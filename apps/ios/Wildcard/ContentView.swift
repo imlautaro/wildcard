@@ -20,28 +20,8 @@ struct ContentView: View {
                     Button("Try again") { Task { await auth.restore() } }
                 }
             case .signedIn:
-                NavigationStack {
-                    Form {
-                        if let user = auth.user {
-                            Section {
-                                LabeledContent("Name", value: user.name)
-                                LabeledContent("Email", value: user.email)
-                                LabeledContent("Email verified", value: user.emailVerified ? "Yes" : "No")
-                            } header: {
-                                Text("Account").manrope(.footnote, weight: .semibold)
-                            }
-                        }
-                        if let error = auth.error {
-                            Text(error).foregroundStyle(.red)
-                        }
-                        Section {
-                            Button("Sign out", role: .destructive) { Task { await auth.signOut() } }
-                                .disabled(auth.isBusy)
-                            if auth.isBusy { ProgressView() }
-                        }
-                    }
-                    .navigationTitle("Account")
-                }
+                HomeView()
+                    .id(auth.user?.id)
             }
         }
     }

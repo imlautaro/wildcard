@@ -53,11 +53,16 @@ Open `apps/ios/Wildcard.xcodeproj`, or run `npm run ios` on macOS. Select the
 `Wildcard` scheme in Xcode 27.1 or later. The current minimum deployment target is
 iOS 27.0. For a physical device, select your own signing team and bundle identifier.
 
-The app includes sign-up/sign-in, a signed-in account screen, Keychain session
+The app includes sign-up/sign-in, native Chats and Account tabs, Keychain session
 storage, restoration on launch, and logout. It preserves the Wildcard Icon Composer
-icon and bundled [Manrope typography](docs/typography.md). Debug and Release default to the public API through `WILDCARD_API_URL`; an
-independent installation must replace that setting. See the auth guide for local
-simulator configuration. No contacts, conversations, or model integration exist yet.
+icon and bundled [Manrope typography](docs/typography.md). Debug and Release
+default to the public API through `WILDCARD_API_URL`; an independent installation must replace that setting. See the auth guide for local
+simulator configuration.
+
+The signed-in shell uses one navigation stack around the tabs: Add pushes a
+full-screen contact form with native Back navigation, preserving the selected tab
+on return. Chats starts empty; the form has no save behavior yet. No contacts API,
+conversation persistence, or model integration is implemented.
 
 ## Infrastructure and releases
 

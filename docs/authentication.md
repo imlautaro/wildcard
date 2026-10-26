@@ -66,8 +66,16 @@ rounded inputs with icons, password visibility, and a blue glass prominent butto
 Inline field messages and borders indicate validation errors; request errors appear
 in a separate banner. The mode switch stays in the navigation toolbar, and repeated
 submissions are blocked while a request is in flight.
-Registration asks for name, email, and password. The signed-in screen shows account
-details and sign-out. On launch the app displays a full-screen `#045DE3` splash with the white Wildcard
+Registration asks for name, email, and password. The signed-in root has Chats
+and Account tabs, defaulting to Chats. Account shows the current name/email and
+retains the existing sign-out flow. A single navigation stack wraps the tab view;
+Add pushes a contact form over the whole tab layout, with native Back navigation
+and the selected tab preserved on return. Navigation state resets for a different
+signed-in user. Chats is an empty layout and contact creation is not connected;
+the Create button is disabled. There are no sample contacts, remote contact
+requests, timers, or persistence in this shell.
+
+On launch the app displays a full-screen `#045DE3` splash with the white Wildcard
 mark centered at 92.5 × 100 points while loading its Keychain token and fetching
 `/me`. The vector mark comes from the current app icon source. Light and dark modes
 use the same blue background. There is no artificial delay; restoration selects
