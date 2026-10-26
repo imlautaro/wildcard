@@ -1,0 +1,120 @@
+import SwiftUI
+import UserNotifications
+import UIKit
+import Observation
+
+@MainActor
+@Observable
+final class PushNotifications {
+    struct Destination: Equatable {
+        let id = UUID()
+        let contactID: String
+        let userID: String
+    }
+
+    static let shared = PushNotifications()
+    private(set) var deviceToken: String?
+    private(set) var status = "Not enabled"
+    private(set) var error: String?
+    private(set) var isBusy = false
+    var destination: Destination?
+    private var permissionRequestInFlight = false
+
+    private var environment: String? {
+        Bundle.main.object(forInfoDictionaryKey: "WildcardPushEnvironment") as? String
+    }
+
+    func received(token: Data) {
+        deviceToken = token.map { String(format: "%02x", $0) }.joined()
+    }
+
+    func registrationFailed() {
+        status = "Registration failed"
+        error = "Unable to register for notifications. Check your connection and try again."
+    }
+
+    func activate(using auth: AuthStore, requestPermission: Bool = false) async {
+        guard auth.state == .signedIn, !permissionRequestInFlight else { return }
+        let center = UNUserNotificationCenter.current()
+        var settings = await center.notificationSettings()
+        if requestPermission && settings.authorizationStatus == .notDetermined {
+            permissionRequestInFlight = true
+            do { _ = try await center.requestAuthorization(options: [.alert, .sound]) }
+            catch { self.error = "Unable to request notification permission. Please try again." }
+            permissionRequestInFlight = false
+            settings = await center.notificationSettings()
+        }
+        guard auth.state == .signedIn else { return }
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            status = "Connecting…"
+            UIApplication.shared.registerForRemoteNotifications()
+            await synchronize(using: auth)
+        case .denied:
+            status = "Disabled in Settings"
+            await synchronize(using: auth, remove: true)
+        default:
+            status = "Not enabled"
+        }
+    }
+
+    func synchronize(using auth: AuthStore, remove: Bool = false) async {
+        guard let deviceToken, !isBusy, auth.state == .signedIn else { return }
+        guard let environment, ["development", "production"].contains(environment) else {
+            error = "The push environment is missing from the app configuration."
+            return
+        }
+        isBusy = true
+        error = nil
+        defer { isBusy = false }
+        do {
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            let allowed = [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
+            let shouldRemove = remove || !allowed
+            let body = try JSONEncoder().encode(["token": deviceToken, "environment": environment])
+            try await auth.withSession { api, token in
+                _ = try await api.send(path: "push/device", method: shouldRemove ? "DELETE" : "PUT", body: body, token: token)
+            }
+            if !shouldRemove { status = "Enabled" }
+        } catch is CancellationError { }
+        catch { self.error = "Unable to update notifications. Open the app or tap Enable notifications to retry." }
+    }
+
+    func clearAccountState() {
+        destination = nil
+        error = nil
+        status = "Not enabled"
+        // APNs tokens identify this installation, and must be registered on every sign-in.
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+    }
+}
+
+@MainActor
+final class PushAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        PushNotifications.shared.received(token: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        PushNotifications.shared.registrationFailed()
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        // Active chats refresh in the foreground; alerts are for background delivery.
+        return []
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+              let contactID = response.notification.request.content.userInfo["contactID"] as? String,
+              let userID = response.notification.request.content.userInfo["userID"] as? String else { return }
+        await MainActor.run {
+            PushNotifications.shared.destination = .init(contactID: contactID, userID: userID)
+        }
+    }
+}

@@ -126,3 +126,10 @@ checks are authorized.
 - [Cloudflare Workflows API](https://developers.cloudflare.com/workflows/build/workers-api/)
 - [Workflows execution rules](https://developers.cloudflare.com/workflows/build/rules-of-workflows/)
 - [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)
+
+## Reply notifications
+
+Completed replies enqueue [APNs push notifications](notifications.md) atomically
+with the saved response. Delivery and retries run independently of generation;
+a provider failure never turns a saved reply into a failed chat. Apple setup and
+an updated iOS installation are required. Foreground polling remains in use.

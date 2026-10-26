@@ -4,6 +4,7 @@ import { createAuth } from './lib/auth';
 import { admitAuthRequest } from './lib/auth-rate-limit';
 import { readBearerSession } from './lib/session';
 import contacts from './routes/contacts';
+import push from './routes/push';
 
 const app = new Hono<{ Bindings: Env }>();
 const authEndpoints = new Map([
@@ -38,6 +39,7 @@ app.get('/api/v1/me', async (c) => {
 });
 
 app.route('/api/v1/contacts', contacts);
+app.route('/api/v1/push', push);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 app.onError((_error, c) => {

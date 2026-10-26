@@ -7,6 +7,9 @@ enum HomeDestination: Hashable {
 }
 
 struct HomeView: View {
+    @Environment(AuthStore.self) private var auth
+    @Environment(PushNotifications.self) private var push
+    @Environment(\.scenePhase) private var scenePhase
     private enum Section: Hashable {
         case chats
         case account
@@ -57,5 +60,22 @@ struct HomeView: View {
             }
         }
         .environment(contacts)
+        .task { await push.activate(using: auth, requestPermission: true) }
+        .task(id: push.deviceToken) { await push.synchronize(using: auth) }
+        .task(id: scenePhase) {
+            if scenePhase == .active { await push.activate(using: auth) }
+        }
+        .task(id: push.destination?.id) {
+            guard let destination = push.destination else { return }
+            guard destination.userID == auth.user?.id else {
+                push.destination = nil
+                return
+            }
+            section = .chats
+            destinations = [.contact(destination.contactID)]
+            await contacts.conversations.store(for: destination.contactID)
+                .refresh(contactID: destination.contactID, using: auth)
+            if push.destination?.id == destination.id { push.destination = nil }
+        }
     }
 }

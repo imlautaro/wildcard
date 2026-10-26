@@ -1,5 +1,5 @@
 import { desc, sql } from 'drizzle-orm';
-import { check, foreignKey, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { check, foreignKey, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const date = (name: string) => integer(name, { mode: 'timestamp_ms' });
 
@@ -86,4 +86,28 @@ export const chatTurn = sqliteTable('chat_turn', {
   index('chat_contact_sequence_idx').on(table.contactId, desc(table.sequence)),
   index('chat_recovery_idx').on(table.status, table.checkedAt),
   index('chat_user_status_idx').on(table.userId, table.status),
+]);
+
+export const pushDevice = sqliteTable('push_device', {
+  id: text('id').primaryKey(),
+  token: text('token').notNull(),
+  environment: text('environment', { enum: ['development', 'production'] }).notNull(),
+  sessionId: text('session_id').notNull().references(() => session.id, { onDelete: 'cascade' }),
+  updatedAt: date('updated_at').notNull(),
+}, (table) => [
+  uniqueIndex('push_device_token_environment_idx').on(table.token, table.environment),
+  index('push_device_session_idx').on(table.sessionId),
+  check('push_environment', sql`${table.environment} IN ('development', 'production')`),
+]);
+
+export const pushDelivery = sqliteTable('push_delivery', {
+  turnId: text('turn_id').notNull().references(() => chatTurn.id, { onDelete: 'cascade' }),
+  deviceId: text('device_id').notNull().references(() => pushDevice.id, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull().references(() => session.id, { onDelete: 'cascade' }),
+  attempts: integer('attempts').notNull().default(0),
+  nextAt: date('next_at').notNull(),
+  expiresAt: date('expires_at').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.turnId, table.deviceId] }),
+  index('push_delivery_next_idx').on(table.nextAt),
 ]);

@@ -198,3 +198,19 @@ Independent-account reproduction and installed iOS behavior remain unverified.
 - [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)
 - [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
 - [Workers CPU and platform limits](https://developers.cloudflare.com/workers/platform/limits/)
+
+## Apple push notifications
+
+[Reply notifications](notifications.md) add APNs as an optional external service.
+Provision the Apple App ID/capability, signing profiles, and provider key before
+configuring encrypted Workers Builds secrets `APNS_PRIVATE_KEY`, `APNS_KEY_ID`,
+`APNS_TEAM_ID`, and `APNS_TOPIC`. The automatic release forwards them to runtime;
+all four must be supplied together when updating. Without them chats continue
+working and pending notifications expire. No new Cloudflare binding is needed.
+`0004_push.sql` adds session-bound devices and a reply outbox in existing D1;
+production release/local migration commands apply it. The Workflow attempts
+immediate delivery and the existing Cron retries it. Preserve additive tables
+on rollback. The setup guide covers independent Apple accounts, permissions,
+sandbox/production signing, private local configuration, retention, staging,
+verification and rollback. No Apple key, remote configuration, real push,
+or installed-device behavior was verified during implementation.

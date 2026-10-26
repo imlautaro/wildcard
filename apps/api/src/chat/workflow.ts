@@ -1,4 +1,5 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
+import { enqueueReply, deliverPush } from '../push/delivery';
 import { activeTurn, type ChatJob } from './data';
 import { museReply, type ModelMessage } from './meta';
 
@@ -39,9 +40,12 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob> {
           { role: 'user', content: turn.userText },
         ]);
         // Save before checkpointing. A replay sees completion and skips another call.
-        await this.env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, status = 'complete', error_code = NULL, updated_at = ?2
+        const now = Date.now();
+        await this.env.DB.batch([this.env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, status = 'complete', error_code = NULL, updated_at = ?2
           WHERE id = ?3 AND attempt = ?4 AND status = 'running'`)
-          .bind(reply, Date.now(), job.turnID, job.attempt).run();
+          .bind(reply, now, job.turnID, job.attempt),
+          enqueueReply(this.env.DB, job.turnID, job.attempt, now),
+        ]);
         return true;
       });
     } catch {
@@ -52,5 +56,11 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob> {
         return true;
       });
     }
+    // Push failures never mark an already saved reply as failed. Cron retries the outbox.
+    await step.do('deliver-push', async () => {
+      try { await deliverPush(this.env, job.turnID); }
+      catch { console.error(JSON.stringify({ event: 'push_delivery_deferred' })); }
+      return true;
+    });
   }
 }

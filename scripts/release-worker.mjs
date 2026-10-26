@@ -45,6 +45,14 @@ try {
   } else if (!secrets.some((secret) => secret.name === 'META_API_KEY')) {
     throw new Error('Set the encrypted META_API_KEY secret in Workers Builds before releasing.');
   }
+  const pushNames = ['APNS_PRIVATE_KEY', 'APNS_KEY_ID', 'APNS_TEAM_ID', 'APNS_TOPIC'];
+  const suppliedPush = pushNames.some((name) => process.env[name] !== undefined);
+  if (suppliedPush) {
+    for (const name of pushNames) {
+      if (!process.env[name]?.trim()) throw new Error(`Configure all four APNs build secrets; ${name} is missing or empty.`);
+      updates[name] = process.env[name].trim();
+    }
+  }
   if (Object.keys(updates).length) {
     temporaryDirectory = mkdtempSync(join(tmpdir(), 'wildcard-release-'));
     const secretFile = join(temporaryDirectory, 'secrets.json');

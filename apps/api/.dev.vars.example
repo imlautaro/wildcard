@@ -3,3 +3,10 @@ BETTER_AUTH_SECRET=replace-with-a-random-secret-of-at-least-32-characters
 
 # Optional locally; required for generating replies. Never commit a real key.
 META_API_KEY=
+
+# Optional APNs setup; use your own Apple key and identifiers. Never commit values.
+# Local macOS workerd may not support the HTTP/2 connection APNs requires.
+# APNS_PRIVATE_KEY=
+# APNS_KEY_ID=
+# APNS_TEAM_ID=
+# APNS_TOPIC=

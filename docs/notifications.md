@@ -1,0 +1,133 @@
+# Reply push notifications
+
+The iOS app registers with Apple Push Notification service (APNs) after sign-in
+and requests alert/sound permission once. Account → Notifications offers a retry
+and a link to system notification settings. Returning to the foreground refreshes
+registration and permission state. Foreground banners and sounds are suppressed;
+existing chat polling refreshes replies while the app is active. No background
+execution mode or silent push is required for these visible alerts.
+
+A completed reply atomically saves an outbox entry for each registered device
+belonging to an unexpired owner session. The Workflow attempts immediate delivery;
+the existing minute Cron retries pending entries. Generation failures do not send
+an alert, and push failures never change a completed reply into a failed turn.
+No historical notifications are backfilled when enrolling a new device.
+
+The lock-screen payload says **Wildcard — You have a new reply.** It excludes
+contact names and message text. Opaque contact/user IDs route a notification tap
+into the matching account's conversation, with a forced history refresh. A cold
+launch waits for session restoration. Another account's notification is ignored;
+a deleted contact uses the existing unavailable-contact view. Authorization remains
+server-side on every contact/history request.
+
+## Apple setup
+
+1. Use a paid Apple Developer membership with permission to manage App IDs, keys,
+   and provisioning profiles. Enable **Push Notifications** on the explicit App ID
+   matching your bundle ID. This checkout uses `com.imlautaro.Wildcard`; an
+   independent installation must use its own bundle ID and signing team.
+2. Xcode's app target includes the Push Notifications capability and
+   `Config/Wildcard.entitlements`. Regenerate signing profiles after enabling it.
+   `APNS_ENVIRONMENT` controls both `aps-environment` and
+   `WildcardPushEnvironment` in Info.plist: Debug defaults to `development`,
+   Release to `production`. Use production for TestFlight/App Store; for any
+   development-signed Release build, override it to `development`.
+   Verify the **signed** app's entitlement matches its Info.plist value, because
+   distribution signing can rewrite entitlements. Do not send sandbox tokens to
+   production or vice versa. No APNs environment is inferred from the API origin.
+3. Create an APNs token signing key with access to the intended app/topic and
+   environments. Download the `.p8` once and store it securely outside Git. Record
+   its Key ID and the Apple Team ID. Do not paste the private key into chat.
+4. Add all four encrypted **Workers Builds** secrets:
+   - `APNS_PRIVATE_KEY`: the complete PKCS#8 PEM `.p8` content. Actual newlines or
+     literal `\n` sequences are supported.
+   - `APNS_KEY_ID`: the Apple key identifier.
+   - `APNS_TEAM_ID`: the Apple Developer Team ID.
+   - `APNS_TOPIC`: the exact app bundle ID.
+5. Commit/push an authorized release. The automatic pipeline copies all four
+   values to encrypted runtime secrets in the same private temporary file used
+   for other secrets. If any APNs build setting is supplied, all four must be
+   nonempty. If none is supplied, existing runtime secrets are preserved. An
+   installation without APNs configuration continues serving chats and auth;
+   pending notifications expire after 24 hours. No separate Cloudflare service
+   or Firebase account is required.
+6. Install the updated, correctly signed iOS app on a physical device, sign in,
+   and allow notifications. Updating the API does not update the installed app.
+
+## API and persistence
+
+`PUT /api/v1/push/device` and `DELETE /api/v1/push/device` require a valid bearer
+session. Both accept exactly `{ "token": "<hex APNs token>", "environment":
+"development" }` (or `production`) and return 204. Bodies are limited to 2 KiB,
+with 30 operations/session/minute and at most ten active devices per session.
+Tokens are upserted by token/environment and reassigned to the current validated
+session; deletion only removes the current session's matching registration.
+The client never supplies another user's ID or an arbitrary provider URL/topic.
+
+Migration `0004_push.sql` adds `push_device` and `push_delivery` to existing D1;
+`npm run auth:setup:local` / automatic production releases apply it. Devices are
+bound to a server session. Sign-out deletes the session and cascades devices and
+queued deliveries. Expired sessions are excluded before sending; reassigning a
+device excludes deliveries for its previous session. Deleted contacts/turns also
+cascade pending notifications. Already submitted APNs alerts cannot be recalled
+on sign-out; the generic payload and account check limit disclosure, and the
+client clears delivered alerts when signing out. Device tokens remain in D1 until
+session deletion, explicit unregister, device eviction, or APNs invalidation;
+no token or credential values are logged.
+
+Delivery uses ES256 provider JWTs and fixed APNs endpoints, a 15-second timeout,
+five concurrent sends, and a bounded batch of 30. An atomic two-minute lease
+prevents concurrent Cron/Workflow claims. Transient failures retry with backoff,
+up to eight attempts and 24 hours. Invalid/unregistered tokens are removed.
+Success deletes the outbox record. `apns-collapse-id` uses the turn ID to coalesce
+outstanding retries; an accepted send followed by a crash can still duplicate an
+alert. APNs acceptance does not guarantee display: offline devices, Focus, system
+permissions, and user settings affect delivery. There is no presence tracking;
+APNs receives alerts regardless of app state and the delegate suppresses their
+foreground presentation.
+
+## Development, verification, and rollback
+
+Local auth/chats work without APNs secrets. If needed, put the four values in
+ignored `.dev.vars`, never source control. Local macOS workerd may not negotiate
+the HTTP/2 connection APNs requires, although deployed Workers use Cloudflare's
+outbound proxy. Verify real delivery from an authorized automatic cloud release;
+do not substitute manual deployment. Staging needs its own Worker, D1, secrets,
+API origin and preferably a separate app ID/key scope.
+
+Static TypeScript and Swift checks and plist/project validation cover source
+integration. No build, runtime tests, device enrollment, provider key validation,
+or real push delivery was performed during implementation. When functional
+verification is authorized, use fictional contacts: enroll a device, send a chat,
+background/close the app, check the alert, and tap it on a cold launch. Also check
+foreground suppression, permission denial/re-enabling, logout/account switching,
+contact deletion, sandbox/production signing, and a provider outage retry.
+
+Rollback the code through an authorized commit/push. Keep the additive tables;
+older code ignores them. Checkpointed Workflows may require compatibility care
+when rolling back `generate-and-save` / `deliver-push`; do not rewrite applied
+migrations. Disable the Apple key to stop provider access, or remove runtime APNs
+secrets through an authorized configuration operation. Pending entries expire;
+no rollback removes already displayed alerts.
+
+References: [Apple registration](https://developer.apple.com/documentation/usernotifications/registering-your-app-with-apns),
+[APNs requests](https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns),
+[token authentication](https://developer.apple.com/documentation/usernotifications/establishing-a-token-based-connection-to-apns),
+[Cloudflare HTTP/2 limitation](https://github.com/cloudflare/workerd/issues/4841).
+
+## Current installation configuration (October 26, 2026)
+
+The Apple App ID `com.imlautaro.Wildcard` already has Push Notifications enabled.
+An explicitly authorized **Wildcard Push Sandbox** key was registered with
+**Topic Specific / Sandbox** access for this app. The four `APNS_*` names above
+were saved as encrypted **Workers Builds** secrets for `wildcard-api`; persistence
+and encryption status were verified after reloading the dashboard. No key values
+are recorded in this repository. The owner retains the original downloaded key.
+
+This configuration supports development-signed Debug installations only. It does
+not enable TestFlight/App Store production delivery. Provision a separately
+reviewed production configuration before using those distributions; do not reuse
+unrelated apps' provider keys. Runtime activation still requires committing and
+pushing the pending implementation through the automatic release pipeline, then
+installing the updated iOS app. No release or real push was performed for this
+configuration step.

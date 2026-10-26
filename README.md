@@ -71,7 +71,9 @@ continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the A
 limits, and background execution. An empty draft offers a microphone for
 [Muse Voice Transcribe dictation](docs/voice.md); the transcript is editable before
 sending. Navigation reuses a session-scoped [memory cache](docs/caching.md) and
-refreshes loaded content in the background. Sharing is not implemented.
+refreshes loaded content in the background. [Reply push notifications](docs/notifications.md)
+use APNs when the app is closed/backgrounded, after configuring Apple signing
+and provider secrets. Tapping an alert opens the chat. Sharing is not implemented.
 
 ## Infrastructure and releases
 

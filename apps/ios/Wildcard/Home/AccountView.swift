@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct AccountView: View {
+    @Environment(PushNotifications.self) private var push
+    @Environment(\.openURL) private var openURL
     @Environment(AuthStore.self) private var auth
 
     var body: some View {
@@ -12,6 +14,17 @@ struct AccountView: View {
                 } header: {
                     Text("Your account").manrope(.footnote, weight: .semibold)
                 }
+            }
+            Section("Notifications") {
+                LabeledContent("Push notifications", value: push.status)
+                Button("Enable notifications") {
+                    Task { await push.activate(using: auth, requestPermission: true) }
+                }
+                .disabled(push.isBusy)
+                Button("Open notification settings") {
+                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
+                }
+                if let error = push.error { Text(error).foregroundStyle(.red) }
             }
             Section {
                 Button("Sign out", role: .destructive) {
