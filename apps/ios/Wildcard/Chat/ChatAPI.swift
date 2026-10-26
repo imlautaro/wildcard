@@ -20,6 +20,7 @@ struct ChatPage: Decodable, Sendable {
 
 struct ChatReadState: Decodable, Sendable {
     let lastReadSequence: Int
+    let totalUnreadCount: Int?
     let unreadCount: Int
 }
 

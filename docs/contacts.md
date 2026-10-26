@@ -104,7 +104,9 @@ response adds `totalUnreadCount` across all owner contacts, including unloaded
 pages. iOS shows counters on chat rows and the Chats tab. The reply is acknowledged
 only after the active conversation has loaded it, through
 `PUT /api/v1/contacts/:id/chat/read` with `{ "sequence": <last displayed completed reply> }`.
-This owner-authorized, monotonic update cannot acknowledge a reply after the
+The acknowledgement returns `lastReadSequence`, `unreadCount`, and
+`totalUnreadCount`; the last is the authoritative total for the app icon, including
+contacts on unloaded pages. This owner-authorized, monotonic update cannot acknowledge a reply after the
 provided sequence or move the watermark backwards. Merely fetching contacts or
 history does not mark anything read. Failed acknowledgements retry on the next
 active conversation poll. Other devices observe the shared owner read state.

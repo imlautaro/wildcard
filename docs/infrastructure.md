@@ -230,3 +230,16 @@ never inspect device tokens or conversation contents for verification. Read coun
 and markers stay in the owner account and do not enable sharing. See
 [notifications](notifications.md) and [contacts](contacts.md) for client updates,
 API contracts, rollback limits, and verification status.
+
+## Icon badges and reply previews
+
+Reply alerts now carry contact names, bounded reply text and an owner-wide
+`aps.badge` count, as requested on October 26, 2026. This reuses the APNs key,
+Workflow, Cron, D1 read-state column, and automatic release process; no additional
+resource, migration, account permission, or secret is needed. Payloads are capped
+at 4096 serialized UTF-8 bytes; only notification previews are shortened, never
+stored replies. iOS must be updated to request badge permission, synchronize the
+icon after reads/foreground refresh, and clear it at sign-out. Existing system
+notification settings still control badges and lock-screen previews. Verification
+must not print notification payloads or message contents in logs. See
+[notifications](notifications.md) for behavior, retention, limits, and rollback.

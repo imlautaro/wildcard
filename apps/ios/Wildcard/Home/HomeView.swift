@@ -61,12 +61,20 @@ struct HomeView: View {
             }
         }
         .environment(contacts)
-        .task { await push.activate(using: auth, requestPermission: true) }
+        .task(id: "\(contacts.hasLoaded)-\(contacts.totalUnreadCount)-\(scenePhase)") {
+            guard contacts.hasLoaded, scenePhase == .active else { return }
+            await push.updateBadge(count: contacts.totalUnreadCount)
+        }
+        .task {
+            await push.activate(using: auth, requestPermission: true)
+            if contacts.hasLoaded { await push.updateBadge(count: contacts.totalUnreadCount) }
+        }
         .task(id: push.deviceToken) { await push.synchronize(using: auth) }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await contacts.refresh(using: auth, preserveLoadedPages: true)
             await push.activate(using: auth)
+            if contacts.hasLoaded { await push.updateBadge(count: contacts.totalUnreadCount) }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(3)) } catch { return }
                 await contacts.refresh(using: auth, preserveLoadedPages: true)

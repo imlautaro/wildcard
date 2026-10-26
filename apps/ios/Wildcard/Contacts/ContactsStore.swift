@@ -156,7 +156,7 @@ final class ContactsStore {
                 try await api.markChatRead(contactID: id, sequence: sequence, token: token)
             }
             guard var contact = knownContacts[id], state.lastReadSequence >= (contact.lastReadSequence ?? 0) else { return }
-            totalUnreadCount = max(0, totalUnreadCount - (contact.unreadCount ?? 0) + state.unreadCount)
+            totalUnreadCount = state.totalUnreadCount ?? max(0, totalUnreadCount - (contact.unreadCount ?? 0) + state.unreadCount)
             readRevision += 1
             contact.lastReadSequence = state.lastReadSequence
             contact.unreadCount = state.unreadCount

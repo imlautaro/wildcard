@@ -73,8 +73,8 @@ limits, and background execution. An empty draft offers a microphone for
 sending. Navigation reuses a session-scoped [memory cache](docs/caching.md) and
 refreshes loaded content in the background. [Reply push notifications](docs/notifications.md)
 use APNs when the app is closed/backgrounded, after configuring Apple signing
-and provider secrets. Tapping an alert opens the chat. Unread reply counts persist on the server and
-appear on chat rows and the Chats tab; returning to the app refreshes them immediately. Sharing is not implemented.
+and provider secrets. Alerts show the contact name and reply text. Tapping an alert opens the chat. Unread reply counts persist on the server and
+appear on chat rows, the Chats tab, and the app icon; returning to the app refreshes them immediately. Sharing is not implemented.
 
 ## Infrastructure and releases
 

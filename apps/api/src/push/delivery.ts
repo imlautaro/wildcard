@@ -1,3 +1,5 @@
+import { totalUnreadReplies } from '../lib/unread';
+import { replyPayload } from './payload';
 
 // Optional until the installation has configured its own Apple provider key.
 export type PushEnvironment = Env & {
@@ -71,6 +73,13 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
         RETURNING turn_id`)
         .bind(now + 120_000, item.turnID, item.deviceID, item.sessionID, now).first();
       if (!claim) return;
+      const alert = await env.DB.prepare(`SELECT c.name AS contactName, t.assistant_text AS reply
+        FROM chat_turn t JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
+        WHERE t.id = ? AND t.user_id = ? AND t.status = 'complete'
+          AND t.sequence > c.last_read_sequence`)
+        .bind(item.turnID, item.userID).first<{ contactName: string; reply: string }>();
+      if (!alert) return;
+      const unreadCount = await totalUnreadReplies(env.DB, item.userID);
       const host = item.environment === 'development' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
       const response = await fetch(`https://${host}/3/device/${item.token}`, {
         method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(15_000),
@@ -79,10 +88,7 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
           'apns-topic': env.APNS_TOPIC!, 'apns-push-type': 'alert', 'apns-priority': '10',
           'apns-expiration': String(Math.floor(item.expiresAt / 1000)), 'apns-collapse-id': item.turnID,
         },
-        body: JSON.stringify({
-          aps: { alert: { title: 'Wildcard', body: 'You have a new reply.' }, sound: 'default' },
-          contactID: item.contactID, userID: item.userID,
-        }),
+        body: replyPayload({ ...alert, unreadCount, contactID: item.contactID, userID: item.userID }),
       });
       // Only inspect Apple's bounded reason field; never log tokens or message data.
       let reason: string | undefined;

@@ -1,3 +1,4 @@
+import { totalUnreadReplies } from '../lib/unread';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import chats from './chats';
@@ -50,11 +51,8 @@ contacts.get('/', async (c) => {
   const { results } = await query.all<Contact>();
   const page = results.slice(0, 50);
   const last = page.at(-1);
-  const unread = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM chat_turn t
-    JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
-    WHERE t.user_id = ? AND t.status = 'complete' AND t.sequence > c.last_read_sequence`)
-    .bind(c.get('owner')).first<{ count: number }>();
-  return c.json({ contacts: page, totalUnreadCount: unread?.count ?? 0, nextCursor: results.length > 50 && last ? `${last.createdAt}:${last.id}` : null });
+  const totalUnreadCount = await totalUnreadReplies(c.env.DB, c.get('owner'));
+  return c.json({ contacts: page, totalUnreadCount, nextCursor: results.length > 50 && last ? `${last.createdAt}:${last.id}` : null });
 });
 
 contacts.post('/', contactBody, async (c) => {

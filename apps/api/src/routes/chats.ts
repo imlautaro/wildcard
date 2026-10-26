@@ -1,3 +1,4 @@
+import { totalUnreadReplies } from '../lib/unread';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { findTurn, publicTurn, storedColumns, turnColumns, type ChatTurn, type StoredTurn } from '../chat/data';
@@ -45,7 +46,8 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
   const unread = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM chat_turn WHERE contact_id = ?
     AND user_id = ? AND status = 'complete' AND sequence > ?`)
     .bind(c.get('contactID'), c.get('owner'), state.lastReadSequence).first<{ count: number }>();
-  return c.json({ ...state, unreadCount: unread?.count ?? 0 });
+  return c.json({ ...state, unreadCount: unread?.count ?? 0,
+    totalUnreadCount: await totalUnreadReplies(c.env.DB, c.get('owner')) });
 });
 chats.post('/turns', messageBody, async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);

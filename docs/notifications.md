@@ -1,7 +1,7 @@
 # Reply push notifications
 
 The iOS app registers with Apple Push Notification service (APNs) after sign-in
-and requests alert/sound permission once. Account → Notifications offers a retry
+and requests alert/sound/badge permission. Account → Notifications offers a retry
 and a link to system notification settings. Returning to the foreground refreshes
 registration and permission state. Foreground banners and sounds are suppressed;
 existing chat polling refreshes replies while the app is active. No background
@@ -13,8 +13,13 @@ the existing minute Cron retries pending entries. Generation failures do not sen
 an alert, and push failures never change a completed reply into a failed turn.
 No historical notifications are backfilled when enrolling a new device.
 
-The lock-screen payload says **Wildcard — You have a new reply.** It excludes
-contact names and message text. Opaque contact/user IDs route a notification tap
+The alert title is the contact's current name and its body is the assistant reply,
+as explicitly requested by the owner on October 26, 2026. The payload includes
+`aps.badge`, set to the total unread replies across the owner's contacts at send
+time. Very long replies are truncated with an ellipsis to keep the complete JSON
+payload within APNs' 4096-byte UTF-8 limit, including escaping and custom fields.
+The full reply remains in the chat. Notifications group by contact using
+`thread-id`. Opaque contact/user IDs route a notification tap
 into the matching account's conversation, with a forced history refresh. A cold
 launch waits for session restoration. Another account's notification is ignored;
 a deleted contact uses the existing unavailable-contact view. Authorization remains
@@ -70,8 +75,10 @@ bound to a server session. Sign-out deletes the session and cascades devices and
 queued deliveries. Expired sessions are excluded before sending; reassigning a
 device excludes deliveries for its previous session. Deleted contacts/turns also
 cascade pending notifications. Already submitted APNs alerts cannot be recalled
-on sign-out; the generic payload and account check limit disclosure, and the
-client clears delivered alerts when signing out. Device tokens remain in D1 until
+on sign-out. Alert payloads now contain contact names and reply text; system
+preview settings control their lock-screen visibility. The account check still
+prevents opening another account's chat. The client clears delivered alerts and
+the icon badge when signing out. Device tokens remain in D1 until
 session deletion, explicit unregister, device eviction, or APNs invalidation;
 no token or credential values are logged.
 
@@ -151,8 +158,41 @@ history revalidation. Fetching a list or history never acknowledges it. See
 [contacts](contacts.md) for API, concurrency, migration, and rollback behavior.
 Pending pushes for acknowledged replies are removed, and the atomic delivery
 claim checks the watermark again. Already accepted/in-flight APNs alerts cannot
-be recalled. App-icon badges are not implemented by this change.
+be recalled. App-icon badges were added in the subsequent update described below.
 
 Static Swift/TypeScript checks cover the integration. No local build or automated
 tests were run. Device display and navigation still require verification using the
 updated iOS installation; APNs acceptance is a separate server observation.
+
+## App icon badge and reply previews (October 26, 2026)
+
+The owner explicitly requested the contact name as title, reply text as body,
+and the unread-message count on the app icon. This replaces the original generic
+alert design. The provider now reads the current contact/reply before sending
+and computes the same owner-wide unread total used by the contacts API; no names,
+message text, payload bodies, keys, or tokens are logged. Existing APNs credentials,
+resources, migrations, and automatic release commands remain sufficient.
+
+The updated iOS app requests `.badge` alongside alert/sound permission and offers
+an **App icon badge** permission status in Account. Already-authorized installations
+can request the previously omitted badge option through the existing enable flow;
+if badges are disabled by the user, system notification settings must enable them.
+After loading counts or acknowledging reads, iOS sets the badge to the server total
+with `UNUserNotificationCenter.setBadgeCount`; zero removes it. Foreground
+activation reapplies the count even if APNs changed it while suspended. Updates
+are serialized and coalesced so an older local completion cannot win over a newer
+count or sign-out. Read acknowledgements return an authoritative owner-wide total,
+including unloaded contact pages. Failed system badge updates retry on the next
+activation/count change; Account exposes the failure status.
+
+An arriving background alert updates the icon without running the app. While
+foregrounded, banners are suppressed and server polling updates the icon. The
+count is a send-time snapshot: delayed/out-of-order APNs delivery or reads on a
+different device can temporarily leave a background icon stale until another push
+or foreground refresh. No silent background synchronization was added.
+
+No local builds, automated tests, or new inference/push test messages were run for
+this update. Static TypeScript/Swift checks cover integration; installed-device
+permission behavior, icon display, and preview layout require verification with
+the updated client. Rollback ignores the new optional payload/API fields; keep
+existing read-state migrations. Older clients still open the alert's conversation.

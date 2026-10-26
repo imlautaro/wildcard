@@ -15,6 +15,10 @@ final class PushNotifications {
     static let shared = PushNotifications()
     private(set) var deviceToken: String?
     private(set) var status = "Not enabled"
+    private(set) var badgeStatus = "Not enabled"
+    private var desiredBadgeCount = 0
+    private var appliedBadgeCount: Int?
+    private var isUpdatingBadge = false
     private(set) var error: String?
     private(set) var isBusy = false
     var destination: Destination?
@@ -37,14 +41,16 @@ final class PushNotifications {
         guard auth.state == .signedIn, !permissionRequestInFlight else { return }
         let center = UNUserNotificationCenter.current()
         var settings = await center.notificationSettings()
-        if requestPermission && settings.authorizationStatus == .notDetermined {
+        let canRequestBadge = settings.authorizationStatus == .authorized && settings.badgeSetting == .disabled
+        if requestPermission && (settings.authorizationStatus == .notDetermined || canRequestBadge) {
             permissionRequestInFlight = true
-            do { _ = try await center.requestAuthorization(options: [.alert, .sound]) }
+            do { _ = try await center.requestAuthorization(options: [.alert, .sound, .badge]) }
             catch { self.error = "Unable to request notification permission. Please try again." }
             permissionRequestInFlight = false
             settings = await center.notificationSettings()
         }
         guard auth.state == .signedIn else { return }
+        badgeStatus = settings.badgeSetting == .enabled ? "Enabled" : "Disabled in Settings"
         switch settings.authorizationStatus {
         case .authorized, .provisional, .ephemeral:
             status = "Connecting…"
@@ -80,10 +86,33 @@ final class PushNotifications {
         catch { self.error = "Unable to update notifications. Open the app or tap Enable notifications to retry." }
     }
 
+    func updateBadge(count: Int) async {
+        desiredBadgeCount = max(0, count)
+        guard !isUpdatingBadge else { return }
+        isUpdatingBadge = true
+        defer { isUpdatingBadge = false }
+        // APNs can change the icon while suspended, so always reapply on activation.
+        var needsApply = true
+        while needsApply || appliedBadgeCount != desiredBadgeCount {
+            needsApply = false
+            let current = desiredBadgeCount
+            do {
+                try await UNUserNotificationCenter.current().setBadgeCount(current)
+                appliedBadgeCount = current
+            } catch {
+                badgeStatus = "Unable to update. Check Settings."
+                return
+            }
+        }
+    }
+
     func clearAccountState() {
         destination = nil
         error = nil
         status = "Not enabled"
+        badgeStatus = "Not enabled"
+        desiredBadgeCount = 0
+        Task { await updateBadge(count: desiredBadgeCount) }
         // APNs tokens identify this installation, and must be registered on every sign-in.
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
     }

@@ -17,6 +17,7 @@ struct AccountView: View {
             }
             Section("Notifications") {
                 LabeledContent("Push notifications", value: push.status)
+                LabeledContent("App icon badge", value: push.badgeStatus)
                 Button("Enable notifications") {
                     Task { await push.activate(using: auth, requestPermission: true) }
                 }
