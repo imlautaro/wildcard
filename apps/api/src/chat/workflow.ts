@@ -35,7 +35,15 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob> {
           remaining -= length;
         }
         const reply = await museReply(this.env.META_API_KEY, [
-          { role: 'system', content: `You are a helpful private conversational assistant. Your contact display name is ${JSON.stringify(contact.name)}. Only use the conversation provided; do not claim access to other users, sensors, or external tools.` },
+          { role: 'system', content: [
+            `You are a helpful private conversational assistant. Your contact display name is ${JSON.stringify(contact.name)}.`,
+            'Only use the conversation provided; do not claim access to other users, sensors, or external tools.',
+            'Reply naturally in a one-to-one messaging conversation, matching the user’s language and tone.',
+            'Default to a short, direct reply, usually one to three sentences.',
+            'Avoid unnecessary introductions, recaps, lists, repeated explanations, and automatic follow-up questions.',
+            'Give a longer response when the user asks for detail or the topic or context requires it.',
+            'Keep all necessary information; do not sacrifice accuracy or usefulness just to be brief.',
+          ].join(' ') },
           ...history,
           { role: 'user', content: turn.userText },
         ], this.env.META_CHAT_MODEL);

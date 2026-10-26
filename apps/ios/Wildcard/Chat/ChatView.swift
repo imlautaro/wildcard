@@ -10,6 +10,8 @@ struct ChatView: View {
     @State private var draft = ""
     @State private var draftRevision = 0
     @State private var isVisible = false
+    @State private var animateNewMessages = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var voice = VoiceRecorder()
     @State private var voiceTask: Task<Void, Never>?
     @FocusState private var composerFocused: Bool
@@ -49,8 +51,8 @@ struct ChatView: View {
                         }
                     }
                     ForEach(chat.turns) { turn in
-                        bubble(turn.userText, sentAt: turn.createdAt, fromUser: true)
-                        if let reply = turn.assistantText { bubble(reply, sentAt: turn.updatedAt, fromUser: false) }
+                        MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true)
+                        if let reply = turn.assistantText { MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false) }
                         else if turn.isPending {
                             ReplyTypingIndicator(sentAt: turn.createdAt)
                         } else if turn.status == .failed {
@@ -66,12 +68,14 @@ struct ChatView: View {
                     Color.clear.frame(height: 1).id("latest")
                 }
                 .padding()
+                .animation(animateNewMessages ? .easeOut(duration: reduceMotion ? 0.15 : 0.22) : nil,
+                           value: chat.turns.last)
             }
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
             .onChange(of: chat.turns.last) { _, _ in
-                withAnimation { proxy.scrollTo("latest", anchor: .bottom) }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { proxy.scrollTo("latest", anchor: .bottom) }
                 Task { try? await contacts.refreshContact(id: contactID, using: auth) }
             }
             .safeAreaBar(edge: .bottom, spacing: 0) { composer }
@@ -89,7 +93,13 @@ struct ChatView: View {
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { _ in
             voice.interrupt()
         }
-        .onAppear { isVisible = true }
+        .onAppear {
+            isVisible = true
+            animateNewMessages = chat.hasLoaded
+        }
+        .onChange(of: chat.hasLoaded) { _, loaded in
+            if loaded { animateNewMessages = true }
+        }
         .onDisappear {
             isVisible = false
             cancelRecording()
@@ -108,25 +118,6 @@ struct ChatView: View {
                 do { try await Task.sleep(for: .seconds(3)) }
                 catch { return }
             }
-        }
-    }
-
-    private func bubble(_ text: String, sentAt: Double, fromUser: Bool) -> some View {
-        HStack {
-            if fromUser { Spacer(minLength: 40) }
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(text).manrope().textSelection(.enabled)
-                HStack(spacing: 4) {
-                    Text(Date(timeIntervalSince1970: sentAt / 1000), format: .dateTime.hour().minute())
-                        .manrope(.caption2)
-                        .foregroundStyle(fromUser ? Color.white.opacity(0.8) : Color.secondary)
-                    if fromUser { MessageReceiptView(sentAt: sentAt) }
-                }
-            }
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .foregroundStyle(fromUser ? Color.white : Color.primary)
-                .background(fromUser ? Color.accentColor : Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20))
-            if !fromUser { Spacer(minLength: 40) }
         }
     }
 

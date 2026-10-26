@@ -176,3 +176,29 @@ remain governed by the actual turn status; already available replies are not
 artificially delayed. The indicator cancels on navigation/backgrounding and
 recomputes on return, without restarting the elapsed time. This is presentation
 only and does not delay model inference or change unread watermarks.
+
+## Conversational presentation and reply length
+
+The delayed Typing indicator uses three softly animated dots with no spinner.
+The dots pause while inactive; Reduce Motion keeps them still. New outgoing
+messages and incoming replies use a 0.22-second fade with an eight-point
+horizontal/four-point vertical offset. Reduce Motion uses a short fade only and
+no animated scroll. The initial history load and earlier-history pagination do
+not deliberately animate every existing message.
+
+Bubbles measure their content with ViewThatFits. If the complete text and metadata
+fit on one line, the time and outgoing checks sit beside the message. Longer or
+explicitly multiline text uses the trailing metadata row underneath. This uses
+actual layout measurements rather than a character-count cutoff and adapts to
+Dynamic Type and the available width. Checks are 20 percent smaller, with the
+same Sent/Received/Read meanings and timing.
+
+The model's system instruction now asks for natural, direct one-to-one replies,
+usually one to three sentences, matching the user's language and tone. It avoids
+unnecessary introductions, recaps, lists, repeated explanations, and automatic
+follow-up questions. Longer answers remain appropriate when requested or required
+by the topic/context; correctness and useful information take priority. The model
+and token safety limit remain unchanged. This prompt applies to future generation
+after the API's automatic commit/push release, without rewriting existing replies.
+Static Swift/TypeScript and whitespace checks cover the source; no builds, tests,
+visual device verification, or paid inference were performed for this change.

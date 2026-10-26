@@ -54,9 +54,9 @@ private struct ReceiptTimeline<Content: View>: View {
 
 struct MessageReceiptView: View {
     let sentAt: Double
-    @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 20
-    @ScaledMetric(relativeTo: .caption2) private var height: CGFloat = 12
-    @ScaledMetric(relativeTo: .caption2) private var lineWidth: CGFloat = 1.6
+    @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 16
+    @ScaledMetric(relativeTo: .caption2) private var height: CGFloat = 9.6
+    @ScaledMetric(relativeTo: .caption2) private var lineWidth: CGFloat = 1.3
 
     var body: some View {
         ReceiptTimeline(sentAt: sentAt) { receipt in
@@ -78,15 +78,42 @@ struct ReplyTypingIndicator: View {
             // Keep a stable container so the delayed task also runs before it has content.
             VStack(spacing: 0) {
                 if receipt == .read {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text("Typing…").manrope(.subheadline).foregroundStyle(.secondary)
+                    HStack {
+                        AnimatedTypingLabel()
                         Spacer()
                     }
-                    .accessibilityElement(children: .combine)
+                    .transition(.opacity)
                 }
             }
+            .animation(.easeOut(duration: 0.15), value: receipt == .read)
         }
+    }
+}
+
+private struct AnimatedTypingLabel: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @ScaledMetric(relativeTo: .subheadline) private var dotSize: CGFloat = 3
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.1, paused: reduceMotion || scenePhase != .active)) { context in
+            HStack(spacing: 3) {
+                Text("Typing").manrope(.subheadline)
+                HStack(spacing: 3) {
+                    ForEach(0..<3) { index in
+                        let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2)
+                        let wave = reduceMotion ? 1 : (sin((phase / 1.2 - Double(index) * 0.16) * 2 * .pi) + 1) / 2
+                        Circle()
+                            .frame(width: dotSize, height: dotSize)
+                            .opacity(0.3 + 0.7 * wave)
+                    }
+                }
+                .padding(.top, 6)
+            }
+        }
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Typing")
     }
 }
 
