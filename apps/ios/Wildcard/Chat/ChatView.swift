@@ -48,8 +48,8 @@ struct ChatView: View {
                         }
                     }
                     ForEach(chat.turns) { turn in
-                        bubble(turn.userText, fromUser: true)
-                        if let reply = turn.assistantText { bubble(reply, fromUser: false) }
+                        bubble(turn.userText, sentAt: turn.createdAt, fromUser: true)
+                        if let reply = turn.assistantText { bubble(reply, sentAt: turn.updatedAt, fromUser: false) }
                         else if turn.isPending {
                             HStack(spacing: 8) {
                                 ProgressView()
@@ -115,10 +115,15 @@ struct ChatView: View {
         }
     }
 
-    private func bubble(_ text: String, fromUser: Bool) -> some View {
+    private func bubble(_ text: String, sentAt: Double, fromUser: Bool) -> some View {
         HStack {
             if fromUser { Spacer(minLength: 40) }
-            Text(text).manrope().textSelection(.enabled)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(text).manrope().textSelection(.enabled)
+                Text(Date(timeIntervalSince1970: sentAt / 1000), format: .dateTime.hour().minute())
+                    .manrope(.caption2)
+                    .foregroundStyle(fromUser ? Color.white.opacity(0.8) : Color.secondary)
+            }
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .foregroundStyle(fromUser ? Color.white : Color.primary)
                 .background(fromUser ? Color.accentColor : Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20))

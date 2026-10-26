@@ -61,6 +61,11 @@ lifetime, limits, invalidation, and manual refresh behavior. It offers earlier h
 retry action for the latest failed reply. The Chats list shows the last reply or
 user message, with a 500-code-point preview.
 
+Each message bubble shows its send time with hours and minutes in the device's
+local time zone and preferred time format. User messages use the turn's
+`createdAt`; completed replies use `updatedAt`, recorded when the reply is saved.
+Pending and failed reply indicators do not show a send time.
+
 D1 state updates are conditional on attempt and status. A replay after a saved
 reply skips inference. There is no exactly-once guarantee for the external Meta
 request: a crash after provider acceptance but before saving can incur another
