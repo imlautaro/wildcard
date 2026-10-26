@@ -53,8 +53,8 @@ struct ChatView: View {
                     ForEach(chat.turns) { turn in
                         MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true)
                         if let reply = turn.assistantText { MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false) }
-                        else if turn.isPending {
-                            ReplyTypingIndicator(sentAt: turn.createdAt)
+                        else if turn.isPending && chat.presence?.status == .typing {
+                            ReplyTypingIndicator()
                         } else if turn.status == .failed {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("The reply could not be completed.").manrope(.footnote).foregroundStyle(.secondary)
@@ -85,6 +85,7 @@ struct ChatView: View {
             if phase == .ready { transcribeRecording() }
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase != .active { chat.clearPresence() }
             if phase == .background { cancelRecording() }
         }
         .onChange(of: chat.isUnavailable) { _, unavailable in
@@ -102,6 +103,7 @@ struct ChatView: View {
         }
         .onDisappear {
             isVisible = false
+            chat.clearPresence()
             cancelRecording()
             chat.compactHistory()
         }

@@ -3,6 +3,7 @@ import Observation
 
 @Observable @MainActor
 final class ChatStore {
+    private(set) var presence: ContactPresence?
     private(set) var turns: [ChatTurn] = []
     private(set) var hasLoaded = false
     private(set) var isLoadingMore = false
@@ -17,6 +18,8 @@ final class ChatStore {
     private var submission: (id: String, text: String)?
     var hasPendingReply: Bool { turns.contains(where: \.isPending) }
 
+    func clearPresence() { presence = nil }
+
     func compactHistory() {
         guard !isSending, !isLoadingMore, turns.count > 100 else { return }
         turns = Array(turns.suffix(100))
@@ -26,6 +29,7 @@ final class ChatStore {
     func invalidate() {
         invalidated = true
         revision += 1
+        presence = nil
         turns = []
         nextBefore = nil
         submission = nil
@@ -41,7 +45,7 @@ final class ChatStore {
 
     func refresh(contactID: String, using auth: AuthStore, force: Bool = true) async {
         guard !invalidated, !isRefreshing else { return }
-        let freshness: TimeInterval = hasPendingReply ? 2 : (error == nil ? 30 : 5)
+        let freshness: TimeInterval = 2
         if !force, let refreshedAt, Date().timeIntervalSince(refreshedAt) < freshness { return }
         isRefreshing = true
         defer { isRefreshing = false }
@@ -57,6 +61,7 @@ final class ChatStore {
                 turns = page.turns
                 nextBefore = page.nextBefore
             } else { merge(page.turns) }
+            presence = page.presence
             hasLoaded = true
             refreshedAt = .now
             error = nil
@@ -66,6 +71,7 @@ final class ChatStore {
             if (error as? URLError)?.code == .cancelled { return }
             refreshedAt = .now
             if case AuthAPI.Failure.notFound = error { invalidate() }
+            presence = nil
             self.error = error.localizedDescription
         }
     }
@@ -107,7 +113,8 @@ final class ChatStore {
             }
             revision += 1
             guard !invalidated else { return false }
-            merge([turn])
+            merge([turn.turn])
+            presence = turn.presence
             hasLoaded = true
             refreshedAt = nil
             self.submission = nil
@@ -138,7 +145,8 @@ final class ChatStore {
             }
             revision += 1
             guard !invalidated else { return }
-            merge([updated])
+            merge([updated.turn])
+            presence = updated.presence
             refreshedAt = nil
             error = nil
         } catch is CancellationError { }

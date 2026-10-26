@@ -76,22 +76,12 @@ struct MessageReceiptView: View {
 }
 
 struct ReplyTypingIndicator: View {
-    let sentAt: Double
-
     var body: some View {
-        ReceiptTimeline(sentAt: sentAt) { receipt in
-            // Keep a stable container so the delayed task also runs before it has content.
-            VStack(spacing: 0) {
-                if receipt == .read {
-                    HStack {
-                        AnimatedTypingLabel()
-                        Spacer()
-                    }
-                    .transition(.opacity)
-                }
-            }
-            .animation(.easeOut(duration: 0.15), value: receipt == .read)
+        HStack {
+            AnimatedTypingLabel()
+            Spacer()
         }
+        .transition(.opacity)
     }
 }
 

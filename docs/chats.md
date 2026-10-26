@@ -57,7 +57,7 @@ Accepted work continues independently of iOS. Closing the app before a send is
 accepted cannot guarantee delivery; unsent drafts are not persisted. The client
 retains the send UUID through uncertain network outcomes while the conversation
 is cached. It polls every three seconds while active with a pending reply and
-revalidates idle conversations after 30 seconds. Returning to a cached conversation
+revalidates idle conversations on the same three-second tick to observe server presence. Returning to a cached conversation
 displays its loaded history immediately. See [client caching](caching.md) for
 lifetime, limits, invalidation, and manual refresh behavior. It offers earlier history, a multiline composer, pending status, and a
 retry action for the latest failed reply. The Chats list shows the last reply or
@@ -162,7 +162,7 @@ Type. No API, schema, service, or persistence changes are required. Static Swift
 and whitespace validation cover the implementation; device appearance remains
 unverified. No builds or tests were run for this change.
 
-## Immediate composer clearing and delayed typing
+## Immediate composer clearing and server typing
 
 Tapping Send clears the composer immediately, before waiting for API acceptance.
 If persistence fails, the submitted text is restored only if the user has made
@@ -170,18 +170,44 @@ no subsequent draft edits or dictation insertions. New draft text is never
 cleared by a previous request's successful completion. A failed request still
 uses ChatStore's existing idempotent submission/recovery behavior.
 
-Pending replies show **Typing…** only after the user's message reaches its
-simulated Read state, three seconds after its persisted createdAt. Checks and
-typing share the same receipt timeline and fixed thresholds. Before then, no
-pending-reply indicator appears. Completed replies and failure/retry controls
-remain governed by the actual turn status; already available replies are not
-artificially delayed. The indicator cancels on navigation/backgrounding and
-recomputes on return, without restarting the elapsed time. This is presentation
-only and does not delay model inference or change unread watermarks.
+Pending replies show **Typing…** only when D1 presence is `typing`. This is
+independent of the simulated receipt checks. No client timer decides whether the
+agent is generating a reply. Completed replies are never artificially delayed.
+
+## Persisted contact presence
+
+Latest/older history pages and send/retry responses include `presence` with
+`status` (`offline`, `online`, `typing`), nullable `lastSeenAt`, and nullable
+`expiresAt`, using Unix milliseconds. Ownership follows the existing contact
+middleware. Presence is activity of the contact's server agent, not a human device
+connection or a claim that the model has literally read a message.
+
+Migration `0008_contact_presence.sql` adds a private, cascading D1 table and atomic
+turn triggers. Accepting a new message/retry sets Online in the same transaction.
+The Workflow sets Typing immediately before reply generation, after prior-memory
+maintenance. Saving a reply or failure atomically sets Online with a 30-second
+idle deadline. Workflow sleep/expiry and the existing minute Cron persist Offline
+and `lastSeenAt` equal to that deadline even if iOS is closed. Late expiry uses a
+conditional deadline predicate so it cannot disconnect a newer message. History
+reads also reconcile overdue presence before returning it. Cron/scheduler delays
+can defer the physical update; history requests reconcile deadlines against server time before reading presence.
+Active work has a 15-minute lease, renewed on each generation attempt, to bound
+stale presence if dispatch, recovery, or Workflows remain unavailable. Long-paused
+work can therefore appear offline until another generation attempt starts.
+
+The visible chat polls authoritative history/presence every three seconds. This
+has polling latency and may miss very short Online/Typing phases; there is no
+WebSocket service. Navigation/backgrounding and refresh failures clear cached
+presence, showing Status unavailable until the next successful refresh. The title
+shows Online, Typing..., Last seen today/yesterday at HH:mm, or a dated Last seen
+for older activity. A contact without prior activity shows Offline rather than an
+invented date. Existing finished turns seed historical last-seen dates without
+pretending they connected during migration. Existing active turns start Online.
+Read checks retain their separately documented simulation.
 
 ## Conversational presentation and reply length
 
-The delayed Typing indicator uses three softly animated dots with no spinner.
+The server-driven Typing indicator uses three softly animated dots with no spinner.
 The dots pause while inactive; Reduce Motion keeps them still. New outgoing
 messages and incoming replies use a 0.22-second fade with an eight-point
 horizontal/four-point vertical offset. Reduce Motion uses a short fade only and

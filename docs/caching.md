@@ -12,9 +12,10 @@ empty cached lists retain their empty state during revalidation.
   shell forces a contact-list refresh on activation and every three seconds while
   active so unread counts and previews update even outside a conversation. Automatic
   refreshes preserve previously loaded later pages; pull to refresh resets pagination.
-- Visible conversations check freshness every three seconds while foregrounded.
-  Pending replies revalidate on each tick; idle history revalidates after 30 seconds.
-  Failed refreshes back off for at least five seconds unless a reply is pending.
+- Visible conversations revalidate on each three-second foreground tick, including
+  idle history, to observe server presence. Presence is cleared when leaving or
+  backgrounding the chat and after refresh failures. Failed requests retry on the
+  same tick; overlapping requests are still prevented.
 - Conversation pull to refresh and Refresh bypass freshness. Refreshes of the same
   conversation, list, or individual contact do not overlap.
 - Sending and retrying update the cached turn immediately after server acceptance

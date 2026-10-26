@@ -67,7 +67,8 @@ push over the full tab layout, preserving the selected tab on return. Chats supp
 pull to refresh and paginated loading. Choose, crop, replace, or remove a [profile photo](docs/profile-photos.md) in the
 contact editor. Private photo bytes use R2. Contacts are saved in D1 and isolated by the
 signed-in user. See [private contacts](docs/contacts.md). Conversations support
-persisted messages, reply status, earlier history, and retries. Accepted replies
+persisted messages, reply status, earlier history, and retries. The chat title shows
+D1-backed Online/Typing/Last seen presence maintained by the server Workflow and Cron. Accepted replies
 continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
 limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1, selects bounded recent context, and provides private memory/history search tools. An empty draft offers a microphone for
 [Muse Voice Transcribe dictation](docs/voice.md); the transcript is editable before

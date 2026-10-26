@@ -1,3 +1,4 @@
+import { expirePresence } from './chat/presence';
 import { deliverPush } from './push/delivery';
 import app from './app';
 import { recoverChats } from './chat/dispatch';
@@ -8,6 +9,7 @@ export default {
   fetch: app.fetch,
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil(recoverChats(env));
+    ctx.waitUntil(expirePresence(env.DB));
     ctx.waitUntil(deliverPush(env));
   },
 } satisfies ExportedHandler<Env>;

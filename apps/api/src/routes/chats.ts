@@ -1,3 +1,4 @@
+import { readPresence } from '../chat/presence';
 import { totalUnreadReplies } from '../lib/unread';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -17,6 +18,7 @@ chats.use('*', async (c, next) => {
   await next();
 });
 chats.get('/turns', async (c) => {
+  const presence = await readPresence(c.env.DB, c.get('contactID'), c.get('owner'));
   const before = c.req.query('before');
   if (before !== undefined && (!/^\d{1,16}$/.test(before) || !Number.isSafeInteger(Number(before)) || Number(before) < 1)) {
     return c.json({ error: 'Invalid cursor' }, 400);
@@ -25,7 +27,7 @@ chats.get('/turns', async (c) => {
     WHERE contact_id = ?1 AND user_id = ?2 AND sequence < ?3 ORDER BY sequence DESC LIMIT 51`)
     .bind(c.get('contactID'), c.get('owner'), before ? Number(before) : Number.MAX_SAFE_INTEGER).all<ChatTurn>();
   const page = results.slice(0, 50);
-  return c.json({ turns: page.reverse(), nextBefore: results.length > 50 ? page[0].sequence : null });
+  return c.json({ presence, turns: page.reverse(), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 // Acknowledge only completed replies actually presented by the client. Never move backwards.
 chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }), async (c) => {
@@ -62,7 +64,7 @@ chats.post('/turns', messageBody, async (c) => {
   if (existing) {
     if (existing.userText !== text) return c.json({ error: 'Message id already used' }, 409);
     if (existing.status === 'queued') c.executionCtx.waitUntil(dispatchChat(c.env, existing));
-    return c.json({ turn: publicTurn(existing) }, 200);
+    return c.json({ turn: publicTurn(existing), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) }, 200);
   }
   if (!c.env.META_API_KEY?.trim()) return c.json({ error: 'Replies are unavailable' }, 503);
   const limit = await admitAuthRequest(c.env.DB, c.get('owner'), 'chat-generation', 20);
@@ -81,16 +83,16 @@ chats.post('/turns', messageBody, async (c) => {
     .bind(id, c.get('contactID'), c.get('owner'), text, `chat-${id}-a1`, now).first<StoredTurn>();
   if (!turn) {
     const duplicate = await findTurn(c.env.DB, id, c.get('contactID'), c.get('owner'));
-    if (duplicate?.userText === text) return c.json({ turn: publicTurn(duplicate) });
+    if (duplicate?.userText === text) return c.json({ turn: publicTurn(duplicate), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
     return c.json({ error: 'A reply is already in progress or the conversation changed' }, 409);
   }
   c.executionCtx.waitUntil(dispatchChat(c.env, turn));
-  return c.json({ turn: publicTurn(turn) }, 202);
+  return c.json({ turn: publicTurn(turn), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) }, 202);
 });
 chats.post('/turns/:turnID/retry', messageBody, async (c) => {
   const previous = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
   if (!previous) return c.json({ error: 'Message not found' }, 404);
-  if (previous.status !== 'failed') return c.json({ turn: publicTurn(previous) });
+  if (previous.status !== 'failed') return c.json({ turn: publicTurn(previous), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
   if (!c.env.META_API_KEY?.trim()) return c.json({ error: 'Replies are unavailable' }, 503);
   const limit = await admitAuthRequest(c.env.DB, c.get('owner'), 'chat-generation', 20);
   if (!limit.allowed) {
@@ -108,7 +110,7 @@ chats.post('/turns/:turnID/retry', messageBody, async (c) => {
     .first<StoredTurn>();
   if (!turn) return c.json({ error: 'Conversation changed. Refresh before retrying' }, 409);
   c.executionCtx.waitUntil(dispatchChat(c.env, turn));
-  return c.json({ turn: publicTurn(turn) }, 202);
+  return c.json({ turn: publicTurn(turn), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) }, 202);
 });
 chats.post('/transcriptions', bodyLimit({ maxSize: 2 * 1024 * 1024,
   onError: (c) => c.json({ error: 'Recording is too large' }, 413) }), async (c) => {

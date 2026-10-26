@@ -1,3 +1,4 @@
+import { expirePresence, markTyping } from './presence';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { enqueueReply, deliverPush } from '../push/delivery';
 import { activeTurn, type ChatJob } from './data';
@@ -24,6 +25,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob> {
         const contact = await this.env.DB.prepare('SELECT name FROM contact WHERE id = ?1 AND user_id = ?2')
           .bind(turn.contactID, turn.userID).first<{ name: string }>();
         if (!contact) return false;
+        await markTyping(this.env.DB, job);
         const reply = await contactReply(this.env, turn, contact.name);
         // Save before checkpointing. A replay sees completion and skips another call.
         const now = Date.now();
@@ -49,6 +51,16 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob> {
       return true;
     });
     await this.refreshMemory(job, step, 'remember-completed-turn', true);
+    const deadline = await step.do('presence-deadline', async () => {
+      const row = await this.env.DB.prepare(`SELECT updated_at + 30000 AS expiresAt FROM chat_turn
+        WHERE id = ?1 AND attempt = ?2 AND status IN ('complete', 'failed')`)
+        .bind(job.turnID, job.attempt).first<{ expiresAt: number | null }>();
+      return row?.expiresAt ?? null;
+    });
+    if (deadline !== null) {
+      await step.sleepUntil('presence-idle', new Date(deadline));
+      await step.do('expire-presence', async () => { await expirePresence(this.env.DB); });
+    }
   }
 
   private async refreshMemory(job: ChatJob, step: WorkflowStep, name: string, includeCurrent: boolean) {

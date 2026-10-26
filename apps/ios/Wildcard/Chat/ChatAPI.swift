@@ -13,7 +13,34 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     var isPending: Bool { status == .queued || status == .running }
 }
 
+struct ContactPresence: Decodable, Sendable {
+    enum Status: String, Decodable, Sendable { case offline, online, typing }
+    let status: Status
+    let lastSeenAt: Double?
+    let expiresAt: Double?
+
+    var label: String {
+        switch status {
+        case .online: return "Online"
+        case .typing: return "Typing..."
+        case .offline:
+            guard let lastSeenAt else { return "Offline" }
+            let date = Date(timeIntervalSince1970: lastSeenAt / 1000)
+            let time = date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+            if Calendar.current.isDateInToday(date) { return "Last seen today at \(time)" }
+            if Calendar.current.isDateInYesterday(date) { return "Last seen yesterday at \(time)" }
+            return "Last seen \(date.formatted(date: .abbreviated, time: .omitted)) at \(time)"
+        }
+    }
+}
+
+struct ChatSubmission: Decodable, Sendable {
+    let turn: ChatTurn
+    let presence: ContactPresence?
+}
+
 struct ChatPage: Decodable, Sendable {
+    let presence: ContactPresence?
     let turns: [ChatTurn]
     let nextBefore: Int?
 }
@@ -32,7 +59,6 @@ extension AuthAPI {
     }
 
     private struct TranscriptionEnvelope: Decodable { let text: String }
-    private struct TurnEnvelope: Decodable { let turn: ChatTurn }
     private struct MessageInput: Encodable { let id: String; let text: String }
 
     func transcribeAudio(contactID: String, audio: Data, token: String) async throws -> String {
@@ -47,14 +73,14 @@ extension AuthAPI {
         return try JSONDecoder().decode(ChatPage.self, from: data)
     }
 
-    func sendMessage(contactID: String, id: String, text: String, token: String) async throws -> ChatTurn {
+    func sendMessage(contactID: String, id: String, text: String, token: String) async throws -> ChatSubmission {
         let body = try JSONEncoder().encode(MessageInput(id: id, text: text))
         let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: body, token: token)
-        return try JSONDecoder().decode(TurnEnvelope.self, from: data).turn
+        return try JSONDecoder().decode(ChatSubmission.self, from: data)
     }
 
-    func retryReply(contactID: String, turnID: String, token: String) async throws -> ChatTurn {
+    func retryReply(contactID: String, turnID: String, token: String) async throws -> ChatSubmission {
         let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns/\(turnID)/retry", method: "POST", token: token)
-        return try JSONDecoder().decode(TurnEnvelope.self, from: data).turn
+        return try JSONDecoder().decode(ChatSubmission.self, from: data)
     }
 }

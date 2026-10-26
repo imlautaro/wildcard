@@ -395,3 +395,34 @@ migrated SQLite schema, and whitespace checks were performed locally.
 No application builds, runtime tests, paid inference, remote migrations, push, or
 deployment were performed for this change. Real Standard/Contributor tool and
 structured-output behavior and independent-account installation remain unverified.
+
+
+## Contact presence
+
+Presence reuses the required D1 `DB`, `CHAT_WORKFLOW`, and minute Cron Trigger;
+no additional Cloudflare service, secret, account permission, or resource is
+needed. Independent installations follow the existing D1/Workflow provisioning
+order and bindings above. Migration `0008_contact_presence.sql` creates the
+owner-scoped table, expiry index, and turn triggers before the automatic release.
+Use `npm run db:migrate:local` for local development. Commit and push to let the
+existing release pipeline apply the same migration remotely and publish code.
+Do not apply it manually to production for an unpushed implementation.
+
+The Workflow persists Typing only for generation, then an idle deadline 30 seconds
+after completion/failure through D1 triggers. A durable sleep expires the lease;
+the minute Cron and history reads also reconcile overdue records. Queued/running
+work has a 15-minute safety lease, refreshed at each generation attempt. Details,
+API fields, polling costs/latency, and failure behavior are in [chats](chats.md#persisted-contact-presence).
+Cron still sweeps presence with no connected clients. Expiry is conditional on the
+current deadline so late old jobs cannot override newer activity.
+
+Verification after an authorized release: check migration 0008 and unchanged D1,
+Workflow/Cron bindings; with a fictitious contact confirm accepted work changes
+Online → Typing → Online → Offline and lastSeenAt reflects the deadline, including
+with iOS closed. Reopen the chat and confirm it reads that same server state.
+Sending a second message during the idle window must survive the first job's
+expiry. Cross-owner requests must still return 404. This functional verification,
+remote migration, release, and device appearance have not been performed locally.
+Rollback code can leave the additive table/triggers in place; older clients ignore
+the new JSON fields. Stop Workflow/Cron writers before any deliberate destructive
+schema rollback. Do not drop contacts or chat history to undo presence.

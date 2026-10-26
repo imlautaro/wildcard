@@ -32,12 +32,19 @@ struct ContactDetailView: View {
                     NavigationLink(value: HomeDestination.editContact(contactID)) {
                         HStack(spacing: 8) {
                             ContactAvatar(contact: contact, size: 30)
-                            Text(contact.name).manrope(.headline, weight: .semibold)
-                                .foregroundStyle(Color(uiColor: .label))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(contact.name).manrope(.headline, weight: .semibold)
+                                    .foregroundStyle(Color(uiColor: .label))
+                                Text(contacts.conversations.store(for: contactID).presence?.label ?? "Status unavailable")
+                                    .manrope(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
                         }
                     }
                     .tint(Color(uiColor: .label))
                     .accessibilityLabel("Edit \(contact.name)")
+                    .accessibilityValue(contacts.conversations.store(for: contactID).presence?.label ?? "Status unavailable")
                 }
             }
         }

@@ -148,3 +148,16 @@ export const pushDelivery = sqliteTable('push_delivery', {
   primaryKey({ columns: [table.turnId, table.deviceId] }),
   index('push_delivery_next_idx').on(table.nextAt),
 ]);
+
+// Presence triggers are maintained in 0008_contact_presence.sql.
+export const contactPresence = sqliteTable('contact_presence', {
+  contactId: text('contact_id').primaryKey(),
+  userId: text('user_id').notNull(),
+  status: text('status', { enum: ['offline', 'online', 'typing'] }).notNull(),
+  lastSeenAt: date('last_seen_at'),
+  expiresAt: date('expires_at'),
+}, (table) => [
+  foreignKey({ columns: [table.contactId, table.userId], foreignColumns: [contact.id, contact.userId] }).onDelete('cascade'),
+  check('presence_status', sql`${table.status} IN ('offline', 'online', 'typing')`),
+  index('contact_presence_expiry_idx').on(table.expiresAt).where(sql`${table.expiresAt} IS NOT NULL`),
+]);
