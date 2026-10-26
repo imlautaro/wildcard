@@ -6,7 +6,7 @@ struct ChatView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
     @Environment(\.scenePhase) private var scenePhase
-    @State private var chat = ChatStore()
+    let chat: ChatStore
     @State private var draft = ""
     @State private var voice = VoiceRecorder()
     @State private var voiceTask: Task<Void, Never>?
@@ -38,7 +38,7 @@ struct ChatView: View {
                             .disabled(chat.isLoadingMore)
                     }
                     if !chat.hasLoaded && chat.error == nil { ProgressView("Loading messages…") }
-                    if chat.hasLoaded && chat.turns.isEmpty {
+                    if chat.hasLoaded && chat.turns.isEmpty && !chat.isUnavailable {
                         ContentUnavailableView {
                             Label("Start a conversation", systemImage: "bubble.left.and.bubble.right")
                                 .manrope(.title2, weight: .semibold)
@@ -92,11 +92,14 @@ struct ChatView: View {
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { _ in
             voice.interrupt()
         }
-        .onDisappear { cancelRecording() }
+        .onDisappear {
+            cancelRecording()
+            chat.compactHistory()
+        }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
-                await chat.refresh(contactID: contactID, using: auth)
+                await chat.refresh(contactID: contactID, using: auth, force: false)
                 if chat.isUnavailable { return }
                 do { try await Task.sleep(for: .seconds(3)) }
                 catch { return }

@@ -70,7 +70,8 @@ persisted messages, reply status, earlier history, and retries. Accepted replies
 continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
 limits, and background execution. An empty draft offers a microphone for
 [Muse Voice Transcribe dictation](docs/voice.md); the transcript is editable before
-sending. Sharing is not implemented.
+sending. Navigation reuses a session-scoped [memory cache](docs/caching.md) and
+refreshes loaded content in the background. Sharing is not implemented.
 
 ## Infrastructure and releases
 

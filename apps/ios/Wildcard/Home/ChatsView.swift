@@ -66,7 +66,7 @@ struct ChatsView: View {
         }
         .overlay {
             if contacts.contacts.isEmpty && contacts.error == nil && mutationError == nil {
-                if contacts.isLoading || !contacts.hasLoaded {
+                if !contacts.hasLoaded {
                     ProgressView("Loading contacts…")
                 } else {
                     ContentUnavailableView {
@@ -79,9 +79,9 @@ struct ChatsView: View {
             }
         }
         .refreshable { await contacts.refresh(using: auth) }
-        .task { await contacts.refresh(using: auth) }
+        .task { await contacts.refresh(using: auth, force: false) }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await contacts.refresh(using: auth) } }
+            if phase == .active { Task { await contacts.refresh(using: auth, force: false) } }
         }
         .alert("Delete contact?", isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } })) {
             Button("Delete", role: .destructive) {

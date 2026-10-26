@@ -10,9 +10,28 @@ final class ChatStore {
     private(set) var nextBefore: Int?
     private(set) var isUnavailable = false
     var error: String?
+    private var refreshedAt: Date?
+    private var isRefreshing = false
+    private var invalidated = false
     private var revision = 0
     private var submission: (id: String, text: String)?
     var hasPendingReply: Bool { turns.contains(where: \.isPending) }
+
+    func compactHistory() {
+        guard !isSending, !isLoadingMore, turns.count > 100 else { return }
+        turns = Array(turns.suffix(100))
+        nextBefore = turns.first?.sequence
+    }
+
+    func invalidate() {
+        invalidated = true
+        revision += 1
+        turns = []
+        nextBefore = nil
+        submission = nil
+        refreshedAt = nil
+        isUnavailable = true
+    }
 
     private func merge(_ incoming: [ChatTurn]) {
         var merged = Dictionary(uniqueKeysWithValues: turns.map { ($0.id, $0) })
@@ -20,7 +39,12 @@ final class ChatStore {
         turns = merged.values.sorted { $0.sequence < $1.sequence }
     }
 
-    func refresh(contactID: String, using auth: AuthStore) async {
+    func refresh(contactID: String, using auth: AuthStore, force: Bool = true) async {
+        guard !invalidated, !isRefreshing else { return }
+        let freshness: TimeInterval = hasPendingReply ? 2 : (error == nil ? 30 : 5)
+        if !force, let refreshedAt, Date().timeIntervalSince(refreshedAt) < freshness { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
         let started = revision
         do {
             let page = try await auth.withSession { api, token in
@@ -28,22 +52,26 @@ final class ChatStore {
             }
             try Task.checkCancellation()
             guard started == revision else { return }
-            if !hasLoaded || (!turns.isEmpty && !page.turns.contains(where: { row in turns.contains(where: { $0.id == row.id }) })) {
+            if !hasLoaded || turns.isEmpty || !page.turns.contains(where: { row in turns.contains(where: { $0.id == row.id }) }) {
+                revision += 1
                 turns = page.turns
                 nextBefore = page.nextBefore
             } else { merge(page.turns) }
             hasLoaded = true
+            refreshedAt = .now
             error = nil
         } catch is CancellationError { }
         catch {
             guard started == revision else { return }
-            if case AuthAPI.Failure.notFound = error { isUnavailable = true }
+            if (error as? URLError)?.code == .cancelled { return }
+            refreshedAt = .now
+            if case AuthAPI.Failure.notFound = error { invalidate() }
             self.error = error.localizedDescription
         }
     }
 
     func loadMore(contactID: String, using auth: AuthStore) async {
-        guard let before = nextBefore, !isLoadingMore else { return }
+        guard !invalidated, !isSending, let before = nextBefore, !isLoadingMore else { return }
         isLoadingMore = true
         let started = revision
         defer { isLoadingMore = false }
@@ -56,11 +84,14 @@ final class ChatStore {
             merge(page.turns)
             nextBefore = page.nextBefore
         } catch is CancellationError { }
-        catch { self.error = error.localizedDescription }
+        catch {
+            guard started == revision, (error as? URLError)?.code != .cancelled else { return }
+            self.error = error.localizedDescription
+        }
     }
 
     func send(text: String, contactID: String, using auth: AuthStore) async -> Bool {
-        guard !isSending, !hasPendingReply, !isUnavailable else { return false }
+        guard !isSending, !hasPendingReply, !invalidated, !isUnavailable else { return false }
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, text.count <= 4000 else { return false }
         // Keep the identifier across an uncertain network result to prevent duplicate sends.
@@ -75,7 +106,10 @@ final class ChatStore {
                 try await api.sendMessage(contactID: contactID, id: submission.id, text: text, token: token)
             }
             revision += 1
+            guard !invalidated else { return false }
             merge([turn])
+            hasLoaded = true
+            refreshedAt = nil
             self.submission = nil
             return true
         } catch is CancellationError { return false }
@@ -94,7 +128,7 @@ final class ChatStore {
     }
 
     func retry(_ turn: ChatTurn, contactID: String, using auth: AuthStore) async {
-        guard !isSending, !hasPendingReply else { return }
+        guard !isSending, !hasPendingReply, !invalidated else { return }
         isSending = true
         revision += 1
         defer { isSending = false }
@@ -103,7 +137,9 @@ final class ChatStore {
                 try await api.retryReply(contactID: contactID, turnID: turn.id, token: token)
             }
             revision += 1
+            guard !invalidated else { return }
             merge([updated])
+            refreshedAt = nil
             error = nil
         } catch is CancellationError { }
         catch { self.error = error.localizedDescription }

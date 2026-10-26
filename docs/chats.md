@@ -53,9 +53,11 @@ failed turns are excluded from future context. The model has no external tools.
 
 Accepted work continues independently of iOS. Closing the app before a send is
 accepted cannot guarantee delivery; unsent drafts are not persisted. The client
-retains the send UUID through uncertain network outcomes within the current
-screen, polls every three seconds while active, and reloads persisted state on
-return. It offers earlier history, a multiline composer, pending status, and a
+retains the send UUID through uncertain network outcomes while the conversation
+is cached. It polls every three seconds while active with a pending reply and
+revalidates idle conversations after 30 seconds. Returning to a cached conversation
+displays its loaded history immediately. See [client caching](caching.md) for
+lifetime, limits, invalidation, and manual refresh behavior. It offers earlier history, a multiline composer, pending status, and a
 retry action for the latest failed reply. The Chats list shows the last reply or
 user message, with a 500-code-point preview.
 

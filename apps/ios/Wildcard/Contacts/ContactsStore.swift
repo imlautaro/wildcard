@@ -11,13 +11,19 @@ final class ContactsStore {
     private(set) var isLoadingMore = false
     private(set) var isMutating = false
     private(set) var error: String?
+    let conversations = ConversationCache()
+    private var refreshedAt: Date?
+    private var contactRefreshedAt: [String: Date] = [:]
+    private var refreshingContacts: Set<String> = []
+    private let freshness: TimeInterval = 30
     private var generation = 0
     private var knownContacts: [String: Contact] = [:]
 
     func contact(id: String) -> Contact? { knownContacts[id] }
 
-    func refresh(using auth: AuthStore) async {
-        guard !isMutating else { return }
+    func refresh(using auth: AuthStore, force: Bool = true) async {
+        guard !isMutating, !isLoading else { return }
+        if !force, let refreshedAt, Date().timeIntervalSince(refreshedAt) < freshness { return }
         generation += 1
         let request = generation
         isLoading = true
@@ -27,10 +33,14 @@ final class ContactsStore {
         do {
             let page = try await auth.withSession { api, token in try await api.contacts(token: token) }
             guard request == generation, !Task.isCancelled else { return }
-            for contact in page.contacts { knownContacts[contact.id] = contact }
+            for contact in page.contacts {
+                knownContacts[contact.id] = contact
+                contactRefreshedAt[contact.id] = .now
+            }
             contacts = page.contacts
             nextCursor = page.nextCursor
             hasLoaded = true
+            refreshedAt = .now
         } catch {
             if request == generation && !isCancellation(error) { self.error = error.localizedDescription }
         }
@@ -45,7 +55,10 @@ final class ContactsStore {
         do {
             let page = try await auth.withSession { api, token in try await api.contacts(token: token, before: cursor) }
             guard request == generation, !Task.isCancelled else { return }
-            for contact in page.contacts { knownContacts[contact.id] = contact }
+            for contact in page.contacts {
+                knownContacts[contact.id] = contact
+                contactRefreshedAt[contact.id] = .now
+            }
             let known = Set(contacts.map(\.id))
             contacts.append(contentsOf: page.contacts.filter { !known.contains($0.id) })
             nextCursor = page.nextCursor
@@ -61,6 +74,8 @@ final class ContactsStore {
                 try await api.saveContact(name: name, id: contactID, token: token)
             }
             knownContacts[saved.id] = saved
+            contactRefreshedAt[saved.id] = .now
+            refreshedAt = nil
             if let index = contacts.firstIndex(where: { $0.id == saved.id }) {
                 contacts[index] = saved
             } else if contactID == nil {
@@ -83,6 +98,9 @@ final class ContactsStore {
             } catch AuthAPI.Failure.notFound {
                 // A contact removed on another client is already deleted.
             }
+            conversations.remove(contactID: contact.id)
+            contactRefreshedAt.removeValue(forKey: contact.id)
+            refreshedAt = nil
             knownContacts.removeValue(forKey: contact.id)
             contacts.removeAll { $0.id == contact.id }
             isMutating = false
@@ -93,16 +111,22 @@ final class ContactsStore {
         }
     }
 
-    func refreshContact(id: String, using auth: AuthStore) async throws {
+    func refreshContact(id: String, using auth: AuthStore, force: Bool = true) async throws {
+        if !force, let date = contactRefreshedAt[id], Date().timeIntervalSince(date) < freshness { return }
+        guard refreshingContacts.insert(id).inserted else { return }
+        defer { refreshingContacts.remove(id) }
         let request = generation
         do {
             let contact = try await auth.withSession { api, token in try await api.contact(id: id, token: token) }
             guard request == generation, !Task.isCancelled else { return }
             knownContacts[id] = contact
+            contactRefreshedAt[id] = .now
             if let index = contacts.firstIndex(where: { $0.id == id }) { contacts[index] = contact }
         } catch {
             guard request == generation else { return }
             if case AuthAPI.Failure.notFound = error {
+                conversations.remove(contactID: id)
+                contactRefreshedAt.removeValue(forKey: id)
                 knownContacts.removeValue(forKey: id)
                 contacts.removeAll { $0.id == id }
             }

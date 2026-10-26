@@ -16,7 +16,7 @@ struct ContactDetailView: View {
                     .disabled(loading)
             }
             if let contact = contacts.contact(id: contactID) {
-                ChatView(contactID: contact.id).id(contact.id)
+                ChatView(contactID: contact.id, chat: contacts.conversations.store(for: contact.id)).id(contact.id)
             } else if loading {
                 ProgressView("Loading contact…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -36,14 +36,14 @@ struct ContactDetailView: View {
                 }
             }
         }
-        .task(id: contactID) { await refresh() }
+        .task(id: contactID) { await refresh(force: false) }
     }
 
-    private func refresh() async {
+    private func refresh(force: Bool = true) async {
         loading = true
         error = nil
         defer { loading = false }
-        do { try await contacts.refreshContact(id: contactID, using: auth) }
+        do { try await contacts.refreshContact(id: contactID, using: auth, force: force) }
         catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }
