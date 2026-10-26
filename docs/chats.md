@@ -76,6 +76,14 @@ turn IDs and attempt numbers are passed as workflow parameters, and step return
 values contain no conversation text. Messages are sent to Meta to produce replies;
 this implementation does not establish a new consent or training-data policy.
 
+## Voice input
+
+When the draft is empty, the composer offers a microphone. Record, stop, and
+review the Muse Voice Transcribe result as an editable draft before sending it.
+See [voice dictation](voice.md) for permissions, formats, endpoint limits, privacy,
+foreground lifecycle, and verification status. Durable generation begins after
+sending the reviewed text; recording/transcription is not a Workflow job.
+
 ## Setup and release
 
 See [infrastructure](infrastructure.md) for configuration, permissions, secret

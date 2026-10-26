@@ -1,3 +1,4 @@
+import AVFAudio
 import SwiftUI
 
 struct ChatView: View {
@@ -7,6 +8,8 @@ struct ChatView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var chat = ChatStore()
     @State private var draft = ""
+    @State private var voice = VoiceRecorder()
+    @State private var voiceTask: Task<Void, Never>?
     @FocusState private var composerFocused: Bool
     @ScaledMetric(relativeTo: .body) private var composerHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .body) private var sendIconSize: CGFloat = 20
@@ -14,6 +17,16 @@ struct ChatView: View {
     private var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draft.unicodeScalars.count <= 4000
             && chat.hasLoaded && !chat.hasPendingReply && !chat.isSending && !chat.isUnavailable
+            && !voice.isBusy && !voice.hasRecording
+    }
+
+    private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var canUseMicrophone: Bool {
+        chat.hasLoaded && !chat.isUnavailable && !chat.isSending && !voice.isBusy
+    }
+    private var actionEnabled: Bool {
+        if voice.phase == .recording { return true }
+        return draftIsEmpty ? canUseMicrophone : canSend
     }
 
     var body: some View {
@@ -67,6 +80,19 @@ struct ChatView: View {
             .safeAreaBar(edge: .bottom, spacing: 0) { composer }
             .refreshable { await chat.refresh(contactID: contactID, using: auth) }
         }
+        .onChange(of: voice.phase) { _, phase in
+            if phase == .ready { transcribeRecording() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { cancelRecording() }
+        }
+        .onChange(of: chat.isUnavailable) { _, unavailable in
+            if unavailable { cancelRecording() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { _ in
+            voice.interrupt()
+        }
+        .onDisappear { cancelRecording() }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
@@ -89,6 +115,22 @@ struct ChatView: View {
         }
     }
 
+    private func cancelRecording() {
+        voiceTask?.cancel()
+        voiceTask = nil
+        voice.cancel()
+    }
+
+    private func transcribeRecording() {
+        voiceTask?.cancel()
+        voiceTask = Task {
+            if let text = await voice.transcribe(contactID: contactID, using: auth), !Task.isCancelled {
+                draft = draft.isEmpty ? text : draft + " " + text
+                composerFocused = true
+            }
+        }
+    }
+
     private var composer: some View {
         VStack(spacing: 8) {
             if let error = chat.error {
@@ -99,6 +141,34 @@ struct ChatView: View {
                         .manrope(.footnote)
                 }
             }
+            if let error = voice.error {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(error).manrope(.footnote).foregroundStyle(.red)
+                    if voice.hasRecording {
+                        HStack {
+                            Button("Retry transcription") { transcribeRecording() }
+                            Button("Discard recording", role: .destructive) { cancelRecording() }
+                        }.manrope(.footnote)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if voice.phase == .recording {
+                HStack {
+                    Image(systemName: "waveform").foregroundStyle(.red)
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        Text("Recording \(voice.elapsed / 60):\(String(format: "%02d", voice.elapsed % 60)) / 1:00").monospacedDigit()
+                    }
+                    Spacer()
+                    Button("Cancel") { cancelRecording() }
+                }.manrope(.footnote)
+            } else if voice.phase == .transcribing || voice.phase == .ready {
+                HStack {
+                    ProgressView()
+                    Text("Transcribing…")
+                    Spacer()
+                    Button("Cancel") { cancelRecording() }
+                }.manrope(.footnote)
+            }
             HStack(alignment: .bottom, spacing: 12) {
                 TextField("Message", text: $draft, axis: .vertical)
                     .manrope().lineLimit(1...6).focused($composerFocused)
@@ -106,24 +176,31 @@ struct ChatView: View {
                     .padding(.vertical, 10)
                     .frame(minHeight: composerHeight)
                     .glassEffect(.regular, in: Capsule())
-                    .disabled(chat.isUnavailable)
+                    .disabled(chat.isUnavailable || voice.isBusy || voice.hasRecording)
                 Button {
-                    let submitted = draft
-                    Task {
-                        if await chat.send(text: submitted, contactID: contactID, using: auth), draft == submitted { draft = "" }
+                    if voice.phase == .recording {
+                        voice.stop()
+                    } else if draftIsEmpty {
+                        composerFocused = false
+                        voiceTask = Task { await voice.start() }
+                    } else {
+                        let submitted = draft
+                        Task {
+                            if await chat.send(text: submitted, contactID: contactID, using: auth), draft == submitted { draft = "" }
+                        }
                     }
                 } label: {
-                    Image(systemName: "arrow.up")
+                    Image(systemName: voice.phase == .recording ? "stop.fill" : (draftIsEmpty ? "mic.fill" : "arrow.up"))
                         .font(.system(size: sendIconSize, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: composerHeight, height: composerHeight)
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .glassEffect(.regular.tint(.accentColor).interactive(), in: Circle())
-                .opacity(canSend ? 1 : 0.4)
-                .accessibilityLabel("Send message")
-                .disabled(!canSend)
+                .glassEffect(.regular.tint(voice.phase == .recording ? .red : .accentColor).interactive(), in: Circle())
+                .opacity(actionEnabled ? 1 : 0.4)
+                .accessibilityLabel(voice.phase == .recording ? "Stop recording and transcribe" : (draftIsEmpty ? "Record audio" : "Send message"))
+                .disabled(!actionEnabled)
             }
             if draft.unicodeScalars.count > 4000 {
                 Text("Messages can contain up to 4,000 characters.").manrope(.caption).foregroundStyle(.red)

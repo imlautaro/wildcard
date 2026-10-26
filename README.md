@@ -68,7 +68,9 @@ pull to refresh and paginated loading. Contacts are saved in D1 and isolated by 
 signed-in user. See [private contacts](docs/contacts.md). Conversations support
 persisted messages, reply status, earlier history, and retries. Accepted replies
 continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
-limits, and background execution. Sharing is not implemented.
+limits, and background execution. An empty draft offers a microphone for
+[Muse Voice Transcribe dictation](docs/voice.md); the transcript is editable before
+sending. Sharing is not implemented.
 
 ## Infrastructure and releases
 

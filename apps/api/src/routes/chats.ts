@@ -1,12 +1,13 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { findTurn, publicTurn, storedColumns, turnColumns, type ChatTurn, type StoredTurn } from '../chat/data';
+import { normalizedRecording, transcribeRecording, TranscriptionFailure } from '../chat/transcription';
 import { dispatchChat } from '../chat/dispatch';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 
 const chats = new Hono<{ Bindings: Env; Variables: { owner: string; contactID: string } }>();
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-chats.use('*', bodyLimit({ maxSize: 32768, onError: (c) => c.json({ error: 'Request body too large' }, 413) }));
+const messageBody = bodyLimit({ maxSize: 32768, onError: (c) => c.json({ error: 'Request body too large' }, 413) });
 chats.use('*', async (c, next) => {
   const id = c.req.param('id');
   if (!id || !await c.env.DB.prepare('SELECT id FROM contact WHERE id = ? AND user_id = ?')
@@ -25,7 +26,7 @@ chats.get('/turns', async (c) => {
   const page = results.slice(0, 50);
   return c.json({ turns: page.reverse(), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
-chats.post('/turns', async (c) => {
+chats.post('/turns', messageBody, async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (!body || Array.isArray(body) || Object.keys(body).sort().join(',') !== 'id,text'
     || typeof body.id !== 'string' || !uuid.test(body.id) || typeof body.text !== 'string'
@@ -63,7 +64,7 @@ chats.post('/turns', async (c) => {
   c.executionCtx.waitUntil(dispatchChat(c.env, turn));
   return c.json({ turn: publicTurn(turn) }, 202);
 });
-chats.post('/turns/:turnID/retry', async (c) => {
+chats.post('/turns/:turnID/retry', messageBody, async (c) => {
   const previous = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
   if (!previous) return c.json({ error: 'Message not found' }, 404);
   if (previous.status !== 'failed') return c.json({ turn: publicTurn(previous) });
@@ -85,5 +86,33 @@ chats.post('/turns/:turnID/retry', async (c) => {
   if (!turn) return c.json({ error: 'Conversation changed. Refresh before retrying' }, 409);
   c.executionCtx.waitUntil(dispatchChat(c.env, turn));
   return c.json({ turn: publicTurn(turn) }, 202);
+});
+chats.post('/transcriptions', bodyLimit({ maxSize: 2 * 1024 * 1024,
+  onError: (c) => c.json({ error: 'Recording is too large' }, 413) }), async (c) => {
+  if (c.req.header('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'audio/wav') {
+    return c.json({ error: 'Send a WAV recording' }, 415);
+  }
+  if (!c.env.META_API_KEY?.trim()) return c.json({ error: 'Transcription is unavailable' }, 503);
+  const admission = await admitAuthRequest(c.env.DB, c.get('owner'), 'voice-transcription', 6);
+  if (!admission.allowed) {
+    c.header('Retry-After', String(admission.retryAfter));
+    return c.json({ error: 'Too many recordings' }, 429);
+  }
+  const audio = normalizedRecording(await c.req.arrayBuffer());
+  if (!audio) return c.json({ error: 'Use a mono 16-bit 16 kHz WAV lasting 0.25–60 seconds' }, 400);
+  try {
+    const text = await transcribeRecording(c.env.META_API_KEY, audio);
+    // Deletion during inference must not return text to a removed conversation.
+    if (!await c.env.DB.prepare('SELECT id FROM contact WHERE id = ? AND user_id = ?')
+      .bind(c.get('contactID'), c.get('owner')).first()) return c.json({ error: 'Contact not found' }, 404);
+    return c.json({ text });
+  } catch (error) {
+    if (error instanceof TranscriptionFailure) {
+      if (error.code === 'NO_SPEECH' || error.code === 'TOO_LONG') return c.json({ code: error.code, error: 'Record a shorter message with clear speech' }, 422);
+      if (error.code === 'REJECTED') return c.json({ error: 'Transcription is unavailable' }, 503);
+    }
+    console.error(JSON.stringify({ event: 'transcription_failed' }));
+    return c.json({ error: 'Transcription could not be completed' }, 502);
+  }
 });
 export default chats;

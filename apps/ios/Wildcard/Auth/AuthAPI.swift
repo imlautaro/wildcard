@@ -67,7 +67,7 @@ struct AuthAPI: Sendable {
         _ = try await send(path: "auth/sign-out", method: "POST", body: Data("{}".utf8), token: token)
     }
 
-    func send(path: String, method: String = "GET", body: Data? = nil, token: String? = nil, query: [URLQueryItem] = []) async throws -> (Data, HTTPURLResponse) {
+    func send(path: String, method: String = "GET", body: Data? = nil, token: String? = nil, query: [URLQueryItem] = [], contentType: String = "application/json", timeout: TimeInterval = 30) async throws -> (Data, HTTPURLResponse) {
         guard let baseURL, baseURL.host != nil else { throw Failure.invalidConfiguration }
         #if DEBUG
         let isLoopback = ["localhost", "127.0.0.1", "::1"].contains(baseURL.host ?? "")
@@ -79,15 +79,27 @@ struct AuthAPI: Sendable {
         if !query.isEmpty { components.queryItems = query }
         guard let url = components.url else { throw Failure.invalidConfiguration }
         var request = URLRequest(url: url)
+        request.timeoutInterval = timeout
         request.httpMethod = method
         request.httpBody = body
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        if body != nil { request.setValue(contentType, forHTTPHeaderField: "Content-Type") }
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if path.hasSuffix("/transcriptions") {
+                switch response.statusCode {
+                case 400, 413, 415: throw Failure.rejected("Record a message between a quarter second and one minute long.")
+                case 422:
+                    let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["code"] as? String
+                    throw Failure.rejected(code == "NO_SPEECH" ? "No speech was detected. Please record again." : "The transcript is too long. Please record a shorter message.")
+                case 429: throw Failure.rejected("Too many recordings. Wait a minute before trying again.")
+                case 502, 503, 504: throw Failure.rejected("Transcription is unavailable right now. Please try again.")
+                default: break
+                }
+            }
             if path.contains("/chat/") {
                 switch response.statusCode {
                 case 400, 422: throw Failure.rejected("Use a message with 1–4,000 characters.")

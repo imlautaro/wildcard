@@ -19,8 +19,15 @@ struct ChatPage: Decodable, Sendable {
 }
 
 extension AuthAPI {
+    private struct TranscriptionEnvelope: Decodable { let text: String }
     private struct TurnEnvelope: Decodable { let turn: ChatTurn }
     private struct MessageInput: Encodable { let id: String; let text: String }
+
+    func transcribeAudio(contactID: String, audio: Data, token: String) async throws -> String {
+        let (data, _) = try await send(path: "contacts/\(contactID)/chat/transcriptions", method: "POST",
+            body: audio, token: token, contentType: "audio/wav", timeout: 120)
+        return try JSONDecoder().decode(TranscriptionEnvelope.self, from: data).text
+    }
 
     func chatTurns(contactID: String, before: Int? = nil, token: String) async throws -> ChatPage {
         let query = before.map { [URLQueryItem(name: "before", value: String($0))] } ?? []

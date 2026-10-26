@@ -9,7 +9,7 @@
 | Runtime auth secret | `BETTER_AUTH_SECRET` | Signs cookies and native bearer sessions |
 | Cloudflare Workflow | `CHAT_WORKFLOW`, `wildcard-chat`, class `ChatWorkflow` | Durable reply generation |
 | Cron Trigger | `* * * * *` in Wrangler | Recover queued dispatch gaps and reconcile terminal workflows |
-| Meta Model API | Runtime `META_API_KEY`, model `muse-spark-1.3` | Generate private conversation replies |
+| Meta Model API | Runtime `META_API_KEY`, models `muse-spark-1.3` / `muse-voice-transcribe-1.0` | Generate replies and Muse Voice Transcribe dictation |
 | Public origin | `BETTER_AUTH_URL` | Canonical auth origin, separate from the secret |
 | Workers Builds | GitHub `imlautaro/wildcard`, `main`, root `/` | Automatic releases from committed and pushed source |
 
@@ -61,7 +61,8 @@ No actual secret value belongs in Git, app build settings, or documentation.
    preserve `binding: CHAT_WORKFLOW` and `class_name: ChatWorkflow`. The automatic
    Worker release creates/updates this Workflow and its minute Cron Trigger from
    Wrangler configuration. No separate local workflow deployment is needed.
-   Obtain your own Meta Model API credential with Muse Spark 1.3 access and add
+   Obtain your own Meta Model API credential with Muse Spark 1.3 and
+   Muse Voice Transcribe access and add
    `META_API_KEY` as an encrypted secret in Worker Settings → Build → Variables
    and secrets. The build credential must be allowed to create/update Workflows;
    verify its permissions if the first automatic release is rejected.
@@ -145,6 +146,17 @@ be reserved for explicitly authorized operations; releases already perform it.
 `npm run types --workspace @wildcard/api` regenerates ignored binding/runtime types
 from Wrangler; `npm run typecheck` includes it. `npm run build` is a local dry run
 only and does not publish. Follow the repository's build/test preferences.
+
+## Voice transcription
+
+[Voice dictation](voice.md) reuses the existing Worker and `META_API_KEY`; it adds
+no resource, binding, migration, or new credential name. The Meta project must
+permit `muse-voice-transcribe-1.0`. Its route forwards bounded WAV audio to Meta
+without storing audio in D1/R2. Local setup and automatic releases use the same
+commands and secret handling described above. Independent accounts need model
+access in addition to the existing Cloudflare permissions. No key or model
+permission change was performed during implementation; runtime model access is
+unverified. The additive route can be rolled back without a schema rollback.
 
 ## Migrations, compatibility, and verification
 
