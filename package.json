@@ -1,0 +1,12 @@
+{
+  "name": "wildcard",
+  "private": true,
+  "workspaces": ["apps/api"],
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "dev": "npm run dev --workspace @wildcard/api",
+    "typecheck": "npm run typecheck --workspace @wildcard/api",
+    "build": "npm run build --workspace @wildcard/api",
+    "ios": "open apps/ios/Wildcard.xcodeproj"
+  }
+}
