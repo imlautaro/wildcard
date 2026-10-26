@@ -8,6 +8,8 @@ struct ChatView: View {
     @State private var chat = ChatStore()
     @State private var draft = ""
     @FocusState private var composerFocused: Bool
+    @ScaledMetric(relativeTo: .body) private var composerHeight: CGFloat = 44
+    @ScaledMetric(relativeTo: .body) private var sendIconSize: CGFloat = 20
 
     private var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draft.unicodeScalars.count <= 4000
@@ -57,11 +59,12 @@ struct ChatView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
             .onChange(of: chat.turns.last) { _, _ in
                 withAnimation { proxy.scrollTo("latest", anchor: .bottom) }
                 Task { try? await contacts.refreshContact(id: contactID, using: auth) }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { composer }
+            .safeAreaBar(edge: .bottom, spacing: 0) { composer }
             .refreshable { await chat.refresh(contactID: contactID, using: auth) }
         }
         .task(id: scenePhase) {
@@ -99,8 +102,10 @@ struct ChatView: View {
             HStack(alignment: .bottom, spacing: 12) {
                 TextField("Message", text: $draft, axis: .vertical)
                     .manrope().lineLimit(1...6).focused($composerFocused)
-                    .padding(12)
-                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .frame(minHeight: composerHeight)
+                    .glassEffect(.regular, in: Capsule())
                     .disabled(chat.isUnavailable)
                 Button {
                     let submitted = draft
@@ -108,10 +113,15 @@ struct ChatView: View {
                         if await chat.send(text: submitted, contactID: contactID, using: auth), draft == submitted { draft = "" }
                     }
                 } label: {
-                    Image(systemName: "arrow.up").font(.system(size: 20, weight: .semibold))
-                        .frame(width: 44, height: 44)
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: sendIconSize, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: composerHeight, height: composerHeight)
+                        .contentShape(Circle())
                 }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.plain)
+                .glassEffect(.regular.tint(.accentColor).interactive(), in: Circle())
+                .opacity(canSend ? 1 : 0.4)
                 .accessibilityLabel("Send message")
                 .disabled(!canSend)
             }
@@ -120,6 +130,5 @@ struct ChatView: View {
             }
         }
         .padding(.horizontal).padding(.vertical, 10)
-        .background(.bar)
     }
 }
