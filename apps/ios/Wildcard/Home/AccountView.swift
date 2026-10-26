@@ -22,6 +22,12 @@ struct AccountView: View {
                     Task { await push.activate(using: auth, requestPermission: true) }
                 }
                 .disabled(push.isBusy)
+                if push.badgeStatus != "Enabled" {
+                    Button("Enable app icon badge") {
+                        Task { await push.activate(using: auth, requestPermission: true) }
+                    }
+                    .disabled(auth.isBusy || push.isBusy)
+                }
                 Button("Open notification settings") {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
                 }

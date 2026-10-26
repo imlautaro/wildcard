@@ -41,16 +41,26 @@ final class PushNotifications {
         guard auth.state == .signedIn, !permissionRequestInFlight else { return }
         let center = UNUserNotificationCenter.current()
         var settings = await center.notificationSettings()
-        let canRequestBadge = settings.authorizationStatus == .authorized && settings.badgeSetting == .disabled
-        if requestPermission && (settings.authorizationStatus == .notDetermined || canRequestBadge) {
+        // Re-register every requested interaction explicitly, including on installations
+        // where an earlier alert-only request reports badgeSetting as notSupported.
+        if requestPermission && settings.authorizationStatus != .denied {
             permissionRequestInFlight = true
             do { _ = try await center.requestAuthorization(options: [.alert, .sound, .badge]) }
-            catch { self.error = "Unable to request notification permission. Please try again." }
+            catch {
+                permissionRequestInFlight = false
+                self.error = "Unable to request notification permission. Please try again."
+                return
+            }
             permissionRequestInFlight = false
             settings = await center.notificationSettings()
         }
         guard auth.state == .signedIn else { return }
-        badgeStatus = settings.badgeSetting == .enabled ? "Enabled" : "Disabled in Settings"
+        switch settings.badgeSetting {
+        case .enabled: badgeStatus = "Enabled"
+        case .disabled: badgeStatus = "Disabled in Settings"
+        case .notSupported: badgeStatus = "Unavailable on this installation"
+        @unknown default: badgeStatus = "Unknown"
+        }
         switch settings.authorizationStatus {
         case .authorized, .provisional, .ephemeral:
             status = "Connecting…"

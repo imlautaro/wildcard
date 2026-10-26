@@ -196,3 +196,16 @@ this update. Static TypeScript/Swift checks cover integration; installed-device
 permission behavior, icon display, and preview layout require verification with
 the updated client. Rollback ignores the new optional payload/API fields; keep
 existing read-state migrations. Older clients still open the alert's conversation.
+
+## Badge permission recovery
+
+Account distinguishes `badgeSetting.disabled` from `.notSupported`; the latter
+is shown as **Unavailable on this installation**, not **Disabled in Settings**.
+An explicit **Enable app icon badge** action re-requests alert/sound/badge options
+for any authorization state other than denied, then reads the resulting system
+settings. It does not skip a badge request just because the previous setting was
+notSupported. Permission-request failures remain visible instead of being cleared
+by subsequent device synchronization. Denied notification authorization still
+requires the system settings flow. A missing Badges toggle must not be diagnosed
+as a user-disabled switch without checking the actual returned setting. These
+changes require installing the updated client; device recovery is unverified.
