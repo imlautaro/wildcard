@@ -60,8 +60,12 @@ its sessions and credential accounts, and should only be done with authorization
 
 ## Native app
 
-The app opens a native sign-in/sign-up form, validates missing fields, shows
-request errors, and prevents repeated submissions while a request is in flight.
+The app uses a native navigation bar above a centered, scrollable sign-in/sign-up
+form with two-line bold Manrope titles, neutral light/dark backgrounds, labeled
+rounded inputs with icons, password visibility, and a blue glass prominent button.
+Inline field messages and borders indicate validation errors; request errors appear
+in a separate banner. The mode switch stays in the navigation toolbar, and repeated
+submissions are blocked while a request is in flight.
 Registration asks for name, email, and password. The signed-in screen shows account
 details and sign-out. On launch the app loads its Keychain token and fetches `/me`.
 An expired session clears the token. Network/server/Keychain failures preserve the
@@ -70,11 +74,13 @@ saved session and offer retry instead of treating an outage as logout.
 Keychain uses `WhenUnlockedThisDeviceOnly`; tokens are not placed in UserDefaults
 or SwiftData. Logout revokes the remote session before removing the local token;
 if the network fails, it displays an error and allows retry. Passwords stay only in
-transient form state and are cleared after submission or a mode change. The app
+transient form state and are cleared after successful authentication or a mode change. The app
 contains no backend secret, database credential, or password hashing code.
 
 Both Debug and Release default to `https://wildcard-api.imlautaro.workers.dev` via
-`WILDCARD_API_URL`, exposed in the generated Info.plist as `WildcardAPIURL`.
+`WILDCARD_API_URL`. The explicit `WildcardAPIURL` key in `Config/Info.plist`
+references `$(WILDCARD_API_URL)` so Xcode expands it into the built app. Custom
+`INFOPLIST_KEY_*` build settings alone do not add this key to the app plist.
 An independent installation must replace this build setting in both configurations.
 Release only accepts HTTPS. Debug also accepts HTTP for loopback hosts; for local
 simulator development override the Debug setting to `http://localhost:8787` and

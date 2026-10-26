@@ -8,7 +8,8 @@ or access to the archived project is required.
 `Config/Info.plist` registers `Manrope.ttf` through `UIAppFonts`. The Xcode app's
 synchronized source folder includes the font as a resource; the Info.plist lives
 outside that folder to avoid copying it as a regular resource. Generated app
-metadata, including the API URL, is merged with this plist in Debug and Release.
+metadata is merged with this plist in Debug and Release. The API URL is an explicit
+`WildcardAPIURL` entry referencing `$(WILDCARD_API_URL)` in the same source plist.
 
 `AppTypography` uses the font's actual PostScript name `Manrope-ExtraLight` and
 sets the variable `wght` axis explicitly (400 regular through 800 extra bold).

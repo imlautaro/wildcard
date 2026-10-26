@@ -10,13 +10,15 @@ struct AuthUser: Codable, Sendable {
 struct AuthAPI: Sendable {
     enum Failure: LocalizedError {
         case invalidConfiguration
+        case insecureURL
         case unauthorized
         case rejected(String)
         case invalidResponse
 
         var errorDescription: String? {
             switch self {
-            case .invalidConfiguration: "The API URL must use HTTPS."
+            case .invalidConfiguration: "The API URL is missing or invalid. Check the app configuration."
+            case .insecureURL: "The API URL must use HTTPS."
             case .unauthorized: "Your session has expired. Please sign in again."
             case .rejected(let message): message
             case .invalidResponse: "The server returned an unexpected response. Please try again."
@@ -67,9 +69,9 @@ struct AuthAPI: Sendable {
         guard let baseURL, baseURL.host != nil else { throw Failure.invalidConfiguration }
         #if DEBUG
         let isLoopback = ["localhost", "127.0.0.1", "::1"].contains(baseURL.host ?? "")
-        guard baseURL.scheme == "https" || (baseURL.scheme == "http" && isLoopback) else { throw Failure.invalidConfiguration }
+        guard baseURL.scheme == "https" || (baseURL.scheme == "http" && isLoopback) else { throw Failure.insecureURL }
         #else
-        guard baseURL.scheme == "https" else { throw Failure.invalidConfiguration }
+        guard baseURL.scheme == "https" else { throw Failure.insecureURL }
         #endif
         var request = URLRequest(url: baseURL.appending(path: "api/v1/\(path)"))
         request.httpMethod = method
