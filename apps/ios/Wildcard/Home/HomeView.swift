@@ -25,7 +25,10 @@ struct HomeView: View {
         NavigationStack(path: $destinations) {
             TabView(selection: $section) {
                 Tab("Chats", systemImage: "bubble.left.and.bubble.right", value: Section.chats) {
-                    ChatsView { contact in destinations.append(.renameContact(contact.id)) }
+                    ChatsView(
+                        openContact: { contact in destinations.append(.contact(contact.id)) },
+                        renameContact: { contact in destinations.append(.renameContact(contact.id)) }
+                    )
                 }
                 .badge(contacts.totalUnreadCount)
                 Tab("Account", systemImage: "person.crop.circle", value: Section.account) {

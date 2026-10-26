@@ -5,11 +5,14 @@ import chats from './chats';
 import { terminateChats } from '../chat/dispatch';
 import { readBearerSession } from '../lib/session';
 
-type Contact = { id: string; name: string; createdAt: number; updatedAt: number; lastMessageText?: string | null; unreadCount?: number; lastReadSequence?: number };
+type Contact = { id: string; name: string; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
 const columns = 'id, name, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence';
 const selection = `${columns}, (SELECT substr(COALESCE(t.assistant_text, t.user_text), 1, 500)
   FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
   ORDER BY t.sequence DESC LIMIT 1) AS lastMessageText,
+  (SELECT CASE WHEN t.assistant_text IS NOT NULL THEN t.updated_at ELSE t.created_at END
+    FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
+    ORDER BY t.sequence DESC LIMIT 1) AS lastMessageAt,
   (SELECT COUNT(*) FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
     AND t.status = 'complete' AND t.sequence > contact.last_read_sequence) AS unreadCount`;
 const contacts = new Hono<{ Bindings: Env; Variables: { owner: string } }>();

@@ -92,7 +92,30 @@ when runtime testing is authorized. Do not use other people's private data.
 
 Contacts now open [private conversations](chats.md). List/detail responses include
 nullable `lastMessageText`, truncated to 500 code points from the latest reply or
-user message. Renaming preserves the conversation. Deletion cascades all turns
+user message, and nullable `lastMessageAt` in Unix milliseconds for that same
+message. Completed replies use the turn's completion timestamp; otherwise the
+user message's creation timestamp is used, including during retries or failures.
+Empty conversations return null. Renaming does not change the message timestamp.
+The timestamp is derived from existing turns and requires no migration or new
+service. Older API responses without this field remain decodable by iOS.
+
+Chats uses a full-width plain list without a Contacts header or disclosure arrows.
+Only interior rows have separators; the first row has no top divider and the last
+has no bottom divider.
+Each row opens the conversation and shows the last message time on the right,
+above its unread badge: local hours and minutes today, `Yesterday` one calendar
+day ago, an English weekday two through six days ago, and `dd/MM/yyyy` for older
+messages. Labels refresh every minute while visible. Empty chats have no date.
+If an older API omits `lastMessageAt`, each visible populated row requests the
+latest conversation page and derives the time from its final turn. This read does
+not mark the conversation read or generate replies. It repeats when the message
+preview changes or the row is recreated; failures leave the date absent. Empty
+chats make no fallback request. Once the API provides the timestamp, no extra
+history request is needed. Install the updated iOS app to use this compatibility
+path; release the API through the existing automatic commit/push pipeline to
+provide timestamps directly.
+
+Renaming preserves the conversation. Deletion cascades all turns
 and requests best-effort termination of active generation; an in-flight provider
 request may still consume credits. No sharing or cross-user context is enabled.
 

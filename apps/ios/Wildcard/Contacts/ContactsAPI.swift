@@ -6,6 +6,7 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     let createdAt: Double
     let updatedAt: Double
     let lastMessageText: String?
+    let lastMessageAt: Double?
     var unreadCount: Int?
     var lastReadSequence: Int?
 }
