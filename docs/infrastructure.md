@@ -10,7 +10,7 @@
 | Runtime auth secret | `BETTER_AUTH_SECRET` | Signs cookies and native bearer sessions |
 | Cloudflare Workflow | `CHAT_WORKFLOW`, `wildcard-chat`, class `ChatWorkflow` | Durable reply generation |
 | Cron Trigger | `* * * * *` in Wrangler | Recover queued dispatch gaps and reconcile terminal workflows |
-| Meta Model API | Runtime `META_API_KEY`, models `muse-spark-1.3` / `muse-voice-transcribe-1.0` | Generate replies and Muse Voice Transcribe dictation |
+| Meta Model API | Runtime `META_API_KEY`, `META_CHAT_MODEL` / `muse-voice-transcribe-1.0` | Generate replies and Muse Voice Transcribe dictation |
 | Public origin | `BETTER_AUTH_URL` | Canonical auth origin, separate from the secret |
 | Workers Builds | GitHub `imlautaro/wildcard`, `main`, root `/` | Automatic releases from committed and pushed source |
 
@@ -308,3 +308,43 @@ storage failures/crashes may leave private orphan objects; there is no automatic
 orphan sweep. Future account deletion must remove its objects separately from D1
 cascades. See [profile photos](profile-photos.md) for API limits, access lifetime,
 retention, rollback, and the unverified physical-device checks.
+
+## Development Contributor model
+
+On October 26, 2026, the owner explicitly approved Contributor mode for this
+single-user development installation, including its existing test conversations,
+after learning that Meta may use submitted prompts, history, and responses to
+train future models. This approval does not extend to a future public or multi-user
+installation. The deployed Worker uses the production pipeline/branch but is
+currently the owner's development backend; there is no separate staging Worker.
+
+`vars.META_CHAT_MODEL` in `apps/api/wrangler.jsonc` selects
+`muse-spark-1.3-contributor`. The Workflow passes that value to the existing Meta
+Chat Completions call with reasoning effort `low`. Only `muse-spark-1.3` (Standard)
+and `muse-spark-1.3-contributor` (Contributor) are accepted; an absent value defaults
+to Standard, and an invalid value stops generation. There is no automatic model
+fallback or change to existing messages. Future requests include the existing
+bounded conversation history as before. Completed replies are not regenerated.
+In-flight Workflow instances can finish on their original code/version.
+
+The model selector is public configuration, not a secret. Reuse the existing
+`META_API_KEY` with access to the selected model; no new credential, Cloudflare
+resource, permission, schema, or migration is required. No existing conversations
+were read or exported to configure this change. No paid inference was triggered
+for verification; actual Contributor request success remains unverified.
+
+For an independent installation, set `META_CHAT_MODEL` to `muse-spark-1.3` unless
+its operator has explicitly chosen Contributor's data use. For local development,
+Wrangler reads the configured variable; an explicit `META_CHAT_MODEL` in ignored
+`.dev.vars` overrides it. The example documents both choices. Before using real
+private data or opening the app to other users, switch back to Standard through
+the versioned configuration and an authorized automatic commit/push release.
+
+To return to Standard, set the Wrangler variable to `muse-spark-1.3`, update any
+local override, commit/push, and verify the live version's source tag and
+`META_CHAT_MODEL` binding. No manual deploy or dashboard-only variable update is
+needed. A code/config rollback changes future generation only and does not undo
+content already submitted to a provider. Keep existing D1/R2 data when changing
+models. Voice transcription remains on `muse-voice-transcribe-1.0`.
+
+Reference: [Meta models and Contributor data use](https://dev.meta.ai/docs/models).

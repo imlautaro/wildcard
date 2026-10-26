@@ -35,7 +35,7 @@ at 4,096 completion tokens, 256 KiB of provider JSON, and 20,000 code points.
 2. A short background dispatch creates `wildcard-chat` with a deterministic ID
    for this turn/attempt. It performs no inference in the HTTP request lifetime.
 3. `ChatWorkflow` marks the turn running, calls Meta's Chat Completions endpoint
-   with `muse-spark-1.3`, and saves the reply to D1 before completing the step.
+   with the configured Muse Spark variant (`META_CHAT_MODEL`), and saves the reply to D1 before completing the step.
 4. A Cron Trigger runs every minute, checks up to 50 pending turns, and recovers
    queued dispatch gaps. It checks five instances concurrently, rotating by last
    check time. Terminal instances with an unfinished row become failed and can

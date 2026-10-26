@@ -38,7 +38,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob> {
           { role: 'system', content: `You are a helpful private conversational assistant. Your contact display name is ${JSON.stringify(contact.name)}. Only use the conversation provided; do not claim access to other users, sensors, or external tools.` },
           ...history,
           { role: 'user', content: turn.userText },
-        ]);
+        ], this.env.META_CHAT_MODEL);
         // Save before checkpointing. A replay sees completion and skips another call.
         const now = Date.now();
         await this.env.DB.batch([this.env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, status = 'complete', error_code = NULL, updated_at = ?2

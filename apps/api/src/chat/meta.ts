@@ -2,12 +2,16 @@ import { NonRetryableError } from 'cloudflare:workflows';
 
 export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
-export async function museReply(key: string | undefined, messages: ModelMessage[]): Promise<string> {
+export async function museReply(key: string | undefined, messages: ModelMessage[], configuredModel?: string): Promise<string> {
   if (!key?.trim()) throw new NonRetryableError('MODEL_NOT_CONFIGURED');
+  const model = configuredModel ?? 'muse-spark-1.3';
+  if (model !== 'muse-spark-1.3' && model !== 'muse-spark-1.3-contributor') {
+    throw new NonRetryableError('MODEL_NOT_CONFIGURED');
+  }
   const response = await fetch('https://api.meta.ai/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'muse-spark-1.3', messages, max_completion_tokens: 4096, reasoning_effort: 'low', stream: false }),
+    body: JSON.stringify({ model, messages, max_completion_tokens: 4096, reasoning_effort: 'low', stream: false }),
     signal: AbortSignal.timeout(120_000),
     // Workers supports manual redirects; never forward the provider credential.
     redirect: 'manual',

@@ -90,6 +90,11 @@ and a matching source commit, then tags the Worker version with that commit.
 Releases apply D1 migrations before publishing and initialize the runtime auth
 secret on the first auth release, preserving it afterward. Chats also require the
 encrypted `META_API_KEY` build secret, copied securely to runtime by the release.
+`META_CHAT_MODEL` selects Muse Spark Standard or Contributor. This owner's
+single-user development backend currently uses `muse-spark-1.3-contributor` with
+explicit consent for Meta's training use of the existing test chats. Independent
+or public installations should select Standard unless separately authorized; see
+[model configuration](docs/infrastructure.md#development-contributor-model).
 Wrangler configures the Workflow and recovery Cron Trigger in the same release. Commit and push to
 release; do not deploy manually. Preview builds are disabled.
 

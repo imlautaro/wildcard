@@ -4,6 +4,11 @@ BETTER_AUTH_SECRET=replace-with-a-random-secret-of-at-least-32-characters
 # Optional locally; required for generating replies. Never commit a real key.
 META_API_KEY=
 
+# Contributor is enabled for this owner-only development installation.
+# Meta may use submitted prompts/history/responses to train models.
+# Independent installations can use muse-spark-1.3 for Standard mode.
+META_CHAT_MODEL=muse-spark-1.3-contributor
+
 # Optional APNs setup; use your own Apple key and identifiers. Never commit values.
 # Local macOS workerd may not support the HTTP/2 connection APNs requires.
 # APNS_PRIVATE_KEY=
