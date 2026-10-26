@@ -78,3 +78,10 @@ version from the cache; signing out discards the entire store. HTTP responses
 remain private/no-store and the app uses no disk photo cache. The notification
 extension uses an independent ephemeral download with no shared session token.
 See [profile photos](profile-photos.md).
+
+
+Foreground chat visits and composer edits also report activity through a separate
+three-second task. This does not mark history fresh or interfere with history
+polling. Opening a chat registers one expiring visit; idle polling does not renew
+it. Backgrounding/navigation close the visit best effort, and server TTLs expire
+lost clients. See [visit presence](chats.md#visiting-a-chat-and-composing-a-draft).

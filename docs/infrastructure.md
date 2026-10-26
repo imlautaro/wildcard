@@ -403,7 +403,10 @@ Presence reuses the required D1 `DB`, `CHAT_WORKFLOW`, and minute Cron Trigger;
 no additional Cloudflare service, secret, account permission, or resource is
 needed. Independent installations follow the existing D1/Workflow provisioning
 order and bindings above. Migration `0008_contact_presence.sql` creates the
-owner-scoped table, expiry index, and turn triggers before the automatic release.
+owner-scoped table, expiry index, and turn triggers. Migration
+`0009_delayed_contact_connection.sql` replaces those triggers so queued work
+preserves presence until the Workflow connects the agent after a durable
+three-second wait. Both run before the automatic release.
 Use `npm run db:migrate:local` for local development. Commit and push to let the
 existing release pipeline apply the same migration remotely and publish code.
 Do not apply it manually to production for an unpushed implementation.
@@ -416,8 +419,9 @@ API fields, polling costs/latency, and failure behavior are in [chats](chats.md#
 Cron still sweeps presence with no connected clients. Expiry is conditional on the
 current deadline so late old jobs cannot override newer activity.
 
-Verification after an authorized release: check migration 0008 and unchanged D1,
+Verification after an authorized release: check migrations 0008/0009 and unchanged D1,
 Workflow/Cron bindings; with a fictitious contact confirm accepted work changes
+the existing Offline/Last seen state persists briefly before
 Online → Typing → Online → Offline and lastSeenAt reflects the deadline, including
 with iOS closed. Reopen the chat and confirm it reads that same server state.
 Sending a second message during the idle window must survive the first job's
@@ -426,3 +430,35 @@ remote migration, release, and device appearance have not been performed locally
 Rollback code can leave the additive table/triggers in place; older clients ignore
 the new JSON fields. Stop Workflow/Cron writers before any deliberate destructive
 schema rollback. Do not drop contacts or chat history to undo presence.
+
+
+### Chat visit and draft activity leases
+
+Apply migration `0010_chat_visits.sql` after 0008/0009. It adds `chat_visit` and
+updates the presence trigger to compose reply/visit leases atomically. The same
+`wildcard-chat` Workflow and `CHAT_WORKFLOW` binding now accept a `kind: visit`
+branch as well as existing turn/attempt jobs. The versioned Wrangler configuration
+already provisions everything required: D1, the Workflow and the minute Cron.
+No new resource, secret or permission is required; visit activity does not require
+Meta inference. Keep generation payload compatibility when upgrading or rolling
+back while jobs exist. Worker types derive the union payload from the exported
+Workflow entry point; regenerate them with the existing typecheck command.
+
+For local setup, run `npm run db:migrate:local` then `npm run dev` with the existing
+bindings. For production use commit/push and the automatic migration/release
+pipeline. Do not manually deploy. The Cron expires presence, removes visit leases
+older than one day and recovers bounded pending visit dispatch. Active visit jobs
+sleep/check at current deadlines; prolonged drafting eventually relies on Cron
+and request reconciliation after 120 cycles. Read [visit behavior](chats.md#visiting-a-chat-and-composing-a-draft)
+for endpoint limits, lifecycle, timing, activity metadata and failure handling.
+
+After an authorized release, verify 0010 applied and the same Workflow/Cron bindings
+remain. Use fictitious data to check open → delayed Online → idle Offline without
+sending, edits extending Online, unchanged open keyboards expiring, leaving before
+connection, background/termination expiry, multiple sessions, and overlap with
+real generation. Visit activity must never show agent Typing or create a turn,
+model request or push. These functional/device checks have not been run locally.
+Rollback must account for active `kind: visit` jobs: older pre-visit code does not
+understand them. Drain/terminate visit jobs first or retain the compatible branch;
+leave additive tables in place, and restore compatible turn triggers deliberately.
+No schema rollback is needed for the existing iOS client, which sends no activity.

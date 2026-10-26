@@ -52,6 +52,15 @@ struct ChatReadState: Decodable, Sendable {
 }
 
 extension AuthAPI {
+    private struct ActivityInput: Encodable { let visitID: String; let kind: String }
+    private struct ActivityResponse: Decodable { let active: Bool }
+
+    func chatActivity(contactID: String, visitID: String, kind: String, token: String) async throws -> Bool {
+        let body = try JSONEncoder().encode(ActivityInput(visitID: visitID, kind: kind))
+        let (data, _) = try await send(path: "contacts/\(contactID)/chat/activity", method: "POST", body: body, token: token, timeout: 5)
+        return try JSONDecoder().decode(ActivityResponse.self, from: data).active
+    }
+
     func markChatRead(contactID: String, sequence: Int, token: String) async throws -> ChatReadState {
         let body = try JSONEncoder().encode(["sequence": sequence])
         let (data, _) = try await send(path: "contacts/\(contactID)/chat/read", method: "PUT", body: body, token: token)

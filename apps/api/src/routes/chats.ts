@@ -1,3 +1,4 @@
+import { dispatchVisit } from '../chat/visits';
 import { readPresence } from '../chat/presence';
 import { totalUnreadReplies } from '../lib/unread';
 import { Hono } from 'hono';
@@ -16,6 +17,63 @@ chats.use('*', async (c, next) => {
     .bind(id, c.get('owner')).first()) return c.json({ error: 'Contact not found' }, 404);
   c.set('contactID', id);
   await next();
+});
+// Activity contains no draft text. Each foreground visit has a client UUID.
+chats.post('/activity', bodyLimit({ maxSize: 1024,
+  onError: (c) => c.json({ error: 'Request body too large' }, 413) }), async (c) => {
+  const body = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!body || Array.isArray(body) || Object.keys(body).sort().join(',') !== 'kind,visitID'
+    || typeof body.visitID !== 'string' || !uuid.test(body.visitID)
+    || typeof body.kind !== 'string' || !['open', 'typing', 'leave'].includes(body.kind)) {
+    return c.json({ error: 'Provide a visit UUID and open, typing, or leave activity' }, 400);
+  }
+  const owner = c.get('owner');
+  const contactID = c.get('contactID');
+  const id = body.visitID.toLowerCase();
+  const admission = await admitAuthRequest(c.env.DB, owner, 'chat-activity', 120);
+  if (!admission.allowed) {
+    c.header('Retry-After', String(admission.retryAfter));
+    return c.json({ error: 'Too much activity' }, 429);
+  }
+  const now = Date.now();
+  if (body.kind === 'open') {
+    const opens = await admitAuthRequest(c.env.DB, owner, 'chat-visits', 20);
+    if (!opens.allowed) {
+      c.header('Retry-After', String(opens.retryAfter));
+      return c.json({ error: 'Too many visits' }, 429);
+    }
+    await c.env.DB.prepare(`INSERT INTO chat_visit
+      (id, contact_id, user_id, ready_at, expires_at, updated_at)
+      SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE EXISTS (SELECT 1 FROM contact WHERE id = ?2 AND user_id = ?3)
+      AND (SELECT COUNT(*) FROM chat_visit WHERE user_id = ?3 AND closed = 0 AND expires_at > ?6) < 10
+      ON CONFLICT(id) DO NOTHING`)
+      .bind(id, contactID, owner, now + 3000, now + 33000, now).run();
+  } else if (body.kind === 'typing') {
+    await c.env.DB.prepare(`UPDATE chat_visit SET expires_at = MAX(expires_at, ?1), updated_at = ?2
+      WHERE id = ?3 AND contact_id = ?4 AND user_id = ?5 AND closed = 0 AND expires_at > ?2`)
+      .bind(now + 30000, now, id, contactID, owner).run();
+  } else {
+    // A leave arriving before an open is a tombstone, so late requests cannot reconnect it.
+    await c.env.DB.prepare(`INSERT INTO chat_visit
+      (id, contact_id, user_id, ready_at, expires_at, updated_at, closed)
+      SELECT ?1, ?2, ?3, ?4, ?4, ?4, 1 WHERE EXISTS (SELECT 1 FROM contact WHERE id = ?2 AND user_id = ?3)
+      ON CONFLICT(id) DO UPDATE SET closed = 1,
+        expires_at = CASE WHEN chat_visit.connected = 0 THEN MIN(chat_visit.expires_at, ?4) ELSE chat_visit.expires_at END
+      WHERE chat_visit.contact_id = ?2 AND chat_visit.user_id = ?3`)
+      .bind(id, contactID, owner, now).run();
+  }
+  const visit = await c.env.DB.prepare(`SELECT connected, closed, expires_at AS expiresAt FROM chat_visit
+    WHERE id = ?1 AND contact_id = ?2 AND user_id = ?3`)
+    .bind(id, contactID, owner).first<{ connected: number; closed: number; expiresAt: number }>();
+  const active = !!visit && !visit.closed && visit.expiresAt > now;
+  if (body.kind === 'open' && active && !visit.connected) {
+    try { await dispatchVisit(c.env, { kind: 'visit', visitID: id, contactID, userID: owner }); }
+    catch {
+      console.error(JSON.stringify({ event: 'visit_dispatch_deferred' }));
+      return c.json({ error: 'Presence is temporarily unavailable' }, 503);
+    }
+  }
+  return c.json({ active });
 });
 chats.get('/turns', async (c) => {
   const presence = await readPresence(c.env.DB, c.get('contactID'), c.get('owner'));

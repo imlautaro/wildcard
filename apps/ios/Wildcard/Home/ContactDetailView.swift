@@ -24,18 +24,18 @@ struct ContactDetailView: View {
                 ContentUnavailableView("Contact not found", systemImage: "person.crop.circle.badge.questionmark")
             }
         }
-        .navigationTitle(contacts.contact(id: contactID)?.name ?? "Contact")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let contact = contacts.contact(id: contactID) {
-                ToolbarItem(placement: .principal) {
+                ToolbarItem(placement: .topBarLeading) {
                     NavigationLink(value: HomeDestination.editContact(contactID)) {
                         HStack(spacing: 8) {
                             ContactAvatar(contact: contact, size: 30)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(contact.name).manrope(.headline, weight: .semibold)
                                     .foregroundStyle(Color(uiColor: .label))
-                                Text(contacts.conversations.store(for: contactID).presence?.label ?? "Status unavailable")
+                                Text(contacts.conversations.store(for: contactID).presence?.label ?? " ")
                                     .manrope(.caption2)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -44,7 +44,7 @@ struct ContactDetailView: View {
                     }
                     .tint(Color(uiColor: .label))
                     .accessibilityLabel("Edit \(contact.name)")
-                    .accessibilityValue(contacts.conversations.store(for: contactID).presence?.label ?? "Status unavailable")
+                    .accessibilityValue(contacts.conversations.store(for: contactID).presence?.label ?? "")
                 }
             }
         }

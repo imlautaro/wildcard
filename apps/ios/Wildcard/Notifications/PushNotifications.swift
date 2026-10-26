@@ -143,16 +143,23 @@ final class PushAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
         PushNotifications.shared.registrationFailed()
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                           withCompletionHandler completionHandler: @escaping @Sendable (UNNotificationPresentationOptions) -> Void) {
         // Active chats refresh in the foreground; alerts are for background delivery.
-        return []
+        DispatchQueue.main.async { completionHandler([]) }
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-              let contactID = response.notification.request.content.userInfo["contactID"] as? String,
-              let userID = response.notification.request.content.userInfo["userID"] as? String else { return }
-        await MainActor.run {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                           withCompletionHandler completionHandler: @escaping @Sendable () -> Void) {
+        let opensConversation = response.actionIdentifier == UNNotificationDefaultActionIdentifier
+        let contactID = response.notification.request.content.userInfo["contactID"] as? String
+        let userID = response.notification.request.content.userInfo["userID"] as? String
+        // UIKit's completion can update its state-restoration snapshot. The async
+        // delegate bridge completed on a background executor and crashed there.
+        // Keep both routing and completion on the main queue, including ignored actions.
+        DispatchQueue.main.async {
+            defer { completionHandler() }
+            guard opensConversation, let contactID, let userID else { return }
             PushNotifications.shared.destination = .init(contactID: contactID, userID: userID)
         }
     }

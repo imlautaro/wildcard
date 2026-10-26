@@ -1,3 +1,4 @@
+import { runVisit, type VisitJob } from './visits';
 import { expirePresence, markTyping } from './presence';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { enqueueReply, deliverPush } from '../push/delivery';
@@ -5,10 +6,16 @@ import { activeTurn, type ChatJob } from './data';
 import { contactReply } from './context';
 import { maintainMemories } from './memory';
 
-export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob> {
-  async run(event: WorkflowEvent<ChatJob>, step: WorkflowStep) {
+export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob> {
+  async run(event: WorkflowEvent<ChatJob | VisitJob>, step: WorkflowStep) {
+    if ('kind' in event.payload) {
+      await runVisit(this.env, event.payload, step);
+      return;
+    }
     const job = event.payload;
     try {
+      // Keep the queued agent disconnected until it actually starts handling the message.
+      await step.sleep('connect-delay', '3 seconds');
       await step.do('mark-running', async () => {
         await this.env.DB.prepare(`UPDATE chat_turn SET status = 'running', updated_at = ?1
           WHERE id = ?2 AND attempt = ?3 AND status = 'queued'`)

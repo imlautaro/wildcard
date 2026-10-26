@@ -9,6 +9,8 @@ struct ChatView: View {
     let chat: ChatStore
     @State private var draft = ""
     @State private var draftRevision = 0
+    @State private var visitID: String?
+    @State private var lastComposerActivity = Date.distantPast
     @State private var isVisible = false
     @State private var animateNewMessages = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -84,8 +86,11 @@ struct ChatView: View {
         .onChange(of: voice.phase) { _, phase in
             if phase == .ready { transcribeRecording() }
         }
+        .onChange(of: composerFocused) { _, focused in
+            lastComposerActivity = focused ? .now : .distantPast
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { chat.clearPresence() }
+            if phase != .active { endVisit(); chat.clearPresence() }
             if phase == .background { cancelRecording() }
         }
         .onChange(of: chat.isUnavailable) { _, unavailable in
@@ -103,9 +108,37 @@ struct ChatView: View {
         }
         .onDisappear {
             isVisible = false
+            endVisit()
             chat.clearPresence()
             cancelRecording()
             chat.compactHistory()
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            let id = UUID().uuidString.lowercased()
+            visitID = id
+            var registered = false
+            var reportedActivity = Date.distantPast
+            while !Task.isCancelled {
+                guard isVisible, scenePhase == .active, !chat.isUnavailable, let currentVisit = visitID else { return }
+                if !registered, await reportActivity("open", visit: currentVisit) != nil {
+                    registered = true
+                }
+                if registered, composerFocused, lastComposerActivity > reportedActivity,
+                   Date.now.timeIntervalSince(lastComposerActivity) < 6 {
+                    let activity = lastComposerActivity
+                    if let active = await reportActivity("typing", visit: currentVisit) {
+                        if active { reportedActivity = activity }
+                        else if visitID == currentVisit {
+                            // Renew only for new interaction, never merely because the chat is still visible.
+                            visitID = UUID().uuidString.lowercased()
+                            registered = false
+                        }
+                    }
+                }
+                do { try await Task.sleep(for: .seconds(3)) }
+                catch { return }
+            }
         }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
@@ -121,6 +154,20 @@ struct ChatView: View {
                 catch { return }
             }
         }
+    }
+
+    private func reportActivity(_ kind: String, visit: String) async -> Bool? {
+        do {
+            return try await auth.withSession { api, token in
+                try await api.chatActivity(contactID: contactID, visitID: visit, kind: kind, token: token)
+            }
+        } catch { return nil } // Optional presence failures never block reading or sending messages.
+    }
+
+    private func endVisit() {
+        guard let id = visitID else { return }
+        visitID = nil
+        Task { _ = await reportActivity("leave", visit: id) }
     }
 
     private func cancelRecording() {
@@ -181,6 +228,7 @@ struct ChatView: View {
             HStack(alignment: .bottom, spacing: 12) {
                 TextField("Message", text: Binding(get: { draft }, set: {
                     draftRevision += 1
+                    lastComposerActivity = .now
                     draft = $0
                 }), axis: .vertical)
                     .manrope().lineLimit(1...6).focused($composerFocused)

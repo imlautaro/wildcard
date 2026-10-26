@@ -34,7 +34,8 @@ at 4,096 completion tokens, 256 KiB of provider JSON, and 20,000 code points.
 1. The HTTP handler commits a queued turn to D1 before acknowledging acceptance.
 2. A short background dispatch creates `wildcard-chat` with a deterministic ID
    for this turn/attempt. It performs no inference in the HTTP request lifetime.
-3. `ChatWorkflow` marks the turn running, calls Meta's Chat Completions endpoint
+3. `ChatWorkflow` waits three seconds before connecting the agent and marking the
+   turn running, then calls Meta's Chat Completions endpoint
    with the configured Muse Spark variant (`META_CHAT_MODEL`), and saves the reply to D1 before completing the step.
 4. A Cron Trigger runs every minute, checks up to 50 pending turns, and recovers
    queued dispatch gaps. It checks five instances concurrently, rotating by last
@@ -183,14 +184,21 @@ middleware. Presence is activity of the contact's server agent, not a human devi
 connection or a claim that the model has literally read a message.
 
 Migration `0008_contact_presence.sql` adds a private, cascading D1 table and atomic
-turn triggers. Accepting a new message/retry sets Online in the same transaction.
+turn triggers. Migration `0009_delayed_contact_connection.sql` updates them:
+accepting a
+message/retry keeps the previous presence (or Offline for a new conversation).
+The Workflow waits three seconds durably before marking the turn running and
+atomically connecting the agent as Online. Already-online contacts stay connected;
+queue acceptance does not extend their lease. This wait also applies to retries
+and continues with iOS closed.
 The Workflow sets Typing immediately before reply generation, after prior-memory
 maintenance. Saving a reply or failure atomically sets Online with a 30-second
 idle deadline. Workflow sleep/expiry and the existing minute Cron persist Offline
 and `lastSeenAt` equal to that deadline even if iOS is closed. Late expiry uses a
 conditional deadline predicate so it cannot disconnect a newer message. History
 reads also reconcile overdue presence before returning it. Cron/scheduler delays
-can defer the physical update; history requests reconcile deadlines against server time before reading presence.
+can defer the physical update; history requests reconcile deadlines against
+server time before reading presence.
 Active work has a 15-minute lease, renewed on each generation attempt, to bound
 stale presence if dispatch, recovery, or Workflows remain unavailable. Long-paused
 work can therefore appear offline until another generation attempt starts.
@@ -198,8 +206,11 @@ work can therefore appear offline until another generation attempt starts.
 The visible chat polls authoritative history/presence every three seconds. This
 has polling latency and may miss very short Online/Typing phases; there is no
 WebSocket service. Navigation/backgrounding and refresh failures clear cached
-presence, showing Status unavailable until the next successful refresh. The title
-shows Online, Typing..., Last seen today/yesterday at HH:mm, or a dated Last seen
+presence, leaving the status line blank until the next successful refresh.
+The leading navigation-bar header places the avatar beside left-aligned name
+and status. It reserves the subtitle line while loading, with no error placeholder.
+The title shows Online, Typing..., Last seen today/yesterday at HH:mm, or a dated
+Last seen
 for older activity. A contact without prior activity shows Offline rather than an
 invented date. Existing finished turns seed historical last-seen dates without
 pretending they connected during migration. Existing active turns start Online.
@@ -242,3 +253,50 @@ Read checks use primary blue in light mode and pale cyan in dark mode. Keep this
 asset aligned with AccentColor if the app's brand color changes. Contact bubbles
 retain the system secondary background. Swift and whitespace checks passed;
 visual device verification remains pending, with no builds or tests run.
+
+
+## Visiting a chat and composing a draft
+
+`POST /activity` accepts `{ "visitID": "<UUID>", "kind": "open" }`, `typing`,
+or `leave`, scoped to the authenticated owner/contact. It returns `{ active }`;
+this reports whether that visit lease accepts activity, not whether the agent is
+already connected. This endpoint never receives draft text and never calls Meta.
+Limits: 1 KiB JSON, 120 activity requests and 20 opens per user per minute, and
+at most ten unclosed, unexpired visits per user. Open is idempotent by UUID;
+replaying an expired or closed visit does not reopen it. A new interaction after
+expiry uses a new UUID. Ownership filters cover every read and write.
+
+Migration `0010_chat_visits.sql` stores private visit leases in D1 with cascading
+contact deletion, indexes, and activity triggers. An open schedules a visit job
+through the existing `CHAT_WORKFLOW` binding, using a separate `visit-` instance
+ID and an explicit payload kind. Its branch performs no generation, memory work,
+or push delivery. Three seconds after the server accepts the open, a durable
+step connects the agent and preserves it for 30 more seconds. An idle open chat
+does not keep renewing this lease and does not reconnect repeatedly after expiry.
+
+Opening the keyboard counts once as activity. Subsequent actual composer edits
+are coalesced on a separate three-second foreground activity loop and extend the
+lease to 30 seconds after the server receives activity. Keeping the keyboard open
+or retaining an unchanged draft does not keep the contact online. New interaction
+after expiry can start a fresh delayed visit. Programmatic composer clearing after
+Send does not count as a draft edit. History/presence polling runs independently;
+activity requests have a five-second timeout and failures never block sending.
+The first status change may take an additional polling interval to become visible.
+
+Leaving or backgrounding closes the visit best effort, cancels an unconnected
+visit, and stops edit heartbeats. An already-connected visit keeps its remaining
+idle window. Tombstones prevent an out-of-order open from reconnecting a closed
+visit. If delivery fails or iOS is killed, leases still expire without a client.
+Expired records/tombstones are removed after one day by the existing Cron/expiry
+path. No text or key contents are stored in visits, only IDs, timestamps and flags.
+
+Multiple devices/visits extend the same contact presence. Real agent Typing takes
+priority over draft activity; completing/failing a reply preserves any newer visit
+lease while dropping the long generation lease. Expiry always checks the current
+combined deadline so old jobs cannot disconnect current generation or drafting.
+The visit job follows renewed deadlines for at most 120 sleep/check cycles; after
+that Cron and authoritative reads continue expiry. Cron also attempts dispatch of
+up to 20 still-pending, unexpired visits in groups of five. Dispatch outages can
+prevent a short visit from connecting before its lease expires; the client retries
+uncertain registration with the same UUID. No realtime service or new binding is
+required, but visit jobs consume Workflows executions and activity adds D1 writes.

@@ -149,7 +149,7 @@ export const pushDelivery = sqliteTable('push_delivery', {
   index('push_delivery_next_idx').on(table.nextAt),
 ]);
 
-// Presence triggers are maintained in 0008_contact_presence.sql.
+// Presence triggers are maintained by the SQL migrations.
 export const contactPresence = sqliteTable('contact_presence', {
   contactId: text('contact_id').primaryKey(),
   userId: text('user_id').notNull(),
@@ -160,4 +160,24 @@ export const contactPresence = sqliteTable('contact_presence', {
   foreignKey({ columns: [table.contactId, table.userId], foreignColumns: [contact.id, contact.userId] }).onDelete('cascade'),
   check('presence_status', sql`${table.status} IN ('offline', 'online', 'typing')`),
   index('contact_presence_expiry_idx').on(table.expiresAt).where(sql`${table.expiresAt} IS NOT NULL`),
+]);
+
+
+// Activity triggers are maintained by the SQL migrations.
+export const chatVisit = sqliteTable('chat_visit', {
+  id: text('id').primaryKey(),
+  contactId: text('contact_id').notNull(),
+  userId: text('user_id').notNull(),
+  readyAt: date('ready_at').notNull(),
+  expiresAt: date('expires_at').notNull(),
+  updatedAt: date('updated_at').notNull(),
+  connected: integer('connected', { mode: 'boolean' }).notNull().default(false),
+  closed: integer('closed', { mode: 'boolean' }).notNull().default(false),
+}, (table) => [
+  foreignKey({ columns: [table.contactId, table.userId], foreignColumns: [contact.id, contact.userId] }).onDelete('cascade'),
+  index('chat_visit_expiry_idx').on(table.expiresAt),
+  index('chat_visit_contact_idx').on(table.contactId, table.userId, table.expiresAt),
+  index('chat_visit_user_idx').on(table.userId, table.expiresAt),
+  check('visit_connected', sql`${table.connected} IN (0, 1)`),
+  check('visit_closed', sql`${table.closed} IN (0, 1)`),
 ]);

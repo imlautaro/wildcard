@@ -1,3 +1,4 @@
+import { recoverVisits } from './chat/visits';
 import { expirePresence } from './chat/presence';
 import { deliverPush } from './push/delivery';
 import app from './app';
@@ -10,6 +11,7 @@ export default {
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil(recoverChats(env));
     ctx.waitUntil(expirePresence(env.DB));
+    ctx.waitUntil(recoverVisits(env));
     ctx.waitUntil(deliverPush(env));
   },
 } satisfies ExportedHandler<Env>;

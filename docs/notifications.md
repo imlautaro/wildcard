@@ -229,3 +229,27 @@ The private production R2 bucket was created and verified on October 26, 2026.
 Apple capability/provisioning verification and visual presentation on an iPhone
 remain pending; static app/extension checks do not establish visible push-avatar
 behavior.
+
+
+## Notification-response completion threading
+
+The app delegate implements the explicit completion-handler forms of both
+UserNotifications callbacks. It dispatches routing and completion to the main
+queue and calls completion exactly once, including ignored actions or missing
+routing fields. Foreground alerts remain suppressed; account/ownership checks
+and cold-launch session restoration remain unchanged.
+
+An October 26, 2026 device crash captured in Xcode showed
+`PushAppDelegate.userNotificationCenter(_:didReceive:)`'s synthesized async bridge
+calling UIKit state-restoration/snapshot completion from a cooperative background
+executor. UIKit raised `NSInternalInconsistencyException: Call must be made on
+main thread`. Updating the destination through MainActor inside the async method
+was insufficient: the synthesized final completion still ran off the main thread.
+Explicit main-queue completion removes that async bridge from this path.
+
+Install the updated iOS binary using Xcode to receive this fix; changing server
+code or relaunching the old installation cannot change its callback implementation.
+If Xcode is still paused at the fatal exception, stop that debug run before running
+the updated app. No reinstall/data wipe, credential change, notification clearing,
+or backend release is required. Static Swift checks cover the change; a device
+retest of a notification tap from a terminated/backgrounded app remains necessary.

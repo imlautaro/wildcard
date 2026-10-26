@@ -11,6 +11,7 @@ export type ContactPresence = {
 export async function expirePresence(db: D1Database) {
   await db.prepare(`UPDATE contact_presence SET status = 'offline', last_seen_at = expires_at, expires_at = NULL
     WHERE expires_at <= ?1`).bind(Date.now()).run();
+  await db.prepare('DELETE FROM chat_visit WHERE expires_at < ?1').bind(Date.now() - 86_400_000).run();
 }
 
 export async function readPresence(db: D1Database, contactID: string, userID: string): Promise<ContactPresence> {
