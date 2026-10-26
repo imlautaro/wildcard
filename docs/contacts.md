@@ -109,12 +109,18 @@ Each row opens the conversation and shows the last message time on the right,
 above its unread badge: local hours and minutes today, `Yesterday` one calendar
 day ago, an English weekday two through six days ago, and `dd/MM/yyyy` for older
 messages. Labels refresh every minute while visible. Empty chats have no date.
-If an older API omits `lastMessageAt`, each visible populated row requests the
-latest conversation page and derives the time from its final turn. This read does
-not mark the conversation read or generate replies. It repeats when the message
-preview changes or the row is recreated; failures leave the date absent. Empty
-chats make no fallback request. Once the API provides the timestamp, no extra
-history request is needed. Install the updated iOS app to use this compatibility
+If an older API omits `lastMessageAt`, rows reuse a matching final turn from the
+conversation cache or a timestamp retained by ContactsStore for the same preview.
+Recreating a row or returning to Home does not clear the cached timestamp. A
+visible populated row without a matching cache entry requests the latest
+conversation page and retains its timestamp for the session. Concurrent requests
+for the same contact and preview are deduplicated; mismatched or deleted-contact
+results are discarded. This read does not mark the conversation read or generate
+replies. Failures leave the date absent, and empty chats make no fallback request.
+The first uncached lookup still requires network access. Identical previews for
+different messages cannot reliably invalidate this compatibility cache; the
+server's `lastMessageAt` is authoritative once released and requires no extra
+history request. Install the updated iOS app to use this compatibility
 path; release the API through the existing automatic commit/push pipeline to
 provide timestamps directly.
 

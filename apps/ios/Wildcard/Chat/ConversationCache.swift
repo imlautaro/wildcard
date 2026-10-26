@@ -11,6 +11,10 @@ final class ConversationCache {
     private var access: UInt64 = 0
     private let capacity = 8
 
+    func lastTurn(for contactID: String) -> ChatTurn? {
+        entries[contactID]?.store.turns.last
+    }
+
     func store(for contactID: String) -> ChatStore {
         access &+= 1
         if var entry = entries[contactID] {

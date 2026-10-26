@@ -23,6 +23,11 @@ empty cached lists retain their empty state during revalidation.
   contact immediately and invalidate list freshness.
 - Revision checks discard responses superseded by mutations, invalidation, or a
   replacement history window. Cancellation is not displayed as a network error.
+- Chat rows prefer the API's `lastMessageAt`. With older APIs, they reuse the
+  matching latest cached turn or a session-scoped timestamp keyed by contact and
+  message preview. Missing timestamps require one history lookup per uncached
+  preview, rather than another lookup each time the row appears. Deleting the
+  contact clears its timestamp. No timestamp cache is written to disk.
 
 Only the visible conversation polls history. Opening or returning to it forces
 an immediate history refresh;

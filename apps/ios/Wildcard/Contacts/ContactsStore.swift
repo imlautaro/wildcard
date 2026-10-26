@@ -22,8 +22,51 @@ final class ContactsStore {
     private var readRevision = 0
     private var firstPageIDs: Set<String> = []
     private var knownContacts: [String: Contact] = [:]
+    private struct MessageTimestamp {
+        let preview: String
+        let value: Double
+    }
+    private var messageTimestamps: [String: MessageTimestamp] = [:]
+    private struct MessageTimestampRequest: Hashable {
+        let contactID: String
+        let preview: String
+    }
+    private var loadingMessageTimestamps: Set<MessageTimestampRequest> = []
 
     func contact(id: String) -> Contact? { knownContacts[id] }
+
+    func lastMessageTimestamp(for contact: Contact) -> Double? {
+        if let timestamp = contact.lastMessageAt { return timestamp }
+        guard let preview = contact.lastMessageText else { return nil }
+        if let turn = conversations.lastTurn(for: contact.id), messagePreview(for: turn) == preview {
+            return turn.assistantText == nil ? turn.createdAt : turn.updatedAt
+        }
+        guard let cached = messageTimestamps[contact.id], cached.preview == preview else { return nil }
+        return cached.value
+    }
+
+    func loadMessageTimestamp(for contact: Contact, using auth: AuthStore) async {
+        guard lastMessageTimestamp(for: contact) == nil, let preview = contact.lastMessageText else { return }
+        let request = MessageTimestampRequest(contactID: contact.id, preview: preview)
+        guard loadingMessageTimestamps.insert(request).inserted else { return }
+        defer { loadingMessageTimestamps.remove(request) }
+        do {
+            let page = try await auth.withSession { api, token in
+                try await api.chatTurns(contactID: contact.id, token: token)
+            }
+            guard !Task.isCancelled, knownContacts[contact.id]?.lastMessageText == preview,
+                  let turn = page.turns.last, messagePreview(for: turn) == preview else { return }
+            messageTimestamps[contact.id] = MessageTimestamp(
+                preview: preview, value: turn.assistantText == nil ? turn.createdAt : turn.updatedAt
+            )
+        } catch {
+            // A missing timestamp must not prevent opening the conversation.
+        }
+    }
+
+    private func messagePreview(for turn: ChatTurn) -> String {
+        String(String.UnicodeScalarView((turn.assistantText ?? turn.userText).unicodeScalars.prefix(500)))
+    }
 
     func refresh(using auth: AuthStore, force: Bool = true, preserveLoadedPages: Bool = false) async {
         guard !isMutating, !isLoading, (!preserveLoadedPages || !isLoadingMore) else { return }
@@ -111,6 +154,7 @@ final class ContactsStore {
                 // A contact removed on another client is already deleted.
             }
             conversations.remove(contactID: contact.id)
+            messageTimestamps.removeValue(forKey: contact.id)
             contactRefreshedAt.removeValue(forKey: contact.id)
             refreshedAt = nil
             totalUnreadCount = max(0, totalUnreadCount - (knownContacts[contact.id]?.unreadCount ?? 0))
@@ -140,6 +184,7 @@ final class ContactsStore {
             guard request == generation else { return }
             if case AuthAPI.Failure.notFound = error {
                 conversations.remove(contactID: id)
+                messageTimestamps.removeValue(forKey: id)
                 contactRefreshedAt.removeValue(forKey: id)
                 knownContacts.removeValue(forKey: id)
                 contacts.removeAll { $0.id == id }

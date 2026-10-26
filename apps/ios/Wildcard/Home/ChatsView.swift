@@ -96,7 +96,7 @@ struct ChatsView: View {
 private struct ChatListRow: View {
     let contact: Contact
     @Environment(AuthStore.self) private var auth
-    @State private var legacyMessageAt: Double?
+    @Environment(ContactsStore.self) private var contacts
 
     private var messagePreview: String {
         guard let text = contact.lastMessageText else { return "No messages yet" }
@@ -137,7 +137,7 @@ private struct ChatListRow: View {
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 6) {
-                if let timestamp = contact.lastMessageAt ?? legacyMessageAt {
+                if let timestamp = contacts.lastMessageTimestamp(for: contact) {
                     TimelineView(.periodic(from: .now, by: 60)) { context in
                         Text(lastMessageTime(timestamp, relativeTo: context.date))
                             .manrope(.caption)
@@ -160,17 +160,7 @@ private struct ChatListRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .task(id: contact.lastMessageText) {
-            legacyMessageAt = nil
-            guard contact.lastMessageAt == nil, contact.lastMessageText != nil else { return }
-            do {
-                let page = try await auth.withSession { api, token in
-                    try await api.chatTurns(contactID: contact.id, token: token)
-                }
-                guard !Task.isCancelled, let turn = page.turns.last else { return }
-                legacyMessageAt = turn.assistantText == nil ? turn.createdAt : turn.updatedAt
-            } catch {
-                // Keep the row usable if an older API cannot provide the timestamp.
-            }
+            await contacts.loadMessageTimestamp(for: contact, using: auth)
         }
     }
 }
