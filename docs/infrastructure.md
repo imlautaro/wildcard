@@ -84,7 +84,15 @@ when persistence is introduced. There is no staging installation at present.
 
 Static TypeScript validation, generated Worker types, the Xcode project plist,
 and byte-for-byte preservation of tracked iOS files during relocation were checked.
-No builds or tests were run.
+No local builds or tests were run. Cloudflare Workers Builds runs the configured
+installation, type check, and release remotely.
+
+On October 26, 2026, Workers Builds was connected to `imlautaro/wildcard`
+(repository ID `1434657598`), production branch `main`, root `/`, with preview
+builds disabled. The selected existing credential is
+`Workers Builds - 2026-05-27 10:54`. No new token or runtime secret was created.
+The connection build uses the commands documented above; pushes trigger subsequent
+automatic releases.
 
 Independent-account setup and installed iOS behavior have not been verified.
 Deployment completion must be confirmed from the automatic build and matching
