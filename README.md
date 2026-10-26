@@ -59,10 +59,13 @@ icon and bundled [Manrope typography](docs/typography.md). Debug and Release
 default to the public API through `WILDCARD_API_URL`; an independent installation must replace that setting. See the auth guide for local
 simulator configuration.
 
-The signed-in shell uses one navigation stack around the tabs: Add pushes a
-full-screen contact form with native Back navigation, preserving the selected tab
-on return. Chats starts empty; the form has no save behavior yet. No contacts API,
-conversation persistence, or model integration is implemented.
+The signed-in shell uses one navigation stack around the tabs. Tap **+** in Chats
+to create a contact by name. Swipe a contact to Rename or Delete (with confirmation);
+tap a contact to open its empty conversation and its title to rename it. Editors
+push over the full tab layout, preserving the selected tab on return. Chats supports
+pull to refresh and paginated loading. Contacts are saved in D1 and isolated by the
+signed-in user. See [private contacts](docs/contacts.md). Conversation persistence,
+sharing, and model integration are not implemented.
 
 ## Infrastructure and releases
 

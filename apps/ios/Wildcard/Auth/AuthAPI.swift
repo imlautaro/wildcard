@@ -12,6 +12,7 @@ struct AuthAPI: Sendable {
         case invalidConfiguration
         case insecureURL
         case unauthorized
+        case notFound
         case rejected(String)
         case invalidResponse
 
@@ -20,6 +21,7 @@ struct AuthAPI: Sendable {
             case .invalidConfiguration: "The API URL is missing or invalid. Check the app configuration."
             case .insecureURL: "The API URL must use HTTPS."
             case .unauthorized: "Your session has expired. Please sign in again."
+            case .notFound: "This contact is no longer available."
             case .rejected(let message): message
             case .invalidResponse: "The server returned an unexpected response. Please try again."
             }
@@ -65,7 +67,7 @@ struct AuthAPI: Sendable {
         _ = try await send(path: "auth/sign-out", method: "POST", body: Data("{}".utf8), token: token)
     }
 
-    private func send(path: String, method: String = "GET", body: Data? = nil, token: String? = nil) async throws -> (Data, HTTPURLResponse) {
+    func send(path: String, method: String = "GET", body: Data? = nil, token: String? = nil, query: [URLQueryItem] = []) async throws -> (Data, HTTPURLResponse) {
         guard let baseURL, baseURL.host != nil else { throw Failure.invalidConfiguration }
         #if DEBUG
         let isLoopback = ["localhost", "127.0.0.1", "::1"].contains(baseURL.host ?? "")
@@ -73,7 +75,10 @@ struct AuthAPI: Sendable {
         #else
         guard baseURL.scheme == "https" else { throw Failure.insecureURL }
         #endif
-        var request = URLRequest(url: baseURL.appending(path: "api/v1/\(path)"))
+        guard var components = URLComponents(url: baseURL.appending(path: "api/v1/\(path)"), resolvingAgainstBaseURL: false) else { throw Failure.invalidConfiguration }
+        if !query.isEmpty { components.queryItems = query }
+        guard let url = components.url else { throw Failure.invalidConfiguration }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -86,7 +91,10 @@ struct AuthAPI: Sendable {
             switch response.statusCode {
             case 401: throw Failure.rejected("Incorrect email or password.")
             case 429: throw Failure.rejected("Too many attempts. Please wait a minute and try again.")
-            case 400, 422: throw Failure.rejected("Check your details, or try signing in if you already have an account.")
+            case 400, 422:
+                if path.hasPrefix("contacts") { throw Failure.rejected("Use a contact name with 1–100 characters and no control characters.") }
+                throw Failure.rejected("Check your details, or try signing in if you already have an account.")
+            case 404 where path.hasPrefix("contacts/"): throw Failure.notFound
             case 409: throw Failure.rejected("Unable to create this account. Try signing in instead.")
             default: throw Failure.rejected("Unable to complete the request. Please try again later.")
             }

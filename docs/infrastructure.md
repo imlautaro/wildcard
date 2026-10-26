@@ -5,7 +5,7 @@
 | Resource | Configuration | Purpose |
 | --- | --- | --- |
 | Cloudflare Worker | `apps/api/wrangler.jsonc`, `wildcard-api` | Hono API and Better Auth handler |
-| Cloudflare D1 | `DB`, `wildcard-db` | Users, hashed passwords, sessions, verification schema, and auth rate limits |
+| Cloudflare D1 | `DB`, `wildcard-db` | Users, hashed passwords, sessions, verification schema, auth rate limits, and private contacts |
 | Runtime auth secret | `BETTER_AUTH_SECRET` | Signs cookies and native bearer sessions |
 | Public origin | `BETTER_AUTH_URL` | Canonical auth origin, separate from the secret |
 | Workers Builds | GitHub `imlautaro/wildcard`, `main`, root `/` | Automatic releases from committed and pushed source |
@@ -110,7 +110,8 @@ npm run dev
 
 Local setup generates an ignored, owner-only `apps/api/.dev.vars` containing a
 random `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL=http://localhost:8787`, and applies
-migration `0001_auth.sql` to Wrangler's local D1. Existing `.dev.vars` files are
+all pending versioned migrations, including `0001_auth.sql` and
+`0002_contacts.sql`, to Wrangler's local D1. Existing `.dev.vars` files are
 preserved. A safe template is versioned as `.dev.vars.example`. Local D1 state is
 ignored under `.wrangler/`; these commands do not connect to production bindings.
 No Cloudflare login is required for local emulation.
@@ -130,6 +131,13 @@ Drizzle schema and SQL use milliseconds. It adds new tables and is compatible
 with the prior empty API. The migration runs before code upload; never rewrite
 an applied migration. Worker rollback does not undo D1 changes or recover deleted
 data. Review future migrations for compatibility with the currently active Worker.
+
+`0002_contacts.sql` adds private contacts to the same D1 database, with an owner
+foreign key and an owner/creation-time index. No additional resource or credential
+is required. Local setup and automatic releases apply it with the existing
+migration commands. It is compatible with the auth-only Worker; rolling code back
+does not delete contacts or undo this migration. See [contacts](contacts.md) for
+the API contract, isolation, retention, native flow, and verification limits.
 
 Verify that the automatic release has no pending migrations, the `DB` binding uses
 the intended ID, and the runtime secret name exists. An unauthenticated GET to

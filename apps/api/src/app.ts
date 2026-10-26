@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { createAuth } from './lib/auth';
 import { admitAuthRequest } from './lib/auth-rate-limit';
+import { readBearerSession } from './lib/session';
+import contacts from './routes/contacts';
 
 const app = new Hono<{ Bindings: Env }>();
 const authEndpoints = new Map([
@@ -29,12 +31,13 @@ app.on(['GET', 'POST'], '/api/v1/auth/*', async (c) => {
 });
 
 app.get('/api/v1/me', async (c) => {
-  if (!c.req.header('Authorization')?.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401);
-  const result = await createAuth(c.env).api.getSession({ headers: c.req.raw.headers });
+  const result = await readBearerSession(c.env, c.req.raw.headers);
   if (!result) return c.json({ error: 'Unauthorized' }, 401);
   const { id, name, email, emailVerified } = result.user;
   return c.json({ user: { id, name, email, emailVerified } });
 });
+
+app.route('/api/v1/contacts', contacts);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 app.onError((_error, c) => {

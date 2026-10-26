@@ -79,4 +79,27 @@ final class AuthStore {
             self.error = error.localizedDescription
         }
     }
+
+    func withSession<Value>(_ operation: (AuthAPI, String) async throws -> Value) async throws -> Value {
+        guard state == .signedIn, let credential = token else { throw AuthAPI.Failure.unauthorized }
+        do {
+            let result = try await operation(api, credential)
+            guard token == credential, state == .signedIn else { throw CancellationError() }
+            return result
+        } catch {
+            guard token == credential else { throw CancellationError() }
+            if case AuthAPI.Failure.unauthorized = error {
+                do {
+                    try SessionKeychain.delete()
+                    token = nil
+                    user = nil
+                    state = .signedOut
+                } catch {
+                    self.error = error.localizedDescription
+                    state = .unavailable
+                }
+            }
+            throw error
+        }
+    }
 }

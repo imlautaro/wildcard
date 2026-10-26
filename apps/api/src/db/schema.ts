@@ -1,3 +1,4 @@
+import { desc } from 'drizzle-orm';
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const date = (name: string) => integer(name, { mode: 'timestamp_ms' });
@@ -50,3 +51,11 @@ export const verification = sqliteTable('verification', {
   createdAt: date('created_at').notNull(),
   updatedAt: date('updated_at').notNull(),
 }, (table) => [index('verification_identifier_idx').on(table.identifier)]);
+
+export const contact = sqliteTable('contact', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  createdAt: date('created_at').notNull(),
+  updatedAt: date('updated_at').notNull(),
+}, (table) => [index('contact_user_created_idx').on(table.userId, desc(table.createdAt), desc(table.id))]);

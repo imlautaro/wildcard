@@ -69,11 +69,12 @@ submissions are blocked while a request is in flight.
 Registration asks for name, email, and password. The signed-in root has Chats
 and Account tabs, defaulting to Chats. Account shows the current name/email and
 retains the existing sign-out flow. A single navigation stack wraps the tab view;
-Add pushes a contact form over the whole tab layout, with native Back navigation
-and the selected tab preserved on return. Navigation state resets for a different
-signed-in user. Chats is an empty layout and contact creation is not connected;
-the Create button is disabled. There are no sample contacts, remote contact
-requests, timers, or persistence in this shell.
+The plus button pushes the contact editor over the whole tab layout, with native
+Back navigation and the selected tab preserved on return. Navigation and contact
+state reset for a different signed-in user. Contacts use authenticated, private D1
+storage; see [contacts](contacts.md) for creation, listing, renaming, deletion,
+pagination, and session-expiry handling. There are no sample contacts or chat
+messages and no periodic polling.
 
 On launch the app displays a full-screen `#045DE3` splash with the white Wildcard
 mark centered at 92.5 × 100 points while loading its Keychain token and fetching
