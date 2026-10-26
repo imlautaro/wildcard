@@ -33,8 +33,10 @@ struct ContactDetailView: View {
                         HStack(spacing: 8) {
                             ContactAvatar(contact: contact, size: 30)
                             Text(contact.name).manrope(.headline, weight: .semibold)
+                                .foregroundStyle(Color(uiColor: .label))
                         }
                     }
+                    .tint(Color(uiColor: .label))
                     .accessibilityLabel("Edit \(contact.name)")
                 }
             }
