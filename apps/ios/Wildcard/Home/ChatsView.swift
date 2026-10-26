@@ -36,7 +36,8 @@ struct ChatsView: View {
                                     Text(contact.name).manrope(.body, weight: .semibold)
                                         .foregroundStyle(.primary)
                                         .lineLimit(1)
-                                    Text("No messages yet").manrope(.subheadline)
+                                    Text(contact.lastMessageText ?? "No messages yet").manrope(.subheadline)
+                                        .lineLimit(2)
                                         .foregroundStyle(.secondary)
                                 }
                             }

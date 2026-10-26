@@ -1,7 +1,8 @@
 # Wildcard
 
 A native iOS app and Hono API for Cloudflare Workers, with email/password
-authentication backed by Better Auth and Cloudflare D1.
+authentication backed by Better Auth, private conversations in Cloudflare D1,
+and durable Muse Spark 1.3 replies through Cloudflare Workflows.
 
 ## Layout
 
@@ -61,11 +62,13 @@ simulator configuration.
 
 The signed-in shell uses one navigation stack around the tabs. Tap **+** in Chats
 to create a contact by name. Swipe a contact to Rename or Delete (with confirmation);
-tap a contact to open its empty conversation and its title to rename it. Editors
+tap a contact to open its conversation and its title to rename it. Editors
 push over the full tab layout, preserving the selected tab on return. Chats supports
 pull to refresh and paginated loading. Contacts are saved in D1 and isolated by the
-signed-in user. See [private contacts](docs/contacts.md). Conversation persistence,
-sharing, and model integration are not implemented.
+signed-in user. See [private contacts](docs/contacts.md). Conversations support
+persisted messages, reply status, earlier history, and retries. Accepted replies
+continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
+limits, and background execution. Sharing is not implemented.
 
 ## Infrastructure and releases
 
@@ -76,7 +79,9 @@ See [infrastructure setup](docs/infrastructure.md). The API uses Cloudflare Work
 The release script requires Workers Builds, a clean checkout, the production branch,
 and a matching source commit, then tags the Worker version with that commit.
 Releases apply D1 migrations before publishing and initialize the runtime auth
-secret on the first auth release, preserving it afterward. Commit and push to
+secret on the first auth release, preserving it afterward. Chats also require the
+encrypted `META_API_KEY` build secret, copied securely to runtime by the release.
+Wrangler configures the Workflow and recovery Cron Trigger in the same release. Commit and push to
 release; do not deploy manually. Preview builds are disabled.
 
 Follow the [working agreements](AGENTS.md), including English-only project content

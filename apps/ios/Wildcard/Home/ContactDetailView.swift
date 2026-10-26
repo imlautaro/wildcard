@@ -16,12 +16,7 @@ struct ContactDetailView: View {
                     .disabled(loading)
             }
             if let contact = contacts.contact(id: contactID) {
-                ContentUnavailableView {
-                    Label("No messages yet", systemImage: "bubble.left.and.bubble.right")
-                        .manrope(.title2, weight: .semibold)
-                } description: {
-                    Text(contact.name).manrope()
-                }
+                ChatView(contactID: contact.id).id(contact.id)
             } else if loading {
                 ProgressView("Loading contact…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

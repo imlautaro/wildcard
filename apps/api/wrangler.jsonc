@@ -33,7 +33,20 @@
   ],
   "secrets": {
     "required": [
-      "BETTER_AUTH_SECRET"
+      "BETTER_AUTH_SECRET",
+      "META_API_KEY"
+    ]
+  },
+  "workflows": [
+    {
+      "name": "wildcard-chat",
+      "binding": "CHAT_WORKFLOW",
+      "class_name": "ChatWorkflow"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "* * * * *"
     ]
   }
 }

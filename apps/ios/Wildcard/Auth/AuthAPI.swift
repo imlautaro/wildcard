@@ -88,6 +88,14 @@ struct AuthAPI: Sendable {
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if path.contains("/chat/") {
+                switch response.statusCode {
+                case 400, 422: throw Failure.rejected("Use a message with 1–4,000 characters.")
+                case 409: throw Failure.rejected("A reply is already in progress or the conversation changed. Refresh and try again.")
+                case 503: throw Failure.rejected("AI replies are temporarily unavailable. Please try again later.")
+                default: break
+                }
+            }
             switch response.statusCode {
             case 401: throw Failure.rejected("Incorrect email or password.")
             case 429: throw Failure.rejected("Too many attempts. Please wait a minute and try again.")

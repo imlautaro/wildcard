@@ -5,12 +5,16 @@
 | Resource | Configuration | Purpose |
 | --- | --- | --- |
 | Cloudflare Worker | `apps/api/wrangler.jsonc`, `wildcard-api` | Hono API and Better Auth handler |
-| Cloudflare D1 | `DB`, `wildcard-db` | Users, hashed passwords, sessions, verification schema, auth rate limits, and private contacts |
+| Cloudflare D1 | `DB`, `wildcard-db` | Users, hashed passwords, sessions, verification schema, auth rate limits, private contacts, and conversation turns |
 | Runtime auth secret | `BETTER_AUTH_SECRET` | Signs cookies and native bearer sessions |
+| Cloudflare Workflow | `CHAT_WORKFLOW`, `wildcard-chat`, class `ChatWorkflow` | Durable reply generation |
+| Cron Trigger | `* * * * *` in Wrangler | Recover queued dispatch gaps and reconcile terminal workflows |
+| Meta Model API | Runtime `META_API_KEY`, model `muse-spark-1.3` | Generate private conversation replies |
 | Public origin | `BETTER_AUTH_URL` | Canonical auth origin, separate from the secret |
 | Workers Builds | GitHub `imlautaro/wildcard`, `main`, root `/` | Automatic releases from committed and pushed source |
 
-There are no KV, R2, Workflow, model API, email service, or staging dependencies.
+There are no KV, R2, email service, or staging dependencies. Chats require
+Workflows and Meta access; auth and contacts can run without a model key.
 Registration and login require D1 and the secret; missing configuration fails
 rather than falling back to in-memory sessions or a development secret. See
 [authentication](authentication.md) for the API, client, privacy, and limitations.
@@ -49,14 +53,22 @@ No actual secret value belongs in Git, app build settings, or documentation.
 4. Connect your repository to Cloudflare Workers Builds using its GitHub
    integration. Select the production branch (`main` by default), root `/`, and
    the build/deploy commands above. The deployment credential needs Workers
-   Scripts edit, D1 edit, and account read permissions in your account. Workers
+   Scripts edit, D1 edit, Workflows edit, and account read permissions in your account. Workers
    Scripts edit covers listing Worker secret names and uploading runtime secrets
    with a version. Select an existing suitably scoped credential; do not commit
    its value. Disable preview builds until staging is explicitly provisioned.
-5. The automatic release applies versioned D1 migrations first, then publishes the
+5. Choose a unique Workflow name in `workflows[].name` for this installation;
+   preserve `binding: CHAT_WORKFLOW` and `class_name: ChatWorkflow`. The automatic
+   Worker release creates/updates this Workflow and its minute Cron Trigger from
+   Wrangler configuration. No separate local workflow deployment is needed.
+   Obtain your own Meta Model API credential with Muse Spark 1.3 access and add
+   `META_API_KEY` as an encrypted secret in Worker Settings → Build → Variables
+   and secrets. The build credential must be allowed to create/update Workflows;
+   verify its permissions if the first automatic release is rejected.
+6. The automatic release applies versioned D1 migrations first, then publishes the
    Worker with an auth secret as described below. There is no manual migration
    requirement for production releases; review each migration before pushing.
-6. Replace both iOS `WILDCARD_API_URL` build settings with your public HTTPS origin.
+7. Replace both iOS `WILDCARD_API_URL` build settings with your public HTTPS origin.
    Build/install the client separately when desired. API releases do not update an
    already installed iOS application.
 
@@ -78,18 +90,27 @@ The release runs remote D1 migrations and inspects only Worker secret names. If
 writes an owner-only JSON file in a private temporary directory, and uploads the
 secret with the code using Wrangler's `--secrets-file`. The file is removed in a
 `finally` block. Secret values never appear in arguments or application logs.
-Subsequent releases omit the secret upload, preserving the existing encrypted
-runtime value and session signatures. The secret is never exposed to iOS.
+Subsequent releases preserve the existing encrypted auth secret and session
+signatures. The secret is never exposed to iOS.
 
-There are no build-time application secrets. The Cloudflare build credential is
-used only by the pipeline, while `BETTER_AUTH_SECRET` is used only at runtime.
+`META_API_KEY` is an encrypted build secret and an encrypted runtime secret. The
+release copies the build value into the same temporary upload file when supplied;
+if absent from the build environment, it preserves an existing runtime key. An
+empty build value or missing key in both locations stops the release. Update the
+encrypted build secret and push an authorized commit to rotate the model key.
+Never print environment values or paste the key into chat. The user confirmed
+configuring the encrypted build secret on October 26, 2026; its value and model
+access were not inspected. The Cloudflare credential is used only by the pipeline,
+while `BETTER_AUTH_SECRET` is used only at runtime.
 Future secret rotation must use an explicitly authorized automatic release; it
 invalidates existing signed sessions. Deleting/recreating the Worker also loses
 its runtime secret and requires users to sign in again.
 
 Release by committing and pushing to the selected branch. Check Workers Builds,
 confirm the source SHA, and inspect the active Worker version's `workers/tag`
-against that SHA. The script tags every version with the full source commit.
+against that SHA. Verify `CHAT_WORKFLOW`, the `ChatWorkflow` class, the minute
+Cron Trigger, and the runtime secret name `META_API_KEY` after the chat release.
+The script tags every version with the full source commit.
 The first repository-connection build may lack source metadata and stop safely;
 a subsequent Git push triggers a build with metadata. Investigate a failed
 pipeline; do not bypass it with a local deployment or `wrangler secret put`.
@@ -111,10 +132,12 @@ npm run dev
 Local setup generates an ignored, owner-only `apps/api/.dev.vars` containing a
 random `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL=http://localhost:8787`, and applies
 all pending versioned migrations, including `0001_auth.sql` and
-`0002_contacts.sql`, to Wrangler's local D1. Existing `.dev.vars` files are
+`0002_contacts.sql`, and `0003_chat_turns.sql`, to Wrangler's local D1. Existing `.dev.vars` files are
 preserved. A safe template is versioned as `.dev.vars.example`. Local D1 state is
 ignored under `.wrangler/`; these commands do not connect to production bindings.
-No Cloudflare login is required for local emulation.
+No Cloudflare login is required for local emulation. For local model calls, add
+`META_API_KEY` to that ignored file; calls use Meta and may consume credits. Without
+it, new sends return 503 while auth/contacts still work.
 
 `npm run db:migrate:local` reapplies only pending local migrations. The separate
 `db:migrate:remote` command modifies the configured production database and should
@@ -138,6 +161,13 @@ is required. Local setup and automatic releases apply it with the existing
 migration commands. It is compatible with the auth-only Worker; rolling code back
 does not delete contacts or undo this migration. See [contacts](contacts.md) for
 the API contract, isolation, retention, native flow, and verification limits.
+
+`0003_chat_turns.sql` adds private turns and an atomic one-active-turn constraint.
+See [chats](chats.md) for lifecycle, limits, retention, failure recovery, and
+rollback with active Workflow instances. Wrangler versions the workflow binding
+and Cron Trigger alongside the API. For staging, use a separate Workflow name,
+Worker, database, build secrets, and iOS origin. Model calls and Workflows consume
+the selected accounts' quotas; this change does not alter billing plans.
 
 Verify that the automatic release has no pending migrations, the `DB` binding uses
 the intended ID, and the runtime secret name exists. An unauthenticated GET to

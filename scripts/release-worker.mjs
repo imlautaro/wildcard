@@ -35,10 +35,20 @@ const secrets = JSON.parse(run('secret', 'list', '--format', 'json'));
 let temporaryDirectory;
 try {
   const secretArgs = [];
+  const updates = {};
   if (!secrets.some((secret) => secret.name === 'BETTER_AUTH_SECRET')) {
+    updates.BETTER_AUTH_SECRET = randomBytes(48).toString('base64url');
+  }
+  if (process.env.META_API_KEY !== undefined) {
+    if (!process.env.META_API_KEY.trim()) throw new Error('META_API_KEY must not be empty.');
+    updates.META_API_KEY = process.env.META_API_KEY.trim();
+  } else if (!secrets.some((secret) => secret.name === 'META_API_KEY')) {
+    throw new Error('Set the encrypted META_API_KEY secret in Workers Builds before releasing.');
+  }
+  if (Object.keys(updates).length) {
     temporaryDirectory = mkdtempSync(join(tmpdir(), 'wildcard-release-'));
     const secretFile = join(temporaryDirectory, 'secrets.json');
-    writeFileSync(secretFile, JSON.stringify({ BETTER_AUTH_SECRET: randomBytes(48).toString('base64url') }), { mode: 0o600 });
+    writeFileSync(secretFile, JSON.stringify(updates), { mode: 0o600 });
     secretArgs.push('--secrets-file', secretFile);
   }
   console.log(`Releasing pushed commit ${sourceCommit}`);

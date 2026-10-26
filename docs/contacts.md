@@ -50,8 +50,8 @@ list from the server response; creation dismisses the editor. Failed saves retai
 the draft and show an error. A failed delete leaves the row available for retry.
 Deleting a contact already removed on another client removes its stale local row.
 
-Opening a contact reads its current record and shows an empty conversation screen.
-Tap its title to rename it. No messages are sent or stored. A per-session record
+Opening a contact reads its current record and opens its persisted conversation.
+Tap its title to rename it. See [chats](chats.md) for message storage and generation. A per-session record
 cache preserves a contact detail when first-page refresh changes the visible list.
 Concurrent refreshes cannot overwrite successful mutations, and mutations retain
 loaded pages and their keyset cursor. A session rejection clears the saved token
@@ -71,8 +71,8 @@ the configured remote database before deploying the pushed Worker.
 The migration is additive and compatible with the prior auth-only API. Do not
 rewrite migration 0001 or an already applied 0002. Worker rollback does not remove
 the table or recover deleted contacts. An authorized user/account deletion cascades
-its contact rows. Normal contact deletion removes only the selected owner's row;
-there are no chat tables or sharing records in this implementation.
+its contact rows. Normal contact deletion removes the selected owner's contact and its conversation
+turns, and requests termination of active generation. Sharing is not implemented.
 
 ## Validation status
 
@@ -86,3 +86,11 @@ or simulator session were run. Before claiming end-to-end verification, use
 fictional accounts to check create/list/rename/delete, cross-user reads and writes,
 invalid bodies, pagination, logout/re-login, stale refreshes, and failure states
 when runtime testing is authorized. Do not use other people's private data.
+
+## Conversation integration
+
+Contacts now open [private conversations](chats.md). List/detail responses include
+nullable `lastMessageText`, truncated to 500 code points from the latest reply or
+user message. Renaming preserves the conversation. Deletion cascades all turns
+and requests best-effort termination of active generation; an in-flight provider
+request may still consume credits. No sharing or cross-user context is enabled.

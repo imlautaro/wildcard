@@ -1,2 +1,5 @@
 BETTER_AUTH_URL=http://localhost:8787
 BETTER_AUTH_SECRET=replace-with-a-random-secret-of-at-least-32-characters
+
+# Optional locally; required for generating replies. Never commit a real key.
+META_API_KEY=

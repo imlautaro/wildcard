@@ -5,6 +5,7 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     let name: String
     let createdAt: Double
     let updatedAt: Double
+    let lastMessageText: String?
 }
 
 struct ContactsPage: Decodable, Sendable {

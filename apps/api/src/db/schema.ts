@@ -1,5 +1,5 @@
-import { desc } from 'drizzle-orm';
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { desc, sql } from 'drizzle-orm';
+import { check, foreignKey, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const date = (name: string) => integer(name, { mode: 'timestamp_ms' });
 
@@ -58,4 +58,32 @@ export const contact = sqliteTable('contact', {
   name: text('name').notNull(),
   createdAt: date('created_at').notNull(),
   updatedAt: date('updated_at').notNull(),
-}, (table) => [index('contact_user_created_idx').on(table.userId, desc(table.createdAt), desc(table.id))]);
+}, (table) => [
+  index('contact_user_created_idx').on(table.userId, desc(table.createdAt), desc(table.id)),
+  uniqueIndex('contact_id_user_idx').on(table.id, table.userId),
+]);
+
+export const chatTurn = sqliteTable('chat_turn', {
+  sequence: integer('sequence').primaryKey({ autoIncrement: true }),
+  id: text('id').notNull().unique(),
+  contactId: text('contact_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  userText: text('user_text').notNull(),
+  assistantText: text('assistant_text'),
+  status: text('status', { enum: ['queued', 'running', 'complete', 'failed'] }).notNull(),
+  attempt: integer('attempt').notNull().default(1),
+  workflowId: text('workflow_id').notNull().unique(),
+  errorCode: text('error_code'),
+  createdAt: date('created_at').notNull(),
+  updatedAt: date('updated_at').notNull(),
+  checkedAt: integer('checked_at').notNull().default(0),
+}, (table) => [
+  foreignKey({ columns: [table.contactId, table.userId], foreignColumns: [contact.id, contact.userId] }).onDelete('cascade'),
+  check('chat_status', sql`${table.status} IN ('queued', 'running', 'complete', 'failed')`),
+  check('chat_attempt', sql`${table.attempt} > 0`),
+  check('chat_completed_reply', sql`${table.status} != 'complete' OR ${table.assistantText} IS NOT NULL`),
+  uniqueIndex('chat_one_active_turn_idx').on(table.contactId).where(sql`${table.status} IN ('queued', 'running')`),
+  index('chat_contact_sequence_idx').on(table.contactId, desc(table.sequence)),
+  index('chat_recovery_idx').on(table.status, table.checkedAt),
+  index('chat_user_status_idx').on(table.userId, table.status),
+]);
