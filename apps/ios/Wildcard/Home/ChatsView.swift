@@ -98,6 +98,14 @@ private struct ChatListRow: View {
     @Environment(AuthStore.self) private var auth
     @State private var legacyMessageAt: Double?
 
+    private var messagePreview: String {
+        guard let text = contact.lastMessageText else { return "No messages yet" }
+        return text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
     private func lastMessageTime(_ timestamp: Double, relativeTo now: Date) -> String {
         let date = Date(timeIntervalSince1970: timestamp / 1000)
         let calendar = Calendar.current
@@ -123,7 +131,7 @@ private struct ChatListRow: View {
                 Text(contact.name).manrope(.body, weight: .semibold)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                Text(contact.lastMessageText ?? "No messages yet").manrope(.subheadline)
+                Text(messagePreview).manrope(.subheadline)
                     .lineLimit(2)
                     .foregroundStyle(.secondary)
             }

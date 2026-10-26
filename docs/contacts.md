@@ -102,6 +102,9 @@ service. Older API responses without this field remain decodable by iOS.
 Chats uses a full-width plain list without a Contacts header or disclosure arrows.
 Only interior rows have separators; the first row has no top divider and the last
 has no bottom divider.
+The message preview trims each line, removes empty lines, and joins the remaining
+lines with spaces before wrapping to at most two lines. Stored messages and the
+conversation bubbles retain their original formatting.
 Each row opens the conversation and shows the last message time on the right,
 above its unread badge: local hours and minutes today, `Yesterday` one calendar
 day ago, an English weekday two through six days ago, and `dd/MM/yyyy` for older
