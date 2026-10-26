@@ -120,9 +120,12 @@ struct ChatView: View {
             if fromUser { Spacer(minLength: 40) }
             VStack(alignment: .trailing, spacing: 4) {
                 Text(text).manrope().textSelection(.enabled)
-                Text(Date(timeIntervalSince1970: sentAt / 1000), format: .dateTime.hour().minute())
-                    .manrope(.caption2)
-                    .foregroundStyle(fromUser ? Color.white.opacity(0.8) : Color.secondary)
+                HStack(spacing: 4) {
+                    Text(Date(timeIntervalSince1970: sentAt / 1000), format: .dateTime.hour().minute())
+                        .manrope(.caption2)
+                        .foregroundStyle(fromUser ? Color.white.opacity(0.8) : Color.secondary)
+                    if fromUser { MessageReceiptView(sentAt: sentAt) }
+                }
             }
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .foregroundStyle(fromUser ? Color.white : Color.primary)

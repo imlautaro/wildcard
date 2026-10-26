@@ -138,3 +138,24 @@ Completed replies enqueue [APNs push notifications](notifications.md) atomically
 with the saved response. Delivery and retries run independently of generation;
 a provider failure never turns a saved reply into a failed chat. Apple setup and
 an updated iOS installation are required. Foreground polling remains in use.
+
+## Simulated outgoing message checks
+
+User message bubbles display checks beside their send time: one muted check for
+**Sent**, two muted checks after one second for **Received**, and two light blue
+checks after three seconds for **Read**. These are deliberately simulated UI
+states with fixed delays in `MessageReceiptView`, not server delivery or contact
+read acknowledgements. The clock starts at the persisted user message's
+`createdAt`; existing messages older than three seconds immediately show Read.
+Navigation, reloading, and reply retries do not restart the simulation. These
+states are independent of assistant generation status, including failed replies,
+and of the owner's actual unread-reply watermark and push badges.
+
+Checks appear only for persisted user messages, after API acceptance. A send that
+fails before persistence has no outgoing bubble/check. Recent visible receipts
+schedule only their remaining transitions; leaving/backgrounding cancels their
+task and returning recomputes the state from time. Finished receipts do not keep
+polling. Accessibility exposes Sent/Received/Read, and check sizes follow Dynamic
+Type. No API, schema, service, or persistence changes are required. Static Swift
+and whitespace validation cover the implementation; device appearance remains
+unverified. No builds or tests were run for this change.
