@@ -4,9 +4,10 @@
 
 The API uses Hono on Cloudflare Workers, with configuration in
 `apps/api/wrangler.jsonc`. The native iOS app is independent and has no API origin
-configured. No Worker, database, Workflow, KV namespace, R2 bucket, secret, or
-external model service is provisioned by this scaffold. No old installation is
-reused. There are no migrations or stored server data to preserve or roll back.
+configured. The deployment target is a fresh Worker named `wildcard-api`,
+connected to the new `imlautaro/wildcard` repository. No database, Workflow, KV
+namespace, R2 bucket, runtime secret, or external model service is required.
+The archived installation and its data are not reused. There are no migrations or stored server data to preserve or roll back.
 
 The Worker has no routes. All requests return a JSON 404; unexpected application
 errors return a generic JSON 500. Error logs contain an event name only, with no
@@ -29,15 +30,15 @@ in ignored `apps/api/.dev.vars`; document their names and provide a safe example
 when a feature needs them. Add bindings in the versioned Wrangler configuration
 and regenerate types; do not hand-write the generated `Env` interface.
 
-## Future hosting in an independent account
+## Automatic hosting in an independent account
 
-Hosting is not connected or enabled yet. These steps describe the intended setup,
-not a deployment completed by the scaffold:
+Reproduce the Workers Builds integration as follows:
 
 1. Choose a Cloudflare account and an available Worker name. Replace
-   `name: wildcard-api` in Wrangler if needed. No account ID, database ID, domain,
-   or credential is hardcoded. Keep the chosen account and any future staging
-   resources separate and explicit.
+   `name: wildcard-api` in Wrangler if needed. Replace the installation-specific `account_id` with your own account ID.
+   The current installation targets account `a9e3a97d08ec5023cbe6b97a1a25fec6` and
+   origin `https://wildcard-api.imlautaro.workers.dev`. No database ID or credential
+   is stored in the configuration. Keep future staging resources separate.
 2. With deployment authorization, connect the repository to Cloudflare Workers
    Builds using its GitHub integration. Grant access to this repository and select
    `main` as the production branch. Use the repository root as the build root.
@@ -47,8 +48,7 @@ not a deployment completed by the scaffold:
    (`CLOUDFLARE_ACCOUNT_ID` if the credential has access to multiple accounts).
    Keep the deployment token in Cloudflare's credential configuration, never Git.
 4. Use `npm ci && npm run typecheck` as the build command. Configure
-   `npx wrangler deploy --config apps/api/wrangler.jsonc` only as the automatic
-   deployment command in Workers Builds. Do not run it locally. Disable preview
+   `npm run release:ci` only as the automatic deployment command in Workers Builds. Do not run it locally. Disable preview
    branch deployments until a separate staging setup is deliberately configured.
 5. Commit and push intended changes. Inspect the automatically triggered build,
    confirm its source SHA matches the pushed commit, and verify the deployed
@@ -63,7 +63,19 @@ Workers plan quotas and observability retention/usage limits apply; this scaffol
 does not enable billing or change an account plan. No paid storage or model
 service is required. Review the account's limits before hosting public traffic.
 
-Future build-time credentials and runtime secrets must be documented separately;
+The release command is implemented in `scripts/release-worker.mjs`. It requires
+`WORKERS_CI=1`, `WORKERS_CI_BRANCH=main`, an unmodified checkout, and
+`WORKERS_CI_COMMIT_SHA` matching Git HEAD. Workers Builds injects these system
+variables; do not set them locally to bypass the checks. A fork may set the build
+variable `WILDCARD_PRODUCTION_BRANCH` if it chooses another production branch.
+The release tags the Worker version with the complete source SHA. If the first
+repository-connection build lacks source metadata, it intentionally stops; a
+subsequent Git push triggers a build with commit metadata. Do not manually deploy.
+
+The integration uses an existing Workers Builds deployment credential selected in
+Cloudflare. It is not copied into the repository or runtime. The API currently
+needs no runtime secrets. Future build-time credentials and runtime secrets must
+be documented separately;
 there is no secret-transfer mechanism yet. Rollback through Cloudflare must target
 a previously pushed version, and resource/data compatibility must be reviewed
 when persistence is introduced. There is no staging installation at present.
@@ -74,8 +86,9 @@ Static TypeScript validation, generated Worker types, the Xcode project plist,
 and byte-for-byte preservation of tracked iOS files during relocation were checked.
 No builds or tests were run.
 
-Remote provisioning, automatic release integration, independent-account setup,
-and installed iOS behavior have not been verified. Follow the development checks
+Independent-account setup and installed iOS behavior have not been verified.
+Deployment completion must be confirmed from the automatic build and matching
+version tag before reporting the public API as live. Follow the development checks
 above when validating a fresh installation; local type checking alone does not
 confirm a production release.
 

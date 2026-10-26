@@ -52,9 +52,13 @@ Composer app icon. Moving the project into `apps/ios` preserves its relative pat
 
 ## Infrastructure and releases
 
-See [infrastructure setup](docs/infrastructure.md). This scaffold has no remote
-resources or configured automatic deployment. Future production releases must use
-Cloudflare Workers Builds from committed and pushed source. Do not deploy manually.
+See [infrastructure setup](docs/infrastructure.md). The API uses Cloudflare Workers Builds connected to
+`imlautaro/wildcard` on `main`, targeting
+`https://wildcard-api.imlautaro.workers.dev`. Build command:
+`npm ci && npm run typecheck`; automatic deployment command: `npm run release:ci`.
+The release script requires Workers Builds, a clean checkout, the production branch,
+and a matching source commit, then tags the Worker version with that commit.
+Commit and push to release; do not deploy manually. Preview builds are disabled.
 
 Follow the [working agreements](AGENTS.md), including English-only project content
 and reproducible infrastructure documentation.
