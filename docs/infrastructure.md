@@ -1,108 +1,150 @@
 # Infrastructure
 
-## Current scaffold
+## Required resources
 
-The API uses Hono on Cloudflare Workers, with configuration in
-`apps/api/wrangler.jsonc`. The native iOS app is independent and has no API origin
-configured. The deployment target is a fresh Worker named `wildcard-api`,
-connected to the new `imlautaro/wildcard` repository. No database, Workflow, KV
-namespace, R2 bucket, runtime secret, or external model service is required.
-The archived installation and its data are not reused. There are no migrations or stored server data to preserve or roll back.
+| Resource | Configuration | Purpose |
+| --- | --- | --- |
+| Cloudflare Worker | `apps/api/wrangler.jsonc`, `wildcard-api` | Hono API and Better Auth handler |
+| Cloudflare D1 | `DB`, `wildcard-db` | Users, hashed passwords, sessions, verification schema, and auth rate limits |
+| Runtime auth secret | `BETTER_AUTH_SECRET` | Signs cookies and native bearer sessions |
+| Public origin | `BETTER_AUTH_URL` | Canonical auth origin, separate from the secret |
+| Workers Builds | GitHub `imlautaro/wildcard`, `main`, root `/` | Automatic releases from committed and pushed source |
 
-The Worker has no routes. All requests return a JSON 404; unexpected application
-errors return a generic JSON 500. Error logs contain an event name only, with no
-request bodies or credentials.
+There are no KV, R2, Workflow, model API, email service, or staging dependencies.
+Registration and login require D1 and the secret; missing configuration fails
+rather than falling back to in-memory sessions or a development secret. See
+[authentication](authentication.md) for the API, client, privacy, and limitations.
+
+## This installation
+
+- Account: `a9e3a97d08ec5023cbe6b97a1a25fec6`.
+- Worker: `wildcard-api`.
+- D1: `wildcard-db`, ID `ac55a941-27bf-4182-ac8a-8aebda43524f` (new database).
+- Origin: `https://wildcard-api.imlautaro.workers.dev`.
+- Repository: `imlautaro/wildcard` (ID `1434657598`), production branch `main`.
+- Build root `/`; build command `npm ci && npm run typecheck`;
+  automatic deployment command `npm run release:ci`.
+- Preview branch builds and version preview URLs are disabled.
+- Existing build credential: `Workers Builds - 2026-05-27 10:54`.
+
+The previous project's database was deleted and is not reused. These IDs and URLs
+are installation-specific; replace them when configuring an independent account.
+No actual secret value belongs in Git, app build settings, or documentation.
+
+## Independent account provisioning
+
+1. Install Node.js 24 or later and npm. Use `.nvmrc` and `npm ci` from the root.
+2. Choose a Cloudflare account, an available Worker name, and database name.
+   Replace `account_id`, Worker `name`, and `vars.BETTER_AUTH_URL` in Wrangler.
+   Change the D1 `database_name` and set its `database_id` to
+   `00000000-0000-0000-0000-000000000000` before provisioning a new installation.
+   Preserve `binding: DB` and `migrations_dir: migrations`.
+3. Authenticate Wrangler in your account. The provisioner needs account read and
+   D1 edit permissions. Run `npm run infra:provision`. It lists databases in that
+   account, reuses a matching name or creates it, verifies its ID, and updates the
+   versioned binding. Re-running against the same configuration reuses the same
+   resource. It refuses to silently replace a different non-placeholder database
+   ID. It neither migrates nor deploys the Worker. Review the chosen account and
+   resulting IDs, then commit and push the configuration.
+4. Connect your repository to Cloudflare Workers Builds using its GitHub
+   integration. Select the production branch (`main` by default), root `/`, and
+   the build/deploy commands above. The deployment credential needs Workers
+   Scripts edit, D1 edit, and account read permissions in your account. Workers
+   Scripts edit covers listing Worker secret names and uploading runtime secrets
+   with a version. Select an existing suitably scoped credential; do not commit
+   its value. Disable preview builds until staging is explicitly provisioned.
+5. The automatic release applies versioned D1 migrations first, then publishes the
+   Worker with an auth secret as described below. There is no manual migration
+   requirement for production releases; review each migration before pushing.
+6. Replace both iOS `WILDCARD_API_URL` build settings with your public HTTPS origin.
+   Build/install the client separately when desired. API releases do not update an
+   already installed iOS application.
+
+D1 and Workers are subject to the selected account's plan/quotas; the feature does
+not enable billing or change plans. Better Auth password hashing consumes CPU, so
+check the account's Worker CPU limits before public use. No email delivery or
+identity verification is provided by creating these resources.
+
+## Automatic secret initialization and releases
+
+`scripts/release-worker.mjs` requires Workers Builds (`WORKERS_CI=1`), the production
+branch, a clean checkout, and `WORKERS_CI_COMMIT_SHA` equal to Git HEAD. These system
+variables are injected by Cloudflare. Do not set them locally to bypass the guard.
+An independent installation can set `WILDCARD_PRODUCTION_BRANCH` in the build
+settings if it uses another production branch.
+
+The release runs remote D1 migrations and inspects only Worker secret names. If
+`BETTER_AUTH_SECRET` does not exist, it generates 48 cryptographically random bytes,
+writes an owner-only JSON file in a private temporary directory, and uploads the
+secret with the code using Wrangler's `--secrets-file`. The file is removed in a
+`finally` block. Secret values never appear in arguments or application logs.
+Subsequent releases omit the secret upload, preserving the existing encrypted
+runtime value and session signatures. The secret is never exposed to iOS.
+
+There are no build-time application secrets. The Cloudflare build credential is
+used only by the pipeline, while `BETTER_AUTH_SECRET` is used only at runtime.
+Future secret rotation must use an explicitly authorized automatic release; it
+invalidates existing signed sessions. Deleting/recreating the Worker also loses
+its runtime secret and requires users to sign in again.
+
+Release by committing and pushing to the selected branch. Check Workers Builds,
+confirm the source SHA, and inspect the active Worker version's `workers/tag`
+against that SHA. The script tags every version with the full source commit.
+The first repository-connection build may lack source metadata and stop safely;
+a subsequent Git push triggers a build with metadata. Investigate a failed
+pipeline; do not bypass it with a local deployment or `wrangler secret put`.
+
+The stable `workers.dev` route is enabled; preview URLs are disabled. Workers Logs
+and Traces are configured with sampling rates 1 and 0.01. Review quotas/retention
+before public use. Preview branches must not share this production database.
+Separate Worker, D1, origin, and secret configuration is required for staging.
 
 ## Local setup
 
-1. Install Node.js 24 or later and npm. The root `.nvmrc` selects Node.js 24.
-2. Run `npm ci` from the repository root to install the locked dependencies.
-3. Run `npm run typecheck` to generate runtime/binding types from Wrangler and
-   check TypeScript. `apps/api/worker-configuration.d.ts` is generated and ignored.
-4. Run `npm run dev`; Wrangler runs locally on port 8787 without Cloudflare login
-   or remote bindings. Visiting any path should return HTTP 404 and
-   `{"error":"Not found"}`.
-5. When desired, `npm run build` bundles the Worker locally into ignored `dist/`
-   using `--dry-run`; it does not create or publish a remote Worker.
+```sh
+npm ci
+npm run auth:setup:local
+npm run typecheck
+npm run dev
+```
 
-No environment variables or secrets are required. Future local credentials belong
-in ignored `apps/api/.dev.vars`; document their names and provide a safe example
-when a feature needs them. Add bindings in the versioned Wrangler configuration
-and regenerate types; do not hand-write the generated `Env` interface.
+Local setup generates an ignored, owner-only `apps/api/.dev.vars` containing a
+random `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL=http://localhost:8787`, and applies
+migration `0001_auth.sql` to Wrangler's local D1. Existing `.dev.vars` files are
+preserved. A safe template is versioned as `.dev.vars.example`. Local D1 state is
+ignored under `.wrangler/`; these commands do not connect to production bindings.
+No Cloudflare login is required for local emulation.
 
-## Automatic hosting in an independent account
+`npm run db:migrate:local` reapplies only pending local migrations. The separate
+`db:migrate:remote` command modifies the configured production database and should
+be reserved for explicitly authorized operations; releases already perform it.
+`npm run types --workspace @wildcard/api` regenerates ignored binding/runtime types
+from Wrangler; `npm run typecheck` includes it. `npm run build` is a local dry run
+only and does not publish. Follow the repository's build/test preferences.
 
-Reproduce the Workers Builds integration as follows:
+## Migrations, compatibility, and verification
 
-1. Choose a Cloudflare account and an available Worker name. Replace
-   `name: wildcard-api` in Wrangler if needed. Replace the installation-specific `account_id` with your own account ID.
-   The current installation targets account `a9e3a97d08ec5023cbe6b97a1a25fec6` and
-   origin `https://wildcard-api.imlautaro.workers.dev`. No database ID or credential
-   is stored in the configuration. Keep future staging resources separate.
-2. With deployment authorization, connect the repository to Cloudflare Workers
-   Builds using its GitHub integration. Grant access to this repository and select
-   `main` as the production branch. Use the repository root as the build root.
-3. Select a build credential scoped to the chosen account with Workers Scripts
-   edit permissions and account read access. No D1, KV, R2, or external API
-   permissions are needed. Select the account explicitly in the build settings
-   (`CLOUDFLARE_ACCOUNT_ID` if the credential has access to multiple accounts).
-   Keep the deployment token in Cloudflare's credential configuration, never Git.
-4. Use `npm ci && npm run typecheck` as the build command. Configure
-   `npm run release:ci` only as the automatic deployment command in Workers Builds. Do not run it locally. Disable preview
-   branch deployments until a separate staging setup is deliberately configured.
-5. Commit and push intended changes. Inspect the automatically triggered build,
-   confirm its source SHA matches the pushed commit, and verify the deployed
-   Worker's version metadata against that commit. The public origin will be
-   `https://<worker-name>.<account-subdomain>.workers.dev`; every path should
-   currently return the JSON 404 described above. A failed build must be repaired
-   in the automatic workflow, not bypassed by manual deployment.
+`0001_auth.sql` creates the user, session, account, verification, and rate-limit
+tables, indexes, unique constraints, and foreign-key cascades. Timestamps in the
+Drizzle schema and SQL use milliseconds. It adds new tables and is compatible
+with the prior empty API. The migration runs before code upload; never rewrite
+an applied migration. Worker rollback does not undo D1 changes or recover deleted
+data. Review future migrations for compatibility with the currently active Worker.
 
-The configuration enables the stable `workers.dev` route, disables version preview
-URLs, and enables Workers Logs and Traces with sampling rates of 1 and 0.01.
-Workers plan quotas and observability retention/usage limits apply; this scaffold
-does not enable billing or change an account plan. No paid storage or model
-service is required. Review the account's limits before hosting public traffic.
+Verify that the automatic release has no pending migrations, the `DB` binding uses
+the intended ID, and the runtime secret name exists. An unauthenticated GET to
+`/api/v1/me` must return 401 JSON; unrelated paths retain the 404 JSON response.
+Refer to the auth guide for functional scenarios using fictional data when tests
+are authorized. Do not expose database contents or secrets to validate setup.
 
-The release command is implemented in `scripts/release-worker.mjs`. It requires
-`WORKERS_CI=1`, `WORKERS_CI_BRANCH=main`, an unmodified checkout, and
-`WORKERS_CI_COMMIT_SHA` matching Git HEAD. Workers Builds injects these system
-variables; do not set them locally to bypass the checks. A fork may set the build
-variable `WILDCARD_PRODUCTION_BRANCH` if it chooses another production branch.
-The release tags the Worker version with the complete source SHA. If the first
-repository-connection build lacks source metadata, it intentionally stops; a
-subsequent Git push triggers a build with commit metadata. Do not manually deploy.
-
-The integration uses an existing Workers Builds deployment credential selected in
-Cloudflare. It is not copied into the repository or runtime. The API currently
-needs no runtime secrets. Future build-time credentials and runtime secrets must
-be documented separately;
-there is no secret-transfer mechanism yet. Rollback through Cloudflare must target
-a previously pushed version, and resource/data compatibility must be reviewed
-when persistence is introduced. There is no staging installation at present.
-
-## Verification status
-
-Static TypeScript validation, generated Worker types, the Xcode project plist,
-and byte-for-byte preservation of tracked iOS files during relocation were checked.
-No local builds or tests were run. Cloudflare Workers Builds runs the configured
-installation, type check, and release remotely.
-
-On October 26, 2026, Workers Builds was connected to `imlautaro/wildcard`
-(repository ID `1434657598`), production branch `main`, root `/`, with preview
-builds disabled. The selected existing credential is
-`Workers Builds - 2026-05-27 10:54`. No new token or runtime secret was created.
-The connection build uses the commands documented above; pushes trigger subsequent
-automatic releases.
-
-Independent-account setup and installed iOS behavior have not been verified.
-Deployment completion must be confirmed from the automatic build and matching
-version tag before reporting the public API as live. Follow the development checks
-above when validating a fresh installation; local type checking alone does not
-confirm a production release.
+TypeScript, generated bindings, release/provisioner syntax, and Swift types were
+checked during implementation. No runtime auth tests or local builds were run.
+Independent-account reproduction and installed iOS behavior remain unverified.
 
 ## References
 
-- [Hono on Cloudflare Workers](https://hono.dev/docs/getting-started/cloudflare-workers)
-- [Workers TypeScript and generated types](https://developers.cloudflare.com/workers/languages/typescript/)
-- [Workers Builds Git integration](https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/)
-- [Workers configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)
+- [D1 Wrangler commands](https://developers.cloudflare.com/d1/wrangler-commands/)
+- [D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)
+- [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)
+- [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
+- [Workers CPU and platform limits](https://developers.cloudflare.com/workers/platform/limits/)

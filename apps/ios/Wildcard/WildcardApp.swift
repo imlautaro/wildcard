@@ -1,32 +1,15 @@
-//
-//  WildcardApp.swift
-//  Wildcard
-//
-//  Created by Lautaro Pereyra on 26/10/2026.
-//
-
 import SwiftUI
-import SwiftData
 
 @main
 struct WildcardApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @State private var auth = AuthStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(auth)
+                .tint(Color(red: 4 / 255, green: 93 / 255, blue: 227 / 255))
+                .task { await auth.restore() }
         }
-        .modelContainer(sharedModelContainer)
     }
 }

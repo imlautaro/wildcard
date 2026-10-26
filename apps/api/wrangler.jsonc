@@ -19,5 +19,21 @@
       "head_sampling_rate": 0.01
     }
   },
-  "account_id": "a9e3a97d08ec5023cbe6b97a1a25fec6"
+  "account_id": "a9e3a97d08ec5023cbe6b97a1a25fec6",
+  "vars": {
+    "BETTER_AUTH_URL": "https://wildcard-api.imlautaro.workers.dev"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wildcard-db",
+      "database_id": "ac55a941-27bf-4182-ac8a-8aebda43524f",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "secrets": {
+    "required": [
+      "BETTER_AUTH_SECRET"
+    ]
+  }
 }

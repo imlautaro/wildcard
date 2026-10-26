@@ -1,22 +1,24 @@
 # Wildcard
 
-A native iOS app and a Hono API scaffold for Cloudflare Workers.
+A native iOS app and Hono API for Cloudflare Workers, with email/password
+authentication backed by Better Auth and Cloudflare D1.
 
 ## Layout
 
 ```text
 apps/
   api/                       # TypeScript API, managed with npm workspaces
-    src/app.ts               # Hono application; no routes yet
+    src/app.ts               # Hono application and auth routes
     src/index.ts             # Worker entry point
     wrangler.jsonc           # Worker configuration
   ios/
-    Wildcard/                # SwiftUI app, SwiftData model, and Icon Composer icon
+    Wildcard/                # SwiftUI app, auth client, and Icon Composer icon
     Wildcard.xcodeproj/       # Xcode project
     WildcardTests/
     WildcardUITests/
 docs/
-  infrastructure.md          # Local setup and future hosting configuration
+  infrastructure.md          # Reproducible provisioning and automatic releases
+  authentication.md          # Auth contract, session behavior, and limitations
 ```
 
 ## API development
@@ -25,12 +27,16 @@ Use Node.js 24 or later and npm. From the repository root:
 
 ```sh
 npm ci
+npm run auth:setup:local
 npm run dev
 ```
 
-Wrangler serves the API locally at `http://localhost:8787`. No routes are registered;
-every path currently returns HTTP 404 with `{"error":"Not found"}`. There is no
-authentication, database, model integration, or connection from the iOS app yet.
+Wrangler serves the API locally at `http://localhost:8787`. Local setup creates an
+ignored auth secret and applies D1 migrations. Register/sign in through
+`/api/v1/auth/sign-up/email` and `/api/v1/auth/sign-in/email`; `/api/v1/me` requires
+a signed bearer session. Unrelated paths return HTTP 404 JSON. See
+[authentication](docs/authentication.md) for the contract and limitations.
+Email ownership verification and password recovery are not configured yet.
 
 ```sh
 npm run typecheck  # Generate Worker types and check TypeScript
@@ -47,8 +53,11 @@ Open `apps/ios/Wildcard.xcodeproj`, or run `npm run ios` on macOS. Select the
 `Wildcard` scheme in Xcode 27.1 or later. The current minimum deployment target is
 iOS 27.0. For a physical device, select your own signing team and bundle identifier.
 
-The app currently contains the SwiftUI/SwiftData starter and the Wildcard Icon
-Composer app icon. Moving the project into `apps/ios` preserves its relative paths.
+The app includes sign-up/sign-in, a signed-in account screen, Keychain session
+storage, restoration on launch, and logout. It preserves the Wildcard Icon Composer
+icon. Debug and Release default to the public API through `WILDCARD_API_URL`; an
+independent installation must replace that setting. See the auth guide for local
+simulator configuration. No contacts, conversations, or model integration exist yet.
 
 ## Infrastructure and releases
 
@@ -58,7 +67,9 @@ See [infrastructure setup](docs/infrastructure.md). The API uses Cloudflare Work
 `npm ci && npm run typecheck`; automatic deployment command: `npm run release:ci`.
 The release script requires Workers Builds, a clean checkout, the production branch,
 and a matching source commit, then tags the Worker version with that commit.
-Commit and push to release; do not deploy manually. Preview builds are disabled.
+Releases apply D1 migrations before publishing and initialize the runtime auth
+secret on the first auth release, preserving it afterward. Commit and push to
+release; do not deploy manually. Preview builds are disabled.
 
 Follow the [working agreements](AGENTS.md), including English-only project content
 and reproducible infrastructure documentation.

@@ -12,6 +12,10 @@
     "typecheck": "npm run typecheck --workspace @wildcard/api",
     "build": "npm run build --workspace @wildcard/api",
     "ios": "open apps/ios/Wildcard.xcodeproj",
-    "release:ci": "node scripts/release-worker.mjs"
+    "release:ci": "node scripts/release-worker.mjs",
+    "infra:provision": "node scripts/provision-d1.mjs",
+    "db:migrate:local": "npm run db:migrate:local --workspace @wildcard/api",
+    "db:migrate:remote": "npm run db:migrate:remote --workspace @wildcard/api",
+    "auth:setup:local": "node scripts/setup-local-auth.mjs && npm run db:migrate:local"
   }
 }

@@ -1,61 +1,45 @@
-//
-//  ContentView.swift
-//  Wildcard
-//
-//  Created by Lautaro Pereyra on 26/10/2026.
-//
-
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @Environment(AuthStore.self) private var auth
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+        Group {
+            switch auth.state {
+            case .restoring:
+                ProgressView("Restoring your session")
+            case .signedOut:
+                AuthenticationView()
+            case .unavailable:
+                ContentUnavailableView {
+                    Label("Unable to restore session", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(auth.error ?? "Please try again when you are connected.")
+                } actions: {
+                    Button("Try again") { Task { await auth.restore() } }
+                }
+            case .signedIn:
+                NavigationStack {
+                    Form {
+                        if let user = auth.user {
+                            Section("Account") {
+                                LabeledContent("Name", value: user.name)
+                                LabeledContent("Email", value: user.email)
+                                LabeledContent("Email verified", value: user.emailVerified ? "Yes" : "No")
+                            }
+                        }
+                        if let error = auth.error {
+                            Text(error).foregroundStyle(.red)
+                        }
+                        Section {
+                            Button("Sign out", role: .destructive) { Task { await auth.signOut() } }
+                                .disabled(auth.isBusy)
+                            if auth.isBusy { ProgressView() }
+                        }
                     }
+                    .navigationTitle("Account")
                 }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
-        }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
             }
         }
     }
-}
-
-#Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }
