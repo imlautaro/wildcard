@@ -202,3 +202,15 @@ and token safety limit remain unchanged. This prompt applies to future generatio
 after the API's automatic commit/push release, without rewriting existing replies.
 Static Swift/TypeScript and whitespace checks cover the source; no builds, tests,
 visual device verification, or paid inference were performed for this change.
+
+## Outgoing bubble colors
+
+User bubbles use the adaptive OutgoingMessageBackground color asset: a pastel
+blue (#D9E7FB, approximately 85 percent white mixed with the current #045DE3
+primary color) in light mode and a deeper blue (#02255B, approximately 60 percent
+black mixed with primary) in dark mode. Message text uses the system primary
+foreground, and timestamps and Sent/Received checks use the secondary foreground.
+Read checks use primary blue in light mode and pale cyan in dark mode. Keep this
+asset aligned with AccentColor if the app's brand color changes. Contact bubbles
+retain the system secondary background. Swift and whitespace checks passed;
+visual device verification remains pending, with no builds or tests run.

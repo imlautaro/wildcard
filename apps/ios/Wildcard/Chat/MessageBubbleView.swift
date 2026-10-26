@@ -23,8 +23,8 @@ struct MessageBubbleView: View {
                 }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
-            .foregroundStyle(fromUser ? Color.white : Color.primary)
-            .background(fromUser ? Color.accentColor : Color(uiColor: .secondarySystemBackground),
+            .foregroundStyle(Color.primary)
+            .background(fromUser ? Color("OutgoingMessageBackground") : Color(uiColor: .secondarySystemBackground),
                         in: RoundedRectangle(cornerRadius: 20))
             if !fromUser { Spacer(minLength: 40) }
         }
@@ -39,7 +39,7 @@ struct MessageBubbleView: View {
         HStack(alignment: .lastTextBaseline, spacing: 3) {
             Text(Date(timeIntervalSince1970: sentAt / 1000), format: .dateTime.hour().minute())
                 .manrope(.caption2)
-                .foregroundStyle(fromUser ? Color.white.opacity(0.8) : Color.secondary)
+                .foregroundStyle(.secondary)
             if fromUser { MessageReceiptView(sentAt: sentAt) }
         }
         .fixedSize()

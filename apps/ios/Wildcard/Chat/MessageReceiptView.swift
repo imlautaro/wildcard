@@ -54,15 +54,20 @@ private struct ReceiptTimeline<Content: View>: View {
 
 struct MessageReceiptView: View {
     let sentAt: Double
+    @Environment(\.colorScheme) private var colorScheme
     @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 16
     @ScaledMetric(relativeTo: .caption2) private var height: CGFloat = 9.6
     @ScaledMetric(relativeTo: .caption2) private var lineWidth: CGFloat = 1.3
+
+    private var readColor: Color {
+        colorScheme == .dark ? Color(red: 0.6, green: 0.9, blue: 1) : .accentColor
+    }
 
     var body: some View {
         ReceiptTimeline(sentAt: sentAt) { receipt in
             ReceiptChecks(doubled: receipt != .sent)
                 .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
-                .foregroundStyle(receipt == .read ? Color(red: 0.6, green: 0.9, blue: 1) : .white.opacity(0.75))
+                .foregroundStyle(receipt == .read ? readColor : Color.secondary)
                 .frame(width: width, height: height)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(receipt.label)
