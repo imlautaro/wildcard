@@ -1,52 +1,45 @@
 import SwiftUI
 
-struct MessageReceiptView: View {
-    let sentAt: Double
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var now = Date.now
-    @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 20
-    @ScaledMetric(relativeTo: .caption2) private var height: CGFloat = 12
-    @ScaledMetric(relativeTo: .caption2) private var lineWidth: CGFloat = 1.6
+// Presentation-only simulation; these are not server delivery/read receipts.
+private enum SimulatedReceipt {
+    case sent, received, read
 
-    // Presentation-only simulation; these are not server delivery/read receipts.
-    private static let receivedDelay: TimeInterval = 1
-    private static let readDelay: TimeInterval = 3
+    static let receivedDelay: TimeInterval = 1
+    static let readDelay: TimeInterval = 3
 
-    private enum Receipt {
-        case sent, received, read
-
-        var label: String {
-            switch self {
-            case .sent: "Sent"
-            case .received: "Received"
-            case .read: "Read"
-            }
+    var label: String {
+        switch self {
+        case .sent: "Sent"
+        case .received: "Received"
+        case .read: "Read"
         }
     }
 
-    private struct UpdateID: Hashable {
-        let sentAt: Double
-        let phase: ScenePhase
-    }
-
-    private var receipt: Receipt {
+    static func status(sentAt: Double, now: Date) -> Self {
         let elapsed = now.timeIntervalSince1970 - sentAt / 1000
-        if elapsed >= Self.readDelay { return .read }
-        if elapsed >= Self.receivedDelay { return .received }
+        if elapsed >= readDelay { return .read }
+        if elapsed >= receivedDelay { return .received }
         return .sent
     }
+}
+
+private struct ReceiptUpdateID: Hashable {
+    let sentAt: Double
+    let phase: ScenePhase
+}
+
+private struct ReceiptTimeline<Content: View>: View {
+    let sentAt: Double
+    @ViewBuilder let content: (SimulatedReceipt) -> Content
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var now = Date.now
 
     var body: some View {
-        ReceiptChecks(doubled: receipt != .sent)
-            .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
-            .foregroundStyle(receipt == .read ? Color(red: 0.6, green: 0.9, blue: 1) : .white.opacity(0.75))
-            .frame(width: width, height: height)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(receipt.label)
-            .task(id: UpdateID(sentAt: sentAt, phase: scenePhase)) {
+        content(SimulatedReceipt.status(sentAt: sentAt, now: now))
+            .task(id: ReceiptUpdateID(sentAt: sentAt, phase: scenePhase)) {
                 now = .now
                 guard scenePhase == .active else { return }
-                for delay in [Self.receivedDelay, Self.readDelay] {
+                for delay in [SimulatedReceipt.receivedDelay, SimulatedReceipt.readDelay] {
                     let remaining = sentAt / 1000 + delay - Date.now.timeIntervalSince1970
                     if remaining > 0 {
                         do { try await Task.sleep(for: .seconds(remaining)) }
@@ -56,6 +49,44 @@ struct MessageReceiptView: View {
                     now = .now
                 }
             }
+    }
+}
+
+struct MessageReceiptView: View {
+    let sentAt: Double
+    @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 20
+    @ScaledMetric(relativeTo: .caption2) private var height: CGFloat = 12
+    @ScaledMetric(relativeTo: .caption2) private var lineWidth: CGFloat = 1.6
+
+    var body: some View {
+        ReceiptTimeline(sentAt: sentAt) { receipt in
+            ReceiptChecks(doubled: receipt != .sent)
+                .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+                .foregroundStyle(receipt == .read ? Color(red: 0.6, green: 0.9, blue: 1) : .white.opacity(0.75))
+                .frame(width: width, height: height)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(receipt.label)
+        }
+    }
+}
+
+struct ReplyTypingIndicator: View {
+    let sentAt: Double
+
+    var body: some View {
+        ReceiptTimeline(sentAt: sentAt) { receipt in
+            // Keep a stable container so the delayed task also runs before it has content.
+            VStack(spacing: 0) {
+                if receipt == .read {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Typing…").manrope(.subheadline).foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
     }
 }
 

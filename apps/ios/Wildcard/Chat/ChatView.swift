@@ -8,6 +8,7 @@ struct ChatView: View {
     @Environment(\.scenePhase) private var scenePhase
     let chat: ChatStore
     @State private var draft = ""
+    @State private var draftRevision = 0
     @State private var isVisible = false
     @State private var voice = VoiceRecorder()
     @State private var voiceTask: Task<Void, Never>?
@@ -51,12 +52,7 @@ struct ChatView: View {
                         bubble(turn.userText, sentAt: turn.createdAt, fromUser: true)
                         if let reply = turn.assistantText { bubble(reply, sentAt: turn.updatedAt, fromUser: false) }
                         else if turn.isPending {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                Text("Thinking…").manrope(.subheadline).foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                            .accessibilityElement(children: .combine)
+                            ReplyTypingIndicator(sentAt: turn.createdAt)
                         } else if turn.status == .failed {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("The reply could not be completed.").manrope(.footnote).foregroundStyle(.secondary)
@@ -144,6 +140,7 @@ struct ChatView: View {
         voiceTask?.cancel()
         voiceTask = Task {
             if let text = await voice.transcribe(contactID: contactID, using: auth), !Task.isCancelled {
+                draftRevision += 1
                 draft = draft.isEmpty ? text : draft + " " + text
                 composerFocused = true
             }
@@ -189,7 +186,10 @@ struct ChatView: View {
                 }.manrope(.footnote)
             }
             HStack(alignment: .bottom, spacing: 12) {
-                TextField("Message", text: $draft, axis: .vertical)
+                TextField("Message", text: Binding(get: { draft }, set: {
+                    draftRevision += 1
+                    draft = $0
+                }), axis: .vertical)
                     .manrope().lineLimit(1...6).focused($composerFocused)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -203,9 +203,15 @@ struct ChatView: View {
                         composerFocused = false
                         voiceTask = Task { await voice.start() }
                     } else {
+                        guard canSend else { return }
                         let submitted = draft
+                        let submittedRevision = draftRevision
+                        draft = ""
                         Task {
-                            if await chat.send(text: submitted, contactID: contactID, using: auth), draft == submitted { draft = "" }
+                            let accepted = await chat.send(text: submitted, contactID: contactID, using: auth)
+                            if !accepted, draftRevision == submittedRevision, draft.isEmpty {
+                                draft = submitted
+                            }
                         }
                     }
                 } label: {

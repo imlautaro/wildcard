@@ -159,3 +159,20 @@ polling. Accessibility exposes Sent/Received/Read, and check sizes follow Dynami
 Type. No API, schema, service, or persistence changes are required. Static Swift
 and whitespace validation cover the implementation; device appearance remains
 unverified. No builds or tests were run for this change.
+
+## Immediate composer clearing and delayed typing
+
+Tapping Send clears the composer immediately, before waiting for API acceptance.
+If persistence fails, the submitted text is restored only if the user has made
+no subsequent draft edits or dictation insertions. New draft text is never
+cleared by a previous request's successful completion. A failed request still
+uses ChatStore's existing idempotent submission/recovery behavior.
+
+Pending replies show **Typing…** only after the user's message reaches its
+simulated Read state, three seconds after its persisted createdAt. Checks and
+typing share the same receipt timeline and fixed thresholds. Before then, no
+pending-reply indicator appears. Completed replies and failure/retry controls
+remain governed by the actual turn status; already available replies are not
+artificially delayed. The indicator cancels on navigation/backgrounding and
+recomputes on return, without restarting the elapsed time. This is presentation
+only and does not delay model inference or change unread watermarks.
