@@ -26,6 +26,27 @@ chats.get('/turns', async (c) => {
   const page = results.slice(0, 50);
   return c.json({ turns: page.reverse(), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
+// Acknowledge only completed replies actually presented by the client. Never move backwards.
+chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }), async (c) => {
+  const body = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!body || Array.isArray(body) || Object.keys(body).join(',') !== 'sequence'
+      || typeof body.sequence !== 'number' || !Number.isSafeInteger(body.sequence) || body.sequence < 1) {
+    return c.json({ error: 'Provide the last displayed reply sequence' }, 400);
+  }
+  const state = await c.env.DB.prepare(`UPDATE contact SET last_read_sequence = MAX(last_read_sequence,
+    COALESCE((SELECT MAX(sequence) FROM chat_turn WHERE contact_id = ?1 AND user_id = ?2
+      AND status = 'complete' AND sequence <= ?3), 0))
+    WHERE id = ?1 AND user_id = ?2 RETURNING last_read_sequence AS lastReadSequence`)
+    .bind(c.get('contactID'), c.get('owner'), body.sequence).first<{ lastReadSequence: number }>();
+  if (!state) return c.json({ error: 'Contact not found' }, 404);
+  await c.env.DB.prepare(`DELETE FROM push_delivery WHERE turn_id IN
+    (SELECT id FROM chat_turn WHERE contact_id = ? AND user_id = ? AND sequence <= ?)`)
+    .bind(c.get('contactID'), c.get('owner'), state.lastReadSequence).run();
+  const unread = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM chat_turn WHERE contact_id = ?
+    AND user_id = ? AND status = 'complete' AND sequence > ?`)
+    .bind(c.get('contactID'), c.get('owner'), state.lastReadSequence).first<{ count: number }>();
+  return c.json({ ...state, unreadCount: unread?.count ?? 0 });
+});
 chats.post('/turns', messageBody, async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (!body || Array.isArray(body) || Object.keys(body).sort().join(',') !== 'id,text'

@@ -1,4 +1,3 @@
-import { createPrivateKey, sign } from 'node:crypto';
 
 // Optional until the installation has configured its own Apple provider key.
 export type PushEnvironment = Env & {
@@ -17,26 +16,33 @@ export function enqueueReply(db: D1Database, turnID: string, attempt: number, no
   return db.prepare(`INSERT OR IGNORE INTO push_delivery
     (turn_id, device_id, session_id, next_at, expires_at)
     SELECT t.id, d.id, d.session_id, ?1, ?2 FROM chat_turn t
+    JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
     JOIN session s ON s.user_id = t.user_id AND s.expires_at > ?1
     JOIN push_device d ON d.session_id = s.id
-    WHERE t.id = ?3 AND t.attempt = ?4 AND t.status = 'complete'`)
+    WHERE t.id = ?3 AND t.attempt = ?4 AND t.status = 'complete' AND t.sequence > c.last_read_sequence`)
     .bind(now, now + 86_400_000, turnID, attempt);
 }
 
-function providerToken(env: PushEnvironment): string {
+async function providerToken(env: PushEnvironment): Promise<string> {
   const header = Buffer.from(JSON.stringify({ alg: 'ES256', kid: env.APNS_KEY_ID })).toString('base64url');
   const claims = Buffer.from(JSON.stringify({ iss: env.APNS_TEAM_ID, iat: Math.floor(Date.now() / 1000) })).toString('base64url');
   const input = `${header}.${claims}`;
-  const key = createPrivateKey(env.APNS_PRIVATE_KEY!.replace(/\\n/g, '\n'));
-  const signature = sign('sha256', Buffer.from(input), { key, dsaEncoding: 'ieee-p1363' });
-  return `${input}.${signature.toString('base64url')}`;
+  const pem = env.APNS_PRIVATE_KEY!.replace(/\\n/g, '\n');
+  const encoded = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, '');
+  const der = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+  // Workers' node:crypto sign rejects PrivateKeyObject in this path. Import PKCS#8 directly.
+  const key = await crypto.subtle.importKey('pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(input));
+  return `${input}.${Buffer.from(signature).toString('base64url')}`;
 }
 
 export async function deliverPush(env: PushEnvironment, turnID?: string) {
   const now = Date.now();
   await env.DB.prepare(`DELETE FROM push_delivery WHERE expires_at <= ? OR attempts >= 8
     OR NOT EXISTS (SELECT 1 FROM push_device d JOIN session s ON s.id = d.session_id
-      WHERE d.id = push_delivery.device_id AND d.session_id = push_delivery.session_id AND s.expires_at > ?)`)
+      WHERE d.id = push_delivery.device_id AND d.session_id = push_delivery.session_id AND s.expires_at > ?)
+    OR EXISTS (SELECT 1 FROM chat_turn t JOIN contact c ON c.id = t.contact_id
+      WHERE t.id = push_delivery.turn_id AND t.sequence <= c.last_read_sequence)`)
     .bind(now, now).run();
   if (!env.APNS_PRIVATE_KEY || !env.APNS_KEY_ID || !env.APNS_TEAM_ID || !env.APNS_TOPIC) return;
   const { results } = await env.DB.prepare(`SELECT p.turn_id AS turnID, p.device_id AS deviceID,
@@ -49,12 +55,20 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
     ORDER BY p.next_at LIMIT 30`).bind(now, turnID ?? null).all<Delivery>();
   if (!results.length) return;
   // One fresh provider JWT per bounded batch; never cache I/O across invocations.
-  const jwt = providerToken(env);
+  let jwt: string;
+  try { jwt = await providerToken(env); }
+  catch {
+    console.error(JSON.stringify({ event: 'push_provider_signing_failed' }));
+    return;
+  }
   for (let offset = 0; offset < results.length; offset += 5) {
     const outcomes = await Promise.allSettled(results.slice(offset, offset + 5).map(async (item) => {
       // Atomic lease prevents concurrent Workflow/Cron sends. Retry after a crash.
       const claim = await env.DB.prepare(`UPDATE push_delivery SET next_at = ?, attempts = attempts + 1
-        WHERE turn_id = ? AND device_id = ? AND session_id = ? AND next_at <= ? RETURNING turn_id`)
+        WHERE turn_id = ? AND device_id = ? AND session_id = ? AND next_at <= ?
+        AND EXISTS (SELECT 1 FROM chat_turn t JOIN contact c ON c.id = t.contact_id
+          WHERE t.id = push_delivery.turn_id AND t.sequence > c.last_read_sequence)
+        RETURNING turn_id`)
         .bind(now + 120_000, item.turnID, item.deviceID, item.sessionID, now).first();
       if (!claim) return;
       const host = item.environment === 'development' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
@@ -87,8 +101,9 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
       } else if (response.ok || (response.status === 400 && reason === 'PayloadEmpty') || response.status === 413) {
         await env.DB.prepare('DELETE FROM push_delivery WHERE turn_id = ? AND device_id = ? AND session_id = ?')
           .bind(item.turnID, item.deviceID, item.sessionID).run();
+        if (response.ok) console.log(JSON.stringify({ event: 'push_accepted', environment: item.environment }));
       } else {
-        console.error(JSON.stringify({ event: 'push_delivery_deferred', status: response.status }));
+        console.error(JSON.stringify({ event: 'push_delivery_deferred', status: response.status, reason: reason && /^[A-Za-z]{1,80}$/.test(reason) ? reason : 'Unknown' }));
         await env.DB.prepare('UPDATE push_delivery SET next_at = ? WHERE turn_id = ? AND device_id = ? AND session_id = ?')
           .bind(Date.now() + Math.min(3_600_000, 60_000 * 2 ** item.attempts), item.turnID, item.deviceID, item.sessionID).run();
       }

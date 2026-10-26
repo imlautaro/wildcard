@@ -38,9 +38,10 @@ substitute for the supplied bearer token on these routes. Responses use
 
 Chats loads the first page on appearance, refreshes on returning to the foreground,
 and supports pull to refresh and Load more. It distinguishes loading, empty,
-request failure, and populated states. There is no periodic polling or local
-contact persistence; only the current session's in-memory presentation state is
-retained. The store is recreated when the signed-in user changes, and responses
+request failure, and populated states. While active, the signed-in shell refreshes
+contacts every three seconds and immediately on foreground activation. Loaded
+later pages survive automatic refreshes. Contact snapshots are cached in memory;
+read state is persisted on the server. The store is recreated when the signed-in user changes, and responses
 from a previous session or an invalidated request cannot populate the new state.
 
 Tap **+**, enter a name, and tap Create. Swipe a row for Rename or Delete; a context
@@ -94,3 +95,22 @@ nullable `lastMessageText`, truncated to 500 code points from the latest reply o
 user message. Renaming preserves the conversation. Deletion cascades all turns
 and requests best-effort termination of active generation; an in-flight provider
 request may still consume credits. No sharing or cross-user context is enabled.
+
+## Unread replies
+
+Contact responses include `lastReadSequence`; list/detail reads also include
+`unreadCount`, counting completed assistant replies after that sequence. The list
+response adds `totalUnreadCount` across all owner contacts, including unloaded
+pages. iOS shows counters on chat rows and the Chats tab. The reply is acknowledged
+only after the active conversation has loaded it, through
+`PUT /api/v1/contacts/:id/chat/read` with `{ "sequence": <last displayed completed reply> }`.
+This owner-authorized, monotonic update cannot acknowledge a reply after the
+provided sequence or move the watermark backwards. Merely fetching contacts or
+history does not mark anything read. Failed acknowledgements retry on the next
+active conversation poll. Other devices observe the shared owner read state.
+
+Migration `0005_read_state.sql` adds a nonnegative, initially zero watermark to
+contacts. Existing completed replies initially appear unread until opened because
+previous versions never recorded reads. Local setup and automatic releases apply
+the additive migration using existing commands and credentials. Rollback retains
+the column; older clients continue working but cannot acknowledge new replies.

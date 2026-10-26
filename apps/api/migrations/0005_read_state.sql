@@ -1,0 +1,1 @@
+ALTER TABLE contact ADD COLUMN last_read_sequence INTEGER NOT NULL DEFAULT 0;

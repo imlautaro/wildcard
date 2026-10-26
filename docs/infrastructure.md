@@ -214,3 +214,19 @@ on rollback. The setup guide covers independent Apple accounts, permissions,
 sandbox/production signing, private local configuration, retention, staging,
 verification and rollback. No Apple key, remote configuration, real push,
 or installed-device behavior was verified during implementation.
+
+## Read-state migration and push signing recovery
+
+`0005_read_state.sql` adds `contact.last_read_sequence` with default zero. Existing
+D1/local migration and automatic release commands apply it before uploading code;
+no new service, binding, credential, or account permission is required. Keep the
+column on code rollback. Existing replies initially count as unread until viewed;
+read acknowledgements also discard queued push entries for those replies. The
+provider signs using native Web Crypto PKCS#8/P-256 instead of the incompatible
+Workers node:crypto PrivateKeyObject path. Existing encrypted APNs secrets remain
+valid. Observe `push_accepted`, `push_provider_signing_failed`, or sanitized
+`push_delivery_deferred` status/reason events after an authorized automatic release;
+never inspect device tokens or conversation contents for verification. Read counts
+and markers stay in the owner account and do not enable sharing. See
+[notifications](notifications.md) and [contacts](contacts.md) for client updates,
+API contracts, rollback limits, and verification status.

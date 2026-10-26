@@ -27,6 +27,7 @@ struct HomeView: View {
                 Tab("Chats", systemImage: "bubble.left.and.bubble.right", value: Section.chats) {
                     ChatsView { contact in destinations.append(.renameContact(contact.id)) }
                 }
+                .badge(contacts.totalUnreadCount)
                 Tab("Account", systemImage: "person.crop.circle", value: Section.account) {
                     AccountView()
                 }
@@ -63,7 +64,13 @@ struct HomeView: View {
         .task { await push.activate(using: auth, requestPermission: true) }
         .task(id: push.deviceToken) { await push.synchronize(using: auth) }
         .task(id: scenePhase) {
-            if scenePhase == .active { await push.activate(using: auth) }
+            guard scenePhase == .active else { return }
+            await contacts.refresh(using: auth, preserveLoadedPages: true)
+            await push.activate(using: auth)
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                await contacts.refresh(using: auth, preserveLoadedPages: true)
+            }
         }
         .task(id: push.destination?.id) {
             guard let destination = push.destination else { return }

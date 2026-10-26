@@ -8,6 +8,7 @@ struct ChatView: View {
     @Environment(\.scenePhase) private var scenePhase
     let chat: ChatStore
     @State private var draft = ""
+    @State private var isVisible = false
     @State private var voice = VoiceRecorder()
     @State private var voiceTask: Task<Void, Never>?
     @FocusState private var composerFocused: Bool
@@ -92,14 +93,21 @@ struct ChatView: View {
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { _ in
             voice.interrupt()
         }
+        .onAppear { isVisible = true }
         .onDisappear {
+            isVisible = false
             cancelRecording()
             chat.compactHistory()
         }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            await chat.refresh(contactID: contactID, using: auth)
             while !Task.isCancelled {
                 await chat.refresh(contactID: contactID, using: auth, force: false)
+                if isVisible, scenePhase == .active,
+                   let sequence = chat.turns.last(where: { $0.status == .complete })?.sequence {
+                    await contacts.markRead(id: contactID, sequence: sequence, using: auth)
+                }
                 if chat.isUnavailable { return }
                 do { try await Task.sleep(for: .seconds(3)) }
                 catch { return }

@@ -8,8 +8,10 @@ empty cached lists retain their empty state during revalidation.
 
 ## Freshness and requests
 
-- Contact lists and individual contacts are fresh for 30 seconds. Navigation and
-  foreground activation reuse fresh data; pull to refresh and Retry force a request.
+- Individual contacts remain fresh for 30 seconds during navigation. The signed-in
+  shell forces a contact-list refresh on activation and every three seconds while
+  active so unread counts and previews update even outside a conversation. Automatic
+  refreshes preserve previously loaded later pages; pull to refresh resets pagination.
 - Visible conversations check freshness every three seconds while foregrounded.
   Pending replies revalidate on each tick; idle history revalidates after 30 seconds.
   Failed refreshes back off for at least five seconds unless a reply is pending.
@@ -22,10 +24,12 @@ empty cached lists retain their empty state during revalidation.
 - Revision checks discard responses superseded by mutations, invalidation, or a
   replacement history window. Cancellation is not displayed as a network error.
 
-Only the visible conversation polls. Returning from background checks freshness;
+Only the visible conversation polls history. Opening or returning to it forces
+an immediate history refresh;
 background generation continues on the server as before. Older history remains
-available through the existing pagination API. A stale contacts-list refresh
-replaces its first page and resets list pagination, as a manual refresh does.
+available through the existing pagination API. Unread acknowledgements invalidate concurrent contact snapshots so a late response
+cannot resurrect a cleared counter. Read state is persisted on the server; the
+navigation cache itself remains in memory.
 
 ## Memory and isolation
 
@@ -45,8 +49,8 @@ rejects results belonging to a superseded credential.
 This is an application memory cache. It does not persist messages, contact data,
 or credentials to disk, bypass server authorization, or change HTTP no-store
 headers. Process termination starts a new cache. Session restoration still requires
-server validation and may show the existing splash. No infrastructure changes,
-new services, migrations, or API deployment are required.
+server validation and may show the existing splash. The original navigation cache adds no infrastructure. Unread tracking additionally
+requires migration 0005 and the matching API release described in notifications.md.
 
 ## Verification
 

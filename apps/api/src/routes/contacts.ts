@@ -4,11 +4,13 @@ import chats from './chats';
 import { terminateChats } from '../chat/dispatch';
 import { readBearerSession } from '../lib/session';
 
-type Contact = { id: string; name: string; createdAt: number; updatedAt: number; lastMessageText?: string | null };
-const columns = 'id, name, created_at AS createdAt, updated_at AS updatedAt';
+type Contact = { id: string; name: string; createdAt: number; updatedAt: number; lastMessageText?: string | null; unreadCount?: number; lastReadSequence?: number };
+const columns = 'id, name, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence';
 const selection = `${columns}, (SELECT substr(COALESCE(t.assistant_text, t.user_text), 1, 500)
   FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
-  ORDER BY t.sequence DESC LIMIT 1) AS lastMessageText`;
+  ORDER BY t.sequence DESC LIMIT 1) AS lastMessageText,
+  (SELECT COUNT(*) FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
+    AND t.status = 'complete' AND t.sequence > contact.last_read_sequence) AS unreadCount`;
 const contacts = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 
 contacts.use('*', async (c, next) => {
@@ -48,7 +50,11 @@ contacts.get('/', async (c) => {
   const { results } = await query.all<Contact>();
   const page = results.slice(0, 50);
   const last = page.at(-1);
-  return c.json({ contacts: page, nextCursor: results.length > 50 && last ? `${last.createdAt}:${last.id}` : null });
+  const unread = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM chat_turn t
+    JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
+    WHERE t.user_id = ? AND t.status = 'complete' AND t.sequence > c.last_read_sequence`)
+    .bind(c.get('owner')).first<{ count: number }>();
+  return c.json({ contacts: page, totalUnreadCount: unread?.count ?? 0, nextCursor: results.length > 50 && last ? `${last.createdAt}:${last.id}` : null });
 });
 
 contacts.post('/', contactBody, async (c) => {

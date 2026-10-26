@@ -18,7 +18,18 @@ struct ChatPage: Decodable, Sendable {
     let nextBefore: Int?
 }
 
+struct ChatReadState: Decodable, Sendable {
+    let lastReadSequence: Int
+    let unreadCount: Int
+}
+
 extension AuthAPI {
+    func markChatRead(contactID: String, sequence: Int, token: String) async throws -> ChatReadState {
+        let body = try JSONEncoder().encode(["sequence": sequence])
+        let (data, _) = try await send(path: "contacts/\(contactID)/chat/read", method: "PUT", body: body, token: token)
+        return try JSONDecoder().decode(ChatReadState.self, from: data)
+    }
+
     private struct TranscriptionEnvelope: Decodable { let text: String }
     private struct TurnEnvelope: Decodable { let turn: ChatTurn }
     private struct MessageInput: Encodable { let id: String; let text: String }

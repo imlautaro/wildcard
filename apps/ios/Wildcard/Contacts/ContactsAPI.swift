@@ -6,10 +6,13 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     let createdAt: Double
     let updatedAt: Double
     let lastMessageText: String?
+    var unreadCount: Int?
+    var lastReadSequence: Int?
 }
 
 struct ContactsPage: Decodable, Sendable {
     let contacts: [Contact]
+    let totalUnreadCount: Int?
     let nextCursor: String?
 }
 

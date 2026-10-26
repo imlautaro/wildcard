@@ -131,3 +131,28 @@ unrelated apps' provider keys. Runtime activation still requires committing and
 pushing the pending implementation through the automatic release pipeline, then
 installing the updated iOS app. No release or real push was performed for this
 configuration step.
+
+## Signing fix and unread state (October 26, 2026)
+
+Production diagnostics confirmed one registered development device and three
+queued deliveries with zero attempts. The Cron exception identified Workers'
+`node:crypto.sign` rejecting `PrivateKeyObject` before any APNs call. Provider
+signing now imports PKCS#8 into Web Crypto and signs ES256 with P-256/SHA-256,
+producing the raw 64-byte JWT signature. No key rotation or permission change is
+needed. Signing failures and APNs status/reason codes have dedicated logs; accepted
+notifications log only environment, never tokens, user IDs, or content.
+
+Unread state is independent of APNs delivery. Migration 0005 adds a contact read
+watermark; completed replies above it remain unread across app restarts. Contact
+rows and the Chats tab display counts, and active chats acknowledge only the
+latest loaded completed sequence. Lists revalidate immediately on activation and
+every three seconds, retaining later loaded pages; opening a conversation forces
+history revalidation. Fetching a list or history never acknowledges it. See
+[contacts](contacts.md) for API, concurrency, migration, and rollback behavior.
+Pending pushes for acknowledged replies are removed, and the atomic delivery
+claim checks the watermark again. Already accepted/in-flight APNs alerts cannot
+be recalled. App-icon badges are not implemented by this change.
+
+Static Swift/TypeScript checks cover the integration. No local build or automated
+tests were run. Device display and navigation still require verification using the
+updated iOS installation; APNs acceptance is a separate server observation.

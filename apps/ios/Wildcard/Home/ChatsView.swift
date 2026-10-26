@@ -40,6 +40,15 @@ struct ChatsView: View {
                                         .lineLimit(2)
                                         .foregroundStyle(.secondary)
                                 }
+                                if let count = contact.unreadCount, count > 0 {
+                                    Spacer(minLength: 8)
+                                    Text(count > 99 ? "99+" : String(count))
+                                        .manrope(.caption, weight: .bold)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 8).padding(.vertical, 4)
+                                        .background(Color.accentColor, in: Capsule())
+                                        .accessibilityLabel("\(count) unread replies")
+                                }
                             }
                             .padding(.vertical, 4)
                         }
@@ -81,7 +90,7 @@ struct ChatsView: View {
         .refreshable { await contacts.refresh(using: auth) }
         .task { await contacts.refresh(using: auth, force: false) }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await contacts.refresh(using: auth, force: false) } }
+            if phase == .active { Task { await contacts.refresh(using: auth) } }
         }
         .alert("Delete contact?", isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } })) {
             Button("Delete", role: .destructive) {

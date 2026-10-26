@@ -53,6 +53,7 @@ export const verification = sqliteTable('verification', {
 }, (table) => [index('verification_identifier_idx').on(table.identifier)]);
 
 export const contact = sqliteTable('contact', {
+  lastReadSequence: integer('last_read_sequence').notNull().default(0),
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
