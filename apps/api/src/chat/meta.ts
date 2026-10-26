@@ -9,7 +9,8 @@ export async function museReply(key: string | undefined, messages: ModelMessage[
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: 'muse-spark-1.3', messages, max_completion_tokens: 4096, reasoning_effort: 'low', stream: false }),
     signal: AbortSignal.timeout(120_000),
-    redirect: 'error',
+    // Workers supports manual redirects; never forward the provider credential.
+    redirect: 'manual',
   });
   if (!response.ok) {
     await response.body?.cancel();

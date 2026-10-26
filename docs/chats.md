@@ -41,6 +41,10 @@ at 4,096 completion tokens, 256 KiB of provider JSON, and 20,000 code points.
    check time. Terminal instances with an unfinished row become failed and can
    be retried from the app. Temporary status-query failures are deferred.
 
+Provider requests use manual redirect handling, as required by the Workers
+runtime. Non-success responses, including redirects, are rejected without
+forwarding the credential to another URL.
+
 Generation has a 120-second HTTP timeout and a three-minute step timeout. It
 retries transient failures twice with exponential delay, then persists failure.
 An attempt reads at most 20 prior completed turns with a 60,000 UTF-16-unit
