@@ -55,7 +55,7 @@ iOS 27.0. For a physical device, select your own signing team and bundle identif
 
 The app includes sign-up/sign-in, a signed-in account screen, Keychain session
 storage, restoration on launch, and logout. It preserves the Wildcard Icon Composer
-icon. Debug and Release default to the public API through `WILDCARD_API_URL`; an
+icon and bundled [Manrope typography](docs/typography.md). Debug and Release default to the public API through `WILDCARD_API_URL`; an
 independent installation must replace that setting. See the auth guide for local
 simulator configuration. No contacts, conversations, or model integration exist yet.
 

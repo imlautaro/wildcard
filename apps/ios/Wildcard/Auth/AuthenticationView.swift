@@ -23,7 +23,7 @@ struct AuthenticationView: View {
                 Section {
                     VStack(spacing: 8) {
                         Text(isSigningUp ? "Create your account" : "Welcome back")
-                            .font(.largeTitle.bold())
+                            .manrope(.largeTitle, weight: .bold)
                         Text(isSigningUp ? "Sign up to get started with Wildcard." : "Sign in to your Wildcard account.")
                             .foregroundStyle(.secondary)
                     }
@@ -76,7 +76,7 @@ struct AuthenticationView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(auth.isBusy)
                 } footer: {
-                    if isSigningUp { Text("Email verification and password recovery are not available yet.") }
+                    if isSigningUp { Text("Email verification and password recovery are not available yet.").manrope(.footnote) }
                 }
                 .listRowBackground(Color.clear)
             }
@@ -99,7 +99,7 @@ struct AuthenticationView: View {
     }
 
     private func fieldError(_ text: String) -> some View {
-        Text(text).font(.footnote).foregroundStyle(.red).accessibilityLabel(text)
+        Text(text).manrope(.footnote).foregroundStyle(.red).accessibilityLabel(text)
     }
 
     private func submit() {
