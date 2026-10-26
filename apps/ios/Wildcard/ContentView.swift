@@ -7,7 +7,7 @@ struct ContentView: View {
         Group {
             switch auth.state {
             case .restoring:
-                ProgressView("Restoring your session")
+                SplashView()
             case .signedOut:
                 AuthenticationView()
             case .unavailable:

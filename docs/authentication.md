@@ -67,7 +67,11 @@ Inline field messages and borders indicate validation errors; request errors app
 in a separate banner. The mode switch stays in the navigation toolbar, and repeated
 submissions are blocked while a request is in flight.
 Registration asks for name, email, and password. The signed-in screen shows account
-details and sign-out. On launch the app loads its Keychain token and fetches `/me`.
+details and sign-out. On launch the app displays a full-screen `#045DE3` splash with the white Wildcard
+mark centered at 92.5 × 100 points while loading its Keychain token and fetching
+`/me`. The vector mark comes from the current app icon source. Light and dark modes
+use the same blue background. There is no artificial delay; restoration selects
+the signed-out, signed-in, or retry screen as soon as it completes.
 An expired session clears the token. Network/server/Keychain failures preserve the
 saved session and offer retry instead of treating an outage as logout.
 
