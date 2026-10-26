@@ -1,12 +1,14 @@
+import { photoKey, photoResponse, removePhoto, validPhoto, readPhoto } from '../photos/storage';
 import { totalUnreadReplies } from '../lib/unread';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import chats from './chats';
 import { terminateChats } from '../chat/dispatch';
+import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readBearerSession } from '../lib/session';
 
-type Contact = { id: string; name: string; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
-const columns = 'id, name, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence';
+type Contact = { id: string; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
+const columns = 'id, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence';
 const selection = `${columns}, (SELECT substr(COALESCE(t.assistant_text, t.user_text), 1, 500)
   FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
   ORDER BY t.sequence DESC LIMIT 1) AS lastMessageText,
@@ -87,10 +89,68 @@ contacts.patch('/:id', contactBody, async (c) => {
   return c.json({ contact: updated ?? result });
 });
 
+contacts.get('/:id/photo', async (c) => {
+  const row = await c.env.DB.prepare('SELECT photo_version AS version FROM contact WHERE id = ? AND user_id = ?')
+    .bind(c.req.param('id'), c.get('owner')).first<{ version: string | null }>();
+  if (!row?.version || (c.req.query('version') && c.req.query('version') !== row.version)) return c.body(null, 404);
+  return photoResponse(c.env, c.get('owner'), c.req.param('id'), row.version);
+});
+
+contacts.put('/:id/photo', async (c) => {
+  const id = c.req.param('id');
+  const owner = c.get('owner');
+  const admission = await admitAuthRequest(c.env.DB, owner, 'contact-photo-upload', 12);
+  if (!admission.allowed) {
+    c.header('Retry-After', String(admission.retryAfter));
+    return c.json({ error: 'Too many photo uploads' }, 429);
+  }
+  const previous = await c.env.DB.prepare('SELECT photo_version AS version FROM contact WHERE id = ? AND user_id = ?')
+    .bind(id, owner).first<{ version: string | null }>();
+  if (!previous) return c.json({ error: 'Contact not found' }, 404);
+  if (c.req.header('Content-Type') !== 'image/jpeg') return c.json({ error: 'Use a square JPEG photo' }, 415);
+  const bytes = await readPhoto(c.req.raw);
+  if (!bytes) return c.json({ error: 'Photo too large' }, 413);
+  if (!validPhoto(bytes)) return c.json({ error: 'Use a square JPEG photo between 64 and 1024 pixels' }, 422);
+  const version = crypto.randomUUID();
+  const key = photoKey(owner, id, version);
+  await c.env.CONTACT_PHOTOS.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+  let saved: Contact | null;
+  try {
+    saved = await c.env.DB.prepare(`UPDATE contact SET photo_version = ?, updated_at = ?
+      WHERE id = ? AND user_id = ? AND photo_version IS ? RETURNING ${columns}`)
+      .bind(version, Date.now(), id, owner, previous.version).first<Contact>();
+  } catch (error) {
+    c.executionCtx.waitUntil(removePhoto(c.env, key));
+    throw error;
+  }
+  if (!saved) {
+    c.executionCtx.waitUntil(removePhoto(c.env, key));
+    return c.json({ error: 'Contact changed. Refresh and try again.' }, 409);
+  }
+  if (previous.version) c.executionCtx.waitUntil(removePhoto(c.env, photoKey(owner, id, previous.version)));
+  const result = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`).bind(id, owner).first<Contact>();
+  return c.json({ contact: result ?? saved });
+});
+
+contacts.delete('/:id/photo', async (c) => {
+  // Read the previous version, then compare-and-swap so concurrent uploads are preserved.
+  const previous = await c.env.DB.prepare('SELECT photo_version AS version FROM contact WHERE id = ? AND user_id = ?')
+    .bind(c.req.param('id'), c.get('owner')).first<{ version: string | null }>();
+  if (!previous) return c.json({ error: 'Contact not found' }, 404);
+  const saved = await c.env.DB.prepare(`UPDATE contact SET photo_version = NULL, updated_at = ?
+    WHERE id = ? AND user_id = ? AND photo_version IS ? RETURNING ${columns}`)
+    .bind(Date.now(), c.req.param('id'), c.get('owner'), previous.version).first<Contact>();
+  if (!saved) return c.json({ error: 'Contact changed. Refresh and try again.' }, 409);
+  if (previous.version) c.executionCtx.waitUntil(removePhoto(c.env, photoKey(c.get('owner'), saved.id, previous.version)));
+  const result = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`).bind(saved.id, c.get('owner')).first<Contact>();
+  return c.json({ contact: result ?? saved });
+});
+
 contacts.delete('/:id', async (c) => {
   const pending = await c.env.DB.prepare("SELECT workflow_id AS id FROM chat_turn WHERE contact_id = ? AND user_id = ? AND status IN ('queued','running')").bind(c.req.param('id'), c.get('owner')).all<{ id: string }>();
-  const result = await c.env.DB.prepare('DELETE FROM contact WHERE id = ?1 AND user_id = ?2 RETURNING id')
-    .bind(c.req.param('id'), c.get('owner')).first<{ id: string }>();
+  const result = await c.env.DB.prepare('DELETE FROM contact WHERE id = ?1 AND user_id = ?2 RETURNING id, photo_version AS photoVersion')
+    .bind(c.req.param('id'), c.get('owner')).first<{ id: string; photoVersion: string | null }>();
+  if (result?.photoVersion) c.executionCtx.waitUntil(removePhoto(c.env, photoKey(c.get('owner'), result.id, result.photoVersion)));
   if (result) c.executionCtx.waitUntil(terminateChats(c.env, pending.results.map((row) => row.id)));
   return result ? c.body(null, 204) : c.json({ error: 'Contact not found' }, 404);
 });

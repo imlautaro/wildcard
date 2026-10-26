@@ -4,15 +4,16 @@ type ReplyAlert = {
   contactID: string;
   userID: string;
   unreadCount: number;
+  photoURL?: string;
 };
 
 export function replyPayload(alert: ReplyAlert): string {
   const serialize = (body: string) => JSON.stringify({
     aps: {
       alert: { title: alert.contactName, body }, sound: 'default', badge: alert.unreadCount,
-      'thread-id': alert.contactID,
+      'thread-id': alert.contactID, 'mutable-content': 1,
     },
-    contactID: alert.contactID, userID: alert.userID,
+    contactID: alert.contactID, userID: alert.userID, photoURL: alert.photoURL,
   });
   const full = serialize(alert.reply);
   if (new TextEncoder().encode(full).byteLength <= 4096) return full;

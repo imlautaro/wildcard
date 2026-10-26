@@ -28,7 +28,8 @@ server-side on every contact/history request.
 ## Apple setup
 
 1. Use a paid Apple Developer membership with permission to manage App IDs, keys,
-   and provisioning profiles. Enable **Push Notifications** on the explicit App ID
+   and provisioning profiles. Enable **Push Notifications** and
+   **Communication Notifications** on the explicit App ID
    matching your bundle ID. This checkout uses `com.imlautaro.Wildcard`; an
    independent installation must use its own bundle ID and signing team.
 2. Xcode's app target includes the Push Notifications capability and
@@ -209,3 +210,22 @@ by subsequent device synchronization. Denied notification authorization still
 requires the system settings flow. A missing Badges toggle must not be diagnosed
 as a user-disabled switch without checking the actual returned setting. These
 changes require installing the updated client; device recovery is unverified.
+
+## Contact avatars
+
+[Contact profile photos](profile-photos.md) add `mutable-content: 1` and, when a
+photo exists, a signed `photoURL` to the existing reply payload. JSON size limits
+include the URL. The embedded `WildcardNotificationService` downloads the private
+image through the Worker and updates the alert using an incoming
+INSendMessageIntent. Text/routing/badge remain available when the extension cannot
+add an avatar. Foreground presentation remains suppressed.
+
+This adds the private R2 bucket/binding and migration 0006 described in
+[infrastructure](infrastructure.md). Create that bucket before the automatic
+release, enable Communication Notifications for the main Apple App ID, and sign
+and install the updated app with its embedded extension. Both targets must use
+the same HTTPS API origin in each configuration. No new APNs secret is required.
+The private production R2 bucket was created and verified on October 26, 2026.
+Apple capability/provisioning verification and visual presentation on an iPhone
+remain pending; static app/extension checks do not establish visible push-avatar
+behavior.

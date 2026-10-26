@@ -89,6 +89,13 @@ struct AuthAPI: Sendable {
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if path.hasSuffix("/photo") {
+                switch response.statusCode {
+                case 400, 413, 415, 422: throw Failure.rejected("Choose a square JPEG photo smaller than 512 KB.")
+                case 409: throw Failure.rejected("This contact changed. Go back, refresh, and try again.")
+                default: break
+                }
+            }
             if path.hasSuffix("/transcriptions") {
                 switch response.statusCode {
                 case 400, 413, 415: throw Failure.rejected("Record a message between a quarter second and one minute long.")

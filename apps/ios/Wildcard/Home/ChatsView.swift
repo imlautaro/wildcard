@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ChatsView: View {
     let openContact: (Contact) -> Void
-    let renameContact: (Contact) -> Void
+    let editContact: (Contact) -> Void
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
     @Environment(\.scenePhase) private var scenePhase
@@ -37,11 +37,11 @@ struct ChatsView: View {
                         .listRowSeparator(contact.id == contacts.contacts.last?.id ? .hidden : .visible, edges: .bottom)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button("Delete", role: .destructive) { deletion = contact }
-                            Button("Rename") { renameContact(contact) }
+                            Button("Edit") { editContact(contact) }
                                 .tint(.accentColor)
                         }
                         .contextMenu {
-                            Button("Rename") { renameContact(contact) }
+                            Button("Edit") { editContact(contact) }
                             Button("Delete", role: .destructive) { deletion = contact }
                         }
                         .disabled(contacts.isMutating)
@@ -123,10 +123,7 @@ private struct ChatListRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "person.crop.circle")
-                .font(.system(size: 34))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+            ContactAvatar(contact: contact, size: 48)
             VStack(alignment: .leading, spacing: 4) {
                 Text(contact.name).manrope(.body, weight: .semibold)
                     .foregroundStyle(.primary)

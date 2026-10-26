@@ -1,4 +1,5 @@
 import { totalUnreadReplies } from '../lib/unread';
+import { pushPhotoURL } from '../photos/push-access';
 import { replyPayload } from './payload';
 
 // Optional until the installation has configured its own Apple provider key.
@@ -73,12 +74,14 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
         RETURNING turn_id`)
         .bind(now + 120_000, item.turnID, item.deviceID, item.sessionID, now).first();
       if (!claim) return;
-      const alert = await env.DB.prepare(`SELECT c.name AS contactName, t.assistant_text AS reply
+      const alert = await env.DB.prepare(`SELECT c.name AS contactName, c.photo_version AS photoVersion, t.assistant_text AS reply
         FROM chat_turn t JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
         WHERE t.id = ? AND t.user_id = ? AND t.status = 'complete'
           AND t.sequence > c.last_read_sequence`)
-        .bind(item.turnID, item.userID).first<{ contactName: string; reply: string }>();
+        .bind(item.turnID, item.userID).first<{ contactName: string; photoVersion: string | null; reply: string }>();
       if (!alert) return;
+      const photoURL = alert.photoVersion
+        ? await pushPhotoURL(env, item.contactID, alert.photoVersion, item.sessionID, item.expiresAt) : undefined;
       const unreadCount = await totalUnreadReplies(env.DB, item.userID);
       const host = item.environment === 'development' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
       const response = await fetch(`https://${host}/3/device/${item.token}`, {
@@ -88,7 +91,7 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
           'apns-topic': env.APNS_TOPIC!, 'apns-push-type': 'alert', 'apns-priority': '10',
           'apns-expiration': String(Math.floor(item.expiresAt / 1000)), 'apns-collapse-id': item.turnID,
         },
-        body: replyPayload({ ...alert, unreadCount, contactID: item.contactID, userID: item.userID }),
+        body: replyPayload({ ...alert, photoURL, unreadCount, contactID: item.contactID, userID: item.userID }),
       });
       // Only inspect Apple's bounded reason field; never log tokens or message data.
       let reason: string | undefined;

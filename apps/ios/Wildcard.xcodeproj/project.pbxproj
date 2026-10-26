@@ -6,6 +6,14 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXCopyFilesBuildPhase section */
+		A1F07000000000000000000A = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (A1F07000000000000000000B, ); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXBuildFile section */
+		A1F07000000000000000000B = {isa = PBXBuildFile; fileRef = A1F070000000000000000001; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		20DA0D7B308FBEC500146C1C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,12 +29,14 @@
 			remoteGlobalIDString = 20DA0D6A308FBEC400146C1C;
 			remoteInfo = Wildcard;
 		};
+		A1F07000000000000000000D = {isa = PBXContainerItemProxy; containerPortal = 20DA0D63308FBEC400146C1C; proxyType = 1; remoteGlobalIDString = A1F070000000000000000003; remoteInfo = WildcardNotificationService; };
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		20DA0D6B308FBEC400146C1C /* Wildcard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Wildcard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		20DA0D7A308FBEC500146C1C /* WildcardTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WildcardTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		20DA0D84308FBEC500146C1C /* WildcardUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WildcardUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1F070000000000000000001 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WildcardNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -45,6 +55,7 @@
 			path = WildcardUITests;
 			sourceTree = "<group>";
 		};
+		A1F070000000000000000002 = {isa = PBXFileSystemSynchronizedRootGroup; path = WildcardNotificationService; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -63,6 +74,7 @@
 			files = (
 			);
 		};
+		A1F070000000000000000005 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -70,6 +82,7 @@
 			isa = PBXGroup;
 			children = (
 				20DA0D6D308FBEC400146C1C /* Wildcard */,
+				A1F070000000000000000002,
 				20DA0D7D308FBEC500146C1C /* WildcardTests */,
 				20DA0D87308FBEC500146C1C /* WildcardUITests */,
 				20DA0D6C308FBEC400146C1C /* Products */,
@@ -80,6 +93,7 @@
 			isa = PBXGroup;
 			children = (
 				20DA0D6B308FBEC400146C1C /* Wildcard.app */,
+				A1F070000000000000000001,
 				20DA0D7A308FBEC500146C1C /* WildcardTests.xctest */,
 				20DA0D84308FBEC500146C1C /* WildcardUITests.xctest */,
 			);
@@ -91,11 +105,13 @@
 /* Begin PBXNativeTarget section */
 		20DA0D6A308FBEC400146C1C /* Wildcard */ = {
 			isa = PBXNativeTarget;
+			dependencies = (A1F07000000000000000000C, );
 			buildConfigurationList = 20DA0D8C308FBEC500146C1C /* Build configuration list for PBXNativeTarget "Wildcard" */;
 			buildPhases = (
 				20DA0D67308FBEC400146C1C /* Sources */,
 				20DA0D68308FBEC400146C1C /* Frameworks */,
 				20DA0D69308FBEC400146C1C /* Resources */,
+				A1F07000000000000000000A /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
@@ -149,6 +165,18 @@
 			productReference = 20DA0D84308FBEC500146C1C /* WildcardUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		A1F070000000000000000003 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1F070000000000000000007;
+			buildPhases = (A1F070000000000000000004, A1F070000000000000000005, A1F070000000000000000006, );
+			buildRules = ();
+			dependencies = ();
+			fileSystemSynchronizedGroups = (A1F070000000000000000002, );
+			name = WildcardNotificationService;
+			productName = WildcardNotificationService;
+			productReference = A1F070000000000000000001;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -162,7 +190,10 @@
 					20DA0D6A308FBEC400146C1C = {
 						CreatedOnToolsVersion = 27.1;
 						SystemCapabilities = {
-							com.apple.Push = { enabled = 1; };
+							com.apple.CommunicationNotifications = { enabled = 1; };
+							com.apple.Push = {
+								enabled = 1;
+							};
 						};
 					};
 					20DA0D79308FBEC500146C1C = {
@@ -189,6 +220,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				A1F070000000000000000003,
 				20DA0D6A308FBEC400146C1C /* Wildcard */,
 				20DA0D79308FBEC500146C1C /* WildcardTests */,
 				20DA0D83308FBEC500146C1C /* WildcardUITests */,
@@ -212,6 +244,7 @@
 			files = (
 			);
 		};
+		A1F070000000000000000006 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -230,6 +263,7 @@
 			files = (
 			);
 		};
+		A1F070000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -243,6 +277,7 @@
 			target = 20DA0D6A308FBEC400146C1C /* Wildcard */;
 			targetProxy = 20DA0D85308FBEC500146C1C /* PBXContainerItemProxy */;
 		};
+		A1F07000000000000000000C = {isa = PBXTargetDependency; target = A1F070000000000000000003; targetProxy = A1F07000000000000000000D; };
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -370,16 +405,16 @@
 		20DA0D8D308FBEC500146C1C /* Debug configuration for PBXNativeTarget "Wildcard" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APNS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = Wildcard;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Config/Wildcard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9CHLS2987W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
-				CODE_SIGN_ENTITLEMENTS = Config/Wildcard.entitlements;
-				APNS_ENVIRONMENT = development;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -405,16 +440,16 @@
 		20DA0D8E308FBEC500146C1C /* Release configuration for PBXNativeTarget "Wildcard" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APNS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = Wildcard;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Config/Wildcard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9CHLS2987W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
-				CODE_SIGN_ENTITLEMENTS = Config/Wildcard.entitlements;
-				APNS_ENVIRONMENT = production;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -521,6 +556,48 @@
 			};
 			name = Release;
 		};
+		A1F070000000000000000008 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9CHLS2987W;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/NotificationService-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.imlautaro.Wildcard.NotificationService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				WILDCARD_API_URL = "https://wildcard-api.imlautaro.workers.dev";
+			};
+			name = Debug;
+		};
+		A1F070000000000000000009 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9CHLS2987W;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/NotificationService-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.imlautaro.Wildcard.NotificationService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				WILDCARD_API_URL = "https://wildcard-api.imlautaro.workers.dev";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -556,6 +633,7 @@
 			);
 			defaultConfigurationName = Release;
 		};
+		A1F070000000000000000007 = {isa = XCConfigurationList; buildConfigurations = (A1F070000000000000000008, A1F070000000000000000009, ); defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = 20DA0D63308FBEC400146C1C /* Project object */;

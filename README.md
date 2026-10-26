@@ -61,10 +61,11 @@ default to the public API through `WILDCARD_API_URL`; an independent installatio
 simulator configuration.
 
 The signed-in shell uses one navigation stack around the tabs. Tap **+** in Chats
-to create a contact by name. Swipe a contact to Rename or Delete (with confirmation);
-tap a contact to open its conversation and its title to rename it. Editors
+to create a contact by name. Swipe a contact to Edit or Delete (with confirmation);
+tap a contact to open its conversation and its title to edit it. Editors
 push over the full tab layout, preserving the selected tab on return. Chats supports
-pull to refresh and paginated loading. Contacts are saved in D1 and isolated by the
+pull to refresh and paginated loading. Choose, crop, replace, or remove a [profile photo](docs/profile-photos.md) in the
+contact editor. Private photo bytes use R2. Contacts are saved in D1 and isolated by the
 signed-in user. See [private contacts](docs/contacts.md). Conversations support
 persisted messages, reply status, earlier history, and retries. Accepted replies
 continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
@@ -73,12 +74,14 @@ limits, and background execution. An empty draft offers a microphone for
 sending. Navigation reuses a session-scoped [memory cache](docs/caching.md) and
 refreshes loaded content in the background. [Reply push notifications](docs/notifications.md)
 use APNs when the app is closed/backgrounded, after configuring Apple signing
-and provider secrets. Alerts show the contact name and reply text. Tapping an alert opens the chat. Unread reply counts persist on the server and
+and provider secrets. Alerts show the contact name, reply text, and a contact avatar through the embedded
+notification service extension. Tapping an alert opens the chat. Unread reply counts persist on the server and
 appear on chat rows, the Chats tab, and the app icon; returning to the app refreshes them immediately. Sharing is not implemented.
 
 ## Infrastructure and releases
 
-See [infrastructure setup](docs/infrastructure.md). The API uses Cloudflare Workers Builds connected to
+See [infrastructure setup](docs/infrastructure.md), including private R2 bucket
+provisioning before the first profile-photo release. The API uses Cloudflare Workers Builds connected to
 `imlautaro/wildcard` on `main`, targeting
 `https://wildcard-api.imlautaro.workers.dev`. Build command:
 `npm ci && npm run typecheck`; automatic deployment command: `npm run release:ci`.

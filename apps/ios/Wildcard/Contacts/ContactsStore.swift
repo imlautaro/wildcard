@@ -12,6 +12,7 @@ final class ContactsStore {
     private(set) var isMutating = false
     private(set) var error: String?
     private(set) var totalUnreadCount = 0
+    private let photoCache = NSCache<NSString, NSData>()
     private var markingRead: Set<String> = []
     let conversations = ConversationCache()
     private var refreshedAt: Date?
@@ -120,7 +121,8 @@ final class ContactsStore {
         }
     }
 
-    func save(name: String, contactID: String?, using auth: AuthStore) async throws {
+    @discardableResult
+    func save(name: String, contactID: String?, using auth: AuthStore) async throws -> Contact {
         try beginMutation()
         do {
             var saved = try await auth.withSession { api, token in
@@ -139,10 +141,39 @@ final class ContactsStore {
             }
             isMutating = false
             if !hasLoaded { await refresh(using: auth) }
+            return saved
         } catch {
             isMutating = false
             throw error
         }
+    }
+
+    func photo(for contact: Contact, using auth: AuthStore) async throws -> Data {
+        guard let version = contact.photoVersion else { throw AuthAPI.Failure.notFound }
+        let key = "\(contact.id)/\(version)" as NSString
+        if let cached = photoCache.object(forKey: key) { return cached as Data }
+        let data = try await auth.withSession { api, token in
+            try await api.contactPhoto(id: contact.id, version: version, token: token)
+        }
+        try Task.checkCancellation()
+        photoCache.totalCostLimit = 16 * 1024 * 1024
+        photoCache.setObject(data as NSData, forKey: key, cost: data.count)
+        return data
+    }
+
+    func savePhoto(contactID: String, data: Data?, using auth: AuthStore) async throws {
+        try beginMutation()
+        defer { isMutating = false }
+        let saved = try await auth.withSession { api, token in
+            try await api.saveContactPhoto(id: contactID, data: data, token: token)
+        }
+        if let previous = knownContacts[contactID]?.photoVersion {
+            photoCache.removeObject(forKey: "\(contactID)/\(previous)" as NSString)
+        }
+        knownContacts[contactID] = saved
+        if let index = contacts.firstIndex(where: { $0.id == contactID }) { contacts[index] = saved }
+        contactRefreshedAt[contactID] = .now
+        refreshedAt = nil
     }
 
     func delete(_ contact: Contact, using auth: AuthStore) async throws {

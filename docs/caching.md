@@ -66,3 +66,14 @@ and reopen a conversation, navigate between tabs, refresh manually, lose and
 restore connectivity, finish a pending reply, load older pages, delete a contact,
 and sign in with another fictional account. Reinstall/run the updated iOS app to
 use the change.
+
+## Profile photo bytes
+
+ContactsStore keeps encoded profile images in a session-scoped NSCache with a
+16 MiB total cost limit, keyed by contact ID and photoVersion. Visible avatars
+load through the authenticated API, and version changes discard the previous
+visible image before fetching. Successful photo mutations evict the previous
+version from the cache; signing out discards the entire store. HTTP responses
+remain private/no-store and the app uses no disk photo cache. The notification
+extension uses an independent ephemeral download with no shared session token.
+See [profile photos](profile-photos.md).

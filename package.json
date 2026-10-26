@@ -16,6 +16,7 @@
     "infra:provision": "node scripts/provision-d1.mjs",
     "db:migrate:local": "npm run db:migrate:local --workspace @wildcard/api",
     "db:migrate:remote": "npm run db:migrate:remote --workspace @wildcard/api",
-    "auth:setup:local": "node scripts/setup-local-auth.mjs && npm run db:migrate:local"
+    "auth:setup:local": "node scripts/setup-local-auth.mjs && npm run db:migrate:local",
+    "infra:photos": "node scripts/provision-photos.mjs"
   }
 }

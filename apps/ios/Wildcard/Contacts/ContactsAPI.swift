@@ -3,6 +3,7 @@ import Foundation
 struct Contact: Codable, Hashable, Identifiable, Sendable {
     let id: String
     let name: String
+    var photoVersion: String? = nil
     let createdAt: Double
     let updatedAt: Double
     let lastMessageText: String?
@@ -37,6 +38,18 @@ extension AuthAPI {
         let path = id.map { "contacts/\($0)" } ?? "contacts"
         let (data, _) = try await send(path: path, method: id == nil ? "POST" : "PATCH", body: body, token: token)
         return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
+    }
+
+    func contactPhoto(id: String, version: String, token: String) async throws -> Data {
+        let (data, _) = try await send(path: "contacts/\(id)/photo", token: token,
+                                     query: [URLQueryItem(name: "version", value: version)])
+        return data
+    }
+
+    func saveContactPhoto(id: String, data: Data?, token: String) async throws -> Contact {
+        let (response, _) = try await send(path: "contacts/\(id)/photo", method: data == nil ? "DELETE" : "PUT",
+                                           body: data, token: token, contentType: "image/jpeg")
+        return try JSONDecoder().decode(ContactEnvelope.self, from: response).contact
     }
 
     func deleteContact(id: String, token: String) async throws {

@@ -1,10 +1,10 @@
 # Private contacts
 
-Contacts are persisted in the existing Cloudflare D1 database. Every operation
+Contact records are persisted in Cloudflare D1; optional
+[profile photos](profile-photos.md) are stored privately in R2. Every operation
 requires the current user's signed bearer session. The owner is taken exclusively
 from that verified session; clients cannot provide or change ownership. Contacts
-are private in this version. Sharing, common memory, AI replies, and conversation
-persistence remain outside this feature.
+are private in this version. Sharing and common memory remain outside this feature.
 
 ## API
 
@@ -16,7 +16,7 @@ persistence remain outside this feature.
 | PATCH | `/api/v1/contacts/:id` | Rename using `{ "name": "New name" }` |
 | DELETE | `/api/v1/contacts/:id` | Delete your contact; returns 204 |
 
-A contact contains `id`, `name`, `createdAt`, and `updatedAt`; timestamps are Unix
+A contact contains `id`, `name`, nullable `photoVersion`, `createdAt`, and `updatedAt`; timestamps are Unix
 milliseconds. Create/read/update return `{ "contact": ... }`. List returns
 `{ "contacts": [...], "nextCursor": string | null }`. Pass the returned cursor as
 `?before=<cursor>` to load the next page. Pagination is ordered by creation time
@@ -44,15 +44,15 @@ later pages survive automatic refreshes. Contact snapshots are cached in memory;
 read state is persisted on the server. The store is recreated when the signed-in user changes, and responses
 from a previous session or an invalidated request cannot populate the new state.
 
-Tap **+**, enter a name, and tap Create. Swipe a row for Rename or Delete; a context
-menu offers the same actions. Rename pushes the editor on the existing shared
+Tap **+**, enter a name, and tap Create. Swipe a row for Edit or Delete; a context
+menu offers the same actions. Edit pushes the editor on the existing shared
 navigation stack. Deletion requires confirmation. Successful mutations update the
 list from the server response; creation dismisses the editor. Failed saves retain
 the draft and show an error. A failed delete leaves the row available for retry.
 Deleting a contact already removed on another client removes its stale local row.
 
 Opening a contact reads its current record and opens its persisted conversation.
-Tap its title to rename it. See [chats](chats.md) for message storage and generation. A per-session record
+Tap its title to edit its name or photo. See [chats](chats.md) for message storage and generation. A per-session record
 cache preserves a contact detail when first-page refresh changes the visible list.
 Concurrent refreshes cannot overwrite successful mutations, and mutations retain
 loaded pages and their keyset cursor. A session rejection clears the saved token
@@ -148,3 +148,6 @@ contacts. Existing completed replies initially appear unread until opened becaus
 previous versions never recorded reads. Local setup and automatic releases apply
 the additive migration using existing commands and credentials. Rollback retains
 the column; older clients continue working but cannot acknowledge new replies.
+
+Profile-photo API, crop behavior, failure recovery, migration 0006, R2 retention,
+and notification avatars are documented in [profile photos](profile-photos.md).

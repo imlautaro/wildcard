@@ -3,7 +3,7 @@ import SwiftUI
 enum HomeDestination: Hashable {
     case addContact
     case contact(String)
-    case renameContact(String)
+    case editContact(String)
 }
 
 struct HomeView: View {
@@ -27,7 +27,7 @@ struct HomeView: View {
                 Tab("Chats", systemImage: "bubble.left.and.bubble.right", value: Section.chats) {
                     ChatsView(
                         openContact: { contact in destinations.append(.contact(contact.id)) },
-                        renameContact: { contact in destinations.append(.renameContact(contact.id)) }
+                        editContact: { contact in destinations.append(.editContact(contact.id)) }
                     )
                 }
                 .badge(contacts.totalUnreadCount)
@@ -54,7 +54,7 @@ struct HomeView: View {
                     ContactEditorView()
                 case .contact(let id):
                     ContactDetailView(contactID: id)
-                case .renameContact(let id):
+                case .editContact(let id):
                     if let contact = contacts.contact(id: id) {
                         ContactEditorView(contact: contact)
                     } else {

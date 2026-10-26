@@ -48,5 +48,11 @@
     "crons": [
       "* * * * *"
     ]
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "CONTACT_PHOTOS",
+      "bucket_name": "wildcard-contact-photos"
+    }
+  ]
 }

@@ -5,6 +5,7 @@
 | Resource | Configuration | Purpose |
 | --- | --- | --- |
 | Cloudflare Worker | `apps/api/wrangler.jsonc`, `wildcard-api` | Hono API and Better Auth handler |
+| Cloudflare R2 | `CONTACT_PHOTOS`, `wildcard-contact-photos` | Private contact profile JPEGs |
 | Cloudflare D1 | `DB`, `wildcard-db` | Users, hashed passwords, sessions, verification schema, auth rate limits, private contacts, and conversation turns |
 | Runtime auth secret | `BETTER_AUTH_SECRET` | Signs cookies and native bearer sessions |
 | Cloudflare Workflow | `CHAT_WORKFLOW`, `wildcard-chat`, class `ChatWorkflow` | Durable reply generation |
@@ -13,7 +14,8 @@
 | Public origin | `BETTER_AUTH_URL` | Canonical auth origin, separate from the secret |
 | Workers Builds | GitHub `imlautaro/wildcard`, `main`, root `/` | Automatic releases from committed and pushed source |
 
-There are no KV, R2, email service, or staging dependencies. Chats require
+There are no KV, email service, or staging dependencies. R2 is required for
+[contact profile photos](profile-photos.md). The production bucket was created and verified on October 26, 2026. Chats require
 Workflows and Meta access; auth and contacts can run without a model key.
 Registration and login require D1 and the secret; missing configuration fails
 rather than falling back to in-memory sessions or a development secret. See
@@ -69,7 +71,9 @@ No actual secret value belongs in Git, app build settings, or documentation.
 6. The automatic release applies versioned D1 migrations first, then publishes the
    Worker with an auth secret as described below. There is no manual migration
    requirement for production releases; review each migration before pushing.
-7. Replace both iOS `WILDCARD_API_URL` build settings with your public HTTPS origin.
+7. Provision the photo bucket using the section below before releasing these
+   changes.
+8. Replace the iOS app and notification extension `WILDCARD_API_URL` build settings with your public HTTPS origin.
    Build/install the client separately when desired. API releases do not update an
    already installed iOS application.
 
@@ -243,3 +247,64 @@ icon after reads/foreground refresh, and clear it at sign-out. Existing system
 notification settings still control badges and lock-screen previews. Verification
 must not print notification payloads or message contents in logs. See
 [notifications](notifications.md) for behavior, retention, limits, and rollback.
+
+## Private contact photo storage
+
+The versioned `r2_buckets` binding requires an existing private bucket before the
+next automatic release. The production bucket `wildcard-contact-photos` was created and verified on
+October 26, 2026 in the configured account, with Standard storage. Its r2.dev
+access is disabled and it has no public custom domains. Apple account capabilities
+and provisioning profiles have not been changed or verified remotely.
+
+For an independent account, first activate R2 in that account if necessary using
+its normal account setup, review its plan, and choose the bucket name. Update
+`account_id` and `r2_buckets[].bucket_name` in `apps/api/wrangler.jsonc`, preserving
+`binding: CONTACT_PHOTOS`. Use a credential with Workers R2 Storage Edit for
+creation and access to bucket metadata; Wrangler's info command also queries
+bucket metrics and needs Account Analytics Read. The automatic deployment
+credential needs access to the chosen R2 bucket in addition to its existing
+Workers/D1/Workflow permissions. No R2 S3 credential or new runtime secret is used.
+
+From the repository root, in the intended authenticated account:
+
+```sh
+npm run infra:photos -- --create  # Create the configured bucket once, then verify
+npm run infra:photos             # Verify an existing bucket without creating it
+```
+
+Creation does not publish the Worker or enable public access. If creation reports
+an existing name, verify that resource with the second command rather than
+recreating it. Keep r2.dev and custom public domains disabled. Existing public
+bucket settings are not modified by this script; verify privacy in the R2
+dashboard. Keep staging in a different bucket and bind that name only in a
+separate staging Worker/configuration. No staging resources are provisioned here.
+
+Then commit/push the versioned configuration and feature together through the
+existing automatic pipeline. Migration `0006_contact_photos.sql` applies before
+Worker publication. Verify the release source SHA, migration status, and the
+`CONTACT_PHOTOS` binding's intended bucket. With an authorized fictional-account
+check, verify that unauthenticated photo reads return 401, signed URL tampering
+returns 404, and another owner cannot read or replace the photo. Do not inspect
+private real account data to validate storage.
+
+`npm run auth:setup:local` applies all migrations, including 0006. `npm run dev`
+emulates the R2 binding locally in ignored `.wrangler` state; do not add
+`remote: true` for local photo development. Production object data is not copied.
+
+Sign and install both the iOS app and its embedded `WildcardNotificationService`
+with your own Apple team. The extension bundle ID must extend the main app's ID;
+replace `com.imlautaro.Wildcard.NotificationService` for independent accounts.
+Set `WILDCARD_API_URL` in Debug and Release on both targets. The main app adds
+`com.apple.developer.usernotifications.communication` and declares
+`INSendMessageIntent`; enable Communication Notifications for its App ID and
+refresh its provisioning profile as needed. The extension uses the standard
+notification service extension point and does not require shared credentials.
+Existing APNs key/topic configuration continues to refer to the main app ID.
+No Apple capability/provisioning change was performed or verified remotely.
+
+Keep the R2 bucket and additive column when rolling back code. R2 deletion and
+replacement are not reversed by a Worker rollback. Cleanup is best effort, so
+storage failures/crashes may leave private orphan objects; there is no automatic
+orphan sweep. Future account deletion must remove its objects separately from D1
+cascades. See [profile photos](profile-photos.md) for API limits, access lifetime,
+retention, rollback, and the unverified physical-device checks.

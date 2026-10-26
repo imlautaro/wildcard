@@ -29,10 +29,13 @@ struct ContactDetailView: View {
         .toolbar {
             if let contact = contacts.contact(id: contactID) {
                 ToolbarItem(placement: .principal) {
-                    NavigationLink(value: HomeDestination.renameContact(contactID)) {
-                        Text(contact.name).manrope(.headline, weight: .semibold)
+                    NavigationLink(value: HomeDestination.editContact(contactID)) {
+                        HStack(spacing: 8) {
+                            ContactAvatar(contact: contact, size: 30)
+                            Text(contact.name).manrope(.headline, weight: .semibold)
+                        }
                     }
-                    .accessibilityLabel("Rename \(contact.name)")
+                    .accessibilityLabel("Edit \(contact.name)")
                 }
             }
         }
