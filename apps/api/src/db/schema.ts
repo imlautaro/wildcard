@@ -88,7 +88,42 @@ export const chatTurn = sqliteTable('chat_turn', {
   index('chat_contact_sequence_idx').on(table.contactId, desc(table.sequence)),
   index('chat_recovery_idx').on(table.status, table.checkedAt),
   index('chat_user_status_idx').on(table.userId, table.status),
+  uniqueIndex('chat_turn_source_idx').on(table.id, table.contactId, table.userId),
 ]);
+
+export const contactMemoryState = sqliteTable('contact_memory_state', {
+  contactId: text('contact_id').primaryKey(),
+  userId: text('user_id').notNull(),
+  lastSequence: integer('last_sequence').notNull().default(0),
+}, (table) => [
+  foreignKey({ columns: [table.contactId, table.userId], foreignColumns: [contact.id, contact.userId] }).onDelete('cascade'),
+  check('memory_cursor', sql`${table.lastSequence} >= 0`),
+]);
+
+export const contactMemory = sqliteTable('contact_memory', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  contactId: text('contact_id').notNull(),
+  userId: text('user_id').notNull(),
+  memoryKey: text('memory_key').notNull(),
+  kind: text('kind', { enum: ['fact', 'preference', 'decision', 'pending'] }).notNull(),
+  content: text('content').notNull(),
+  sourceTurnId: text('source_turn_id').notNull(),
+  sourceQuote: text('source_quote').notNull(),
+  sourceSequence: integer('source_sequence').notNull(),
+  updatedAt: date('updated_at').notNull(),
+}, (table) => [
+  foreignKey({ columns: [table.contactId, table.userId], foreignColumns: [contact.id, contact.userId] }).onDelete('cascade'),
+  foreignKey({ columns: [table.sourceTurnId, table.contactId, table.userId],
+    foreignColumns: [chatTurn.id, chatTurn.contactId, chatTurn.userId] }).onDelete('cascade'),
+  uniqueIndex('contact_memory_key_idx').on(table.contactId, table.userId, table.memoryKey),
+  index('contact_memory_scope_idx').on(table.contactId, table.userId, desc(table.sourceSequence)),
+  check('memory_key_length', sql`length(${table.memoryKey}) BETWEEN 1 AND 80`),
+  check('memory_kind', sql`${table.kind} IN ('fact', 'preference', 'decision', 'pending')`),
+  check('memory_content_length', sql`length(${table.content}) BETWEEN 1 AND 300`),
+  check('memory_quote_length', sql`length(${table.sourceQuote}) BETWEEN 1 AND 240`),
+]);
+
+// chat_turn_search and its maintenance triggers are managed by SQL migrations.
 
 export const pushDevice = sqliteTable('push_device', {
   id: text('id').primaryKey(),

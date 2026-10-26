@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Cloudflare Worker | `apps/api/wrangler.jsonc`, `wildcard-api` | Hono API and Better Auth handler |
 | Cloudflare R2 | `CONTACT_PHOTOS`, `wildcard-contact-photos` | Private contact profile JPEGs |
-| Cloudflare D1 | `DB`, `wildcard-db` | Users, hashed passwords, sessions, verification schema, auth rate limits, private contacts, and conversation turns |
+| Cloudflare D1 | `DB`, `wildcard-db` | Users, hashed passwords, sessions, verification schema, auth rate limits, private contacts, conversation turns, contact memories, and full-text history search |
 | Runtime auth secret | `BETTER_AUTH_SECRET` | Signs cookies and native bearer sessions |
 | Cloudflare Workflow | `CHAT_WORKFLOW`, `wildcard-chat`, class `ChatWorkflow` | Durable reply generation |
 | Cron Trigger | `* * * * *` in Wrangler | Recover queued dispatch gaps and reconcile terminal workflows |
@@ -348,3 +348,50 @@ content already submitted to a provider. Keep existing D1/R2 data when changing
 models. Voice transcription remains on `muse-voice-transcribe-1.0`.
 
 Reference: [Meta models and Contributor data use](https://dev.meta.ai/docs/models).
+
+## Contact memory and history search
+
+[Contact memory](memory.md) reuses `DB`, `CHAT_WORKFLOW`, `META_API_KEY`, and
+`META_CHAT_MODEL`. No new service, vector database, embedding model, binding,
+secret, account permission, or paid plan is required. Model inference for memory
+extraction and retrieval rounds consumes the selected Meta account's credits;
+D1 index storage and queries consume its existing quotas. The configured
+Contributor consent also applies to extraction inputs from the owner's test chats.
+Independent installations should keep the Standard-model default unless separately
+authorized. Sharing and cross-user memory access remain unimplemented.
+
+Migration `0007_contact_memory.sql` adds owner-scoped memory/cursor tables, source
+foreign keys, and a SQLite FTS5 external-content index maintained by triggers.
+It indexes the existing conversation archive once during migration; allow time
+and quota for this on a populated database. Memory extraction itself happens
+in bounded Workflow batches as conversations continue, not in the migration.
+Do not rewrite an applied migration or trigger a separate bulk model backfill.
+
+For an independent account, provision the existing D1 and Workflow resources
+first, then apply all versioned migrations through `npm run auth:setup:local`
+(or `npm run db:migrate:local` for an existing local setup). Configure the existing
+Meta secret locally only when inference is intended. The automatic release runs
+the same migrations remotely before uploading committed and pushed code. Verify
+that the account permits Muse Spark Chat Completions function tools and structured
+JSON output; no key or permission changes were made for this implementation.
+
+Check the automatic build status, source SHA/version tag, existing DB/Workflow
+bindings, and pending migration list after an authorized push. With fictional
+data, functional verification should cover recall after the recent window has
+expired, search by alternate words, date/cursor filtering, source excerpts and
+offsets, separate owners/contacts, replayed maintenance, conflicting updates,
+contact deletion, and memory/provider failures. Do not print facts, quotes, tool
+arguments/results, or provider bodies in logs. Sanitized events are
+`chat_memory_deferred` and `chat_retrieval_failed`.
+
+The schema is additive and compatible with the prior Worker. Code rollback keeps
+memories, cursor state, search indexes, and synchronization triggers intact; it
+does not delete data or reverse source-commit tagging. Keep the existing Workflow
+class/binding for active instances; do not drop these tables while newer instances
+may still reference them. Staging must use a separate D1/Worker/Workflow and secrets.
+
+Static TypeScript/binding checks, SQL compilation with EXPLAIN against an empty
+migrated SQLite schema, and whitespace checks were performed locally.
+No application builds, runtime tests, paid inference, remote migrations, push, or
+deployment were performed for this change. Real Standard/Contributor tool and
+structured-output behavior and independent-account installation remain unverified.

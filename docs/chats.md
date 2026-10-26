@@ -45,11 +45,13 @@ Provider requests use manual redirect handling, as required by the Workers
 runtime. Non-success responses, including redirects, are rejected without
 forwarding the credential to another URL.
 
-Generation has a 120-second HTTP timeout and a three-minute step timeout. It
-retries transient failures twice with exponential delay, then persists failure.
-An attempt reads at most 20 prior completed turns with a 60,000 UTF-16-unit
-history budget. Older messages remain in D1 but are outside the model context;
-failed turns are excluded from future context. The model has no external tools.
+Generation has a 45-second timeout per model request and a three-minute step
+timeout. It retries transient generation failures twice with exponential delay,
+then persists failure. An attempt includes up to eight completed prior turns
+within a 12,000-byte UTF-8 history budget, plus selected D1 memories. Long latest
+turns are explicitly clipped. Older completed messages remain searchable through
+bounded, private read tools; failed turns are excluded. See [contact memory](memory.md)
+for extraction, retrieval limits, provenance, and rollout.
 
 Accepted work continues independently of iOS. Closing the app before a send is
 accepted cannot guarantee delivery; unsent drafts are not persisted. The client
@@ -80,7 +82,7 @@ workflow. Termination is best effort. An already accepted provider call may stil
 consume credits; conditional writes cannot recreate a deleted conversation.
 Cloudflare workflow metadata/checkpoints have separate platform retention; only
 turn IDs and attempt numbers are passed as workflow parameters, and step return
-values contain no conversation text. Messages are sent to Meta to produce replies;
+values contain no conversation text. Messages and selected memories are sent to Meta for replies and memory extraction;
 this implementation does not establish a new consent or training-data policy.
 
 ## Voice input

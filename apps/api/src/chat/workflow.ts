@@ -1,7 +1,8 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { enqueueReply, deliverPush } from '../push/delivery';
 import { activeTurn, type ChatJob } from './data';
-import { museReply, type ModelMessage } from './meta';
+import { contactReply } from './context';
+import { maintainMemories } from './memory';
 
 export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob> {
   async run(event: WorkflowEvent<ChatJob>, step: WorkflowStep) {
@@ -13,6 +14,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob> {
           .bind(Date.now(), job.turnID, job.attempt).run();
         return true;
       });
+      await this.refreshMemory(job, step, 'refresh-prior-memory', false);
       await step.do('generate-and-save', {
         retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' },
         timeout: '3 minutes',
@@ -22,31 +24,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob> {
         const contact = await this.env.DB.prepare('SELECT name FROM contact WHERE id = ?1 AND user_id = ?2')
           .bind(turn.contactID, turn.userID).first<{ name: string }>();
         if (!contact) return false;
-        const { results } = await this.env.DB.prepare(`SELECT user_text AS userText, assistant_text AS assistantText
-          FROM chat_turn WHERE contact_id = ?1 AND user_id = ?2 AND sequence < ?3 AND status = 'complete'
-          ORDER BY sequence DESC LIMIT 20`).bind(turn.contactID, turn.userID, turn.sequence)
-          .all<{ userText: string; assistantText: string }>();
-        const history: ModelMessage[] = [];
-        let remaining = 60_000;
-        for (const prior of results) {
-          const length = prior.userText.length + prior.assistantText.length;
-          if (length > remaining) break;
-          history.unshift({ role: 'user', content: prior.userText }, { role: 'assistant', content: prior.assistantText });
-          remaining -= length;
-        }
-        const reply = await museReply(this.env.META_API_KEY, [
-          { role: 'system', content: [
-            `You are a helpful private conversational assistant. Your contact display name is ${JSON.stringify(contact.name)}.`,
-            'Only use the conversation provided; do not claim access to other users, sensors, or external tools.',
-            'Reply naturally in a one-to-one messaging conversation, matching the user’s language and tone.',
-            'Default to a short, direct reply, usually one to three sentences.',
-            'Avoid unnecessary introductions, recaps, lists, repeated explanations, and automatic follow-up questions.',
-            'Give a longer response when the user asks for detail or the topic or context requires it.',
-            'Keep all necessary information; do not sacrifice accuracy or usefulness just to be brief.',
-          ].join(' ') },
-          ...history,
-          { role: 'user', content: turn.userText },
-        ], this.env.META_CHAT_MODEL);
+        const reply = await contactReply(this.env, turn, contact.name);
         // Save before checkpointing. A replay sees completion and skips another call.
         const now = Date.now();
         await this.env.DB.batch([this.env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, status = 'complete', error_code = NULL, updated_at = ?2
@@ -70,5 +48,20 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob> {
       catch { console.error(JSON.stringify({ event: 'push_delivery_deferred' })); }
       return true;
     });
+    await this.refreshMemory(job, step, 'remember-completed-turn', true);
+  }
+
+  private async refreshMemory(job: ChatJob, step: WorkflowStep, name: string, includeCurrent: boolean) {
+    try {
+      await step.do(name, { retries: { limit: 1, delay: '5 seconds' }, timeout: '1 minute' }, async () => {
+        const turn = await activeTurn(this.env.DB, job);
+        if (!turn || (includeCurrent && turn.status !== 'complete') || turn.status === 'failed') return false;
+        await maintainMemories(this.env, { contactID: turn.contactID, userID: turn.userID,
+          beforeSequence: turn.sequence + (includeCurrent ? 1 : 0) });
+        return true;
+      });
+    } catch {
+      console.error(JSON.stringify({ event: 'chat_memory_deferred' }));
+    }
   }
 }

@@ -69,7 +69,7 @@ contact editor. Private photo bytes use R2. Contacts are saved in D1 and isolate
 signed-in user. See [private contacts](docs/contacts.md). Conversations support
 persisted messages, reply status, earlier history, and retries. Accepted replies
 continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
-limits, and background execution. An empty draft offers a microphone for
+limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1, selects bounded recent context, and provides private memory/history search tools. An empty draft offers a microphone for
 [Muse Voice Transcribe dictation](docs/voice.md); the transcript is editable before
 sending. Navigation reuses a session-scoped [memory cache](docs/caching.md) and
 refreshes loaded content in the background. [Reply push notifications](docs/notifications.md)
