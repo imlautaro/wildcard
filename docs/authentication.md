@@ -76,11 +76,25 @@ storage; see [contacts](contacts.md) for creation, listing, renaming, deletion,
 pagination, and session-expiry handling. There are no sample contacts or chat
 messages and no periodic polling.
 
-On launch the app displays a full-screen `#045DE3` splash with the white Wildcard
+iOS uses `Wildcard/LaunchScreen.storyboard` through the explicit
+`UILaunchStoryboardName = LaunchScreen` entry in `Config/Info.plist` in both Debug
+and Release. The synchronized app group includes the storyboard as a resource.
+Automatic empty launch-screen generation is disabled. The native screen uses the
+same `AccentColor` background and white-tinted `SplashMark` asset as SwiftUI, with
+a 92.5 × 100 point aspect-fit image centered in the safe area. The blue background
+covers the entire screen in both appearances; sharing the assets and alignment
+avoids a color, size, or position jump when SwiftUI takes over.
+
+After native launch, the app displays a full-screen `#045DE3` splash with the white Wildcard
 mark centered at 92.5 × 100 points while loading its Keychain token and fetching
 `/me`. The vector mark comes from the current app icon source. Light and dark modes
 use the same blue background. There is no artificial delay; restoration selects
 the signed-out, signed-in, or retry screen as soon as it completes.
+These launch changes were checked statically (storyboard XML, asset references,
+constraints, plist, and project configuration), without a build or simulator run.
+Verify the transition on device after installing the updated app in light/dark
+mode and supported orientations.
+
 An expired session clears the token. Network/server/Keychain failures preserve the
 saved session and offer retry instead of treating an outage as logout.
 
