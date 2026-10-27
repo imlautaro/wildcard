@@ -1119,3 +1119,19 @@ code fix through the existing commit/push automatic pipeline; no migration is ne
 Existing failed turns are not automatically replayed and need a new user message or
 the existing explicit retry action. Model quality and actual subsequent conversation
 still need verification after the corrected release.
+
+
+### Required responses to public openings
+
+The group draft context marks a human-requested public post as a required opening
+response when no later human message exists. Its structured action enum permits reply
+only, or keep/revise during review; invalid skips cannot silently complete a slot.
+Energy/access/cap guards still apply. No new service, binding, secret or migration is
+needed. Release the backend code through commit/push and the automatic pipeline.
+`group_turn_decision` logs only a fixed action code and openingReplyRequired boolean,
+without message bodies, account IDs, group IDs or prompts. Opt-in energy checks cover
+fresh/repeated openings, invalid skips, later human cancellation, ordinary later skips,
+zero energy and a simulated complete Workflow publication/replay. Validate actual
+model conversation after release; simulated providers do not establish model quality.
+A prior real post completed with a null draft and skipped publication despite energy,
+so it needs a new message or explicit retry; no automatic replay of old silence occurs.

@@ -147,7 +147,9 @@ canceled or clearly superseded requests can also be skipped at initial drafting.
 Skipping creates no message, unread count, push or self-memory event; grounded
 human-memory maintenance still follows its existing policy. Later human messages
 keep their existing rounds; subsequent bot messages share their original exchange
-and its fixed publication budget. Agents can skip ordinary bot turns when there is
+and its fixed publication budget. Fresh human-requested public openings require an initial generated response unless
+new human traffic permits cancellation/supersession; older similar greetings do not
+suppress a new opening. Agents can skip later ordinary bot turns when there is
 nothing useful to add. Exhausted/capped turns complete without inference or a bubble.
 
 Draft/review calls and guarded publication use separate durable Workflow steps.

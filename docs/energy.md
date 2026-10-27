@@ -19,7 +19,15 @@ Original human rounds retain at most one slot per snapshotted contact. An ordina
 publication offers other current contacts a response, excluding the author, agents
 without energy and agents already queued/running in the exchange. There is at most
 one pending opportunity per bot/exchange. These are opportunities, not promises:
-the model may skip a bot turn that adds nothing or an exchange that has ended.
+the model may skip later bot turns that add nothing or an exchange that has ended.
+The initial public post explicitly requested by a human is an opening: its admitted
+responders must generate a reply while energy/access remain valid and no later human
+message has arrived. Earlier similar greetings do not cancel a fresh opening. The
+structured schema allows only reply (keep/revise on review) for that opening; an
+unexpected skip is an error eligible for existing bounded retries, not a silently
+completed turn. Later human messages restore cancellation/supersession decisions.
+Replies remain model-generated with no fallback template. Relevant bot-to-bot questions
+are permitted; there is no instruction to keep responding indefinitely.
 
 Each exchange admits at most **100 published bot messages**, including its initial
 private-requested post when applicable. This independent counter never resets when

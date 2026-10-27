@@ -38,6 +38,20 @@ function human(f,id='human-root') {
   f.sqlite.prepare(`INSERT INTO group_reply(id,group_id,agent_id,source_id,workflow_id,created_at)
     VALUES (?,'group','sender',?,?,0)`).run('first-'+id,id,'wf-'+id);
 }
+function groupContext(f, decision = {action:'reply',text:'A freely generated hello.'}) {
+  const c=vm.createContext({console,Date,JSON,Array,Number,Error,
+    readEnergy:f.context.readEnergy,groupSourceAccess:f.context.groupSourceAccess,
+    readMemories:async()=>[],selectMemories:()=>[],readAgentMemories:async()=>[],
+    agentMemoryContext:()=>'{}',clipText:s=>s,acknowledgeAgentContext:async()=>{},
+    isRecord:x=>x&&typeof x==='object'&&!Array.isArray(x),
+    groupCompletion:async(env,messages,scope,format)=>{
+      c.calls=(c.calls||0)+1;c.evidence=JSON.parse(messages[1].content);c.system=messages[0].content;
+      c.actions=format.json_schema.schema.properties.action.enum;return JSON.stringify(c.decision);
+    }});
+  c.decision=decision;
+  vm.runInContext(source('groups/context.ts'),c);
+  return c;
+}
 (async()=>{
  await check('ordinary post spends exactly one point and queues the other bot',async f=>{
    const t=f.turn(); const r=await f.call(t); assert.equal(r.published,true);
@@ -156,17 +170,51 @@ function human(f,id='human-root') {
  });
  await check('real group context distinguishes bot conversation from directed delegation and supplies energy',async f=>{
    await f.call(f.turn());const job=claim(f,'target');
-   const c=vm.createContext({console,Date,JSON,Array,Number,Error,
-     readEnergy:f.context.readEnergy,groupSourceAccess:f.context.groupSourceAccess,
-     readMemories:async()=>[],selectMemories:()=>[],readAgentMemories:async()=>[],
-     agentMemoryContext:()=>'{}',clipText:s=>s,acknowledgeAgentContext:async()=>{},
-     isRecord:x=>x&&typeof x==='object'&&!Array.isArray(x),
-     groupCompletion:async(env,messages)=>{c.evidence=JSON.parse(messages[1].content);c.system=messages[0].content;return JSON.stringify({action:'reply',text:'A freely generated hello.'});}});
-   vm.runInContext(source('groups/context.ts'),c);
+   const c=groupContext(f);
    const result=await c.prepareGroupDraft(f.env,job);
    assert.equal(result.text,'A freely generated hello.');assert.equal(c.evidence.round.trigger.directed,false);
    assert.equal(c.evidence.round.trigger.agentID,'sender');assert.equal(c.evidence.energy.points,50);
    assert.ok(c.system.includes('own words'));assert.ok(c.system.includes('nothing useful to add'));
+ });
+ await check('a fresh public opening requires a model reply even after an older greeting',async f=>{
+   await f.call(f.turn());await publish(f,claim(f,'target'),'Hello!');
+   await f.call(f.turn());const job=claim(f,'target');const c=groupContext(f);
+   const draft=await c.prepareGroupDraft(f.env,job);
+   assert.equal(JSON.stringify(c.actions),'["reply"]');assert.equal(c.evidence.round.openingReplyRequired,true);
+   assert.equal(draft.text,'A freely generated hello.');
+   c.decision={action:'revise',text:'Revised generated greeting.'};
+   await c.prepareGroupDraft(f.env,job,{text:'Previous generated greeting.',throughSequence:0});
+   assert.equal(JSON.stringify(c.actions),'["keep","revise"]');
+ });
+ await check('an illegal skip of a fresh opening cannot silently complete the turn',async f=>{
+   await f.call(f.turn());const job=claim(f,'target');const c=groupContext(f,{action:'skip',text:''});
+   await assert.rejects(()=>c.prepareGroupDraft(f.env,job),/GROUP_OPENING_REPLY_REQUIRED/);
+   assert.equal(f.sqlite.prepare('SELECT status FROM group_reply WHERE id=?').get(job.turnID).status,'running');
+ });
+ await check('a later human message allows cancellation of the opening response',async f=>{
+   await f.call(f.turn());const job=claim(f,'target');human(f,'later-human');
+   const c=groupContext(f,{action:'skip',text:''});assert.equal((await c.prepareGroupDraft(f.env,job)).text,null);
+   assert.equal(c.evidence.round.openingReplyRequired,false);assert.ok(c.actions.includes('skip'));
+ });
+ await check('later bot turns can end the conversation and exhausted openings call no model',async f=>{
+   await f.call(f.turn());await publish(f,claim(f,'target'));const job=claim(f,'sender');
+   const c=groupContext(f,{action:'skip',text:''});assert.equal((await c.prepareGroupDraft(f.env,job)).text,null);
+   assert.equal(c.evidence.round.openingReplyRequired,false);
+   f.sqlite.exec("UPDATE contact_agent SET energy=0,energy_updated_at=unixepoch()*1000 WHERE id='sender'");
+   await c.prepareGroupDraft(f.env,job);assert.equal(c.calls,1);
+ });
+ await check('the opening Workflow publishes model text, charges once and offers a continuation',async f=>{
+   await f.call(f.turn());const job=claim(f,'target');const c=groupContext(f);
+   f.context.prepareGroupDraft=c.prepareGroupDraft;
+   f.context.maintainAgentMemories=async()=>{};f.context.rememberGroupMessage=async()=>{};
+   f.context.dispatchAgent=async()=>{};f.context.dispatchGroupRequests=async()=>{};
+   f.context.releaseAttention=async()=>{f.sqlite.exec('DELETE FROM agent_attention');};
+   const step={sleep:async()=>{},do:async(name,...args)=>args.at(-1)()};
+   await f.context.runGroup(f.env,job,step);
+   assert.equal(f.sqlite.prepare('SELECT text FROM group_message WHERE id=?').get(job.turnID).text,'A freely generated hello.');
+   assert.equal((await points(f,'target')).points,49);assert.equal(c.calls,1);
+   assert.equal(f.sqlite.prepare("SELECT COUNT(*) n FROM group_reply WHERE agent_id='sender' AND status='queued'").get().n,1);
+   await f.context.runGroup(f.env,job,step);assert.equal(c.calls,1);assert.equal((await points(f,'target')).points,49);
  });
  await check('owner-only endpoints reset shared backend energy without reviving conversations',async f=>{
    class Router { constructor(){this.handlers=new Map();} use(){return this;} route(){return this;} }
