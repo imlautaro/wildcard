@@ -131,7 +131,9 @@ struct MessageBubbleShape: Shape {
         path.addQuadCurve(to: CGPoint(x: left + radius, y: top),
                           control: CGPoint(x: left, y: top))
         path.closeSubpath()
-        return fromUser ? path : path.applying(CGAffineTransform(a: -1, b: 0, c: 0, d: 1,
-                                                               tx: rect.minX + rect.maxX, ty: 0))
+        let lowerTail = path.applying(CGAffineTransform(a: 1, b: 0, c: 0, d: -1,
+                                                      tx: 0, ty: rect.minY + rect.maxY))
+        return fromUser ? lowerTail : lowerTail.applying(CGAffineTransform(a: -1, b: 0, c: 0, d: 1,
+                                                                         tx: rect.minX + rect.maxX, ty: 0))
     }
 }

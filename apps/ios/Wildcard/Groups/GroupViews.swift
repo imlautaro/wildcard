@@ -522,7 +522,7 @@ private struct GroupMessageRow: View {
         members.first { $0.id == (message.agentID ?? message.userID) && $0.kind == (message.agentID == nil ? "user" : "agent") }
     }
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .bottom, spacing: 8) {
             if !own { GroupAvatar(member: sender, groupID: groupID, size: 30) }
             VStack(alignment: .leading, spacing: 4) {
                 if let file = message.attachment {

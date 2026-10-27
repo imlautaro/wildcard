@@ -345,13 +345,13 @@ context retention, migration, cleanup, provider data policy, and validation stat
 
 ## Bubble appearance experiment
 
-Bubbles use a continuous outline with a small integrated pointed tail at the top
+Bubbles use a continuous outline with a small integrated pointed tail at the bottom
 corner: left for incoming messages, right for outgoing messages. The tip extends
-approximately 6 points outward and 3 points upward, with a slightly rounded tip
+approximately 6 points outward and 3 points downward, with a slightly rounded tip
 curving back into the side of the bubble.
 The remaining corners retain their base radius (20 points for text/images,
 16 for documents). This replaces the earlier decorative circle and half-radius
-corner experiment. Image tails use the outgoing bubble color; image pixels remain
+corner experiment. Image tails use the corresponding incoming/outgoing bubble color; image pixels remain
 clipped to the bubble outline with a 2-point inner border in the bubble color. Message alignment, receipts, and attachment opening
 retain their existing behavior.
 

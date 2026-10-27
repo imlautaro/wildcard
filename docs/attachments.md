@@ -17,8 +17,9 @@ When sent with text, the caption appears below the image inside the same outgoin
 bubble. Captions share the text-message layout: short single-line text keeps the
 time and receipt checks on its line; longer or multiline text puts them below. Image-only messages keep
 the metadata overlay.
-Images use a rounded outline with an integrated pointed tail at the top right
-in the outgoing bubble color, replacing the decorative circle. A 2-point border
+Images use a rounded outline with an integrated pointed tail at the bottom right
+for outgoing messages, or bottom left for incoming group messages, in the matching
+bubble color, replacing the decorative circle. A 2-point border
 in that same color surrounds the image, including images with captions. The tail
 tip has a rounded cap. The image itself has independent 16-point rounded corners (smaller than the 20-point bubble)
 inside a 2-point bubble-colored rim. With a caption, both lower image corners
