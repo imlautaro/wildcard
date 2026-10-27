@@ -36,6 +36,16 @@ deleted. A new account registering the old address cannot claim them. Email
 ownership verification remains unconfigured in authentication; this feature
 selects an account by its registered address and does not prove mailbox ownership.
 
+iOS rejects the signed-in account's own email before sending an invitation,
+ignoring surrounding whitespace and letter case. The API remains authoritative.
+Sharing requests display the API's bounded, plain-text validation errors for
+self-invites, missing accounts, existing access, expired invitations, and rate
+limits. These errors never fall through to contact-name or sign-up messages.
+Missing/malformed error bodies use a sharing-specific fallback; HTTP 401 still
+uses the existing expired-session handling. Install the updated app with Xcode
+to receive this client-side correction. Static Swift type checks cover the fix;
+no runtime tests, real invitations, build, or release were performed for it.
+
 This implementation supports four participants per agent, including its creator,
 and ten pending invitations. Existing participants can accept a new invitation
 without creating a second conversation. Successful acceptance retries by the

@@ -34,6 +34,7 @@ struct AuthAPI: Sendable {
         let password: String
     }
     private struct UserResponse: Decodable { let user: AuthUser }
+    private struct ErrorResponse: Decodable { let error: String }
 
     private let session: URLSession
     private let baseURL: URL?
@@ -89,6 +90,16 @@ struct AuthAPI: Sendable {
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if path.hasPrefix("contacts/sharing/") {
+                if [400, 403, 404, 409, 413, 422, 429].contains(response.statusCode),
+                   let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error,
+                   !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   message.unicodeScalars.count <= 512,
+                   !message.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
+                    throw Failure.rejected(message)
+                }
+                throw Failure.rejected("Contact sharing is temporarily unavailable. Please try again.")
+            }
             if path.hasSuffix("/photo") {
                 switch response.statusCode {
                 case 400, 413, 415, 422: throw Failure.rejected("Choose a square JPEG photo smaller than 512 KB.")

@@ -114,6 +114,11 @@ struct ContactSharingView: View {
 
     private func createInvitation(byEmail: Bool = false) {
         let email = byEmail ? recipientEmail.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+        if let email, let ownEmail = auth.user?.email,
+           email.lowercased() == ownEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            error = "You cannot invite your own account. Enter another user's email."
+            return
+        }
         busy = true
         error = nil
         Task {
