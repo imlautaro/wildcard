@@ -64,6 +64,11 @@ struct HomeView: View {
             }
         }
         .environment(contacts)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { MessageSounds.shared.activate(userID: auth.user?.id) }
+            else { MessageSounds.shared.deactivate() }
+        }
+        .onDisappear { MessageSounds.shared.reset() }
         .task(id: "\(contacts.hasLoaded)-\(contacts.totalUnreadCount)-\(scenePhase)") {
             guard contacts.hasLoaded, scenePhase == .active else { return }
             await push.updateBadge(count: contacts.totalUnreadCount)
@@ -75,6 +80,7 @@ struct HomeView: View {
         .task(id: push.deviceToken) { await push.synchronize(using: auth) }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            MessageSounds.shared.activate(userID: auth.user?.id)
             await contacts.refresh(using: auth, preserveLoadedPages: true)
             await push.activate(using: auth)
             if contacts.hasLoaded { await push.updateBadge(count: contacts.totalUnreadCount) }

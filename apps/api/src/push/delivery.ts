@@ -91,7 +91,7 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
           'apns-topic': env.APNS_TOPIC!, 'apns-push-type': 'alert', 'apns-priority': '10',
           'apns-expiration': String(Math.floor(item.expiresAt / 1000)), 'apns-collapse-id': item.turnID,
         },
-        body: replyPayload({ ...alert, photoURL, unreadCount, contactID: item.contactID, userID: item.userID }),
+        body: replyPayload({ ...alert, turnID: item.turnID, photoURL, unreadCount, contactID: item.contactID, userID: item.userID }),
       });
       // Only inspect Apple's bounded reason field; never log tokens or message data.
       let reason: string | undefined;

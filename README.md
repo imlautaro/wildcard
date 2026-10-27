@@ -78,7 +78,8 @@ sending. Navigation reuses a session-scoped [memory cache](docs/caching.md) and
 refreshes loaded content in the background. [Reply push notifications](docs/notifications.md)
 use APNs when the app is closed/backgrounded, after configuring Apple signing
 and provider secrets. Alerts show the contact name, reply text, and a contact avatar through the embedded
-notification service extension. Tapping an alert opens the chat. Unread reply counts persist on the server and
+notification service extension. Tapping an alert opens the chat. Bundled message sounds distinguish activity in the
+visible chat, replies elsewhere in the foreground, and background push alerts. Unread reply counts persist on the server and
 appear on chat rows, the Chats tab, and the app icon; returning to the app refreshes them immediately. Sharing is not implemented.
 
 ## Infrastructure and releases

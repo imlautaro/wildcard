@@ -82,6 +82,10 @@ final class ContactsStore {
         do {
             let page = try await auth.withSession { api, token in try await api.contacts(token: token) }
             guard request == generation, readSnapshot == readRevision, !Task.isCancelled else { return }
+            let changedReplies = page.contacts.filter { contact in
+                guard let previous = knownContacts[contact.id] else { return false }
+                return (contact.unreadCount ?? 0) > (previous.unreadCount ?? 0)
+            }
             for contact in page.contacts {
                 knownContacts[contact.id] = contact
                 contactRefreshedAt[contact.id] = .now
@@ -94,6 +98,20 @@ final class ContactsStore {
             if additional.isEmpty { nextCursor = page.nextCursor }
             hasLoaded = true
             refreshedAt = .now
+            // Resolve stable turn IDs only when unread counts grow, so polling and APNs
+            // share the same deduplication key even outside the visible conversation.
+            for contact in changedReplies {
+                guard !Task.isCancelled, let userID = auth.user?.id else { return }
+                if let history = try? await auth.withSession({ api, token in
+                    try await api.chatTurns(contactID: contact.id, token: token)
+                }) {
+                    guard !Task.isCancelled, auth.user?.id == userID else { return }
+                    for turn in history.turns where turn.assistantText != nil {
+                        MessageSounds.shared.received(turnID: turn.id, contactID: contact.id, userID: userID,
+                                                      completedAt: Date(timeIntervalSince1970: turn.updatedAt / 1000))
+                    }
+                }
+            }
         } catch {
             if request == generation && !isCancellation(error) { self.error = error.localizedDescription }
         }

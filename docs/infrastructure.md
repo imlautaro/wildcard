@@ -462,3 +462,15 @@ Rollback must account for active `kind: visit` jobs: older pre-visit code does n
 understand them. Drain/terminate visit jobs first or retain the compatible branch;
 leave additive tables in place, and restore compatible turn triggers deliberately.
 No schema rollback is needed for the existing iOS client, which sends no activity.
+
+
+## Bundled message and notification sounds
+
+The message-sound update uses the existing APNs integration and resources. Include
+all three `apps/ios/Wildcard/Sounds/*.wav` files in an independent installation;
+the synchronized Xcode app group packages them automatically. Install the updated
+client before releasing the API payload that names the flute WAV in `aps.sound`.
+Release the API only through an authorized commit/push and verify its automatic
+build/source SHA. No resource provisioning, migration, new secret, or signing
+capability is required. See [message sound behavior and device verification](notifications.md#message-sounds-october-27-2026)
+for filenames, compatibility, rollback, and checks that remain unverified.

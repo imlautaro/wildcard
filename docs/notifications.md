@@ -3,8 +3,9 @@
 The iOS app registers with Apple Push Notification service (APNs) after sign-in
 and requests alert/sound/badge permission. Account → Notifications offers a retry
 and a link to system notification settings. Returning to the foreground refreshes
-registration and permission state. Foreground banners and sounds are suppressed;
-existing chat polling refreshes replies while the app is active. No background
+registration and permission state. Foreground banners are suppressed; foreground
+message sounds are selected by the visible conversation, as described below.
+Existing chat polling refreshes replies while the app is active. No background
 execution mode or silent push is required for these visible alerts.
 
 A completed reply atomically saves an outbox entry for each registered device
@@ -253,3 +254,41 @@ If Xcode is still paused at the fatal exception, stop that debug run before runn
 the updated app. No reinstall/data wipe, credential change, notification clearing,
 or backend release is required. Static Swift checks cover the change; a device
 retest of a notification tap from a terminated/backgrounded app remains necessary.
+
+
+## Message sounds (October 27, 2026)
+
+The main app bundles the three owner-supplied Mixkit WAV files in `Wildcard/Sounds`.
+Xcode's synchronized app group includes them as resources; keep their filenames
+unchanged. They are 44.1 kHz, 16-bit PCM, each shorter than three seconds, within
+[Apple's custom notification sound requirements](https://developer.apple.com/documentation/usernotifications/unnotificationsound).
+
+- An accepted outgoing message and a newly completed reply in the visible chat use
+  `mixkit-hard-pop-click-2364.wav`.
+- A reply from another conversation, or while viewing any other app screen, uses
+  `mixkit-alert-quick-chime-766.wav` while the app is active.
+- Background/terminated notifications use
+  `mixkit-flute-mobile-phone-notification-alert-2316.wav` through `aps.sound`.
+
+Foreground playback uses System Sound Services and does not change the audio
+session used by voice recording. System volume, silent mode, audio-session state,
+Focus, and notification sound permission can affect audibility. These are ordinary
+sounds, not critical alerts. Foreground banners remain suppressed.
+
+The payload includes the stable `turnID`, used with the authenticated account to
+deduplicate foreground APNs and polling observations. Chat refreshes report newly
+completed turns; contact-list unread increases resolve recent turn IDs through a
+history request, allowing foreground sounds even without APNs permission. Initial
+history, earlier pages, unchanged refreshes, and replies completed before the
+current foreground interval do not replay sounds. Outgoing sounds require server
+acceptance, including recovery of an accepted request after a timeout; failed
+submissions and reply retries do not play a send sound. State clears on sign-out.
+
+Install the new iOS binary before an authorized automatic backend release uses the
+custom APNs sound; older installations without the file fall back to the system
+sound. The new payload fields require no migration, binding, capability, or secret.
+Rollback through commit/push; older clients ignore `turnID`. Static Swift and
+TypeScript validation does not establish audible playback. Verify the three cases,
+late push deduplication, background/resume, silent mode, recording, notification
+permission denial, and account switching on a physical device with fictional data.
+No build, runtime test, or real push was run for this change.

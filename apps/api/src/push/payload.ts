@@ -3,6 +3,7 @@ type ReplyAlert = {
   reply: string;
   contactID: string;
   userID: string;
+  turnID: string;
   unreadCount: number;
   photoURL?: string;
 };
@@ -10,10 +11,10 @@ type ReplyAlert = {
 export function replyPayload(alert: ReplyAlert): string {
   const serialize = (body: string) => JSON.stringify({
     aps: {
-      alert: { title: alert.contactName, body }, sound: 'default', badge: alert.unreadCount,
+      alert: { title: alert.contactName, body }, sound: 'mixkit-flute-mobile-phone-notification-alert-2316.wav', badge: alert.unreadCount,
       'thread-id': alert.contactID, 'mutable-content': 1,
     },
-    contactID: alert.contactID, userID: alert.userID, photoURL: alert.photoURL,
+    contactID: alert.contactID, userID: alert.userID, turnID: alert.turnID, photoURL: alert.photoURL,
   });
   const full = serialize(alert.reply);
   if (new TextEncoder().encode(full).byteLength <= 4096) return full;

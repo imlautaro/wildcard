@@ -117,6 +117,7 @@ final class PushNotifications {
     }
 
     func clearAccountState() {
+        MessageSounds.shared.reset()
         destination = nil
         error = nil
         status = "Not enabled"
@@ -145,8 +146,16 @@ final class PushAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                            withCompletionHandler completionHandler: @escaping @Sendable (UNNotificationPresentationOptions) -> Void) {
-        // Active chats refresh in the foreground; alerts are for background delivery.
-        DispatchQueue.main.async { completionHandler([]) }
+        let contactID = notification.request.content.userInfo["contactID"] as? String
+        let userID = notification.request.content.userInfo["userID"] as? String
+        let turnID = notification.request.content.userInfo["turnID"] as? String
+        let deliveredAt = notification.date
+        DispatchQueue.main.async {
+            defer { completionHandler([]) }
+            guard let contactID, let userID, let turnID else { return }
+            MessageSounds.shared.received(turnID: turnID, contactID: contactID, userID: userID,
+                                          completedAt: deliveredAt)
+        }
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,

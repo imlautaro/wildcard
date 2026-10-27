@@ -56,6 +56,13 @@ final class ChatStore {
             }
             try Task.checkCancellation()
             guard started == revision else { return }
+            if hasLoaded, let userID = auth.user?.id {
+                let completed = Set(turns.filter { $0.assistantText != nil }.map(\.id))
+                for turn in page.turns where turn.assistantText != nil && !completed.contains(turn.id) {
+                    MessageSounds.shared.received(turnID: turn.id, contactID: contactID, userID: userID,
+                                                  completedAt: Date(timeIntervalSince1970: turn.updatedAt / 1000))
+                }
+            }
             if !hasLoaded || turns.isEmpty || !page.turns.contains(where: { row in turns.contains(where: { $0.id == row.id }) }) {
                 revision += 1
                 turns = page.turns
@@ -118,6 +125,7 @@ final class ChatStore {
             hasLoaded = true
             refreshedAt = nil
             self.submission = nil
+            MessageSounds.shared.sent(turnID: submission.id, contactID: contactID)
             return true
         } catch is CancellationError { return false }
         catch {
@@ -127,6 +135,7 @@ final class ChatStore {
             if turns.contains(where: { $0.id == submission.id }) {
                 self.submission = nil
                 self.error = nil
+                MessageSounds.shared.sent(turnID: submission.id, contactID: contactID)
                 return true
             }
             self.error = error.localizedDescription

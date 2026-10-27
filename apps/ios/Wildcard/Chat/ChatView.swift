@@ -101,6 +101,7 @@ struct ChatView: View {
         }
         .onAppear {
             isVisible = true
+            MessageSounds.shared.visibleContactID = contactID
             animateNewMessages = chat.hasLoaded
         }
         .onChange(of: chat.hasLoaded) { _, loaded in
@@ -108,6 +109,7 @@ struct ChatView: View {
         }
         .onDisappear {
             isVisible = false
+            if MessageSounds.shared.visibleContactID == contactID { MessageSounds.shared.visibleContactID = nil }
             endVisit()
             chat.clearPresence()
             cancelRecording()
