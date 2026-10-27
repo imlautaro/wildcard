@@ -1,3 +1,4 @@
+import { cleanOAuthFlows } from './mcp/oauth';
 import { deliverGroupPush } from './groups/push';
 import { dispatchGroupRequests } from './groups/request-results';
 import { recoverGroups } from './groups/workflow';
@@ -14,6 +15,7 @@ export { ChatWorkflow } from './chat/workflow';
 export default {
   fetch: app.fetch,
   async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(cleanOAuthFlows(env));
     ctx.waitUntil(cleanAttachments(env));
     ctx.waitUntil(dispatchSchedules(env));
     ctx.waitUntil(recoverChats(env));

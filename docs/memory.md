@@ -250,3 +250,10 @@ vice versa; (3) recall beyond recent context, including a one-word answer beside
 a retrieved question; (4) explicit preference changes and older backlog/replays;
 (5) similarly named agents, unauthorized groups, removals/deletions and consent
 changes; (6) provider/storage failures and recovery on subsequent turns.
+
+## Private external connections
+
+A contact chat marked by MCP connection setup remains excluded from shared human
+memories and agent self-memory, including group retrieval through the creator contact.
+It uses Standard for private replies and stops human memory extraction. Disconnect does
+not remove this marker. Existing source history is retained. See [connections](connectors.md).

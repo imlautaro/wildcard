@@ -183,3 +183,21 @@ See [message replies](replies.md) for the shared iOS/web Reply actions, quote
 payloads, target validation, agent context, cache behavior and verification steps.
 Replies are ordinary messages that carry a quoted earlier message; they add no new
 request type, store or notification.
+
+## MCP Connections
+
+Contact details links to Connections for public/Bearer remote Streamable HTTP servers,
+matching iOS. Review schemas and explicitly authorize each tool. Connecting isolates
+the private chat from shared memory permanently and selects Standard for private replies;
+group posting and schedule creation/editing from that chat are disabled. See
+[connections](connectors.md) for security, session caching, OAuth setup and
+pending functional/device verification.
+
+OAuth connections use the same permissions and isolation as iOS, with a full-page
+provider round trip and `/mcp/oauth-complete` return route. The tab stores only flow/
+contact/connection/user IDs in sessionStorage, strips the completion proof fragment
+before finalizing, and uses the existing session-cookie proxy. Provider credentials
+stay encrypted in the API. Reauthorizing clears previous tool approvals. Configure
+`MCP_WEB_ORIGIN` in the API and register its displayed HTTPS callback URI with the
+provider; the web completion route is not the provider redirect URI. See the
+[OAuth lifecycle](connectors.md#oauth-setup-and-lifecycle) and pending verification.

@@ -125,6 +125,11 @@ struct AuthAPI: Sendable {
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if path.contains("/mcp") {
+                if response.statusCode == 404 { throw Failure.notFound }
+                let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
+                throw Failure.rejected(message ?? "Connections are temporarily unavailable. Please try again.")
+            }
             if path.hasSuffix("/reactions") {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }
                 if response.statusCode >= 500 { throw Failure.temporarilyUnavailable }

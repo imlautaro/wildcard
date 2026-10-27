@@ -166,3 +166,13 @@ repository (build `npm ci && npm run typecheck:web && npm run build:web`, deploy
 
 Follow the [working agreements](AGENTS.md), including English-only project content
 and reproducible infrastructure documentation.
+
+## MCP connections
+
+Private contact chats can use authorized remote MCP tools through the existing Worker.
+Open contact details → **Connections** on iOS or web. See [MCP connections](docs/connectors.md)
+for permissions, permanent private-chat isolation, Standard processing, supported
+transports, deployment prerequisites and pending verification. Streamable HTTP supports
+public/Bearer access and OAuth authorization-code with PKCE, registered or dynamic
+clients, encrypted credentials and refresh tokens. Gmail setup requires your own
+Google OAuth client and preview access; live provider/device validation is pending.

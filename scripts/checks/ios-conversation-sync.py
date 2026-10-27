@@ -16,6 +16,7 @@ with tempfile.TemporaryDirectory(prefix='wildcard-sync-') as directory:
     # are replaced by the deterministic transport in the test harness.
     models = '\n'.join((ios / file).read_text().split('\nextension AuthAPI {')[0]
                        for file in ('Chat/ChatAPI.swift', 'Contacts/ContactsAPI.swift'))
+    models += '\n' + (ios / 'Contacts/McpConnections.swift').read_text().split('private struct McpEnvelope')[0].replace('import SwiftUI', '')
     (temp / 'Models.swift').write_text(models)
     sources = [ios / file for file in (
         'Chat/MessageReactionStore.swift', 'Chat/ChatStore.swift', 'Chat/ConversationCache.swift', 'Chat/ReadAcknowledgementQueue.swift',

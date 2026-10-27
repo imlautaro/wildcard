@@ -43,6 +43,9 @@ struct ContactEditorView: View {
             if let contactID, contacts.contact(id: contactID)?.role == "owner" {
                 ContactEnergySection(contactID: contactID, cache: contacts.energySnapshots.store(for: contactID))
             }
+            if let contactID {
+                Section { NavigationLink("Connections") { McpConnectionsView(contactID: contactID, cache: contacts.mcpSnapshots.store(for: contactID)) } }
+            }
             if !canEdit {
                 Text("This is a shared contact. Its creator manages its name, photo, and participants.")
                     .manrope(.footnote).foregroundStyle(.secondary)

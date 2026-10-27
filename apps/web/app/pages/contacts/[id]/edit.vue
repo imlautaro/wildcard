@@ -52,6 +52,7 @@ const remove = () => run(async () => {
   await api(`contacts/${id.value}`, { method: 'DELETE' });
   chats.removeContact(id.value);
   forgetContactEnergy(id.value);
+  forgetMcpConnections(id.value);
   forgetRead(`contact:${id.value}`);
   await navigateTo('/', { replace: true });
 });
@@ -84,6 +85,7 @@ onMounted(() => run(async () => {
       <ContactEnergySection v-if="contact.role === 'owner'" :contact-id="id" />
 
       <div class="group" style="margin-top: 20px">
+        <NuxtLink :to="`/contacts/${id}/connections`" class="button-row">Connections</NuxtLink>
         <NuxtLink :to="`/chats/${id}`" class="button-row">Open chat</NuxtLink>
         <NuxtLink v-if="canManage" :to="`/contacts/${id}/sharing`" class="button-row">Share contact</NuxtLink>
       </div>

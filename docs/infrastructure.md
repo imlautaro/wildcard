@@ -1183,3 +1183,35 @@ API code ignores the columns and rejects request bodies containing `replyTo` or
 `replyToID` with HTTP 400, so roll clients back with the API or forward-fix. Older
 clients ignore the `replyTo` response field. Do not drop the columns or rewrite the
 migration to roll back.
+
+## MCP connection storage and egress
+
+[Connection setup and rollback](connectors.md#infrastructure-and-retention) uses the existing
+Worker/D1 and migration 0026, with no new resources or secrets. Preserve BETTER_AUTH_SECRET
+for encrypted tokens; rotation needs reconnection or explicit re-encryption. Standard
+model access is required for isolated chats. Retain public-only Worker egress and no
+VPC/private bindings; DNS preflight alone is not an enforcing network boundary. Older
+code cannot safely replace the privacy filters after connector output exists. Follow
+the existing commit/push and automatic migration/release pipeline; no manual deploy.
+
+### MCP OAuth extension
+
+Apply migration 0027 after 0026 through the automatic release pipeline. OAuth uses
+existing D1, the existing encryption derivation and existing Cron cleanup; no new
+Cloudflare resource/binding or runtime secret. `MCP_WEB_ORIGIN` is a versioned
+API variable specifying the exact public web origin. `BETTER_AUTH_URL` must be
+public HTTPS for OAuth. Each environment/provider needs its own registration of
+`https://YOUR_API_HOST/api/v1/mcp/oauth/callback`; Google requires its APIs, consent,
+preview eligibility and an AI-agent-marked Web OAuth client. Users configure their
+client credentials in Connections; no client values go into source. See
+[OAuth provisioning, retention, rollback and verification](connectors.md#oauth-setup-and-lifecycle).
+Do not retain full OAuth query URLs in infrastructure/proxy logs. The native app
+registers `wildcard` for browser completion; Google receives only the HTTPS API
+callback. Local HTTP public/Bearer features remain available; OAuth is unavailable
+until a public HTTPS API/web environment is configured. Provider setup and real
+OAuth/browser validation are not yet verified.
+
+API and web Worker configuration set `observability.redact_query_string = true`
+(supported by the pinned Wrangler schema), preserving logs/traces while removing
+query strings from captured request URLs. Verify that redaction in the automatic
+release and apply equivalent controls to any additional proxy/log exports.

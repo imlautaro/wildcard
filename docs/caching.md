@@ -423,3 +423,22 @@ add no unread messages or push alerts.
 separate reply cache, request or disk storage exists. Pending sends keep their reply
 target with the idempotency UUID. Reaching an older quoted original pages history
 through the existing **Load earlier** path, bounded to 20 pages.
+
+## MCP connection metadata
+
+Both clients cache up to eight private contact catalogs in session memory, including empty
+results. They revalidate on entry and explicit refresh, deduplicate reads, reject responses
+invalidated by mutations and clear on access loss/account change. iOS uses the existing
+NavigationSnapshotCache; web uses useMcpConnections. Tokens are never cached. See
+[the full cache and verification contract](connectors.md#client-caching).
+
+OAuth status, public issuer/scope and callback URI share the MCP session snapshots.
+Provider tokens, PKCE state, codes and client secrets do not. Web sessionStorage
+holds only initiating flow/contact/connection/user IDs during full-page OAuth and
+clears them on completion/session reset. The one-use completion proof is removed
+from URL history before authenticated completion. iOS keeps the ASWebAuthenticationSession
+and matching flow only in memory; navigation/cancellation cannot finish it later.
+Reauthorization invalidates tool approvals on the server. Both clients revalidate
+metadata and discover tools separately after completion; catalog failure leaves a
+connected account with tools requiring refresh/review. See the OAuth guide for
+expiry, account switching and pending browser/device checks.

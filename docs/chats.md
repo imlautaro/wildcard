@@ -426,3 +426,11 @@ See [message replies](replies.md) for the shared iOS/web Reply actions, quote
 payloads, target validation, agent context, cache behavior and verification steps.
 Replies are ordinary messages that carry a quoted earlier message; they add no new
 request type, store or notification.
+
+## External MCP tools
+
+Private direct human turns in isolated contact chats can discover and call explicitly
+authorized MCP tools. These chats use Standard, exclude shared-memory export and disable
+group posting/delegation and schedule creation/editing. Durable reservations prevent
+automatic replay of uncertain external writes. See [connections](connectors.md) for
+limits, permissions, supported transports and pending verification.

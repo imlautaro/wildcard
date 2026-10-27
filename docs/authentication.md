@@ -25,7 +25,7 @@ signed bearer tokens, uses database-backed sessions, and disables session cookie
 caching so revocation is checked against D1.
 
 Only the auth routes listed above are exposed. Password change/reset, email
-verification, OAuth, account sharing, and account deletion are not configured.
+verification, sign-in OAuth, account sharing, and account deletion are not configured.
 Passwords must contain 8–128 characters and are hashed by Better Auth's password
 implementation; plaintext passwords are never stored. Sessions expire after seven
 days and are refreshed after one day of activity. There is no stateless JWT or
@@ -147,3 +147,7 @@ changed through these routes. The general Better Auth endpoint allowlist remains
 unchanged. See [account profile](profile-photos.md#account-profile) and
 [infrastructure](infrastructure.md#account-profile-storage) for migration 0015
 and private storage reproduction.
+
+External account OAuth for [MCP connections](connectors.md#oauth-setup-and-lifecycle)
+is separate from signing in to Wildcard. It requires an existing signed Wildcard
+session and never creates a Wildcard account or changes the signed-in identity.

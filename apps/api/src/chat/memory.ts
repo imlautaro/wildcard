@@ -1,8 +1,9 @@
+import { privateContact } from '../mcp/client';
 import { groupMemories } from '../groups/memory';
 import { isRecord, museCompletion } from './meta';
 import { contactModelAllowed } from './consent';
 
-export type MemoryScope = { contactID: string; userID: string; beforeSequence: number; contributorModel?: boolean };
+export type MemoryScope = { contactID: string; userID: string; beforeSequence: number; contributorModel?: boolean; privateConversation?: boolean };
 export type Memory = {
   sourceUserID: string; sourceUserName: string;
   key: string; kind: string; content: string; sourceTurnID: string;
@@ -34,10 +35,11 @@ export async function readMemories(db: D1Database, scope: MemoryScope, ownOnly =
     JOIN contact_agent a ON a.id = current.agent_id
     WHERE source.agent_id = current.agent_id
       AND (m.contact_id = current.id OR (?4 = 0 AND a.memory_shared = 1))
+      AND (NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = source.id) OR (?6 = 1 AND m.contact_id = current.id))
       AND (m.contact_id != current.id OR m.source_sequence < ?3)
       AND (?5 = 0 OR source.user_id = a.owner_id OR source.contributor_consent = 1)
     ORDER BY m.source_sequence DESC, m.id DESC LIMIT 256`)
-    .bind(scope.contactID, scope.userID, scope.beforeSequence, ownOnly ? 1 : 0, scope.contributorModel ? 1 : 0).all<Memory>();
+    .bind(scope.contactID, scope.userID, scope.beforeSequence, ownOnly ? 1 : 0, scope.contributorModel ? 1 : 0, scope.privateConversation ? 1 : 0).all<Memory>();
   if (ownOnly) return results;
   const agent = await db.prepare('SELECT agent_id AS id FROM contact WHERE id = ? AND user_id = ?')
     .bind(scope.contactID, scope.userID).first<{ id: string }>();
@@ -69,6 +71,7 @@ const extractionFormat = { type: 'json_schema', json_schema: { name: 'contact_me
 // Each invocation processes one bounded batch. A transaction compares the cursor
 // before every mutation, so a stale Workflow cannot overwrite a newer batch.
 export async function maintainMemories(env: Env, scope: MemoryScope): Promise<void> {
+  if (await privateContact(env.DB, scope.contactID)) return;
   if (!await contactModelAllowed(env, scope.contactID, scope.userID)) return;
   await env.DB.prepare(`INSERT INTO contact_memory_state (contact_id, user_id, last_sequence)
     SELECT id, user_id, 0 FROM contact WHERE id = ?1 AND user_id = ?2

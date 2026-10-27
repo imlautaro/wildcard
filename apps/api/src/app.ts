@@ -1,3 +1,5 @@
+import { oauthPublic } from './mcp/oauth';
+import mcp from './mcp/routes';
 import groups from './groups/routes';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -33,9 +35,11 @@ app.on(['GET', 'POST'], '/api/v1/auth/*', async (c) => {
   return createAuth(c.env).handler(c.req.raw);
 });
 
+app.route('/api/v1/mcp/oauth', oauthPublic);
 app.route('/api/v1/me', me);
 app.route('/api/v1/groups', groups);
 
+app.route('/api/v1/contacts/:contactID/mcp', mcp);
 app.route('/api/v1/contacts', contacts);
 app.route('/api/v1/push', push);
 app.route('/api/v1/push-photos', pushPhotos);
