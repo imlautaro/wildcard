@@ -64,7 +64,7 @@ struct ChatView: View {
                     ForEach(chat.turns) { turn in
                         if turn.scheduleID == nil {
                             if let attachment = turn.attachment {
-                                ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id)
+                                ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id, sentAt: turn.createdAt)
                             }
                             if !turn.userText.isEmpty {
                                 MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true)

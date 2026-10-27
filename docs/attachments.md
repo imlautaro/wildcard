@@ -5,7 +5,14 @@ or Choose file, inspect the draft thumbnail/name, and remove or replace it befor
 sending. A message can contain one attachment, with or without text. The right
 button sends when an attachment is selected; dictation remains available for an
 empty composer. Failed sends retain the draft and attachment, including the request
-identifier for uncertain network results. Sent attachments open in native Quick Look.
+identifier for uncertain network results. Images load automatically as inline thumbnails, preserving their aspect ratio.
+They use 20-point rounded corners on the actual image bounds and align to the same
+trailing edge as outgoing text bubbles. A dark badge at the bottom right shows the
+message time and the same presentation-only receipt checks used by text messages;
+these checks do not represent server-confirmed delivery or reads. Tap
+an image to open a black full-screen viewer with pinch/pan, double-tap zoom, and a
+Close button. Documents continue to open in native Quick Look. Failed image loads
+show retry controls; full-screen loading also supports retry and dismissal.
 
 ## Formats and limits
 
@@ -37,7 +44,13 @@ Turn responses include optional `attachment: { name, mimeType, size }` without a
 object key or base64 bytes. `GET /api/v1/contacts/:id/chat/turns/:turnID/attachment`
 requires the owner's bearer session and returns private, non-cacheable bytes with
 an attachment disposition. There are no public or provider-fetchable file URLs.
-Quick Look uses a protected temporary file removed on dismissal or leaving the view;
+Image thumbnails and full-screen images use authenticated retrieval and stay in
+view memory, without writing image preview files to disk. Decoding happens outside
+the main actor with ImageIO downsampling (520-pixel thumbnails, up to 4096 pixels
+in the full-screen viewer); orientation is applied. Animated images display their
+first frame. Opening full-screen fetches the image again, so it requires network
+access and a valid session even if the thumbnail is already visible.
+Document Quick Look uses a protected temporary file removed on dismissal or leaving the view;
 files left by a process crash can remain in the OS temporary directory until purged.
 
 Migration `0012_chat_attachments.sql` adds turn metadata and a durable object registry.
@@ -72,7 +85,8 @@ push, and the automatic pipeline; install the updated iOS app separately.
 
 Verify using fictional files: supported formats, attachment-only/text-plus-file
 sends, removal/replacement, invalid or oversized files, offline retry without a
-duplicate turn, Quick Look, a follow-up question, and denial from a different
+duplicate turn, inline images, full-screen image opening/zoom/rotation/closing,
+image retry after a network failure, document Quick Look, a follow-up question, and denial from a different
 account. Confirm deletion immediately blocks download and later Cron cleans R2.
 These end-to-end checks and real Meta file inference have not been run by the agent.
 

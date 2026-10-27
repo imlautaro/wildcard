@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 import UIKit
 import QuickLook
 import SwiftUI
+import ImageIO
 
 struct ChatAttachment: Codable, Equatable, Sendable {
     let name: String
@@ -55,60 +56,261 @@ struct AttachmentQuickLook: UIViewControllerRepresentable {
     }
 }
 
+private enum AttachmentImageDecoder {
+    nonisolated static func decode(_ data: Data, maxPixelSize: Int) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+                kCGImageSourceShouldCacheImmediately: true,
+              ] as CFDictionary) else { return nil }
+        return UIImage(cgImage: image)
+    }
+}
+
 struct ChatAttachmentView: View {
     let attachment: ChatAttachment
     let contactID: String
     let turnID: String
+    let sentAt: Double
     @Environment(AuthStore.self) private var auth
     @State private var loading = false
     @State private var previewURL: URL?
     @State private var error: String?
+    @State private var thumbnail: UIImage?
+    @State private var imageAttempt = 0
+    @State private var showImage = false
+    @State private var documentTask: Task<Void, Never>?
 
     var body: some View {
         HStack {
             Spacer(minLength: 40)
             VStack(alignment: .trailing, spacing: 6) {
-                Button {
-                    guard !loading else { return }
-                    loading = true
-                    Task {
-                        defer { loading = false }
-                        do {
-                            let bytes = try await auth.withSession { api, token in
-                                try await api.chatAttachment(contactID: contactID, turnID: turnID, token: token)
+                if attachment.isImage {
+                    Button {
+                        if thumbnail != nil { showImage = true }
+                        else { imageAttempt += 1 }
+                    } label: {
+                        Group {
+                            if let thumbnail {
+                                Image(uiImage: thumbnail).resizable().scaledToFit()
+                                    .overlay(alignment: .bottomTrailing) {
+                                        MessageMetadataView(sentAt: sentAt, fromUser: true)
+                                            .padding(.horizontal, 7).padding(.vertical, 4)
+                                            .background(.black.opacity(0.6), in: Capsule())
+                                            .environment(\.colorScheme, .dark)
+                                            .padding(8)
+                                    }
+                                    // Clip the image's actual bounds before the flexible frame.
+                                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                                    .contentShape(RoundedRectangle(cornerRadius: 20))
+                                    .frame(maxWidth: 260, maxHeight: 260, alignment: .trailing)
+                            } else {
+                                ZStack {
+                                    Color("OutgoingMessageBackground")
+                                    if loading { ProgressView() }
+                                    else { Label("Retry image", systemImage: "arrow.clockwise").manrope(.footnote) }
+                                }.frame(width: 220, height: 180)
+                                    .clipShape(RoundedRectangle(cornerRadius: 20))
                             }
-                            try Task.checkCancellation()
-                            let folder = FileManager.default.temporaryDirectory.appending(path: "chat-preview-\(UUID().uuidString)")
-                            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                            let url = folder.appendingPathComponent(attachment.name)
-                            try bytes.write(to: url, options: [.atomic, .completeFileProtection])
-                            previewURL = url
-                        } catch { self.error = error.localizedDescription }
-                    }
-                } label: {
-                    HStack {
-                        if loading { ProgressView() }
-                        else { Image(systemName: attachment.isImage ? "photo" : "doc.richtext") }
-                        VStack(alignment: .leading) {
-                            Text(attachment.name).lineLimit(2)
-                            Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file)).font(.caption)
                         }
-                        Image(systemName: "arrow.down.circle")
-                    }.manrope(.footnote).padding(12)
+                        .contentShape(RoundedRectangle(cornerRadius: 20))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(loading)
+                    .accessibilityLabel(thumbnail == nil ? "Retry loading image" : "Open image full screen: \(attachment.name)")
+                } else {
+                    documentButton
                 }
-                .buttonStyle(.plain)
-                .background(Color("OutgoingMessageBackground"), in: RoundedRectangle(cornerRadius: 16))
-                .disabled(loading)
                 if let error { Text(error).manrope(.caption).foregroundStyle(.red) }
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .task(id: "\(auth.user?.id ?? "")/\(turnID)/\(imageAttempt)") {
+            guard attachment.isImage, thumbnail == nil else { return }
+            loading = true
+            error = nil
+            defer { loading = false }
+            do {
+                let bytes = try await auth.withSession { api, token in
+                    try await api.chatAttachment(contactID: contactID, turnID: turnID, token: token)
+                }
+                try Task.checkCancellation()
+                let decoded = await Task.detached(priority: .userInitiated) {
+                    AttachmentImageDecoder.decode(bytes, maxPixelSize: 520)
+                }.value
+                try Task.checkCancellation()
+                guard let decoded else { throw AuthAPI.Failure.rejected("This image could not be displayed.") }
+                thumbnail = decoded
+            } catch is CancellationError { }
+            catch {
+                guard !Task.isCancelled else { return }
+                self.error = error.localizedDescription
+            }
+        }
+        .fullScreenCover(isPresented: $showImage) {
+            AttachmentImageViewer(attachment: attachment, contactID: contactID, turnID: turnID)
         }
         .sheet(isPresented: Binding(get: { previewURL != nil }, set: { if !$0 { clearPreview() } })) {
             if let previewURL { AttachmentQuickLook(url: previewURL).ignoresSafeArea() }
         }
-        .onDisappear { clearPreview() }
+        .onDisappear {
+            documentTask?.cancel()
+            clearPreview()
+        }
     }
+
+    private var documentButton: some View {
+        Button {
+            guard !loading else { return }
+            loading = true
+            error = nil
+            documentTask = Task {
+                defer { loading = false }
+                do {
+                    let bytes = try await auth.withSession { api, token in
+                        try await api.chatAttachment(contactID: contactID, turnID: turnID, token: token)
+                    }
+                    try Task.checkCancellation()
+                    let folder = FileManager.default.temporaryDirectory.appending(path: "chat-preview-\(UUID().uuidString)")
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    let url = folder.appendingPathComponent(attachment.name)
+                    try bytes.write(to: url, options: [.atomic, .completeFileProtection])
+                    previewURL = url
+                } catch is CancellationError { }
+                catch {
+                    guard !Task.isCancelled else { return }
+                    self.error = error.localizedDescription
+                }
+            }
+        } label: {
+            HStack {
+                if loading { ProgressView() }
+                else { Image(systemName: "doc.richtext") }
+                VStack(alignment: .leading) {
+                    Text(attachment.name).lineLimit(2)
+                    Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file)).font(.caption)
+                }
+                Image(systemName: "arrow.down.circle")
+            }.manrope(.footnote).padding(12)
+        }
+        .buttonStyle(.plain)
+        .background(Color("OutgoingMessageBackground"), in: RoundedRectangle(cornerRadius: 16))
+        .disabled(loading)
+    }
+
     private func clearPreview() {
         if let previewURL { try? FileManager.default.removeItem(at: previewURL.deletingLastPathComponent()) }
         previewURL = nil
+    }
+}
+
+private struct AttachmentImageViewer: View {
+    let attachment: ChatAttachment
+    let contactID: String
+    let turnID: String
+    @Environment(AuthStore.self) private var auth
+    @Environment(\.dismiss) private var dismiss
+    @State private var image: UIImage?
+    @State private var error: String?
+    @State private var attempt = 0
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+            Group {
+                if let image {
+                    ZoomableAttachmentImage(image: image)
+                        .accessibilityLabel(attachment.name)
+                } else if let error {
+                    VStack(spacing: 16) {
+                        Text(error).manrope().multilineTextAlignment(.center)
+                        Button("Retry") { attempt += 1 }
+                    }.padding(32).frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ProgressView("Loading image…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.system(size: 18, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .accessibilityLabel("Close image")
+            .padding(16)
+        }
+        .foregroundStyle(.white)
+        .preferredColorScheme(.dark)
+        .task(id: attempt) {
+            error = nil
+            do {
+                let bytes = try await auth.withSession { api, token in
+                    try await api.chatAttachment(contactID: contactID, turnID: turnID, token: token)
+                }
+                try Task.checkCancellation()
+                let decoded = await Task.detached(priority: .userInitiated) {
+                    AttachmentImageDecoder.decode(bytes, maxPixelSize: 4096)
+                }.value
+                try Task.checkCancellation()
+                guard let decoded else { throw AuthAPI.Failure.rejected("This image could not be displayed.") }
+                image = decoded
+            } catch is CancellationError { }
+            catch {
+                guard !Task.isCancelled else { return }
+                self.error = error.localizedDescription
+            }
+        }
+    }
+}
+
+private struct ZoomableAttachmentImage: UIViewRepresentable {
+    let image: UIImage
+    func makeUIView(context: Context) -> AttachmentImageScrollView {
+        AttachmentImageScrollView(image: image)
+    }
+    func updateUIView(_ view: AttachmentImageScrollView, context: Context) {}
+}
+
+private final class AttachmentImageScrollView: UIScrollView, UIScrollViewDelegate {
+    private let imageView: UIImageView
+    private var viewportSize: CGSize = .zero
+
+    init(image: UIImage) {
+        imageView = UIImageView(image: image)
+        super.init(frame: .zero)
+        imageView.contentMode = .scaleAspectFit
+        addSubview(imageView)
+        delegate = self
+        minimumZoomScale = 1
+        maximumZoomScale = 4
+        showsHorizontalScrollIndicator = false
+        showsVerticalScrollIndicator = false
+        contentInsetAdjustmentBehavior = .never
+        backgroundColor = .black
+        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(toggleZoom(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        addGestureRecognizer(doubleTap)
+    }
+    required init?(coder: NSCoder) { nil }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard bounds.size != viewportSize else { return }
+        viewportSize = bounds.size
+        setZoomScale(1, animated: false)
+        imageView.frame = CGRect(origin: .zero, size: viewportSize)
+        contentSize = viewportSize
+    }
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
+
+    @objc private func toggleZoom(_ gesture: UITapGestureRecognizer) {
+        if zoomScale > 1 { setZoomScale(1, animated: true) }
+        else {
+            let point = gesture.location(in: imageView)
+            let size = CGSize(width: bounds.width / 2.5, height: bounds.height / 2.5)
+            zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2,
+                            width: size.width, height: size.height), animated: true)
+        }
     }
 }

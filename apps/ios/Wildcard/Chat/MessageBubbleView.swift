@@ -36,6 +36,15 @@ struct MessageBubbleView: View {
     }
 
     private var metadata: some View {
+        MessageMetadataView(sentAt: sentAt, fromUser: fromUser)
+    }
+}
+
+struct MessageMetadataView: View {
+    let sentAt: Double
+    let fromUser: Bool
+
+    var body: some View {
         HStack(alignment: .lastTextBaseline, spacing: 3) {
             Text(Date(timeIntervalSince1970: sentAt / 1000), format: .dateTime.hour().minute())
                 .manrope(.caption2)
