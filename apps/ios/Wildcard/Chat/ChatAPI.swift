@@ -12,6 +12,7 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     let status: Status
     let attempt: Int
     let createdAt: Double
+    let readAt: Double?
     let updatedAt: Double
     var isPending: Bool { status == .queued || status == .running }
 }

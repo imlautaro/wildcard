@@ -5,6 +5,8 @@ enum HomeDestination: Hashable {
     case contact(String)
     case editContact(String)
     case schedules(String)
+    case sharing(String)
+    case joinContact
 }
 
 struct HomeView: View {
@@ -40,7 +42,10 @@ struct HomeView: View {
             .toolbar {
                 if section == .chats && destinations.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
-                        NavigationLink(value: HomeDestination.addContact) {
+                        Menu {
+                            NavigationLink("Create Contact", value: HomeDestination.addContact)
+                            NavigationLink("Join Shared Contact", value: HomeDestination.joinContact)
+                        } label: {
                             Image(systemName: "plus")
                         }
                         .accessibilityLabel("Add contact")
@@ -53,6 +58,10 @@ struct HomeView: View {
                 switch destination {
                 case .addContact:
                     ContactEditorView()
+                case .joinContact:
+                    JoinSharedContactView { id in destinations = [.contact(id)] }
+                case .sharing(let id):
+                    ContactSharingView(contactID: id)
                 case .contact(let id):
                     ContactDetailView(contactID: id)
                 case .schedules(let id):

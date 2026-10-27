@@ -337,8 +337,7 @@ For an independent installation, set `META_CHAT_MODEL` to `muse-spark-1.3` unles
 its operator has explicitly chosen Contributor's data use. For local development,
 Wrangler reads the configured variable; an explicit `META_CHAT_MODEL` in ignored
 `.dev.vars` overrides it. The example documents both choices. Before using real
-private data or opening the app to other users, switch back to Standard through
-the versioned configuration and an authorized automatic commit/push release.
+private data or opening the app to other users, prefer Standard through the versioned configuration and an authorized automatic commit/push release. If retaining Contributor, the sharing flow requires explicit agreement from creator and recipient; the original single-user approval never supplies recipient consent.
 
 To return to Standard, set the Wrangler variable to `muse-spark-1.3`, update any
 local override, commit/push, and verify the live version's source tag and
@@ -358,7 +357,7 @@ extraction and retrieval rounds consumes the selected Meta account's credits;
 D1 index storage and queries consume its existing quotas. The configured
 Contributor consent also applies to extraction inputs from the owner's test chats.
 Independent installations should keep the Standard-model default unless separately
-authorized. Sharing and cross-user memory access remain unimplemented.
+authorized. See [shared contacts](sharing.md) and migration 0013 below for the later sharing extension and explicit participant consent.
 
 Migration `0007_contact_memory.sql` adds owner-scoped memory/cursor tables, source
 foreign keys, and a SQLite FTS5 external-content index maintained by triggers.
@@ -530,3 +529,65 @@ fictional images/PDFs, inspect private retrieval, retries, and deferred cleanup 
 described in the attachment guide. Real inference, device previews, and remote
 cleanup remain unverified. The schema is additive: code rollback must preserve
 attachment metadata and R2 objects, and restore compatible Cron cleanup.
+
+## Shared-contact migration
+
+[Shared contacts](sharing.md) reuse all existing required resources: D1 `DB`,
+`CHAT_WORKFLOW`/`ChatWorkflow`, the minute Cron, private R2 `CONTACT_PHOTOS`, auth,
+and Meta configuration. APNs remains optional for push delivery. There are no new
+resources, bindings, provisioning credentials, secrets, or account permissions.
+The existing `migrations_dir` automatically includes `0013_shared_contacts.sql`.
+
+Apply migrations 0001–0012 first, then 0013, using `npm run db:migrate:local` for
+local development. Migration 0013 creates `contact_agent`, `contact_invite`,
+`agent_attention`, and `agent_presence`; adds agent membership/Contributor consent
+columns to contacts and nullable `read_at` to turns; backfills identities, presence,
+active attention claims, and historical reads; and replaces the old presence
+triggers. Existing conversation IDs, private history, schedules, read watermarks,
+attachments, and push records remain in place. Metadata projection and exclusive
+processing admission are enforced by triggers. The old `contact_presence` table
+is retained but is no longer authoritative for the new Worker.
+
+Use the earlier independent-account creation order and account-specific binding,
+origin, model, iOS bundle/team, and optional APNs replacements. Prefer Standard
+unless the operator and every participant explicitly accept Contributor data use.
+The share/join flow discloses that model and persists member consent; existing
+members without Contributor consent cannot generate with that model or contribute
+memories to its inputs until accepting a new invitation. No secrets belong in
+codes, logs, source, or documentation. Invitation digests live only in D1; codes
+are cryptographically random, expiring, one-use capabilities shared by the user.
+
+For production, commit and push the complete intended migration, Worker, iOS,
+and documentation changes, then let Workers Builds apply the remote migration
+and publish automatically. Verify its final status and source SHA tag against
+the pushed commit, no pending D1 migrations, and DB/Workflow/R2 bindings by name.
+Never deploy manually. Avoid initiating work during the migration/release window:
+the database attention guard may reject an old-code Workflow accepted after
+backfill but before the new Worker is published; it will surface as a failed
+turn that can be retried with the new version. Existing pre-migration active
+turns receive claims and cannot overlap new participant generation. Do not enable
+sharing until the matching Worker release is verified. Install the updated iOS
+app with Xcode to expose invitation, consent, access management, and real read
+receipts. Older installed clients lack consent/access management and their
+creator-deletion confirmation does not explain shared deletion; update clients
+before using sharing.
+
+Rollback to an older Worker is not safe once sharing is enabled: it does not
+understand agent-wide ownership, metadata, consent, or attention. Keep the additive
+schema and use a forward fix or an explicitly sharing-aware rollback version.
+Do not drop/rebuild tables or restore D1 independently of live Workflows, private
+conversations, or R2; a restore does not recall notifications/provider data.
+Attention has no unsafe time-based expiry. Recovery retains a claim until the
+recorded Workflow is confirmed terminal; a paused or unqueryable Workflow can
+block the agent and requires inspection before intervention. Do not delete
+attention rows to bypass an unconfirmed running instance.
+
+Local validation for this change is static: TypeScript and Swift type checks,
+empty-schema SQLite migration/foreign-key diagnostics, SQL preparation, and
+whitespace checks. No runtime tests, builds, inference, remote migration, push,
+or deployment were performed. Before end-to-end claims, use authorized fictional
+accounts to verify invitation consumption races, membership authorization, shared
+memory attribution/recall, canonical photo/presence, queued versus running reads,
+exclusive processing across ordinary/scheduled messages, private notifications
+and badge totals, and cancellation/removal/recovery during generation. Verify
+that a missing/paused instance status never unlocks concurrent attention.

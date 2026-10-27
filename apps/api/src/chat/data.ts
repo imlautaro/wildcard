@@ -1,6 +1,7 @@
 import { publicAttachment, type PublicAttachment } from './attachments';
 export type ChatState = 'queued' | 'running' | 'complete' | 'failed';
 export type ChatTurn = {
+  readAt: number | null;
   attachment?: PublicAttachment | null;
   scheduleID: string | null;
   errorCode: string | null;
@@ -15,13 +16,13 @@ export type ChatTurn = {
 };
 export type StoredTurn = ChatTurn & { attachmentJSON: string | null; contactID: string; userID: string; workflowID: string; timeZone: string | null; scheduleInstruction: string | null };
 export type ChatJob = { turnID: string; attempt: number };
-export const turnColumns = `sequence, id, user_text AS userText, assistant_text AS assistantText,
+export const turnColumns = `sequence, id, read_at AS readAt, user_text AS userText, assistant_text AS assistantText,
   status, attempt, created_at AS createdAt, updated_at AS updatedAt, schedule_id AS scheduleID, error_code AS errorCode`;
 export const storedColumns = `${turnColumns}, attachment_json AS attachmentJSON, contact_id AS contactID, user_id AS userID, workflow_id AS workflowID, time_zone AS timeZone, schedule_instruction AS scheduleInstruction`;
 
 export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }): ChatTurn {
-  const { sequence, id, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, errorCode } = turn;
-  return { attachment: publicAttachment(turn), sequence, id, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, errorCode };
+  const { sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, errorCode } = turn;
+  return { attachment: publicAttachment(turn), sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, errorCode };
 }
 
 export function findTurn(db: D1Database, id: string, contactID: string, userID: string) {

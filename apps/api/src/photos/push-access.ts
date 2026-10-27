@@ -26,10 +26,10 @@ photos.get('/:id', async (c) => {
   const valid = await crypto.subtle.verify('HMAC', await signingKey(c.env), Buffer.from(signature, 'hex'),
     message(id, version, session, expires));
   if (!valid) return c.body(null, 404);
-  const row = await c.env.DB.prepare(`SELECT c.user_id AS owner FROM contact c
+  const row = await c.env.DB.prepare(`SELECT a.owner_id AS owner, a.id AS agentID FROM contact c JOIN contact_agent a ON a.id = c.agent_id
     JOIN session s ON s.user_id = c.user_id WHERE c.id = ? AND c.photo_version = ?
-    AND s.id = ? AND s.expires_at > ?`).bind(id, version, session, Date.now()).first<{ owner: string }>();
+    AND s.id = ? AND s.expires_at > ?`).bind(id, version, session, Date.now()).first<{ owner: string; agentID: string }>();
   if (!row) return c.body(null, 404);
-  return photoResponse(c.env, row.owner, id, version);
+  return photoResponse(c.env, row.owner, row.agentID, version);
 });
 export default photos;

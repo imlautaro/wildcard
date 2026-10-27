@@ -1,4 +1,5 @@
 import { parseAttachment, sameAttachment, storedAttachment } from '../chat/attachments';
+import { contactModelAllowed } from '../chat/consent';
 import { validTimeZone } from '../schedules/data';
 import { dispatchVisit } from '../chat/visits';
 import { readPresence } from '../chat/presence';
@@ -19,6 +20,10 @@ chats.use('*', async (c, next) => {
   if (!id || !await c.env.DB.prepare('SELECT id FROM contact WHERE id = ? AND user_id = ?')
     .bind(id, c.get('owner')).first()) return c.json({ error: 'Contact not found' }, 404);
   c.set('contactID', id);
+  if (c.req.method === 'POST' && !c.req.path.endsWith('/activity')
+    && !await contactModelAllowed(c.env, id, c.get('owner'))) {
+    return c.json({ error: 'Accept a new invitation with Contributor model consent before using this contact' }, 403);
+  }
   await next();
 });
 // Activity contains no draft text. Each foreground visit has a client UUID.

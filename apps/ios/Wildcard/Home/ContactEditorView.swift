@@ -15,6 +15,7 @@ struct ContactEditorView: View {
     @State private var photoData: Data?
     @State private var photoChanged = false
     @State private var loadingPhoto = false
+    private var canEdit: Bool { contactID.flatMap { contacts.contact(id: $0) }?.canManage ?? true }
 
     init(contact: Contact? = nil) {
         _contactID = State(initialValue: contact?.id)
@@ -48,7 +49,7 @@ struct ContactEditorView: View {
                 }
                 if loadingPhoto { ProgressView("Loading photo…") }
             }
-            .disabled(contacts.isMutating)
+            .disabled(contacts.isMutating || !canEdit)
 
             TextField("Name", text: $name)
                 .textContentType(.name)
@@ -56,19 +57,25 @@ struct ContactEditorView: View {
                 .focused($editingName)
                 .submitLabel(.done)
                 .onSubmit(save)
-                .disabled(saving || contacts.isMutating || loadingPhoto)
+                .disabled(saving || contacts.isMutating || loadingPhoto || !canEdit)
+            if !canEdit {
+                Text("This is a shared contact. Its creator manages its name, photo, and participants.")
+                    .manrope(.footnote).foregroundStyle(.secondary)
+            }
             if let error {
                 Text(error).manrope(.footnote).foregroundStyle(.red)
             }
             if saving { ProgressView("Saving…") }
         }
-        .navigationTitle(contactID == nil ? "Add Contact" : "Edit Contact")
+        .navigationTitle(contactID == nil ? "Add Contact" : (canEdit ? "Edit Contact" : "Contact"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(saving)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button(contactID == nil ? "Create" : "Save", action: save)
-                    .disabled(saving || contacts.isMutating || loadingPhoto)
+            if canEdit {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(contactID == nil ? "Create" : "Save", action: save)
+                        .disabled(saving || contacts.isMutating || loadingPhoto)
+                }
             }
         }
         .task { editingName = contactID == nil }
@@ -95,7 +102,7 @@ struct ContactEditorView: View {
     }
 
     private func save() {
-        guard !saving, !contacts.isMutating, !loadingPhoto else { return }
+        guard canEdit, !saving, !contacts.isMutating, !loadingPhoto else { return }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.unicodeScalars.count <= 100,
               !trimmed.unicodeScalars.contains(where: { $0.value < 0x20 || (0x7f...0x9f).contains($0.value) }) else {

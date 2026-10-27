@@ -65,14 +65,13 @@ to create a contact by name. Swipe a contact to Edit or Delete (with confirmatio
 tap a contact to open its conversation and its title to edit it. Editors
 push over the full tab layout, preserving the selected tab on return. Chats supports
 pull to refresh and paginated loading. Choose, crop, replace, or remove a [profile photo](docs/profile-photos.md) in the
-contact editor. Private photo bytes use R2. Contacts are saved in D1 and isolated by the
-signed-in user. See [private contacts](docs/contacts.md). Conversations support
+contact editor. Private photo bytes use R2. Contact identities are saved in D1; each participant has an isolated private conversation. See [contacts](docs/contacts.md). Conversations support
 persisted messages, reply status, earlier history, and retries. The chat title shows
 D1-backed Online/Typing/Last seen presence maintained by the server Workflow and Cron,
 with a brief durable wait before the agent connects. Opening a chat also connects
 the agent briefly; actual composer activity extends its server-side idle lease. Accepted replies
 continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
-limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1, selects bounded recent context, and provides private memory/history search tools. An empty draft offers a microphone for
+limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1, selects bounded recent context, and provides shared attributed memories with private history search tools. An empty draft offers a microphone for
 [Muse Voice Transcribe dictation](docs/voice.md); the transcript is editable before
 sending. Navigation reuses a session-scoped [memory cache](docs/caching.md) and
 refreshes loaded content in the background. [Reply push notifications](docs/notifications.md)
@@ -80,7 +79,7 @@ use APNs when the app is closed/backgrounded, after configuring Apple signing
 and provider secrets. Alerts show the contact name, reply text, and a contact avatar through the embedded
 notification service extension. Tapping an alert opens the chat. Bundled message sounds distinguish activity in the
 visible chat, replies elsewhere in the foreground, and background push alerts. Unread reply counts persist on the server and
-appear on chat rows, the Chats tab, and the app icon; returning to the app refreshes them immediately. Contacts can also [schedule messages](docs/schedules.md) once or at fixed intervals, edit or cancel them in chat, and inspect/cancel them from the chat toolbar clock button. Scheduling uses the existing D1, Cron, Workflow, and push services. The composer supports private [image and PDF attachments](docs/attachments.md) from Photos or Files, with native previews. Sharing is not implemented.
+appear on chat rows, the Chats tab, and the app icon; returning to the app refreshes them immediately. Contacts can also [schedule messages](docs/schedules.md) once or at fixed intervals, edit or cancel them in chat, and inspect/cancel them from the chat toolbar clock button. Scheduling uses the existing D1, Cron, Workflow, and push services. The composer supports private [image and PDF attachments](docs/attachments.md) from Photos or Files, with native previews. Creators can [share contacts](docs/sharing.md) using expiring invitation codes: recipients start empty private chats with the same agent, shared memories/presence, and exclusive attention across participants. Schedules, unread counts, attachments, and notifications remain per recipient. The iOS sharing screens disclose shared-memory and Contributor data use and require explicit acceptance.
 
 ## Infrastructure and releases
 

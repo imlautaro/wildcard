@@ -3,6 +3,8 @@ import Foundation
 struct Contact: Codable, Hashable, Identifiable, Sendable {
     let id: String
     let name: String
+    var agentID: String? = nil
+    var role: String? = nil
     var photoVersion: String? = nil
     let createdAt: Double
     let updatedAt: Double
@@ -10,6 +12,7 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     let lastMessageAt: Double?
     var unreadCount: Int?
     var lastReadSequence: Int?
+    var canManage: Bool { role != "member" }
 }
 
 struct ContactsPage: Decodable, Sendable {

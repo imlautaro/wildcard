@@ -75,6 +75,7 @@ struct ChatAttachmentView: View {
     let turnID: String
     let sentAt: Double
     let caption: String
+    var readAt: Double? = nil
     @Environment(AuthStore.self) private var auth
     @State private var loading = false
     @State private var previewURL: URL?
@@ -95,7 +96,7 @@ struct ChatAttachmentView: View {
                     } else {
                         VStack(alignment: .trailing, spacing: 0) {
                             imageButton
-                            MessageTextContentView(text: caption, sentAt: sentAt, fromUser: true, fillsWidth: true)
+                            MessageTextContentView(text: caption, sentAt: sentAt, fromUser: true, readAt: readAt, fillsWidth: true)
                             .padding(.horizontal, 16).padding(.vertical, 12)
                         }
                         .frame(maxWidth: 260)
@@ -158,7 +159,7 @@ struct ChatAttachmentView: View {
                     Image(uiImage: thumbnail).resizable().scaledToFit()
                         .overlay(alignment: .bottomTrailing) {
                             if caption.isEmpty {
-                                MessageMetadataView(sentAt: sentAt, fromUser: true)
+                                MessageMetadataView(sentAt: sentAt, fromUser: true, readAt: readAt)
                                     .padding(.horizontal, 7).padding(.vertical, 4)
                                     .background(.black.opacity(0.6), in: Capsule())
                                     .environment(\.colorScheme, .dark)

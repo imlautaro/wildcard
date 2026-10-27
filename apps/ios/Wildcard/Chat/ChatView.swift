@@ -64,10 +64,10 @@ struct ChatView: View {
                     ForEach(chat.turns) { turn in
                         if turn.scheduleID == nil {
                             if let attachment = turn.attachment {
-                                ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id, sentAt: turn.createdAt, caption: attachment.isImage ? turn.userText : "")
+                                ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id, sentAt: turn.createdAt, caption: attachment.isImage ? turn.userText : "", readAt: turn.readAt)
                             }
                             if !turn.userText.isEmpty && turn.attachment?.isImage != true {
-                                MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true)
+                                MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true, readAt: turn.readAt)
                             }
                         }
                         if let reply = turn.assistantText {
@@ -86,8 +86,11 @@ struct ChatView: View {
                                         replyIsVisible: true
                                     )
                                 }
-                        } else if turn.isPending && chat.presence?.status == .typing {
+                        } else if turn.status == .running && chat.presence?.status == .typing {
                             ReplyTypingIndicator()
+                        } else if turn.status == .queued {
+                            Text("Waiting for contact…").manrope(.footnote).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         } else if turn.status == .failed {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(turn.errorCode == "SCHEDULE_CANCELLED" ? "Scheduled message cancelled." : "The reply could not be completed.").manrope(.footnote).foregroundStyle(.secondary)

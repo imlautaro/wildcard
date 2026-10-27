@@ -1,10 +1,9 @@
-# Private contacts
+# Contacts and private conversations
 
 Contact records are persisted in Cloudflare D1; optional
 [profile photos](profile-photos.md) are stored privately in R2. Every operation
 requires the current user's signed bearer session. The owner is taken exclusively
-from that verified session; clients cannot provide or change ownership. Contacts
-are private in this version. Sharing and common memory remain outside this feature.
+from that verified session; clients cannot provide or change ownership. A contact identity can be shared through [invitations](sharing.md); conversation records remain private per participant. The creator controls the shared name/photo and participant access.
 
 ## API
 
@@ -13,10 +12,10 @@ are private in this version. Sharing and common memory remain outside this featu
 | GET | `/api/v1/contacts` | Most recent conversation activity first, 50 per page |
 | POST | `/api/v1/contacts` | Create using `{ "name": "My contact" }`; returns 201 |
 | GET | `/api/v1/contacts/:id` | Read your contact |
-| PATCH | `/api/v1/contacts/:id` | Rename using `{ "name": "New name" }` |
-| DELETE | `/api/v1/contacts/:id` | Delete your contact; returns 204 |
+| PATCH | `/api/v1/contacts/:id` | Creator renames using `{ "name": "New name" }` |
+| DELETE | `/api/v1/contacts/:id` | Creator deletes the whole agent; a member leaves and deletes their private conversation; returns 204 |
 
-A contact contains `id`, `name`, nullable `photoVersion`, `createdAt`, and `updatedAt`; timestamps are Unix
+A contact contains the private conversation `id`, shared `agentID`, `role` (`owner` or `member`), `name`, nullable `photoVersion`, `createdAt`, and `updatedAt`; timestamps are Unix
 milliseconds. Create/read/update return `{ "contact": ... }`. List returns
 `{ "contacts": [...], "nextCursor": string | null }`. Pass the returned cursor as
 `?before=<cursor>` to load the next page. Pagination is ordered by `lastMessageAt` (falling back to `createdAt` for empty
@@ -51,7 +50,7 @@ This can revisit a previously loaded page after activity changes. Contact snapsh
 read state is persisted on the server. The store is recreated when the signed-in user changes, and responses
 from a previous session or an invalidated request cannot populate the new state.
 
-Tap **+**, enter a name, and tap Create. Swipe a row for Edit or Delete; a context
+Tap **+ → Create Contact**, enter a name, and tap Create. **+ → Join Shared Contact** accepts a code from a creator; it requires sharing consent and opens a new empty private chat. The person-plus button in a creator’s chat opens sharing/access management. Swipe a row for Edit or Delete; a context
 menu offers the same actions. Edit pushes the editor on the existing shared
 navigation stack. Deletion requires confirmation. Successful mutations update the
 list from the server response; creation dismisses the editor. Failed saves retain
@@ -79,8 +78,7 @@ the configured remote database before deploying the pushed Worker.
 The migration is additive and compatible with the prior auth-only API. Do not
 rewrite migration 0001 or an already applied 0002. Worker rollback does not remove
 the table or recover deleted contacts. An authorized user/account deletion cascades
-its contact rows. Normal contact deletion removes the selected owner's contact and its conversation
-turns, and requests termination of active generation. Sharing is not implemented.
+its contact rows. See [shared contacts](sharing.md) for migration 0013, per-participant projections, deletion/revocation behavior, and attention recovery.
 
 ## Validation status
 
@@ -131,9 +129,7 @@ history request. Install the updated iOS app to use this compatibility
 path; release the API through the existing automatic commit/push pipeline to
 provide timestamps directly.
 
-Renaming preserves the conversation. Deletion cascades all turns
-and requests best-effort termination of active generation; an in-flight provider
-request may still consume credits. No sharing or cross-user context is enabled.
+Renaming projects the shared name to all participants and preserves their private conversations. Creator deletion cascades every participant’s turns; a member leaving removes only their own projection. Both request best-effort termination; in-flight provider work may still consume credits. [Shared memory](sharing.md) exposes attributed facts, while raw transcripts remain private.
 
 ## Unread replies
 

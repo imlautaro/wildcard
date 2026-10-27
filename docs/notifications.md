@@ -318,3 +318,7 @@ unsent entries and invalidates generation from its old revision. Delivery checks
 the schedule immediately before the external request. Already in-flight/accepted
 APNs alerts cannot be recalled. Signing out removes this session's enrollment
 but does not cancel the user's schedules.
+
+## Shared contacts
+
+[Shared contacts](sharing.md) keep notifications private to the turn recipient. Each participant has a separate contact/conversation ID, read watermark, unread total, schedules, session devices, sound keys, and notification tap destination. Sharing does not fan replies or reminders out to other members. Notification names/photos use the same canonical agent metadata; signed avatar reads resolve its creator/agent R2 object after validating the recipient’s membership/session. Member removal/leave cascades that person’s pending outbox entries; creator deletion cascades everyone’s. Already accepted APNs requests cannot be recalled.

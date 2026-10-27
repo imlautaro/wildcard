@@ -1,10 +1,13 @@
-# Private contact memory
+# Contact memory
 
-Each private contact keeps a bounded set of remembered facts in the existing D1
-database. Every read, search, extraction, and write uses the turn's persisted
-owner and contact, never model-supplied identities. This does not implement sharing
-or decide the future shared-memory consent/access policy. There is no new iOS UI
-or public memory-editing endpoint in this version.
+An agent has a shared memory space formed from its participants' attributed facts.
+Each participant retains at most 64 facts and a separate extraction cursor; a
+four-person agent has at most 256 candidates. Existing single-person contacts
+remain isolated until invitation creation and acceptance explicitly approve
+sharing. See [shared contacts](sharing.md) for consent, attribution, access,
+removal, exclusive attention, and migration 0013. Raw history and attachments
+remain private per conversation; shared memory includes its content and source
+quote. No public memory-editing endpoint or comprehensive erasure UI is included.
 
 ## Reply context and tools
 
@@ -16,7 +19,7 @@ is told that context is partial and can consult original messages. Current
 messages keep the existing API's 4,000-code-point limit.
 
 Automatic retrieval compares up to 12 normalized query words from the current
-message and latest user message with stored keys, content, and source quotes.
+message and latest user message with source names, stored keys, content, and source quotes.
 Matching memories and preferences are ranked by lexical matches and then recency;
 up to eight candidates are packed into less than 3,800 UTF-8 bytes. Preferences
 can be included without a keyword match. This is lexical retrieval, not semantic
@@ -37,9 +40,7 @@ callers cannot supply FTS operators or SQL. History search sorts by newest match
 sequence, with a cursor for older results. Snippets are always marked incomplete.
 Source excerpts clip each side to 600 UTF-8 bytes; use `nextUserOffset` or
 `nextAssistantOffset` to inspect later portions of that source turn. Whole-result
-packing may omit neighbors and reports truncation. All searches exclude the
-current turn and future sequences. Tools cannot access other contacts or owners,
-the internet, external services, or modify data. Missing/foreign source IDs return
+packing may omit neighbors and reports truncation. Private history searches exclude the current turn and future sequences in that conversation. Memory search can also retrieve completed facts from other participants of the same agent, attributed by source user ID/name. Tools cannot access other agents, other participants’ raw transcripts/schedules, the internet, external services, or modify memory data. Missing/foreign source IDs return
 the same generic not-found result.
 
 Each generation attempt allows two tool rounds and six executions, then makes a
@@ -58,7 +59,7 @@ budgets or incomplete provider responses cannot produce an unbounded loop.
 
 The Workflow attempts one memory batch before reply generation to catch up on
 previous completed turns. After saving the reply and attempting push delivery, it
-attempts another batch including the just-completed turn. Extraction does not run
+attempts another batch including the just-completed turn before releasing the agent’s attention to the next participant. Extraction does not run
 in the HTTP send handler. Its one-minute steps have one retry; exhausted failures
 emit `chat_memory_deferred` and do not fail a saved reply. A later turn tries the
 unprocessed batch again. There is no standalone maintenance Cron or guarantee that
@@ -67,8 +68,7 @@ an idle contact immediately recovers a failed memory batch.
 Each batch reads the next six completed user messages after a persisted sequence
 cursor, stopping at 16,000 UTF-8 bytes. A first message is always kept whole within
 the API's existing size limit. Assistant replies are excluded as factual evidence.
-The extractor receives those messages, their dates/IDs, and at most 64 existing
-memories. It uses the configured Muse Spark variant and schema-constrained JSON,
+The extractor receives those messages, their dates/IDs, the server-resolved speaker identity, and at most 64 existing memories from that speaker alone. It uses the configured Muse Spark variant and schema-constrained JSON,
 then the backend validates every change before committing any change in that batch.
 
 There are four kinds: `fact`, `preference`, `decision`, and `pending`. Each memory

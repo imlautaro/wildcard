@@ -6,6 +6,7 @@ import { enqueueReply, deliverPush } from '../push/delivery';
 import { activeTurn, type ChatJob } from './data';
 import { contactReply } from './context';
 import { maintainMemories } from './memory';
+import { releaseAttention } from './dispatch';
 
 export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob> {
   async run(event: WorkflowEvent<ChatJob | VisitJob>, step: WorkflowStep) {
@@ -14,11 +15,15 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob> {
       return;
     }
     const job = event.payload;
+    const admitted = await step.do('check-attention', async () => !!await this.env.DB.prepare(
+      'SELECT turn_id FROM agent_attention WHERE turn_id = ? AND attempt = ?')
+      .bind(job.turnID, job.attempt).first());
+    if (!admitted) return;
     try {
       // Keep the queued agent disconnected until it actually starts handling the message.
       await step.sleep('connect-delay', '3 seconds');
       await step.do('mark-running', async () => {
-        await this.env.DB.prepare(`UPDATE chat_turn SET status = 'running', updated_at = ?1
+        await this.env.DB.prepare(`UPDATE chat_turn SET status = 'running', read_at = COALESCE(read_at, ?1), updated_at = ?1
           WHERE id = ?2 AND attempt = ?3 AND status = 'queued'`)
           .bind(Date.now(), job.turnID, job.attempt).run();
         return true;
@@ -59,6 +64,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob> {
       return true;
     });
     await this.refreshMemory(job, step, 'remember-completed-turn', true);
+    await step.do('release-attention', async () => { await releaseAttention(this.env, job); });
     const deadline = await step.do('presence-deadline', async () => {
       const row = await this.env.DB.prepare(`SELECT updated_at + 30000 AS expiresAt FROM chat_turn
         WHERE id = ?1 AND attempt = ?2 AND status IN ('complete', 'failed')`)
@@ -76,8 +82,13 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob> {
       await step.do(name, { retries: { limit: 1, delay: '5 seconds' }, timeout: '1 minute' }, async () => {
         const turn = await activeTurn(this.env.DB, job);
         if (!turn || (includeCurrent && turn.status !== 'complete') || turn.status === 'failed') return false;
-        await maintainMemories(this.env, { contactID: turn.contactID, userID: turn.userID,
-          beforeSequence: turn.sequence + (includeCurrent ? 1 : 0) });
+        const { results } = await this.env.DB.prepare(`SELECT c.id, c.user_id AS userID FROM contact c
+          WHERE c.agent_id = (SELECT agent_id FROM contact WHERE id = ?1) AND (?2 = 0 OR c.id = ?1)`)
+          .bind(turn.contactID, includeCurrent ? 1 : 0).all<{ id: string; userID: string }>();
+        for (const member of results) {
+          await maintainMemories(this.env, { contactID: member.id, userID: member.userID,
+            beforeSequence: member.id === turn.contactID ? turn.sequence + (includeCurrent ? 1 : 0) : Number.MAX_SAFE_INTEGER });
+        }
         return true;
       });
     } catch {

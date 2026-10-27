@@ -37,11 +37,12 @@ struct ChatsView: View {
                         .listRowSeparator(contact.id == contacts.contacts.last?.id ? .hidden : .visible, edges: .bottom)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button("Delete", role: .destructive) { deletion = contact }
-                            Button("Edit") { editContact(contact) }
-                                .tint(.accentColor)
+                            if contact.canManage {
+                                Button("Edit") { editContact(contact) }.tint(.accentColor)
+                            }
                         }
                         .contextMenu {
-                            Button("Edit") { editContact(contact) }
+                            if contact.canManage { Button("Edit") { editContact(contact) } }
                             Button("Delete", role: .destructive) { deletion = contact }
                         }
                         .disabled(contacts.isMutating)
@@ -88,7 +89,11 @@ struct ChatsView: View {
             }
             Button("Cancel", role: .cancel) { deletion = nil }
         } message: {
-            Text("This will permanently delete \(deletion?.name ?? "this contact").")
+            if deletion?.canManage == false {
+                Text("This removes your access and deletes your private chat, schedules, and contributed memories. Other participants keep the contact.")
+            } else {
+                Text("This permanently deletes \(deletion?.name ?? "this contact") for everyone, including all participants' chats, schedules, and memories.")
+            }
         }
     }
 }

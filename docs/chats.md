@@ -1,10 +1,10 @@
 # Private conversations
 
-Each contact has one private conversation owned by its creator. The Hono API
-uses the bearer session's user ID, never a client-supplied owner. Contact lookup,
-history, sends, retries, model context, and deletion all enforce ownership.
-Another user's contact or message returns 404. Sharing and shared memory are not
-implemented.
+Each participant has one private conversation with an agent. A [shared contact](sharing.md)
+keeps the same identity, global memory, presence, and exclusive attention across
+these conversations. Bearer-session authorization isolates each participant's
+raw history, attachments, read state, notifications, and schedules. A new member
+starts with no messages. Another participant's conversation ID still returns 404.
 
 ## API contract
 
@@ -19,11 +19,10 @@ no-store`. Prefix: `/api/v1/contacts/:contactID/chat`.
 
 A turn includes `id`, global monotonic `sequence`, `userText`, nullable
 `assistantText`, `status` (`queued`, `running`, `complete`, `failed`), `attempt`,
-and millisecond `createdAt`/`updatedAt`. Sequence gaps are normal and disclose no
+and millisecond `createdAt`/`updatedAt`, plus nullable `readAt` when the agent starts attending the turn. Sequence gaps are normal and disclose no
 message content. Internal workflow IDs, owners, and provider errors are omitted.
 Repeated sends with the same UUID and trimmed text return the existing turn.
-A reused UUID with different text returns 409. Only one active turn per contact
-is allowed, enforced atomically in D1. Each user has at most ten active turns and
+A reused UUID with different text returns 409. Only one active turn per participant conversation is allowed, enforced atomically in D1. Different participants can queue concurrently; one agent-wide attention claim admits exactly one to processing. Each user has at most ten active turns and
 20 new send/retry admission attempts per minute. Messages allow 1–4,000 Unicode
 code points after trimming, exclude NUL, and use a 32 KiB body limit. Missing
 model configuration returns 503 before persisting a new send. Replies are capped
@@ -32,7 +31,7 @@ at 4,096 completion tokens, 256 KiB of provider JSON, and 20,000 code points.
 ## Durable execution
 
 1. The HTTP handler commits a queued turn to D1 before acknowledging acceptance.
-2. A short background dispatch creates `wildcard-chat` with a deterministic ID
+2. A short background dispatch atomically claims agent attention for the oldest waiting sequence, then creates `wildcard-chat` with a deterministic ID
    for this turn/attempt. It performs no inference in the HTTP request lifetime.
 3. `ChatWorkflow` waits three seconds before connecting the agent and marking the
    turn running, then calls Meta's Chat Completions endpoint
@@ -142,26 +141,16 @@ with the saved response. Delivery and retries run independently of generation;
 a provider failure never turns a saved reply into a failed chat. Apple setup and
 an updated iOS installation are required. Foreground polling remains in use.
 
-## Simulated outgoing message checks
+## Outgoing message checks
 
-User message bubbles display checks beside their send time: one muted check for
-**Sent**, two muted checks after one second for **Received**, and two light blue
-checks after three seconds for **Read**. These are deliberately simulated UI
-states with fixed delays in `MessageReceiptView`, not server delivery or contact
-read acknowledgements. The clock starts at the persisted user message's
-`createdAt`; existing messages older than three seconds immediately show Read.
-Navigation, reloading, and reply retries do not restart the simulation. These
-states are independent of assistant generation status, including failed replies,
-and of the owner's actual unread-reply watermark and push badges.
-
-Checks appear only for persisted user messages, after API acceptance. A send that
-fails before persistence has no outgoing bubble/check. Recent visible receipts
-schedule only their remaining transitions; leaving/backgrounding cancels their
-task and returning recomputes the state from time. Finished receipts do not keep
-polling. Accessibility exposes Sent/Received/Read, and check sizes follow Dynamic
-Type. No API, schema, service, or persistence changes are required. Static Swift
-and whitespace validation cover the implementation; device appearance remains
-unverified. No builds or tests were run for this change.
+Persisted user messages show muted double checks after server acceptance. Colored
+double checks appear only when the server records `readAt` as the agent starts
+attending that turn. This replaces the previous fixed-delay simulation. Queued
+messages in another participant's conversation remain unread until attention is
+released. Retries retain their first recorded read time. These are server agent
+processing receipts, not evidence of human reading or APNs delivery. The user's
+unread-assistant-reply watermark remains a separate mechanism. Check sizes follow
+Dynamic Type and accessibility exposes Received/Read.
 
 ## Immediate composer clearing and server typing
 
@@ -171,17 +160,18 @@ no subsequent draft edits or dictation insertions. New draft text is never
 cleared by a previous request's successful completion. A failed request still
 uses ChatStore's existing idempotent submission/recovery behavior.
 
-Pending replies show **Typing…** only when D1 presence is `typing`. This is
-independent of the simulated receipt checks. No client timer decides whether the
+Replies show **Typing…** only when their own turn is running and global D1 presence is `typing`. Queued turns show **Waiting for contact…**. No client timer decides whether the
 agent is generating a reply. Completed replies are never artificially delayed.
 
 ## Persisted contact presence
+
+Migration 0013 supersedes the original per-conversation presence table/triggers below with one `agent_presence` row per shared agent. See [shared contacts](sharing.md#exclusive-attention-and-recovery) for current arbitration and recovery. The original migration history below describes how presence was introduced.
 
 Latest/older history pages and send/retry responses include `presence` with
 `status` (`offline`, `online`, `typing`), nullable `lastSeenAt`, and nullable
 `expiresAt`, using Unix milliseconds. Ownership follows the existing contact
 middleware. Presence is activity of the contact's server agent, not a human device
-connection or a claim that the model has literally read a message.
+connection. `readAt` separately records processing admission.
 
 Migration `0008_contact_presence.sql` adds a private, cascading D1 table and atomic
 turn triggers. Migration `0009_delayed_contact_connection.sql` updates them:
@@ -218,7 +208,7 @@ Last seen
 for older activity. A contact without prior activity shows Offline rather than an
 invented date. Existing finished turns seed historical last-seen dates without
 pretending they connected during migration. Existing active turns start Online.
-Read checks retain their separately documented simulation.
+Read checks use the persisted agent-attention receipt described above.
 
 ## Conversational presentation and reply length
 
@@ -234,7 +224,7 @@ fit on one line, the time and outgoing checks sit beside the message. Longer or
 explicitly multiline text uses the trailing metadata row underneath. This uses
 actual layout measurements rather than a character-count cutoff and adapts to
 Dynamic Type and the available width. Checks are 20 percent smaller, with the
-same Sent/Received/Read meanings and timing.
+same server acceptance/read meanings described above.
 
 The model's system instruction now asks for natural, direct one-to-one replies,
 usually one to three sentences, matching the user's language and tone. It avoids

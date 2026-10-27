@@ -29,8 +29,7 @@ one-time jobs remain visible so failures are not mistaken for successful sends.
 Schedule records remain stored for history and cancellation/push checks.
 
 Each schedule belongs to the current contact and user, who is the only recipient.
-Contact sharing does not exist yet and this implementation introduces no sharing
-or permission policy. Deleted contacts/accounts cascade their schedules, receipts,
+For [shared contacts](sharing.md), each participant has independent schedules and is the sole recipient. Scheduled work uses the same exclusive agent queue as human messages; another participant cannot inspect or change these schedules. Deleted contacts/accounts cascade their schedules, receipts,
 turns, and pending notifications. Sign-out removes device push enrollment under
 the existing session rules but does not cancel stored schedules. Generation can
 continue in the cloud without an active device session.
@@ -47,7 +46,7 @@ the conversation shows generation outcomes. iOS labels visible completed schedul
 **Dispatched · pending or failed; check the conversation**.
 
 The conditional insert checks the original cursor/revision, one active turn per
-contact, and at most ten active turns per user. A unique index on schedule,
+participant conversation, and at most ten active turns per user. A unique index on schedule,
 revision, and occurrence additionally prevents duplicate jobs. Failed workflow
 dispatch remains recoverable by the existing chat outbox/Cron. No external
 control-plane scheduling call is needed to create or cancel a schedule.

@@ -7,9 +7,12 @@ import schedules from './schedules';
 import { terminateChats } from '../chat/dispatch';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readBearerSession } from '../lib/session';
+import sharing from './sharing';
 
-type Contact = { id: string; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
-const columns = 'id, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence';
+type Contact = { id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
+const columns = `id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
+  CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
+const managesAgent = `EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = contact.user_id)`;
 const selection = `${columns}, (SELECT substr(COALESCE(t.assistant_text, CASE WHEN t.schedule_id IS NOT NULL THEN 'Scheduled message' WHEN t.user_text = '' AND t.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(t.attachment_json, '$.name') ELSE t.user_text END), 1, 500)
   FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
   ORDER BY t.sequence DESC LIMIT 1) AS lastMessageText,
@@ -73,7 +76,9 @@ contacts.post('/', contactBody, async (c) => {
     VALUES (?1, ?2, ?3, ?4, ?4) RETURNING ${columns}`)
     .bind(crypto.randomUUID(), c.get('owner'), name, now).first<Contact>();
   if (!result) throw new Error('Contact creation failed.');
-  return c.json({ contact: result }, 201);
+  const created = await c.env.DB.prepare(`SELECT ${columns} FROM contact WHERE id = ? AND user_id = ?`)
+    .bind(result.id, c.get('owner')).first<Contact>();
+  return c.json({ contact: created }, 201);
 });
 
 contacts.get('/:id', async (c) => {
@@ -86,7 +91,7 @@ contacts.patch('/:id', contactBody, async (c) => {
   const name = contactName(await c.req.json<unknown>().catch(() => null));
   if (!name) return c.json({ error: 'Provide only a name using 1–100 characters without control characters' }, 400);
   const result = await c.env.DB.prepare(`UPDATE contact SET name = ?1, updated_at = ?2
-    WHERE id = ?3 AND user_id = ?4 RETURNING ${columns}`)
+    WHERE id = ?3 AND user_id = ?4 AND ${managesAgent} RETURNING ${columns}`)
     .bind(name, Date.now(), c.req.param('id'), c.get('owner')).first<Contact>();
   if (!result) return c.json({ error: 'Contact not found' }, 404);
   const updated = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
@@ -95,10 +100,10 @@ contacts.patch('/:id', contactBody, async (c) => {
 });
 
 contacts.get('/:id/photo', async (c) => {
-  const row = await c.env.DB.prepare('SELECT photo_version AS version FROM contact WHERE id = ? AND user_id = ?')
-    .bind(c.req.param('id'), c.get('owner')).first<{ version: string | null }>();
+  const row = await c.env.DB.prepare('SELECT photo_version AS version, agent_id AS agentID, (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) AS photoOwner FROM contact WHERE id = ? AND user_id = ?')
+    .bind(c.req.param('id'), c.get('owner')).first<{ version: string | null; agentID: string; photoOwner: string }>();
   if (!row?.version || (c.req.query('version') && c.req.query('version') !== row.version)) return c.body(null, 404);
-  return photoResponse(c.env, c.get('owner'), c.req.param('id'), row.version);
+  return photoResponse(c.env, row.photoOwner, row.agentID, row.version);
 });
 
 contacts.put('/:id/photo', async (c) => {
@@ -109,9 +114,10 @@ contacts.put('/:id/photo', async (c) => {
     c.header('Retry-After', String(admission.retryAfter));
     return c.json({ error: 'Too many photo uploads' }, 429);
   }
-  const previous = await c.env.DB.prepare('SELECT photo_version AS version FROM contact WHERE id = ? AND user_id = ?')
-    .bind(id, owner).first<{ version: string | null }>();
+  const previous = await c.env.DB.prepare('SELECT photo_version AS version, agent_id AS agentID, (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) AS photoOwner FROM contact WHERE id = ? AND user_id = ?')
+    .bind(id, owner).first<{ version: string | null; agentID: string; photoOwner: string }>();
   if (!previous) return c.json({ error: 'Contact not found' }, 404);
+  if (previous.photoOwner !== c.get('owner')) return c.json({ error: 'Only the creator can edit this contact' }, 403);
   if (c.req.header('Content-Type') !== 'image/jpeg') return c.json({ error: 'Use a square JPEG photo' }, 415);
   const bytes = await readPhoto(c.req.raw);
   if (!bytes) return c.json({ error: 'Photo too large' }, 413);
@@ -122,7 +128,7 @@ contacts.put('/:id/photo', async (c) => {
   let saved: Contact | null;
   try {
     saved = await c.env.DB.prepare(`UPDATE contact SET photo_version = ?, updated_at = ?
-      WHERE id = ? AND user_id = ? AND photo_version IS ? RETURNING ${columns}`)
+      WHERE id = ? AND user_id = ? AND photo_version IS ? AND ${managesAgent} RETURNING ${columns}`)
       .bind(version, Date.now(), id, owner, previous.version).first<Contact>();
   } catch (error) {
     c.executionCtx.waitUntil(removePhoto(c.env, key));
@@ -139,11 +145,12 @@ contacts.put('/:id/photo', async (c) => {
 
 contacts.delete('/:id/photo', async (c) => {
   // Read the previous version, then compare-and-swap so concurrent uploads are preserved.
-  const previous = await c.env.DB.prepare('SELECT photo_version AS version FROM contact WHERE id = ? AND user_id = ?')
-    .bind(c.req.param('id'), c.get('owner')).first<{ version: string | null }>();
+  const previous = await c.env.DB.prepare('SELECT photo_version AS version, agent_id AS agentID, (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) AS photoOwner FROM contact WHERE id = ? AND user_id = ?')
+    .bind(c.req.param('id'), c.get('owner')).first<{ version: string | null; agentID: string; photoOwner: string }>();
   if (!previous) return c.json({ error: 'Contact not found' }, 404);
+  if (previous.photoOwner !== c.get('owner')) return c.json({ error: 'Only the creator can edit this contact' }, 403);
   const saved = await c.env.DB.prepare(`UPDATE contact SET photo_version = NULL, updated_at = ?
-    WHERE id = ? AND user_id = ? AND photo_version IS ? RETURNING ${columns}`)
+    WHERE id = ? AND user_id = ? AND photo_version IS ? AND ${managesAgent} RETURNING ${columns}`)
     .bind(Date.now(), c.req.param('id'), c.get('owner'), previous.version).first<Contact>();
   if (!saved) return c.json({ error: 'Contact changed. Refresh and try again.' }, 409);
   if (previous.version) c.executionCtx.waitUntil(removePhoto(c.env, photoKey(c.get('owner'), saved.id, previous.version)));
@@ -152,13 +159,27 @@ contacts.delete('/:id/photo', async (c) => {
 });
 
 contacts.delete('/:id', async (c) => {
-  const pending = await c.env.DB.prepare("SELECT workflow_id AS id FROM chat_turn WHERE contact_id = ? AND user_id = ? AND status IN ('queued','running')").bind(c.req.param('id'), c.get('owner')).all<{ id: string }>();
-  const result = await c.env.DB.prepare('DELETE FROM contact WHERE id = ?1 AND user_id = ?2 RETURNING id, photo_version AS photoVersion')
-    .bind(c.req.param('id'), c.get('owner')).first<{ id: string; photoVersion: string | null }>();
-  if (result?.photoVersion) c.executionCtx.waitUntil(removePhoto(c.env, photoKey(c.get('owner'), result.id, result.photoVersion)));
-  if (result) c.executionCtx.waitUntil(terminateChats(c.env, pending.results.map((row) => row.id)));
-  return result ? c.body(null, 204) : c.json({ error: 'Contact not found' }, 404);
+  const member = await c.env.DB.prepare(`SELECT c.agent_id AS agentID, a.owner_id AS ownerID, a.photo_version AS photoVersion
+    FROM contact c JOIN contact_agent a ON a.id = c.agent_id WHERE c.id = ? AND c.user_id = ?`)
+    .bind(c.req.param('id'), c.get('owner')).first<{ agentID: string; ownerID: string; photoVersion: string | null }>();
+  if (!member) return c.json({ error: 'Contact not found' }, 404);
+  const isOwner = member.ownerID === c.get('owner');
+  const pending = await c.env.DB.prepare(`SELECT t.workflow_id AS id FROM chat_turn t JOIN contact c ON c.id = t.contact_id
+    WHERE c.agent_id = ?1 AND (?2 = 1 OR c.user_id = ?3) AND t.status IN ('queued','running')`)
+    .bind(member.agentID, isOwner ? 1 : 0, c.get('owner')).all<{ id: string }>();
+  if (isOwner) {
+    await c.env.DB.prepare('DELETE FROM contact_agent WHERE id = ? AND owner_id = ?')
+      .bind(member.agentID, c.get('owner')).run();
+    if (member.photoVersion) c.executionCtx.waitUntil(removePhoto(c.env, photoKey(member.ownerID, member.agentID, member.photoVersion)));
+  } else {
+    await c.env.DB.prepare('DELETE FROM contact WHERE id = ? AND user_id = ?')
+      .bind(c.req.param('id'), c.get('owner')).run();
+  }
+  c.executionCtx.waitUntil(terminateChats(c.env, pending.results.map((row) => row.id)));
+  return c.body(null, 204);
 });
+
+contacts.route('/sharing', sharing);
 
 contacts.route('/:id/chat', chats);
 contacts.route('/:id/schedules', schedules);

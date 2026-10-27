@@ -17,8 +17,7 @@ tip has a rounded cap. The image itself has independent 16-point rounded corners
 inside a 2-point bubble-colored rim. With a caption, both lower image corners
 use a minimal 2-point radius where the image meets the text. They align to the same
 trailing edge as outgoing text bubbles. For image-only messages, a dark badge at the bottom right shows the
-message time and the same presentation-only receipt checks used by text messages;
-these checks do not represent server-confirmed delivery or reads. Tap
+message time and the same server acceptance/agent-read checks used by text messages. They use persisted `readAt`, remain muted while queued, and do not certify human reading or APNs delivery. Tap
 an image to open a black full-screen viewer with pinch/pan, double-tap zoom, and a
 Close button. Drag down at the default zoom level to dismiss: the image follows
 the finger and closes after a sufficient downward drag or a short fast swipe.
@@ -106,3 +105,7 @@ The schema is additive. Older clients can read turn responses but cannot display
 attachments or send them. On code rollback, keep migration 0012, the registry,
 and R2 objects; dropping the metadata loses file references. Restore compatible
 code and Cron cleanup before considering any data removal.
+
+## Shared contact access
+
+Attachments remain private to the participant conversation, even when its agent is shared. Shared-memory retrieval does not expose other participants’ file bytes, history, or attachment endpoints. New members start empty histories. See [sharing](sharing.md).

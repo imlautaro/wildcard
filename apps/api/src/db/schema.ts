@@ -52,7 +52,18 @@ export const verification = sqliteTable('verification', {
   updatedAt: date('updated_at').notNull(),
 }, (table) => [index('verification_identifier_idx').on(table.identifier)]);
 
+export const contactAgent = sqliteTable('contact_agent', {
+  id: text('id').primaryKey(),
+  ownerId: text('owner_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  photoVersion: text('photo_version'),
+  updatedAt: date('updated_at').notNull().default(sql`0`),
+  memoryShared: integer('memory_shared', { mode: 'boolean' }).notNull().default(false),
+}, (table) => [check('agent_memory_shared', sql`${table.memoryShared} IN (0, 1)`)]);
+
 export const contact = sqliteTable('contact', {
+  agentId: text('agent_id').references(() => contactAgent.id, { onDelete: 'cascade' }),
+  contributorConsent: integer('contributor_consent', { mode: 'boolean' }).notNull().default(false),
   photoVersion: text('photo_version'),
   lastReadSequence: integer('last_read_sequence').notNull().default(0),
   id: text('id').primaryKey(),
@@ -63,9 +74,36 @@ export const contact = sqliteTable('contact', {
 }, (table) => [
   index('contact_user_created_idx').on(table.userId, desc(table.createdAt), desc(table.id)),
   uniqueIndex('contact_id_user_idx').on(table.id, table.userId),
+  uniqueIndex('contact_agent_user_idx').on(table.agentId, table.userId),
 ]);
 
+export const contactInvite = sqliteTable('contact_invite', {
+  token: text('token').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  expiresAt: date('expires_at').notNull(),
+  acceptedBy: text('accepted_by').references(() => user.id, { onDelete: 'cascade' }),
+  contributorConsent: integer('contributor_consent', { mode: 'boolean' }).notNull().default(false),
+}, (table) => [index('contact_invite_agent_idx').on(table.agentId, table.expiresAt)]);
+
+export const agentAttention = sqliteTable('agent_attention', {
+  agentId: text('agent_id').primaryKey().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  turnId: text('turn_id').notNull().unique(),
+  attempt: integer('attempt').notNull(),
+  workflowId: text('workflow_id').notNull(),
+  acquiredAt: date('acquired_at').notNull(),
+  checkedAt: integer('checked_at').notNull().default(0),
+}, (table) => [index('agent_attention_recovery_idx').on(table.checkedAt, table.acquiredAt)]);
+
+export const agentPresence = sqliteTable('agent_presence', {
+  agentId: text('agent_id').primaryKey().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  status: text('status', { enum: ['offline', 'online', 'typing'] }).notNull(),
+  lastSeenAt: date('last_seen_at'),
+  expiresAt: date('expires_at'),
+}, (table) => [index('agent_presence_expiry_idx').on(table.expiresAt),
+  check('agent_presence_status', sql`${table.status} IN ('offline', 'online', 'typing')`)]);
+
 export const chatTurn = sqliteTable('chat_turn', {
+  readAt: date('read_at'),
   timeZone: text('time_zone'),
   scheduleId: text('schedule_id').references((): AnySQLiteColumn => contactSchedule.id),
   scheduleRevision: integer('schedule_revision'),

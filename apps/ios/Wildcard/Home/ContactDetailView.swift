@@ -28,6 +28,14 @@ struct ContactDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let contact = contacts.contact(id: contactID) {
+                if contact.canManage {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink(value: HomeDestination.sharing(contactID)) {
+                            Image(systemName: "person.badge.plus")
+                        }
+                        .accessibilityLabel("Share contact")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(value: HomeDestination.schedules(contactID)) {
                         Image(systemName: "clock")
@@ -51,7 +59,7 @@ struct ContactDetailView: View {
                         .padding(.trailing, 8)
                     }
                     .tint(Color(uiColor: .label))
-                    .accessibilityLabel("Edit \(contact.name)")
+                    .accessibilityLabel(contact.canManage ? "Edit \(contact.name)" : "View \(contact.name)")
                     .accessibilityValue(contacts.conversations.store(for: contactID).presence?.label ?? "")
                 }
             }

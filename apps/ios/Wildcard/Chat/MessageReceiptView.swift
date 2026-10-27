@@ -1,59 +1,8 @@
 import SwiftUI
 
-// Presentation-only simulation; these are not server delivery/read receipts.
-private enum SimulatedReceipt {
-    case sent, received, read
-
-    static let receivedDelay: TimeInterval = 1
-    static let readDelay: TimeInterval = 3
-
-    var label: String {
-        switch self {
-        case .sent: "Sent"
-        case .received: "Received"
-        case .read: "Read"
-        }
-    }
-
-    static func status(sentAt: Double, now: Date) -> Self {
-        let elapsed = now.timeIntervalSince1970 - sentAt / 1000
-        if elapsed >= readDelay { return .read }
-        if elapsed >= receivedDelay { return .received }
-        return .sent
-    }
-}
-
-private struct ReceiptUpdateID: Hashable {
-    let sentAt: Double
-    let phase: ScenePhase
-}
-
-private struct ReceiptTimeline<Content: View>: View {
-    let sentAt: Double
-    @ViewBuilder let content: (SimulatedReceipt) -> Content
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var now = Date.now
-
-    var body: some View {
-        content(SimulatedReceipt.status(sentAt: sentAt, now: now))
-            .task(id: ReceiptUpdateID(sentAt: sentAt, phase: scenePhase)) {
-                now = .now
-                guard scenePhase == .active else { return }
-                for delay in [SimulatedReceipt.receivedDelay, SimulatedReceipt.readDelay] {
-                    let remaining = sentAt / 1000 + delay - Date.now.timeIntervalSince1970
-                    if remaining > 0 {
-                        do { try await Task.sleep(for: .seconds(remaining)) }
-                        catch { return }
-                    }
-                    guard !Task.isCancelled else { return }
-                    now = .now
-                }
-            }
-    }
-}
-
 struct MessageReceiptView: View {
     let sentAt: Double
+    var readAt: Double? = nil
     @Environment(\.colorScheme) private var colorScheme
     @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 16
     @ScaledMetric(relativeTo: .caption2) private var height: CGFloat = 9.6
@@ -64,14 +13,12 @@ struct MessageReceiptView: View {
     }
 
     var body: some View {
-        ReceiptTimeline(sentAt: sentAt) { receipt in
-            ReceiptChecks(doubled: receipt != .sent)
-                .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
-                .foregroundStyle(receipt == .read ? readColor : Color.secondary)
-                .frame(width: width, height: height)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(receipt.label)
-        }
+        ReceiptChecks(doubled: true)
+            .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+            .foregroundStyle(readAt != nil ? readColor : Color.secondary)
+            .frame(width: width, height: height)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(readAt != nil ? "Read" : "Received")
     }
 }
 

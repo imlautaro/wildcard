@@ -1,8 +1,8 @@
 # Contact profile photos
 
-Contacts can have one profile photo, private to their owner. Photos appear in the
+Agents can have one profile photo, visible to their authorized participants and editable only by their creator. Photos appear in the
 Chats list, conversation title, contact editor, and supported iOS communication
-notifications. They do not create system Contacts entries or enable sharing.
+notifications. They do not create system Contacts entries. [Shared contacts](sharing.md) reuse the canonical creator/agent R2 object without copying bytes.
 
 ## Native editing
 
@@ -33,7 +33,7 @@ No owner ID, R2 key, or permanent public image URL is exposed in those responses
 | PUT | `/api/v1/contacts/:id/photo` | Replace with raw `image/jpeg`; returns the updated contact |
 | DELETE | `/api/v1/contacts/:id/photo` | Remove the image; returns the updated contact |
 
-All three require the existing signed bearer session and check ownership in D1.
+All three require the existing signed bearer session. Reads check participant membership in D1; writes additionally require creator ownership.
 A missing/foreign contact or absent photo returns 404; missing auth returns 401.
 Uploads count streamed bytes, reject more than 512 KiB with 413, require JPEG with
 415, and check JPEG markers and square dimensions of 64–1024 pixels with 422.
@@ -113,3 +113,7 @@ metadata and corresponding R2 objects together when making backups.
 
 References: [R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/),
 [Apple communication notifications](https://developer.apple.com/documentation/usernotifications/implementing-communication-notifications).
+
+## Shared identity photos
+
+Migration 0013 projects the canonical name/photo version to all participant conversation records. Authenticated reads and signed notification-avatar reads first validate the recipient’s private contact/session, then resolve the original creator/agent storage key. Removing a member revokes their subsequent reads and does not delete the shared photo. Creator deletion removes the shared object with the existing best-effort cleanup.
