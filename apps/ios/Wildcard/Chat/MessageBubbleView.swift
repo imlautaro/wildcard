@@ -8,13 +8,14 @@ struct MessageBubbleView: View {
     var isSending = false
     var showsReceipt = true
     var senderName: String? = nil
+    var senderColor: Color? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack {
             if fromUser { Spacer(minLength: 40) }
             VStack(alignment: .leading, spacing: 4) {
-                if let senderName { MessageSenderNameView(name: senderName) }
+                if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
                 MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
@@ -30,10 +31,11 @@ struct MessageBubbleView: View {
 
 struct MessageSenderNameView: View {
     let name: String
+    var color: Color? = nil
 
     var body: some View {
         Text(name).manrope(.caption, weight: .semibold)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(color ?? Color.secondary)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
     }

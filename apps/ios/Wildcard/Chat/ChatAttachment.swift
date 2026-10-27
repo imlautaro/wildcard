@@ -68,6 +68,7 @@ struct ChatAttachmentView: View {
     var fromUser = true
     var showsReceipt = true
     var senderName: String? = nil
+    var senderColor: Color? = nil
     @Environment(AuthStore.self) private var auth
     @State private var loading = false
     @State private var previewURL: URL?
@@ -96,7 +97,7 @@ struct ChatAttachmentView: View {
                     } else {
                         VStack(alignment: .leading, spacing: 0) {
                             if let senderName {
-                                MessageSenderNameView(name: senderName)
+                                MessageSenderNameView(name: senderName, color: senderColor)
                                     .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
                             }
                             imageButton
@@ -234,7 +235,7 @@ struct ChatAttachmentView: View {
             }
         } label: {
             VStack(alignment: .leading, spacing: 4) {
-                if let senderName { MessageSenderNameView(name: senderName) }
+                if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
                 HStack {
                     if loading { ProgressView() }
                     else { Image(systemName: "doc.richtext") }

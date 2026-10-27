@@ -160,6 +160,7 @@ final class GroupsStore {
 final class GroupChatStore {
     private(set) var snapshot: GroupSnapshot?
     private(set) var messages: [GroupMessage] = []
+    private(set) var hasLoadedMessages = false
     private(set) var newIncomingMessageIDs: Set<String> = []
     private(set) var nextBefore: Int?
     private(set) var isLoading = false
@@ -185,6 +186,7 @@ final class GroupChatStore {
         invalidateDetails()
         snapshot = nil
         messages = []
+        hasLoadedMessages = false
         nextBefore = nil
         newIncomingMessageIDs = []
         pending = nil
@@ -263,6 +265,7 @@ final class GroupChatStore {
                 !knownIDs.contains($0.id) && $0.userID != auth.user?.id && $0.sequence > (state.group.lastReadSequence ?? 0)
             }.map(\.id))
             merge(incoming)
+            hasLoadedMessages = true
             if let pending, messages.contains(where: { $0.id == pending.id }) {
                 if let file = pending.attachment, file.mimeType.hasPrefix("image/") {
                     await auth.images.store(file.data, for: .groupAttachment(groupID: id, messageID: pending.id))

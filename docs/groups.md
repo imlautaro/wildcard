@@ -15,6 +15,28 @@ Invitations appear in **+ → Contacts → Group Invitations**, with a pending c
 The Contacts screen also includes **Contact Invitations**.
 They are in-app invitations; the server does not send email.
 
+On first entry, the chat keeps its loading indicator until the first successful
+history response. Group metadata arriving earlier does not show **Start a
+conversation**. That empty state appears only after a successful empty history;
+cached history remains visible during refreshes. Initial failures show the existing
+error and **Refresh** control. See [cache verification](caching.md#group-navigation-and-secondary-screens)
+for device checks.
+
+## Sender colors on iOS
+
+Each human and agent identity receives a stable, pseudo-random palette color within
+a group. Sender labels use the same color in text, image/caption and PDF bubbles,
+including messages from former members. A fixed hash of group ID, member kind and
+member ID keeps colors stable across launches, renames and history pagination;
+colors can repeat. The palette pairs darker inks for light mode with lighter tints
+for dark mode. Own messages retain their existing layout without a sender label.
+No network calls, persisted assignments or additional cache are needed.
+
+Device verification: compare sender labels across text, images and PDFs in both
+appearances, reopen the group, load older messages and rename/remove a member.
+Confirm colors remain stable and names remain readable. Device visual verification
+is pending; static checks do not establish rendered appearance.
+
 ## Membership and consent
 
 The creator owns the group and can grant or revoke **Can invite** per human

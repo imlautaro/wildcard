@@ -201,8 +201,10 @@ struct GroupChatView: View {
                         Button("Load earlier messages") { Task { await store.loadMore(id: groupID, auth: auth) } }
                             .disabled(store.isLoadingMore)
                     }
-                    if store.snapshot == nil && store.error == nil { ProgressView("Loading messages…") }
-                    if store.snapshot != nil && store.messages.isEmpty && store.pendingText == nil {
+                    if !store.hasLoadedMessages && store.messages.isEmpty && store.pendingText == nil && store.error == nil {
+                        ProgressView("Loading messages…")
+                    }
+                    if store.hasLoadedMessages && store.snapshot != nil && store.messages.isEmpty && store.pendingText == nil {
                         ContentUnavailableView {
                             Label("Start a conversation", systemImage: "bubble.left.and.bubble.right")
                                 .manrope(.title2, weight: .semibold)
@@ -552,6 +554,13 @@ private struct GroupMessageRow: View {
     private var sender: GroupMember? {
         members.first { $0.id == (message.agentID ?? message.userID) && $0.kind == (message.agentID == nil ? "user" : "agent") }
     }
+    private var senderColor: Color {
+        let identity = message.agentID.map { "agent/\($0)" }
+            ?? message.userID.map { "user/\($0)" }
+            ?? "message/\(message.id)"
+        return GroupMemberColor.color(groupID: groupID, identity: identity)
+    }
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if !own { GroupAvatar(member: sender, groupID: groupID, size: 30) }
@@ -559,11 +568,13 @@ private struct GroupMessageRow: View {
                 if let file = message.attachment {
                     ChatAttachmentView(attachment: file, contactID: groupID, turnID: message.id, groupID: groupID,
                                        sentAt: message.createdAt, caption: file.isImage ? message.text : "", fromUser: own, showsReceipt: false,
-                                       senderName: own ? nil : (sender?.name ?? message.senderName))
+                                       senderName: own ? nil : (sender?.name ?? message.senderName),
+                                      senderColor: senderColor)
                 }
                 if !message.text.isEmpty && message.attachment?.isImage != true {
                     MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, showsReceipt: false,
-                                      senderName: own ? nil : (sender?.name ?? message.senderName))
+                                      senderName: own ? nil : (sender?.name ?? message.senderName),
+                                      senderColor: senderColor)
                 }
             }
         }

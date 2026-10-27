@@ -171,6 +171,12 @@ Inactive histories retain the latest 100 messages and restore an earlier-page
 cursor. The target may be exceeded while every store is exempt. Eviction and
 confirmed membership loss invalidate stores and reject late responses.
 
+Group history tracks its first successful load independently of the group snapshot.
+On first entry, loading remains visible until history arrives; metadata alone never
+triggers the empty conversation state. Successful empty histories retain that state
+during background refreshes. Failures retain the existing error/Refresh controls,
+and invalidation resets the history-load flag together with the cached messages.
+
 The chat, member details, invite-user and add-contact screens share the same group
 snapshot. Concurrent snapshot reads share a request. Navigation displays the
 snapshot immediately and revalidates; the visible chat still polls history and
@@ -195,7 +201,9 @@ invitation codes nor consent toggles are added to the cache. All of these metada
 and history caches are session-only and disappear with the signed-in shell.
 
 Implementation rules for future features live in [AGENTS.md](../AGENTS.md#cache-by-default).
-Device verification: reopen a group and its details, revisit schedules and sharing
+Device verification: open a populated group with delayed history and confirm no
+empty-state flash, open a genuinely empty group, retry an initial history failure,
+reopen a group and its details, revisit schedules and sharing
 (including empty lists), return while a send acknowledgement is uncertain, page
 back beyond 100 messages, navigate across more than eight groups, replace/remove
 member photos, refresh offline, revoke membership and switch fictional accounts.
