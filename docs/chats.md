@@ -12,7 +12,10 @@ without triggering automatic replies. Only a requested response from one specifi
 agent returns in an assistant-only private turn with `groupRequestID`
 and empty `userText`. It uses normal unread/push delivery and cannot initiate
 further group actions, mutate schedules or be manually retried. The conversation
-is free for other messages while waiting for the group response.
+is free for other messages while waiting for the group response. The planner uses
+separate post/question tools and current tool results to report success or the
+actual rejection category. Recent successful destinations can resolve references
+in a fresh request; they cannot authorize replaying the old message.
 
 ## API contract
 

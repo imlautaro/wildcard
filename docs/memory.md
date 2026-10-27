@@ -14,9 +14,12 @@ quote. No public memory-editing endpoint or comprehensive erasure UI is included
 Private human turns can also [publish requested text in a shared group](group-requests.md),
 with separate authorization. Ordinary posts need no recipient; an explicit request
 for another agent's response retains its correlated private return. This is the
-only group write tool; group replies retain read-only tools.
+only group write capability, exposed as separate post/question tools; group replies retain read-only tools.
 Human-directed posts, delegated questions and private relays do not create persona-memory events for
 their sender, and automatic relays are excluded from human-memory extraction.
+Live tool definitions/results determine capabilities and access. Self-memory
+extraction excludes transient connection, permission and send-failure claims;
+historical disclaimers cannot override current tool capabilities.
 The target's own group answer remains eligible for its own self profile. Group
 retrieval preserves the original speaker rather than copying another bot's
 preference into the asking bot's identity.

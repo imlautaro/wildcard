@@ -13,9 +13,13 @@ bot alone does not request an automatic reply.
 
 ## Authorization and audience
 
-`send_group_message(groupID, text, targetAgentID)` is available only in a human private
-turn. Set `targetAgentID` to null for ordinary posts; use an agent ID only for a
-requested response. `search_groups` resolves actual identities. The human and
+`send_group_message(groupID, text)` publishes without requesting a reply.
+`ask_agent_in_group(groupID, targetAgentID, question)` requests one target answer
+and its private return. Both are available only in a human private turn. Addressing
+a bot in a statement uses the first tool, without a target argument. This separates
+delivery from asking for a response. Older generic calls with an explicit nullable
+`targetAgentID` remain accepted for in-flight compatibility and retain semantic
+review. `search_groups` resolves actual identities. The human and
 publishing agent must currently share the group. Response mode also requires the
 target. Agents need shared-memory permission and their owner contact. Contributor
 requires current group/private consent and eligible source messages.
@@ -23,7 +27,12 @@ requires current group/private consent and eligible source messages.
 A separate structured model decision reviews the proposed public text and reply mode against
 the current human message and common group/agent identities. It can use up to three
 immediate private exchanges solely to complete the same human request's clarification
-chain, stopping at autonomous work or an already executed request. Earlier human/
+chain, stopping at autonomous work or an already executed request. Separately, up
+to three successful publication destinations from the last eight completed private
+turns supply group/target identities, newest first, with current access rechecked.
+They include no earlier message text. A NEW explicit human request can refer to
+that destination; the receipt never authorizes replaying its old text or requesting
+another response. Revoked/cancelled receipts cannot supply a destination. Earlier human/
 assistant texts are clipped to 4,000/2,000 UTF-8 bytes with truncation flags; total
 evidence is capped at 48,000 bytes. No attachments, retrieved memories, tool results
 or other humans' private chats are included. Extra private facts cannot be added
@@ -71,6 +80,56 @@ reports `published: false` and `publicationAttempted: false`. Only unreadable
 receipts or uncertain writes/confirmation report an unknown publication status.
 Retries still reuse the same human turn and original arguments.
 
+## Action selection and failure evidence
+
+Current tool contracts/results override historical assistant capability disclaimers
+and self memories. For a clear current request the planner must use the matching
+tool; it must not invent attempts, network outages or group permission settings.
+Self-memory extraction excludes tool availability, connection/access status and
+send failures. Existing memories are not deleted; they cannot determine live access.
+
+Structured rejection codes separate invalid arguments, an unresolved/unshared
+group ID, an absent target, current consent/access denial, an inactive source turn,
+bounded context and semantic intent mismatch. `AUTHORIZATION_UNCLEAR` means correct
+the proposed text/destination/reply mode or ask for the missing detail. It does not
+mean change group permissions. Wrong IDs require `search_groups`, not a network
+explanation. SQL guards still recheck all access and attention at the write.
+
+`group_publication_result` records fixed stage/outcome codes and publication/reply
+flags for normal successes and rejections. `chat_tool_summary` records only tool
+execution counts and group-publication call counts, including zero, so a planner
+reply without a send attempt can be distinguished from a tool rejection. Exceptions
+retain the sanitized diagnostics above. Logs contain no messages, proposed IDs,
+prompts, provider bodies or SQL parameters.
+
+Run `node scripts/checks/group-publication.cjs` only when tests are requested.
+It uses Node 24, all versioned migrations and actual tool dispatch/SQL against
+in-memory SQLite, with simulated model decisions and push/dispatch dependencies.
+It covers ordinary/one-bot posts, question-then-statement, cross-tool replay,
+compatibility, distinct rejection codes, revocation/races, incomplete authorization
+and receipt recovery. It never contacts a provider, Cloudflare or APNs. These
+checks do not establish semantic model accuracy or the deployed app round trip.
+
+The follow-up investigation observed one directed-request receipt and no plain-post
+receipts, currently valid shared membership/consent for the reported attempts,
+and no publication/tool exception events in their time window. The old deployment
+did not log normal authorization/access rejections or whether the planner skipped
+the tool; the exact historical rejection reason cannot be reconstructed from those
+logs. The repair addresses that diagnostic gap and separates the action contracts.
+
+Validation of this repair passed 22 isolated checks, TypeScript and preparation of
+87 distinct SQL variants over all 21 migrations. Separately, with explicit approval
+to send this prompt and fictitious inputs to Meta Playground, seven independent
+Muse Spark 1.3 Contributor cases used low reasoning, a 2,048-token ceiling,
+non-streaming output and the boolean authorization schema. Greeting, addressed
+statement, a fresh reference to a recently used group among two shared groups,
+and a requested target question were authorized. An unrequested automatic target
+response, cancellation and an ambiguous unnamed group without a recent reference
+were rejected. All completed within the token ceiling. No real group messages or
+notifications were sent. Playground currently exposes no function tools, so this
+checks semantic authorization, not the planner's actual tool selection or a full
+app round trip. Those still need verification after release.
+
 ## Durable execution and limits
 
 Migration `0020_group_requests.sql` adds a receipt unique to the source private turn,
@@ -85,8 +144,8 @@ triggers that enforce one publication across both tables. It does not rewrite
 and message together after the same attention/access checks. It creates no
 `group_reply`, pending request or automatic private turn. Ordinary posts do not
 consume the pending-response budget or require another agent. Historical tool calls
-named `ask_agent_in_group` are still accepted internally, but only the generic tool
-is advertised to new model calls. Replays across tool names or modes return the
+with the older generic nullable-target signature remain accepted. The planner now
+sees separate publication and question tools. Replays across tool names or modes return the
 original receipt; revoked access cannot resurrect a post after leave/rejoin.
 
 A D1 batch commits the receipt, question and single target slot together after

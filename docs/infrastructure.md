@@ -861,12 +861,12 @@ the existing procedure; no new R2 objects are introduced.
 ## General group publication (migration 0021)
 
 [Private group publication](group-requests.md) now advertises `send_group_message`
-for requested greetings, announcements, statements and questions. A null target
-publishes only; an explicit response request retains the existing directed round
-and private return. Migration `0021_group_posts.sql` adds plain-post receipts,
+for requested greetings, announcements and statements, with only groupID/text.
+The separately advertised `ask_agent_in_group` requests one bot answer and its
+private return. Older nullable-target generic calls remain compatible. Migration `0021_group_posts.sql` adds plain-post receipts,
 cross-table publication uniqueness and revocation/persona-event triggers. Drizzle
 mirrors the table. The already applied 0020 migration and in-flight directed jobs
-remain intact; legacy tool calls are accepted internally.
+remain intact; both actions reuse their existing receipt tables and guards.
 
 Reuse the existing D1, private R2, Worker/Workflow, Meta model/credentials, Cron and
 optional APNs setup above. There are no new resources, bindings, secrets,
@@ -921,6 +921,34 @@ group message, notification or private transcript was used in those synthetic
 cases; no provider credential was read or exposed. A cancellation control at
 2,048 tokens correctly returned `authorized: false`. TypeScript and the existing 21-migration/85-distinct-query
 static SQL checks passed. These checks are narrower than a deployed app round trip.
+
+The subsequent action-selection repair separates the two advertised tools without
+adding infrastructure, migrations, permissions, secrets, bindings or dependencies.
+It reuses D1 receipt indexes for at most three recent successful destinations from
+the last eight completed private turns, checking access on every read and excluding
+old message content. New explicit requests can resolve recent destinations; old
+receipts never grant new publication authority. Existing private/group data is not
+rewritten. The self-memory prompt excludes transient tool/access failures.
+
+Normal outcomes now emit `group_publication_result` with fixed stage/code and
+publication/reply flags; `chat_tool_summary` records execution/publication call
+counts so a no-tool answer can be identified. Neither logs text, destination IDs,
+SQL parameters or provider bodies. Invalid IDs, intent mismatch and source-slot
+failure are distinguished from actual consent/access denial. No permission guard
+is relaxed. These events use existing Worker logs and retention settings; no
+additional observability resource or higher trace sampling is required.
+
+The opt-in `node scripts/checks/group-publication.cjs` check uses the existing
+Node 24 runtime and built-in SQLite with all migrations, actual SQL/tool dispatch,
+fictitious records and simulated model/push/dispatch dependencies. It runs locally,
+requires no credentials and never contacts live services. All 22 cases passed,
+along with TypeScript and 87 distinct prepared SQL variants. Seven separately
+authorized Meta Playground cases checked the actual semantic authorization prompt
+with fictitious data; see the [validation details](group-requests.md#action-selection-and-failure-evidence).
+After an authorized commit/push, verify the automatic deployment commit/version as above. Then use
+fictitious accounts for the full app/Meta/notification round trip; that remains
+separate from isolated SQL checks. Roll back through a compatible pushed commit,
+retaining 0020/0021 and in-flight receipts/Workflow steps. No new iOS build is needed.
 
 ## Cross-chat identity and group retrieval (migration 0019)
 
