@@ -33,7 +33,13 @@ final class MessageSounds {
 
     func sent(turnID: String, contactID: String) {
         guard sentIDs.insert(turnID).inserted, visibleContactID == contactID else { return }
-        play("mixkit-hard-pop-click-2364")
+        let account = userID
+        let activation = activeSince
+        Task {
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            guard self.userID == account, self.activeSince == activation, self.visibleContactID == contactID else { return }
+            self.play("mixkit-hard-pop-click-2364")
+        }
     }
 
     func received(turnID: String, contactID: String, userID: String, completedAt: Date,
@@ -44,8 +50,14 @@ final class MessageSounds {
               // A push or list refresh can arrive before chat polling. The visible
               // conversation must wait for its reply bubble to appear instead.
               (visibleContactID != contactID || replyIsVisible),
-              receivedIDs.insert(turnID).inserted else { return }
-        play(visibleContactID == contactID ? "mixkit-hard-pop-click-2364" : "mixkit-alert-quick-chime-766")
+              !receivedIDs.contains(turnID) else { return }
+        Task {
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            guard self.userID == userID, self.activeSince == activeSince,
+                  self.visibleContactID != contactID || replyIsVisible,
+                  self.receivedIDs.insert(turnID).inserted else { return }
+            self.play(self.visibleContactID == contactID ? "mixkit-hard-pop-click-2364" : "mixkit-alert-quick-chime-766")
+        }
     }
 
     static func groupConversationID(_ id: String) -> String { "group/\(id)" }

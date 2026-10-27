@@ -68,8 +68,8 @@ for extraction, retrieval limits, provenance, and rollout.
 Accepted work continues independently of iOS. Closing the app before a send is
 accepted cannot guarantee delivery; unsent drafts are not persisted. The client
 retains the send UUID through uncertain network outcomes while the conversation
-is cached. It polls every three seconds while active with a pending reply and
-revalidates idle conversations on the same three-second tick to observe server presence. Returning to a cached conversation
+is cached. The session synchronizer polls every second while active and
+revalidates idle visible conversations on the same tick to observe server presence. Returning to a cached conversation
 displays its loaded history immediately. See [client caching](caching.md) for
 lifetime, limits, invalidation, and manual refresh behavior. It offers earlier history, a multiline composer, pending status, and a
 retry action for the latest failed reply. The Chats list shows the last reply or
@@ -241,7 +241,7 @@ Active work has a 15-minute lease, renewed on each generation attempt, to bound
 stale presence if dispatch, recovery, or Workflows remain unavailable. Long-paused
 work can therefore appear offline until another generation attempt starts.
 
-The visible chat polls authoritative history/presence every three seconds. This
+The session synchronizer polls visible authoritative history/presence every second. This
 has polling latency and may miss very short Online/Typing phases; there is no
 WebSocket service. Navigation/backgrounding and refresh failures clear cached
 presence, showing **Loading...** until the next successful refresh.
@@ -394,3 +394,21 @@ preserve the same glass treatment, dimensions and Dynamic Type scaling. Groups a
 sender names/avatars and aggregate [group receipts](groups.md#delivery-and-read-receipts). Groups also reuse
 the attachment views, Photos/Files picker and voice recorder/transcription flow.
 See [groups](groups.md).
+
+## Shared Home and chat state
+
+Home projects the same cached turn and receipt evidence as the conversation, and
+foreground APNs requests synchronization before sound presentation. List refreshes
+warm already opened conversations with changed previews or pending replies. Shared
+requests survive navigation cancellation and merge delayed results without
+regressing completed replies or read evidence. Catch-up bridges missing pages. See
+[shared synchronization](caching.md#shared-conversation-synchronization) for request
+ownership, timing limits, isolated regressions and device verification. This is an
+iOS-only change using the existing API; install the updated app.
+
+Read observations are enqueued synchronously by the visible chat and acknowledged
+by the session, so leaving the screen cannot cancel the write. Failed reads retry
+from the foreground timer while Home is visible. Counters update on server
+acknowledgement, and stale lists cannot resurrect them. Conversation cache hits
+change only non-observable LRU bookkeeping, preventing a lookup during render from
+triggering its own render again. See [read acknowledgement lifetime](caching.md#read-acknowledgement-lifetime).

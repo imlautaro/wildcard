@@ -20,7 +20,7 @@ struct ChatsView: View {
 
     private var displayedContacts: [Contact] {
         if mode == .chats {
-            return contacts.contacts.filter { $0.lastMessageAt != nil || $0.lastMessageText != nil }
+            return contacts.contacts.map { contacts.preview(for: $0) }.filter { $0.lastMessageAt != nil || $0.lastMessageText != nil }
         }
         return contacts.contacts.sorted {
             let order = $0.name.localizedStandardCompare($1.name)
@@ -36,7 +36,7 @@ struct ChatsView: View {
         // Defer older groups until private-chat pagination reaches their timestamp.
         // This avoids putting them ahead of newer private chats on unloaded pages.
         let boundary = contacts.nextCursor?.split(separator: ":", maxSplits: 1).first.flatMap { Double($0) }
-        entries += groups.groups.filter { group in
+        entries += groups.groups.map { groups.preview(for: $0) }.filter { group in
             boundary.map { (group.lastMessageAt ?? group.updatedAt) >= $0 } ?? true
         }.map(ChatListEntry.group)
         return entries.sorted {
@@ -247,7 +247,7 @@ private struct ChatListRow: View {
                     .lineLimit(1)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     if contact.lastMessageFromUser == 1 {
-                        MessageReceiptView(sentAt: contact.lastMessageAt ?? contact.createdAt, readAt: contact.lastMessageReadAt)
+                        MessageReceiptView(sentAt: contact.lastMessageAt ?? contact.createdAt, readAt: contact.lastMessageReadAt, isSending: contacts.conversations.cachedStore(for: contact.id)?.outgoingMessage != nil)
                     }
                     Text(messagePreview).manrope(.subheadline)
                         .lineLimit(2)
@@ -299,6 +299,7 @@ private enum ChatListEntry: Identifiable {
 
 private struct GroupChatListRow: View {
     let group: ChatGroup
+    @Environment(GroupsStore.self) private var groups
     @Environment(AuthStore.self) private var auth
     private var own: Bool { group.lastMessageUserID == auth.user?.id && group.lastMessageUserID != nil }
     @ScaledMetric(relativeTo: .subheadline) private var previewSize: CGFloat = 15
@@ -319,7 +320,9 @@ private struct GroupChatListRow: View {
                 Text(group.name).manrope(.body, weight: .semibold).foregroundStyle(.primary).lineLimit(1)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     if own {
-                        MessageReceiptView(sentAt: group.lastMessageAt ?? group.createdAt, receiptState: group.lastMessageReceiptState ?? "sent")
+                        MessageReceiptView(sentAt: group.lastMessageAt ?? group.createdAt,
+                            isSending: groups.conversations.cachedStore(for: group.id).map { $0.pendingID == group.lastMessageID && !$0.pendingAccepted } ?? false,
+                            receiptState: group.lastMessageReceiptState ?? "sent")
                     }
                     Text(messagePreview).manrope(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }

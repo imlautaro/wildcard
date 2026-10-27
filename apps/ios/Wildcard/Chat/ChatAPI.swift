@@ -13,9 +13,20 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     let status: Status
     let attempt: Int
     let createdAt: Double
-    let readAt: Double?
+    var readAt: Double?
     let updatedAt: Double
     var isPending: Bool { status == .queued || status == .running }
+
+    /// History, send acknowledgements, and pagination may arrive out of order.
+    func merging(_ incoming: ChatTurn) -> ChatTurn {
+        guard id == incoming.id else { return incoming }
+        let rank: [Status: Int] = [.queued: 0, .running: 1, .failed: 2, .complete: 3]
+        let newer = incoming.attempt > attempt || (incoming.attempt == attempt &&
+            (incoming.updatedAt > updatedAt || (incoming.updatedAt == updatedAt && rank[incoming.status]! >= rank[status]!)))
+        var result = newer ? incoming : self
+        result.readAt = [readAt, incoming.readAt].compactMap { $0 }.max()
+        return result
+    }
 }
 
 struct ContactPresence: Decodable, Sendable {

@@ -2,41 +2,41 @@ import Foundation
 import Observation
 
 /// Owned by the signed-in shell through ContactsStore; never persisted to disk.
-@MainActor
+@MainActor @Observable
 final class ConversationCache {
-    private struct Entry {
-        let store: ChatStore
-        var access: UInt64
-    }
-    private var entries: [String: Entry] = [:]
-    private var access: UInt64 = 0
+    // Membership is observable; recency is bookkeeping, never a render dependency.
+    private var entries: [String: ChatStore] = [:]
+    @ObservationIgnored private var access: UInt64 = 0
+    @ObservationIgnored private var lastAccess: [String: UInt64] = [:]
     private let capacity = 8
 
+    func cachedStore(for contactID: String) -> ChatStore? { entries[contactID] }
+
     func lastTurn(for contactID: String) -> ChatTurn? {
-        entries[contactID]?.store.turns.last
+        entries[contactID]?.turns.last
     }
 
     func store(for contactID: String) -> ChatStore {
         access &+= 1
-        if var entry = entries[contactID] {
-            entry.access = access
-            entries[contactID] = entry
-            return entry.store
-        }
-        // In-flight mutations retain their idempotency state until they finish.
+        lastAccess[contactID] = access
+        if let store = entries[contactID] { return store }
+        // Cache hits must not rewrite observable entries during SwiftUI rendering.
         while entries.count >= capacity,
-              let oldest = entries.filter({ !$0.value.store.isSending && !$0.value.store.isLoadingMore })
-                .min(by: { $0.value.access < $1.value.access })?.key {
-            entries.removeValue(forKey: oldest)?.store.invalidate()
+              let oldest = entries.filter({ !$0.value.isRetained && !$0.value.isSending && !$0.value.isLoadingMore })
+                .min(by: { (lastAccess[$0.key] ?? 0) < (lastAccess[$1.key] ?? 0) })?.key {
+            lastAccess.removeValue(forKey: oldest)
+            entries.removeValue(forKey: oldest)?.invalidate()
         }
         let store = ChatStore()
-        entries[contactID] = Entry(store: store, access: access)
+        entries[contactID] = store
         return store
     }
 
     func remove(contactID: String) {
-        entries.removeValue(forKey: contactID)?.store.invalidate()
+        lastAccess.removeValue(forKey: contactID)
+        entries.removeValue(forKey: contactID)?.invalidate()
     }
+
 }
 
 /// Reusable session-only snapshot cache for secondary resource screens.

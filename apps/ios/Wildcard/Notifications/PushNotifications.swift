@@ -23,6 +23,12 @@ final class PushNotifications {
     private(set) var error: String?
     private(set) var isBusy = false
     var destination: Destination?
+    private(set) var incomingEvent: Destination?
+
+    func receivedForeground(_ conversation: Conversation, userID: String) {
+        guard MessageSounds.shared.userID == userID else { return }
+        incomingEvent = Destination(conversation: conversation, userID: userID)
+    }
     private var permissionRequestInFlight = false
     private var scheduledGroupMessages: Set<String> = []
     private var presentedGroupMessages: Set<String> = []
@@ -179,6 +185,7 @@ final class PushNotifications {
         presentedGroupMessages.removeAll()
         groupReadSequences.removeAll()
         destination = nil
+        incomingEvent = nil
         error = nil
         status = "Not enabled"
         badgeStatus = "Not enabled"
@@ -209,21 +216,27 @@ final class PushAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
         let contactID = notification.request.content.userInfo["contactID"] as? String
         let userID = notification.request.content.userInfo["userID"] as? String
         let turnID = notification.request.content.userInfo["turnID"] as? String
-        let deliveredAt = notification.date
         let groupID = notification.request.content.userInfo["groupID"] as? String
         let messageID = notification.request.content.userInfo["messageID"] as? String
         let sequence = notification.request.content.userInfo["sequence"] as? Int
         let sentAt = notification.request.content.userInfo["sentAt"] as? Double
+        let isLocalActivity = notification.request.identifier.hasPrefix("foreground-group-")
         DispatchQueue.main.async {
-            if let groupID, let userID, let messageID, let sequence, let sentAt {
-                completionHandler(PushNotifications.shared.groupPresentation(groupID: groupID, userID: userID,
-                    messageID: messageID, sequence: sequence, sentAt: Date(timeIntervalSince1970: sentAt / 1000)))
+            guard let userID else { completionHandler([]); return }
+            if let groupID {
+                if isLocalActivity, let messageID, let sequence, let sentAt {
+                    completionHandler(PushNotifications.shared.groupPresentation(groupID: groupID, userID: userID,
+                        messageID: messageID, sequence: sequence, sentAt: Date(timeIntervalSince1970: sentAt / 1000)))
+                } else {
+                    PushNotifications.shared.receivedForeground(.group(groupID), userID: userID)
+                    completionHandler([])
+                }
                 return
             }
-            defer { completionHandler([]) }
-            guard let contactID, let userID, let turnID else { return }
-            MessageSounds.shared.received(turnID: turnID, contactID: contactID, userID: userID,
-                                          completedAt: deliveredAt)
+            if let contactID, turnID != nil {
+                PushNotifications.shared.receivedForeground(.contact(contactID), userID: userID)
+            }
+            completionHandler([])
         }
     }
 

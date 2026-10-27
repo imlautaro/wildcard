@@ -8,8 +8,8 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     var photoVersion: String? = nil
     let createdAt: Double
     let updatedAt: Double
-    let lastMessageText: String?
-    let lastMessageAt: Double?
+    var lastMessageText: String?
+    var lastMessageAt: Double?
     var unreadCount: Int?
     var lastMessageFromUser: Int? = nil
     var lastMessageReadAt: Double? = nil

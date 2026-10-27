@@ -156,6 +156,7 @@ struct GroupInvitationsView: View {
 
 struct GroupChatView: View {
     let groupID: String
+    @Environment(ConversationSync.self) private var sync
     @Environment(AuthStore.self) private var auth
     @Environment(GroupsStore.self) private var groups
     @Environment(\.scenePhase) private var scenePhase
@@ -222,10 +223,10 @@ struct GroupChatView: View {
                             ChatAttachmentView(attachment: ChatAttachment(name: file.name, mimeType: file.mimeType, size: file.data.count),
                                                contactID: groupID, turnID: store.pendingID ?? "pending", groupID: groupID,
                                                sentAt: store.pendingSentAt ?? 0, caption: file.mimeType.hasPrefix("image/") ? pending : "",
-                                               isSending: true, localData: file.data)
+                                               receiptState: "sent", isSending: !store.pendingAccepted, localData: file.data)
                         }
                         if !pending.isEmpty && store.pendingAttachment?.mimeType.hasPrefix("image/") != true {
-                            MessageBubbleView(text: pending, sentAt: store.pendingSentAt ?? 0, fromUser: true, isSending: true)
+                            MessageBubbleView(text: pending, sentAt: store.pendingSentAt ?? 0, fromUser: true, receiptState: "sent", isSending: !store.pendingAccepted)
                         }
                     }
                     ForEach((store.snapshot?.replies ?? []).filter { $0.status == "running" }) { reply in
@@ -347,7 +348,11 @@ struct GroupChatView: View {
             if phase == .ready { transcribeRecording() }
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .active { noteVisibleMessagesRead() }
             if phase == .background { cancelRecording(); attachmentTask?.cancel() }
+        }
+        .onChange(of: store.hasLoadedMessages) { _, loaded in
+            if loaded { animateNewMessages = true }
         }
         .onChange(of: store.snapshot?.group.id) { _, id in
             if id == nil {
@@ -360,36 +365,37 @@ struct GroupChatView: View {
         .onAppear {
             store.isRetained = true
             isVisible = true
+            sync.visible = .group(groupID)
+            sync.request(.group(groupID))
+            noteVisibleMessagesRead()
             MessageSounds.shared.visibleContactID = MessageSounds.groupConversationID(groupID)
         }
         .onDisappear {
+            noteVisibleMessagesRead()
             store.didLeave()
             isVisible = false
+            if sync.visible == .group(groupID) { sync.visible = nil }
             if MessageSounds.shared.visibleContactID == MessageSounds.groupConversationID(groupID) {
                 MessageSounds.shared.visibleContactID = nil
             }
             cancelRecording()
             attachmentTask?.cancel()
         }
-        .task(id: "\(groupID)-\(isVisible)-\(scenePhase)") {
+        .task(id: "\(groupID)-\(isVisible)-\(scenePhase)-\(store.messages.last?.id ?? "")") {
             guard isVisible, scenePhase == .active else { return }
+            sync.request(.group(groupID))
             while !Task.isCancelled {
-                await store.refresh(id: groupID, auth: auth)
                 await store.acknowledge(store.messages.map(\.id), state: "received", id: groupID, auth: auth)
                 animateNewMessages = true
                 do { try await Task.sleep(for: .seconds(3)) } catch { return }
             }
         }
-        .task(id: "\(groupID)-\(isVisible)-\(scenePhase)") {
-            guard isVisible, scenePhase == .active else { return }
-            // Read receipts must not hold up message and reply-status polling.
-            while !Task.isCancelled {
-                if let sequence = store.messages.last?.sequence {
-                    await groups.markRead(id: groupID, sequence: sequence, using: auth)
-                }
-                do { try await Task.sleep(for: .seconds(3)) } catch { return }
-            }
-        }
+        .onChange(of: store.messages.last?.sequence) { _, _ in noteVisibleMessagesRead() }
+    }
+
+    private func noteVisibleMessagesRead() {
+        guard isVisible, scenePhase == .active, let sequence = store.messages.last?.sequence else { return }
+        groups.noteRead(id: groupID, sequence: sequence, using: auth)
     }
     private func composer(proxy: ScrollViewProxy) -> some View {
         VStack(spacing: 8) {
@@ -401,7 +407,7 @@ struct GroupChatView: View {
                         .manrope(.footnote)
                 }
             }
-            if let pending = store.pendingText, !store.isSending {
+            if let pending = store.pendingText, !store.isSending, !store.pendingAccepted {
                 Button("Retry sending") { send(pending, file: store.pendingAttachment, proxy: proxy) }
                     .manrope(.footnote).frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -535,6 +541,7 @@ struct GroupChatView: View {
         nearBottom = true
         Task {
             let success = await store.send(value, attachment: file, id: groupID, auth: auth)
+            sync.request(.group(groupID))
             if !success, draftRevision == submittedRevision, draft.isEmpty {
                 draft = value
                 if attachment == nil { attachment = file }

@@ -32,6 +32,7 @@ struct HomeView: View {
 
     @State private var section: Section = .chats
     @State private var destinations: [HomeDestination] = []
+    @State private var sync = ConversationSync()
     @State private var contacts = ContactsStore()
     @State private var groups = GroupsStore()
     @State private var invitations = ContactInvitationsStore()
@@ -117,7 +118,20 @@ struct HomeView: View {
                 }
             }
         }
+        .environment(sync)
         .environment(groups)
+        .onChange(of: destinations) { _, path in
+            switch path.last {
+            case .contact(let id): sync.visible = .contact(id)
+            case .group(let id): sync.visible = .group(id)
+            default: sync.visible = nil
+            }
+            sync.request(sync.visible)
+        }
+        .onChange(of: push.incomingEvent) { _, event in
+            guard let event, event.userID == auth.user?.id else { return }
+            sync.request(event.conversation)
+        }
         .environment(contacts)
         .environment(invitations)
         .onChange(of: scenePhase) { _, phase in
@@ -137,25 +151,15 @@ struct HomeView: View {
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             MessageSounds.shared.activate(userID: auth.user?.id)
-            async let contactRefresh: Void = contacts.refresh(using: auth, preserveLoadedPages: true)
-            async let groupRefresh: Void = groups.refresh(using: auth)
-            _ = await (contactRefresh, groupRefresh)
-            await push.activate(using: auth)
-            if contacts.hasLoaded && groups.hasLoaded { await push.updateBadge(count: totalUnreadCount) }
-            while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(3)) } catch { return }
-                async let contactRefresh: Void = contacts.refresh(using: auth, preserveLoadedPages: true)
-                async let groupRefresh: Void = groups.refresh(using: auth, refreshInvitations: false)
-                _ = await (contactRefresh, groupRefresh)
-            }
+            await sync.run(contacts: contacts, groups: groups, auth: auth)
         }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
-            await groups.refresh(using: auth)
+            await groups.refreshInbox(using: auth)
             await invitations.refresh(using: auth, force: true)
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
-                await groups.refresh(using: auth)
+                await groups.refreshInbox(using: auth)
                 await invitations.refresh(using: auth)
             }
         }

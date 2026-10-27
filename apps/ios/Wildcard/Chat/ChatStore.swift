@@ -26,13 +26,28 @@ final class ChatStore {
     private(set) var isUnavailable = false
     var error: String?
     private var refreshedAt: Date?
-    private var isRefreshing = false
+    private var refreshRequest: (id: UUID, task: Task<Void, Never>)?
+    var isRetained = false
     private var invalidated = false
     private var revision = 0
     private var submission: (id: String, text: String, attachmentID: UUID?)?
     var hasPendingReply: Bool { turns.contains(where: \.isPending) }
 
     func clearPresence() { presence = nil }
+
+    func reconcile(_ contact: Contact) {
+        guard !invalidated, contact.lastMessageFromUser == 1,
+              let index = turns.lastIndex(where: { $0.createdAt == contact.lastMessageAt }),
+              let readAt = contact.lastMessageReadAt else { return }
+        turns[index].readAt = max(turns[index].readAt ?? 0, readAt)
+    }
+
+    func needsRefresh(for contact: Contact) -> Bool {
+        guard !invalidated else { return false }
+        guard let latest = turns.last else { return contact.lastMessageAt != nil }
+        let timestamp = latest.assistantText == nil ? latest.createdAt : latest.updatedAt
+        return hasPendingReply || (contact.lastMessageAt ?? 0) > timestamp
+    }
 
     func compactHistory() {
         guard !isSending, !isLoadingMore, turns.count > 100 else { return }
@@ -43,6 +58,8 @@ final class ChatStore {
 
     func invalidate() {
         invalidated = true
+        refreshRequest?.task.cancel()
+        refreshRequest = nil
         revision += 1
         presence = nil
         turns = []
@@ -56,40 +73,62 @@ final class ChatStore {
 
     private func merge(_ incoming: [ChatTurn]) {
         var merged = Dictionary(uniqueKeysWithValues: turns.map { ($0.id, $0) })
-        for turn in incoming { merged[turn.id] = turn }
+        for turn in incoming { merged[turn.id] = merged[turn.id].map { $0.merging(turn) } ?? turn }
         turns = merged.values.sorted { $0.sequence < $1.sequence }
     }
 
     func refresh(contactID: String, using auth: AuthStore, force: Bool = true) async {
-        guard !invalidated, !isRefreshing else { return }
+        guard !invalidated else { return }
+        if let request = refreshRequest { await request.task.value; return }
+        let request = (id: UUID(), task: Task { await self.performRefresh(contactID: contactID, using: auth, force: force) })
+        refreshRequest = request
+        await request.task.value
+        if refreshRequest?.id == request.id { refreshRequest = nil }
+    }
+
+    private func performRefresh(contactID: String, using auth: AuthStore, force: Bool) async {
+        guard !invalidated else { return }
         let freshness: TimeInterval = 2
         if !force, let refreshedAt, Date().timeIntervalSince(refreshedAt) < freshness { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
         let started = revision
+        defer { if !isRetained { compactHistory() } }
         do {
             let page = try await auth.withSession { api, token in
                 try await api.chatTurns(contactID: contactID, token: token)
             }
-            try Task.checkCancellation()
-            guard started == revision else { return }
-            if hasLoaded, let userID = auth.user?.id {
-                let completed = Set(turns.filter { $0.assistantText != nil }.map(\.id))
-                for turn in page.turns where turn.assistantText != nil && !completed.contains(turn.id) {
-                    newReplyIDs.insert(turn.id)
-                    MessageSounds.shared.received(turnID: turn.id, contactID: contactID, userID: userID,
-                                                  completedAt: Date(timeIntervalSince1970: turn.updatedAt / 1000))
+            var incoming = page.turns
+            var cursor = page.nextBefore
+            if let latest = turns.last?.sequence {
+                while let before = cursor, (incoming.first?.sequence ?? latest) > latest {
+                    try Task.checkCancellation()
+                    let older = try await auth.withSession { api, token in
+                        try await api.chatTurns(contactID: contactID, before: before, token: token)
+                    }
+                    incoming.insert(contentsOf: older.turns, at: 0)
+                    guard older.nextBefore != cursor else { break }
+                    cursor = older.nextBefore
                 }
             }
-            if !hasLoaded || turns.isEmpty || !page.turns.contains(where: { row in turns.contains(where: { $0.id == row.id }) }) {
-                revision += 1
-                turns = page.turns
-                nextBefore = page.nextBefore
-            } else { merge(page.turns) }
+            try Task.checkCancellation()
+            guard started == revision else { return }
+            if auth.user != nil {
+                let completed = Set(turns.filter { $0.assistantText != nil }.map(\.id))
+                for turn in incoming where turn.assistantText != nil && !completed.contains(turn.id) {
+                    newReplyIDs.insert(turn.id)
+                }
+            }
+            if !hasLoaded || turns.isEmpty { nextBefore = cursor }
+            merge(incoming)
             presence = page.presence
             hasLoaded = true
             refreshedAt = .now
             error = nil
+            if let userID = auth.user?.id {
+                for turn in turns where newReplyIDs.contains(turn.id) {
+                    MessageSounds.shared.received(turnID: turn.id, contactID: contactID, userID: userID,
+                        completedAt: Date(timeIntervalSince1970: turn.updatedAt / 1000))
+                }
+            }
         } catch is CancellationError { }
         catch {
             guard started == revision else { return }
@@ -163,6 +202,7 @@ final class ChatStore {
             hasLoaded = true
             refreshedAt = nil
             self.submission = nil
+            outgoingMessage = nil
             if let attachment, attachment.mimeType.hasPrefix("image/") {
                 await auth.images.store(attachment.data, for: .attachment(contactID: contactID, turnID: submission.id))
             }

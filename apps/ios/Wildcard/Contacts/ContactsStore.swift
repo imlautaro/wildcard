@@ -12,10 +12,14 @@ final class ContactsStore {
     private(set) var isMutating = false
     private(set) var error: String?
     private(set) var totalUnreadCount = 0
-    private var markingRead: Set<String> = []
+    private let readAcknowledgements = ReadAcknowledgementQueue()
     let conversations = ConversationCache()
     let scheduleSnapshots = NavigationSnapshotCache<[ContactSchedule]>()
     let sharingSnapshots = NavigationSnapshotCache<ContactSharing>()
+    private var refreshRequest: (id: UUID, task: Task<Void, Never>)?
+    private var warmingTask: Task<Void, Never>?
+    private var queuedWarmContacts: [Contact]?
+    private var queuedAnnouncements: Set<String> = []
     private var refreshedAt: Date?
     private var contactRefreshedAt: [String: Date] = [:]
     private var refreshingContacts: Set<String> = []
@@ -36,6 +40,19 @@ final class ContactsStore {
     private var loadingMessageTimestamps: Set<MessageTimestampRequest> = []
 
     func contact(id: String) -> Contact? { knownContacts[id] }
+
+    func preview(for contact: Contact) -> Contact {
+        guard let chat = conversations.cachedStore(for: contact.id),
+              let turn = chat.displayedTurns.last else { return contact }
+        let timestamp = turn.assistantText == nil ? turn.createdAt : turn.updatedAt
+        guard chat.isSubmitting(turn.id) || timestamp >= (contact.lastMessageAt ?? 0) else { return contact }
+        var result = contact
+        result.lastMessageText = messagePreview(for: turn)
+        result.lastMessageAt = timestamp
+        result.lastMessageFromUser = turn.assistantText == nil && turn.scheduleID == nil && turn.groupRequestID == nil ? 1 : 0
+        result.lastMessageReadAt = [turn.readAt, timestamp == contact.lastMessageAt ? contact.lastMessageReadAt : nil].compactMap { $0 }.max()
+        return result
+    }
 
     private func isMoreRecent(_ lhs: Contact, than rhs: Contact) -> Bool {
         let left = lhs.lastMessageAt ?? lhs.createdAt
@@ -77,11 +94,24 @@ final class ContactsStore {
     }
 
     private func messagePreview(for turn: ChatTurn) -> String {
-        String(String.UnicodeScalarView((turn.assistantText ?? turn.userText).unicodeScalars.prefix(500)))
+        let fallback = turn.scheduleID != nil ? "Scheduled message" : turn.groupRequestID != nil ? "Group response" :
+            turn.userText.isEmpty ? turn.attachment.map { "Attachment: " + $0.name } ?? "" : turn.userText
+        return String(String.UnicodeScalarView((turn.assistantText ?? fallback).unicodeScalars.prefix(500)))
     }
 
     func refresh(using auth: AuthStore, force: Bool = true, preserveLoadedPages: Bool = false) async {
-        guard !isMutating, !isLoading, (!preserveLoadedPages || !isLoadingMore) else { return }
+        guard !isMutating else { return }
+        if let request = refreshRequest { await request.task.value; return }
+        let request = (id: UUID(), task: Task {
+            await self.performRefresh(using: auth, force: force, preserveLoadedPages: preserveLoadedPages)
+        })
+        refreshRequest = request
+        await request.task.value
+        if refreshRequest?.id == request.id { refreshRequest = nil }
+    }
+
+    private func performRefresh(using auth: AuthStore, force: Bool, preserveLoadedPages: Bool) async {
+        guard !isMutating, (!preserveLoadedPages || !isLoadingMore) else { return }
         if !force, let refreshedAt, Date().timeIntervalSince(refreshedAt) < freshness { return }
         generation += 1
         let request = generation
@@ -93,6 +123,7 @@ final class ContactsStore {
         do {
             let page = try await auth.withSession { api, token in try await api.contacts(token: token) }
             guard request == generation, readSnapshot == readRevision, !Task.isCancelled else { return }
+            let previousContacts = knownContacts
             let changedReplies = page.contacts.filter { contact in
                 guard let previous = knownContacts[contact.id] else { return false }
                 return (contact.unreadCount ?? 0) > (previous.unreadCount ?? 0)
@@ -117,6 +148,7 @@ final class ContactsStore {
                 return !isMoreRecent(boundary, than: existing)
             }
             for contact in removed {
+                readAcknowledgements.remove(id: contact.id)
                 conversations.remove(contactID: contact.id)
                 scheduleSnapshots.remove(id: contact.id)
                 sharingSnapshots.remove(id: contact.id)
@@ -126,7 +158,15 @@ final class ContactsStore {
             }
             if !removed.isEmpty { await auth.images.clear(deactivate: false) }
             guard request == generation, readSnapshot == readRevision, !Task.isCancelled else { return }
-            contacts = page.contacts + additional
+            contacts = page.contacts.map { contact in
+                var result = contact
+                if let previous = previousContacts[contact.id], previous.lastMessageAt == result.lastMessageAt,
+                   previous.lastMessageFromUser == result.lastMessageFromUser {
+                    result.lastMessageReadAt = [previous.lastMessageReadAt, result.lastMessageReadAt].compactMap { $0 }.max()
+                }
+                return result
+            } + additional
+            for contact in contacts { knownContacts[contact.id] = contact }
             sortContacts()
             firstPageIDs = incomingIDs
             totalUnreadCount = page.totalUnreadCount ?? page.contacts.reduce(0) { $0 + ($1.unreadCount ?? 0) }
@@ -135,22 +175,40 @@ final class ContactsStore {
             if additional.isEmpty || firstPageChanged { nextCursor = page.nextCursor }
             hasLoaded = true
             refreshedAt = .now
-            // Resolve stable turn IDs only when unread counts grow, so polling and APNs
-            // share the same deduplication key even outside the visible conversation.
-            for contact in changedReplies {
-                guard !Task.isCancelled, let userID = auth.user?.id else { return }
-                if let history = try? await auth.withSession({ api, token in
-                    try await api.chatTurns(contactID: contact.id, token: token)
-                }) {
-                    guard !Task.isCancelled, auth.user?.id == userID else { return }
-                    for turn in history.turns where turn.assistantText != nil {
-                        MessageSounds.shared.received(turnID: turn.id, contactID: contact.id, userID: userID,
-                                                      completedAt: Date(timeIntervalSince1970: turn.updatedAt / 1000))
+            // List evidence updates receipts and warms existing histories before navigation.
+            for contact in page.contacts { conversations.cachedStore(for: contact.id)?.reconcile(contact) }
+            let changedIDs = Set(changedReplies.map(\.id))
+            warmHistories(page.contacts, announcing: changedIDs, using: auth)
+        } catch {
+            if request == generation && !isCancellation(error) { self.error = error.localizedDescription }
+        }
+    }
+
+    private func warmHistories(_ contacts: [Contact], announcing ids: Set<String>, using auth: AuthStore) {
+        let ownerID = auth.user?.id
+        queuedWarmContacts = contacts
+        queuedAnnouncements.formUnion(ids)
+        guard warmingTask == nil else { return }
+        warmingTask = Task {
+            while !Task.isCancelled, auth.state == .signedIn, auth.user?.id == ownerID, let batch = queuedWarmContacts {
+                queuedWarmContacts = nil
+                let announcements = queuedAnnouncements
+                queuedAnnouncements.removeAll()
+                await withTaskGroup(of: Void.self) { tasks in
+                    var inFlight = 0
+                    for contact in batch {
+                        guard !Task.isCancelled, auth.state == .signedIn, auth.user?.id == ownerID else { break }
+                        let cached = conversations.cachedStore(for: contact.id)
+                        guard cached?.needsRefresh(for: contact) == true || announcements.contains(contact.id) else { continue }
+                        // Unopened notification histories must not evict navigation caches.
+                        let chat = cached ?? ChatStore()
+                        tasks.addTask { @MainActor in await chat.refresh(contactID: contact.id, using: auth) }
+                        inFlight += 1
+                        if inFlight == 4 { await tasks.next(); inFlight -= 1 }
                     }
                 }
             }
-        } catch {
-            if request == generation && !isCancellation(error) { self.error = error.localizedDescription }
+            warmingTask = nil
         }
     }
 
@@ -232,6 +290,7 @@ final class ContactsStore {
             await auth.images.clear(deactivate: false)
             scheduleSnapshots.remove(id: contact.id)
             sharingSnapshots.remove(id: contact.id)
+            readAcknowledgements.remove(id: contact.id)
             conversations.remove(contactID: contact.id)
             messageTimestamps.removeValue(forKey: contact.id)
             contactRefreshedAt.removeValue(forKey: contact.id)
@@ -267,6 +326,7 @@ final class ContactsStore {
                 guard request == generation else { return }
                 scheduleSnapshots.remove(id: id)
                 sharingSnapshots.remove(id: id)
+                readAcknowledgements.remove(id: id)
                 conversations.remove(contactID: id)
                 messageTimestamps.removeValue(forKey: id)
                 contactRefreshedAt.removeValue(forKey: id)
@@ -277,29 +337,53 @@ final class ContactsStore {
         }
     }
 
-    func markRead(id: String, sequence: Int, using auth: AuthStore) async {
-        guard sequence > (knownContacts[id]?.lastReadSequence ?? 0), markingRead.insert(id).inserted else { return }
-        defer { markingRead.remove(id) }
-        do {
-            let state = try await auth.withSession { api, token in
-                try await api.markChatRead(contactID: id, sequence: sequence, token: token)
+    /// Called synchronously when loaded replies are presented, before view teardown.
+    @discardableResult
+    func noteRead(id: String, sequence: Int, using auth: AuthStore) -> Task<Void, Never>? {
+        guard sequence > 0, let ownerID = auth.user?.id else { return nil }
+        return readAcknowledgements.enqueue(id: id, sequence: sequence,
+            confirmed: knownContacts[id]?.lastReadSequence ?? 0) { [weak self] sequence in
+            guard let self, auth.state == .signedIn, auth.user?.id == ownerID else { throw CancellationError() }
+            do {
+                let started = self.readRevision
+                let state = try await auth.withSession { api, token in
+                    try await api.markChatRead(contactID: id, sequence: sequence, token: token)
+                }
+                try Task.checkCancellation()
+                guard auth.user?.id == ownerID else { throw CancellationError() }
+                guard var contact = self.knownContacts[id] else { return state.lastReadSequence }
+                guard state.lastReadSequence >= (contact.lastReadSequence ?? 0) else {
+                    return contact.lastReadSequence ?? 0
+                }
+                let adjusted = max(0, self.totalUnreadCount - (contact.unreadCount ?? 0) + state.unreadCount)
+                self.totalUnreadCount = started == self.readRevision ? state.totalUnreadCount ?? adjusted : adjusted
+                self.readRevision += 1
+                contact.lastReadSequence = state.lastReadSequence
+                contact.unreadCount = state.unreadCount
+                self.knownContacts[id] = contact
+                if let index = self.contacts.firstIndex(where: { $0.id == id }) { self.contacts[index] = contact }
+                self.sortContacts()
+                self.refreshedAt = nil
+                return state.lastReadSequence
+            } catch AuthAPI.Failure.notFound {
+                self.readAcknowledgements.remove(id: id)
+                throw AuthAPI.Failure.notFound
             }
-            guard var contact = knownContacts[id], state.lastReadSequence >= (contact.lastReadSequence ?? 0) else { return }
-            totalUnreadCount = state.totalUnreadCount ?? max(0, totalUnreadCount - (contact.unreadCount ?? 0) + state.unreadCount)
-            readRevision += 1
-            contact.lastReadSequence = state.lastReadSequence
-            contact.unreadCount = state.unreadCount
-            knownContacts[id] = contact
-            if let index = contacts.firstIndex(where: { $0.id == id }) { contacts[index] = contact }
-            sortContacts()
-            refreshedAt = nil
-        } catch is CancellationError { }
-        catch { /* Active chat polling retries the acknowledgement without hiding messages. */ }
+        }
     }
+
+    func markRead(id: String, sequence: Int, using auth: AuthStore) async {
+        await noteRead(id: id, sequence: sequence, using: auth)?.value
+    }
+
+    func retryPendingReads() { readAcknowledgements.retryPending() }
 
     private func beginMutation() throws {
         guard !isMutating else { throw MutationInProgress() }
         generation += 1
+        refreshRequest?.task.cancel()
+        refreshRequest = nil
+        warmingTask?.cancel()
         isLoading = false
         isLoadingMore = false
         isMutating = true

@@ -6,13 +6,109 @@ on every navigation. Loaded content stays visible during refresh and network
 failures. A full loading indicator is reserved for the first successful load;
 empty cached lists retain their empty state during revalidation.
 
+## Shared conversation synchronization
+
+`HomeView` owns `ConversationSync` for the signed-in session. A one-second
+foreground timer, navigation, completed sends and foreground APNs all request
+synchronization through coalescing event streams. Private and group lists have
+independent consumers. Histories run independently by conversation ID, and list
+warming uses at most four concurrent histories per source. A slow history does
+not delay list publication, another conversation, or read acknowledgements.
+Invitations refresh separately every 15 seconds.
+
+List and history callers await the same in-flight request instead of dropping a
+refresh behind a loading flag. Navigation cancellation does not cancel the shared
+read. Already started reads may finish after backgrounding; the canceled session
+loop starts no more ticks. Activation run identities prevent old-loop cleanup from
+stopping a replacement loop. Session authorization and store invalidation still
+reject obsolete results. A wake arriving while a list request is in flight is
+retained for another pass.
+
+Home derives its last-message preview, sender, sending clock and receipt from the
+same observable cached conversation used by the chat when that evidence is at
+least as recent as its server summary. Both caches expose observable insertions,
+so a chat created after Home's first render can update the list immediately.
+Cache hits update only non-observable LRU bookkeeping. Replacing an observable
+entry during a SwiftUI render would invalidate the same render repeatedly; stable
+lookups keep the original store identity without publishing a mutation. Insertions
+and removals remain observable, and LRU eviction still honors visible/pending stores.
+Summary receipt evidence reconciles back into the matching cached message.
+Private summaries identify outgoing turns by their exact server creation time;
+groups use immutable message IDs. Evidence is never transferred to a different
+message. Private turn merging respects attempts/timestamps and preserves read
+receipts independently; group receipt merging only advances Sent → Received →
+Read. Catch-up traverses missing pages without replacing previously loaded history.
+
+Group HTTP acceptance marks the optimistic row Sent before audio or a follow-up
+history request. It does not imply Received or Read. History then replaces that
+row by UUID, without displaying both. A 429, 5xx or unclassified transient group
+response preserves the UUID for retry. Newly observed private completions request
+audio after the shared history is committed. Foreground remote pushes request
+fresh data instead of immediately playing sounds; group banners use the fetched
+activity. Audio waits a further 100 ms for observation updates, and visible reply
+rows retain their existing insertion delay. These are presentation delays, not
+proof of a rendered frame; physical-device timing remains to be checked.
+
+This implementation uses the existing HTTP API and APNs, with polling as the
+fallback. It adds no WebSocket/SSE service, migration or deployment dependency.
+A one-second tick is a scheduling interval, not a latency guarantee; requests,
+network outages, API limits and server generation can take longer. Foreground
+request volume increases compared with the former three-second polling. Histories
+for unopened private chats fetched only to identify a new notification are
+transient and do not evict the eight navigation caches. Existing retention,
+privacy, image budgets and revocation rules remain in force.
+
+Run the opt-in isolated store regressions with
+`python3 scripts/checks/ios-conversation-sync.py` on macOS with Xcode installed.
+They compile the production stores with fictional models and an in-memory
+transport; no network, credentials, app build, simulator or APNs is used. Device
+verification must cover send → Home → chat, delayed/out-of-order replies and
+receipts, multiple group responders, slow/offline recovery, repeated navigation,
+background/resume, foreground push/poll races, audio ordering, pagination, access
+revocation and account switching. Install the updated iOS binary to verify these
+presentation behaviors.
+
+## Read acknowledgement lifetime
+
+Private and group unread-watermark writes use a session-owned
+`ReadAcknowledgementQueue`. Visible, active chats synchronously record their latest
+loaded reply/message watermark on appearance, newly loaded content and departure.
+Home does not create read observations from previews or prefetching. Canceling a
+view or leaving with the keyboard open cannot cancel an already queued write.
+The queue coalesces to the highest observed sequence and sends a newer observation
+that arrives while a write is in flight. Failures and partial acknowledgements
+remain queued for the foreground timer, independently of stalled list requests.
+No read task sleeps or retries while holding the main actor synchronously.
+
+The server acknowledgement updates row counts and the combined badge; a failed
+write retains the server count rather than pretending it succeeded. Read revisions
+reject a list response started before the acknowledgement. Concurrent private read
+responses reconcile their count deltas when another read has already completed,
+preventing an older owner-total snapshot from undoing that completion. Deletion,
+confirmed access loss and the existing session checks discard obsolete work.
+These intents live in session memory only; process termination can lose a write
+that has not reached the server, and subsequent activation refreshes server state.
+
+Group recipient read receipts remain distinct from unread watermarks: only a
+message row observed at least 50% onscreen creates that read receipt. A canceled
+row acknowledgement remains pending, and a later cached history refresh retries
+it even after leaving the group. Neither Home previews nor a read watermark
+fabricate recipient Read evidence.
+
+The isolated regressions reproduce a self-invalidating cache hit and a canceled
+read leaving Home unread against the previous implementation. They cover stable
+private/group lookups, LRU order, read coalescing, failed-read recovery from Home,
+a list stalled during retry, canceled group reads and recipient receipts, and
+stale list responses. UI rendering, keyboard responsiveness and real device
+network cancellation still require physical-device verification.
+
 ## Freshness and requests
 
 - Individual contacts remain fresh for 30 seconds during navigation. The signed-in
-  shell forces a contact-list refresh on activation and every three seconds while
+  shell forces a contact-list refresh on activation and every second while
   active so unread counts and previews update even outside a conversation. Automatic
   refreshes preserve previously loaded later pages; pull to refresh resets pagination.
-- Visible conversations revalidate on each three-second foreground tick, including
+- Visible conversations revalidate on each one-second foreground tick, including
   idle history, to observe server presence. Presence is cleared when leaving or
   backgrounding the chat and after refresh failures. Failed requests retry on the
   same tick; overlapping requests are still prevented.
@@ -41,8 +137,10 @@ empty cached lists retain their empty state during revalidation.
   preview, rather than another lookup each time the row appears. Deleting the
   contact clears its timestamp. No timestamp cache is written to disk.
 
-Only the visible conversation polls history. Opening or returning to it forces
-an immediate history refresh;
+The visible conversation revalidates on every foreground tick. Cached private
+conversations with pending replies, and cached groups with changed previews or
+outstanding outgoing receipts, also revalidate. Opening or returning to a chat
+requests an immediate history refresh;
 background generation continues on the server as before. Older history remains
 available through the existing pagination API. Unread acknowledgements invalidate concurrent contact snapshots so a late response
 cannot resurrect a cleared counter. Read state is persisted on the server; the
@@ -77,7 +175,7 @@ preserve loaded later pages and rebase pagination when first-page membership cha
 ## Memory and isolation
 
 The cache keeps eight recently accessed conversations, evicting the least recently
-used eligible entry when another is opened. Stores with an active send/retry or
+used eligible entry when another is opened. Visible stores and stores with an active send/retry or
 history-page request are temporarily exempt from eviction. Leaving a conversation
 retains its latest 100 turns when no mutation or page request is in progress;
 older turns can be fetched again using the restored pagination cursor. While
@@ -98,9 +196,10 @@ requires migration 0005 and the matching API release described in notifications.
 
 ## Verification
 
-Swift static type checking and git diff whitespace validation cover this change.
-No application builds, automated tests, simulator runs, or live account requests
-are part of this verification. Installed-app behavior still needs checking: open
+Swift static type checking, git diff whitespace validation and 39 isolated
+store regressions cover the shared synchronization update. No application builds,
+simulator runs, real APNs/audio checks or live account requests are part of this
+verification. Installed-app behavior still needs checking: open
 and reopen a conversation, navigate between tabs, refresh manually, lose and
 restore connectivity, finish a pending reply, load older pages, delete a contact,
 and sign in with another fictional account. Reinstall/run the updated iOS app to
@@ -182,8 +281,8 @@ See [group media](groups.md#group-photos-attachments-and-voice).
 Home summaries carry outgoing receipt state and group sender identity alongside
 their cached preview. Group stores retain per-message aggregate receipt states;
 visible polling refreshes recent history and fetches only aggregate states for
-older retained outgoing IDs in batches of 100. History merging replaces receipt
-state by message ID. Home acknowledges received group previews in one bounded
+older retained outgoing IDs in batches of 100. History merging preserves the
+strongest receipt evidence for each message ID. Home acknowledges received group previews in one bounded
 request per changed set; failed acknowledgements retry on later list refreshes.
 Message rows acknowledge reading only when visible in the foreground. Stores
 retain observed-but-unacknowledged reads for retry during group polling and
@@ -212,7 +311,7 @@ and invalidation resets the history-load flag together with the cached messages.
 The chat, member details, invite-user and add-contact screens share the same group
 snapshot. Concurrent snapshot reads share a request. Navigation displays the
 snapshot immediately and revalidates; the visible chat still polls history and
-reply status every three seconds. A cache does not suppress live updates. Changes
+reply status on the shared one-second foreground tick. A cache does not suppress live updates. Changes
 to identity, members and permissions invalidate concurrent snapshot reads before
 revalidation. Explicit leave/delete removes the cached group. History-confirmed
 image submissions also seed image bytes after a lost send acknowledgement.

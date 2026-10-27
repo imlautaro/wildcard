@@ -16,6 +16,7 @@ struct AuthAPI: Sendable {
         case notFound
         case rejected(String)
         case invalidResponse
+        case temporarilyUnavailable
 
         var errorDescription: String? {
             switch self {
@@ -25,6 +26,7 @@ struct AuthAPI: Sendable {
             case .notFound: "This contact is no longer available."
             case .rejected(let message): message
             case .invalidResponse: "The server returned an unexpected response. Please try again."
+            case .temporarilyUnavailable: "Groups are temporarily unavailable. Please try again."
             }
         }
     }
@@ -129,13 +131,14 @@ struct AuthAPI: Sendable {
                     throw Failure.rejected(code == "NO_SPEECH" ? "No speech was detected. Please record again." : "The transcript is too long. Please record a shorter message.")
                 }
                 if response.statusCode == 404 && method == "GET" && !path.contains("/photos/") { throw Failure.notFound }
-                if [400, 403, 404, 409, 413, 422, 429].contains(response.statusCode),
+                if response.statusCode == 429 || response.statusCode >= 500 { throw Failure.temporarilyUnavailable }
+                if [400, 403, 404, 409, 413, 422].contains(response.statusCode),
                    let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error,
                    message.unicodeScalars.count <= 512,
                    !message.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
                     throw Failure.rejected(message)
                 }
-                throw Failure.rejected("Groups are temporarily unavailable. Please try again.")
+                throw Failure.temporarilyUnavailable
             }
             if path == "me", [400, 422].contains(response.statusCode) {
                 throw Failure.rejected("Use a name with 1–100 characters and no control characters.")

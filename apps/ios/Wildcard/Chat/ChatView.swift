@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct ChatView: View {
     let contactID: String
+    @Environment(ConversationSync.self) private var sync
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
     @Environment(\.scenePhase) private var scenePhase
@@ -118,7 +119,7 @@ struct ChatView: View {
                 if !isAwayFromBottom || previous == nil || latest.map({ chat.isSubmitting($0.id) }) == true {
                     scrollToLatest(using: proxy)
                 }
-                Task { try? await contacts.refreshContact(id: contactID, using: auth) }
+                sync.request(.contact(contactID))
             }
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 composer
@@ -184,6 +185,7 @@ struct ChatView: View {
             lastComposerActivity = focused ? .now : .distantPast
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .active { noteVisibleRepliesRead() }
             if phase != .active { endVisit(); chat.clearPresence() }
             if phase == .background { cancelRecording() }
         }
@@ -195,14 +197,21 @@ struct ChatView: View {
         }
         .onAppear {
             isVisible = true
+            chat.isRetained = true
+            sync.visible = .contact(contactID)
+            sync.request(.contact(contactID))
             MessageSounds.shared.visibleContactID = contactID
             animateNewMessages = chat.hasLoaded
+            noteVisibleRepliesRead()
         }
         .onChange(of: chat.hasLoaded) { _, loaded in
             if loaded { animateNewMessages = true }
         }
         .onDisappear {
+            noteVisibleRepliesRead()
             isVisible = false
+            chat.isRetained = false
+            if sync.visible == .contact(contactID) { sync.visible = nil }
             if MessageSounds.shared.visibleContactID == contactID { MessageSounds.shared.visibleContactID = nil }
             endVisit()
             chat.clearPresence()
@@ -237,20 +246,15 @@ struct ChatView: View {
                 catch { return }
             }
         }
-        .task(id: scenePhase) {
-            guard scenePhase == .active else { return }
-            await chat.refresh(contactID: contactID, using: auth)
-            while !Task.isCancelled {
-                await chat.refresh(contactID: contactID, using: auth, force: false)
-                if isVisible, scenePhase == .active,
-                   let sequence = chat.turns.last(where: { $0.status == .complete })?.sequence {
-                    await contacts.markRead(id: contactID, sequence: sequence, using: auth)
-                }
-                if chat.isUnavailable { return }
-                do { try await Task.sleep(for: .seconds(3)) }
-                catch { return }
-            }
+        .onChange(of: chat.turns.last(where: { $0.status == .complete })?.sequence) { _, _ in
+            noteVisibleRepliesRead()
         }
+    }
+
+    private func noteVisibleRepliesRead() {
+        guard isVisible, scenePhase == .active,
+              let sequence = chat.turns.last(where: { $0.status == .complete })?.sequence else { return }
+        contacts.noteRead(id: contactID, sequence: sequence, using: auth)
     }
 
     private func scrollToLatest(using proxy: ScrollViewProxy) {
@@ -403,6 +407,7 @@ struct ChatView: View {
                         attachment = nil
                         Task {
                             let accepted = await chat.send(text: submitted, attachment: submittedAttachment, contactID: contactID, using: auth)
+                            sync.request(.contact(contactID))
                             if !accepted, draftRevision == submittedRevision, draft.isEmpty {
                                 draft = submitted
                                 if attachment == nil { attachment = submittedAttachment }

@@ -156,7 +156,7 @@ Unread state is independent of APNs delivery. Migration 0005 adds a contact read
 watermark; completed replies above it remain unread across app restarts. Contact
 rows and the Chats tab display counts, and active chats acknowledge only the
 latest loaded completed sequence. Lists revalidate immediately on activation and
-every three seconds, retaining later loaded pages; opening a conversation forces
+every second, retaining later loaded pages; opening a conversation forces
 history revalidation. Fetching a list or history never acknowledges it. See
 [contacts](contacts.md) for API, concurrency, migration, and rollback behavior.
 Pending pushes for acknowledged replies are removed, and the atomic delivery
@@ -286,9 +286,9 @@ before display. The reply bubble reports its appearance after a cancellable 250 
 wait for the insertion/scroll animation, rechecking visibility, account and active
 state. Deduplication prevents replay when a bubble reappears. Chat refreshes report
 newly completed turns for conversations outside the visible chat; contact-list unread increases resolve recent turn IDs through a
-history request, allowing foreground sounds even without APNs permission. Initial
-history, earlier pages, unchanged refreshes, and replies completed before the
-current foreground interval do not replay sounds. Outgoing sounds require server
+history request, allowing foreground sounds even without APNs permission. Replies completed before the current foreground interval do not replay sounds.
+Newly completed replies fetched for the first time during the interval can notify;
+unchanged history and already announced messages remain deduplicated. Outgoing sounds require server
 acceptance, including recovery of an accepted request after a timeout; failed
 submissions and reply retries do not play a send sound. State clears on sign-out.
 
@@ -358,17 +358,19 @@ extension. No new Apple capability, topic, resource or secret is required.
 
 Group list/detail responses contain per-member counts/read sequence. The list also
 returns at most 50 unread activity entries across current memberships for the
-foreground polling fallback. The app polls groups approximately every three
-seconds while active and updates the row badge, Chats badge and app icon. It waits
+foreground polling fallback. The app polls groups approximately every
+second while active and updates the row badge, Chats badge and app icon. It waits
 for both private/group initial snapshots before replacing the icon badge.
 `PUT /api/v1/groups/:id/read` acknowledges only existing displayed history, advances
-monotonically and clears queued deliveries for that member. Only a visible active
-group chat issues it; Home and details do not. Read revisions protect client state
+monotonically and clears queued deliveries for that member. A visible active
+group chat records the observation; the session can finish or retry its queued
+write from Home. Home and details never create observations from their snapshots. Read revisions protect client state
 from stale list responses, and a confirmed read removes corresponding delivered
 notifications from the current device.
 
-The delegate shows group banners outside the visible group, using the foreground
-chime. Polling can schedule a local foreground banner if APNs has not arrived;
+The delegate treats remote foreground pushes as synchronization hints. After the
+list applies fetched activity, iOS schedules group banners outside the visible
+group, using the foreground chime. Polling supplies the same path without APNs;
 message IDs deduplicate both paths during that foreground session. Inside the
 attended group, only the new bubble's in-chat sound plays after insertion. No old
 sounds/local alerts replay on activation. Alert permissions continue to apply;
@@ -387,3 +389,28 @@ validation were performed while implementing this change.
 
 References: [Apple foreground presentation options](https://developer.apple.com/documentation/usernotifications/unnotificationpresentationoptions)
 and [APNs request headers and limits](https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns).
+
+## Synchronization before foreground presentation
+
+Remote foreground APNs callbacks queue a session refresh and suppress immediate
+audio/banner presentation. The shared history or Home summary is updated before
+notification presentation is requested. Visible chats continue to wait for the
+reply row's insertion delay. Audio adds 100 ms for observation updates and checks
+the same account, foreground interval and visible conversation again. Group local
+notifications use the existing message-ID deduplication. Background/terminated
+APNs behavior is unchanged.
+
+The session uses a one-second polling fallback and independent list/history
+requests. This interval is not an end-to-end timing guarantee. See
+[shared synchronization](caching.md#shared-conversation-synchronization) for
+regression commands, lifecycle, cache behavior and device verification. The
+isolated checks do not exercise real audio, notification delivery or screen
+rendering. Install the updated iOS binary; no API deployment is needed.
+
+Unread-watermark acknowledgements now belong to the signed-in session rather than
+a view's cancellable task. A visible private/group chat queues the latest loaded
+read sequence synchronously. Leaving does not abandon it; the foreground timer
+retries failures independently of list requests, and updates row/tab/icon counts
+after server acknowledgement. These intents do not acknowledge unseen Home
+previews. See [read acknowledgement lifetime](caching.md#read-acknowledgement-lifetime)
+for retention, stale-response protection and pending device verification.

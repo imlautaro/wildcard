@@ -175,9 +175,10 @@ create no bubble, notification or unread count.
 Client-generated message UUIDs make submission idempotent. An uncertain network
 failure retains the same UUID for retry. Database rejection restores the draft.
 Earlier history is paginated in pages of 50, and polling catches up across missing
-pages after backgrounding. Message/reply-status polling restarts when the group
-becomes visible or returns to the foreground. Read acknowledgements run in a
-separate task, so a slow acknowledgement cannot hold up incoming messages or
+pages after backgrounding. The session synchronizer refreshes visible history and
+reply status on its one-second foreground tick; changed cached groups and pending
+outgoing receipts also refresh while Home is visible. Unread acknowledgements run
+in a session queue that survives navigation, so a slow acknowledgement cannot hold up incoming messages or
 leave an old typing indicator on screen. Device verification of slow read
 acknowledgements, background/foreground transitions and returning from group
 details remains pending. Revoked group access clears the visible chat on 404.
@@ -380,7 +381,8 @@ Every new message from a different human or any contact counts as unread for eac
 current human member until their read watermark advances. Your own messages do
 not count or notify your other devices. Opening the group acknowledges its loaded
 history only while the chat is visible and the app is active; Home, group details
-and background polling never acknowledge it. Counts appear on group rows, the
+and background polling do not create read observations. A queued observation can
+finish or retry after leaving the chat. Counts appear on group rows, the
 Chats tab and the app icon, combined with private unread replies. `PUT /:id/read`
 accepts a positive displayed sequence, never moves backwards, clamps it to actual
 group history and removes read notifications from the server outbox. It has a
@@ -408,7 +410,7 @@ the 64-byte APNs collapse-ID limit. These are standard group alerts using the ap
 icon; private-contact communication-avatar notifications keep their existing path.
 
 While active outside the group, a remote alert presents a system banner and the
-foreground chime. Three-second group polling also supplies bounded unread activity
+foreground chime. One-second group polling also supplies bounded unread activity
 as a local foreground fallback. Stable message IDs deduplicate the banner and
 sound across polling/APNs. While viewing the group, a new received bubble uses
 the in-chat sound after insertion, with no banner. Outgoing sound requires server
@@ -430,3 +432,24 @@ Group chat history and details now share a bounded session cache. Member avatars
 use the protected image cache, and navigation revalidates while retaining loaded
 content. See [group navigation caching](caching.md#group-navigation-and-secondary-screens)
 for eviction, pagination, access invalidation and device verification.
+
+## Consistent Home and group navigation
+
+Home projects the same cached latest message, sender and aggregate receipt as the
+group view. List receipts reconcile by message ID, and delayed history/pagination
+cannot regress a Read check. The optimistic clock changes to Sent on server
+acceptance, before a follow-up history request or the send sound. HTTP acceptance
+does not confirm recipient receipt. Transient server/rate-limit failures retain
+the submission UUID. Foreground remote pushes wake synchronization before fetched
+activity produces audio/banner presentation. Histories, lists, invitations and
+read acknowledgements have separate lifecycles. See [shared synchronization](caching.md#shared-conversation-synchronization)
+for polling limits, cache budgets, isolated regressions and pending device checks.
+No backend change or new infrastructure is required; install the updated iOS app.
+
+Unread-watermark writes survive view cancellation and coalesce observations made
+while another write is pending. The session timer retries failures even if Home's
+list request is stalled. Observed recipient read receipts also retry through cached
+history refreshes; they remain separate from watermarks. Group cache hits preserve
+the same store without observable LRU writes during render. See
+[read acknowledgement lifetime](caching.md#read-acknowledgement-lifetime) for
+cancellation, count reconciliation, retention and verification limits.
