@@ -23,8 +23,16 @@ struct ContactsPage: Decodable, Sendable {
     let nextCursor: String?
 }
 
+struct ContactEnergy: Decodable, Sendable {
+    let points: Int
+    let capacity: Int
+    let rechargeIntervalSeconds: Int
+    let nextPointAt: Double?
+}
+
 extension AuthAPI {
     private struct ContactEnvelope: Decodable { let contact: Contact }
+    private struct EnergyEnvelope: Decodable { let energy: ContactEnergy }
     private struct ContactInput: Encodable { let name: String }
 
     func contacts(token: String, before: String? = nil) async throws -> ContactsPage {
@@ -55,6 +63,12 @@ extension AuthAPI {
         let (response, _) = try await send(path: "contacts/\(id)/photo", method: data == nil ? "DELETE" : "PUT",
                                            body: data, token: token, contentType: "image/jpeg")
         return try JSONDecoder().decode(ContactEnvelope.self, from: response).contact
+    }
+
+    func contactEnergy(id: String, reset: Bool = false, token: String) async throws -> ContactEnergy {
+        let suffix = reset ? "/reset" : ""
+        let (data, _) = try await send(path: "contacts/\(id)/energy\(suffix)", method: reset ? "POST" : "GET", token: token)
+        return try JSONDecoder().decode(EnergyEnvelope.self, from: data).energy
     }
 
     func deleteContact(id: String, token: String) async throws {

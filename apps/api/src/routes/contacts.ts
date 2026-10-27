@@ -1,3 +1,4 @@
+import { readEnergy } from '../groups/energy';
 import { photoKey, photoResponse, removePhoto, validPhoto, readPhoto } from '../photos/storage';
 import { totalUnreadReplies } from '../lib/unread';
 import { Hono } from 'hono';
@@ -88,6 +89,34 @@ contacts.get('/:id', async (c) => {
   const result = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ?1 AND user_id = ?2`)
     .bind(c.req.param('id'), c.get('owner')).first<Contact>();
   return result ? c.json({ contact: result }) : c.json({ error: 'Contact not found' }, 404);
+});
+
+async function energyOwner(db: D1Database, id: string, userID: string) {
+  return db.prepare(`SELECT a.id FROM contact c JOIN contact_agent a ON a.id = c.agent_id
+    WHERE c.id = ? AND c.user_id = ? AND a.owner_id = c.user_id`).bind(id, userID).first<{ id: string }>();
+}
+
+contacts.get('/:id/energy', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const agent = await energyOwner(c.env.DB, c.req.param('id'), c.get('owner'));
+  if (!agent) return c.json({ error: 'Contact not found or creator access required' }, 404);
+  return c.json({ energy: await readEnergy(c.env.DB, agent.id) });
+});
+
+contacts.post('/:id/energy/reset', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const agent = await energyOwner(c.env.DB, c.req.param('id'), c.get('owner'));
+  if (!agent) return c.json({ error: 'Contact not found or creator access required' }, 404);
+  const admission = await admitAuthRequest(c.env.DB, c.get('owner'), 'agent-energy-reset', 12);
+  if (!admission.allowed) {
+    c.header('Retry-After', String(admission.retryAfter));
+    return c.json({ error: 'Too many energy resets' }, 429);
+  }
+  const updated = await c.env.DB.prepare(`UPDATE contact_agent SET energy = 50, energy_updated_at = ?
+    WHERE id = ? AND owner_id = ? AND EXISTS (SELECT 1 FROM contact WHERE id = ? AND user_id = ? AND agent_id = contact_agent.id)
+    RETURNING id`).bind(Date.now(), agent.id, c.get('owner'), c.req.param('id'), c.get('owner')).first();
+  if (!updated) return c.json({ error: 'Contact no longer available' }, 404);
+  return c.json({ energy: await readEnergy(c.env.DB, agent.id) });
 });
 
 contacts.patch('/:id', contactBody, async (c) => {

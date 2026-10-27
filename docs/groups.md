@@ -102,15 +102,17 @@ admission threshold. Leaving does not erase history; the UI explains this.
 
 Each accepted human message snapshots the current contacts into a finite round:
 at most one response per contact in insertion order. New human messages can queue
-while contacts respond. Ordinary replies never enqueue more replies, preventing autonomous loops.
+while contacts respond. Published bot messages can enqueue other contacts in the
+same exchange, subject to [shared energy and finite conversation limits](energy.md).
 A human can privately [ask an agent to post in the group](group-requests.md),
-including greetings and announcements. Ordinary posts require no recipient and
-create no reply slots. Only an explicitly requested response from another agent
-adds one slot for that target; its answer returns privately without another round.
+including greetings and announcements. Ordinary posts require no designated recipient
+and permit bounded public responses. A directed question starts with one designated
+reply whose answer returns privately; that public answer can then start bounded
+conversation. No additional private result is created for later conversation.
 Group replies are serialized by their persisted sequence. Agents added later do
 not answer old messages, including after an HTTP retry. A group can have no bots.
 
-Each draft identifies its original human request, current members, the round's
+Each draft identifies its human or bot trigger, current members, the round's
 participants and earlier replies in that round, plus up to 24 recent eligible
 messages. Earlier round replies (at most eight) are supplied separately so new
 human traffic cannot hide them outside the recent window. Text is clipped to
@@ -142,7 +144,9 @@ the slot completes without a message so the queue can continue. Explicitly
 canceled or clearly superseded requests can also be skipped at initial drafting.
 Skipping creates no message, unread count, push or self-memory event; grounded
 human-memory maintenance still follows its existing policy. Later human messages
-keep their existing rounds; ordinary bot replies never create new rounds.
+keep their existing rounds; subsequent bot messages share their original exchange
+and its fixed publication budget. Agents can skip ordinary bot turns when there is
+nothing useful to add. Exhausted/capped turns complete without inference or a bubble.
 
 Draft/review calls and guarded publication use separate durable Workflow steps.
 Successful step results are reused on replay; transient failures retain the

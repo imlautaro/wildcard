@@ -33,6 +33,7 @@ function fixture() {
         if (state.fault === 'receipt' && sql.startsWith('SELECT post.id')) throw Error('D1_TEST_PRIVATE_TEXT');
         const { stmt, params } = this.execute(); return stmt.get(...params) ?? null;
       },
+      async run() { const { stmt, params } = this.execute(); const result = stmt.run(...params); return { meta: { changes: result.changes } }; },
       async all() { const { stmt, params } = this.execute(); return { results: stmt.all(...params) }; },
     };
   }, async batch(statements) {
@@ -40,11 +41,14 @@ function fixture() {
     if (state.fault === 'write') throw Error('D1_TEST_PRIVATE_TEXT');
     sqlite.exec('BEGIN');
     try {
-      for (const s of statements) { const { stmt, params } = s.execute(); stmt.run(...params); }
+      const results = statements.map(s => { const { stmt, params } = s.execute();
+        if (stmt.columns().length) return {results: stmt.all(...params), meta: {changes: 0}};
+        return {results: [], meta: {changes: stmt.run(...params).changes}};
+      });
       sqlite.exec('COMMIT');
-    } catch (error) { sqlite.exec('ROLLBACK'); throw error; }
-    if (state.fault === 'committed') throw Error('D1_TEST_PRIVATE_TEXT');
-    return [];
+      if (state.fault === 'committed') throw Error('D1_TEST_PRIVATE_TEXT');
+      return results;
+    } catch (error) { if (sqlite.isTransaction) sqlite.exec('ROLLBACK'); throw error; }
   } };
   sqlite.exec(`INSERT INTO user(id,name,email,created_at,updated_at) VALUES
     ('human','Demo Human','human@example.invalid',0,0), ('other','Other Human','other@example.invalid',0,0);
@@ -72,7 +76,7 @@ function fixture() {
         message: { content: state.fault === 'json' ? '{' : JSON.stringify({ authorized: state.decision }) } }] }));
     },
   });
-  for (const file of ['chat/meta.ts', 'groups/request-access.ts', 'groups/requests.ts', 'chat/context.ts']) vm.runInContext(source(file), context);
+  for (const file of ['chat/meta.ts', 'groups/energy.ts', 'groups/request-access.ts', 'groups/requests.ts', 'chat/context.ts']) vm.runInContext(source(file), context);
   const env = { DB, META_API_KEY: 'fictional-not-a-key', META_CHAT_MODEL: 'muse-spark-1.3-contributor' };
   let counter = 0;
   function turn(text = 'Say hello in Demo Group.') {
@@ -96,12 +100,13 @@ async function check(name, run) {
   try { await run(f); checks++; console.log('PASS ' + name); }
   finally { f.sqlite.close(); }
 }
-(async () => {
-  await check('plain greeting posts without target or reply slots', async f => {
+module.exports = { fixture, source };
+if (require.main === module) (async () => {
+  await check('plain greeting posts and allows bounded group replies without a private return', async f => {
     const r = await f.call(f.turn());
     assert.equal(r.published, true); assert.equal(r.replyExpected, false);
-    assert.equal(f.count('group_post'), 1); assert.equal(f.count('group_message'), 1); assert.equal(f.count('group_reply'), 0);
-    assert.equal(f.count('agent_memory_event'), 0); assert.equal(f.state.dispatches, 0);
+    assert.equal(f.count('group_post'), 1); assert.equal(f.count('group_message'), 1); assert.equal(f.count('group_reply'), 1);
+    assert.equal(f.count('agent_memory_event'), 0); assert.equal(f.state.dispatches, 1);
   });
   await check('ordinary post works with only the sending bot', async f => {
     f.sqlite.exec("DELETE FROM group_agent WHERE agent_id='target'");
@@ -117,7 +122,7 @@ async function check(name, run) {
     assert.equal(destinations[0].targetAgentID, 'target'); assert.ok(!JSON.stringify(destinations).includes('favorite color'));
     const r = await f.call(t, 'send_group_message', { groupID: 'group', text: 'Bot Two, hello!' });
     assert.equal(r.published, true); assert.equal(r.replyExpected, false);
-    assert.equal(f.count('group_reply'), 1); assert.equal(f.count('group_message'), 2);
+    assert.equal(f.count('group_reply'), 2); assert.equal(f.count('group_message'), 2);
     assert.equal(f.state.evidence.recentDestinations.length, 1);
     assert.equal(f.state.evidence.recentDialogue.length, 0);
   });

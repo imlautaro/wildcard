@@ -316,10 +316,10 @@ groups.post('/:id/messages', async (c) => {
     await c.env.DB.prepare('INSERT INTO chat_attachment_object (object_key, created_at) VALUES (?, ?)').bind(key, now).run();
     await c.env.CONTACT_PHOTOS.put(key, attachment.bytes, { httpMetadata: { contentType: attachment.metadata.mimeType } });
   }
-  // One human message creates one finite round. Bot replies never enqueue more replies.
+  // Snapshot the human round. Subsequent bot replies share its bounded exchange.
   await c.env.DB.batch([
-    c.env.DB.prepare(`INSERT INTO group_message (id, group_id, user_id, sender_name, text, created_at, contributor_consent, attachment_json)
-      SELECT ?3, ?1, u.id, u.name, ?4, ?5, m.contributor_consent, ?7 FROM user u JOIN group_member m ON m.user_id = u.id AND m.group_id = ?1
+    c.env.DB.prepare(`INSERT INTO group_message (id, group_id, user_id, sender_name, text, created_at, contributor_consent, attachment_json, exchange_id, requester_id)
+      SELECT ?3, ?1, u.id, u.name, ?4, ?5, m.contributor_consent, ?7, ?3, ?2 FROM user u JOIN group_member m ON m.user_id = u.id AND m.group_id = ?1
       WHERE u.id = ?2 AND (?6 = 0 OR NOT EXISTS (SELECT 1 FROM group_member WHERE group_id = ?1 AND contributor_consent = 0))
       AND (SELECT COUNT(*) FROM group_reply WHERE group_id = ?1 AND status IN ('queued', 'running')) < 64
       ON CONFLICT(id) DO NOTHING`).bind(id, owner, b.id, b.text.trim(), now, contributor(c.env) ? 1 : 0, attachmentJSON),

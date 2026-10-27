@@ -15,6 +15,7 @@ final class ContactsStore {
     private let readAcknowledgements = ReadAcknowledgementQueue()
     let conversations = ConversationCache()
     let scheduleSnapshots = NavigationSnapshotCache<[ContactSchedule]>()
+    let energySnapshots = NavigationSnapshotCache<ContactEnergy>()
     let sharingSnapshots = NavigationSnapshotCache<ContactSharing>()
     private var refreshRequest: (id: UUID, task: Task<Void, Never>)?
     private var warmingTask: Task<Void, Never>?
@@ -152,6 +153,7 @@ final class ContactsStore {
                 conversations.remove(contactID: contact.id)
                 scheduleSnapshots.remove(id: contact.id)
                 sharingSnapshots.remove(id: contact.id)
+                energySnapshots.remove(id: contact.id)
                 knownContacts.removeValue(forKey: contact.id)
                 contactRefreshedAt.removeValue(forKey: contact.id)
                 messageTimestamps.removeValue(forKey: contact.id)
@@ -290,6 +292,7 @@ final class ContactsStore {
             await auth.images.clear(deactivate: false)
             scheduleSnapshots.remove(id: contact.id)
             sharingSnapshots.remove(id: contact.id)
+            energySnapshots.remove(id: contact.id)
             readAcknowledgements.remove(id: contact.id)
             conversations.remove(contactID: contact.id)
             messageTimestamps.removeValue(forKey: contact.id)
@@ -326,6 +329,7 @@ final class ContactsStore {
                 guard request == generation else { return }
                 scheduleSnapshots.remove(id: id)
                 sharingSnapshots.remove(id: id)
+                energySnapshots.remove(id: id)
                 readAcknowledgements.remove(id: id)
                 conversations.remove(contactID: id)
                 messageTimestamps.removeValue(forKey: id)

@@ -1070,3 +1070,34 @@ remote migration, provider call or deployment was performed for local validation
 Rollback may run the previous API while leaving this additive migration in place;
 do not remove the table/column or recreate history to undo code. Historical receipt
 evidence is not reconstructible from current membership or push acceptance.
+
+
+## Group energy and automatic bot conversation
+
+Apply additive migration `0023_agent_energy.sql` through the existing automatic release
+pipeline after authorized commit/push. Independent installations use the same D1 binding,
+all ordered migrations, existing Workflow, recovery Cron and model configuration. There
+are no new account IDs, resources, secrets or client-side scheduling requirements. Local
+setup remains `npm ci` and `npm run auth:setup:local`. No remote setup or manual deployment
+is required for this feature. See [energy](energy.md) for API, retention and behavior.
+
+The migration initializes existing balances at 50, backfills exchange lineage without
+starting historical conversations, and installs atomic debit/admission triggers. New
+agents initialize their recharge clock in SQL. Existing receipt/push outboxes still
+capture all published messages. Creator access is checked using authenticated contact
+ownership, independently of cached UI roles; reset is limited to 12/account/minute.
+
+Before release run the opt-in fictional-data energy/publication/receipt checks and API
+static typecheck. After authorized push, verify the automatic build/source tag and that
+0023 has no pending migration; then verify installed iOS behavior with fictional accounts.
+Local SQLite checks do not establish production D1/model/device behavior.
+
+Rollback requires a reviewed forward migration alongside the reverted application:
+drop `group_energy_and_continuation` and `group_energy_guard` to stop automatic admission
+and debits, and mark queued `auto-` replies complete only where no attention claim exists.
+Let running Workflows release their own attention or use normal recovery; never delete
+active locks. Preserve energy columns, lineage, counters, messages and receipts. Older
+API code alone is not a complete rollback because the new triggers would still enqueue
+turns it cannot interpret. Restore the triggers through another versioned migration if
+re-enabling the feature. Ship rollback by commit/push and automatic release as usual;
+do not drop data tables or run a manual deployment.

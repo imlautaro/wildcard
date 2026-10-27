@@ -54,13 +54,15 @@ export const verification = sqliteTable('verification', {
 }, (table) => [index('verification_identifier_idx').on(table.identifier)]);
 
 export const contactAgent = sqliteTable('contact_agent', {
+  energy: integer('energy').notNull().default(50),
+  energyUpdatedAt: integer('energy_updated_at').notNull().default(0),
   id: text('id').primaryKey(),
   ownerId: text('owner_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   photoVersion: text('photo_version'),
   updatedAt: date('updated_at').notNull().default(sql`0`),
   memoryShared: integer('memory_shared', { mode: 'boolean' }).notNull().default(false),
-}, (table) => [check('agent_memory_shared', sql`${table.memoryShared} IN (0, 1)`)]);
+}, (table) => [check('agent_energy_range', sql`${table.energy} BETWEEN 0 AND 50`), check('agent_memory_shared', sql`${table.memoryShared} IN (0, 1)`)]);
 
 export const contact = sqliteTable('contact', {
   agentId: text('agent_id').references(() => contactAgent.id, { onDelete: 'cascade' }),
@@ -304,6 +306,8 @@ export const groupInvite = sqliteTable('group_invite', {
 }, (t) => [foreignKey({ columns: [t.groupId, t.senderId], foreignColumns: [groupMember.groupId, groupMember.userId] }).onDelete('cascade'),
   uniqueIndex('group_invite_recipient_unique').on(t.groupId, t.recipientId), index('group_invite_recipient_idx').on(t.recipientId, t.expiresAt)]);
 export const groupMessage = sqliteTable('group_message', {
+  exchangeId: text('exchange_id').references((): AnySQLiteColumn => groupMessage.id, { onDelete: 'set null' }),
+  requesterId: text('requester_id').references(() => user.id, { onDelete: 'set null' }),
   receiptsTracked: integer('receipts_tracked').notNull().default(0),
   attachmentJSON: text('attachment_json'),
   requestId: text('request_id').references((): AnySQLiteColumn => groupRequest.id, { onDelete: 'set null' }),
@@ -317,9 +321,14 @@ export const groupMessage = sqliteTable('group_message', {
   roundEnqueued: integer('round_enqueued').notNull().default(0),
   text: text('text').notNull(),
   createdAt: date('created_at').notNull(),
-}, (t) => [index('group_message_history_idx').on(t.groupId, desc(t.sequence)),
+}, (t) => [index('group_message_exchange_idx').on(t.exchangeId, t.sequence), index('group_message_history_idx').on(t.groupId, desc(t.sequence)),
   uniqueIndex('group_message_request_idx').on(t.requestId).where(sql`${t.requestId} IS NOT NULL`),
   check('group_attachment_json', sql`${t.attachmentJSON} IS NULL OR json_valid(${t.attachmentJSON})`)]);
+export const groupExchange = sqliteTable('group_exchange', {
+  rootId: text('root_id').primaryKey().references(() => groupMessage.id, { onDelete: 'cascade' }),
+  botMessages: integer('bot_messages').notNull().default(0),
+}, (t) => [check('group_exchange_budget', sql`${t.botMessages} BETWEEN 0 AND 100`)]);
+
 export const groupReply = sqliteTable('group_reply', {
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
   id: text('id').notNull().unique(),

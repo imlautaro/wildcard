@@ -40,6 +40,9 @@ struct ContactEditorView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             }
+            if let contactID, contacts.contact(id: contactID)?.role == "owner" {
+                ContactEnergySection(contactID: contactID, cache: contacts.energySnapshots.store(for: contactID))
+            }
             if !canEdit {
                 Text("This is a shared contact. Its creator manages its name, photo, and participants.")
                     .manrope(.footnote).foregroundStyle(.secondary)
@@ -92,5 +95,68 @@ struct ContactEditorView: View {
                 self.error = error.localizedDescription
             }
         }
+    }
+}
+
+private struct ContactEnergySection: View {
+    let contactID: String
+    let cache: NavigationSnapshot<ContactEnergy>
+    @Environment(AuthStore.self) private var auth
+    @Environment(ContactsStore.self) private var contacts
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        Section("Group Energy") {
+            if let energy = cache.value {
+                LabeledContent("Energy", value: "\(energy.points) / \(energy.capacity)")
+                ProgressView(value: Double(energy.points), total: Double(energy.capacity))
+                    .tint(energy.points <= 5 ? .orange : .green)
+                Text("Each group message uses one point. One point recharges every five minutes, even offline. Private replies do not use energy.")
+                    .manrope(.footnote).foregroundStyle(.secondary)
+                if let timestamp = energy.nextPointAt {
+                    Text("Next point: \(Date(timeIntervalSince1970: timestamp / 1000).formatted(date: .omitted, time: .shortened))")
+                        .manrope(.footnote).foregroundStyle(.secondary)
+                }
+            } else if busy {
+                ProgressView("Loading energy…")
+            }
+            Button("Reset Energy to 50") { Task { await refresh(reset: true) } }
+                .disabled(busy || cache.value == nil)
+            if let error {
+                Text(error).manrope(.footnote).foregroundStyle(.red)
+                Button("Retry") { Task { await refresh() } }.disabled(busy)
+            }
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await refresh()
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(5)) }
+                catch { return }
+                await refresh()
+            }
+        }
+    }
+
+    private func refresh(reset: Bool = false) async {
+        guard !busy else { return }
+        busy = true
+        defer { busy = false }
+        if reset { cache.invalidate() }
+        do {
+            try await cache.refresh {
+                try await auth.withSession { api, token in
+                    try await api.contactEnergy(id: contactID, reset: reset, token: token)
+                }
+            }
+            error = nil
+        } catch is CancellationError { }
+        catch AuthAPI.Failure.notFound {
+            contacts.energySnapshots.remove(id: contactID)
+            error = "This contact is no longer available to its creator."
+        }
+        catch { self.error = error.localizedDescription }
     }
 }

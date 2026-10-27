@@ -1,3 +1,4 @@
+import { groupEnergyAvailable } from './energy';
 import { maintainAgentMemories } from '../chat/agent-memory';
 import { groupSourceAccess } from './request-access';
 import { dispatchGroupRequests } from './request-results';
@@ -40,12 +41,14 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft): Pr
   // The watermark guard and insert run in the same transaction. If a message
   // arrived after review, neither publication nor a skip can complete this slot.
   const results = await env.DB.batch([
-    env.DB.prepare(`INSERT INTO group_message (id, group_id, agent_id, sender_name, text, created_at, contributor_consent)
-      SELECT r.id, r.group_id, r.agent_id, a.name, ?3, ?4, ?5 FROM group_reply r JOIN contact_agent a ON a.id = r.agent_id
+    env.DB.prepare(`INSERT INTO group_message (id, group_id, agent_id, sender_name, text, created_at, contributor_consent, exchange_id, requester_id)
+      SELECT r.id, r.group_id, r.agent_id, a.name, ?3, ?4, ?5, source.exchange_id, source.requester_id
+      FROM group_reply r JOIN contact_agent a ON a.id = r.agent_id JOIN group_message source ON source.id = r.source_id
       WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND ?3 IS NOT NULL
-      AND ${access} AND ${unchangedHistory} ON CONFLICT(id) DO NOTHING`).bind(...bindings),
+      AND ${access} AND ${unchangedHistory} AND ${groupEnergyAvailable('r')} ON CONFLICT(id) DO NOTHING`).bind(...bindings),
     env.DB.prepare(`UPDATE group_reply AS r SET status = 'complete' WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
       AND (EXISTS (SELECT 1 FROM group_message saved WHERE saved.id = r.id)
+        OR (NOT (${groupEnergyAvailable('r')}))
         OR (?3 IS NULL AND ${access} AND ${unchangedHistory}))`).bind(...bindings),
     env.DB.prepare(`SELECT r.status, EXISTS (SELECT 1 FROM group_message WHERE id = r.id) AS published,
       EXISTS (SELECT 1 FROM group_message newer WHERE newer.group_id = r.group_id AND newer.sequence > ?3) AS changed
@@ -74,54 +77,64 @@ export async function runGroup(env: Env, job: GroupJob, step: WorkflowStep) {
           .bind(job.turnID, job.attempt, Date.now() + 900_000),
       ]);
     });
-    await refreshSelfMemory(env, job, step, 'group-refresh-self-memory');
-    let draft: GroupDraft | undefined;
-    let outcome: PublishOutcome = 'changed';
-    // Each draft/review is durable independently, so successful model calls are
-    // not repeated when a later publish step retries or the Workflow resumes.
-    for (let review = 0; review <= 2; review++) {
-      const previous = draft;
-      draft = await step.do(`group-prepare-draft-${review}`, {
-        retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' }, timeout: '3 minutes',
-      }, async () => {
-        const task = await env.DB.prepare('SELECT status FROM group_reply WHERE id = ? AND attempt = ?')
-          .bind(job.turnID, job.attempt).first<{ status: string }>();
-        if (!task || task.status !== 'running') return null;
-        return prepareGroupDraft(env, job, previous);
-      }) ?? undefined;
-      if (!draft) { outcome = 'inactive'; break; }
-      const prepared = draft;
-      outcome = await step.do(`group-publish-draft-${review}`, async () => publishGroupDraft(env, job, prepared));
-      if (outcome !== 'changed') break;
-    }
-    if (outcome === 'changed') {
-      await step.do('group-supersede-changing-turn', async () => {
-        // Never publish the last unchecked draft. New human messages already
-        // have their own rounds; close this obsolete slot and unblock the queue.
-        const result = await env.DB.prepare(`UPDATE group_reply SET status = 'complete'
-          WHERE id = ?1 AND attempt = ?2 AND status = 'running'
-          AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)
-          AND NOT EXISTS (SELECT 1 FROM group_message WHERE id = ?1)`)
-          .bind(job.turnID, job.attempt).run();
-        if (result.meta.changes) console.log(JSON.stringify({ event: 'group_turn_superseded', reason: 'context_kept_changing' }));
-      });
-    }
-    await step.do('group-deliver-push', async () => {
-      try { await deliverGroupPush(env, job.turnID); }
-      catch { console.error(JSON.stringify({ event: 'group_push_deferred' })); }
+    const canSpeak = await step.do('group-energy-admission', async () => {
+      const row = await env.DB.prepare(`UPDATE group_reply AS r SET status = 'complete'
+        WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND NOT (${groupEnergyAvailable('r')})
+        RETURNING id`).bind(job.turnID, job.attempt).first();
+      return !row;
     });
-    try {
-      await step.do('group-remember', { retries: { limit: 1, delay: '5 seconds' }, timeout: '1 minute' }, async () => {
-        await rememberGroupMessage(env, job.turnID, job.attempt);
+    if (canSpeak) {
+      await refreshSelfMemory(env, job, step, 'group-refresh-self-memory');
+      let draft: GroupDraft | undefined;
+      let outcome: PublishOutcome = 'changed';
+      // Each draft/review is durable independently, so successful model calls are
+      // not repeated when a later publish step retries or the Workflow resumes.
+      for (let review = 0; review <= 2; review++) {
+        const previous = draft;
+        draft = await step.do(`group-prepare-draft-${review}`, {
+          retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' }, timeout: '3 minutes',
+        }, async () => {
+          const task = await env.DB.prepare('SELECT status FROM group_reply WHERE id = ? AND attempt = ?')
+            .bind(job.turnID, job.attempt).first<{ status: string }>();
+          if (!task || task.status !== 'running') return null;
+          return prepareGroupDraft(env, job, previous);
+        }) ?? undefined;
+        if (!draft) { outcome = 'inactive'; break; }
+        const prepared = draft;
+        outcome = await step.do(`group-publish-draft-${review}`, async () => publishGroupDraft(env, job, prepared));
+        if (outcome !== 'changed') break;
+      }
+      if (outcome === 'changed') {
+        await step.do('group-supersede-changing-turn', async () => {
+          // Never publish the last unchecked draft. New human messages already
+          // have their own rounds; close this obsolete slot and unblock the queue.
+          const result = await env.DB.prepare(`UPDATE group_reply SET status = 'complete'
+            WHERE id = ?1 AND attempt = ?2 AND status = 'running'
+            AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)
+            AND NOT EXISTS (SELECT 1 FROM group_message WHERE id = ?1)`)
+            .bind(job.turnID, job.attempt).run();
+          if (result.meta.changes) console.log(JSON.stringify({ event: 'group_turn_superseded', reason: 'context_kept_changing' }));
+        });
+      }
+      await step.do('group-deliver-push', async () => {
+        try { await deliverGroupPush(env, job.turnID); }
+        catch { console.error(JSON.stringify({ event: 'group_push_deferred' })); }
       });
-    } catch { console.error(JSON.stringify({ event: 'group_memory_deferred' })); }
+      try {
+        await step.do('group-remember', { retries: { limit: 1, delay: '5 seconds' }, timeout: '1 minute' }, async () => {
+          await rememberGroupMessage(env, job.turnID, job.attempt);
+        });
+      } catch { console.error(JSON.stringify({ event: 'group_memory_deferred' })); }
+    }
   } catch {
     await step.do('group-save-failure', async () => {
       await env.DB.prepare(`UPDATE group_reply SET status = 'failed' WHERE id = ? AND attempt = ? AND status IN ('queued','running')`)
         .bind(job.turnID, job.attempt).run();
     });
   }
-  await refreshSelfMemory(env, job, step, 'group-remember-self-reply');
+  const published = await step.do('group-has-publication', async () => !!await env.DB.prepare(
+    'SELECT id FROM group_message WHERE id = ?').bind(job.turnID).first());
+  if (published) await refreshSelfMemory(env, job, step, 'group-remember-self-reply');
   await step.do('group-release-attention', async () => {
     const task = await env.DB.prepare('SELECT group_id AS groupID FROM group_reply WHERE id = ?').bind(job.turnID).first<{ groupID: string }>();
     await env.DB.prepare(`UPDATE agent_presence SET status = 'online', expires_at = ?3

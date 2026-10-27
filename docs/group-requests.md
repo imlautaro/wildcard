@@ -3,17 +3,20 @@
 A human can privately ask a contact to post in a group they share: “Say hello in
 Friends”, “Tell the group the meeting starts at five”, or other requested text.
 The contact publishes as itself and confirms privately. No other bot is required;
-an ordinary post creates no reply slots or later private result. Every group member
+an ordinary post allows other group agents to respond within their shared energy
+and finite exchange limits, without a later private result. Every group member
 can see the publication. The surrounding private conversation stays private.
 
 When the human requests a response from one specific other agent, such as “Ask Bot
 Two in Friends what its favorite color is”, the target receives one group reply
-slot and its answer returns privately with attribution. Addressing or greeting a
-bot alone does not request an automatic reply.
+slot and its answer returns privately with attribution. That public answer can
+start bounded conversation. Addressing or greeting a bot alone does not request a
+designated answer or private return; ordinary public responses remain possible.
 
 ## Authorization and audience
 
-`send_group_message(groupID, text)` publishes without requesting a reply.
+`send_group_message(groupID, text)` publishes without requesting a designated answer or private return.
+Other agents may respond under the [energy policy](energy.md).
 `ask_agent_in_group(groupID, targetAgentID, question)` requests one target answer
 and its private return. Both are available only in a human private turn. Addressing
 a bot in a statement uses the first tool, without a target argument. This separates
@@ -48,7 +51,9 @@ Semantic review is model-based and fallible. Deterministic protections are scope
 tools, fixed authorship, SQL permission guards, uniqueness constraints and finite
 target slots. There is no guarantee of perfect intent detection or injection
 resistance. Permission covers only the requested publication, not private transcripts,
-arbitrary memories, attachments or continued autonomous bot conversations.
+arbitrary memories or attachments. Subsequent public conversation is separately
+bounded by the server's energy/exchange policy and cannot invoke publication tools
+or expose private transcripts.
 
 Authorization retains low reasoning with a 2,048-token completion budget. The
 previous 400-token budget was too restrictive for a reasoning model's structured
@@ -141,8 +146,9 @@ identifies the asking agent and requesting human separately without impersonatio
 Migration `0021_group_posts.sql` extends this with plain-post receipts and SQL
 triggers that enforce one publication across both tables. It does not rewrite
 0020 or alter in-flight directed requests. A D1 batch saves the plain-post receipt
-and message together after the same attention/access checks. It creates no
-`group_reply`, pending request or automatic private turn. Ordinary posts do not
+and message together after the same attention/access checks. Migration 0023 now
+creates bounded public `group_reply` opportunities, but no pending directed request
+or automatic private turn. Ordinary posts do not
 consume the pending-response budget or require another agent. Historical tool calls
 with the older generic nullable-target signature remain accepted. The planner now
 sees separate publication and question tools. Replays across tool names or modes return the
@@ -182,7 +188,8 @@ requests per human; existing 64-slot group admission
 and ten active private turns per account. The planner keeps two tool rounds/six
 executions. The normal path adds authorization and relay completions to the existing
 group response; plain posts add only authorization inference. Latency/cost are
-unmeasured. Attachments, multiple publications per human turn, multiple automatic
+unmeasured. Ordinary posts may now add group inference within the energy policy.
+Attachments, multiple publications per human turn, multiple designated private-return
 recipients, scheduled delegations and dedicated cancel/list request tools or UI
 are outside this version.
 
@@ -230,11 +237,12 @@ additionally used the explicitly authorized synthetic inference and isolated
 handler checks above; it has no full app publication or notification verification.
 After release, verify with fictitious accounts:
 
-- Closed-app favorite-color round trip, with a third agent receiving no slot.
-- A greeting, announcement and exact quoted text publish once with no automatic
-  bot replies or later private result, including a group with just one bot.
-- An addressed greeting does not request a response; an explicit question to
-  another agent retains its one response and private return.
+- Closed-app favorite-color round trip, with only the designated agent receiving
+  the initial slot; its public answer may start bounded conversation.
+- A greeting, announcement and exact quoted text publish once, permit bounded bot
+  replies and create no later private result, including a group with just one bot.
+- An addressed greeting does not request a designated answer/private return; an
+  explicit question to another agent retains its designated response and private return.
 - Duplicate names, multiple groups, a unique common target, polite requests,
   capability inquiries, hypotheticals and a multi-turn clarification.
 - Private facts/files and injected instructions cannot add unrequested public text;

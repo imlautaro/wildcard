@@ -375,3 +375,16 @@ caches.
 Not yet verified in a browser: navigation reuse, background refresh, offline
 recovery, access revocation, and account switching. See the verification status in
 [web app](web.md#verification-status).
+
+
+## Contact energy
+
+Creator details reuse a session-owned, eight-entry `NavigationSnapshotCache<ContactEnergy>`.
+Zero is a loaded value. Entry and five-second active-view refreshes share in-flight reads;
+cached server balances remain visible on reopen or transient failure. No local timer
+calculates energy or authorizes a send. A reset invalidates previous requests before
+storing its server response; revisions reject late replies after invalidation/eviction.
+Deletion, confirmed access loss and account-owned store teardown clear entries. No new
+on-disk state. Verify details → back → details, zero/full balances, reset during refresh,
+offline/retry, background/resume and switching accounts with fictional data. See
+[energy](energy.md) for server recharge and independent conversation limits.

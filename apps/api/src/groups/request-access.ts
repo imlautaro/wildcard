@@ -39,8 +39,8 @@ export function groupRequestTurnAllowed(table: string, contributor: boolean) {
           WHERE answer.id = 'group-' || request.id || '-' || request.target_agent_id AND answer.contributor_consent = 1))` : ''}))`;
 }
 
-// Human messages retain their original authorization path. A bot message may
-// trigger exactly one reply only through its server-recorded human delegation.
+// Every continuation retains its human root and current public group permissions.
+// A bot message never grants access to private conversations or action tools.
 export function groupSourceAccess(reply: string, contributor: boolean) {
   return `EXISTS (SELECT 1 FROM group_message source WHERE source.id = ${reply}.source_id
     AND source.group_id = ${reply}.group_id ${contributor ? 'AND source.contributor_consent = 1' : ''}
@@ -51,5 +51,20 @@ export function groupSourceAccess(reply: string, contributor: boolean) {
       WHERE request.id = source.request_id AND request.id = source.id AND request.group_id = source.group_id
         AND request.sender_agent_id = source.agent_id AND request.target_agent_id = ${reply}.agent_id
         AND request.status = 'waiting' AND request.expires_at > unixepoch() * 1000
-        AND ${groupRequestAccess('request', contributor)}))))`;
+        AND ${groupRequestAccess('request', contributor)}))
+    OR (source.agent_id IS NOT NULL AND source.request_id IS NULL AND source.requester_id IS NOT NULL
+      AND EXISTS (SELECT 1 FROM group_agent speaker JOIN contact_agent agent ON agent.id = speaker.agent_id
+        WHERE speaker.group_id = source.group_id AND speaker.agent_id = source.agent_id AND agent.memory_shared = 1
+        AND EXISTS (SELECT 1 FROM contact WHERE agent_id = agent.id AND user_id = agent.owner_id))
+      AND EXISTS (SELECT 1 FROM group_member requester WHERE requester.group_id = source.group_id
+        AND requester.user_id = source.requester_id AND requester.share_memory = 1
+        ${contributor ? 'AND requester.contributor_consent = 1' : ''})
+      AND EXISTS (SELECT 1 FROM group_message root WHERE root.id = source.exchange_id AND root.group_id = source.group_id
+        AND root.requester_id = source.requester_id
+        ${contributor ? 'AND root.contributor_consent = 1' : ''}
+        AND (root.user_id = source.requester_id
+          OR EXISTS (SELECT 1 FROM group_post post WHERE post.id = root.id AND post.status = 'published'
+            AND ${groupPublicationAccess('post', contributor)})
+          OR EXISTS (SELECT 1 FROM group_request request WHERE request.id = root.id AND request.status != 'cancelled'
+            AND ${groupRequestAccess('request', contributor)}))))))`;
 }
