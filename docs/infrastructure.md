@@ -894,6 +894,34 @@ response mode, ambiguous groups, replay across modes, revocation and notificatio
 This backend extension needs no new iOS binary. Back up D1 as before; it introduces
 no R2 objects.
 
+Authorization failure diagnostics use the same infrastructure and require no
+migration, new secret, resource, binding or iOS update. The authorization completion
+now uses a 2,048-token budget and retains `reasoning_effort: low`, matching the
+other model calls. This is a ceiling, not an instruction to generate that many
+tokens. Provider finish/JSON checks and SQL permission guards remain mandatory.
+`group_publication_failed` records only the stage (`receipt`, `access`, `context`,
+`authorization`, `publication`, `confirmation`) and a sanitized error code. Generic
+`chat_tool_failed` also records a known tool name and sanitized code. Never log
+raw exceptions, provider response bodies, SQL parameters or conversation text.
+Committed receipts recover success after a write/confirmation error. Pre-write
+errors with no receipt report no publication; unreadable/uncertain writes retain
+unknown status. The old 400-token path returned HTTP 200 then failed before saving,
+but its exact model code was not captured in the previous logs. This diagnosis
+used production trace metadata and receipt counts, not private message contents.
+Use the existing automatic commit/push release and verification procedure for this
+repair; do not retry failed user messages automatically after release.
+
+The repair was checked with explicitly authorized synthetic Meta Playground
+inference: the same Spanish clarification exhausted 400 tokens before a visible
+decision and succeeded at 2,048 with 567 reasoning tokens plus 14 output tokens.
+The model, schema, low reasoning and non-streaming/default sampling settings were
+kept constant. Eight isolated checks used simulated model/database dependencies
+to verify fail-closed behavior, safe diagnostics and receipt recovery. No real
+group message, notification or private transcript was used in those synthetic
+cases; no provider credential was read or exposed. A cancellation control at
+2,048 tokens correctly returned `authorized: false`. TypeScript and the existing 21-migration/85-distinct-query
+static SQL checks passed. These checks are narrower than a deployed app round trip.
+
 ## Cross-chat identity and group retrieval (migration 0019)
 
 [Agent self memory and group retrieval](memory.md#one-agent-identity-across-private-chats-and-groups)

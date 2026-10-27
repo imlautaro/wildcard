@@ -41,6 +41,36 @@ target slots. There is no guarantee of perfect intent detection or injection
 resistance. Permission covers only the requested publication, not private transcripts,
 arbitrary memories, attachments or continued autonomous bot conversations.
 
+Authorization retains low reasoning with a 2,048-token completion budget. The
+previous 400-token budget was too restrictive for a reasoning model's structured
+decision. Truncated/invalid authorization still fails closed: it cannot publish.
+The investigation found an HTTP-200 authorization request immediately followed by
+a tool failure before any publication, with no saved receipts; the old logs did
+not record its exact model error code. This budget change addresses that path
+without treating a provider success status as proof of a usable decision.
+
+With explicit permission, a synthetic Spanish clarification was replayed in Meta's
+Playground with Muse Spark 1.3 Contributor, the same instructions/schema, low
+reasoning, non-streaming output and default temperature/top-p. At 400 tokens the
+result was incomplete (398 reasoning tokens, two output tokens, no visible decision).
+The identical input at 2,048 produced `authorized: true` using 567 reasoning tokens
+and 14 output tokens. A simpler 400-token greeting also succeeded; the problem is
+insufficient headroom for more involved decisions, not an unconditional API outage.
+At 2,048 tokens an explicit cancellation returned `authorized: false` (285
+reasoning tokens, 14 output tokens), preserving the denial path.
+Eight isolated synthetic handler checks cover truncation/JSON/access failure with
+no writes, denial, receipt recovery after a committed write, genuinely unknown
+write/read status, and an ordinary publication. They used simulated dependencies,
+not live groups or notifications. This does not establish a full app round trip.
+
+Publication failures now log `group_publication_failed` with a fixed stage and
+sanitized diagnostic code, without exception text, prompts, SQL parameters or
+message bodies. A receipt lookup recovers an already committed publication. When
+authorization/access/context fails before a write and no receipt exists, the tool
+reports `published: false` and `publicationAttempted: false`. Only unreadable
+receipts or uncertain writes/confirmation report an unknown publication status.
+Retries still reuse the same human turn and original arguments.
+
 ## Durable execution and limits
 
 Migration `0020_group_requests.sql` adds a receipt unique to the source private turn,
@@ -131,11 +161,14 @@ No new resource, binding, secret, dependency or account permission is required.
 0021 follows 0001–0020. Use existing local setup/migration commands. Production
 migration/publication uses only the automatic pipeline after authorized commit/push.
 
-This extension has static TypeScript verification, the 21-migration SQLite schema
+The initial general-publication extension had static TypeScript verification, the 21-migration SQLite schema
 and 85 distinct SQL variants prepared with `EXPLAIN` for both reply modes and model
 consent settings. It changes no iOS code or configuration and needs no app reinstall.
 Swift checks belong to the earlier directed-request implementation. No build, runtime test, model inference,
 private user data, remote migration, notification, installation or release was run.
+Those limits describe the initial extension. The authorization-budget repair
+additionally used the explicitly authorized synthetic inference and isolated
+handler checks above; it has no full app publication or notification verification.
 After release, verify with fictitious accounts:
 
 - Closed-app favorite-color round trip, with a third agent receiving no slot.

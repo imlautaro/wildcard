@@ -7,7 +7,7 @@ import { contactModelAllowed } from './consent';
 import { executeScheduleTool, scheduleTools } from '../schedules/tools';
 import type { StoredTurn } from './data';
 import { byteLength, clipText, keywords, readMemories, selectMemories, type MemoryScope } from './memory';
-import { isRecord, museCompletion, type ModelMessage, type ModelTool, type ToolCall } from './meta';
+import { isRecord, museCompletion, safeErrorCode, type ModelMessage, type ModelTool, type ToolCall } from './meta';
 
 const searchParameters = { type: 'object', additionalProperties: false,
   properties: { query: { type: 'string', description: 'Specific search words, in the language used in the original conversation.' } }, required: ['query'] };
@@ -234,8 +234,10 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string): Pr
       else {
         executions++;
         try { content = await executeTool(env, scope, call, turn); }
-        catch {
-          console.error(JSON.stringify({ event: 'chat_tool_failed' }));
+        catch (error) {
+          console.error(JSON.stringify({ event: 'chat_tool_failed', code: safeErrorCode(error),
+            tool: tools.some((tool) => tool.function.name === call.function.name) || call.function.name === 'ask_agent_in_group'
+              ? call.function.name : 'unknown' }));
           content = JSON.stringify({ error: 'Tool temporarily unavailable; the result is uncertain. Do not claim success or absence. Mutations can be retried with the same arguments; group requests return the one original receipt for this human turn.' });
         }
       }

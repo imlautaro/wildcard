@@ -9,6 +9,17 @@ export type ModelMessage =
 export type ModelTool = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } };
 type ModelOptions = { tools?: ModelTool[]; responseFormat?: Record<string, unknown>; maxTokens?: number };
 
+// Only emit bounded diagnostic codes, never exception text, provider bodies,
+// SQL parameters or conversation content. Unknown errors stay deliberately vague.
+export function safeErrorCode(error: unknown): string {
+  if (!(error instanceof Error)) return 'UNEXPECTED_ERROR';
+  if (/^MODEL_[A-Z_]{1,80}$/.test(error.message)) return error.message;
+  if (error instanceof SyntaxError) return 'INVALID_JSON';
+  if (error.name === 'TimeoutError' || error.name === 'AbortError') return 'REQUEST_TIMEOUT';
+  if (error.message.startsWith('D1_')) return 'DATABASE_ERROR';
+  return 'UNEXPECTED_ERROR';
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
