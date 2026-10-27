@@ -1,4 +1,5 @@
 import { publicAttachment, type PublicAttachment } from './attachments';
+import type { ReplyQuote } from '../replies/data';
 export type ChatState = 'queued' | 'running' | 'complete' | 'failed';
 export type ChatTurn = {
   readAt: number | null;
@@ -14,16 +15,20 @@ export type ChatTurn = {
   attempt: number;
   createdAt: number;
   updatedAt: number;
+  replyToID: string | null;
+  replyToSide: 'user' | 'assistant' | null;
 };
+export type PublicTurn = Omit<ChatTurn, 'replyToID' | 'replyToSide'> & { replyTo: ReplyQuote | null };
 export type StoredTurn = ChatTurn & { attachmentJSON: string | null; contactID: string; userID: string; workflowID: string; timeZone: string | null; scheduleInstruction: string | null };
 export type ChatJob = { turnID: string; attempt: number };
 export const turnColumns = `sequence, id, read_at AS readAt, user_text AS userText, assistant_text AS assistantText,
-  status, attempt, created_at AS createdAt, updated_at AS updatedAt, schedule_id AS scheduleID, group_request_id AS groupRequestID, error_code AS errorCode`;
+  status, attempt, created_at AS createdAt, updated_at AS updatedAt, schedule_id AS scheduleID, group_request_id AS groupRequestID, error_code AS errorCode,
+  reply_to_id AS replyToID, reply_to_side AS replyToSide`;
 export const storedColumns = `${turnColumns}, attachment_json AS attachmentJSON, contact_id AS contactID, user_id AS userID, workflow_id AS workflowID, time_zone AS timeZone, schedule_instruction AS scheduleInstruction`;
 
-export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }): ChatTurn {
+export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }, replyTo: ReplyQuote | null): PublicTurn {
   const { sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode } = turn;
-  return { attachment: publicAttachment(turn), sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode };
+  return { attachment: publicAttachment(turn), sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode, replyTo };
 }
 
 export function findTurn(db: D1Database, id: string, contactID: string, userID: string) {

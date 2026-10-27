@@ -25,13 +25,13 @@ no-store`. Prefix: `/api/v1/contacts/:contactID/chat`.
 | Method | Path | Behavior |
 | --- | --- | --- |
 | GET | `/turns?before=<sequence>` | Latest 50 turns, ascending, with `nextBefore` for older pages |
-| POST | `/turns` | JSON `{ "id": "<client UUID>", "text": "Hello" }`; persist and return `{ turn }` with 202 |
+| POST | `/turns` | JSON `{ "id": "<client UUID>", "text": "Hello" }` plus optional [`replyTo`](replies.md#api); persist and return `{ turn }` with 202 |
 | POST | `/turns/:turnID/retry` | Retry the latest failed human turn; autonomous schedule/group results cannot be retried; return `{ turn }` with 202 |
 
 A turn includes `id`, global monotonic `sequence`, `userText`, nullable
 `assistantText`, `status` (`queued`, `running`, `complete`, `failed`), `attempt`,
 and millisecond `createdAt`/`updatedAt`, plus nullable `readAt` when the model successfully processes the turn
-and nullable `groupRequestID` for automatic group results. Sequence gaps are normal and disclose no
+and nullable `groupRequestID` for automatic group results, plus nullable [`replyTo`](replies.md#api) quotes. Sequence gaps are normal and disclose no
 message content. Internal workflow IDs, owners, and provider errors are omitted.
 Repeated sends with the same UUID and trimmed text return the existing turn.
 A reused UUID with different text returns 409. Only one active turn per participant conversation is allowed, enforced atomically in D1. Different participants can queue concurrently; one agent-wide attention claim admits exactly one to processing. Each user has at most ten active turns and
@@ -419,3 +419,10 @@ See [message reactions](reactions.md) for the shared iOS/web selector, actor and
 message identity, agent tools, permissions, mutation retries, session cache freshness
 and verification steps. Reactions use existing conversation synchronization and
 add no unread messages or push alerts.
+
+## Private message replies
+
+See [message replies](replies.md) for the shared iOS/web Reply actions, quote
+payloads, target validation, agent context, cache behavior and verification steps.
+Replies are ordinary messages that carry a quoted earlier message; they add no new
+request type, store or notification.

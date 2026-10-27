@@ -1,10 +1,10 @@
 import { createReactionCache, clearReactionCache, refreshReactions, type ReactionCache } from './useMessageReactions';
-import type { DraftAttachment, GroupMessage, GroupMessagesPage, GroupSnapshot } from '~/utils/types';
+import type { DraftAttachment, GroupMessage, GroupMessagesPage, GroupSnapshot, ReplyQuote } from '~/utils/types';
 
 // Session cache of group conversations, mirroring useConversation. A pending send
 // becomes `accepted` (Sent) on HTTP acceptance, before the follow-up history
 // request; history then replaces it by UUID.
-export type GroupPending = { id: string; text: string; attachment: DraftAttachment | null; failed: string | null; accepted: boolean; createdAt: number };
+export type GroupPending = { id: string; text: string; attachment: DraftAttachment | null; replyTo: ReplyQuote | null; failed: string | null; accepted: boolean; createdAt: number };
 export type GroupConversation = {
   reactions: ReactionCache;
   snapshot: GroupSnapshot | null;
@@ -15,6 +15,8 @@ export type GroupConversation = {
   unavailable: boolean;
   pending: GroupPending | null;
   draft: string;
+  // The message being replied to, kept with the draft across navigation.
+  replyTo: ReplyQuote | null;
   loadingEarlier: boolean;
   revision: number;
 };
@@ -50,7 +52,7 @@ function entryFor(id: string): GroupConversation {
   entry = reactive({
     reactions: createReactionCache(),
     snapshot: null, messages: [], nextBefore: null, loaded: false, error: null, unavailable: false,
-    pending: null, draft: '', loadingEarlier: false, revision: 0,
+    pending: null, draft: '', replyTo: null, loadingEarlier: false, revision: 0,
   });
   groups.set(id, entry);
   for (const [key, value] of groups) {
@@ -219,7 +221,7 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
       ? { name: pending.attachment.name, mimeType: pending.attachment.mimeType, data: pending.attachment.data }
       : undefined;
     try {
-      await api<{ id: string }>(`groups/${id}/messages`, { json: { id: pending.id, text: pending.text, attachment } });
+      await api<{ id: string }>(`groups/${id}/messages`, { json: { id: pending.id, text: pending.text, attachment, replyToID: pending.replyTo?.messageID } });
       if (entry.pending?.id !== pending.id) return;
       // Acceptance means Sent, not Received; polling confirms it even if this load fails.
       entry.pending.accepted = true;
@@ -233,8 +235,9 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
   async function send(text: string, attachment: DraftAttachment | null) {
     const entry = state.value;
     if (entry.pending) return;
-    entry.pending = { id: crypto.randomUUID(), text: text.trim(), attachment, failed: null, accepted: false, createdAt: Date.now() };
+    entry.pending = { id: crypto.randomUUID(), text: text.trim(), attachment, replyTo: entry.replyTo, failed: null, accepted: false, createdAt: Date.now() };
     entry.draft = '';
+    entry.replyTo = null;
     await submit();
   }
 
@@ -242,6 +245,7 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
     const entry = state.value;
     if (!entry.pending?.failed) return;
     entry.draft = entry.pending.text;
+    entry.replyTo = entry.pending.replyTo;
     if (entry.pending.attachment?.previewURL) URL.revokeObjectURL(entry.pending.attachment.previewURL);
     entry.pending = null;
   }

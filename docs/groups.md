@@ -216,9 +216,9 @@ photos and mutations require current membership. Responses have `no-store`.
 | PATCH /:id/members/:userID | Owner changes `canInvite` |
 | DELETE /:id/members/:userID | Remove a human or leave |
 | DELETE /:id | Owner deletes group |
-| GET /:id/messages?before=sequence | History, `messages` and `nextBefore` |
+| GET /:id/messages?before=sequence | History, `messages` (with nullable [`replyTo`](replies.md#api) quotes) and `nextBefore` |
 | PUT /:id/read | Acknowledge displayed `sequence` for the current member |
-| POST /:id/messages | Submit UUID `id`, `text` and optional base64 `attachment`; HTTP 202 after persistence |
+| POST /:id/messages | Submit UUID `id`, `text`, optional base64 `attachment` and optional `replyToID`; HTTP 202 after persistence |
 | POST /:id/replies/:replyID/retry | Retry a failed reply after active work finishes |
 | GET /:id/photos/:kind/:memberID | Current member avatar, kind `user` or `agent` |
 
@@ -468,3 +468,10 @@ See [message reactions](reactions.md) for the shared iOS/web selector, actor and
 message identity, agent tools, permissions, mutation retries, session cache freshness
 and verification steps. Reactions use existing conversation synchronization and
 add no unread messages or push alerts.
+
+## Group message replies
+
+See [message replies](replies.md) for the shared iOS/web Reply actions, quote
+payloads, target validation, agent context, cache behavior and verification steps.
+Replies are ordinary messages that carry a quoted earlier message; they add no new
+request type, store or notification.

@@ -1,4 +1,5 @@
 import { reactionRoutes } from '../reactions/routes';
+import { groupQuotes, parseGroupReply } from '../replies/data';
 import { receiptState } from './receipts';
 import { deliverGroupPush } from './push';
 import media, { groupPhotoKey } from './media';
@@ -236,10 +237,12 @@ groups.get('/:id/messages', async (c) => {
   const before = Number(c.req.query('before') ?? Number.MAX_SAFE_INTEGER);
   if (!Number.isSafeInteger(before) || before < 1) return c.json({ error: 'Invalid history cursor' }, 400);
   const { results } = await c.env.DB.prepare(`SELECT ${receiptState('group_message')} AS receiptState, sequence, id, user_id AS userID, agent_id AS agentID,
-    sender_name AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON FROM group_message
-    WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before).all<{ sequence: number; attachmentJSON: string | null }>();
+    sender_name AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON, reply_to_id AS replyToID FROM group_message
+    WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before).all<{ sequence: number; attachmentJSON: string | null; replyToID: string | null }>();
   const page = results.slice(0, 50);
-  return c.json({ messages: page.reverse().map(({ attachmentJSON, ...message }) => ({ ...message, attachment: publicAttachment({ attachmentJSON }) })), nextBefore: results.length > 50 ? page[0].sequence : null });
+  const quotes = await groupQuotes(c.env.DB, c.req.param('id'), page);
+  return c.json({ messages: page.reverse().map(({ attachmentJSON, replyToID, ...message }) => ({ ...message,
+    attachment: publicAttachment({ attachmentJSON }), replyTo: quotes({ replyToID }) })), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 // Aggregate-only refresh for retained history; recheck membership in the query.
 groups.get('/:id/receipts', async (c) => {
@@ -298,18 +301,24 @@ groups.post('/:id/messages', async (c) => {
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (typeof b?.id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.id)
     || typeof b.text !== 'string' || (!b.text.trim() && b.attachment === undefined) || b.text.includes('\0')
-    || Array.from(b.text.trim()).length > 4000 || Object.keys(b).some((key) => !['id','text','attachment'].includes(key))) {
+    || Array.from(b.text.trim()).length > 4000 || Object.keys(b).some((key) => !['id','text','attachment','replyToID'].includes(key))) {
     return c.json({ error: 'Use a message up to 4,000 characters or an attachment, with a UUID' }, 400);
   }
   b.id = b.id.toLowerCase();
+  const replyToID = parseGroupReply(b.replyToID) ?? null;
+  if (b.replyToID !== undefined && !replyToID) return c.json({ error: 'Choose a message from this group to reply to' }, 400);
   const attachment = b.attachment === undefined ? null : await parseAttachment(b.attachment);
   if (b.attachment !== undefined && !attachment) return c.json({ error: 'Choose a JPEG, PNG, GIF, WebP, or PDF up to 5 MB' }, 400);
-  const existing = await c.env.DB.prepare('SELECT text, attachment_json AS attachmentJSON FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
-    .bind(b.id, id, owner).first<{ text: string; attachmentJSON: string | null }>();
+  const existing = await c.env.DB.prepare('SELECT text, attachment_json AS attachmentJSON, reply_to_id AS replyToID FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
+    .bind(b.id, id, owner).first<{ text: string; attachmentJSON: string | null; replyToID: string | null }>();
   if (existing) {
-    if (existing.text !== b.text.trim() || !sameAttachment(existing, attachment?.metadata)) return c.json({ error: 'Message ID already used' }, 409);
+    if (existing.text !== b.text.trim() || !sameAttachment(existing, attachment?.metadata) || existing.replyToID !== replyToID) return c.json({ error: 'Message ID already used' }, 409);
     c.executionCtx.waitUntil(dispatchGroup(c.env, id));
     return c.json({ id: b.id });
+  }
+  // Quotes stay inside this group; membership was checked by the route middleware.
+  if (replyToID && !await c.env.DB.prepare('SELECT 1 FROM group_message WHERE id = ? AND group_id = ?').bind(replyToID, id).first()) {
+    return c.json({ error: 'The message you are replying to is no longer available' }, 400);
   }
   const now = Date.now();
   const key = attachment ? `group-attachments/${id}/${owner}/${b.id}/${crypto.randomUUID()}` : null;
@@ -320,11 +329,12 @@ groups.post('/:id/messages', async (c) => {
   }
   // Snapshot the human round. Subsequent bot replies share its bounded exchange.
   await c.env.DB.batch([
-    c.env.DB.prepare(`INSERT INTO group_message (id, group_id, user_id, sender_name, text, created_at, contributor_consent, attachment_json, exchange_id, requester_id)
-      SELECT ?3, ?1, u.id, u.name, ?4, ?5, m.contributor_consent, ?7, ?3, ?2 FROM user u JOIN group_member m ON m.user_id = u.id AND m.group_id = ?1
+    c.env.DB.prepare(`INSERT INTO group_message (id, group_id, user_id, sender_name, text, created_at, contributor_consent, attachment_json, exchange_id, requester_id, reply_to_id)
+      SELECT ?3, ?1, u.id, u.name, ?4, ?5, m.contributor_consent, ?7, ?3, ?2, ?8 FROM user u JOIN group_member m ON m.user_id = u.id AND m.group_id = ?1
       WHERE u.id = ?2 AND (?6 = 0 OR NOT EXISTS (SELECT 1 FROM group_member WHERE group_id = ?1 AND contributor_consent = 0))
+      AND (?8 IS NULL OR EXISTS (SELECT 1 FROM group_message quoted WHERE quoted.id = ?8 AND quoted.group_id = ?1))
       AND (SELECT COUNT(*) FROM group_reply WHERE group_id = ?1 AND status IN ('queued', 'running')) < 64
-      ON CONFLICT(id) DO NOTHING`).bind(id, owner, b.id, b.text.trim(), now, contributor(c.env) ? 1 : 0, attachmentJSON),
+      ON CONFLICT(id) DO NOTHING`).bind(id, owner, b.id, b.text.trim(), now, contributor(c.env) ? 1 : 0, attachmentJSON, replyToID),
     c.env.DB.prepare(`INSERT INTO group_reply (id, group_id, agent_id, source_id, workflow_id, created_at)
       SELECT 'group-' || gm.id || '-' || ga.agent_id, ga.group_id, ga.agent_id, gm.id,
         'group-' || gm.id || '-' || ga.agent_id || '-1', gm.created_at
@@ -333,9 +343,9 @@ groups.post('/:id/messages', async (c) => {
       ON CONFLICT(source_id, agent_id) DO NOTHING`).bind(b.id, id, owner),
     c.env.DB.prepare('UPDATE group_message SET round_enqueued = 1 WHERE id = ? AND group_id = ? AND user_id = ?').bind(b.id, id, owner),
   ]);
-  const saved = await c.env.DB.prepare('SELECT id, text, attachment_json AS attachmentJSON FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
-    .bind(b.id, id, owner).first<{ id: string; text: string; attachmentJSON: string | null }>();
-  if (!saved || saved.text !== b.text.trim() || !sameAttachment(saved, attachment?.metadata)) return c.json({ error: 'The group queue is full or model consent is required' }, 409);
+  const saved = await c.env.DB.prepare('SELECT id, text, attachment_json AS attachmentJSON, reply_to_id AS replyToID FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
+    .bind(b.id, id, owner).first<{ id: string; text: string; attachmentJSON: string | null; replyToID: string | null }>();
+  if (!saved || saved.text !== b.text.trim() || !sameAttachment(saved, attachment?.metadata) || saved.replyToID !== replyToID) return c.json({ error: 'The group queue is full or model consent is required' }, 409);
   c.executionCtx.waitUntil(dispatchGroup(c.env, id));
   c.executionCtx.waitUntil(deliverGroupPush(c.env, saved.id));
   return c.json({ id: saved.id }, 202);

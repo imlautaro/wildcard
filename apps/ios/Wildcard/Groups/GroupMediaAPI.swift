@@ -14,9 +14,9 @@ extension AuthAPI {
                                        token: token, contentType: "audio/wav", timeout: 120)
         return try JSONDecoder().decode(Response.self, from: data).text
     }
-    func sendGroupMessage(groupID: String, id: String, text: String, attachment: DraftAttachment?, token: String) async throws {
-        struct Input: Encodable { let id: String; let text: String; let attachment: DraftAttachment? }
-        let body = try JSONEncoder().encode(Input(id: id, text: text, attachment: attachment))
+    func sendGroupMessage(groupID: String, id: String, text: String, attachment: DraftAttachment?, replyToID: String? = nil, token: String) async throws {
+        struct Input: Encodable { let id: String; let text: String; let attachment: DraftAttachment?; let replyToID: String? }
+        let body = try JSONEncoder().encode(Input(id: id, text: text, attachment: attachment, replyToID: replyToID))
         _ = try await send(path: "groups/\(groupID)/messages", method: "POST", body: body, token: token, timeout: 90)
     }
     func saveGroupPhoto(id: String, data: Data?, token: String) async throws -> String? {

@@ -25,6 +25,9 @@ struct ChatView: View {
     @State private var animateNewMessages = false
     @State private var isAwayFromBottom = false
     @State private var composerBarHeight: CGFloat = 0
+    @State private var replyTarget: MessageReplyQuote?
+    @State private var highlightedMessage: String?
+    @State private var quoteTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var voice = VoiceRecorder()
     @State private var voiceTask: Task<Void, Never>?
@@ -46,6 +49,22 @@ struct ChatView: View {
         if voice.phase == .recording { return true }
         return draftIsEmpty ? canUseMicrophone : canSend
     }
+    private var canReply: Bool { chat.hasLoaded && !chat.isUnavailable }
+
+    private func replyPreview(_ quote: MessageReplyQuote) -> MessageReplyPreview {
+        quote.side == "user"
+            ? MessageReplyPreview(quote: quote, author: "You", color: .accentColor)
+            : MessageReplyPreview(quote: quote, author: contacts.contact(id: contactID)?.name ?? "Contact",
+                                  color: GroupMemberColor.color(groupID: contactID, identity: "contact"))
+    }
+
+    private func reply(to turn: ChatTurn, side: String) {
+        guard canReply else { return }
+        replyTarget = side == "assistant"
+            ? .local(messageID: turn.id, side: side, text: turn.assistantText ?? "", attachment: nil)
+            : .local(messageID: turn.id, side: side, text: turn.userText, attachment: turn.attachment)
+        composerFocused = true
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -66,19 +85,31 @@ struct ChatView: View {
                     }
                     ForEach(chat.displayedTurns) { turn in
                         if turn.scheduleID == nil && (!turn.userText.isEmpty || turn.attachment != nil) {
+                            let quote = turn.replyTo.map(replyPreview)
+                            let showQuote = { if let replyTo = turn.replyTo { showQuoted(replyTo, proxy: proxy) } }
                             VStack(spacing: 8) {
                                 if let attachment = turn.attachment {
-                                    ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id, sentAt: turn.createdAt, caption: attachment.isImage ? turn.userText : "", readAt: turn.readAt, isSending: chat.isSubmitting(turn.id), localData: chat.outgoingMessage?.turn.id == turn.id ? chat.outgoingMessage?.attachment?.data : nil)
+                                    ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id, sentAt: turn.createdAt, caption: attachment.isImage ? turn.userText : "", readAt: turn.readAt, isSending: chat.isSubmitting(turn.id), localData: chat.outgoingMessage?.turn.id == turn.id ? chat.outgoingMessage?.attachment?.data : nil,
+                                                       replyQuote: quote, onQuoteTap: showQuote)
                                 }
                                 if !turn.userText.isEmpty && turn.attachment?.isImage != true {
-                                    MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true, readAt: turn.readAt, isSending: chat.isSubmitting(turn.id))
+                                    MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true, readAt: turn.readAt, isSending: chat.isSubmitting(turn.id),
+                                                      replyQuote: turn.attachment == nil ? quote : nil, onQuoteTap: showQuote)
                                 }
                             }
-                            .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "user", fromUser: true, enabled: !chat.isSubmitting(turn.id))
+                            .swipeToReply(enabled: canReply && !chat.isSubmitting(turn.id)) { reply(to: turn, side: "user") }
+                            .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "user", fromUser: true, enabled: !chat.isSubmitting(turn.id),
+                                              onReply: canReply ? { reply(to: turn, side: "user") } : nil)
+                            .messageHighlight(highlightedMessage == "\(turn.id)/user")
+                            .id("\(turn.id)/user")
                         }
                         if let reply = turn.assistantText {
                             MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false)
-                                .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "assistant", fromUser: false)
+                                .swipeToReply(enabled: canReply) { self.reply(to: turn, side: "assistant") }
+                                .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "assistant", fromUser: false,
+                                                  onReply: canReply ? { self.reply(to: turn, side: "assistant") } : nil)
+                                .messageHighlight(highlightedMessage == "\(turn.id)/assistant")
+                                .id("\(turn.id)/assistant")
                                 .task {
                                     guard chat.newReplyIDs.contains(turn.id) else { return }
                                     // Wait until the insertion/scroll animation has finished.
@@ -221,6 +252,7 @@ struct ChatView: View {
             chat.clearPresence()
             cancelRecording()
             attachmentTask?.cancel()
+            quoteTask?.cancel()
             chat.compactHistory()
         }
         .task(id: scenePhase) {
@@ -259,6 +291,27 @@ struct ChatView: View {
         guard isVisible, scenePhase == .active,
               let sequence = chat.turns.last(where: { $0.status == .complete })?.sequence else { return }
         contacts.noteRead(id: contactID, sequence: sequence, using: auth)
+    }
+
+    /// Scroll to a quoted message, paging earlier history within a bound when needed.
+    private func showQuoted(_ quote: MessageReplyQuote, proxy: ScrollViewProxy) {
+        guard quote.available else { return }
+        let key = "\(quote.messageID)/\(quote.side)"
+        quoteTask?.cancel()
+        quoteTask = Task {
+            for _ in 0..<20 where !chat.turns.contains(where: { $0.id == quote.messageID }) {
+                guard let cursor = chat.nextBefore, !Task.isCancelled else { break }
+                await chat.loadMore(contactID: contactID, using: auth)
+                if chat.nextBefore == cursor { break }
+            }
+            guard !Task.isCancelled, chat.turns.contains(where: { $0.id == quote.messageID }) else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { proxy.scrollTo(key, anchor: .center) }
+            highlightedMessage = key
+            do { try await Task.sleep(for: .seconds(1.2)) } catch { return }
+            if highlightedMessage == key {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { highlightedMessage = nil }
+            }
+        }
     }
 
     private func scrollToLatest(using proxy: ScrollViewProxy) {
@@ -349,6 +402,13 @@ struct ChatView: View {
             if isLoadingAttachment {
                 HStack { ProgressView(); Text("Preparing attachment…").manrope(.footnote); Spacer() }
             }
+            if let replyTarget {
+                MessageReplyComposerBar(preview: replyPreview(replyTarget)) {
+                    self.replyTarget = nil
+                    draftRevision += 1
+                }
+                .disabled(chat.isSending)
+            }
             if let attachment {
                 HStack(spacing: 10) {
                     if attachment.mimeType.hasPrefix("image/"), let image = UIImage(data: attachment.data) {
@@ -405,16 +465,19 @@ struct ChatView: View {
                     } else {
                         guard canSend else { return }
                         let submittedAttachment = attachment
+                        let submittedReply = replyTarget
                         let submitted = draft
                         let submittedRevision = draftRevision
                         draft = ""
                         attachment = nil
+                        replyTarget = nil
                         Task {
-                            let accepted = await chat.send(text: submitted, attachment: submittedAttachment, contactID: contactID, using: auth)
+                            let accepted = await chat.send(text: submitted, attachment: submittedAttachment, replyTo: submittedReply, contactID: contactID, using: auth)
                             sync.request(.contact(contactID))
                             if !accepted, draftRevision == submittedRevision, draft.isEmpty {
                                 draft = submitted
                                 if attachment == nil { attachment = submittedAttachment }
+                                if replyTarget == nil { replyTarget = submittedReply }
                             }
                         }
                     }

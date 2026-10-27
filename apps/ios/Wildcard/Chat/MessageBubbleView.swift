@@ -10,14 +10,26 @@ struct MessageBubbleView: View {
     var showsReceipt = true
     var senderName: String? = nil
     var senderColor: Color? = nil
+    var replyQuote: MessageReplyPreview? = nil
+    var onQuoteTap: (() -> Void)? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack {
             if fromUser { Spacer(minLength: 40) }
-            VStack(alignment: .leading, spacing: 4) {
-                if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
-                MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
+            Group {
+                if let replyQuote {
+                    MessageBubbleStack(spacing: 6) {
+                        if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
+                        MessageReplyQuoteView(preview: replyQuote, action: onQuoteTap)
+                        MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
+                        MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
+                    }
+                }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             .foregroundStyle(Color.primary)

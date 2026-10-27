@@ -80,11 +80,11 @@ struct AuthAPI: Sendable {
     func contact(id: String, token: String) async throws -> Contact {
         try JSONDecoder().decode(Contact.self, from: await send(path: "contacts/\(id)", token: token).0)
     }
-    func sendMessage(contactID: String, id: String, text: String, attachment: DraftAttachment?, token: String) async throws -> ChatSubmission {
+    func sendMessage(contactID: String, id: String, text: String, attachment: DraftAttachment?, replyTo: MessageReplyQuote? = nil, token: String) async throws -> ChatSubmission {
         try JSONDecoder().decode(ChatSubmission.self, from: await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: try JSONEncoder().encode(["id": id]), token: token).0)
     }
     func retryReply(contactID: String, turnID: String, token: String) async throws -> ChatSubmission { throw Failure.rejected("Unused") }
-    func sendGroupMessage(groupID: String, id: String, text: String, attachment: DraftAttachment?, token: String) async throws {
+    func sendGroupMessage(groupID: String, id: String, text: String, attachment: DraftAttachment?, replyToID: String? = nil, token: String) async throws {
         _ = try await send(path: "groups/\(groupID)/messages", method: "POST", body: try JSONEncoder().encode(["id": id]), token: token)
     }
     func markChatRead(contactID: String, sequence: Int, token: String) async throws -> ChatReadState {

@@ -31,7 +31,7 @@ final class ChatStore {
     var isRetained = false
     private var invalidated = false
     private var revision = 0
-    private var submission: (id: String, text: String, attachmentID: UUID?)?
+    private var submission: (id: String, text: String, attachmentID: UUID?, replyKey: String?)?
     var hasPendingReply: Bool { turns.contains(where: \.isPending) }
 
     func clearPresence() { presence = nil }
@@ -170,13 +170,15 @@ final class ChatStore {
         }
     }
 
-    func send(text: String, attachment: DraftAttachment? = nil, contactID: String, using auth: AuthStore) async -> Bool {
+    func send(text: String, attachment: DraftAttachment? = nil, replyTo: MessageReplyQuote? = nil, contactID: String, using auth: AuthStore) async -> Bool {
         guard !isSending, !hasPendingReply, !invalidated, !isUnavailable else { return false }
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (!text.isEmpty || attachment != nil), text.unicodeScalars.count <= 4000 else { return false }
         // Keep the identifier across an uncertain network result to prevent duplicate sends.
-        if submission?.text != text || submission?.attachmentID != attachment?.id {
-            submission = (UUID().uuidString.lowercased(), text, attachment?.id)
+        // A different quoted message is different content and needs a new identifier.
+        let replyKey = replyTo.map { "\($0.messageID)/\($0.side)" }
+        if submission?.text != text || submission?.attachmentID != attachment?.id || submission?.replyKey != replyKey {
+            submission = (UUID().uuidString.lowercased(), text, attachment?.id, replyKey)
         }
         guard let submission else { return false }
         isSending = true
@@ -189,7 +191,7 @@ final class ChatStore {
                 attachment: attachment.map { ChatAttachment(name: $0.name, mimeType: $0.mimeType, size: $0.data.count) },
                 scheduleID: nil, groupRequestID: nil, errorCode: nil, sequence: 0, id: submission.id,
                 userText: text, assistantText: nil, status: .queued, attempt: 0,
-                createdAt: now, readAt: nil, updatedAt: now
+                createdAt: now, readAt: nil, updatedAt: now, replyTo: replyTo
             ),
             attachment: attachment
         )
@@ -199,7 +201,7 @@ final class ChatStore {
         }
         do {
             let turn = try await auth.withSession { api, token in
-                try await api.sendMessage(contactID: contactID, id: submission.id, text: text, attachment: attachment, token: token)
+                try await api.sendMessage(contactID: contactID, id: submission.id, text: text, attachment: attachment, replyTo: replyTo, token: token)
             }
             revision += 1
             guard !invalidated else { return false }

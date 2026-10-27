@@ -1160,3 +1160,26 @@ Private turns completed with only a reaction have NULL assistant text and status
 `complete`; older unread-count code counts those turns as replies. Preserve the
 new non-null-text unread/push guards when rolling back, or forward-fix the old API
 before publishing it. Do not delete user messages to work around compatibility.
+
+## Message replies (migration 0025)
+
+[Message replies](replies.md) use the existing D1 `DB` binding. No service,
+binding, permission or secret is added. Independent accounts must apply every
+ordered migration, including `0025_message_replies.sql`, before running the matching
+API. Local setup uses `npm run db:migrate:local` with the installation's own local
+configuration. The existing automatic API release applies migrations before
+publishing. Release only through committed, pushed source and verify the automatic
+build source commit; do not deploy or migrate production by hand. Publish matching
+web source and install matching iOS source through Xcode.
+
+0025 is additive: it adds nullable `chat_turn.reply_to_id`/`reply_to_side` and
+`group_message.reply_to_id` columns with `ON DELETE SET NULL` references to the
+quoted message. Existing messages are not replies. No remote migration,
+runtime/provider call or deployment was performed during implementation; static
+client/API checks and local SQL preparation do not validate those.
+
+A rollback can leave the columns in place and revert both clients and API. Older
+API code ignores the columns and rejects request bodies containing `replyTo` or
+`replyToID` with HTTP 400, so roll clients back with the API or forward-fix. Older
+clients ignore the `replyTo` response field. Do not drop the columns or rewrite the
+migration to roll back.

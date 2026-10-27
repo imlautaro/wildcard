@@ -416,3 +416,10 @@ See [message reactions](reactions.md) for the shared iOS/web selector, actor and
 message identity, agent tools, permissions, mutation retries, session cache freshness
 and verification steps. Reactions use existing conversation synchronization and
 add no unread messages or push alerts.
+
+## Reply quotes
+
+[Message replies](replies.md#cache) travel inside cached message payloads; no
+separate reply cache, request or disk storage exists. Pending sends keep their reply
+target with the idempotency UUID. Reaching an older quoted original pages history
+through the existing **Load earlier** path, bounded to 20 pages.

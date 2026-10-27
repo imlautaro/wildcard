@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { DraftAttachment } from '~/utils/types';
+import type { ReplyPreview } from '~/utils/replies';
 
 // Text plus one optional image/PDF attachment, matching the API's 4,000 character limit.
-const props = defineProps<{ disabled?: boolean; placeholder?: string }>();
+// The parent owns the reply target so it survives navigation with the draft.
+const props = defineProps<{ disabled?: boolean; placeholder?: string; reply?: ReplyPreview | null }>();
 const draft = defineModel<string>({ required: true });
-const emit = defineEmits<{ send: [text: string, attachment: DraftAttachment | null]; typing: [] }>();
+const emit = defineEmits<{ send: [text: string, attachment: DraftAttachment | null]; typing: []; cancelReply: [] }>();
 
 const attachment = ref<DraftAttachment | null>(null);
 const preparing = ref(false);
@@ -67,6 +69,10 @@ defineExpose({ focus: () => textarea.value?.focus() });
       </button>
       <input ref="picker" type="file" class="visually-hidden" :accept="attachmentTypes.join(',')" tabindex="-1" @change="choose">
       <div class="input">
+        <div v-if="reply" class="draft-reply">
+          <MessageReplyQuote :preview="reply" />
+          <button type="button" class="icon-button" aria-label="Cancel reply" :disabled="disabled" @click="emit('cancelReply')"><AppIcon name="close" /></button>
+        </div>
         <div v-if="attachment" class="draft-attachment">
           <img v-if="attachment.previewURL" :src="attachment.previewURL" alt="">
           <AppIcon v-else name="file" style="width: 28px; height: 28px; color: var(--accent)" />

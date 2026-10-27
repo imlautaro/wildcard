@@ -31,6 +31,19 @@ export type ContactsPage = { contacts: Contact[]; totalUnreadCount?: number | nu
 export type Attachment = { name: string; mimeType: string; size: number };
 export type DraftAttachment = Attachment & { data: string; previewURL: string | null };
 
+// An earlier message quoted by a reply, resolved by the server from current history.
+// Private quotes omit sender identity: `side` tells whether the user or contact wrote it.
+export type ReplyQuote = {
+  messageID: string;
+  side: 'user' | 'assistant' | 'group';
+  available: boolean;
+  userID: string | null;
+  agentID: string | null;
+  senderName: string | null;
+  text: string;
+  attachment: Attachment | null;
+};
+
 export type TurnStatus = 'queued' | 'running' | 'complete' | 'failed';
 export type ChatTurn = {
   attachment?: Attachment | null;
@@ -46,6 +59,7 @@ export type ChatTurn = {
   createdAt: number;
   readAt: number | null;
   updatedAt: number;
+  replyTo?: ReplyQuote | null;
 };
 
 export type Presence = { status: 'offline' | 'online' | 'typing'; lastSeenAt: number | null; expiresAt: number | null };
@@ -82,6 +96,7 @@ export type GroupMessage = {
   attachment: Attachment | null;
   // Aggregate recipient state: sent, received, or read; null for legacy messages.
   receiptState?: string | null;
+  replyTo?: ReplyQuote | null;
 };
 export type GroupSnapshot = { group: ChatGroup; members: GroupMember[]; replies: GroupReply[]; canInvite: boolean; contributorModel: boolean };
 export type GroupMessagesPage = { messages: GroupMessage[]; nextBefore: number | null };

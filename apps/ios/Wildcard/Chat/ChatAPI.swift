@@ -1,5 +1,17 @@
 import Foundation
 
+/// An earlier message quoted by a reply. The server resolves it from current history.
+struct MessageReplyQuote: Codable, Equatable, Sendable {
+    let messageID: String
+    let side: String
+    let available: Bool
+    let userID: String?
+    let agentID: String?
+    let senderName: String?
+    let text: String
+    let attachment: ChatAttachment?
+}
+
 struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     enum Status: String, Decodable, Sendable { case queued, running, complete, failed }
     let attachment: ChatAttachment?
@@ -15,6 +27,7 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     let createdAt: Double
     var readAt: Double?
     let updatedAt: Double
+    var replyTo: MessageReplyQuote? = nil
     var isPending: Bool { status == .queued || status == .running }
 
     /// History, send acknowledgements, and pagination may arrive out of order.
@@ -84,7 +97,8 @@ extension AuthAPI {
     }
 
     private struct TranscriptionEnvelope: Decodable { let text: String }
-    private struct MessageInput: Encodable { let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment? }
+    private struct ReplyInput: Encodable { let messageID: String; let side: String }
+    private struct MessageInput: Encodable { let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment?; let replyTo: ReplyInput? }
 
     func transcribeAudio(contactID: String, audio: Data, token: String) async throws -> String {
         let (data, _) = try await send(path: "contacts/\(contactID)/chat/transcriptions", method: "POST",
@@ -98,10 +112,11 @@ extension AuthAPI {
         return try JSONDecoder().decode(ChatPage.self, from: data)
     }
 
-    func sendMessage(contactID: String, id: String, text: String, attachment: DraftAttachment? = nil, token: String) async throws -> ChatSubmission {
+    func sendMessage(contactID: String, id: String, text: String, attachment: DraftAttachment? = nil, replyTo: MessageReplyQuote? = nil, token: String) async throws -> ChatSubmission {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .withoutEscapingSlashes
-        let body = try encoder.encode(MessageInput(id: id, text: text, timeZone: TimeZone.current.identifier, attachment: attachment))
+        let body = try encoder.encode(MessageInput(id: id, text: text, timeZone: TimeZone.current.identifier, attachment: attachment,
+                                                   replyTo: replyTo.map { ReplyInput(messageID: $0.messageID, side: $0.side) }))
         let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: body, token: token, timeout: 90)
         return try JSONDecoder().decode(ChatSubmission.self, from: data)
     }

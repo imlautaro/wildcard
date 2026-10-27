@@ -52,6 +52,7 @@ struct GroupMessage: Decodable, Identifiable, Equatable {
     let text: String
     let createdAt: Double
     let attachment: ChatAttachment?
+    var replyTo: MessageReplyQuote? = nil
 }
 struct GroupSnapshot: Decodable {
     let group: ChatGroup
@@ -375,7 +376,7 @@ final class GroupChatStore {
         }
     }
 
-    private var pending: (id: String, text: String, attachment: DraftAttachment?, sentAt: Double)?
+    private var pending: (id: String, text: String, attachment: DraftAttachment?, sentAt: Double, replyTo: MessageReplyQuote?)?
     private(set) var pendingAccepted = false
     private var pendingSender: (id: String, name: String)?
     var pendingText: String? { pending.map { value in messages.contains(where: { $0.id == value.id }) ? nil : value.text } ?? nil }
@@ -418,6 +419,7 @@ final class GroupChatStore {
     var pendingID: String? { pending?.id }
     var pendingAttachment: DraftAttachment? { pending?.attachment }
     var pendingSentAt: Double? { pending?.sentAt }
+    var pendingReplyTo: MessageReplyQuote? { pending?.replyTo }
 
     func refresh(id: String, auth: AuthStore) async {
         guard !invalidated else { return }
@@ -542,11 +544,12 @@ final class GroupChatStore {
             self.error = error.localizedDescription
         }
     }
-    func send(_ text: String, attachment: DraftAttachment? = nil, id: String, auth: AuthStore) async -> Bool {
-        guard !invalidated, !isSending, pending == nil || (pending?.text == text && pending?.attachment == attachment) else { return false }
+    func send(_ text: String, attachment: DraftAttachment? = nil, replyTo: MessageReplyQuote? = nil, id: String, auth: AuthStore) async -> Bool {
+        guard !invalidated, !isSending, pending == nil || (pending?.text == text && pending?.attachment == attachment
+            && pending?.replyTo?.messageID == replyTo?.messageID) else { return false }
         isSending = true
         if pending == nil {
-            pending = (UUID().uuidString.lowercased(), text, attachment, Date.now.timeIntervalSince1970 * 1000)
+            pending = (UUID().uuidString.lowercased(), text, attachment, Date.now.timeIntervalSince1970 * 1000, replyTo)
             pendingAccepted = false
             pendingSender = auth.user.map { ($0.id, $0.name) }
         }
@@ -555,7 +558,8 @@ final class GroupChatStore {
         let submitted = pending!
         do {
             try await auth.withSession { api, token in
-                try await api.sendGroupMessage(groupID: id, id: submitted.id, text: submitted.text, attachment: submitted.attachment, token: token)
+                try await api.sendGroupMessage(groupID: id, id: submitted.id, text: submitted.text, attachment: submitted.attachment,
+                                               replyToID: submitted.replyTo?.messageID, token: token)
             }
             guard !invalidated, epoch == accessEpoch else { return false }
             if pending?.id == submitted.id { pendingAccepted = true }

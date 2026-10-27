@@ -55,6 +55,10 @@ Matching iOS:
   accepted, colored when the agent read it), Online/Typing/Last seen presence,
   activity leases (`open`/`typing`/`leave`, with no draft text), and image/PDF
   attachments up to 5 MB.
+- [Quoted replies](replies.md) in private chats and groups, from a hover/touch reply
+  button or **Reply** in the hold/right-click selector. Quotes scroll to and highlight
+  the original, and the reply target is kept with the draft in the session cache.
+  iOS also offers swipe-to-reply; the web app has no swipe gesture.
 - Contact sharing: invite by account email or by code, revoke invitations, remove
   participants, join by code, and accept or decline received invitations. Shared-memory
   and Contributor consent are explicit, with the iOS disclosure text.
@@ -172,3 +176,10 @@ See [message reactions](reactions.md) for the shared iOS/web selector, actor and
 message identity, agent tools, permissions, mutation retries, session cache freshness
 and verification steps. Reactions use existing conversation synchronization and
 add no unread messages or push alerts.
+
+## Message replies
+
+See [message replies](replies.md) for the shared iOS/web Reply actions, quote
+payloads, target validation, agent context, cache behavior and verification steps.
+Replies are ordinary messages that carry a quoted earlier message; they add no new
+request type, store or notification.

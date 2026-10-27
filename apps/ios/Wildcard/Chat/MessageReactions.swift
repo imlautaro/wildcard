@@ -7,6 +7,7 @@ private struct MessageReactionsModifier: ViewModifier {
     let side: String
     let fromUser: Bool
     let enabled: Bool
+    let onReply: (() -> Void)?
     @Environment(AuthStore.self) private var auth
     @State private var showsPicker = false
     private var key: String { "\(messageID)/\(side)" }
@@ -23,6 +24,9 @@ private struct MessageReactionsModifier: ViewModifier {
                 .contentShape(Rectangle())
                 .highPriorityGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in if enabled { showsPicker = true } })
                 .accessibilityAction(named: "React to message") { if enabled { showsPicker = true } }
+                .accessibilityActions {
+                    if enabled, let onReply { Button("Reply", action: onReply) }
+                }
             if !rows.isEmpty {
                 HStack(spacing: 4) {
                     ForEach(MessageReactionStore.emojis, id: \.self) { emoji in
@@ -60,6 +64,12 @@ private struct MessageReactionsModifier: ViewModifier {
                         .disabled(store.busy.contains(key))
                     }
                 }
+                if let onReply {
+                    Button("Reply", systemImage: "arrowshape.turn.up.left") {
+                        showsPicker = false
+                        onReply()
+                    }
+                }
                 if own != nil { Button("Remove reaction") { choose(nil) }.disabled(store.busy.contains(key)) }
                 if !rows.isEmpty {
                     ScrollView {
@@ -76,7 +86,8 @@ private struct MessageReactionsModifier: ViewModifier {
 }
 
 extension View {
-    func messageReactions(_ store: MessageReactionStore, path: String, messageID: String, side: String, fromUser: Bool, enabled: Bool = true) -> some View {
-        modifier(MessageReactionsModifier(store: store, path: path, messageID: messageID, side: side, fromUser: fromUser, enabled: enabled))
+    func messageReactions(_ store: MessageReactionStore, path: String, messageID: String, side: String, fromUser: Bool, enabled: Bool = true,
+                          onReply: (() -> Void)? = nil) -> some View {
+        modifier(MessageReactionsModifier(store: store, path: path, messageID: messageID, side: side, fromUser: fromUser, enabled: enabled, onReply: onReply))
     }
 }

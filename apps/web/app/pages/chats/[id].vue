@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ChatTurn, Contact, DraftAttachment } from '~/utils/types';
+import type { ChatTurn, Contact, DraftAttachment, ReplyQuote } from '~/utils/types';
 
 const route = useRoute();
 const contactID = computed(() => String(route.params.id));
@@ -32,6 +32,41 @@ const items = computed<Item[]>(() => {
 });
 const lastTurnID = computed(() => state.value.turns.at(-1)?.id);
 const replying = computed(() => state.value.turns.some((turn) => turn.status === 'queued' || turn.status === 'running'));
+
+function replyPreview(quote: ReplyQuote) {
+  return quote.side === 'user'
+    ? { quote, author: 'You', color: ownReplyColor }
+    : { quote, author: contact.value?.name ?? 'Contact', color: replyColor(contactID.value, 'contact') };
+}
+const replyTarget = computed(() => state.value.replyTo ? replyPreview(state.value.replyTo) : null);
+const canReply = computed(() => state.value.loaded && !state.value.unavailable);
+function startReply(turn: ChatTurn, side: 'user' | 'assistant') {
+  state.value.replyTo = side === 'assistant'
+    ? localReplyQuote(turn.id, side, turn.assistantText ?? '', null)
+    : localReplyQuote(turn.id, side, turn.userText, turn.attachment ?? null);
+  composer.value?.focus();
+}
+
+// Scroll to a quoted message, paging earlier history within a bound when needed.
+const highlighted = ref<string | null>(null);
+let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+async function showQuoted(quote: ReplyQuote) {
+  if (!quote.available) return;
+  for (let pages = 0; pages < 20 && !state.value.turns.some((turn) => turn.id === quote.messageID); pages += 1) {
+    const cursor = state.value.nextBefore;
+    if (!cursor) break;
+    await earlier();
+    if (state.value.nextBefore === cursor) break;
+  }
+  await nextTick();
+  const key = `${quote.messageID}-${quote.side}`;
+  const element = document.getElementById(`message-${key}`);
+  if (!element) return;
+  element.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  highlighted.value = key;
+  clearTimeout(highlightTimer);
+  highlightTimer = setTimeout(() => { highlighted.value = null; }, 1200);
+}
 
 function attachmentPath(turn: ChatTurn) {
   return `contacts/${contactID.value}/chat/turns/${turn.id}/attachment`;
@@ -93,7 +128,10 @@ onMounted(async () => {
   }
   composer.value?.focus();
 });
-onBeforeUnmount(() => window.removeEventListener('focus', markRead));
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', markRead);
+  clearTimeout(highlightTimer);
+});
 </script>
 
 <template>
@@ -133,20 +171,27 @@ onBeforeUnmount(() => window.removeEventListener('focus', markRead));
       <template v-for="item in items" :key="item.key">
         <div v-if="item.kind === 'day'" class="day">{{ item.label }}</div>
         <template v-else>
-          <div v-if="item.turn.scheduleID === null && (item.turn.userText || item.turn.attachment)" class="bubble-row outgoing">
-            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="user">
+          <div
+            v-if="item.turn.scheduleID === null && (item.turn.userText || item.turn.attachment)" :id="`message-${item.turn.id}-user`"
+            class="bubble-row outgoing" :class="{ highlighted: highlighted === `${item.turn.id}-user` }"
+          >
+            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="user" :replyable="canReply" @reply="startReply(item.turn, 'user')">
               <div class="private-message-content">
                 <div v-if="item.turn.attachment" class="bubble media">
+                  <MessageReplyQuote v-if="item.turn.replyTo" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />
                   <MessageAttachment :attachment="item.turn.attachment" :path="attachmentPath(item.turn)" />
                   <div v-if="item.turn.userText && item.turn.attachment.mimeType.startsWith('image/')" class="caption">{{ item.turn.userText }}</div>
                   <div class="meta" style="padding: 0 6px 2px">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
                 </div>
-                <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble">{{ item.turn.userText }}<div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
+                <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble"><MessageReplyQuote v-if="item.turn.replyTo && !item.turn.attachment" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />{{ item.turn.userText }}<div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
               </div>
             </MessageReactions>
           </div>
-          <div v-if="item.turn.assistantText" class="bubble-row incoming">
-            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant"><div class="bubble">{{ item.turn.assistantText }}<div class="meta">{{ messageTime(item.turn.updatedAt) }}</div></div></MessageReactions>
+          <div
+            v-if="item.turn.assistantText" :id="`message-${item.turn.id}-assistant`"
+            class="bubble-row incoming" :class="{ highlighted: highlighted === `${item.turn.id}-assistant` }"
+          >
+            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply" @reply="startReply(item.turn, 'assistant')"><div class="bubble">{{ item.turn.assistantText }}<div class="meta">{{ messageTime(item.turn.updatedAt) }}</div></div></MessageReactions>
           </div>
           <div v-else-if="item.turn.status === 'running' && state.presence?.status === 'typing'" class="bubble-row incoming">
             <div class="typing" aria-label="Typing"><span /><span /><span /></div>
@@ -164,13 +209,14 @@ onBeforeUnmount(() => window.removeEventListener('focus', markRead));
       <template v-if="state.pending">
         <div v-if="state.pending.attachment" class="bubble-row outgoing">
           <div class="bubble media">
+            <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
             <MessageAttachment :attachment="state.pending.attachment" :path="null" :local-url="state.pending.attachment.previewURL" />
             <div v-if="state.pending.text && state.pending.attachment.previewURL" class="caption">{{ state.pending.text }}</div>
             <div class="meta" style="padding: 0 6px 2px">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div>
           </div>
         </div>
         <div v-if="state.pending.text && !state.pending.attachment?.previewURL" class="bubble-row outgoing">
-          <div class="bubble">{{ state.pending.text }}<div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div></div>
+          <div class="bubble"><MessageReplyQuote v-if="state.pending.replyTo && !state.pending.attachment" :preview="replyPreview(state.pending.replyTo)" />{{ state.pending.text }}<div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div></div>
         </div>
         <div v-if="state.pending.failed" class="status-line outgoing error">
           {{ state.pending.failed }}
@@ -180,8 +226,8 @@ onBeforeUnmount(() => window.removeEventListener('focus', markRead));
       </template>
     </div>
     <ChatComposer
-      ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded"
-      @send="onSend" @typing="activity.typing()"
+      ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded" :reply="replyTarget"
+      @send="onSend" @typing="activity.typing()" @cancel-reply="state.replyTo = null"
     />
   </template>
 </template>

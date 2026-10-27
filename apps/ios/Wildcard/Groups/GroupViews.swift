@@ -176,6 +176,9 @@ struct GroupChatView: View {
     @State private var nearBottom = true
     @State private var composerBarHeight: CGFloat = 0
     @State private var animateNewMessages = false
+    @State private var replyTarget: MessageReplyQuote?
+    @State private var highlightedMessage: String?
+    @State private var quoteTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var composerFocused: Bool
     @ScaledMetric(relativeTo: .body) private var composerControlHeight: CGFloat = 44
@@ -193,6 +196,42 @@ struct GroupChatView: View {
     private var actionEnabled: Bool {
         if voice.phase == .recording { return true }
         return draftIsEmpty ? canUseMicrophone : canSend
+    }
+    private func replyPreview(_ quote: MessageReplyQuote) -> MessageReplyPreview {
+        if quote.agentID == nil, let userID = quote.userID, userID == auth.user?.id {
+            return MessageReplyPreview(quote: quote, author: "You", color: .accentColor)
+        }
+        let member = store.snapshot?.members.first {
+            $0.id == (quote.agentID ?? quote.userID) && $0.kind == (quote.agentID == nil ? "user" : "agent")
+        }
+        let identity = quote.agentID.map { "agent/\($0)" } ?? quote.userID.map { "user/\($0)" } ?? "message/\(quote.messageID)"
+        return MessageReplyPreview(quote: quote, author: member?.name ?? quote.senderName ?? "Unknown member",
+                                   color: GroupMemberColor.color(groupID: groupID, identity: identity))
+    }
+    private func reply(to message: GroupMessage) {
+        guard store.snapshot != nil else { return }
+        replyTarget = .local(messageID: message.id, side: "group", text: message.text, attachment: message.attachment,
+                             userID: message.userID, agentID: message.agentID, senderName: message.senderName)
+        composerFocused = true
+    }
+    /// Scroll to a quoted message, paging earlier history within a bound when needed.
+    private func showQuoted(_ quote: MessageReplyQuote, proxy: ScrollViewProxy) {
+        guard quote.available else { return }
+        quoteTask?.cancel()
+        quoteTask = Task {
+            for _ in 0..<20 where !store.messages.contains(where: { $0.id == quote.messageID }) {
+                guard let cursor = store.nextBefore, !Task.isCancelled else { break }
+                await store.loadMore(id: groupID, auth: auth)
+                if store.nextBefore == cursor { break }
+            }
+            guard !Task.isCancelled, store.messages.contains(where: { $0.id == quote.messageID }) else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { proxy.scrollTo(quote.messageID, anchor: .center) }
+            highlightedMessage = quote.messageID
+            do { try await Task.sleep(for: .seconds(1.2)) } catch { return }
+            if highlightedMessage == quote.messageID {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { highlightedMessage = nil }
+            }
+        }
     }
     var body: some View {
         ScrollViewReader { proxy in
@@ -215,18 +254,26 @@ struct GroupChatView: View {
                     }
                     ForEach(store.messages) { message in
                         GroupMessageRow(message: message, groupID: groupID, members: store.snapshot?.members ?? [],
-                                        isNew: store.newIncomingMessageIDs.contains(message.id))
+                                        isNew: store.newIncomingMessageIDs.contains(message.id),
+                                        replyQuote: message.replyTo.map(replyPreview),
+                                        canReply: store.snapshot != nil,
+                                        onQuoteTap: { if let quote = message.replyTo { showQuoted(quote, proxy: proxy) } },
+                                        onReply: { reply(to: message) })
+                            .messageHighlight(highlightedMessage == message.id)
                             .id(message.id)
                     }
                     if let pending = store.pendingText {
+                        let pendingQuote = store.pendingReplyTo.map(replyPreview)
                         if let file = store.pendingAttachment {
                             ChatAttachmentView(attachment: ChatAttachment(name: file.name, mimeType: file.mimeType, size: file.data.count),
                                                contactID: groupID, turnID: store.pendingID ?? "pending", groupID: groupID,
                                                sentAt: store.pendingSentAt ?? 0, caption: file.mimeType.hasPrefix("image/") ? pending : "",
-                                               receiptState: "sent", isSending: !store.pendingAccepted, localData: file.data)
+                                               receiptState: "sent", isSending: !store.pendingAccepted, localData: file.data,
+                                               replyQuote: pendingQuote)
                         }
                         if !pending.isEmpty && store.pendingAttachment?.mimeType.hasPrefix("image/") != true {
-                            MessageBubbleView(text: pending, sentAt: store.pendingSentAt ?? 0, fromUser: true, receiptState: "sent", isSending: !store.pendingAccepted)
+                            MessageBubbleView(text: pending, sentAt: store.pendingSentAt ?? 0, fromUser: true, receiptState: "sent", isSending: !store.pendingAccepted,
+                                              replyQuote: store.pendingAttachment == nil ? pendingQuote : nil)
                         }
                     }
                     ForEach((store.snapshot?.replies ?? []).filter { $0.status == "running" }) { reply in
@@ -359,6 +406,7 @@ struct GroupChatView: View {
                 cancelRecording()
                 attachmentTask?.cancel()
                 attachment = nil
+                replyTarget = nil
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { _ in voice.interrupt() }
@@ -380,6 +428,7 @@ struct GroupChatView: View {
             }
             cancelRecording()
             attachmentTask?.cancel()
+            quoteTask?.cancel()
         }
         .task(id: "\(groupID)-\(isVisible)-\(scenePhase)-\(store.messages.last?.id ?? "")") {
             guard isVisible, scenePhase == .active else { return }
@@ -408,7 +457,7 @@ struct GroupChatView: View {
                 }
             }
             if let pending = store.pendingText, !store.isSending, !store.pendingAccepted {
-                Button("Retry sending") { send(pending, file: store.pendingAttachment, proxy: proxy) }
+                Button("Retry sending") { send(pending, file: store.pendingAttachment, reply: store.pendingReplyTo, proxy: proxy) }
                     .manrope(.footnote).frame(maxWidth: .infinity, alignment: .leading)
             }
             if let error = voice.error {
@@ -445,6 +494,13 @@ struct GroupChatView: View {
             }
             if isLoadingAttachment {
                 HStack { ProgressView(); Text("Preparing attachment…").manrope(.footnote); Spacer() }
+            }
+            if let replyTarget {
+                MessageReplyComposerBar(preview: replyPreview(replyTarget)) {
+                    self.replyTarget = nil
+                    draftRevision += 1
+                }
+                .disabled(store.isSending)
             }
             if let attachment {
                 HStack(spacing: 10) {
@@ -495,7 +551,7 @@ struct GroupChatView: View {
                         voiceTask = Task { await voice.start() }
                     } else {
                         guard canSend else { return }
-                        send(draft, file: attachment, proxy: proxy)
+                        send(draft, file: attachment, reply: replyTarget, proxy: proxy)
                     }
                 }
             }
@@ -532,19 +588,21 @@ struct GroupChatView: View {
         attachmentError = nil
         draftRevision += 1
     }
-    private func send(_ text: String, file: DraftAttachment?, proxy: ScrollViewProxy) {
+    private func send(_ text: String, file: DraftAttachment?, reply: MessageReplyQuote?, proxy: ScrollViewProxy) {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty || file != nil else { return }
         let submittedRevision = draftRevision
         if draft.trimmingCharacters(in: .whitespacesAndNewlines) == value { draft = "" }
         if attachment == file { attachment = nil }
+        if replyTarget?.messageID == reply?.messageID { replyTarget = nil }
         nearBottom = true
         Task {
-            let success = await store.send(value, attachment: file, id: groupID, auth: auth)
+            let success = await store.send(value, attachment: file, replyTo: reply, id: groupID, auth: auth)
             sync.request(.group(groupID))
             if !success, draftRevision == submittedRevision, draft.isEmpty {
                 draft = value
                 if attachment == nil { attachment = file }
+                if replyTarget == nil { replyTarget = reply }
             }
             scrollToLatest(using: proxy)
         }
@@ -557,6 +615,10 @@ private struct GroupMessageRow: View {
     let groupID: String
     let members: [GroupMember]
     let isNew: Bool
+    let replyQuote: MessageReplyPreview?
+    let canReply: Bool
+    let onQuoteTap: () -> Void
+    let onReply: () -> Void
     @Environment(AuthStore.self) private var auth
     @Environment(GroupsStore.self) private var groups
     @Environment(\.scenePhase) private var scenePhase
@@ -580,16 +642,18 @@ private struct GroupMessageRow: View {
                     ChatAttachmentView(attachment: file, contactID: groupID, turnID: message.id, groupID: groupID,
                                        sentAt: message.createdAt, caption: file.isImage ? message.text : "", receiptState: message.receiptState ?? "sent", fromUser: own, showsReceipt: own,
                                        senderName: own ? nil : (sender?.name ?? message.senderName),
-                                      senderColor: senderColor)
+                                      senderColor: senderColor, replyQuote: replyQuote, onQuoteTap: onQuoteTap)
                 }
                 if !message.text.isEmpty && message.attachment?.isImage != true {
                     MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, receiptState: message.receiptState ?? "sent", showsReceipt: own,
                                       senderName: own ? nil : (sender?.name ?? message.senderName),
-                                      senderColor: senderColor)
+                                      senderColor: senderColor, replyQuote: message.attachment == nil ? replyQuote : nil, onQuoteTap: onQuoteTap)
                 }
             }
         }
-        .messageReactions(groups.conversations.store(for: groupID).reactions, path: "groups/\(groupID)/reactions", messageID: message.id, side: "group", fromUser: own)
+        .swipeToReply(enabled: canReply, action: onReply)
+        .messageReactions(groups.conversations.store(for: groupID).reactions, path: "groups/\(groupID)/reactions", messageID: message.id, side: "group", fromUser: own,
+                          onReply: canReply ? onReply : nil)
         .onScrollVisibilityChange(threshold: 0.5) { isOnScreen = $0 }
         .task(id: "\(message.id)-\(isOnScreen)-\(scenePhase)") {
             guard isOnScreen, scenePhase == .active, !own else { return }

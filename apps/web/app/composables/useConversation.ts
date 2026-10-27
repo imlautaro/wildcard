@@ -1,9 +1,9 @@
 import { createReactionCache, clearReactionCache, refreshReactions, type ReactionCache } from './useMessageReactions';
-import type { ChatPage, ChatReadState, ChatSubmission, ChatTurn, DraftAttachment, Presence } from '~/utils/types';
+import type { ChatPage, ChatReadState, ChatSubmission, ChatTurn, DraftAttachment, Presence, ReplyQuote } from '~/utils/types';
 
 // Session cache of private conversations, keyed by contact. Pending sends keep
 // their UUID across navigation and failures so a retry can never duplicate them.
-export type PendingSend = { id: string; text: string; attachment: DraftAttachment | null; failed: string | null; createdAt: number };
+export type PendingSend = { id: string; text: string; attachment: DraftAttachment | null; replyTo: ReplyQuote | null; failed: string | null; createdAt: number };
 export type Conversation = {
   reactions: ReactionCache;
   turns: ChatTurn[];
@@ -14,6 +14,8 @@ export type Conversation = {
   unavailable: boolean;
   pending: PendingSend | null;
   draft: string;
+  // The message being replied to, kept with the draft across navigation.
+  replyTo: ReplyQuote | null;
   loadingEarlier: boolean;
   retrying: boolean;
   revision: number;
@@ -56,7 +58,7 @@ function conversation(id: string): Conversation {
   entry = reactive({
     reactions: createReactionCache(),
     turns: [], nextBefore: null, presence: null, loaded: false, error: null, unavailable: false,
-    pending: null, draft: '', loadingEarlier: false, retrying: false, revision: 0,
+    pending: null, draft: '', replyTo: null, loadingEarlier: false, retrying: false, revision: 0,
   });
   conversations.set(id, entry);
   // Evict the least recently opened conversations without pending sends.
@@ -153,7 +155,8 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
       : undefined;
     try {
       const result = await api<ChatSubmission>(`contacts/${id}/chat/turns`, {
-        json: { id: pending.id, text: pending.text, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, attachment },
+        json: { id: pending.id, text: pending.text, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, attachment,
+          replyTo: pending.replyTo ? { messageID: pending.replyTo.messageID, side: pending.replyTo.side } : undefined },
       });
       if (entry.pending?.id !== pending.id) return;
       entry.turns = mergeInto(entry.turns, [result.turn]);
@@ -168,8 +171,9 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
   async function send(text: string, attachment: DraftAttachment | null) {
     const entry = state.value;
     if (entry.pending) return;
-    entry.pending = { id: crypto.randomUUID(), text: text.trim(), attachment, failed: null, createdAt: Date.now() };
+    entry.pending = { id: crypto.randomUUID(), text: text.trim(), attachment, replyTo: entry.replyTo, failed: null, createdAt: Date.now() };
     entry.draft = '';
+    entry.replyTo = null;
     await submit();
   }
 
@@ -177,6 +181,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
     const entry = state.value;
     if (!entry.pending?.failed) return;
     entry.draft = entry.pending.text;
+    entry.replyTo = entry.pending.replyTo;
     revokePreview(entry.pending.attachment);
     entry.pending = null;
   }

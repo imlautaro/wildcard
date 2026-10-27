@@ -230,6 +230,11 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
 .composer .send svg { width: 18px; height: 18px; }
 .composer .hint { font-size: 12px; color: var(--danger); padding: 4px 8px 0; }
 .draft-attachment { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.draft-reply { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bubble .reply-quote { margin: 2px 0 4px; }
+.bubble.media .reply-quote { margin: 0 0 4px; }
+.bubble-row.highlighted .bubble { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); transition: box-shadow 0.3s; }
+@media (prefers-reduced-motion: reduce) { .bubble-row.highlighted .bubble { transition: none; } }
 .draft-attachment img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
 .draft-attachment .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

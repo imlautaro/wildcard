@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DraftAttachment, GroupMember, GroupMessage } from '~/utils/types';
+import type { DraftAttachment, GroupMember, GroupMessage, ReplyQuote } from '~/utils/types';
 
 const route = useRoute();
 const groupID = computed(() => String(route.params.id));
@@ -56,6 +56,39 @@ function senderPhoto(message: GroupMessage) {
 function senderStyle(message: GroupMessage) {
   const identity = message.agentID ? `agent/${message.agentID}` : message.userID ? `user/${message.userID}` : `message/${message.id}`;
   return senderColor(groupID.value, identity);
+}
+function replyPreview(quote: ReplyQuote) {
+  if (quote.agentID === null && quote.userID !== null && quote.userID === user.value?.id) return { quote, author: 'You', color: ownReplyColor };
+  const member = quote.agentID ? members.value.get(`agent/${quote.agentID}`) : members.value.get(`user/${quote.userID}`);
+  const identity = quote.agentID ? `agent/${quote.agentID}` : quote.userID ? `user/${quote.userID}` : `message/${quote.messageID}`;
+  return { quote, author: member?.name ?? quote.senderName ?? 'Unknown member', color: replyColor(groupID.value, identity) };
+}
+const replyTarget = computed(() => state.value.replyTo ? replyPreview(state.value.replyTo) : null);
+const canReply = computed(() => !!state.value.snapshot && !state.value.unavailable);
+function startReply(message: GroupMessage) {
+  state.value.replyTo = localReplyQuote(message.id, 'group', message.text, message.attachment,
+    { userID: message.userID, agentID: message.agentID, senderName: message.senderName });
+  composer.value?.focus();
+}
+
+// Scroll to a quoted message, paging earlier history within a bound when needed.
+const highlighted = ref<string | null>(null);
+let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+async function showQuoted(quote: ReplyQuote) {
+  if (!quote.available) return;
+  for (let pages = 0; pages < 20 && !state.value.messages.some((message) => message.id === quote.messageID); pages += 1) {
+    const cursor = state.value.nextBefore;
+    if (!cursor) break;
+    await earlier();
+    if (state.value.nextBefore === cursor) break;
+  }
+  await nextTick();
+  const element = document.getElementById(`message-${quote.messageID}`);
+  if (!element) return;
+  element.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  highlighted.value = quote.messageID;
+  clearTimeout(highlightTimer);
+  highlightTimer = setTimeout(() => { highlighted.value = null; }, 1200);
 }
 function attachmentPath(message: GroupMessage) {
   return `groups/${groupID.value}/messages/${message.id}/attachment`;
@@ -118,6 +151,7 @@ onMounted(async () => {
   composer.value?.focus();
 });
 onBeforeUnmount(() => {
+  clearTimeout(highlightTimer);
   observer?.disconnect();
   document.removeEventListener('visibilitychange', onVisibility);
   window.removeEventListener('focus', markRead);
@@ -161,18 +195,20 @@ onBeforeUnmount(() => {
       <template v-for="item in items" :key="item.key">
         <div v-if="item.kind === 'day'" class="day">{{ item.label }}</div>
         <div
-          v-else class="bubble-row" :class="isMine(item.message) ? 'outgoing' : 'incoming'" :style="{ marginTop: item.first ? '6px' : '0' }"
+          v-else :id="`message-${item.message.id}`" class="bubble-row"
+          :class="[isMine(item.message) ? 'outgoing' : 'incoming', { highlighted: highlighted === item.message.id }]" :style="{ marginTop: item.first ? '6px' : '0' }"
           :data-read-id="isMine(item.message) ? undefined : item.message.id"
         >
           <div v-if="!isMine(item.message)" class="avatar-slot">
             <AppAvatar v-if="item.last" :name="item.message.senderName" :path="senderPhoto(item.message)" :size="28" />
           </div>
-          <MessageReactions :cache="state.reactions" :path="`groups/${groupID}/reactions`" :message-i-d="item.message.id" side="group">
+          <MessageReactions :cache="state.reactions" :path="`groups/${groupID}/reactions`" :message-i-d="item.message.id" side="group" :replyable="canReply" @reply="startReply(item.message)">
           <div class="bubble" :class="{ media: item.message.attachment?.mimeType.startsWith('image/') }">
             <span
               v-if="!isMine(item.message) && item.first" class="sender"
               :style="[senderStyle(item.message), item.message.attachment?.mimeType.startsWith('image/') ? { padding: '4px 8px 0' } : {}]"
             >{{ senderOf(item.message)?.name ?? item.message.senderName }}</span>
+            <MessageReplyQuote v-if="item.message.replyTo" :preview="replyPreview(item.message.replyTo)" interactive @open="showQuoted(item.message.replyTo)" />
             <MessageAttachment v-if="item.message.attachment" :attachment="item.message.attachment" :path="attachmentPath(item.message)" />
             <div v-if="item.message.text" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }">{{ item.message.text }}</div>
             <div class="meta" :style="item.message.attachment?.mimeType.startsWith('image/') ? 'padding: 0 6px 2px' : ''">
@@ -186,6 +222,7 @@ onBeforeUnmount(() => {
       <template v-if="state.pending">
         <div class="bubble-row outgoing">
           <div class="bubble" :class="{ media: state.pending.attachment?.previewURL }">
+            <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
             <MessageAttachment v-if="state.pending.attachment" :attachment="state.pending.attachment" :path="null" :local-url="state.pending.attachment.previewURL" />
             <div v-if="state.pending.text" :class="{ caption: state.pending.attachment?.previewURL }">{{ state.pending.text }}</div>
             <div class="meta" :style="state.pending.attachment?.previewURL ? 'padding: 0 6px 2px' : ''">
@@ -209,6 +246,9 @@ onBeforeUnmount(() => {
         <button class="link-button" @click="retryReply(reply.id)">Retry</button>
       </div>
     </div>
-    <ChatComposer ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded" @send="onSend" />
+    <ChatComposer
+      ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded" :reply="replyTarget"
+      @send="onSend" @cancel-reply="state.replyTo = null"
+    />
   </template>
 </template>

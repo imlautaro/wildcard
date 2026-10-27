@@ -70,6 +70,8 @@ struct ChatAttachmentView: View {
     var showsReceipt = true
     var senderName: String? = nil
     var senderColor: Color? = nil
+    var replyQuote: MessageReplyPreview? = nil
+    var onQuoteTap: (() -> Void)? = nil
     @Environment(AuthStore.self) private var auth
     @State private var loading = false
     @State private var previewURL: URL?
@@ -82,7 +84,8 @@ struct ChatAttachmentView: View {
     private var imageResource: CachedImageResource {
         groupID.map { .groupAttachment(groupID: $0, messageID: turnID) } ?? .attachment(contactID: contactID, turnID: turnID)
     }
-    private var imageBubbleRadius: CGFloat { caption.isEmpty && senderName == nil ? 20 : 0 }
+    private var standaloneImage: Bool { caption.isEmpty && senderName == nil && replyQuote == nil }
+    private var imageBubbleRadius: CGFloat { standaloneImage ? 20 : 0 }
     private var bubbleColor: Color { fromUser ? Color("OutgoingMessageBackground") : Color(uiColor: .secondarySystemBackground) }
     private var displayedThumbnail: UIImage? {
         thumbnail ?? auth.images.cachedImage(imageResource, maxPixelSize: 520)
@@ -93,13 +96,17 @@ struct ChatAttachmentView: View {
             if fromUser { Spacer(minLength: 40) }
             VStack(alignment: .trailing, spacing: 6) {
                 if attachment.isImage {
-                    if caption.isEmpty && senderName == nil {
+                    if standaloneImage {
                         imageButton
                     } else {
                         VStack(alignment: .leading, spacing: 0) {
                             if let senderName {
                                 MessageSenderNameView(name: senderName, color: senderColor)
                                     .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+                            }
+                            if let replyQuote {
+                                MessageReplyQuoteView(preview: replyQuote, action: onQuoteTap)
+                                    .padding(.horizontal, 8).padding(.top, senderName == nil ? 8 : 0).padding(.bottom, 6)
                             }
                             imageButton
                             if !caption.isEmpty {
@@ -237,6 +244,7 @@ struct ChatAttachmentView: View {
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
+                if let replyQuote { MessageReplyQuoteView(preview: replyQuote) }
                 HStack {
                     if loading { ProgressView() }
                     else { Image(systemName: "doc.richtext") }
