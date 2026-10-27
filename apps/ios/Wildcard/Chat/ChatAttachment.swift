@@ -67,6 +67,7 @@ struct ChatAttachmentView: View {
     var localData: Data? = nil
     var fromUser = true
     var showsReceipt = true
+    var senderName: String? = nil
     @Environment(AuthStore.self) private var auth
     @State private var loading = false
     @State private var previewURL: URL?
@@ -79,6 +80,7 @@ struct ChatAttachmentView: View {
     private var imageResource: CachedImageResource {
         groupID.map { .groupAttachment(groupID: $0, messageID: turnID) } ?? .attachment(contactID: contactID, turnID: turnID)
     }
+    private var imageBubbleRadius: CGFloat { caption.isEmpty && senderName == nil ? 20 : 0 }
     private var bubbleColor: Color { fromUser ? Color("OutgoingMessageBackground") : Color(uiColor: .secondarySystemBackground) }
     private var displayedThumbnail: UIImage? {
         thumbnail ?? auth.images.cachedImage(imageResource, maxPixelSize: 520)
@@ -89,14 +91,20 @@ struct ChatAttachmentView: View {
             if fromUser { Spacer(minLength: 40) }
             VStack(alignment: .trailing, spacing: 6) {
                 if attachment.isImage {
-                    if caption.isEmpty {
+                    if caption.isEmpty && senderName == nil {
                         imageButton
                             .messageBubbleShadow()
                     } else {
-                        VStack(alignment: .trailing, spacing: 0) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if let senderName {
+                                MessageSenderNameView(name: senderName)
+                                    .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+                            }
                             imageButton
-                            MessageTextContentView(text: caption, sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true)
-                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            if !caption.isEmpty {
+                                MessageTextContentView(text: caption, sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true)
+                                    .padding(.horizontal, 16).padding(.vertical, 12)
+                            }
                         }
                         .frame(maxWidth: 260)
                         .background(bubbleColor, in: MessageBubbleShape(fromUser: fromUser))
@@ -179,9 +187,9 @@ struct ChatAttachmentView: View {
                             topTrailingRadius: 16
                         ))
                         .padding(2)
-                        .background(bubbleColor, in: MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
-                        .clipShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
-                        .contentShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
+                        .background(bubbleColor, in: MessageBubbleShape(cornerRadius: imageBubbleRadius, fromUser: fromUser))
+                        .clipShape(MessageBubbleShape(cornerRadius: imageBubbleRadius, fromUser: fromUser))
+                        .contentShape(MessageBubbleShape(cornerRadius: imageBubbleRadius, fromUser: fromUser))
                         .frame(maxWidth: 260, maxHeight: 260, alignment: .trailing)
                 } else {
                     bubbleColor
@@ -191,11 +199,11 @@ struct ChatAttachmentView: View {
                             else { Label("Retry image", systemImage: "arrow.clockwise").manrope(.footnote) }
                         }
                         .frame(maxWidth: 260, maxHeight: 260)
-                        .background(bubbleColor, in: MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
-                        .clipShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
+                        .background(bubbleColor, in: MessageBubbleShape(cornerRadius: imageBubbleRadius, fromUser: fromUser))
+                        .clipShape(MessageBubbleShape(cornerRadius: imageBubbleRadius, fromUser: fromUser))
                 }
             }
-            .contentShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
+            .contentShape(MessageBubbleShape(cornerRadius: imageBubbleRadius, fromUser: fromUser))
         }
         .buttonStyle(.plain)
         .disabled(loading || isSending)
@@ -227,16 +235,19 @@ struct ChatAttachmentView: View {
                 }
             }
         } label: {
-            HStack {
-                if loading { ProgressView() }
-                else { Image(systemName: "doc.richtext") }
-                VStack(alignment: .leading) {
-                    Text(attachment.name).lineLimit(2)
-                    Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file)).font(.caption)
-                }
-                Image(systemName: isSending ? "clock" : "arrow.down.circle")
-                    .accessibilityLabel(isSending ? "Sending" : "Download attachment")
-            }.manrope(.footnote).padding(12)
+            VStack(alignment: .leading, spacing: 4) {
+                if let senderName { MessageSenderNameView(name: senderName) }
+                HStack {
+                    if loading { ProgressView() }
+                    else { Image(systemName: "doc.richtext") }
+                    VStack(alignment: .leading) {
+                        Text(attachment.name).lineLimit(2)
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file)).font(.caption)
+                    }
+                    Image(systemName: isSending ? "clock" : "arrow.down.circle")
+                        .accessibilityLabel(isSending ? "Sending" : "Download attachment")
+                }.manrope(.footnote)
+            }.padding(12)
         }
         .buttonStyle(.plain)
         .background(bubbleColor, in: MessageBubbleShape(cornerRadius: 16, fromUser: fromUser))

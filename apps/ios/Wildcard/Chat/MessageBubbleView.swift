@@ -7,12 +7,16 @@ struct MessageBubbleView: View {
     var readAt: Double? = nil
     var isSending = false
     var showsReceipt = true
+    var senderName: String? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack {
             if fromUser { Spacer(minLength: 40) }
-            MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
+            VStack(alignment: .leading, spacing: 4) {
+                if let senderName { MessageSenderNameView(name: senderName) }
+                MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
+            }
             .padding(.horizontal, 16).padding(.vertical, 12)
             .foregroundStyle(Color.primary)
             .background(fromUser ? Color("OutgoingMessageBackground") : Color(uiColor: .secondarySystemBackground),
@@ -23,6 +27,17 @@ struct MessageBubbleView: View {
         .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(x: fromUser ? 8 : -8, y: 4)))
     }
 
+}
+
+struct MessageSenderNameView: View {
+    let name: String
+
+    var body: some View {
+        Text(name).manrope(.caption, weight: .semibold)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
 }
 
 extension View {

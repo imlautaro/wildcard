@@ -116,7 +116,8 @@ photos and mutations require current membership. Responses have `no-store`.
 
 ## Interface and current limits
 
-Other senders have an avatar beside the bubble and a name above it. The group
+Other senders have an avatar beside the bubble and their name inside the bubble,
+above the message content. This applies to text, images and PDF cards. The group
 header shows comma-separated members and scrolls horizontally if they overflow;
 Reduce Motion keeps this text stationary and VoiceOver reads the full list.
 The marquee clips to an explicitly sized, leading-aligned subtitle viewport so

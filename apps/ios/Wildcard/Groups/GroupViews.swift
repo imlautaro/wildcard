@@ -525,13 +525,14 @@ private struct GroupMessageRow: View {
         HStack(alignment: .top, spacing: 8) {
             if !own { GroupAvatar(member: sender, groupID: groupID, size: 30) }
             VStack(alignment: .leading, spacing: 4) {
-                if !own { Text(sender?.name ?? message.senderName).manrope(.caption, weight: .semibold).foregroundStyle(.secondary).padding(.leading, 12) }
                 if let file = message.attachment {
                     ChatAttachmentView(attachment: file, contactID: groupID, turnID: message.id, groupID: groupID,
-                                       sentAt: message.createdAt, caption: file.isImage ? message.text : "", fromUser: own, showsReceipt: false)
+                                       sentAt: message.createdAt, caption: file.isImage ? message.text : "", fromUser: own, showsReceipt: false,
+                                       senderName: own ? nil : (sender?.name ?? message.senderName))
                 }
                 if !message.text.isEmpty && message.attachment?.isImage != true {
-                    MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, showsReceipt: false)
+                    MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, showsReceipt: false,
+                                      senderName: own ? nil : (sender?.name ?? message.senderName))
                 }
             }
         }
