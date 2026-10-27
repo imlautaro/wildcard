@@ -22,6 +22,8 @@ extension MessageReplyQuote {
 struct MessageReplyQuoteView: View {
     let preview: MessageReplyPreview
     var action: (() -> Void)? = nil
+    /// Bubbles tint the quote; the composer places it on its own glass card.
+    var tinted = true
     private var label: String { "Reply to \(preview.author): \(MessageReplySummary.description(preview.quote))" }
 
     var body: some View {
@@ -39,8 +41,7 @@ struct MessageReplyQuoteView: View {
     }
 
     private var quote: some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 1.5).fill(preview.color).frame(width: 3)
+        HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(preview.author).manrope(.caption, weight: .semibold)
                     .foregroundStyle(preview.color).lineLimit(1)
@@ -49,8 +50,13 @@ struct MessageReplyQuoteView: View {
             .padding(.vertical, 6)
             Spacer(minLength: 0)
         }
-        .padding(.leading, 6).padding(.trailing, 8)
-        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.leading, 11).padding(.trailing, 8)
+        // An overlay takes the content's height; a shape in the stack would fill
+        // every point of height offered by the composer bar.
+        .overlay(alignment: .leading) { Rectangle().fill(preview.color).frame(width: 3) }
+        .fixedSize(horizontal: false, vertical: true)
+        .background(tinted ? Color.primary.opacity(0.06) : .clear)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .contentShape(RoundedRectangle(cornerRadius: 10))
     }
 }
@@ -87,11 +93,14 @@ struct MessageReplyComposerBar: View {
         HStack(spacing: 10) {
             Image(systemName: "arrowshape.turn.up.left.fill").foregroundStyle(preview.color)
                 .accessibilityHidden(true)
-            MessageReplyQuoteView(preview: preview)
+            MessageReplyQuoteView(preview: preview, tinted: false)
             Button(action: onCancel) { Image(systemName: "xmark.circle.fill") }
+                .buttonStyle(.plain).foregroundStyle(.secondary)
                 .accessibilityLabel("Cancel reply")
         }
-        .padding(10).background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 14).padding(.vertical, 6)
+        // Matches the composer field's glass treatment.
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22))
     }
 }
 
