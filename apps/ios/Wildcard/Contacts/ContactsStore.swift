@@ -36,6 +36,16 @@ final class ContactsStore {
 
     func contact(id: String) -> Contact? { knownContacts[id] }
 
+    private func isMoreRecent(_ lhs: Contact, than rhs: Contact) -> Bool {
+        let left = lhs.lastMessageAt ?? lhs.createdAt
+        let right = rhs.lastMessageAt ?? rhs.createdAt
+        return left == right ? lhs.id > rhs.id : left > right
+    }
+
+    private func sortContacts() {
+        contacts.sort { isMoreRecent($0, than: $1) }
+    }
+
     func lastMessageTimestamp(for contact: Contact) -> Double? {
         if let timestamp = contact.lastMessageAt { return timestamp }
         guard let preview = contact.lastMessageText else { return nil }
@@ -91,11 +101,22 @@ final class ContactsStore {
                 contactRefreshedAt[contact.id] = .now
             }
             let incomingIDs = Set(page.contacts.map(\.id))
-            let additional = preserveLoadedPages ? contacts.filter { !firstPageIDs.contains($0.id) && !incomingIDs.contains($0.id) } : []
+            let firstPageChanged = incomingIDs != firstPageIDs
+            let additional = preserveLoadedPages && page.nextCursor != nil ? contacts.filter { existing in
+                guard !incomingIDs.contains(existing.id) else { return false }
+                // Keep loaded rows pushed below the first page by newer messages.
+                // Missing first-page rows that still belong above its boundary were deleted.
+                guard firstPageIDs.contains(existing.id) else { return true }
+                guard let boundary = page.contacts.last else { return false }
+                return isMoreRecent(boundary, than: existing)
+            } : []
             contacts = page.contacts + additional
+            sortContacts()
             firstPageIDs = incomingIDs
             totalUnreadCount = page.totalUnreadCount ?? page.contacts.reduce(0) { $0 + ($1.unreadCount ?? 0) }
-            if additional.isEmpty { nextCursor = page.nextCursor }
+            // Rebase when rows cross the first-page boundary. Load more deduplicates
+            // repeated rows while filling gaps caused by the mutable activity order.
+            if additional.isEmpty || firstPageChanged { nextCursor = page.nextCursor }
             hasLoaded = true
             refreshedAt = .now
             // Resolve stable turn IDs only when unread counts grow, so polling and APNs
@@ -131,8 +152,10 @@ final class ContactsStore {
                 knownContacts[contact.id] = contact
                 contactRefreshedAt[contact.id] = .now
             }
-            let known = Set(contacts.map(\.id))
-            contacts.append(contentsOf: page.contacts.filter { !known.contains($0.id) })
+            let incomingIDs = Set(page.contacts.map(\.id))
+            contacts.removeAll { incomingIDs.contains($0.id) }
+            contacts.append(contentsOf: page.contacts)
+            sortContacts()
             nextCursor = page.nextCursor
         } catch {
             if request == generation && !isCancellation(error) { self.error = error.localizedDescription }
@@ -155,8 +178,8 @@ final class ContactsStore {
                 contacts[index] = saved
             } else if contactID == nil {
                 contacts.insert(saved, at: 0)
-                contacts.sort { $0.createdAt == $1.createdAt ? $0.id > $1.id : $0.createdAt > $1.createdAt }
             }
+            sortContacts()
             isMutating = false
             if !hasLoaded { await refresh(using: auth) }
             return saved
@@ -190,6 +213,7 @@ final class ContactsStore {
         }
         knownContacts[contactID] = saved
         if let index = contacts.firstIndex(where: { $0.id == contactID }) { contacts[index] = saved }
+        sortContacts()
         contactRefreshedAt[contactID] = .now
         refreshedAt = nil
     }
@@ -229,6 +253,7 @@ final class ContactsStore {
             knownContacts[id] = contact
             contactRefreshedAt[id] = .now
             if let index = contacts.firstIndex(where: { $0.id == id }) { contacts[index] = contact }
+            sortContacts()
         } catch {
             guard request == generation else { return }
             if case AuthAPI.Failure.notFound = error {
@@ -256,6 +281,7 @@ final class ContactsStore {
             contact.unreadCount = state.unreadCount
             knownContacts[id] = contact
             if let index = contacts.firstIndex(where: { $0.id == id }) { contacts[index] = contact }
+            sortContacts()
             refreshedAt = nil
         } catch is CancellationError { }
         catch { /* Active chat polling retries the acknowledgement without hiding messages. */ }

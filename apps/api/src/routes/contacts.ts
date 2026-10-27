@@ -49,16 +49,20 @@ contacts.get('/', async (c) => {
     timestamp = Number(cursor[1]);
     id = cursor[2];
   }
+  // Use the same message timestamp for row display, ordering, and keyset pagination.
+  const recentContacts = `WITH recent_contacts AS (SELECT ${selection} FROM contact WHERE user_id = ?1)`;
   const query = before === undefined
-    ? c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE user_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 51`).bind(c.get('owner'))
-    : c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE user_id = ?1
-        AND (created_at < ?2 OR (created_at = ?2 AND id < ?3))
-        ORDER BY created_at DESC, id DESC LIMIT 51`).bind(c.get('owner'), timestamp, id);
+    ? c.env.DB.prepare(`${recentContacts} SELECT * FROM recent_contacts
+        ORDER BY COALESCE(lastMessageAt, createdAt) DESC, id DESC LIMIT 51`).bind(c.get('owner'))
+    : c.env.DB.prepare(`${recentContacts} SELECT * FROM recent_contacts
+        WHERE COALESCE(lastMessageAt, createdAt) < ?2
+          OR (COALESCE(lastMessageAt, createdAt) = ?2 AND id < ?3)
+        ORDER BY COALESCE(lastMessageAt, createdAt) DESC, id DESC LIMIT 51`).bind(c.get('owner'), timestamp, id);
   const { results } = await query.all<Contact>();
   const page = results.slice(0, 50);
   const last = page.at(-1);
   const totalUnreadCount = await totalUnreadReplies(c.env.DB, c.get('owner'));
-  return c.json({ contacts: page, totalUnreadCount, nextCursor: results.length > 50 && last ? `${last.createdAt}:${last.id}` : null });
+  return c.json({ contacts: page, totalUnreadCount, nextCursor: results.length > 50 && last ? `${last.lastMessageAt ?? last.createdAt}:${last.id}` : null });
 });
 
 contacts.post('/', contactBody, async (c) => {
