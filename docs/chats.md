@@ -63,6 +63,13 @@ lifetime, limits, invalidation, and manual refresh behavior. It offers earlier h
 retry action for the latest failed reply. The Chats list shows the last reply or
 user message, with a 500-code-point preview.
 
+Scrolling more than 80 points away from the bottom reveals a floating circular
+chevron-down button above the composer's voice/send side. Tap it to return to the
+latest message; it disappears near the bottom. The overlay reserves no history
+space. New replies and receipt updates preserve the scroll position while reading
+older messages; initial history and a new optimistic outgoing message still scroll
+to the bottom. Scrolling and button transitions respect Reduce Motion.
+
 Each message bubble shows its send time with hours and minutes in the device's
 local time zone and preferred time format. User messages use the turn's
 `createdAt`; completed replies use `updatedAt`, recorded when the reply is saved.

@@ -22,6 +22,8 @@ struct ChatView: View {
     @State private var lastComposerActivity = Date.distantPast
     @State private var isVisible = false
     @State private var animateNewMessages = false
+    @State private var isAwayFromBottom = false
+    @State private var composerBarHeight: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var voice = VoiceRecorder()
     @State private var voiceTask: Task<Void, Never>?
@@ -107,11 +109,43 @@ struct ChatView: View {
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
-            .onChange(of: chat.displayedTurns.last) { _, _ in
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { proxy.scrollTo("latest", anchor: .bottom) }
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentSize.height - geometry.visibleRect.maxY > 80
+            } action: { _, isAway in
+                isAwayFromBottom = isAway
+            }
+            .onChange(of: chat.displayedTurns.last) { previous, latest in
+                if !isAwayFromBottom || previous == nil || latest.map({ chat.isSubmitting($0.id) }) == true {
+                    scrollToLatest(using: proxy)
+                }
                 Task { try? await contacts.refreshContact(id: contactID, using: auth) }
             }
-            .safeAreaBar(edge: .bottom, spacing: 0) { composer }
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                composer
+                    .onGeometryChange(for: CGFloat.self) { geometry in
+                        geometry.size.height
+                    } action: { height in
+                        composerBarHeight = height
+                    }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if isAwayFromBottom && !chat.displayedTurns.isEmpty {
+                    Button { scrollToLatest(using: proxy) } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: sendIconSize, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: composerHeight, height: composerHeight)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: Circle())
+                    .accessibilityLabel("Scroll to latest message")
+                    .padding(.trailing, 16)
+                    .padding(.bottom, composerBarHeight + 8)
+                    .transition(.opacity)
+                }
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isAwayFromBottom)
             .refreshable { await chat.refresh(contactID: contactID, using: auth) }
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection, matching: .images, preferredItemEncoding: .compatible)
@@ -225,6 +259,12 @@ struct ChatView: View {
                 do { try await Task.sleep(for: .seconds(3)) }
                 catch { return }
             }
+        }
+    }
+
+    private func scrollToLatest(using proxy: ScrollViewProxy) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
+            proxy.scrollTo("latest", anchor: .bottom)
         }
     }
 
