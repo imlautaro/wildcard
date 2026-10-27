@@ -59,11 +59,14 @@ struct ChatAttachmentView: View {
     let attachment: ChatAttachment
     let contactID: String
     let turnID: String
+    var groupID: String? = nil
     let sentAt: Double
     let caption: String
     var readAt: Double? = nil
     var isSending = false
     var localData: Data? = nil
+    var fromUser = true
+    var showsReceipt = true
     @Environment(AuthStore.self) private var auth
     @State private var loading = false
     @State private var previewURL: URL?
@@ -73,14 +76,17 @@ struct ChatAttachmentView: View {
     @State private var showImage = false
     @State private var documentTask: Task<Void, Never>?
 
-    private var imageResource: CachedImageResource { .attachment(contactID: contactID, turnID: turnID) }
+    private var imageResource: CachedImageResource {
+        groupID.map { .groupAttachment(groupID: $0, messageID: turnID) } ?? .attachment(contactID: contactID, turnID: turnID)
+    }
+    private var bubbleColor: Color { fromUser ? Color("OutgoingMessageBackground") : Color(uiColor: .secondarySystemBackground) }
     private var displayedThumbnail: UIImage? {
         thumbnail ?? auth.images.cachedImage(imageResource, maxPixelSize: 520)
     }
 
     var body: some View {
         HStack {
-            Spacer(minLength: 40)
+            if fromUser { Spacer(minLength: 40) }
             VStack(alignment: .trailing, spacing: 6) {
                 if attachment.isImage {
                     if caption.isEmpty {
@@ -89,16 +95,16 @@ struct ChatAttachmentView: View {
                     } else {
                         VStack(alignment: .trailing, spacing: 0) {
                             imageButton
-                            MessageTextContentView(text: caption, sentAt: sentAt, fromUser: true, readAt: readAt, isSending: isSending, fillsWidth: true)
+                            MessageTextContentView(text: caption, sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true)
                             .padding(.horizontal, 16).padding(.vertical, 12)
                         }
                         .frame(maxWidth: 260)
-                        .background(Color("OutgoingMessageBackground"), in: MessageBubbleShape())
+                        .background(bubbleColor, in: MessageBubbleShape(fromUser: fromUser))
                         .overlay {
-                            MessageBubbleShape().stroke(Color("OutgoingMessageBackground"), lineWidth: 4)
+                            MessageBubbleShape(fromUser: fromUser).stroke(bubbleColor, lineWidth: 4)
                                 .allowsHitTesting(false)
                         }
-                        .clipShape(MessageBubbleShape())
+                        .clipShape(MessageBubbleShape(fromUser: fromUser))
                         .messageBubbleShadow()
                     }
                 } else {
@@ -106,8 +112,9 @@ struct ChatAttachmentView: View {
                 }
                 if let error { Text(error).manrope(.caption).foregroundStyle(.red) }
             }
+            if !fromUser { Spacer(minLength: 40) }
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
+        .frame(maxWidth: .infinity, alignment: fromUser ? .trailing : .leading)
         .task(id: "\(auth.user?.id ?? "")/\(turnID)/\(imageAttempt)") {
             guard attachment.isImage, thumbnail == nil else { return }
             loading = true
@@ -131,7 +138,7 @@ struct ChatAttachmentView: View {
             }
         }
         .fullScreenCover(isPresented: $showImage) {
-            AttachmentImageViewer(attachment: attachment, contactID: contactID, turnID: turnID)
+            AttachmentImageViewer(attachment: attachment, contactID: contactID, turnID: turnID, groupID: groupID)
         }
         .sheet(isPresented: Binding(get: { previewURL != nil }, set: { if !$0 { clearPreview() } })) {
             if let previewURL { AttachmentQuickLook(url: previewURL).ignoresSafeArea() }
@@ -157,7 +164,7 @@ struct ChatAttachmentView: View {
                         .clipped()
                         .overlay(alignment: .bottomTrailing) {
                             if caption.isEmpty {
-                                MessageMetadataView(sentAt: sentAt, fromUser: true, readAt: readAt, isSending: isSending)
+                                MessageMetadataView(sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
                                     .padding(.horizontal, 7).padding(.vertical, 4)
                                     .background(.black.opacity(0.6), in: Capsule())
                                     .environment(\.colorScheme, .dark)
@@ -172,23 +179,23 @@ struct ChatAttachmentView: View {
                             topTrailingRadius: 16
                         ))
                         .padding(2)
-                        .background(Color("OutgoingMessageBackground"), in: MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
-                        .clipShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
-                        .contentShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
+                        .background(bubbleColor, in: MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
+                        .clipShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
+                        .contentShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
                         .frame(maxWidth: 260, maxHeight: 260, alignment: .trailing)
                 } else {
-                    Color("OutgoingMessageBackground")
+                    bubbleColor
                         .aspectRatio(1, contentMode: .fit)
                         .overlay {
                             if loading { ProgressView() }
                             else { Label("Retry image", systemImage: "arrow.clockwise").manrope(.footnote) }
                         }
                         .frame(maxWidth: 260, maxHeight: 260)
-                        .background(Color("OutgoingMessageBackground"), in: MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
-                        .clipShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
+                        .background(bubbleColor, in: MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
+                        .clipShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
                 }
             }
-            .contentShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
+            .contentShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0, fromUser: fromUser))
         }
         .buttonStyle(.plain)
         .disabled(loading || isSending)
@@ -204,7 +211,8 @@ struct ChatAttachmentView: View {
                 defer { loading = false }
                 do {
                     let bytes = try await auth.withSession { api, token in
-                        try await api.chatAttachment(contactID: contactID, turnID: turnID, token: token)
+                        if let groupID { return try await api.groupAttachment(groupID: groupID, messageID: turnID, token: token) }
+                        return try await api.chatAttachment(contactID: contactID, turnID: turnID, token: token)
                     }
                     try Task.checkCancellation()
                     let folder = FileManager.default.temporaryDirectory.appending(path: "chat-preview-\(UUID().uuidString)")
@@ -231,7 +239,7 @@ struct ChatAttachmentView: View {
             }.manrope(.footnote).padding(12)
         }
         .buttonStyle(.plain)
-        .background(Color("OutgoingMessageBackground"), in: MessageBubbleShape(cornerRadius: 16))
+        .background(bubbleColor, in: MessageBubbleShape(cornerRadius: 16, fromUser: fromUser))
         .messageBubbleShadow()
         .disabled(loading || isSending)
     }
@@ -246,6 +254,7 @@ private struct AttachmentImageViewer: View {
     let attachment: ChatAttachment
     let contactID: String
     let turnID: String
+    var groupID: String? = nil
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @State private var image: UIImage?
@@ -281,7 +290,8 @@ private struct AttachmentImageViewer: View {
         .task(id: attempt) {
             error = nil
             do {
-                image = try await auth.cachedImage(.attachment(contactID: contactID, turnID: turnID), maxPixelSize: 4096)
+                let resource: CachedImageResource = groupID.map { .groupAttachment(groupID: $0, messageID: turnID) } ?? .attachment(contactID: contactID, turnID: turnID)
+                image = try await auth.cachedImage(resource, maxPixelSize: 4096)
             } catch is CancellationError { }
             catch {
                 guard !Task.isCancelled else { return }

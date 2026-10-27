@@ -58,6 +58,7 @@ export async function cleanAttachments(env: Env): Promise<void> {
   const { results } = await env.DB.prepare(`SELECT object_key AS key FROM chat_attachment_object
     WHERE created_at < ? AND NOT EXISTS
       (SELECT 1 FROM chat_turn WHERE json_extract(attachment_json, '$.key') = object_key)
+      AND NOT EXISTS (SELECT 1 FROM group_message WHERE json_extract(attachment_json, '$.key') = object_key)
     ORDER BY created_at LIMIT 20`).bind(Date.now() - 86400000).all<{ key: string }>();
   for (const { key } of results) {
     await env.CONTACT_PHOTOS.delete(key);

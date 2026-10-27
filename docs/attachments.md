@@ -120,3 +120,14 @@ code and Cron cleanup before considering any data removal.
 ## Shared contact access
 
 Attachments remain private to the participant conversation, even when its agent is shared. Shared-memory retrieval does not expose other participants’ file bytes, history, or attachment endpoints. New members start empty histories. See [sharing](sharing.md).
+
+
+## Group attachments
+
+Group messages use the same formats, 5 MiB validation, private bucket, object
+registry, preview views and image cache. Downloads require current group
+membership; history omits object keys. The Cron keeps objects referenced by either
+private turns or group messages. Each group contact can analyze the current file
+(or most recent eligible group file) within its existing exclusive attention turn.
+See [group media](groups.md#group-photos-attachments-and-voice) for the routes,
+source consent, visibility and cleanup behavior.

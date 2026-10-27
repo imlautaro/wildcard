@@ -103,3 +103,13 @@ format, installed UI, and actual model access remain unverified.
 - [Meta speech to text](https://dev.meta.ai/docs/speech-to-text)
 - [Transcribe a recording](https://dev.meta.ai/docs/api-reference/voice/transcribe)
 - [Apple AVAudioRecorder](https://developer.apple.com/documentation/avfaudio/avaudiorecorder)
+
+
+## Group dictation
+
+Groups reuse the recorder, limits, provider and editable-transcript interaction.
+`POST /api/v1/groups/:id/transcriptions` authenticates a current member, requires
+applicable Contributor consent and rechecks access after inference. The six-per-
+minute account budget is shared with private dictation. It stores no audio clip;
+only the transcript is sent as an ordinary group message after confirmation.
+See [groups](groups.md#group-photos-attachments-and-voice).

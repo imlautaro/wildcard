@@ -8,6 +8,7 @@ struct ChatGroup: Decodable, Hashable, Identifiable {
     let createdAt: Double
     let updatedAt: Double
     let lastMessageText: String?
+    let photoVersion: String?
 }
 struct GroupMember: Decodable, Hashable, Identifiable {
     let id: String
@@ -32,6 +33,7 @@ struct GroupMessage: Decodable, Identifiable {
     let senderName: String
     let text: String
     let createdAt: Double
+    let attachment: ChatAttachment?
 }
 struct GroupSnapshot: Decodable {
     let group: ChatGroup
@@ -83,6 +85,9 @@ final class GroupsStore {
         do {
             let list = try await GroupService.read(GroupListResponse.self, auth: auth)
             let inbox = try await GroupService.read(GroupInvitationsResponse.self, path: "invitations", auth: auth)
+            if hasLoaded, !Set(groups.map(\.id)).subtracting(list.groups.map(\.id)).isEmpty {
+                await auth.images.clear(deactivate: false)
+            }
             groups = list.groups
             contributorModel = list.contributorModel
             invitations = inbox.invitations
@@ -104,9 +109,11 @@ final class GroupChatStore {
     var error: String?
     // Keep the UUID and text after an uncertain send so Retry cannot duplicate it.
     private var accessEpoch = 0
-    private var pending: (id: String, text: String)?
+    private var pending: (id: String, text: String, attachment: DraftAttachment?, sentAt: Double)?
     var pendingText: String? { pending?.text }
     var pendingID: String? { pending?.id }
+    var pendingAttachment: DraftAttachment? { pending?.attachment }
+    var pendingSentAt: Double? { pending?.sentAt }
 
     func refresh(id: String, auth: AuthStore) async {
         guard !isLoading else { return }
@@ -142,6 +149,7 @@ final class GroupChatStore {
             nextBefore = nil
             messages = []
             pending = nil
+            await auth.images.clear(deactivate: false)
             self.error = "This group is no longer available."
         } catch { self.error = error.localizedDescription }
     }
@@ -165,16 +173,25 @@ final class GroupChatStore {
             nextBefore = page.nextBefore
         } catch { self.error = error.localizedDescription }
     }
-    func send(_ text: String, id: String, auth: AuthStore) async -> Bool {
-        guard !isSending, pending == nil || pending?.text == text else { return false }
+    func send(_ text: String, attachment: DraftAttachment? = nil, id: String, auth: AuthStore) async -> Bool {
+        guard !isSending, pending == nil || (pending?.text == text && pending?.attachment == attachment) else { return false }
         isSending = true
-        if pending == nil { pending = (UUID().uuidString.lowercased(), text) }
+        if pending == nil { pending = (UUID().uuidString.lowercased(), text, attachment, Date.now.timeIntervalSince1970 * 1000) }
         defer { isSending = false }
+        let submitted = pending!
         do {
-            _ = try await GroupService.data("\(id)/messages", method: "POST", input: ["id": pending!.id, "text": pending!.text], auth: auth)
+            try await auth.withSession { api, token in
+                try await api.sendGroupMessage(groupID: id, id: submitted.id, text: submitted.text, attachment: submitted.attachment, token: token)
+            }
+            if let file = submitted.attachment, file.mimeType.hasPrefix("image/") {
+                await auth.images.store(file.data, for: .groupAttachment(groupID: id, messageID: submitted.id))
+            }
             await refresh(id: id, auth: auth)
             return true
         } catch {
+            // Polling may confirm a message even if its HTTP acknowledgement was lost.
+            await refresh(id: id, auth: auth)
+            if messages.contains(where: { $0.id == submitted.id }) { pending = nil; return true }
             if case AuthAPI.Failure.rejected = error { pending = nil }
             if case AuthAPI.Failure.unauthorized = error { pending = nil }
             self.error = error.localizedDescription

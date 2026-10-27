@@ -182,3 +182,14 @@ uploads, and isolation between two fictional accounts.
 
 
 Group members explicitly accept sharing their display name and current profile photo with co-members. Authenticated group photo routes check current group and target membership, without granting private-contact or account-edit access. See [groups](groups.md).
+
+
+## Group identity
+
+Group creation and details reuse the avatar/name editor and cropper. Only the group
+owner edits these fields; current members may read the photo. Migration 0017 adds
+`chat_group.photo_version`. JPEGs use `groups/<groupID>/<version>.jpg` in the existing
+private R2 bucket, the same dimensions/size validation and compare-and-swap pattern.
+Header/list avatars use the existing protected image cache with distinct group
+keys. See [groups](groups.md#group-photos-attachments-and-voice) for endpoints,
+cleanup, limits and validation still needed on a device.

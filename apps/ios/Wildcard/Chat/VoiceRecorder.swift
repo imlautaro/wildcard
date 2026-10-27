@@ -99,7 +99,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         error = "Recording was interrupted. Please record again."
     }
 
-    func transcribe(contactID: String, using auth: AuthStore) async -> String? {
+    func transcribe(contactID: String, groupID: String? = nil, using auth: AuthStore) async -> String? {
         guard hasRecording, phase == .ready || phase == .failed, let file else { return nil }
         let current = operation
         phase = .transcribing
@@ -109,7 +109,8 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             guard (44...(2 * 1024 * 1024)).contains(size) else { throw RecordingFailure() }
             let audio = try Data(contentsOf: file)
             let text = try await auth.withSession { api, token in
-                try await api.transcribeAudio(contactID: contactID, audio: audio, token: token)
+                if let groupID { return try await api.transcribeGroupAudio(groupID: groupID, audio: audio, token: token) }
+                return try await api.transcribeAudio(contactID: contactID, audio: audio, token: token)
             }
             try Task.checkCancellation()
             guard current == operation else { return nil }

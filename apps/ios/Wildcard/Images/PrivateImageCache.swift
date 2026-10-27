@@ -6,12 +6,16 @@ import UIKit
 enum CachedImageResource: Hashable, Sendable {
     case contactAvatar(contactID: String, version: String)
     case accountAvatar(version: String)
+    case groupAvatar(groupID: String, version: String)
+    case groupAttachment(groupID: String, messageID: String)
     case attachment(contactID: String, turnID: String)
 
     var key: String {
         switch self {
         case let .contactAvatar(id, version): return "contact/\(id)/avatar/\(version)"
         case let .accountAvatar(version): return "account/avatar/\(version)"
+        case let .groupAvatar(id, version): return "group/\(id)/avatar/\(version)"
+        case let .groupAttachment(id, message): return "group/\(id)/attachment/\(message)"
         case let .attachment(id, turn): return "contact/\(id)/attachment/\(turn)"
         }
     }
@@ -215,6 +219,8 @@ extension AuthStore {
                 switch resource {
                 case let .contactAvatar(id, version): return try await api.contactPhoto(id: id, version: version, token: token)
                 case let .accountAvatar(version): return try await api.profilePhoto(version: version, token: token)
+                case let .groupAvatar(id, version): return try await api.groupPhoto(id: id, version: version, token: token)
+                case let .groupAttachment(id, message): return try await api.groupAttachment(groupID: id, messageID: message, token: token)
                 case let .attachment(id, turn): return try await api.chatAttachment(contactID: id, turnID: turn, token: token)
                 }
             }

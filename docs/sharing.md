@@ -11,12 +11,12 @@ The creator opens a contact and taps the person-plus toolbar button. **Share
 Contact** explains shared memory, requires approval to share existing and future
 memories, and lets the creator enter an existing user's email and tap **Invite
 User**. The server resolves that address to an immutable account ID and creates
-an in-app request for that account. The recipient opens the envelope button in
-Chats and accepts or declines from **Contact Invitations**. Acceptance still
+an in-app request for that account. The recipient opens **Chats → + → Contacts → Contact Invitations**
+and accepts or declines there. Acceptance still
 requires shared-memory consent and, when applicable, Contributor consent. No
 mailbox email or invitation push alert is sent. The foreground app refreshes its
 invitation inbox at most once every 15 seconds, immediately on foreground entry,
-and on manual refresh. Its toolbar indicator is separate from message badges.
+and on manual refresh. Its pending count appears on the Contact Invitations row, separate from message badges.
 
 The optional **Invite with a code instead** disclosure retains the earlier flow:
 create a code, share it with the system share sheet, and have the recipient choose

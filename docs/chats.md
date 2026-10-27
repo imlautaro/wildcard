@@ -365,4 +365,12 @@ at 6% opacity, with a 2-point blur radius and a 1-point downward offset. The
 shadow follows the complete bubble outline, including its tail.
 
 
-Group conversations have shared human/agent history and reuse the global agent attention queue. See [groups](groups.md) for finite reply rounds, consent, sender identities and text-only limits.
+Group conversations have shared human/agent history and reuse the global agent attention queue. See [groups](groups.md) for finite reply rounds, consent, sender identities, group avatars, attachments and voice dictation.
+
+
+Group and individual chats share `MessageBubbleView` and the composer field,
+action button and scroll-to-latest control in `ChatControls.swift`. Shared controls
+preserve the same glass treatment, dimensions and Dynamic Type scaling. Groups add
+sender names/avatars and suppress unsupported read receipts. Groups also reuse
+the attachment views, Photos/Files picker and voice recorder/transcription flow.
+See [groups](groups.md).

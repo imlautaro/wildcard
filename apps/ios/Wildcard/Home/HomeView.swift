@@ -4,6 +4,10 @@ enum HomeDestination: Hashable {
     case contacts
     case createGroup
     case group(String)
+    case groupDetails(String)
+    case groupInviteUser(String)
+    case groupAddContact(String)
+    case groupContactConsent(String, String)
     case groupInvitations
     case addContact
     case contact(String)
@@ -49,27 +53,12 @@ struct HomeView: View {
             .navigationTitle(section.title)
             .toolbar {
                 if section == .chats && destinations.isEmpty {
-                    ToolbarItem(placement: .topBarLeading) {
-                        NavigationLink(value: HomeDestination.contactInvitations) {
-                            HStack(spacing: 4) {
-                                Image(systemName: invitations.invitations.isEmpty ? "envelope" : "envelope.badge")
-                                if !invitations.invitations.isEmpty {
-                                    Text(invitations.invitations.count > 99 ? "99+" : String(invitations.invitations.count))
-                                        .manrope(.caption, weight: .semibold)
-                                }
-                            }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink(value: HomeDestination.contacts) {
+                            Image(systemName: "plus")
                         }
                         .tint(Color(uiColor: .label))
-                        .accessibilityLabel(invitations.invitations.isEmpty ? "Contact Invitations" : "Contact Invitations, pending requests")
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            NavigationLink("Contacts", value: HomeDestination.contacts)
-                            NavigationLink("Create group", value: HomeDestination.createGroup)
-                            NavigationLink("Group Invitations", value: HomeDestination.groupInvitations)
-                        } label: { Image(systemName: "plus") }
-                        .tint(Color(uiColor: .label))
-                        .accessibilityLabel("Add contact")
+                        .accessibilityLabel("Open Contacts")
                         .disabled(contacts.isMutating)
                     }
                 }
@@ -81,6 +70,14 @@ struct HomeView: View {
                     CreateGroupView { id in destinations = [.group(id)] }
                 case .group(let id):
                     GroupChatView(groupID: id)
+                case .groupDetails(let id):
+                    GroupMembersView(groupID: id)
+                case .groupInviteUser(let id):
+                    InviteGroupUserView(groupID: id)
+                case .groupAddContact(let id):
+                    AddGroupContactView(groupID: id)
+                case .groupContactConsent(let groupID, let contactID):
+                    AddGroupContactConsentView(groupID: groupID, contactID: contactID)
                 case .groupInvitations:
                     GroupInvitationsView { id in destinations = [.group(id)] }
                 case .contacts:

@@ -692,3 +692,35 @@ or change in-flight Workflow payload contracts. Older workers do not recover gro
 jobs; a compatible forward fix is preferable while jobs are pending. Removing a
 member/group does not release an in-flight agent claim early; recovery waits for
 Workflow termination. Retain tables on code rollback to preserve stored messages.
+
+
+### Group media
+
+Migration `0017_group_media.sql` adds nullable `chat_group.photo_version` and
+JSON-validated `group_message.attachment_json`. The versioned Drizzle schema mirrors
+both. It reuses the private `CONTACT_PHOTOS` bucket for `groups/...` avatars and
+`group-attachments/...` files, `DB` for metadata/consent and the attachment-object
+registry, the existing minute Cron for orphan file cleanup, and `META_API_KEY` for
+both Muse chat file analysis and Muse Voice Transcribe. No provisioning order,
+binding, account permission, secret, dependency or provider setting changes are
+needed beyond the existing D1 → private R2 → Worker/Workflow setup.
+
+Independent installs follow the existing provisioning and replace account/Worker,
+D1, R2, iOS API and automatic build connection values as documented above. Keep
+R2 private; file/photo routes authorize current group membership and only owners
+can edit group identity. iOS reuses its existing microphone purpose string and
+picker/cropper configuration. Local setup applies 0017 via the standard migration
+script. Commit/push triggers the automatic release, which applies 0017 before
+publishing the compatible code; no manual deployment or migration is needed.
+
+After release verify the pushed source tag, active Worker and migration state,
+then use fictitious accounts to exercise the media checks in [groups](groups.md).
+No remote migration, file upload, transcription, inference or runtime/device
+verification was performed during this implementation. The schema is additive;
+retain it during rollback. Old group clients cannot display files and old cleanup
+code ignores group references, so do not roll back the attachment cleanup while
+group file objects exist. Prefer a forward fix or retain the updated registry
+cleanup. Group photo removal is best effort; orphan photos may persist. File
+cleanup waits at least 24 hours after registration and deletes only objects with
+no remaining private or group message reference. Deleting group metadata does not
+retract files/messages already received by a member or data already sent to Meta.

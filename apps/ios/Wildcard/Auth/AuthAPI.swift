@@ -110,6 +110,10 @@ struct AuthAPI: Sendable {
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
             if path.hasPrefix("groups") {
+                if path.hasSuffix("/transcriptions"), response.statusCode == 422 {
+                    let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["code"] as? String
+                    throw Failure.rejected(code == "NO_SPEECH" ? "No speech was detected. Please record again." : "The transcript is too long. Please record a shorter message.")
+                }
                 if response.statusCode == 404 && method == "GET" && !path.contains("/photos/") { throw Failure.notFound }
                 if [400, 403, 404, 409, 413, 422, 429].contains(response.statusCode),
                    let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error,

@@ -269,6 +269,7 @@ export const scheduleMutation = sqliteTable('schedule_mutation', {
 // Schedule cursor and cancellation triggers are maintained by SQL migrations.
 
 export const chatGroup = sqliteTable('chat_group', {
+  photoVersion: text('photo_version'),
   id: text('id').primaryKey(),
   ownerId: text('owner_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
@@ -300,6 +301,7 @@ export const groupInvite = sqliteTable('group_invite', {
 }, (t) => [foreignKey({ columns: [t.groupId, t.senderId], foreignColumns: [groupMember.groupId, groupMember.userId] }).onDelete('cascade'),
   uniqueIndex('group_invite_recipient_unique').on(t.groupId, t.recipientId), index('group_invite_recipient_idx').on(t.recipientId, t.expiresAt)]);
 export const groupMessage = sqliteTable('group_message', {
+  attachmentJSON: text('attachment_json'),
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
   id: text('id').notNull().unique(),
   groupId: text('group_id').notNull().references(() => chatGroup.id, { onDelete: 'cascade' }),
@@ -310,7 +312,8 @@ export const groupMessage = sqliteTable('group_message', {
   roundEnqueued: integer('round_enqueued').notNull().default(0),
   text: text('text').notNull(),
   createdAt: date('created_at').notNull(),
-}, (t) => [index('group_message_history_idx').on(t.groupId, desc(t.sequence))]);
+}, (t) => [index('group_message_history_idx').on(t.groupId, desc(t.sequence)),
+  check('group_attachment_json', sql`${t.attachmentJSON} IS NULL OR json_valid(${t.attachmentJSON})`)]);
 export const groupReply = sqliteTable('group_reply', {
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
   id: text('id').notNull().unique(),

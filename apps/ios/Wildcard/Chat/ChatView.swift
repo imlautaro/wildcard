@@ -130,16 +130,7 @@ struct ChatView: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 if isAwayFromBottom && !chat.displayedTurns.isEmpty {
-                    Button { scrollToLatest(using: proxy) } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: sendIconSize, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .frame(width: composerHeight, height: composerHeight)
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: Circle())
-                    .accessibilityLabel("Scroll to latest message")
+                    ChatScrollToLatestButton { scrollToLatest(using: proxy) }
                     .padding(.trailing, 16)
                     .padding(.bottom, composerBarHeight + 8)
                     .transition(.opacity)
@@ -389,13 +380,15 @@ struct ChatView: View {
                     lastComposerActivity = .now
                     draft = $0
                 }), axis: .vertical)
-                    .manrope().lineLimit(1...6).focused($composerFocused)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .frame(minHeight: composerHeight)
-                    .glassEffect(.regular, in: Capsule())
+                    .focused($composerFocused)
+                    .chatComposerFieldStyle()
                     .disabled(chat.isUnavailable || voice.isBusy || voice.hasRecording)
-                Button {
+                ChatComposerActionButton(
+                    symbol: voice.phase == .recording ? "stop.fill" : (draftIsEmpty ? "mic.fill" : "arrow.up"),
+                    label: voice.phase == .recording ? "Stop recording and transcribe" : (draftIsEmpty ? "Record audio" : "Send message"),
+                    isEnabled: actionEnabled,
+                    tint: voice.phase == .recording ? .red : .accentColor
+                ) {
                     if voice.phase == .recording {
                         voice.stop()
                     } else if draftIsEmpty {
@@ -416,18 +409,7 @@ struct ChatView: View {
                             }
                         }
                     }
-                } label: {
-                    Image(systemName: voice.phase == .recording ? "stop.fill" : (draftIsEmpty ? "mic.fill" : "arrow.up"))
-                        .font(.system(size: sendIconSize, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: composerHeight, height: composerHeight)
-                        .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.tint(voice.phase == .recording ? .red : .accentColor).interactive(), in: Circle())
-                .opacity(actionEnabled ? 1 : 0.4)
-                .accessibilityLabel(voice.phase == .recording ? "Stop recording and transcribe" : (draftIsEmpty ? "Record audio" : "Send message"))
-                .disabled(!actionEnabled)
             }
             if draft.unicodeScalars.count > 4000 {
                 Text("Messages can contain up to 4,000 characters.").manrope(.caption).foregroundStyle(.red)

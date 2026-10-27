@@ -1,7 +1,7 @@
 # Contacts and private conversations
 
-The Chats toolbar uses the adaptive system label color for the invitations and
-add-contact buttons. Chat toolbar sharing and schedule buttons use the same
+The Chats toolbar uses the adaptive system label color for the plus button,
+which opens Contacts directly. Chat toolbar sharing and schedule buttons use the same
 neutral color in light and dark appearance.
 
 Contact records are persisted in Cloudflare D1; optional
@@ -58,15 +58,17 @@ This can revisit a previously loaded page after activity changes. Contact snapsh
 read state is persisted on the server. The store is recreated when the signed-in user changes, and responses
 from a previous session or an invalidated request cannot populate the new state.
 
-Tap **+** to open the **Contacts** screen. Its first two rows are **Create
-contact** and **Join Shared Contact**, followed by all contacts sorted
+Tap **+** to open the **Contacts** screen without a dropdown. Its action rows are
+**Create group**, **Group Invitations**, **Contact Invitations**, **Create contact**
+and **Join Shared Contact**. Invitation rows remain visible when empty and show
+pending counts when present. These actions are followed by all contacts sorted
 alphabetically using localized name comparison, with IDs breaking equal-name ties.
 Contacts automatically loads remaining pages, re-sorting as they arrive; errors
 retain loaded rows and offer Retry. Tap a contact to open its chat and return to
 Home when navigating back. Swipe and context-menu Edit/Delete remain available
 in both lists. Choose **Create contact**, enter a name, and tap Create to return
 to Contacts. **Join Shared Contact** accepts a code from a creator; it requires
-sharing consent and opens a new empty private chat. The person-plus button in a creator’s chat opens sharing/access management, including invitations by an existing account’s email. Recipients open the envelope button in Chats to accept or decline requests; no mailbox email is sent. Swipe a row for Edit or Delete; a context
+sharing consent and opens a new empty private chat. The person-plus button in a creator’s chat opens sharing/access management, including invitations by an existing account’s email. Recipients open **+ → Contacts → Contact Invitations** to accept or decline requests; no mailbox email is sent. Swipe a row for Edit or Delete; a context
 menu offers the same actions. Edit pushes the editor on the existing shared
 navigation stack. Deletion requires confirmation. Successful mutations update the
 list from the server response; creation dismisses the editor. Failed saves retain

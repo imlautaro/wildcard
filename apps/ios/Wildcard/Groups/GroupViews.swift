@@ -1,3 +1,6 @@
+import AVFAudio
+import PhotosUI
+import UniformTypeIdentifiers
 import SwiftUI
 import UIKit
 
@@ -28,27 +31,53 @@ struct CreateGroupView: View {
     @State private var contributorConsent = false
     @State private var busy = false
     @State private var error: String?
+    @State private var photoData: Data?
+    @State private var photoChanged = false
+    @State private var editingIdentity = false
+    @State private var createdID: String?
     var body: some View {
         Form {
-            Section("Group name") { TextField("Name", text: $name).manrope() }
+            Section {
+                ProfileIdentityView(name: name, hasPhoto: photoData != nil, canEdit: !busy,
+                                    isWorking: $editingIdentity, saveName: { name = $0 }, savePhoto: { photoData = $0; photoChanged = true }) {
+                    if let photoData, let image = UIImage(data: photoData) {
+                        Image(uiImage: image).resizable().scaledToFill().frame(width: 96, height: 96).clipShape(Circle())
+                    } else { GroupPhotoAvatar(group: nil, size: 96) }
+                }
+                .listRowBackground(Color.clear).listRowSeparator(.hidden)
+            }
             GroupConsentFields(contributor: groups.contributorModel, shareMemory: $shareMemory, contributorConsent: $contributorConsent)
             if let error { Text(error).foregroundStyle(.red) }
             Button("Create group") {
+                guard !busy, !editingIdentity else { return }
                 busy = true
                 Task {
                     defer { busy = false }
                     do {
-                        let data = try await GroupService.data(method: "POST", input: ["name": name, "shareMemory": shareMemory, "contributorConsent": contributorConsent], auth: auth)
-                        let result = try JSONDecoder().decode(GroupIDResponse.self, from: data)
+                        let id: String
+                        if let createdID {
+                            id = createdID
+                            _ = try await GroupService.data(id, method: "PATCH", input: ["name": name], auth: auth)
+                        } else {
+                            let data = try await GroupService.data(method: "POST", input: ["name": name, "shareMemory": shareMemory, "contributorConsent": contributorConsent], auth: auth)
+                            id = try JSONDecoder().decode(GroupIDResponse.self, from: data).id
+                            createdID = id
+                        }
+                        if photoChanged {
+                            let version = try await auth.withSession { api, token in try await api.saveGroupPhoto(id: id, data: photoData, token: token) }
+                            if let photoData, let version { await auth.images.store(photoData, for: .groupAvatar(groupID: id, version: version)) }
+                            photoChanged = false
+                        }
                         await groups.refresh(using: auth)
-                        created(result.id)
+                        created(id)
                     } catch { self.error = error.localizedDescription }
                 }
             }
-            .disabled(busy || !groups.hasLoaded)
+            .disabled(busy || editingIdentity || !groups.hasLoaded)
         }
         .disabled(busy)
         .navigationTitle("Create group").navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(busy || editingIdentity)
         .task { await groups.refresh(using: auth) }
     }
 }
@@ -127,23 +156,68 @@ struct GroupChatView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var store = GroupChatStore()
     @State private var draft = ""
-    @State private var showingMembers = false
+    @State private var attachment: DraftAttachment?
+    @State private var photoSelection: PhotosPickerItem?
+    @State private var showPhotoPicker = false
+    @State private var showFilePicker = false
+    @State private var isLoadingAttachment = false
+    @State private var attachmentError: String?
+    @State private var attachmentTask: Task<Void, Never>?
+    @State private var draftRevision = 0
+    @State private var voice = VoiceRecorder()
+    @State private var voiceTask: Task<Void, Never>?
     @State private var nearBottom = true
+    @State private var composerBarHeight: CGFloat = 0
+    @State private var animateNewMessages = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var composerFocused: Bool
+    @ScaledMetric(relativeTo: .body) private var composerControlHeight: CGFloat = 44
+    @ScaledMetric(relativeTo: .caption2) private var memberLineHeight: CGFloat = 16
+
+    private var canSend: Bool {
+        (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachment != nil) && draft.unicodeScalars.count <= 4000
+            && !store.isSending && store.pendingID == nil && store.snapshot != nil
+            && !voice.isBusy && !voice.hasRecording && !isLoadingAttachment
+    }
+    private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachment == nil }
+    private var canUseMicrophone: Bool {
+        store.snapshot != nil && !store.isSending && store.pendingID == nil && !voice.isBusy && !isLoadingAttachment
+    }
+    private var actionEnabled: Bool {
+        if voice.phase == .recording { return true }
+        return draftIsEmpty ? canUseMicrophone : canSend
+    }
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(spacing: 16) {
                     if store.nextBefore != nil {
                         Button("Load earlier messages") { Task { await store.loadMore(id: groupID, auth: auth) } }
                             .disabled(store.isLoadingMore)
+                    }
+                    if store.snapshot == nil && store.error == nil { ProgressView("Loading messages…") }
+                    if store.snapshot != nil && store.messages.isEmpty && store.pendingText == nil {
+                        ContentUnavailableView {
+                            Label("Start a conversation", systemImage: "bubble.left.and.bubble.right")
+                                .manrope(.title2, weight: .semibold)
+                        } description: {
+                            Text("Send your first message.").manrope()
+                        }
                     }
                     ForEach(store.messages) { message in
                         GroupMessageRow(message: message, groupID: groupID, members: store.snapshot?.members ?? [])
                             .id(message.id)
                     }
                     if let pending = store.pendingText {
-                        MessageBubbleView(text: pending, sentAt: Date.now.timeIntervalSince1970 * 1000, fromUser: true, isSending: true)
+                        if let file = store.pendingAttachment {
+                            ChatAttachmentView(attachment: ChatAttachment(name: file.name, mimeType: file.mimeType, size: file.data.count),
+                                               contactID: groupID, turnID: store.pendingID ?? "pending", groupID: groupID,
+                                               sentAt: store.pendingSentAt ?? 0, caption: file.mimeType.hasPrefix("image/") ? pending : "",
+                                               isSending: true, localData: file.data)
+                        }
+                        if !pending.isEmpty && store.pendingAttachment?.mimeType.hasPrefix("image/") != true {
+                            MessageBubbleView(text: pending, sentAt: store.pendingSentAt ?? 0, fromUser: true, isSending: true)
+                        }
                     }
                     ForEach((store.snapshot?.replies ?? []).filter { $0.status == "running" }) { reply in
                         HStack(spacing: 6) {
@@ -164,88 +238,278 @@ struct GroupChatView: View {
                     }
                     Color.clear.frame(height: 1).id("latest")
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
+                .padding()
+                .animation(animateNewMessages ? .easeOut(duration: reduceMotion ? 0.15 : 0.22) : nil,
+                           value: store.messages.last?.id)
+                .animation(animateNewMessages ? .easeOut(duration: reduceMotion ? 0.15 : 0.22) : nil,
+                           value: store.pendingID)
             }
             .defaultScrollAnchor(.bottom)
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
             .scrollDismissesKeyboard(.interactively)
             .onScrollGeometryChange(for: Bool.self) { geometry in
                 geometry.contentSize.height - geometry.visibleRect.maxY < 80
             } action: { _, value in nearBottom = value }
-            .onChange(of: store.messages.last?.id) { _, _ in
-                if nearBottom { proxy.scrollTo("latest", anchor: .bottom) }
+            .onChange(of: store.messages.last?.id) { previous, _ in
+                if nearBottom || previous == nil { scrollToLatest(using: proxy) }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(spacing: 8) {
-                    if let error = store.error {
-                        Text(error).manrope(.caption).foregroundStyle(.red)
-                        Button("Refresh") { Task { await store.refresh(id: groupID, auth: auth) } }.manrope(.caption)
-                    }
-                    if !nearBottom {
-                        HStack {
-                            Spacer()
-                            Button { withAnimation { proxy.scrollTo("latest", anchor: .bottom) } } label: { Image(systemName: "chevron.down") }
-                                .buttonStyle(.glass).tint(Color(uiColor: .label))
-                        }
-                    }
-                    if let pending = store.pendingText, !store.isSending {
-                        Button("Retry sending") { send(pending, proxy: proxy) }
-                    }
-                    HStack(alignment: .bottom, spacing: 10) {
-                        TextField("Message", text: $draft, axis: .vertical)
-                            .manrope().lineLimit(1...6).focused($composerFocused)
-                            .padding(12).background(.background, in: RoundedRectangle(cornerRadius: 22))
-                        Button { send(draft, proxy: proxy) } label: {
-                            Image(systemName: "arrow.up").font(.headline).frame(width: 42, height: 42)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.isSending || store.pendingText != nil || store.snapshot == nil)
-                        .accessibilityLabel("Send message")
-                    }
+            .onChange(of: store.pendingID) { _, id in
+                if id != nil { scrollToLatest(using: proxy) }
+            }
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                composer(proxy: proxy)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerBarHeight = $0 }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if !nearBottom && !store.messages.isEmpty {
+                    ChatScrollToLatestButton { scrollToLatest(using: proxy) }
+                        .padding(.trailing, 16)
+                        .padding(.bottom, composerBarHeight + 8)
+                        .transition(.opacity)
                 }
-                .padding(.horizontal, 16).padding(.vertical, 10).background(.bar)
             }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: nearBottom)
+            .refreshable { await store.refresh(id: groupID, auth: auth) }
         }
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Button { showingMembers = true } label: {
-                    VStack(spacing: -2) {
-                        Text(store.snapshot?.group.name ?? "Group").manrope(.headline, weight: .semibold).lineLimit(1)
-                        GroupMarquee(text: store.snapshot?.members.map(\.name).joined(separator: ", ") ?? "Loading...")
-                            .frame(width: 200, height: 20)
+            ToolbarItem(placement: .topBarLeading) {
+                NavigationLink(value: HomeDestination.groupDetails(groupID)) {
+                    HStack(spacing: 6) {
+                        GroupPhotoAvatar(group: store.snapshot?.group, size: 38)
+                        VStack(alignment: .leading, spacing: -2) {
+                            Text(store.snapshot?.group.name ?? "Group")
+                                .manrope(.headline, weight: .semibold)
+                                .foregroundStyle(Color(uiColor: .label))
+                                .lineLimit(1)
+                            GroupMarquee(text: store.snapshot?.members.map(\.name).joined(separator: ", ") ?? "Loading...")
+                                .frame(width: 160, height: memberLineHeight)
+                        }
                     }
+                    .padding(.leading, -6)
+                    .padding(.trailing, 8)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Group details")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showingMembers = true } label: { Image(systemName: "person.2") }
-                    .tint(Color(uiColor: .label)).accessibilityLabel("Group members")
+                .tint(Color(uiColor: .label))
+                .accessibilityLabel(store.snapshot?.group.name ?? "Group details")
+                .accessibilityValue(store.snapshot?.members.map(\.name).joined(separator: ", ") ?? "Loading...")
             }
         }
-        .sheet(isPresented: $showingMembers, onDismiss: { Task { await store.refresh(id: groupID, auth: auth) } }) {
-            GroupMembersView(groupID: groupID)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection, matching: .images, preferredItemEncoding: .compatible)
+        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: DraftAttachment.types) { result in
+            do { try selectFile(result.get()) }
+            catch { attachmentError = error.localizedDescription }
         }
+        .onChange(of: photoSelection) { _, selected in
+            guard let selected else { return }
+            attachmentTask?.cancel()
+            isLoadingAttachment = true
+            attachmentError = nil
+            attachmentTask = Task {
+                defer { isLoadingAttachment = false; photoSelection = nil }
+                do {
+                    guard let data = try await selected.loadTransferable(type: Data.self), data.count <= DraftAttachment.limit,
+                          let image = UIImage(data: data) else {
+                        throw AuthAPI.Failure.rejected("Choose a photo up to 5 MB.")
+                    }
+                    try Task.checkCancellation()
+                    let scale = min(1, 2048 / max(image.size.width, image.size.height))
+                    let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+                    let format = UIGraphicsImageRendererFormat()
+                    format.scale = 1
+                    format.opaque = true
+                    let resized = UIGraphicsImageRenderer(size: size, format: format).image { context in
+                        UIColor.white.setFill()
+                        context.fill(CGRect(origin: .zero, size: size))
+                        image.draw(in: CGRect(origin: .zero, size: size))
+                    }
+                    guard let bytes = resized.jpegData(compressionQuality: 0.85), bytes.count <= DraftAttachment.limit else {
+                        throw AuthAPI.Failure.rejected("Choose a photo up to 5 MB.")
+                    }
+                    guard store.snapshot != nil else { return }
+                    attachment = DraftAttachment(name: "Photo.jpg", mimeType: "image/jpeg", data: bytes)
+                    draftRevision += 1
+                } catch is CancellationError { }
+                catch { attachmentError = error.localizedDescription }
+            }
+        }
+        .onChange(of: voice.phase) { _, phase in
+            if phase == .ready { transcribeRecording() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { cancelRecording(); attachmentTask?.cancel() }
+        }
+        .onChange(of: store.snapshot?.group.id) { _, id in
+            if id == nil {
+                cancelRecording()
+                attachmentTask?.cancel()
+                attachment = nil
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { _ in voice.interrupt() }
+        .onDisappear { cancelRecording(); attachmentTask?.cancel() }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await store.refresh(id: groupID, auth: auth)
+            animateNewMessages = true
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(3)) } catch { return }
                 await store.refresh(id: groupID, auth: auth)
             }
         }
     }
-    private func send(_ text: String, proxy: ScrollViewProxy) {
-        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return }
-        if draft.trimmingCharacters(in: .whitespacesAndNewlines) == value { draft = "" }
-        nearBottom = true
-        Task {
-            let success = await store.send(value, id: groupID, auth: auth)
-            if !success, draft.isEmpty { draft = value }
+    private func composer(proxy: ScrollViewProxy) -> some View {
+        VStack(spacing: 8) {
+            if let error = store.error {
+                HStack(alignment: .top) {
+                    Text(error).manrope(.footnote).foregroundStyle(.red)
+                    Spacer()
+                    Button("Refresh") { Task { await store.refresh(id: groupID, auth: auth) } }
+                        .manrope(.footnote)
+                }
+            }
+            if let pending = store.pendingText, !store.isSending {
+                Button("Retry sending") { send(pending, file: store.pendingAttachment, proxy: proxy) }
+                    .manrope(.footnote).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let error = voice.error {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(error).manrope(.footnote).foregroundStyle(.red)
+                    if voice.hasRecording {
+                        HStack {
+                            Button("Retry transcription") { transcribeRecording() }
+                            Button("Discard recording", role: .destructive) { cancelRecording() }
+                        }.manrope(.footnote)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if voice.phase == .recording {
+                HStack {
+                    Image(systemName: "waveform").foregroundStyle(.red)
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        Text("Recording \(voice.elapsed / 60):\(String(format: "%02d", voice.elapsed % 60)) / 1:00").monospacedDigit()
+                    }
+                    Spacer()
+                    Button("Cancel") { cancelRecording() }
+                }.manrope(.footnote)
+            } else if voice.phase == .transcribing || voice.phase == .ready {
+                HStack {
+                    ProgressView()
+                    Text("Transcribing…")
+                    Spacer()
+                    Button("Cancel") { cancelRecording() }
+                }.manrope(.footnote)
+            }
+            if let attachmentError {
+                Text(attachmentError).manrope(.footnote).foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if isLoadingAttachment {
+                HStack { ProgressView(); Text("Preparing attachment…").manrope(.footnote); Spacer() }
+            }
+            if let attachment {
+                HStack(spacing: 10) {
+                    if attachment.mimeType.hasPrefix("image/"), let image = UIImage(data: attachment.data) {
+                        Image(uiImage: image).resizable().scaledToFill().frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 8))
+                    } else { Image(systemName: "doc.richtext").font(.title2) }
+                    VStack(alignment: .leading) {
+                        Text(attachment.name).manrope(.footnote).lineLimit(1)
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.data.count), countStyle: .file))
+                            .manrope(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        self.attachment = nil
+                        attachmentError = nil
+                        draftRevision += 1
+                    } label: { Image(systemName: "xmark.circle.fill") }
+                    .accessibilityLabel("Remove attachment")
+                    .disabled(store.isSending)
+                }.padding(10).background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
+            }
+            HStack(alignment: .bottom, spacing: 12) {
+                Menu {
+                    Button("Photo library", systemImage: "photo.on.rectangle") { showPhotoPicker = true }
+                    Button("Choose file", systemImage: "doc") { showFilePicker = true }
+                } label: {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 20, weight: .medium))
+                        .frame(width: composerControlHeight, height: composerControlHeight)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: Circle())
+                .accessibilityLabel("Add attachment")
+                .disabled(store.snapshot == nil || store.isSending || store.pendingID != nil || voice.isBusy || voice.hasRecording || isLoadingAttachment)
+                TextField("Message", text: Binding(get: { draft }, set: { draftRevision += 1; draft = $0 }), axis: .vertical)
+                    .focused($composerFocused)
+                    .chatComposerFieldStyle()
+                    .disabled(store.snapshot == nil || voice.isBusy || voice.hasRecording)
+                ChatComposerActionButton(
+                    symbol: voice.phase == .recording ? "stop.fill" : (draftIsEmpty ? "mic.fill" : "arrow.up"),
+                    label: voice.phase == .recording ? "Stop recording and transcribe" : (draftIsEmpty ? "Record audio" : "Send message"),
+                    isEnabled: actionEnabled, tint: voice.phase == .recording ? .red : .accentColor
+                ) {
+                    if voice.phase == .recording { voice.stop() }
+                    else if draftIsEmpty {
+                        composerFocused = false
+                        voiceTask = Task { await voice.start() }
+                    } else {
+                        guard canSend else { return }
+                        send(draft, file: attachment, proxy: proxy)
+                    }
+                }
+            }
+            if draft.unicodeScalars.count > 4000 {
+                Text("Messages can contain up to 4,000 characters.").manrope(.caption).foregroundStyle(.red)
+            }
+        }
+        .padding(.horizontal).padding(.vertical, 10)
+    }
+
+    private func scrollToLatest(using proxy: ScrollViewProxy) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
             proxy.scrollTo("latest", anchor: .bottom)
         }
     }
+
+    private func cancelRecording() {
+        voiceTask?.cancel()
+        voiceTask = nil
+        voice.cancel()
+    }
+    private func transcribeRecording() {
+        voiceTask?.cancel()
+        voiceTask = Task {
+            if let text = await voice.transcribe(contactID: groupID, groupID: groupID, using: auth), !Task.isCancelled {
+                draftRevision += 1
+                draft = draft.isEmpty ? text : draft + " " + text
+                composerFocused = true
+            }
+        }
+    }
+    private func selectFile(_ url: URL) throws {
+        attachment = try DraftAttachment.load(url: url)
+        attachmentError = nil
+        draftRevision += 1
+    }
+    private func send(_ text: String, file: DraftAttachment?, proxy: ScrollViewProxy) {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty || file != nil else { return }
+        let submittedRevision = draftRevision
+        if draft.trimmingCharacters(in: .whitespacesAndNewlines) == value { draft = "" }
+        if attachment == file { attachment = nil }
+        nearBottom = true
+        Task {
+            let success = await store.send(value, attachment: file, id: groupID, auth: auth)
+            if !success, draftRevision == submittedRevision, draft.isEmpty {
+                draft = value
+                if attachment == nil { attachment = file }
+            }
+            scrollToLatest(using: proxy)
+        }
+    }
+
 }
 
 private struct GroupMessageRow: View {
@@ -262,14 +526,12 @@ private struct GroupMessageRow: View {
             if !own { GroupAvatar(member: sender, groupID: groupID, size: 30) }
             VStack(alignment: .leading, spacing: 4) {
                 if !own { Text(sender?.name ?? message.senderName).manrope(.caption, weight: .semibold).foregroundStyle(.secondary).padding(.leading, 12) }
-                // Group receipts must not imply that every member read the message.
-                HStack {
-                    if own { Spacer(minLength: 40) }
-                    MessageTextContentView(text: message.text, sentAt: message.createdAt, fromUser: false)
-                        .padding(.horizontal, 16).padding(.vertical, 12)
-                        .background(own ? Color("OutgoingMessageBackground") : Color(uiColor: .secondarySystemBackground), in: MessageBubbleShape(fromUser: own))
-                        .messageBubbleShadow()
-                    if !own { Spacer(minLength: 40) }
+                if let file = message.attachment {
+                    ChatAttachmentView(attachment: file, contactID: groupID, turnID: message.id, groupID: groupID,
+                                       sentAt: message.createdAt, caption: file.isImage ? message.text : "", fromUser: own, showsReceipt: false)
+                }
+                if !message.text.isEmpty && message.attachment?.isImage != true {
+                    MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, showsReceipt: false)
                 }
             }
         }
@@ -305,18 +567,28 @@ private struct GroupMarquee: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var textWidth: CGFloat = 0
+    @State private var animationStart = Date.now
     var body: some View {
         GeometryReader { geometry in
             TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion || scenePhase != .active || textWidth <= geometry.size.width)) { context in
                 let overflow = max(0, textWidth - geometry.size.width)
                 let duration = Double(overflow / 24)
-                let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: max(1, duration * 2 + 4))
-                let offset = phase < 2 ? 0 : (phase < duration + 2 ? min(Double(overflow), (phase - 2) * 24) : max(0, Double(overflow) - (phase - duration - 4) * 24))
-                Text(text).manrope(.caption).foregroundStyle(.secondary).fixedSize(horizontal: true, vertical: false)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { textWidth = $0 }
-                    .offset(x: reduceMotion ? 0 : -offset)
+                let phase = max(0, context.date.timeIntervalSince(animationStart))
+                    .truncatingRemainder(dividingBy: max(1, duration * 2 + 4))
+                let offset = phase < 2 ? 0 : (phase < duration + 2 ? (phase - 2) * 24
+                    : (phase < duration + 4 ? Double(overflow) : Double(overflow) - (phase - duration - 4) * 24))
+                Text(text).manrope(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: true, vertical: false)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
+                        textWidth = $0
+                        animationStart = .now
+                    }
+                    .offset(x: reduceMotion ? 0 : -min(Double(overflow), max(0, offset)))
             }
+            // Clip the moving text to the subtitle viewport, not its intrinsic width.
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
             .clipped()
+            .onChange(of: text) { _, _ in animationStart = .now }
+            .onChange(of: geometry.size.width) { _, _ in animationStart = .now }
         }
         .accessibilityElement(children: .ignore).accessibilityLabel(text)
     }

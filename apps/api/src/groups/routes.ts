@@ -1,3 +1,6 @@
+import media, { groupPhotoKey } from './media';
+import { removePhoto } from '../photos/storage';
+import { parseAttachment, sameAttachment, publicAttachment } from '../chat/attachments';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { readBearerSession } from '../lib/session';
@@ -14,8 +17,8 @@ const membership = (db: D1Database, id: string, user: string) => db.prepare(`SEL
   WHERE m.group_id = ? AND m.user_id = ?`).bind(id, user).first<{ canInvite: number; ownerID: string }>();
 const mayInvite = `EXISTS (SELECT 1 FROM group_member m JOIN chat_group g ON g.id = m.group_id
   WHERE m.group_id = ?1 AND m.user_id = ?2 AND (m.can_invite = 1 OR g.owner_id = ?2))`;
-const summary = `g.id, g.name, g.owner_id AS ownerID, g.created_at AS createdAt,
-  (SELECT text FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
+const summary = `g.id, g.name, g.owner_id AS ownerID, g.created_at AS createdAt, g.photo_version AS photoVersion,
+  (SELECT CASE WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
   COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt`;
 
 groups.use('*', async (c, next) => {
@@ -24,7 +27,12 @@ groups.use('*', async (c, next) => {
   c.set('owner', session.user.id);
   await next();
 });
-groups.use('*', bodyLimit({ maxSize: 24 * 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }));
+groups.use('*', async (c, next) => {
+  const maxSize = c.req.method === 'POST' && c.req.path.endsWith('/messages') ? 7 * 1024 * 1024 + 32768
+    : c.req.path.endsWith('/transcriptions') ? 2 * 1024 * 1024
+    : c.req.path.endsWith('/photo') ? 512 * 1024 : 24 * 1024;
+  return bodyLimit({ maxSize, onError: (c) => c.json({ error: 'File or request is too large' }, 413) })(c, next);
+});
 groups.use('*', async (c, next) => {
   if (c.req.method !== 'GET') {
     const admission = await admitAuthRequest(c.env.DB, c.get('owner'), 'group-write', 40);
@@ -106,6 +114,13 @@ groups.get('/:id', async (c) => {
     ORDER BY (r.status = 'failed'), r.sequence DESC LIMIT 80`).bind(id).all();
   return c.json({ group, members, replies, canInvite: member.canInvite === 1 || member.ownerID === owner, contributorModel: contributor(c.env) });
 });
+groups.patch('/:id', async (c) => {
+  const b = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!validName(b?.name)) return c.json({ error: 'Use a name with 1–100 characters' }, 400);
+  const row = await c.env.DB.prepare('UPDATE chat_group SET name = ? WHERE id = ? AND owner_id = ? RETURNING id')
+    .bind((b!.name as string).trim(), c.req.param('id'), c.get('owner')).first();
+  return row ? c.body(null, 204) : c.json({ error: 'Only the group owner can edit the name' }, 403);
+});
 groups.post('/:id/consent', async (c) => {
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (!accepted(b, c.env)) return c.json({ error: 'Accept shared memory and model data use' }, 400);
@@ -176,31 +191,52 @@ groups.delete('/:id/agents/:agentID', async (c) => {
   return row ? c.body(null, 204) : c.json({ error: 'Cannot remove this contact' }, 403);
 });
 groups.delete('/:id', async (c) => {
-  const row = await c.env.DB.prepare('DELETE FROM chat_group WHERE id = ? AND owner_id = ? RETURNING id')
-    .bind(c.req.param('id'), c.get('owner')).first();
+  const row = await c.env.DB.prepare('DELETE FROM chat_group WHERE id = ? AND owner_id = ? RETURNING photo_version AS photoVersion')
+    .bind(c.req.param('id'), c.get('owner')).first<{ photoVersion: string | null }>();
+  if (row?.photoVersion) c.executionCtx.waitUntil(removePhoto(c.env, groupPhotoKey(c.req.param('id'), row.photoVersion)));
   return row ? c.body(null, 204) : c.json({ error: 'Only the owner can delete this group' }, 403);
 });
 groups.get('/:id/messages', async (c) => {
   const before = Number(c.req.query('before') ?? Number.MAX_SAFE_INTEGER);
   if (!Number.isSafeInteger(before) || before < 1) return c.json({ error: 'Invalid history cursor' }, 400);
   const { results } = await c.env.DB.prepare(`SELECT sequence, id, user_id AS userID, agent_id AS agentID,
-    sender_name AS senderName, text, created_at AS createdAt FROM group_message
-    WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before).all<{ sequence: number }>();
+    sender_name AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON FROM group_message
+    WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before).all<{ sequence: number; attachmentJSON: string | null }>();
   const page = results.slice(0, 50);
-  return c.json({ messages: page.reverse(), nextBefore: results.length > 50 ? page[0].sequence : null });
+  return c.json({ messages: page.reverse().map(({ attachmentJSON, ...message }) => ({ ...message, attachment: publicAttachment({ attachmentJSON }) })), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 groups.post('/:id/messages', async (c) => {
   const id = c.req.param('id'), owner = c.get('owner');
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
-  if (typeof b?.id !== 'string' || !/^[a-f0-9-]{36}$/i.test(b.id) || typeof b.text !== 'string' || !b.text.trim()
-    || Array.from(b.text).length > 4000) return c.json({ error: 'Use a message with 1–4,000 characters and a UUID' }, 400);
+  if (typeof b?.id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.id)
+    || typeof b.text !== 'string' || (!b.text.trim() && b.attachment === undefined) || b.text.includes('\0')
+    || Array.from(b.text.trim()).length > 4000 || Object.keys(b).some((key) => !['id','text','attachment'].includes(key))) {
+    return c.json({ error: 'Use a message up to 4,000 characters or an attachment, with a UUID' }, 400);
+  }
+  b.id = b.id.toLowerCase();
+  const attachment = b.attachment === undefined ? null : await parseAttachment(b.attachment);
+  if (b.attachment !== undefined && !attachment) return c.json({ error: 'Choose a JPEG, PNG, GIF, WebP, or PDF up to 5 MB' }, 400);
+  const existing = await c.env.DB.prepare('SELECT text, attachment_json AS attachmentJSON FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
+    .bind(b.id, id, owner).first<{ text: string; attachmentJSON: string | null }>();
+  if (existing) {
+    if (existing.text !== b.text.trim() || !sameAttachment(existing, attachment?.metadata)) return c.json({ error: 'Message ID already used' }, 409);
+    c.executionCtx.waitUntil(dispatchGroup(c.env, id));
+    return c.json({ id: b.id });
+  }
+  const now = Date.now();
+  const key = attachment ? `group-attachments/${id}/${owner}/${b.id}/${crypto.randomUUID()}` : null;
+  const attachmentJSON = attachment && key ? JSON.stringify({ ...attachment.metadata, key }) : null;
+  if (attachment && key) {
+    await c.env.DB.prepare('INSERT INTO chat_attachment_object (object_key, created_at) VALUES (?, ?)').bind(key, now).run();
+    await c.env.CONTACT_PHOTOS.put(key, attachment.bytes, { httpMetadata: { contentType: attachment.metadata.mimeType } });
+  }
   // One human message creates one finite round. Bot replies never enqueue more replies.
   await c.env.DB.batch([
-    c.env.DB.prepare(`INSERT INTO group_message (id, group_id, user_id, sender_name, text, created_at, contributor_consent)
-      SELECT ?3, ?1, u.id, u.name, ?4, ?5, m.contributor_consent FROM user u JOIN group_member m ON m.user_id = u.id AND m.group_id = ?1
+    c.env.DB.prepare(`INSERT INTO group_message (id, group_id, user_id, sender_name, text, created_at, contributor_consent, attachment_json)
+      SELECT ?3, ?1, u.id, u.name, ?4, ?5, m.contributor_consent, ?7 FROM user u JOIN group_member m ON m.user_id = u.id AND m.group_id = ?1
       WHERE u.id = ?2 AND (?6 = 0 OR NOT EXISTS (SELECT 1 FROM group_member WHERE group_id = ?1 AND contributor_consent = 0))
       AND (SELECT COUNT(*) FROM group_reply WHERE group_id = ?1 AND status IN ('queued', 'running')) < 64
-      ON CONFLICT(id) DO NOTHING`).bind(id, owner, b.id, b.text.trim(), Date.now(), contributor(c.env) ? 1 : 0),
+      ON CONFLICT(id) DO NOTHING`).bind(id, owner, b.id, b.text.trim(), now, contributor(c.env) ? 1 : 0, attachmentJSON),
     c.env.DB.prepare(`INSERT INTO group_reply (id, group_id, agent_id, source_id, workflow_id, created_at)
       SELECT 'group-' || gm.id || '-' || ga.agent_id, ga.group_id, ga.agent_id, gm.id,
         'group-' || gm.id || '-' || ga.agent_id || '-1', gm.created_at
@@ -209,9 +245,9 @@ groups.post('/:id/messages', async (c) => {
       ON CONFLICT(source_id, agent_id) DO NOTHING`).bind(b.id, id, owner),
     c.env.DB.prepare('UPDATE group_message SET round_enqueued = 1 WHERE id = ? AND group_id = ? AND user_id = ?').bind(b.id, id, owner),
   ]);
-  const saved = await c.env.DB.prepare('SELECT id, text FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
-    .bind(b.id, id, owner).first<{ id: string; text: string }>();
-  if (!saved || saved.text !== b.text.trim()) return c.json({ error: 'The group queue is full or model consent is required' }, 409);
+  const saved = await c.env.DB.prepare('SELECT id, text, attachment_json AS attachmentJSON FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
+    .bind(b.id, id, owner).first<{ id: string; text: string; attachmentJSON: string | null }>();
+  if (!saved || saved.text !== b.text.trim() || !sameAttachment(saved, attachment?.metadata)) return c.json({ error: 'The group queue is full or model consent is required' }, 409);
   c.executionCtx.waitUntil(dispatchGroup(c.env, id));
   return c.json({ id: saved.id }, 202);
 });
@@ -240,4 +276,5 @@ groups.get('/:id/photos/:kind/:memberID', async (c) => {
   const photo = await c.env.CONTACT_PHOTOS.get(`users/${memberID}/${row.version}.jpg`);
   return photo ? new Response(photo.body, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } }) : c.body(null, 404);
 });
+groups.route('/:id', media);
 export default groups;

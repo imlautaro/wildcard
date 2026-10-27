@@ -64,7 +64,8 @@ simulator configuration.
 
 The signed-in shell uses one navigation stack around the tabs. Chats shows only
 conversations with at least one message, ordered by recent activity. Tap **+** to
-open Contacts: Create contact and Join Shared Contact appear first, followed by
+open Contacts directly: Create group, Group Invitations, Contact Invitations,
+Create contact and Join Shared Contact appear first, followed by
 all contacts in alphabetical order. Tap a contact to open its conversation. Swipe a contact to Edit or Delete (with confirmation);
 tap a contact to open its conversation and its title to edit it. Editors
 push over the full tab layout, preserving the selected tab on return. Chats supports
@@ -94,8 +95,9 @@ shared chat, with explicit shared-memory and model consent, in-app invitations,
 per-member invitation permissions, sender avatars/names and a scrolling member
 subtitle. Each human message starts a bounded automatic reply round. Groups and
 private chats share the same exclusive attention queue per agent. Create one from
-**Chats → + → Create group**. This version supports text and foreground polling;
-group push, badges, attachments, dictation and schedules are not implemented.
+**Chats → + → Contacts → Create group**. Groups support editable avatars,
+image/PDF attachments with native previews, voice dictation with an editable
+transcript, and foreground polling. Group push, badges and schedules are not implemented.
 
 ## Infrastructure and releases
 

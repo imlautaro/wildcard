@@ -142,3 +142,15 @@ three-second task. This does not mark history fresh or interfere with history
 polling. Opening a chat registers one expiring visit; idle polling does not renew
 it. Backgrounding/navigation close the visit best effort, and server TTLs expire
 lost clients. See [visit presence](chats.md#visiting-a-chat-and-composing-a-draft).
+
+
+## Group images
+
+Group avatar versions and message IDs use distinct `group/<id>/avatar/<version>`
+and `group/<id>/attachment/<messageID>` resource keys in the same account cache,
+sharing all existing budgets, protection, lifetime, deduplication and logout cleanup.
+Confirmed image submissions seed local bytes. Group list membership loss, explicit
+leave/deletion and group-history 404 clear the account cache conservatively.
+Cached images require refreshed group metadata for revocation discovery; offline
+images can remain until that check. Group member avatars remain view-local.
+See [group media](groups.md#group-photos-attachments-and-voice).
