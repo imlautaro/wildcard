@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(prefix='wildcard-sync-') as directory:
                        for file in ('Chat/ChatAPI.swift', 'Contacts/ContactsAPI.swift'))
     (temp / 'Models.swift').write_text(models)
     sources = [ios / file for file in (
-        'Chat/ChatStore.swift', 'Chat/ConversationCache.swift', 'Chat/ReadAcknowledgementQueue.swift',
+        'Chat/MessageReactionStore.swift', 'Chat/ChatStore.swift', 'Chat/ConversationCache.swift', 'Chat/ReadAcknowledgementQueue.swift',
         'Chat/ConversationSync.swift', 'Contacts/ContactsStore.swift',
         'Groups/GroupsAPI.swift',
     )]

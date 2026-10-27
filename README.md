@@ -76,7 +76,8 @@ tap a contact to open its conversation and its title to edit it. Editors
 push over the full tab layout, preserving the selected tab on return. Chats supports
 pull to refresh and paginated loading. Choose, crop, replace, or remove a [profile photo](docs/profile-photos.md) in the
 contact editor. Private photo bytes use R2. Contact identities are saved in D1; each participant has an isolated private conversation. See [contacts](docs/contacts.md). Conversations support
-persisted messages, reply status, earlier history, and retries. The chat title shows
+[emoji reactions](docs/reactions.md) from humans and bots on their own or others’
+messages in both private chats and groups, persisted messages, reply status, earlier history, and retries. The chat title shows
 D1-backed Online/Typing/Last seen presence maintained by the server Workflow and Cron,
 with a brief durable wait before the agent connects. Opening a chat also connects
 the agent briefly; actual composer activity extends its server-side idle lease. Accepted replies

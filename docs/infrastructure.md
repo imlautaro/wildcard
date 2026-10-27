@@ -1135,3 +1135,28 @@ zero energy and a simulated complete Workflow publication/replay. Validate actua
 model conversation after release; simulated providers do not establish model quality.
 A prior real post completed with a null draft and skipped publication despite energy,
 so it needs a new message or explicit retry; no automatic replay of old silence occurs.
+
+## Message reactions (migration 0024)
+
+[Message reactions](reactions.md) use the existing D1 `DB` binding and model
+Workflow. No service, binding, permission or secret is added. Independent accounts
+must apply every ordered migration, including `0024_message_reactions.sql`, before
+running the matching API. Local setup uses `npm run db:migrate:local` with the
+installation's own local configuration. The existing automatic API release applies
+migrations before publishing. Release only through committed, pushed source and
+verify the automatic build source commit; do not deploy or migrate production by
+hand. Publish matching web source and install matching iOS source through Xcode.
+
+0024 is additive: existing messages begin with no reactions. It creates checked
+actor/target relationships, cascading foreign keys and a unique expression index
+for one reaction per actor/message. Verify all migrations in a clean independent
+installation, then use fictional accounts for the reaction verification in the
+feature guide. No remote migration, runtime/provider call or deployment was
+performed during implementation; static client/API checks do not validate those.
+
+A rollback can leave the additive table in place and revert both clients and API;
+keep reaction data for a future forward fix. Older code will not show reactions.
+Private turns completed with only a reaction have NULL assistant text and status
+`complete`; older unread-count code counts those turns as replies. Preserve the
+new non-null-text unread/push guards when rolling back, or forward-fix the old API
+before publishing it. Do not delete user messages to work around compatibility.

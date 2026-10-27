@@ -54,6 +54,7 @@ enum ImageResource {
     var handler: (String, String, Data?, [URLQueryItem]) async throws -> Data = { _, _, _, _ in Data() }
     func respond(_ path: String, method: String, body: Data? = nil, query: [URLQueryItem] = []) async throws -> Data {
         calls[method + " " + path, default: 0] += 1
+        if path.hasSuffix("/reactions") { return Data("{\"reactions\":[]}".utf8) }
         return try await handler(path, method, body, query)
     }
     func reset() {

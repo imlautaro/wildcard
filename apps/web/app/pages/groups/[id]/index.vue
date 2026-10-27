@@ -167,6 +167,7 @@ onBeforeUnmount(() => {
           <div v-if="!isMine(item.message)" class="avatar-slot">
             <AppAvatar v-if="item.last" :name="item.message.senderName" :path="senderPhoto(item.message)" :size="28" />
           </div>
+          <MessageReactions :cache="state.reactions" :path="`groups/${groupID}/reactions`" :message-i-d="item.message.id" side="group">
           <div class="bubble" :class="{ media: item.message.attachment?.mimeType.startsWith('image/') }">
             <span
               v-if="!isMine(item.message) && item.first" class="sender"
@@ -178,6 +179,7 @@ onBeforeUnmount(() => {
               {{ messageTime(item.message.createdAt) }}<MessageReceipt v-if="isMine(item.message)" :receipt-state="item.message.receiptState ?? 'sent'" />
             </div>
           </div>
+          </MessageReactions>
         </div>
       </template>
 

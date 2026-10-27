@@ -65,16 +65,20 @@ struct ChatView: View {
                         }
                     }
                     ForEach(chat.displayedTurns) { turn in
-                        if turn.scheduleID == nil {
-                            if let attachment = turn.attachment {
-                                ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id, sentAt: turn.createdAt, caption: attachment.isImage ? turn.userText : "", readAt: turn.readAt, isSending: chat.isSubmitting(turn.id), localData: chat.outgoingMessage?.turn.id == turn.id ? chat.outgoingMessage?.attachment?.data : nil)
+                        if turn.scheduleID == nil && (!turn.userText.isEmpty || turn.attachment != nil) {
+                            VStack(spacing: 8) {
+                                if let attachment = turn.attachment {
+                                    ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id, sentAt: turn.createdAt, caption: attachment.isImage ? turn.userText : "", readAt: turn.readAt, isSending: chat.isSubmitting(turn.id), localData: chat.outgoingMessage?.turn.id == turn.id ? chat.outgoingMessage?.attachment?.data : nil)
+                                }
+                                if !turn.userText.isEmpty && turn.attachment?.isImage != true {
+                                    MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true, readAt: turn.readAt, isSending: chat.isSubmitting(turn.id))
+                                }
                             }
-                            if !turn.userText.isEmpty && turn.attachment?.isImage != true {
-                                MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true, readAt: turn.readAt, isSending: chat.isSubmitting(turn.id))
-                            }
+                            .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "user", fromUser: true, enabled: !chat.isSubmitting(turn.id))
                         }
                         if let reply = turn.assistantText {
                             MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false)
+                                .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "assistant", fromUser: false)
                                 .task {
                                     guard chat.newReplyIDs.contains(turn.id) else { return }
                                     // Wait until the insertion/scroll animation has finished.

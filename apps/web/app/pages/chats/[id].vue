@@ -133,20 +133,20 @@ onBeforeUnmount(() => window.removeEventListener('focus', markRead));
       <template v-for="item in items" :key="item.key">
         <div v-if="item.kind === 'day'" class="day">{{ item.label }}</div>
         <template v-else>
-          <template v-if="item.turn.scheduleID === null">
-            <div v-if="item.turn.attachment" class="bubble-row outgoing">
-              <div class="bubble media">
-                <MessageAttachment :attachment="item.turn.attachment" :path="attachmentPath(item.turn)" />
-                <div v-if="item.turn.userText && item.turn.attachment.mimeType.startsWith('image/')" class="caption">{{ item.turn.userText }}</div>
-                <div class="meta" style="padding: 0 6px 2px">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
+          <div v-if="item.turn.scheduleID === null && (item.turn.userText || item.turn.attachment)" class="bubble-row outgoing">
+            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="user">
+              <div class="private-message-content">
+                <div v-if="item.turn.attachment" class="bubble media">
+                  <MessageAttachment :attachment="item.turn.attachment" :path="attachmentPath(item.turn)" />
+                  <div v-if="item.turn.userText && item.turn.attachment.mimeType.startsWith('image/')" class="caption">{{ item.turn.userText }}</div>
+                  <div class="meta" style="padding: 0 6px 2px">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
+                </div>
+                <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble">{{ item.turn.userText }}<div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
               </div>
-            </div>
-            <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble-row outgoing">
-              <div class="bubble">{{ item.turn.userText }}<div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
-            </div>
-          </template>
+            </MessageReactions>
+          </div>
           <div v-if="item.turn.assistantText" class="bubble-row incoming">
-            <div class="bubble">{{ item.turn.assistantText }}<div class="meta">{{ messageTime(item.turn.updatedAt) }}</div></div>
+            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant"><div class="bubble">{{ item.turn.assistantText }}<div class="meta">{{ messageTime(item.turn.updatedAt) }}</div></div></MessageReactions>
           </div>
           <div v-else-if="item.turn.status === 'running' && state.presence?.status === 'typing'" class="bubble-row incoming">
             <div class="typing" aria-label="Typing"><span /><span /><span /></div>

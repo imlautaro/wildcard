@@ -461,3 +461,10 @@ history refreshes; they remain separate from watermarks. Group cache hits preser
 the same store without observable LRU writes during render. See
 [read acknowledgement lifetime](caching.md#read-acknowledgement-lifetime) for
 cancellation, count reconciliation, retention and verification limits.
+
+## Group message reactions
+
+See [message reactions](reactions.md) for the shared iOS/web selector, actor and
+message identity, agent tools, permissions, mutation retries, session cache freshness
+and verification steps. Reactions use existing conversation synchronization and
+add no unread messages or push alerts.

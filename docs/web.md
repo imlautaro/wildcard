@@ -165,3 +165,10 @@ Not yet verified: model replies and private read receipts (they need a model run
 group catch-up across more than 50 missed messages, PDF attachments in a browser,
 photo selection through the file picker, session expiry over time, and rate-limit
 behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.
+
+## Message reactions
+
+See [message reactions](reactions.md) for the shared iOS/web selector, actor and
+message identity, agent tools, permissions, mutation retries, session cache freshness
+and verification steps. Reactions use existing conversation synchronization and
+add no unread messages or push alerts.

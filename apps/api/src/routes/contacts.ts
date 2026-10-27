@@ -24,7 +24,7 @@ const selection = `${columns},
     FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
     ORDER BY t.sequence DESC LIMIT 1) AS lastMessageAt,
   (SELECT COUNT(*) FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
-    AND t.status = 'complete' AND t.sequence > contact.last_read_sequence) AS unreadCount`;
+    AND t.status = 'complete' AND t.assistant_text IS NOT NULL AND t.sequence > contact.last_read_sequence) AS unreadCount`;
 const contacts = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 
 contacts.use('*', async (c, next) => {

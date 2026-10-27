@@ -409,3 +409,10 @@ Deletion, confirmed access loss and account-owned store teardown clear entries. 
 on-disk state. Verify details → back → details, zero/full balances, reset during refresh,
 offline/retry, background/resume and switching accounts with fictional data. See
 [energy](energy.md) for server recharge and independent conversation limits.
+
+## Reaction snapshots
+
+See [message reactions](reactions.md) for the shared iOS/web selector, actor and
+message identity, agent tools, permissions, mutation retries, session cache freshness
+and verification steps. Reactions use existing conversation synchronization and
+add no unread messages or push alerts.

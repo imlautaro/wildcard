@@ -589,6 +589,7 @@ private struct GroupMessageRow: View {
                 }
             }
         }
+        .messageReactions(groups.conversations.store(for: groupID).reactions, path: "groups/\(groupID)/reactions", messageID: message.id, side: "group", fromUser: own)
         .onScrollVisibilityChange(threshold: 0.5) { isOnScreen = $0 }
         .task(id: "\(message.id)-\(isOnScreen)-\(scenePhase)") {
             guard isOnScreen, scenePhase == .active, !own else { return }

@@ -441,3 +441,21 @@ export const groupMessageReceipt = sqliteTable('group_message_receipt', {
   index('group_receipt_recipient_idx').on(t.recipientKind, t.recipientId, t.messageId),
   check('receipt_kind', sql`${t.recipientKind} IN ('user', 'agent')`),
   check('receipt_read_delivery', sql`${t.readAt} IS NULL OR ${t.deliveredAt} IS NOT NULL`)]);
+
+export const messageReaction = sqliteTable('message_reaction', {
+  turnId: text('turn_id').references(() => chatTurn.id, { onDelete: 'cascade' }),
+  groupMessageId: text('group_message_id').references(() => groupMessage.id, { onDelete: 'cascade' }),
+  side: text('side').notNull(),
+  userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+  agentId: text('agent_id').references(() => contactAgent.id, { onDelete: 'cascade' }),
+  emoji: text('emoji').notNull(),
+}, (t) => [
+  uniqueIndex('reaction_identity').on(sql`COALESCE(${t.turnId}, ${t.groupMessageId})`, t.side,
+    sql`COALESCE(${t.userId}, ${t.agentId})`, sql`(${t.userId} IS NOT NULL)`),
+  index('reaction_turn').on(t.turnId), index('reaction_group_message').on(t.groupMessageId),
+  check('reaction_side', sql`${t.side} IN ('user', 'assistant', 'group')`),
+  check('reaction_emoji', sql`${t.emoji} IN ('👍', '❤️', '😂', '😮', '😢', '🙏')`),
+  check('reaction_actor', sql`(${t.userId} IS NULL) != (${t.agentId} IS NULL)`),
+  check('reaction_target', sql`(${t.turnId} IS NOT NULL AND ${t.groupMessageId} IS NULL AND ${t.side} IN ('user', 'assistant'))
+    OR (${t.turnId} IS NULL AND ${t.groupMessageId} IS NOT NULL AND ${t.side} = 'group')`),
+]);

@@ -1,9 +1,11 @@
+import { reactionTool } from '../reactions/data';
+import { groupReaction } from '../reactions/tools';
 import { acknowledgeGroupResults } from './receipts';
 import { readAgentMemories, selectAgentMemories } from '../chat/agent-memory';
 import { byteLength, clipText, keywords } from '../chat/memory';
 import { isRecord, museCompletion, type ModelMessage, type ModelTool, type ToolCall } from '../chat/meta';
 
-export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; beforeSequence?: number };
+export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; beforeSequence?: number; reactionJob?: { turnID: string; attempt: number } };
 export const groupRetrievalTools: ModelTool[] = [
   { type: 'function', function: { name: 'search_self_memories',
     description: 'Retrieve your own persistent preferences and persona across private and group chats, attributed to your agent ID. Never retrieves another agent’s private preferences.',
@@ -176,7 +178,7 @@ export async function groupCompletion(env: Env, messages: ModelMessage[], scope:
   const processedResults: unknown[] = [];
   for (let round = 0; round < 3; round++) {
     const answer = await museCompletion(env.META_API_KEY, messages, env.META_CHAT_MODEL,
-      { maxTokens: 1200, responseFormat, ...(round < 2 ? { tools: groupRetrievalTools } : {}) });
+      { maxTokens: 1200, responseFormat, ...(round < 2 ? { tools: [...groupRetrievalTools, reactionTool] } : {}) });
     await acknowledgeGroupResults(env.DB, scope.agentID, processedResults);
     processedResults.length = 0;
     if (!answer.tool_calls?.length) return answer.content!;
@@ -185,7 +187,9 @@ export async function groupCompletion(env: Env, messages: ModelMessage[], scope:
       let content = JSON.stringify({ error: 'Tool budget exhausted.' });
       if (executions++ < 6) {
         try {
-          content = await executeGroupRetrieval(env.DB, scope, call);
+          content = call.function.name === reactionTool.function.name
+            ? await groupReaction(env, scope, JSON.parse(call.function.arguments))
+            : await executeGroupRetrieval(env.DB, scope, call);
           const result = JSON.parse(content);
           if (['get_group_excerpt', 'search_group_messages'].includes(call.function.name) && Array.isArray(result.results)) {
             processedResults.push(...result.results);

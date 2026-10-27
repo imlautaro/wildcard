@@ -1,9 +1,11 @@
+import { createReactionCache, clearReactionCache, refreshReactions, type ReactionCache } from './useMessageReactions';
 import type { ChatPage, ChatReadState, ChatSubmission, ChatTurn, DraftAttachment, Presence } from '~/utils/types';
 
 // Session cache of private conversations, keyed by contact. Pending sends keep
 // their UUID across navigation and failures so a retry can never duplicate them.
 export type PendingSend = { id: string; text: string; attachment: DraftAttachment | null; failed: string | null; createdAt: number };
 export type Conversation = {
+  reactions: ReactionCache;
   turns: ChatTurn[];
   nextBefore: number | null;
   presence: Presence | null;
@@ -24,11 +26,19 @@ const catchUpPages = 10;
 
 registerSessionReset(() => {
   for (const conversation of conversations.values()) revokePreview(conversation.pending?.attachment);
+  for (const entry of conversations.values()) clearReactionCache(entry.reactions);
   conversations.clear();
 });
 
 function revokePreview(attachment: DraftAttachment | null | undefined) {
   if (attachment?.previewURL) URL.revokeObjectURL(attachment.previewURL);
+}
+
+export function forgetConversation(id: string) {
+  const entry = conversations.get(id);
+  if (entry) clearReactionCache(entry.reactions);
+  conversations.delete(id);
+  forgetRead(`contact:${id}`);
 }
 
 // Read-only lookup for Home: no LRU reordering, so rendering never mutates the cache.
@@ -44,6 +54,7 @@ function conversation(id: string): Conversation {
     return entry;
   }
   entry = reactive({
+    reactions: createReactionCache(),
     turns: [], nextBefore: null, presence: null, loaded: false, error: null, unavailable: false,
     pending: null, draft: '', loadingEarlier: false, retrying: false, revision: 0,
   });
@@ -51,7 +62,10 @@ function conversation(id: string): Conversation {
   // Evict the least recently opened conversations without pending sends.
   for (const [key, value] of conversations) {
     if (conversations.size <= retained) break;
-    if (key !== id && !value.pending) conversations.delete(key);
+    if (key !== id && !value.pending && !Object.keys(value.reactions.pending).length) {
+      clearReactionCache(value.reactions);
+      conversations.delete(key);
+    }
   }
   return entry;
 }
@@ -90,9 +104,11 @@ export async function loadConversation(id: string) {
     entry.presence = page.presence;
     entry.loaded = true;
     entry.error = null;
+    await refreshReactions(entry.reactions, `contacts/${id}/chat/reactions`, entry.turns.map((turn) => turn.id));
   } catch (error) {
     if (conversations.get(id) !== entry) return;
     if (error instanceof ApiError && error.status === 404) {
+      clearReactionCache(entry.reactions);
       entry.unavailable = true;
       chats.removeContact(id);
       forgetRead(`contact:${id}`);
@@ -118,6 +134,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
       const page = await api<ChatPage>(`contacts/${id}/chat/turns`, { query: { before: entry.nextBefore } });
       entry.turns = mergeInto(entry.turns, page.turns);
       entry.nextBefore = page.nextBefore;
+      await refreshReactions(entry.reactions, `contacts/${id}/chat/reactions`, entry.turns.map((turn) => turn.id));
     } catch (error) {
       entry.error = errorMessage(error);
     } finally {

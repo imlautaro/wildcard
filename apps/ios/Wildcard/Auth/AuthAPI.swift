@@ -125,6 +125,12 @@ struct AuthAPI: Sendable {
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if path.hasSuffix("/reactions") {
+                if [403, 404].contains(response.statusCode) { throw Failure.notFound }
+                if response.statusCode >= 500 { throw Failure.temporarilyUnavailable }
+                let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
+                throw Failure.rejected(message ?? "Reactions are temporarily unavailable. Please try again.")
+            }
             if path.hasPrefix("groups") {
                 if path.hasSuffix("/transcriptions"), response.statusCode == 422 {
                     let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["code"] as? String

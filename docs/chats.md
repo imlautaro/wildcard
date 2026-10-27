@@ -412,3 +412,10 @@ from the foreground timer while Home is visible. Counters update on server
 acknowledgement, and stale lists cannot resurrect them. Conversation cache hits
 change only non-observable LRU bookkeeping, preventing a lookup during render from
 triggering its own render again. See [read acknowledgement lifetime](caching.md#read-acknowledgement-lifetime).
+
+## Private message reactions
+
+See [message reactions](reactions.md) for the shared iOS/web selector, actor and
+message identity, agent tools, permissions, mutation retries, session cache freshness
+and verification steps. Reactions use existing conversation synchronization and
+add no unread messages or push alerts.

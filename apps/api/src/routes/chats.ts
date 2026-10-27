@@ -1,3 +1,4 @@
+import { reactionRoutes } from '../reactions/routes';
 import { parseAttachment, sameAttachment, storedAttachment } from '../chat/attachments';
 import { contactModelAllowed } from '../chat/consent';
 import { validTimeZone } from '../schedules/data';
@@ -26,6 +27,7 @@ chats.use('*', async (c, next) => {
   }
   await next();
 });
+chats.route('/reactions', reactionRoutes(false));
 // Activity contains no draft text. Each foreground visit has a client UUID.
 chats.post('/activity', bodyLimit({ maxSize: 1024,
   onError: (c) => c.json({ error: 'Request body too large' }, 413) }), async (c) => {
@@ -104,7 +106,7 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
   }
   const state = await c.env.DB.prepare(`UPDATE contact SET last_read_sequence = MAX(last_read_sequence,
     COALESCE((SELECT MAX(sequence) FROM chat_turn WHERE contact_id = ?1 AND user_id = ?2
-      AND status = 'complete' AND sequence <= ?3), 0))
+      AND status = 'complete' AND assistant_text IS NOT NULL AND sequence <= ?3), 0))
     WHERE id = ?1 AND user_id = ?2 RETURNING last_read_sequence AS lastReadSequence`)
     .bind(c.get('contactID'), c.get('owner'), body.sequence).first<{ lastReadSequence: number }>();
   if (!state) return c.json({ error: 'Contact not found' }, 404);
@@ -112,7 +114,7 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
     (SELECT id FROM chat_turn WHERE contact_id = ? AND user_id = ? AND sequence <= ?)`)
     .bind(c.get('contactID'), c.get('owner'), state.lastReadSequence).run();
   const unread = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM chat_turn WHERE contact_id = ?
-    AND user_id = ? AND status = 'complete' AND sequence > ?`)
+    AND user_id = ? AND status = 'complete' AND assistant_text IS NOT NULL AND sequence > ?`)
     .bind(c.get('contactID'), c.get('owner'), state.lastReadSequence).first<{ count: number }>();
   return c.json({ ...state, unreadCount: unread?.count ?? 0,
     totalUnreadCount: await totalUnreadReplies(c.env.DB, c.get('owner')) });

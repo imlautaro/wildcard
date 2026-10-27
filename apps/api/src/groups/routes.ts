@@ -1,3 +1,4 @@
+import { reactionRoutes } from '../reactions/routes';
 import { receiptState } from './receipts';
 import { deliverGroupPush } from './push';
 import media, { groupPhotoKey } from './media';
@@ -230,6 +231,7 @@ groups.delete('/:id', async (c) => {
   if (row?.photoVersion) c.executionCtx.waitUntil(removePhoto(c.env, groupPhotoKey(c.req.param('id'), row.photoVersion)));
   return row ? c.body(null, 204) : c.json({ error: 'Only the owner can delete this group' }, 403);
 });
+groups.route('/:id/reactions', reactionRoutes(true));
 groups.get('/:id/messages', async (c) => {
   const before = Number(c.req.query('before') ?? Number.MAX_SAFE_INTEGER);
   if (!Number.isSafeInteger(before) || before < 1) return c.json({ error: 'Invalid history cursor' }, 400);

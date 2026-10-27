@@ -1,3 +1,4 @@
+import { createReactionCache, clearReactionCache, refreshReactions, type ReactionCache } from './useMessageReactions';
 import type { DraftAttachment, GroupMessage, GroupMessagesPage, GroupSnapshot } from '~/utils/types';
 
 // Session cache of group conversations, mirroring useConversation. A pending send
@@ -5,6 +6,7 @@ import type { DraftAttachment, GroupMessage, GroupMessagesPage, GroupSnapshot } 
 // request; history then replaces it by UUID.
 export type GroupPending = { id: string; text: string; attachment: DraftAttachment | null; failed: string | null; accepted: boolean; createdAt: number };
 export type GroupConversation = {
+  reactions: ReactionCache;
   snapshot: GroupSnapshot | null;
   messages: GroupMessage[];
   nextBefore: number | null;
@@ -29,6 +31,7 @@ const batch = 100;
 
 registerSessionReset(() => {
   for (const group of groups.values()) if (group.pending?.attachment?.previewURL) URL.revokeObjectURL(group.pending.attachment.previewURL);
+  for (const entry of groups.values()) clearReactionCache(entry.reactions);
   groups.clear();
   receipts.clear();
 });
@@ -45,13 +48,15 @@ function entryFor(id: string): GroupConversation {
     return entry;
   }
   entry = reactive({
+    reactions: createReactionCache(),
     snapshot: null, messages: [], nextBefore: null, loaded: false, error: null, unavailable: false,
     pending: null, draft: '', loadingEarlier: false, revision: 0,
   });
   groups.set(id, entry);
   for (const [key, value] of groups) {
     if (groups.size <= retained) break;
-    if (key !== id && !value.pending) {
+    if (key !== id && !value.pending && !Object.keys(value.reactions.pending).length) {
+      clearReactionCache(value.reactions);
       groups.delete(key);
       receipts.delete(key);
     }
@@ -66,6 +71,8 @@ function receiptsFor(id: string): Receipts {
 }
 
 export function forgetGroup(id: string) {
+  const removed = groups.get(id);
+  if (removed) clearReactionCache(removed.reactions);
   groups.delete(id);
   receipts.delete(id);
   forgetRead(`group:${id}`);
@@ -158,6 +165,7 @@ export async function loadGroupConversation(id: string, visible = false) {
         ? { ...message, receiptState: mergeReceipt(message.receiptState, updates.get(message.id)) } : message);
     }
 
+    await refreshReactions(entry.reactions, `groups/${id}/reactions`, entry.messages.map((message) => message.id));
     if (visible) {
       const others = entry.messages.filter((message) => message.userID !== user.value?.id).map((message) => message.id);
       await acknowledge(id, others, 'received');
@@ -167,6 +175,7 @@ export async function loadGroupConversation(id: string, visible = false) {
   } catch (error) {
     if (groups.get(id) !== entry) return;
     if (error instanceof ApiError && error.status === 404) {
+      clearReactionCache(entry.reactions);
       entry.unavailable = true;
       chats.removeGroup(id);
       receipts.delete(id);
@@ -192,6 +201,7 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
       const page = await api<GroupMessagesPage>(`groups/${id}/messages`, { query: { before: entry.nextBefore } });
       entry.messages = mergeMessages(entry.messages, page.messages);
       entry.nextBefore = page.nextBefore;
+      await refreshReactions(entry.reactions, `groups/${id}/reactions`, entry.messages.map((message) => message.id));
     } catch (error) {
       entry.error = errorMessage(error);
     } finally {

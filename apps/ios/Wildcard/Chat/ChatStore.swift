@@ -3,6 +3,7 @@ import Observation
 
 @Observable @MainActor
 final class ChatStore {
+    let reactions = MessageReactionStore()
     struct OutgoingMessage {
         let turn: ChatTurn
         let attachment: DraftAttachment?
@@ -52,11 +53,13 @@ final class ChatStore {
     func compactHistory() {
         guard !isSending, !isLoadingMore, turns.count > 100 else { return }
         turns = Array(turns.suffix(100))
+        reactions.retain(ids: turns.map(\.id))
         newReplyIDs.formIntersection(turns.map(\.id))
         nextBefore = turns.first?.sequence
     }
 
     func invalidate() {
+        reactions.invalidate()
         invalidated = true
         refreshRequest?.task.cancel()
         refreshRequest = nil
@@ -119,6 +122,8 @@ final class ChatStore {
             }
             if !hasLoaded || turns.isEmpty { nextBefore = cursor }
             merge(incoming)
+            await reactions.refresh(path: "contacts/\(contactID)/chat/reactions", ids: turns.map(\.id), auth: auth)
+            guard !invalidated, started == revision else { return }
             presence = page.presence
             hasLoaded = true
             refreshedAt = .now
@@ -157,6 +162,7 @@ final class ChatStore {
             guard started == revision else { return }
             merge(page.turns)
             nextBefore = page.nextBefore
+            await reactions.refresh(path: "contacts/\(contactID)/chat/reactions", ids: turns.map(\.id), auth: auth)
         } catch is CancellationError { }
         catch {
             guard started == revision, (error as? URLError)?.code != .cancelled else { return }

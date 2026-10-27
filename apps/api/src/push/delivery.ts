@@ -24,7 +24,7 @@ export function enqueueReply(db: D1Database, turnID: string, attempt: number, no
     JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
     JOIN session s ON s.user_id = t.user_id AND s.expires_at > ?1
     JOIN push_device d ON d.session_id = s.id
-    WHERE t.id = ?3 AND t.attempt = ?4 AND t.status = 'complete' AND t.sequence > c.last_read_sequence AND ${scheduleAllowed('t')}`)
+    WHERE t.id = ?3 AND t.attempt = ?4 AND t.status = 'complete' AND t.assistant_text IS NOT NULL AND t.sequence > c.last_read_sequence AND ${scheduleAllowed('t')}`)
     .bind(now, now + 86_400_000, turnID, attempt);
 }
 
@@ -78,7 +78,7 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
       if (!claim) return;
       const alert = await env.DB.prepare(`SELECT c.name AS contactName, c.photo_version AS photoVersion, t.assistant_text AS reply
         FROM chat_turn t JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
-        WHERE t.id = ? AND t.user_id = ? AND t.status = 'complete'
+        WHERE t.id = ? AND t.user_id = ? AND t.status = 'complete' AND t.assistant_text IS NOT NULL
           AND t.sequence > c.last_read_sequence AND ${scheduleAllowed('t')}
           AND ${groupRequestTurnAllowed('t', env.META_CHAT_MODEL.includes('contributor'))}`)
         .bind(item.turnID, item.userID).first<{ contactName: string; photoVersion: string | null; reply: string }>();

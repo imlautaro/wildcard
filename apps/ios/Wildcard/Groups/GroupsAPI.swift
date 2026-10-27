@@ -253,6 +253,7 @@ final class GroupsStore {
 
 @MainActor @Observable
 final class GroupChatStore {
+    let reactions = MessageReactionStore()
     private(set) var snapshot: GroupSnapshot?
     private(set) var messages: [GroupMessage] = []
     private(set) var hasLoadedMessages = false
@@ -278,6 +279,7 @@ final class GroupChatStore {
     }
 
     func invalidate() {
+        reactions.invalidate()
         invalidated = true
         accessEpoch += 1
         refreshRequest?.task.cancel()
@@ -305,6 +307,7 @@ final class GroupChatStore {
         guard !isRetained, !isSending, !isLoadingMore, messages.count > 100 else { return }
         messages = Array(messages.suffix(100))
         nextBefore = messages.first?.sequence
+        reactions.retain(ids: messages.map(\.id))
         let retained = Set(messages.map(\.id))
         receivedIDs.formIntersection(retained)
         readIDs.formIntersection(retained)
@@ -458,6 +461,8 @@ final class GroupChatStore {
                 !knownIDs.contains($0.id) && $0.userID != auth.user?.id && $0.sequence > (state.group.lastReadSequence ?? 0)
             }.map(\.id))
             merge(incoming)
+            await reactions.refresh(path: "groups/\(id)/reactions", ids: messages.map(\.id), auth: auth)
+            guard !invalidated, epoch == accessEpoch else { return }
             hasLoadedMessages = true
             if let pending, messages.contains(where: { $0.id == pending.id }) {
                 self.pending = nil
@@ -523,6 +528,8 @@ final class GroupChatStore {
             let page = try JSONDecoder().decode(GroupMessagesPage.self, from: data)
             guard !invalidated, epoch == accessEpoch, nextBefore == before else { return }
             merge(page.messages)
+            await reactions.refresh(path: "groups/\(id)/reactions", ids: messages.map(\.id), auth: auth)
+            guard !invalidated, epoch == accessEpoch else { return }
             nextBefore = page.nextBefore
         } catch is CancellationError { }
         catch AuthAPI.Failure.notFound {
@@ -589,7 +596,7 @@ final class GroupConversationCache {
         if let store = entries[id] { return store }
         while entries.count >= 8, let oldest = entries.filter({
             !$0.value.isRetained && !$0.value.isSending && !$0.value.isLoadingMore
-                && $0.value.pendingID == nil
+                && $0.value.pendingID == nil && $0.value.reactions.pending.isEmpty
         }).min(by: { (lastAccess[$0.key] ?? 0) < (lastAccess[$1.key] ?? 0) })?.key {
             lastAccess.removeValue(forKey: oldest)
             entries.removeValue(forKey: oldest)?.invalidate()
