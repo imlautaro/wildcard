@@ -213,6 +213,66 @@ photos and mutations require current membership. Responses have `no-store`.
 | POST /:id/replies/:replyID/retry | Retry a failed reply after active work finishes |
 | GET /:id/photos/:kind/:memberID | Current member avatar, kind `user` or `agent` |
 
+## Delivery and read receipts
+
+Migration `0022_group_receipts.sql` records the human and agent recipient identities
+at each new message insert, atomically with the message. It excludes the sender.
+New joiners do not become recipients of earlier messages; leaving/removing a member
+never deletes their snapshot or manufactures their confirmation. An unconfirmed
+recipient who leaves can therefore prevent that message reaching Received/Read.
+Deleting the group/message cascades its receipts. Snapshots contain IDs, not names
+or copies of message content, and have the lifetime of the shared message.
+
+- Clock: a local submission is awaiting server confirmation.
+- One muted check: the message is persisted (Sent), without confirmation from all.
+- Two muted checks: every snapshotted recipient confirmed receipt (Received).
+- Two colored checks: every snapshotted recipient confirmed reading (Read).
+
+For humans, iOS explicitly acknowledges downloaded Home previews and group history.
+A server HTTP response or accepted APNs request alone does not prove client receipt.
+Reading requires a message row to be at least 50% visible in the active group while
+the app is foreground. Read implies receipt. This is a client display acknowledgement,
+not proof of attention or comprehension, and does not mean a PDF/image was opened.
+The existing unread counter watermark is separate and does not grant read receipts.
+Older clients do not send these acknowledgements and can keep an aggregate pending.
+
+For agents, the durable shared message history is their mailbox: receipt is recorded
+at insertion. Reading is recorded only for IDs actually included in a model context
+after a successful model response, including bounded history, the original trigger,
+earlier round replies and retrieval excerpts. Private-agent contexts also acknowledge
+included shared group excerpts. Context can be clipped and attachment markers may
+omit bytes. No reply is generated merely to advance a check. An unaddressed agent
+may stay unread until a later authorized turn includes the message. Failed model
+calls do not confirm consumption. Agent reads describe model processing, not humans.
+
+Legacy messages lack a snapshot and return `receiptState: null`; iOS conservatively
+shows Sent, never inferred Received/Read. Empty recipient snapshots also remain Sent.
+APIs expose aggregate states only, behind current group membership. Acknowledgements
+are account-bound, bounded to 100 IDs, idempotent and rate-limited; they check current
+membership again at write time. Read/delivery timestamps retain their first value.
+
+`PUT /api/v1/groups/receipts` confirms receipt of up to 100 Home preview `messageIDs`.
+`PUT /api/v1/groups/:id/receipts` accepts `messageIDs` and `state: received | read`.
+`GET /api/v1/groups/:id/receipts?messageIDs=<JSON array>` refreshes aggregate states
+for up to 100 retained message IDs. History returns each message's `receiptState`;
+group summaries return `lastMessageID`, `lastMessageUserID`, `lastMessageReceiptState`.
+Home uses bold **You:** for the signed-in human's last message and shows its check.
+
+The session-owned stores deduplicate successful acknowledgements, retry failures
+during visible polling, retain already observed reads for retry, and bound receipt
+deduplication to retained history/preview IDs. Receipt refreshes update cached rows,
+including older outgoing messages outside the newest history page, without another
+message-body cache. Invalidation blocks late results; session changes discard state.
+A failed receipt refresh keeps usable history visible. No additional service is used.
+
+Opt-in isolated checks: `node scripts/checks/group-receipts.cjs` and
+`node scripts/checks/group-publication.cjs` (Node 24+). They use migrated in-memory
+SQLite and simulated model/network boundaries, never real chats or provider calls.
+Device verification remains pending: two fictional human accounts plus bots, offline
+recipient, background/foreground, a row scrolled offscreen, long/image/PDF messages,
+retry, older pages, join/leave/removal and account switching. Confirm no premature
+aggregate check, no Home preview marking read and no claims of push delivery.
+
 ## Interface and current limits
 
 Other senders have an avatar beside the bubble and their name inside the bubble,
@@ -226,7 +286,7 @@ moving text cannot draw behind the avatar. It pauses at each end, stays within
 the measured overflow and restarts from the left when members or width change.
 Group messages use the same `MessageBubbleView` as individual chats, including
 colors, tails, flat backgrounds, timestamps and typography, with sender avatars/names added
-for other members. Group receipts do not claim every member has read the message.
+for other members. Outgoing checks use the aggregate receipts described below.
 Both chats share the glass capsule composer field, circular tinted action button
 and floating scroll-to-latest control from `ChatControls.swift`. Groups use the
 same 16-point history spacing/padding, soft bottom scroll edge, native bottom safe

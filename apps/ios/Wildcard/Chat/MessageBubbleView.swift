@@ -4,6 +4,7 @@ struct MessageBubbleView: View {
     let text: String
     let sentAt: Double
     let fromUser: Bool
+    var receiptState: String? = nil
     var readAt: Double? = nil
     var isSending = false
     var showsReceipt = true
@@ -16,7 +17,7 @@ struct MessageBubbleView: View {
             if fromUser { Spacer(minLength: 40) }
             VStack(alignment: .leading, spacing: 4) {
                 if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
-                MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
+                MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             .foregroundStyle(Color.primary)
@@ -45,6 +46,7 @@ struct MessageTextContentView: View {
     let text: String
     let sentAt: Double
     let fromUser: Bool
+    var receiptState: String? = nil
     var readAt: Double? = nil
     var isSending = false
     var showsReceipt = true
@@ -56,14 +58,14 @@ struct MessageTextContentView: View {
                 HStack(alignment: .lastTextBaseline, spacing: 8) {
                     messageText.fixedSize(horizontal: true, vertical: true)
                     if fillsWidth { Spacer(minLength: 0) }
-                    MessageMetadataView(sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
+                    MessageMetadataView(sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
                 }
                 .fixedSize(horizontal: !fillsWidth, vertical: false)
             }
             VStack(alignment: .trailing, spacing: 4) {
                 messageText.fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
-                MessageMetadataView(sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
+                MessageMetadataView(sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
             }
         }
     }
@@ -76,6 +78,7 @@ struct MessageTextContentView: View {
 struct MessageMetadataView: View {
     let sentAt: Double
     let fromUser: Bool
+    var receiptState: String? = nil
     var readAt: Double? = nil
     var isSending = false
     var showsReceipt = true
@@ -85,7 +88,7 @@ struct MessageMetadataView: View {
             Text(Date(timeIntervalSince1970: sentAt / 1000), format: .dateTime.hour().minute())
                 .manrope(.caption2)
                 .foregroundStyle(.secondary)
-            if fromUser && showsReceipt { MessageReceiptView(sentAt: sentAt, readAt: readAt, isSending: isSending) }
+            if fromUser && showsReceipt { MessageReceiptView(sentAt: sentAt, readAt: readAt, isSending: isSending, receiptState: receiptState) }
         }
         .fixedSize()
     }

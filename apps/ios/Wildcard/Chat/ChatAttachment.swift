@@ -62,6 +62,7 @@ struct ChatAttachmentView: View {
     var groupID: String? = nil
     let sentAt: Double
     let caption: String
+    var receiptState: String? = nil
     var readAt: Double? = nil
     var isSending = false
     var localData: Data? = nil
@@ -102,7 +103,7 @@ struct ChatAttachmentView: View {
                             }
                             imageButton
                             if !caption.isEmpty {
-                                MessageTextContentView(text: caption, sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true)
+                                MessageTextContentView(text: caption, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true)
                                     .padding(.horizontal, 16).padding(.vertical, 12)
                             }
                         }
@@ -171,7 +172,7 @@ struct ChatAttachmentView: View {
                         .clipped()
                         .overlay(alignment: .bottomTrailing) {
                             if caption.isEmpty {
-                                MessageMetadataView(sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
+                                MessageMetadataView(sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
                                     .padding(.horizontal, 7).padding(.vertical, 4)
                                     .background(.black.opacity(0.6), in: Capsule())
                                     .environment(\.colorScheme, .dark)
@@ -246,6 +247,11 @@ struct ChatAttachmentView: View {
                     Image(systemName: isSending ? "clock" : "arrow.down.circle")
                         .accessibilityLabel(isSending ? "Sending" : "Download attachment")
                 }.manrope(.footnote)
+                HStack {
+                    Spacer(minLength: 0)
+                    MessageMetadataView(sentAt: sentAt, fromUser: fromUser, receiptState: receiptState,
+                                        readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
+                }
             }.padding(12)
         }
         .buttonStyle(.plain)

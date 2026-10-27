@@ -1,3 +1,4 @@
+import { acknowledgeAgentContext } from './receipts';
 import { agentMemoryContext, readAgentMemories } from '../chat/agent-memory';
 import { attachmentMessage, storedAttachment } from '../chat/attachments';
 import { clipText, readMemories, selectMemories } from '../chat/memory';
@@ -108,6 +109,8 @@ Return only the requested JSON decision; never publish review notes or internal 
       },
     } },
   });
+  await acknowledgeAgentContext(env.DB, row.groupID, row.agentID,
+    [row.sourceID, ...history.map((m) => m.id), ...roundReplies.map((m) => m.id)]);
   const decision: unknown = JSON.parse(answer);
   if (!isRecord(decision) || typeof decision.text !== 'string' || Object.keys(decision).some((key) => !['action', 'text'].includes(key))) {
     throw new Error('GROUP_INVALID_DECISION');

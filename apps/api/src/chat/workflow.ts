@@ -28,7 +28,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       // Keep the queued agent disconnected until it actually starts handling the message.
       await step.sleep('connect-delay', '3 seconds');
       await step.do('mark-running', async () => {
-        await this.env.DB.prepare(`UPDATE chat_turn SET status = 'running', read_at = COALESCE(read_at, ?1), updated_at = ?1
+        await this.env.DB.prepare(`UPDATE chat_turn SET status = 'running', updated_at = ?1
           WHERE id = ?2 AND attempt = ?3 AND status = 'queued'`)
           .bind(Date.now(), job.turnID, job.attempt).run();
         return true;

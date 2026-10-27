@@ -304,6 +304,7 @@ export const groupInvite = sqliteTable('group_invite', {
 }, (t) => [foreignKey({ columns: [t.groupId, t.senderId], foreignColumns: [groupMember.groupId, groupMember.userId] }).onDelete('cascade'),
   uniqueIndex('group_invite_recipient_unique').on(t.groupId, t.recipientId), index('group_invite_recipient_idx').on(t.recipientId, t.expiresAt)]);
 export const groupMessage = sqliteTable('group_message', {
+  receiptsTracked: integer('receipts_tracked').notNull().default(0),
   attachmentJSON: text('attachment_json'),
   requestId: text('request_id').references((): AnySQLiteColumn => groupRequest.id, { onDelete: 'set null' }),
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
@@ -419,3 +420,15 @@ export const agentMemory = sqliteTable('agent_memory', {
   check('agent_memory_kind', sql`${t.kind} IN ('fact', 'preference', 'decision', 'pending')`),
   check('agent_memory_content_length', sql`length(${t.content}) BETWEEN 1 AND 300`),
   check('agent_memory_quote_length', sql`length(${t.sourceQuote}) BETWEEN 1 AND 240`)]);
+
+// Recipient membership is intentionally not a foreign key: leaving cannot promote a receipt.
+export const groupMessageReceipt = sqliteTable('group_message_receipt', {
+  messageId: text('message_id').notNull().references(() => groupMessage.id, { onDelete: 'cascade' }),
+  recipientKind: text('recipient_kind').notNull(),
+  recipientId: text('recipient_id').notNull(),
+  deliveredAt: date('delivered_at'),
+  readAt: date('read_at'),
+}, (t) => [primaryKey({ columns: [t.messageId, t.recipientKind, t.recipientId] }),
+  index('group_receipt_recipient_idx').on(t.recipientKind, t.recipientId, t.messageId),
+  check('receipt_kind', sql`${t.recipientKind} IN ('user', 'agent')`),
+  check('receipt_read_delivery', sql`${t.readAt} IS NULL OR ${t.deliveredAt} IS NOT NULL`)]);

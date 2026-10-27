@@ -1,3 +1,4 @@
+import { acknowledgeGroupResults } from './receipts';
 import { readAgentMemories, selectAgentMemories } from '../chat/agent-memory';
 import { byteLength, clipText, keywords } from '../chat/memory';
 import { isRecord, museCompletion, type ModelMessage, type ModelTool, type ToolCall } from '../chat/meta';
@@ -172,15 +173,24 @@ export async function executeGroupRetrieval(db: D1Database, scope: GroupRetrieva
 export async function groupCompletion(env: Env, messages: ModelMessage[], scope: GroupRetrievalScope,
   responseFormat?: Record<string, unknown>): Promise<string> {
   let executions = 0;
+  const processedResults: unknown[] = [];
   for (let round = 0; round < 3; round++) {
     const answer = await museCompletion(env.META_API_KEY, messages, env.META_CHAT_MODEL,
       { maxTokens: 1200, responseFormat, ...(round < 2 ? { tools: groupRetrievalTools } : {}) });
+    await acknowledgeGroupResults(env.DB, scope.agentID, processedResults);
+    processedResults.length = 0;
     if (!answer.tool_calls?.length) return answer.content!;
     messages.push(answer);
     for (const call of answer.tool_calls) {
       let content = JSON.stringify({ error: 'Tool budget exhausted.' });
       if (executions++ < 6) {
-        try { content = await executeGroupRetrieval(env.DB, scope, call); }
+        try {
+          content = await executeGroupRetrieval(env.DB, scope, call);
+          const result = JSON.parse(content);
+          if (['get_group_excerpt', 'search_group_messages'].includes(call.function.name) && Array.isArray(result.results)) {
+            processedResults.push(...result.results);
+          }
+        }
         catch {
           console.error(JSON.stringify({ event: 'group_retrieval_failed' }));
           content = JSON.stringify({ error: 'Group retrieval unavailable. Do not infer absence or invent an answer.' });

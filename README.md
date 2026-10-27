@@ -93,7 +93,8 @@ appear on chat rows, the Chats tab, and the app icon; returning to the app refre
 
 [Groups](docs/groups.md) combine human accounts and existing contacts in one
 shared chat, with explicit shared-memory and model consent, in-app invitations,
-per-member invitation permissions, sender avatars/names and a scrolling member
+per-member invitation permissions, sender avatars/names, [persisted recipient receipts](docs/groups.md#delivery-and-read-receipts)
+that require all original recipients for Received/Read, and a scrolling member
 subtitle. Each human message starts a bounded automatic reply round. Groups and
 private chats share the same exclusive attention queue per agent. Create one from
 **Chats → + → Contacts → Create group**. Each turn sees the original request,

@@ -11,6 +11,8 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     let lastMessageText: String?
     let lastMessageAt: Double?
     var unreadCount: Int?
+    var lastMessageFromUser: Int? = nil
+    var lastMessageReadAt: Double? = nil
     var lastReadSequence: Int?
     var canManage: Bool { role != "member" }
 }

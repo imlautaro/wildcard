@@ -30,7 +30,7 @@ no-store`. Prefix: `/api/v1/contacts/:contactID/chat`.
 
 A turn includes `id`, global monotonic `sequence`, `userText`, nullable
 `assistantText`, `status` (`queued`, `running`, `complete`, `failed`), `attempt`,
-and millisecond `createdAt`/`updatedAt`, plus nullable `readAt` when the agent starts attending the turn
+and millisecond `createdAt`/`updatedAt`, plus nullable `readAt` when the model successfully processes the turn
 and nullable `groupRequestID` for automatic group results. Sequence gaps are normal and disclose no
 message content. Internal workflow IDs, owners, and provider errors are omitted.
 Repeated sends with the same UUID and trimmed text return the existing turn.
@@ -163,13 +163,22 @@ an updated iOS installation are required. Foreground polling remains in use.
 ## Outgoing message checks
 
 Persisted user messages show muted double checks after server acceptance. Colored
-double checks appear only when the server records `readAt` as the agent starts
-attending that turn. This replaces the previous fixed-delay simulation. Queued
+double checks appear only when the server records `readAt` after a successful
+model response processing that turn. Connection, queue admission and context
+preparation alone do not mark it read. This replaces the previous fixed-delay simulation. Queued
 messages in another participant's conversation remain unread until attention is
 released. Retries retain their first recorded read time. These are server agent
 processing receipts, not evidence of human reading or APNs delivery. The user's
 unread-assistant-reply watermark remains a separate mechanism. Check sizes follow
 Dynamic Type and accessibility exposes Received/Read.
+
+Home shows the same persisted receipt to the left of an outgoing private-message
+preview, including attachment-only messages. `lastMessageFromUser` and
+`lastMessageReadAt` come from the same latest turn as the preview. Incoming agent
+previews do not show outgoing checks. Private Received means durable acceptance
+into the agent's server inbox, not human-device or APNs delivery. Previously stored
+private `readAt` timestamps retain their older attention-admission meaning; this
+change does not retroactively certify model processing of historical turns.
 
 ## Immediate composer clearing and server typing
 
@@ -202,7 +211,7 @@ Latest/older history pages and send/retry responses include `presence` with
 `status` (`offline`, `online`, `typing`), nullable `lastSeenAt`, and nullable
 `expiresAt`, using Unix milliseconds. Ownership follows the existing contact
 middleware. Presence is activity of the contact's server agent, not a human device
-connection. `readAt` separately records processing admission.
+connection. `readAt` separately records successful model processing.
 
 For shared contacts, the API returns `typing` only to the recipient conversation
 holding the current attention claim for a running turn and matching attempt.
@@ -382,6 +391,6 @@ Group conversations have shared human/agent history and reuse the global agent a
 Group and individual chats share `MessageBubbleView` and the composer field,
 action button and scroll-to-latest control in `ChatControls.swift`. Shared controls
 preserve the same glass treatment, dimensions and Dynamic Type scaling. Groups add
-sender names/avatars and suppress unsupported read receipts. Groups also reuse
+sender names/avatars and aggregate [group receipts](groups.md#delivery-and-read-receipts). Groups also reuse
 the attachment views, Photos/Files picker and voice recorder/transcription flow.
 See [groups](groups.md).

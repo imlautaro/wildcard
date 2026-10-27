@@ -1,3 +1,4 @@
+import { receiptState } from './receipts';
 import { deliverGroupPush } from './push';
 import media, { groupPhotoKey } from './media';
 import { removePhoto } from '../photos/storage';
@@ -21,7 +22,10 @@ const mayInvite = `EXISTS (SELECT 1 FROM group_member m JOIN chat_group g ON g.i
   WHERE m.group_id = ?1 AND m.user_id = ?2 AND (m.can_invite = 1 OR g.owner_id = ?2))`;
 const summary = `m.last_read_sequence AS lastReadSequence,
   (SELECT COUNT(*) FROM group_message gm WHERE gm.group_id = g.id AND gm.sequence > m.last_read_sequence
-    AND gm.user_id IS NOT m.user_id) AS unreadCount, g.id, g.name, g.owner_id AS ownerID, g.created_at AS createdAt, g.photo_version AS photoVersion,
+    AND gm.user_id IS NOT m.user_id) AS unreadCount, g.id, g.name, g.owner_id AS ownerID,
+  (SELECT id FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageID,
+  (SELECT user_id FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageUserID,
+  (SELECT ${receiptState('gm')} FROM group_message gm WHERE gm.group_id = g.id ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageReceiptState, g.created_at AS createdAt, g.photo_version AS photoVersion,
   (SELECT CASE WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
   (SELECT created_at FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageAt,
   (SELECT sender_name FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageSenderName,
@@ -40,7 +44,7 @@ groups.use('*', async (c, next) => {
   return bodyLimit({ maxSize, onError: (c) => c.json({ error: 'File or request is too large' }, 413) })(c, next);
 });
 groups.use('*', async (c, next) => {
-  if (c.req.method !== 'GET' && !c.req.path.endsWith('/read')) {
+  if (c.req.method !== 'GET' && !c.req.path.endsWith('/read') && !c.req.path.endsWith('/receipts')) {
     const admission = await admitAuthRequest(c.env.DB, c.get('owner'), 'group-write', 40);
     if (!admission.allowed) return c.json({ error: 'Too many requests. Please wait a minute.' }, 429);
   }
@@ -104,6 +108,23 @@ groups.post('/invitations/:inviteID/accept', async (c) => {
 });
 groups.delete('/invitations/:inviteID', async (c) => {
   await c.env.DB.prepare('DELETE FROM group_invite WHERE id = ? AND recipient_id = ?').bind(c.req.param('inviteID'), c.get('owner')).run();
+  return c.body(null, 204);
+});
+
+// One bounded acknowledgement for previews received across the Home list.
+groups.put('/receipts', async (c) => {
+  const admission = await admitAuthRequest(c.env.DB, c.get('owner'), 'group-receipt', 120);
+  if (!admission.allowed) return c.json({ error: 'Too many receipt updates' }, 429);
+  const b = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!Array.isArray(b?.messageIDs) || b.messageIDs.length < 1 || b.messageIDs.length > 100
+    || !b.messageIDs.every((id) => typeof id === 'string' && id.length <= 160)) {
+    return c.json({ error: 'Provide up to 100 message IDs' }, 400);
+  }
+  await c.env.DB.prepare(`UPDATE group_message_receipt SET delivered_at = COALESCE(delivered_at, ?1)
+    WHERE recipient_kind = 'user' AND recipient_id = ?2 AND message_id IN (SELECT value FROM json_each(?3))
+    AND EXISTS (SELECT 1 FROM group_message gm JOIN group_member m ON m.group_id = gm.group_id
+      WHERE gm.id = message_id AND m.user_id = ?2)`)
+    .bind(Date.now(), c.get('owner'), JSON.stringify(b.messageIDs)).run();
   return c.body(null, 204);
 });
 
@@ -212,12 +233,44 @@ groups.delete('/:id', async (c) => {
 groups.get('/:id/messages', async (c) => {
   const before = Number(c.req.query('before') ?? Number.MAX_SAFE_INTEGER);
   if (!Number.isSafeInteger(before) || before < 1) return c.json({ error: 'Invalid history cursor' }, 400);
-  const { results } = await c.env.DB.prepare(`SELECT sequence, id, user_id AS userID, agent_id AS agentID,
+  const { results } = await c.env.DB.prepare(`SELECT ${receiptState('group_message')} AS receiptState, sequence, id, user_id AS userID, agent_id AS agentID,
     sender_name AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON FROM group_message
     WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before).all<{ sequence: number; attachmentJSON: string | null }>();
   const page = results.slice(0, 50);
   return c.json({ messages: page.reverse().map(({ attachmentJSON, ...message }) => ({ ...message, attachment: publicAttachment({ attachmentJSON }) })), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
+// Aggregate-only refresh for retained history; recheck membership in the query.
+groups.get('/:id/receipts', async (c) => {
+  let ids: unknown;
+  try { ids = JSON.parse(c.req.query('messageIDs') ?? '[]'); } catch { ids = null; }
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > 100
+    || !ids.every((id) => typeof id === 'string' && id.length <= 160)) {
+    return c.json({ error: 'Provide up to 100 message IDs' }, 400);
+  }
+  const { results } = await c.env.DB.prepare(`SELECT gm.id, ${receiptState('gm')} AS receiptState FROM group_message gm
+    WHERE gm.group_id = ?1 AND gm.id IN (SELECT value FROM json_each(?2))
+    AND EXISTS (SELECT 1 FROM group_member WHERE group_id = ?1 AND user_id = ?3)`)
+    .bind(c.req.param('id'), JSON.stringify(ids), c.get('owner')).all();
+  return c.json({ receipts: results });
+});
+
+// Explicit client acknowledgement; HTTP/APNs acceptance alone does not confirm delivery.
+groups.put('/:id/receipts', async (c) => {
+  const admission = await admitAuthRequest(c.env.DB, c.get('owner'), 'group-receipt', 120);
+  if (!admission.allowed) return c.json({ error: 'Too many receipt updates' }, 429);
+  const b = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!Array.isArray(b?.messageIDs) || b.messageIDs.length < 1 || b.messageIDs.length > 100
+    || !b.messageIDs.every((id) => typeof id === 'string' && id.length <= 160)
+    || !['received', 'read'].includes(String(b.state))) return c.json({ error: 'Provide up to 100 message IDs and received/read state' }, 400);
+  await c.env.DB.prepare(`UPDATE group_message_receipt
+    SET delivered_at = COALESCE(delivered_at, ?1), read_at = CASE WHEN ?2 = 'read' THEN COALESCE(read_at, ?1) ELSE read_at END
+    WHERE recipient_kind = 'user' AND recipient_id = ?3 AND message_id IN (SELECT value FROM json_each(?4))
+    AND EXISTS (SELECT 1 FROM group_member WHERE group_id = ?5 AND user_id = ?3)
+    AND EXISTS (SELECT 1 FROM group_message gm WHERE gm.id = message_id AND gm.group_id = ?5)`)
+    .bind(Date.now(), b.state, c.get('owner'), JSON.stringify(b.messageIDs), c.req.param('id')).run();
+  return c.body(null, 204);
+});
+
 groups.put('/:id/read', async (c) => {
   const admission = await admitAuthRequest(c.env.DB, c.get('owner'), 'group-read', 120);
   if (!admission.allowed) return c.json({ error: 'Too many read updates' }, 429);

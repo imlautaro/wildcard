@@ -1,3 +1,4 @@
+import { acknowledgeGroupResults } from '../groups/receipts';
 import { agentMemoryContext, readAgentMemories } from './agent-memory';
 import { executeGroupRequest, groupRequestReceipt, groupRequestTool, groupQuestionTool, recentGroupDestinations } from '../groups/requests';
 import { groupRequestReply } from '../groups/request-results';
@@ -243,10 +244,19 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string): Pr
   ];
   let executions = 0;
   let groupPublicationCalls = 0;
+  const processedGroupResults: unknown[] = [...groupMessages.results];
   for (let round = 0; round < 3; round++) {
     if (round === 2) messages.push({ role: 'system', content: 'Tool budget exhausted. Answer using the available evidence; acknowledge any missing detail.' });
     const answer = await museCompletion(env.META_API_KEY, messages, env.META_CHAT_MODEL,
       round < 2 ? { tools: turn.scheduleID ? tools.filter((tool) => !['create_schedule', 'update_schedule', 'cancel_schedule', 'send_group_message', 'ask_agent_in_group'].includes(tool.function.name)) : tools } : {});
+    await acknowledgeGroupResults(env.DB, agent.id, processedGroupResults);
+    processedGroupResults.length = 0;
+    // A successful model response proves the current input was processed, even if
+    // it asks for tools. Preparation/connection failures do not manufacture a read.
+    await env.DB.prepare(`UPDATE chat_turn SET read_at = COALESCE(read_at, ?1)
+      WHERE id = ?2 AND attempt = ?3 AND status = 'running'
+      AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?2 AND attempt = ?3)`)
+      .bind(Date.now(), turn.id, turn.attempt).run();
     if (!answer.tool_calls?.length) {
       console.log(JSON.stringify({ event: 'chat_tool_summary', executions, groupPublicationCalls }));
       return answer.content!;
@@ -258,7 +268,13 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string): Pr
       if (executions >= 6) content = JSON.stringify({ error: 'Tool budget exhausted.' });
       else {
         executions++;
-        try { content = await executeTool(env, scope, call, turn); }
+        try {
+          content = await executeTool(env, scope, call, turn);
+          if (['get_group_excerpt', 'search_group_messages'].includes(call.function.name)) {
+            const result = JSON.parse(content);
+            if (Array.isArray(result.results)) processedGroupResults.push(...result.results);
+          }
+        }
         catch (error) {
           console.error(JSON.stringify({ event: 'chat_tool_failed', code: safeErrorCode(error),
             tool: tools.some((tool) => tool.function.name === call.function.name)

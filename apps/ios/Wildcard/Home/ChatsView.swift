@@ -245,9 +245,14 @@ private struct ChatListRow: View {
                 Text(contact.name).manrope(.body, weight: .semibold)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                Text(messagePreview).manrope(.subheadline)
-                    .lineLimit(2)
-                    .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    if contact.lastMessageFromUser == 1 {
+                        MessageReceiptView(sentAt: contact.lastMessageAt ?? contact.createdAt, readAt: contact.lastMessageReadAt)
+                    }
+                    Text(messagePreview).manrope(.subheadline)
+                        .lineLimit(2)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 6) {
@@ -294,12 +299,14 @@ private enum ChatListEntry: Identifiable {
 
 private struct GroupChatListRow: View {
     let group: ChatGroup
+    @Environment(AuthStore.self) private var auth
+    private var own: Bool { group.lastMessageUserID == auth.user?.id && group.lastMessageUserID != nil }
     @ScaledMetric(relativeTo: .subheadline) private var previewSize: CGFloat = 15
 
     private var messagePreview: AttributedString {
         let message = group.lastMessageText?.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ") ?? "No messages yet"
-        guard let sender = group.lastMessageSenderName, !sender.isEmpty else { return AttributedString(message) }
+        guard let sender = own ? "You" : group.lastMessageSenderName, !sender.isEmpty else { return AttributedString(message) }
         var preview = AttributedString(sender + ": ")
         preview.font = Font(AppTypography.font(size: previewSize, weight: .bold))
         preview += AttributedString(message)
@@ -310,7 +317,12 @@ private struct GroupChatListRow: View {
             GroupPhotoAvatar(group: group, size: 48)
             VStack(alignment: .leading, spacing: 4) {
                 Text(group.name).manrope(.body, weight: .semibold).foregroundStyle(.primary).lineLimit(1)
-                Text(messagePreview).manrope(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    if own {
+                        MessageReceiptView(sentAt: group.lastMessageAt ?? group.createdAt, receiptState: group.lastMessageReceiptState ?? "sent")
+                    }
+                    Text(messagePreview).manrope(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                }
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 6) {

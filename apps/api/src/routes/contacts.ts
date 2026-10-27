@@ -13,7 +13,10 @@ type Contact = { id: string; agentID: string | null; role: 'owner' | 'member'; n
 const columns = `id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
   CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
 const managesAgent = `EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = contact.user_id)`;
-const selection = `${columns}, (SELECT substr(COALESCE(t.assistant_text, CASE WHEN t.schedule_id IS NOT NULL THEN 'Scheduled message' WHEN t.group_request_id IS NOT NULL THEN 'Group response' WHEN t.user_text = '' AND t.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(t.attachment_json, '$.name') ELSE t.user_text END), 1, 500)
+const selection = `${columns},
+  (SELECT CASE WHEN t.assistant_text IS NULL AND t.schedule_id IS NULL AND t.group_request_id IS NULL THEN 1 ELSE 0 END
+    FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageFromUser,
+  (SELECT t.read_at FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageReadAt, (SELECT substr(COALESCE(t.assistant_text, CASE WHEN t.schedule_id IS NOT NULL THEN 'Scheduled message' WHEN t.group_request_id IS NOT NULL THEN 'Group response' WHEN t.user_text = '' AND t.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(t.attachment_json, '$.name') ELSE t.user_text END), 1, 500)
   FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
   ORDER BY t.sequence DESC LIMIT 1) AS lastMessageText,
   (SELECT CASE WHEN t.assistant_text IS NOT NULL THEN t.updated_at ELSE t.created_at END

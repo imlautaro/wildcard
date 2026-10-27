@@ -177,6 +177,22 @@ Cached images require refreshed group metadata for revocation discovery; offline
 images can remain until that check. Group member avatars use the same cache with group/member/version keys.
 See [group media](groups.md#group-photos-attachments-and-voice).
 
+## Receipt updates
+
+Home summaries carry outgoing receipt state and group sender identity alongside
+their cached preview. Group stores retain per-message aggregate receipt states;
+visible polling refreshes recent history and fetches only aggregate states for
+older retained outgoing IDs in batches of 100. History merging replaces receipt
+state by message ID. Home acknowledges received group previews in one bounded
+request per changed set; failed acknowledgements retry on later list refreshes.
+Message rows acknowledge reading only when visible in the foreground. Stores
+retain observed-but-unacknowledged reads for retry during group polling and
+reject updates after invalidation. Successful delivery/read deduplication follows
+retained history plus current preview IDs and disappears with the signed-in shell.
+No message/receipt data is newly persisted on device. Server receipt rows use D1
+with migration 0022 and cascade with group/message deletion; membership snapshots
+intentionally survive a recipient leaving. See [receipt semantics and verification](groups.md#delivery-and-read-receipts).
+
 ## Group navigation and secondary screens
 
 GroupsStore now owns a `GroupConversationCache`, so navigating away and back

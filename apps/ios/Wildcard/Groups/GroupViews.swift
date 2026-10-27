@@ -375,6 +375,7 @@ struct GroupChatView: View {
             guard isVisible, scenePhase == .active else { return }
             while !Task.isCancelled {
                 await store.refresh(id: groupID, auth: auth)
+                await store.acknowledge(store.messages.map(\.id), state: "received", id: groupID, auth: auth)
                 animateNewMessages = true
                 do { try await Task.sleep(for: .seconds(3)) } catch { return }
             }
@@ -550,6 +551,9 @@ private struct GroupMessageRow: View {
     let members: [GroupMember]
     let isNew: Bool
     @Environment(AuthStore.self) private var auth
+    @Environment(GroupsStore.self) private var groups
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isOnScreen = false
     private var own: Bool { message.userID == auth.user?.id && message.agentID == nil }
     private var sender: GroupMember? {
         members.first { $0.id == (message.agentID ?? message.userID) && $0.kind == (message.agentID == nil ? "user" : "agent") }
@@ -567,16 +571,21 @@ private struct GroupMessageRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let file = message.attachment {
                     ChatAttachmentView(attachment: file, contactID: groupID, turnID: message.id, groupID: groupID,
-                                       sentAt: message.createdAt, caption: file.isImage ? message.text : "", fromUser: own, showsReceipt: false,
+                                       sentAt: message.createdAt, caption: file.isImage ? message.text : "", receiptState: message.receiptState ?? "sent", fromUser: own, showsReceipt: own,
                                        senderName: own ? nil : (sender?.name ?? message.senderName),
                                       senderColor: senderColor)
                 }
                 if !message.text.isEmpty && message.attachment?.isImage != true {
-                    MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, showsReceipt: false,
+                    MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, receiptState: message.receiptState ?? "sent", showsReceipt: own,
                                       senderName: own ? nil : (sender?.name ?? message.senderName),
                                       senderColor: senderColor)
                 }
             }
+        }
+        .onScrollVisibilityChange(threshold: 0.5) { isOnScreen = $0 }
+        .task(id: "\(message.id)-\(isOnScreen)-\(scenePhase)") {
+            guard isOnScreen, scenePhase == .active, !own else { return }
+            await groups.conversations.store(for: groupID).acknowledge([message.id], state: "read", id: groupID, auth: auth)
         }
         .task(id: message.id) {
             guard isNew, !own else { return }

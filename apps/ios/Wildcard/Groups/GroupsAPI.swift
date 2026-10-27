@@ -10,6 +10,9 @@ struct ChatGroup: Decodable, Hashable, Identifiable {
     let lastMessageText: String?
     let lastMessageAt: Double?
     let lastMessageSenderName: String?
+    var lastMessageID: String? = nil
+    var lastMessageUserID: String? = nil
+    var lastMessageReceiptState: String? = nil
     let photoVersion: String?
     var unreadCount: Int?
     var lastReadSequence: Int?
@@ -45,6 +48,7 @@ struct GroupMessage: Decodable, Identifiable {
     let userID: String?
     let agentID: String?
     let senderName: String
+    var receiptState: String? = nil
     let text: String
     let createdAt: Double
     let attachment: ChatAttachment?
@@ -72,6 +76,8 @@ struct GroupListResponse: Decodable {
     let contributorModel: Bool
 }
 struct GroupInvitationsResponse: Decodable { let invitations: [GroupInvitation]; let contributorModel: Bool }
+private struct GroupReceiptUpdate: Decodable { let id: String; let receiptState: String? }
+private struct GroupReceiptPage: Decodable { let receipts: [GroupReceiptUpdate] }
 struct GroupIDResponse: Decodable { let id: String }
 
 @MainActor
@@ -96,6 +102,7 @@ final class GroupsStore {
     private(set) var isLoading = false
     var error: String?
     let conversations = GroupConversationCache()
+    private var receivedPreviewIDs: Set<String> = []
     private var readRevision = 0
     private var reading: Set<String> = []
     private var readSequences: [String: Int] = [:]
@@ -151,6 +158,15 @@ final class GroupsStore {
             }
             error = nil
             hasLoaded = true
+            let previewIDs = Set(groups.compactMap(\.lastMessageID))
+            let unseen = previewIDs.subtracting(receivedPreviewIDs)
+            if !unseen.isEmpty {
+                do {
+                    _ = try await GroupService.data("receipts", method: "PUT", input: ["messageIDs": Array(unseen)], auth: auth)
+                    receivedPreviewIDs.formUnion(unseen)
+                    receivedPreviewIDs.formIntersection(previewIDs)
+                } catch { /* Retry receipt-only failures on the next list refresh. */ }
+            }
         } catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }
@@ -190,6 +206,9 @@ final class GroupChatStore {
         nextBefore = nil
         newIncomingMessageIDs = []
         pending = nil
+        pendingReadIDs = []
+        receivedIDs = []
+        readIDs = []
         error = "This group is no longer available."
     }
 
@@ -202,6 +221,10 @@ final class GroupChatStore {
         guard !isRetained, !isSending, !isLoadingMore, messages.count > 100 else { return }
         messages = Array(messages.suffix(100))
         nextBefore = messages.first?.sequence
+        let retained = Set(messages.map(\.id))
+        receivedIDs.formIntersection(retained)
+        readIDs.formIntersection(retained)
+        pendingReadIDs.formIntersection(retained)
     }
 
     func refreshDetails(id: String, auth: AuthStore) async throws {
@@ -229,6 +252,41 @@ final class GroupChatStore {
             throw error
         }
     }
+    private var pendingReadIDs: Set<String> = []
+    private var receivedIDs: Set<String> = []
+    private var readIDs: Set<String> = []
+    private var acknowledging: Set<String> = []
+
+    func acknowledge(_ ids: [String], state: String, id: String, auth: AuthStore) async {
+        guard !invalidated else { return }
+        if state == "read" { pendingReadIDs.formUnion(Set(ids).subtracting(readIDs)) }
+        let known = state == "read" ? readIDs : receivedIDs
+        let unseen = Array(Set(ids).subtracting(known)).sorted()
+        for offset in stride(from: 0, to: unseen.count, by: 100) {
+            guard !invalidated, !Task.isCancelled else { return }
+            let batch = Array(unseen[offset..<min(offset + 100, unseen.count)])
+            let key = state + batch.joined(separator: "/")
+            guard acknowledging.insert(key).inserted else { continue }
+            let epoch = accessEpoch
+            do {
+                _ = try await GroupService.data("\(id)/receipts", method: "PUT",
+                    input: ["messageIDs": batch, "state": state], auth: auth)
+                if !invalidated, epoch == accessEpoch {
+                    receivedIDs.formUnion(batch)
+                    if state == "read" { readIDs.formUnion(batch); pendingReadIDs.subtract(batch) }
+                    // Bound acknowledgement deduplication to the retained history plus latest preview.
+                    let retained = Set(messages.map(\.id) + batch)
+                    receivedIDs.formIntersection(retained)
+                    readIDs.formIntersection(retained)
+                }
+            } catch { /* Retry acknowledgements on the next visible polling pass. */ }
+            acknowledging.remove(key)
+        }
+        if state == "received", !pendingReadIDs.isEmpty {
+            await acknowledge(Array(pendingReadIDs), state: "read", id: id, auth: auth)
+        }
+    }
+
     private var pending: (id: String, text: String, attachment: DraftAttachment?, sentAt: Double)?
     var pendingText: String? { pending?.text }
     var pendingID: String? { pending?.id }
@@ -272,6 +330,23 @@ final class GroupChatStore {
                 }
                 guard !invalidated, epoch == accessEpoch else { return }
                 self.pending = nil
+            }
+            // Refresh older retained outgoing receipts without refetching message bodies.
+            let recentIDs = Set(incoming.map(\.id))
+            let olderIDs = messages.filter { $0.userID == auth.user?.id && $0.agentID == nil && !recentIDs.contains($0.id) }.map(\.id)
+            for offset in stride(from: 0, to: olderIDs.count, by: 100) {
+                let ids = Array(olderIDs[offset..<min(offset + 100, olderIDs.count)])
+                let encoded = String(decoding: try JSONEncoder().encode(ids), as: UTF8.self)
+                let (data, _) = try await auth.withSession { api, token in
+                    try await api.send(path: "groups/\(id)/receipts", token: token,
+                        query: [URLQueryItem(name: "messageIDs", value: encoded)])
+                }
+                let updates = try JSONDecoder().decode(GroupReceiptPage.self, from: data)
+                guard !invalidated, epoch == accessEpoch else { return }
+                let byID = Dictionary(uniqueKeysWithValues: updates.receipts.map { ($0.id, $0) })
+                for index in messages.indices {
+                    if let update = byID[messages[index].id] { messages[index].receiptState = update.receiptState }
+                }
             }
             error = nil
         } catch is CancellationError { }

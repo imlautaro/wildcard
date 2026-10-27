@@ -4,6 +4,7 @@ struct MessageReceiptView: View {
     let sentAt: Double
     var readAt: Double? = nil
     var isSending = false
+    var receiptState: String? = nil
     @Environment(\.colorScheme) private var colorScheme
     @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 16
     @ScaledMetric(relativeTo: .caption2) private var height: CGFloat = 9.6
@@ -20,12 +21,12 @@ struct MessageReceiptView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Sending")
         } else {
-            ReceiptChecks(doubled: true)
+            ReceiptChecks(doubled: receiptState == nil || receiptState == "received" || receiptState == "read")
                 .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
-                .foregroundStyle(readAt != nil ? readColor : Color.secondary)
+                .foregroundStyle((receiptState == "read" || readAt != nil) ? readColor : Color.secondary)
                 .frame(width: width, height: height)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(readAt != nil ? "Read" : "Received")
+                .accessibilityLabel(receiptState == "read" || readAt != nil ? "Read" : (receiptState == "sent" ? "Sent" : "Received"))
         }
     }
 }

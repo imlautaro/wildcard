@@ -991,3 +991,29 @@ Local static TypeScript, all 19 migration compilations and new SQL EXPLAIN check
 passed. No build, runtime test, inference, remote migration, commit, push or
 deployment was performed. Standard/Contributor provider behavior, functional recall,
 revocation races and independent-account installation remain unverified.
+
+## Group receipt storage (migration 0022)
+
+Apply the versioned `0022_group_receipts.sql` through the existing automatic release
+migration step before publishing the matching API. Local independent setup uses
+`npm run db:migrate:local --workspace @wildcard/api` after installing dependencies.
+No new Cloudflare resource, binding, secret or account permission is needed: the
+existing D1 database stores receipt snapshots and insert trigger. Provision D1 and
+all prior migrations in their existing order. Never apply a production migration
+or deploy manually as a shortcut around the automatic release workflow.
+
+New message inserts atomically snapshot human/agent recipients; historical messages
+are deliberately not backfilled. The API checks current membership for aggregate
+reads and for each authenticated acknowledgement write. Clients need an updated
+iOS installation to acknowledge delivery/visible reads; legacy clients can keep
+all-recipient states pending. Backend publication alone does not install the app.
+See [semantics, endpoints, retention and verification](groups.md#delivery-and-read-receipts).
+
+Verify a clean independent database with all migrations and run the opt-in isolated
+receipt/publication checks before release. Following authorized commit/push, verify
+the automatic deployment's source tag and pending migrations through the normal
+release checks. Device verification with fictional accounts remains required; no
+remote migration, provider call or deployment was performed for local validation.
+Rollback may run the previous API while leaving this additive migration in place;
+do not remove the table/column or recreate history to undo code. Historical receipt
+evidence is not reconstructible from current membership or push acceptance.
