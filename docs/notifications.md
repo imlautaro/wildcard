@@ -260,7 +260,10 @@ retest of a notification tap from a terminated/backgrounded app remains necessar
 
 The main app bundles the three owner-supplied Mixkit WAV files in `Wildcard/Sounds`.
 Xcode's synchronized app group includes them as resources; keep their filenames
-unchanged. They are 44.1 kHz, 16-bit PCM, each shorter than three seconds, within
+unchanged. All three bundled files are attenuated by 50 dB relative to the supplied
+originals for gentler playback, without changing their duration or metadata. The
+original source files remain outside the repository. They are 44.1 kHz, 16-bit PCM,
+each shorter than three seconds, within
 [Apple's custom notification sound requirements](https://developer.apple.com/documentation/usernotifications/unnotificationsound).
 
 - An accepted outgoing message and a newly completed reply in the visible chat use
@@ -276,8 +279,11 @@ Focus, and notification sound permission can affect audibility. These are ordina
 sounds, not critical alerts. Foreground banners remain suppressed.
 
 The payload includes the stable `turnID`, used with the authenticated account to
-deduplicate foreground APNs and polling observations. Chat refreshes report newly
-completed turns; contact-list unread increases resolve recent turn IDs through a
+deduplicate foreground APNs and polling observations. For the visible chat, APNs and polling never play or consume the sound event
+before display. The reply bubble reports its appearance after a cancellable 250 ms
+wait for the insertion/scroll animation, rechecking visibility, account and active
+state. Deduplication prevents replay when a bubble reappears. Chat refreshes report
+newly completed turns for conversations outside the visible chat; contact-list unread increases resolve recent turn IDs through a
 history request, allowing foreground sounds even without APNs permission. Initial
 history, earlier pages, unchanged refreshes, and replies completed before the
 current foreground interval do not replay sounds. Outgoing sounds require server
@@ -292,3 +298,14 @@ TypeScript validation does not establish audible playback. Verify the three case
 late push deduplication, background/resume, silent mode, recording, notification
 permission denial, and account switching on a physical device with fictional data.
 No build, runtime test, or real push was run for this change.
+
+
+The October 27, 2026 volume adjustment attenuates all three sounds by 50 dB at the
+owner's request. Samples are scaled directly from the original files in commit
+`6937d4d050f19648ecd29950c4168375bed2b536` to avoid cumulative rounding from earlier
+adjustments. The accompanying client change delays the visible reply sound until
+its bubble appears and its insertion/scroll animation has finished.
+Install the updated iOS binary to apply it to foreground sounds and background
+notifications; the API sound filenames stay the same and no backend release is
+needed. PCM sample scaling and unchanged WAV parameters were checked locally;
+audible loudness on a physical device remains unverified.

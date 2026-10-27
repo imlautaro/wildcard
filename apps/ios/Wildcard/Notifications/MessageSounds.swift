@@ -36,10 +36,14 @@ final class MessageSounds {
         play("mixkit-hard-pop-click-2364")
     }
 
-    func received(turnID: String, contactID: String, userID: String, completedAt: Date) {
+    func received(turnID: String, contactID: String, userID: String, completedAt: Date,
+                  replyIsVisible: Bool = false) {
         guard self.userID == userID, let activeSince,
               UIApplication.shared.applicationState == .active,
               completedAt >= activeSince,
+              // A push or list refresh can arrive before chat polling. The visible
+              // conversation must wait for its reply bubble to appear instead.
+              (visibleContactID != contactID || replyIsVisible),
               receivedIDs.insert(turnID).inserted else { return }
         play(visibleContactID == contactID ? "mixkit-hard-pop-click-2364" : "mixkit-alert-quick-chime-766")
     }

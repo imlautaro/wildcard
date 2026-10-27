@@ -6,6 +6,7 @@ final class ChatStore {
     private(set) var presence: ContactPresence?
     private(set) var turns: [ChatTurn] = []
     private(set) var hasLoaded = false
+    private(set) var newReplyIDs: Set<String> = []
     private(set) var isLoadingMore = false
     private(set) var isSending = false
     private(set) var nextBefore: Int?
@@ -23,6 +24,7 @@ final class ChatStore {
     func compactHistory() {
         guard !isSending, !isLoadingMore, turns.count > 100 else { return }
         turns = Array(turns.suffix(100))
+        newReplyIDs.formIntersection(turns.map(\.id))
         nextBefore = turns.first?.sequence
     }
 
@@ -31,6 +33,7 @@ final class ChatStore {
         revision += 1
         presence = nil
         turns = []
+        newReplyIDs.removeAll()
         nextBefore = nil
         submission = nil
         refreshedAt = nil
@@ -59,6 +62,7 @@ final class ChatStore {
             if hasLoaded, let userID = auth.user?.id {
                 let completed = Set(turns.filter { $0.assistantText != nil }.map(\.id))
                 for turn in page.turns where turn.assistantText != nil && !completed.contains(turn.id) {
+                    newReplyIDs.insert(turn.id)
                     MessageSounds.shared.received(turnID: turn.id, contactID: contactID, userID: userID,
                                                   completedAt: Date(timeIntervalSince1970: turn.updatedAt / 1000))
                 }

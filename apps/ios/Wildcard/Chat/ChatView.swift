@@ -54,8 +54,23 @@ struct ChatView: View {
                     }
                     ForEach(chat.turns) { turn in
                         MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true)
-                        if let reply = turn.assistantText { MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false) }
-                        else if turn.isPending && chat.presence?.status == .typing {
+                        if let reply = turn.assistantText {
+                            MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false)
+                                .task {
+                                    guard chat.newReplyIDs.contains(turn.id) else { return }
+                                    // Wait until the insertion/scroll animation has finished.
+                                    do { try await Task.sleep(for: .milliseconds(250)) }
+                                    catch { return }
+                                    guard !Task.isCancelled, isVisible, scenePhase == .active,
+                                          MessageSounds.shared.visibleContactID == contactID,
+                                          let userID = auth.user?.id else { return }
+                                    MessageSounds.shared.received(
+                                        turnID: turn.id, contactID: contactID, userID: userID,
+                                        completedAt: Date(timeIntervalSince1970: turn.updatedAt / 1000),
+                                        replyIsVisible: true
+                                    )
+                                }
+                        } else if turn.isPending && chat.presence?.status == .typing {
                             ReplyTypingIndicator()
                         } else if turn.status == .failed {
                             VStack(alignment: .leading, spacing: 8) {
