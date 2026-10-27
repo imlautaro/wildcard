@@ -42,10 +42,12 @@ extension AuthAPI {
 struct SchedulesView: View {
     let contactID: String
     @Environment(AuthStore.self) private var auth
+    @Environment(ContactsStore.self) private var contacts
     @Environment(\.scenePhase) private var scenePhase
-    @State private var schedules: [ContactSchedule] = []
+    let cache: NavigationSnapshot<[ContactSchedule]>
+    private var schedules: [ContactSchedule] { cache.value ?? [] }
     @State private var loading = true
-    @State private var hasLoaded = false
+    private var hasLoaded: Bool { cache.value != nil }
     @State private var refreshRevision = 0
     @State private var cancelling: Set<String> = []
     @State private var error: String?
@@ -113,27 +115,33 @@ struct SchedulesView: View {
         loading = true
         defer { if started == refreshRevision { loading = false } }
         do {
-            let updated = try await auth.withSession { api, token in
-                try await api.contactSchedules(contactID: contactID, token: token)
+            try await cache.refresh {
+                try await auth.withSession { api, token in
+                    try await api.contactSchedules(contactID: contactID, token: token)
+                }
             }
             try Task.checkCancellation()
             guard started == refreshRevision else { return }
-            schedules = updated
-            hasLoaded = true
             error = nil
         } catch is CancellationError { }
+        catch AuthAPI.Failure.notFound {
+            contacts.scheduleSnapshots.remove(id: contactID)
+            self.error = "This contact is no longer available."
+        }
         catch { if started == refreshRevision { self.error = error.localizedDescription } }
     }
 
     private func cancel(_ schedule: ContactSchedule) async {
         guard cancelling.insert(schedule.id).inserted else { return }
         refreshRevision += 1
+        cache.invalidate()
         loading = false
         defer { cancelling.remove(schedule.id) }
         do {
             try await auth.withSession { api, token in
                 try await api.cancelSchedule(contactID: contactID, scheduleID: schedule.id, token: token)
             }
+            cache.invalidate()
             await refresh()
         } catch is CancellationError { }
         catch { self.error = error.localizedDescription }

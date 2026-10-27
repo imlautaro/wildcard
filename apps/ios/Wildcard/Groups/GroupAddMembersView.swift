@@ -5,7 +5,8 @@ struct InviteGroupUserView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(GroupsStore.self) private var groups
     @Environment(\.dismiss) private var dismiss
-    @State private var snapshot: GroupSnapshot?
+    private var store: GroupChatStore { groups.conversations.store(for: groupID) }
+    private var snapshot: GroupSnapshot? { store.snapshot }
     @State private var email = ""
     @State private var busy = false
     @State private var error: String?
@@ -27,7 +28,8 @@ struct InviteGroupUserView: View {
         .navigationTitle("Invite a user").navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(busy)
         .task {
-            do { snapshot = try await GroupService.read(GroupSnapshot.self, path: groupID, auth: auth) }
+            do { try await store.refreshDetails(id: groupID, auth: auth) }
+            catch is CancellationError { }
             catch { self.error = error.localizedDescription }
         }
     }
@@ -39,9 +41,12 @@ struct InviteGroupUserView: View {
             defer { busy = false }
             do {
                 _ = try await GroupService.data("\(groupID)/invitations", method: "POST", input: ["email": email], auth: auth)
+                store.invalidateDetails()
+                try await store.refreshDetails(id: groupID, auth: auth)
                 await groups.refresh(using: auth)
                 dismiss()
-            } catch { self.error = error.localizedDescription }
+            } catch is CancellationError { }
+            catch { self.error = error.localizedDescription }
         }
     }
 }
@@ -50,7 +55,9 @@ struct AddGroupContactView: View {
     let groupID: String
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
-    @State private var snapshot: GroupSnapshot?
+    @Environment(GroupsStore.self) private var groups
+    private var store: GroupChatStore { groups.conversations.store(for: groupID) }
+    private var snapshot: GroupSnapshot? { store.snapshot }
     @State private var error: String?
     @State private var loading = false
 
@@ -112,8 +119,9 @@ struct AddGroupContactView: View {
         loading = true
         error = nil
         defer { loading = false }
-        do { snapshot = try await GroupService.read(GroupSnapshot.self, path: groupID, auth: auth) }
-        catch { snapshot = nil; self.error = error.localizedDescription }
+        do { try await store.refreshDetails(id: groupID, auth: auth) }
+        catch is CancellationError { }
+        catch { self.error = error.localizedDescription }
         await contacts.refresh(using: auth)
         while !Task.isCancelled, contacts.error == nil, let cursor = contacts.nextCursor {
             await contacts.loadMore(using: auth)
@@ -129,7 +137,8 @@ struct AddGroupContactConsentView: View {
     @Environment(ContactsStore.self) private var contacts
     @Environment(GroupsStore.self) private var groups
     @Environment(\.dismiss) private var dismiss
-    @State private var snapshot: GroupSnapshot?
+    private var store: GroupChatStore { groups.conversations.store(for: groupID) }
+    private var snapshot: GroupSnapshot? { store.snapshot }
     @State private var shareMemory = false
     @State private var contributorConsent = false
     @State private var busy = false
@@ -170,9 +179,10 @@ struct AddGroupContactConsentView: View {
         .navigationBarBackButtonHidden(busy)
         .task {
             do {
-                snapshot = try await GroupService.read(GroupSnapshot.self, path: groupID, auth: auth)
+                try await store.refreshDetails(id: groupID, auth: auth)
                 try await contacts.refreshContact(id: contactID, using: auth)
-            } catch { self.error = error.localizedDescription }
+            } catch is CancellationError { }
+            catch { self.error = error.localizedDescription }
         }
     }
     private func addContact() {
@@ -184,9 +194,12 @@ struct AddGroupContactConsentView: View {
             do {
                 _ = try await GroupService.data("\(groupID)/agents", method: "POST", input: ["contactID": contactID,
                     "shareMemory": shareMemory, "contributorConsent": contributorConsent], auth: auth)
+                store.invalidateDetails()
+                try await store.refreshDetails(id: groupID, auth: auth)
                 await groups.refresh(using: auth)
                 dismiss()
-            } catch { self.error = error.localizedDescription }
+            } catch is CancellationError { }
+            catch { self.error = error.localizedDescription }
         }
     }
 }

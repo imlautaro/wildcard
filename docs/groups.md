@@ -147,7 +147,12 @@ create no bubble, notification or unread count.
 Client-generated message UUIDs make submission idempotent. An uncertain network
 failure retains the same UUID for retry. Database rejection restores the draft.
 Earlier history is paginated in pages of 50, and polling catches up across missing
-pages after backgrounding. Revoked group access clears the visible chat on 404.
+pages after backgrounding. Message/reply-status polling restarts when the group
+becomes visible or returns to the foreground. Read acknowledgements run in a
+separate task, so a slow acknowledgement cannot hold up incoming messages or
+leave an old typing indicator on screen. Device verification of slow read
+acknowledgements, background/foreground transitions and returning from group
+details remains pending. Revoked group access clears the visible chat on 404.
 
 ## API
 
@@ -331,3 +336,9 @@ two-minute claims, backoff, eight attempts and 24-hour expiry. Delivery is retry
 not exactly once; delayed accepted alerts can outlive an already displayed local
 fallback. No remote push or device behavior was exercised during implementation.
 See [notifications](notifications.md#group-notifications) for setup and checks.
+
+
+Group chat history and details now share a bounded session cache. Member avatars
+use the protected image cache, and navigation revalidates while retaining loaded
+content. See [group navigation caching](caching.md#group-navigation-and-secondary-screens)
+for eviction, pagination, access invalidation and device verification.

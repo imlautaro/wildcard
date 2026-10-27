@@ -3,7 +3,9 @@ import SwiftUI
 struct ContactSharingView: View {
     let contactID: String
     @Environment(AuthStore.self) private var auth
-    @State private var sharing: ContactSharing?
+    @Environment(ContactsStore.self) private var contacts
+    let cache: NavigationSnapshot<ContactSharing>
+    private var sharing: ContactSharing? { cache.value }
     @State private var invitation: ContactInvitation?
     @State private var shareMemory = false
     @State private var contributorConsent = false
@@ -79,7 +81,7 @@ struct ContactSharingView: View {
                     }
                 }
             }
-            if busy { ProgressView() }
+            if busy && sharing == nil { ProgressView() }
             if let error {
                 Text(error).foregroundStyle(.red).manrope(.footnote)
                 Button("Retry") { Task { await load() } }
@@ -107,9 +109,16 @@ struct ContactSharingView: View {
         busy = true
         defer { busy = false }
         do {
-            sharing = try await auth.withSession { api, token in try await api.contactSharing(id: contactID, token: token) }
+            try await cache.refresh {
+                try await auth.withSession { api, token in try await api.contactSharing(id: contactID, token: token) }
+            }
             error = nil
-        } catch { self.error = error.localizedDescription }
+        } catch is CancellationError { }
+        catch AuthAPI.Failure.notFound {
+            contacts.sharingSnapshots.remove(id: contactID)
+            error = "This contact is no longer available."
+        }
+        catch { self.error = error.localizedDescription }
     }
 
     private func createInvitation(byEmail: Bool = false) {
@@ -120,20 +129,24 @@ struct ContactSharingView: View {
             return
         }
         busy = true
+        cache.invalidate()
         error = nil
         Task {
             do {
                 invitation = try await auth.withSession { api, token in
                     try await api.inviteContact(id: contactID, email: email, contributorConsent: contributorConsent, token: token)
                 }
+                cache.invalidate()
                 busy = false
                 await load()
-            } catch { self.error = error.localizedDescription; busy = false }
+            } catch is CancellationError { busy = false }
+            catch { self.error = error.localizedDescription; busy = false }
         }
     }
 
     private func revoke(memberID: String? = nil, invitationID: String? = nil) {
         busy = true
+        cache.invalidate()
         error = nil
         Task {
             do {
@@ -141,9 +154,11 @@ struct ContactSharingView: View {
                     try await api.revokeContactAccess(id: contactID, memberID: memberID, invitationID: invitationID, token: token)
                 }
                 if invitationID != nil { invitation = nil }
+                cache.invalidate()
                 busy = false
                 await load()
-            } catch { self.error = error.localizedDescription; busy = false }
+            } catch is CancellationError { busy = false }
+            catch { self.error = error.localizedDescription; busy = false }
         }
     }
 }
@@ -197,7 +212,8 @@ struct JoinSharedContactView: View {
             defer { busy = false }
             do {
                 preview = try await auth.withSession { api, token in try await api.previewInvitation(code: requestedCode, token: token) }
-            } catch { self.error = error.localizedDescription }
+            } catch is CancellationError { }
+            catch { self.error = error.localizedDescription }
         }
     }
 
@@ -214,7 +230,8 @@ struct JoinSharedContactView: View {
                 await contacts.refresh(using: auth)
                 try await contacts.refreshContact(id: id, using: auth)
                 joined(id)
-            } catch { self.error = error.localizedDescription }
+            } catch is CancellationError { }
+            catch { self.error = error.localizedDescription }
         }
     }
 }

@@ -72,9 +72,9 @@ struct HomeView: View {
                 case .createGroup:
                     CreateGroupView { id in destinations = [.group(id)] }
                 case .group(let id):
-                    GroupChatView(groupID: id)
+                    GroupChatView(groupID: id, store: groups.conversations.store(for: id))
                 case .groupDetails(let id):
-                    GroupMembersView(groupID: id)
+                    GroupMembersView(groupID: id, store: groups.conversations.store(for: id))
                 case .groupInviteUser(let id):
                     InviteGroupUserView(groupID: id)
                 case .groupAddContact(let id):
@@ -103,11 +103,11 @@ struct HomeView: View {
                         destinations = [.contact(contactID)]
                     }
                 case .sharing(let id):
-                    ContactSharingView(contactID: id)
+                    ContactSharingView(contactID: id, cache: contacts.sharingSnapshots.store(for: id))
                 case .contact(let id):
                     ContactDetailView(contactID: id)
                 case .schedules(let id):
-                    SchedulesView(contactID: id)
+                    SchedulesView(contactID: id, cache: contacts.scheduleSnapshots.store(for: id))
                 case .editContact(let id):
                     if let contact = contacts.contact(id: id) {
                         ContactEditorView(contact: contact)

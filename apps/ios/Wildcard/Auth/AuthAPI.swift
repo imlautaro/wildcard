@@ -105,7 +105,21 @@ struct AuthAPI: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if body != nil { request.setValue(contentType, forHTTPHeaderField: "Content-Type") }
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
+        // SwiftUI cancels view tasks during navigation. URLSession reports that as
+        // URLError.cancelled rather than CancellationError; keep one cancellation
+        // contract for callers so normal navigation never becomes an error banner.
+        try Task.checkCancellation()
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                throw CancellationError()
+            }
+            throw error
+        }
+        try Task.checkCancellation()
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {

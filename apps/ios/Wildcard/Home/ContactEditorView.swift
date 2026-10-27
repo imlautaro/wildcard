@@ -79,6 +79,7 @@ struct ContactEditorView: View {
                 contactID = saved.id
                 if photoChanged {
                     do { try await contacts.savePhoto(contactID: saved.id, data: photoData, using: auth) }
+                    catch is CancellationError { return }
                     catch {
                         self.error = "Contact saved, but the photo could not be saved. \(error.localizedDescription) Tap Save to retry."
                         return

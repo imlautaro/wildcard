@@ -229,3 +229,9 @@ authorized verification with fictional accounts before end-to-end claims.
 
 
 Groups extend sharing to a common conversation with several users and contact agents. Invitation rights are granted per group member; adding a contact requires its creator and explicit memory consent. See [groups](groups.md).
+
+
+The iOS screen retains its loaded metadata in a bounded session cache, renders it
+immediately on return and revalidates in the background. See
+[navigation caching](caching.md#group-navigation-and-secondary-screens) for
+request deduplication, mutation/access invalidation and verification.

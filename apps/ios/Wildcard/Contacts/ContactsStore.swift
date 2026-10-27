@@ -14,6 +14,8 @@ final class ContactsStore {
     private(set) var totalUnreadCount = 0
     private var markingRead: Set<String> = []
     let conversations = ConversationCache()
+    let scheduleSnapshots = NavigationSnapshotCache<[ContactSchedule]>()
+    let sharingSnapshots = NavigationSnapshotCache<ContactSharing>()
     private var refreshedAt: Date?
     private var contactRefreshedAt: [String: Date] = [:]
     private var refreshingContacts: Set<String> = []
@@ -109,12 +111,20 @@ final class ContactsStore {
                 guard let boundary = page.contacts.last else { return false }
                 return isMoreRecent(boundary, than: existing)
             } : []
-            let removed = contacts.contains { existing in
+            let removed = contacts.filter { existing in
                 guard firstPageIDs.contains(existing.id), !incomingIDs.contains(existing.id) else { return false }
                 guard page.nextCursor != nil, let boundary = page.contacts.last else { return true }
                 return !isMoreRecent(boundary, than: existing)
             }
-            if removed { await auth.images.clear(deactivate: false) }
+            for contact in removed {
+                conversations.remove(contactID: contact.id)
+                scheduleSnapshots.remove(id: contact.id)
+                sharingSnapshots.remove(id: contact.id)
+                knownContacts.removeValue(forKey: contact.id)
+                contactRefreshedAt.removeValue(forKey: contact.id)
+                messageTimestamps.removeValue(forKey: contact.id)
+            }
+            if !removed.isEmpty { await auth.images.clear(deactivate: false) }
             guard request == generation, readSnapshot == readRevision, !Task.isCancelled else { return }
             contacts = page.contacts + additional
             sortContacts()
@@ -220,6 +230,8 @@ final class ContactsStore {
                 // A contact removed on another client is already deleted.
             }
             await auth.images.clear(deactivate: false)
+            scheduleSnapshots.remove(id: contact.id)
+            sharingSnapshots.remove(id: contact.id)
             conversations.remove(contactID: contact.id)
             messageTimestamps.removeValue(forKey: contact.id)
             contactRefreshedAt.removeValue(forKey: contact.id)
@@ -253,6 +265,8 @@ final class ContactsStore {
             if case AuthAPI.Failure.notFound = error {
                 await auth.images.clear(deactivate: false)
                 guard request == generation else { return }
+                scheduleSnapshots.remove(id: id)
+                sharingSnapshots.remove(id: id)
                 conversations.remove(contactID: id)
                 messageTimestamps.removeValue(forKey: id)
                 contactRefreshedAt.removeValue(forKey: id)

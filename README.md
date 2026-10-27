@@ -78,7 +78,8 @@ the agent briefly; actual composer activity extends its server-side idle lease. 
 continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
 limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1, selects bounded recent context, and provides shared attributed memories with private history search tools. Each agent also keeps its own stated persona/preferences across chats and can discover common group members and retrieve their attributed group statements through bounded, permission-checked search. An empty draft offers a microphone for
 [Muse Voice Transcribe dictation](docs/voice.md); the transcript is editable before
-sending. Navigation reuses a session-scoped [memory cache](docs/caching.md) and
+sending. Navigation reuses a bounded session-scoped [memory cache](docs/caching.md) for
+private/group chats, group details, schedules and sharing, and
 refreshes loaded content in the background. Recent chat images and avatars share
 a bounded memory/protected disk cache, reducing reloads across navigation and app
 restarts. [Reply push notifications](docs/notifications.md)

@@ -5,7 +5,8 @@ struct GroupMembersView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(GroupsStore.self) private var groups
     @Environment(\.dismiss) private var dismiss
-    @State private var snapshot: GroupSnapshot?
+    let store: GroupChatStore
+    private var snapshot: GroupSnapshot? { store.snapshot }
     @State private var shareMemory = false
     @State private var contributorConsent = false
     @State private var busy = false
@@ -17,7 +18,7 @@ struct GroupMembersView: View {
     private var owner: Bool { snapshot?.group.ownerID == auth.user?.id }
     var body: some View {
         Form {
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error = error ?? store.error { Text(error).foregroundStyle(.red) }
             if let snapshot {
                 Section {
                     ProfileIdentityView(name: snapshot.group.name, hasPhoto: snapshot.group.photoVersion != nil,
@@ -66,7 +67,7 @@ struct GroupMembersView: View {
                     if owner { Button("Delete group", role: .destructive) { confirmingDelete = true } }
                     else { Button("Leave group", role: .destructive) { confirmingLeave = true } }
                 }
-            } else if error == nil { ProgressView("Loading group…") }
+            } else if error == nil && store.error == nil { ProgressView("Loading group…") }
         }
         .disabled(busy)
         .navigationTitle(snapshot?.group.name ?? "Group details").navigationBarTitleDisplayMode(.inline)
@@ -82,6 +83,8 @@ struct GroupMembersView: View {
                 .disabled(snapshot?.canInvite != true || busy || editingIdentity)
             }
         }
+        .onAppear { store.isRetained = true }
+        .onDisappear { store.didLeave() }
         .task { await reload() }
         .refreshable { await reload() }
         .alert("Delete group?", isPresented: $confirmingDelete) {
@@ -102,15 +105,17 @@ struct GroupMembersView: View {
         } message: { Text("This removes group access. Previous messages stay visible. Removing a user also removes the contacts they added.") }
     }
     private func refreshIdentity() async throws {
-        snapshot = try await GroupService.read(GroupSnapshot.self, path: groupID, auth: auth)
+        store.invalidateDetails()
+        try await store.refreshDetails(id: groupID, auth: auth)
         await groups.refresh(using: auth)
     }
     private func reload() async {
         do {
-            snapshot = try await GroupService.read(GroupSnapshot.self, path: groupID, auth: auth)
+            try await store.refreshDetails(id: groupID, auth: auth)
             error = nil
         }
-        catch AuthAPI.Failure.notFound { snapshot = nil; error = "This group is no longer available." }
+        catch AuthAPI.Failure.notFound { error = "This group is no longer available." }
+        catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }
     private func mutate(_ suffix: String, method: String, input: [String: Any]? = nil, close: Bool = false) {
@@ -121,9 +126,12 @@ struct GroupMembersView: View {
             defer { busy = false }
             do {
                 _ = try await GroupService.data(groupID + (suffix.isEmpty ? "" : "/\(suffix)"), method: method, input: input, auth: auth)
+                store.invalidateDetails()
+                if close { groups.conversations.remove(id: groupID) }
                 await groups.refresh(using: auth)
                 if close { await auth.images.clear(deactivate: false); dismiss() } else { await reload() }
-            } catch { self.error = error.localizedDescription }
+            } catch is CancellationError { }
+            catch { self.error = error.localizedDescription }
         }
     }
 }

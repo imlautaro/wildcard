@@ -28,7 +28,13 @@ empty cached lists retain their empty state during revalidation.
   turn refresh the contact preview. Contact creation and rename update the local
   contact immediately and invalidate list freshness.
 - Revision checks discard responses superseded by mutations, invalidation, or a
-  replacement history window. Cancellation is not displayed as a network error.
+  replacement history window. The shared API transport normalizes URLSession's
+  `URLError.cancelled` and canceled task results to `CancellationError`. Group
+  lists, group history, invitations, member details, sharing, and contact editors
+  ignore cancellation just like private chat refreshes, preserving loaded content
+  and pending submission identifiers. Cancellation does not create an error row
+  or a Refresh/Retry button. Other failures keep their existing error and recovery
+  controls; canceling a send does not imply the server rejected it.
 - Chat rows prefer the API's `lastMessageAt`. With older APIs, they reuse the
   matching latest cached turn or a session-scoped timestamp keyed by contact and
   message preview. Missing timestamps require one history lookup per uncached
@@ -152,5 +158,45 @@ sharing all existing budgets, protection, lifetime, deduplication and logout cle
 Confirmed image submissions seed local bytes. Group list membership loss, explicit
 leave/deletion and group-history 404 clear the account cache conservatively.
 Cached images require refreshed group metadata for revocation discovery; offline
-images can remain until that check. Group member avatars remain view-local.
+images can remain until that check. Group member avatars use the same cache with group/member/version keys.
 See [group media](groups.md#group-photos-attachments-and-voice).
+
+## Group navigation and secondary screens
+
+GroupsStore now owns a `GroupConversationCache`, so navigating away and back
+reuses the same history, pagination, snapshot, reply state and uncertain submission
+ID. It targets eight recently accessed groups; visible stores and stores with a
+send, earlier-page request or unresolved submission are exempt from eviction.
+Inactive histories retain the latest 100 messages and restore an earlier-page
+cursor. The target may be exceeded while every store is exempt. Eviction and
+confirmed membership loss invalidate stores and reject late responses.
+
+The chat, member details, invite-user and add-contact screens share the same group
+snapshot. Concurrent snapshot reads share a request. Navigation displays the
+snapshot immediately and revalidates; the visible chat still polls history and
+reply status every three seconds. A cache does not suppress live updates. Changes
+to identity, members and permissions invalidate concurrent snapshot reads before
+revalidation. Explicit leave/delete removes the cached group. History-confirmed
+image submissions also seed image bytes after a lost send acknowledgement.
+
+Member avatars now use `PrivateImageCache`, including synchronous decoded hits,
+background decoding, shared downloads and protected disk storage. Their keys
+include group, member kind, member ID and photo version, preserving the group
+access context. They share the existing account budgets and cleanup policy.
+
+ContactsStore owns separate `NavigationSnapshotCache` instances for schedules and
+contact-sharing metadata, each with an eight-contact LRU limit. Empty schedule
+lists are successful cached values. Reopening renders loaded content immediately
+and revalidates; schedules keep their five-second foreground polling. Concurrent
+reads share a request that can finish after navigation. Mutations invalidate
+in-flight reads, retain visible content and reload after success. Deletion,
+confirmed first-page removal and resource 404 discard affected data. Neither
+invitation codes nor consent toggles are added to the cache. All of these metadata
+and history caches are session-only and disappear with the signed-in shell.
+
+Implementation rules for future features live in [AGENTS.md](../AGENTS.md#cache-by-default).
+Device verification: reopen a group and its details, revisit schedules and sharing
+(including empty lists), return while a send acknowledgement is uncertain, page
+back beyond 100 messages, navigate across more than eight groups, replace/remove
+member photos, refresh offline, revoke membership and switch fictional accounts.
+Static validation cannot establish scrolling smoothness or measured latency.

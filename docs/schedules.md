@@ -131,3 +131,9 @@ have not been exercised for this change. After an authorized release, verify
 using fictitious content: one-time/interval creation, timezone confirmation,
 cancellation in chat/UI during generation, edits, app-closed delivery, and
 ownership isolation. Do not log message text, device tokens, or secrets.
+
+
+The iOS screen retains its loaded metadata in a bounded session cache, renders it
+immediately on return and revalidates in the background. See
+[navigation caching](caching.md#group-navigation-and-secondary-screens) for
+request deduplication, mutation/access invalidation and verification.

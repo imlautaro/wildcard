@@ -70,7 +70,8 @@ struct CreateGroupView: View {
                         }
                         await groups.refresh(using: auth)
                         created(id)
-                    } catch { self.error = error.localizedDescription }
+                    } catch is CancellationError { }
+                    catch { self.error = error.localizedDescription }
                 }
             }
             .disabled(busy || editingIdentity || !groups.hasLoaded)
@@ -112,7 +113,8 @@ struct GroupInvitationsView: View {
                             do {
                                 _ = try await GroupService.data("invitations/\(invitation.id)", method: "DELETE", auth: auth)
                                 await groups.refresh(using: auth)
-                            } catch { self.error = error.localizedDescription }
+                            } catch is CancellationError { }
+                            catch { self.error = error.localizedDescription }
                         }
                     }
                 }
@@ -136,8 +138,10 @@ struct GroupInvitationsView: View {
                                 let result = try JSONDecoder().decode(GroupIDResponse.self, from: data)
                                 await groups.refresh(using: auth)
                                 selected = nil
+                                groups.conversations.remove(id: result.id)
                                 joined(result.id)
-                            } catch { self.error = error.localizedDescription }
+                            } catch is CancellationError { }
+                            catch { self.error = error.localizedDescription }
                         }
                     }
                 }
@@ -155,7 +159,7 @@ struct GroupChatView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(GroupsStore.self) private var groups
     @Environment(\.scenePhase) private var scenePhase
-    @State private var store = GroupChatStore()
+    let store: GroupChatStore
     @State private var isVisible = false
     @State private var draft = ""
     @State private var attachment: DraftAttachment?
@@ -234,7 +238,8 @@ struct GroupChatView: View {
                                 do {
                                     _ = try await GroupService.data("\(groupID)/replies/\(reply.id)/retry", method: "POST", auth: auth)
                                     await store.refresh(id: groupID, auth: auth)
-                                } catch { store.error = error.localizedDescription }
+                                } catch is CancellationError { }
+                                catch { store.error = error.localizedDescription }
                             }
                         }
                         .manrope(.footnote)
@@ -351,10 +356,12 @@ struct GroupChatView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { _ in voice.interrupt() }
         .onAppear {
+            store.isRetained = true
             isVisible = true
             MessageSounds.shared.visibleContactID = MessageSounds.groupConversationID(groupID)
         }
         .onDisappear {
+            store.didLeave()
             isVisible = false
             if MessageSounds.shared.visibleContactID == MessageSounds.groupConversationID(groupID) {
                 MessageSounds.shared.visibleContactID = nil
@@ -362,16 +369,22 @@ struct GroupChatView: View {
             cancelRecording()
             attachmentTask?.cancel()
         }
-        .task(id: scenePhase) {
-            guard scenePhase == .active else { return }
-            await store.refresh(id: groupID, auth: auth)
-            animateNewMessages = true
+        .task(id: "\(groupID)-\(isVisible)-\(scenePhase)") {
+            guard isVisible, scenePhase == .active else { return }
             while !Task.isCancelled {
-                if isVisible, scenePhase == .active, let sequence = store.messages.last?.sequence {
+                await store.refresh(id: groupID, auth: auth)
+                animateNewMessages = true
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            }
+        }
+        .task(id: "\(groupID)-\(isVisible)-\(scenePhase)") {
+            guard isVisible, scenePhase == .active else { return }
+            // Read receipts must not hold up message and reply-status polling.
+            while !Task.isCancelled {
+                if let sequence = store.messages.last?.sequence {
                     await groups.markRead(id: groupID, sequence: sequence, using: auth)
                 }
                 do { try await Task.sleep(for: .seconds(3)) } catch { return }
-                await store.refresh(id: groupID, auth: auth)
             }
         }
     }
@@ -571,19 +584,31 @@ struct GroupAvatar: View {
     var size: CGFloat = 40
     @Environment(AuthStore.self) private var auth
     @State private var image: UIImage?
+    @State private var loadedResource: CachedImageResource?
+    private var resource: CachedImageResource? {
+        guard let member, let version = member.photoVersion else { return nil }
+        return .groupMemberAvatar(groupID: groupID, kind: member.kind, memberID: member.id, version: version)
+    }
+    private var displayedImage: UIImage? {
+        guard let resource else { return nil }
+        if loadedResource == resource, let image { return image }
+        return auth.images.cachedImage(resource, maxPixelSize: 288)
+    }
     var body: some View {
         Group {
-            if let image { Image(uiImage: image).resizable().scaledToFill() }
+            if let image = displayedImage { Image(uiImage: image).resizable().scaledToFill() }
             else { Image(systemName: member?.kind == "agent" ? "person.crop.circle.fill" : "person.circle.fill").resizable().scaledToFit().foregroundStyle(.secondary) }
         }
         .frame(width: size, height: size).clipShape(Circle()).accessibilityHidden(true)
-        .task(id: "\(groupID)/\(member?.identity ?? "")/\(member?.photoVersion ?? "")") {
+        .task(id: resource) {
             image = nil
-            guard let member, member.photoVersion != nil else { return }
+            loadedResource = nil
+            guard let resource else { return }
             do {
-                let data = try await GroupService.data("\(groupID)/photos/\(member.kind)/\(member.id)", auth: auth)
+                let loaded = try await auth.cachedImage(resource, maxPixelSize: 288)
                 try Task.checkCancellation()
-                image = UIImage(data: data)
+                image = loaded
+                loadedResource = resource
             } catch { }
         }
     }

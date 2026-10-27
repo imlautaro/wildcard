@@ -95,6 +95,7 @@ final class GroupsStore {
     private(set) var hasLoaded = false
     private(set) var isLoading = false
     var error: String?
+    let conversations = GroupConversationCache()
     private var readRevision = 0
     private var reading: Set<String> = []
     private var readSequences: [String: Int] = [:]
@@ -131,9 +132,9 @@ final class GroupsStore {
                 invitations = inbox.invitations
             }
             guard revision == readRevision else { return }
-            if hasLoaded, !Set(groups.map(\.id)).subtracting(list.groups.map(\.id)).isEmpty {
-                await auth.images.clear(deactivate: false)
-            }
+            let removed = hasLoaded ? Set(groups.map(\.id)).subtracting(list.groups.map(\.id)) : []
+            for id in removed { conversations.remove(id: id) }
+            if !removed.isEmpty { await auth.images.clear(deactivate: false) }
             guard revision == readRevision else { return }
             groups = list.groups
             contributorModel = list.contributorModel
@@ -167,6 +168,65 @@ final class GroupChatStore {
     var error: String?
     // Keep the UUID and text after an uncertain send so Retry cannot duplicate it.
     private var accessEpoch = 0
+    private var invalidated = false
+    private var detailsRevision = 0
+    private var detailsRequest: (id: UUID, task: Task<GroupSnapshot, Error>)?
+    var isRetained = false
+
+    func invalidateDetails() {
+        detailsRevision += 1
+        detailsRequest?.task.cancel()
+        detailsRequest = nil
+    }
+
+    func invalidate() {
+        invalidated = true
+        accessEpoch += 1
+        invalidateDetails()
+        snapshot = nil
+        messages = []
+        nextBefore = nil
+        newIncomingMessageIDs = []
+        pending = nil
+        error = "This group is no longer available."
+    }
+
+    func didLeave() {
+        isRetained = false
+        trimHistory()
+    }
+
+    private func trimHistory() {
+        guard !isRetained, !isSending, !isLoadingMore, messages.count > 100 else { return }
+        messages = Array(messages.suffix(100))
+        nextBefore = messages.first?.sequence
+    }
+
+    func refreshDetails(id: String, auth: AuthStore) async throws {
+        guard !invalidated else { throw AuthAPI.Failure.notFound }
+        let revision = detailsRevision
+        let request: (id: UUID, task: Task<GroupSnapshot, Error>)
+        if let active = detailsRequest { request = active }
+        else {
+            request = (UUID(), Task { try await GroupService.read(GroupSnapshot.self, path: id, auth: auth) })
+            detailsRequest = request
+        }
+        defer { if detailsRequest?.id == request.id { detailsRequest = nil } }
+        do {
+            let state = try await request.task.value
+            guard !invalidated, revision == detailsRevision else { throw CancellationError() }
+            snapshot = state
+        } catch AuthAPI.Failure.notFound {
+            guard revision == detailsRevision else { throw CancellationError() }
+            invalidate()
+            await auth.images.clear(deactivate: false)
+            error = "This group is no longer available."
+            throw AuthAPI.Failure.notFound
+        } catch {
+            guard !invalidated, revision == detailsRevision else { throw CancellationError() }
+            throw error
+        }
+    }
     private var pending: (id: String, text: String, attachment: DraftAttachment?, sentAt: Double)?
     var pendingText: String? { pending?.text }
     var pendingID: String? { pending?.id }
@@ -174,11 +234,12 @@ final class GroupChatStore {
     var pendingSentAt: Double? { pending?.sentAt }
 
     func refresh(id: String, auth: AuthStore) async {
-        guard !isLoading else { return }
+        guard !invalidated, !isLoading else { return }
         isLoading = true
-        defer { isLoading = false }
+        let epoch = accessEpoch
+        defer { isLoading = false; trimHistory() }
         do {
-            let state = try await GroupService.read(GroupSnapshot.self, path: id, auth: auth)
+            try await refreshDetails(id: id, auth: auth)
             let page = try await GroupService.read(GroupMessagesPage.self, path: "\(id)/messages", auth: auth)
             var incoming = page.messages
             // Catch up across multiple pages after the app spent time in the background.
@@ -195,26 +256,31 @@ final class GroupChatStore {
                     cursor = older.nextBefore
                 }
             }
-            snapshot = state
-            if messages.isEmpty { nextBefore = page.nextBefore }
+            guard !invalidated, epoch == accessEpoch, let state = snapshot else { return }
+            if messages.isEmpty { nextBefore = cursor }
             let knownIDs = Set(messages.map(\.id))
             newIncomingMessageIDs = Set(incoming.filter {
                 !knownIDs.contains($0.id) && $0.userID != auth.user?.id && $0.sequence > (state.group.lastReadSequence ?? 0)
             }.map(\.id))
             merge(incoming)
-            if let pending, messages.contains(where: { $0.id == pending.id }) { self.pending = nil }
+            if let pending, messages.contains(where: { $0.id == pending.id }) {
+                if let file = pending.attachment, file.mimeType.hasPrefix("image/") {
+                    await auth.images.store(file.data, for: .groupAttachment(groupID: id, messageID: pending.id))
+                }
+                guard !invalidated, epoch == accessEpoch else { return }
+                self.pending = nil
+            }
             error = nil
         } catch is CancellationError { }
         catch AuthAPI.Failure.notFound {
-            accessEpoch += 1
-            snapshot = nil
-            nextBefore = nil
-            messages = []
-            newIncomingMessageIDs = []
-            pending = nil
+            guard !invalidated, epoch == accessEpoch else { return }
+            invalidate()
             await auth.images.clear(deactivate: false)
             self.error = "This group is no longer available."
-        } catch { self.error = error.localizedDescription }
+        } catch {
+            guard !invalidated, epoch == accessEpoch else { return }
+            self.error = error.localizedDescription
+        }
     }
     private func merge(_ page: [GroupMessage]) {
         var indexed = Dictionary(uniqueKeysWithValues: messages.map { ($0.id, $0) })
@@ -222,39 +288,53 @@ final class GroupChatStore {
         messages = indexed.values.sorted { $0.sequence < $1.sequence }
     }
     func loadMore(id: String, auth: AuthStore) async {
-        guard !isLoadingMore, let before = nextBefore else { return }
+        guard !invalidated, !isLoadingMore, let before = nextBefore else { return }
         isLoadingMore = true
         let epoch = accessEpoch
-        defer { isLoadingMore = false }
+        defer { isLoadingMore = false; trimHistory() }
         do {
             let (data, _) = try await auth.withSession { api, token in
                 try await api.send(path: "groups/\(id)/messages", token: token, query: [URLQueryItem(name: "before", value: String(before))])
             }
             let page = try JSONDecoder().decode(GroupMessagesPage.self, from: data)
-            guard epoch == accessEpoch else { return }
+            guard !invalidated, epoch == accessEpoch, nextBefore == before else { return }
             merge(page.messages)
             nextBefore = page.nextBefore
-        } catch { self.error = error.localizedDescription }
+        } catch is CancellationError { }
+        catch AuthAPI.Failure.notFound {
+            guard !invalidated, epoch == accessEpoch else { return }
+            invalidate()
+            await auth.images.clear(deactivate: false)
+        }
+        catch {
+            guard !invalidated, epoch == accessEpoch else { return }
+            self.error = error.localizedDescription
+        }
     }
     func send(_ text: String, attachment: DraftAttachment? = nil, id: String, auth: AuthStore) async -> Bool {
-        guard !isSending, pending == nil || (pending?.text == text && pending?.attachment == attachment) else { return false }
+        guard !invalidated, !isSending, pending == nil || (pending?.text == text && pending?.attachment == attachment) else { return false }
         isSending = true
         if pending == nil { pending = (UUID().uuidString.lowercased(), text, attachment, Date.now.timeIntervalSince1970 * 1000) }
-        defer { isSending = false }
+        let epoch = accessEpoch
+        defer { isSending = false; trimHistory() }
         let submitted = pending!
         do {
             try await auth.withSession { api, token in
                 try await api.sendGroupMessage(groupID: id, id: submitted.id, text: submitted.text, attachment: submitted.attachment, token: token)
             }
+            guard !invalidated, epoch == accessEpoch else { return false }
             MessageSounds.shared.sentGroup(messageID: submitted.id, groupID: id)
             if let file = submitted.attachment, file.mimeType.hasPrefix("image/") {
                 await auth.images.store(file.data, for: .groupAttachment(groupID: id, messageID: submitted.id))
             }
             await refresh(id: id, auth: auth)
             return true
-        } catch {
+        } catch is CancellationError { return false }
+        catch {
+            guard !invalidated, epoch == accessEpoch else { return false }
             // Polling may confirm a message even if its HTTP acknowledgement was lost.
             await refresh(id: id, auth: auth)
+            guard !invalidated, epoch == accessEpoch else { return false }
             if messages.contains(where: { $0.id == submitted.id }) { pending = nil; return true }
             if case AuthAPI.Failure.rejected = error { pending = nil }
             if case AuthAPI.Failure.unauthorized = error { pending = nil }
@@ -262,4 +342,32 @@ final class GroupChatStore {
             return false
         }
     }
+}
+
+/// Session-owned LRU. Pending submissions must retain their idempotency state.
+@MainActor
+final class GroupConversationCache {
+    private struct Entry { let store: GroupChatStore; var access: UInt64 }
+    private var entries: [String: Entry] = [:]
+    private var access: UInt64 = 0
+
+    func store(for id: String) -> GroupChatStore {
+        access &+= 1
+        if var entry = entries[id] {
+            entry.access = access
+            entries[id] = entry
+            return entry.store
+        }
+        while entries.count >= 8, let oldest = entries.filter({
+            !$0.value.store.isRetained && !$0.value.store.isSending && !$0.value.store.isLoadingMore
+                && $0.value.store.pendingID == nil
+        }).min(by: { $0.value.access < $1.value.access })?.key {
+            entries.removeValue(forKey: oldest)?.store.invalidate()
+        }
+        let store = GroupChatStore()
+        entries[id] = Entry(store: store, access: access)
+        return store
+    }
+
+    func remove(id: String) { entries.removeValue(forKey: id)?.store.invalidate() }
 }

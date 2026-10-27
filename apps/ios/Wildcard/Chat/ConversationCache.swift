@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Owned by the signed-in shell through ContactsStore; never persisted to disk.
 @MainActor
@@ -35,5 +36,66 @@ final class ConversationCache {
 
     func remove(contactID: String) {
         entries.removeValue(forKey: contactID)?.store.invalidate()
+    }
+}
+
+/// Reusable session-only snapshot cache for secondary resource screens.
+@MainActor @Observable
+final class NavigationSnapshot<Value: Sendable> {
+    private(set) var value: Value?
+    private var revision = 0
+    private var invalidated = false
+    private var request: (id: UUID, task: Task<Value, Error>)?
+
+    func invalidate(remove: Bool = false) {
+        revision += 1
+        request?.task.cancel()
+        request = nil
+        if remove { value = nil }
+        invalidated = remove
+    }
+
+    func refresh(fetch: @escaping @MainActor () async throws -> Value) async throws {
+        guard !invalidated else { throw AuthAPI.Failure.notFound }
+        let started = revision
+        let active: (id: UUID, task: Task<Value, Error>)
+        if let request { active = request }
+        else {
+            active = (UUID(), Task { try await fetch() })
+            request = active
+        }
+        defer { if request?.id == active.id { request = nil } }
+        do {
+            let updated = try await active.task.value
+            guard !invalidated, started == revision else { throw CancellationError() }
+            value = updated
+        } catch {
+            guard !invalidated, started == revision else { throw CancellationError() }
+            throw error
+        }
+    }
+}
+
+@MainActor
+final class NavigationSnapshotCache<Value: Sendable> {
+    private var entries: [String: NavigationSnapshot<Value>] = [:]
+    private var order: [String] = []
+
+    func store(for id: String) -> NavigationSnapshot<Value> {
+        order.removeAll { $0 == id }
+        order.append(id)
+        if let cached = entries[id] { return cached }
+        while entries.count >= 8, let oldest = order.first {
+            order.removeFirst()
+            entries.removeValue(forKey: oldest)?.invalidate(remove: true)
+        }
+        let store = NavigationSnapshot<Value>()
+        entries[id] = store
+        return store
+    }
+
+    func remove(id: String) {
+        order.removeAll { $0 == id }
+        entries.removeValue(forKey: id)?.invalidate(remove: true)
     }
 }
