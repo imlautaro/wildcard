@@ -1215,3 +1215,10 @@ API and web Worker configuration set `observability.redact_query_string = true`
 (supported by the pinned Wrangler schema), preserving logs/traces while removing
 query strings from captured request URLs. Verify that redaction in the automatic
 release and apply equivalent controls to any additional proxy/log exports.
+
+The API entry point imports `lib/schema-runtime` before other modules. It eagerly
+initializes the explicitly pinned Zod runtime shared by Better Auth (`zod`) and MCP
+(`zod/v4`) and selects its interpreting `jitless` path for Workers. Preserve this
+bootstrap order: the initial MCP automatic release passed TypeScript but Cloudflare
+rejected module initialization with `Class2 is not a constructor`. Migrations 0026
+and 0027 had already applied; rerunning the automatic release preserves them.

@@ -1,3 +1,4 @@
+import './lib/schema-runtime';
 import { cleanOAuthFlows } from './mcp/oauth';
 import { deliverGroupPush } from './groups/push';
 import { dispatchGroupRequests } from './groups/request-results';
