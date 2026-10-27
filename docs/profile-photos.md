@@ -7,6 +7,13 @@ notifications. They do not create system Contacts entries. [Shared contacts](sha
 ## Native editing
 
 Choose **Edit** from a chat row's swipe/context menu or tap the conversation title.
+The contact editor and Account share `ProfileIdentityView`: a centered circular
+avatar with a smaller camera circle at its bottom-right corner, with the name
+centered below. Tap the avatar to open **Choose Photo** and, when a photo exists,
+**Remove Photo**. Tap the name to open **Edit name**, then enter and confirm the
+name in a native alert. A new contact displays **Add name** until named. Members
+who cannot manage a shared contact see the same identity without editing menus.
+
 The same photo controls are available when creating a contact. **Choose Photo**
 uses the system Photos picker without requesting access to the entire library.
 The crop sheet supports dragging, pinching, and a zoom slider with a circular
@@ -120,13 +127,21 @@ Migration 0013 projects the canonical name/photo version to all participant conv
 
 ## Account profile
 
-Account displays your current name, email, and photo. Open **Edit Profile** to
-change your name and choose, crop, replace, or remove your own photo. It reuses
-the contact cropper and JPEG preparation described above. Save persists the name
-first, then the photo; if the photo request fails, the crop remains available to
-retry. Leaving without saving discards the draft. Account refreshes the profile
-when opened. Authentication responses may omit the optional photo version; the
-client reads the canonical profile from `/api/v1/me` after sign-in.
+Account displays your current name, email, and photo. The shared avatar/name
+controls are editable directly in Account; there is no separate Edit Profile
+screen or profile-wide Save button. Confirming a name saves only the name.
+Choosing **Use Photo** in the cropper saves only the photo; **Remove Photo**
+persists removal immediately. Canceling a picker, cropper, or name alert makes
+no change. The shared control reuses the contact cropper and JPEG preparation
+described above. Failed writes show an inline error and Retry, retaining the
+submitted name or cropped photo until another edit replaces it. Controls and
+sign-out are disabled during an update. Contact editing still stages changes
+until Create/Save, including its existing partial-save recovery.
+
+Account refreshes the profile when opened and waits for that refresh before
+enabling profile editing to avoid overwriting a new edit with the opening read.
+Authentication responses may omit the optional photo version; the client reads
+the canonical profile from `/api/v1/me` after sign-in.
 
 | Method | Path | Behavior |
 | --- | --- | --- |

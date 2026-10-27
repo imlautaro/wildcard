@@ -5,21 +5,28 @@ struct AccountView: View {
     @Environment(\.openURL) private var openURL
     @Environment(AuthStore.self) private var auth
 
+    @State private var editingIdentity = false
+    @State private var refreshingProfile = true
+
     var body: some View {
         Form {
             if let user = auth.user {
                 Section {
-                    HStack {
-                        Spacer()
+                    ProfileIdentityView(
+                        name: user.name,
+                        hasPhoto: user.photoVersion != nil,
+                        canEdit: !auth.isBusy && !refreshingProfile,
+                        isWorking: $editingIdentity,
+                        saveName: { try await auth.saveProfile(name: $0) },
+                        savePhoto: { try await auth.saveProfilePhoto(data: $0) }
+                    ) {
                         AccountAvatar(user: user, size: 96)
-                        Spacer()
                     }
                     .listRowBackground(Color.clear)
-                    LabeledContent("Name", value: user.name)
-                    NavigationLink("Edit Profile") { AccountEditorView(user: user) }
+                    .listRowSeparator(.hidden)
+                }
+                Section {
                     LabeledContent("Email", value: user.email)
-                } header: {
-                    Text("Your account").manrope(.footnote, weight: .semibold)
                 }
             }
             Section("Notifications") {
@@ -44,7 +51,7 @@ struct AccountView: View {
                 Button("Sign out", role: .destructive) {
                     Task { await auth.signOut() }
                 }
-                .disabled(auth.isBusy)
+                .disabled(auth.isBusy || editingIdentity || refreshingProfile)
                 if auth.isBusy { ProgressView() }
             }
             if let error = auth.error {
@@ -52,6 +59,10 @@ struct AccountView: View {
                     .foregroundStyle(.red)
             }
         }
-        .task { try? await auth.refreshProfile() }
+        .task {
+            refreshingProfile = true
+            defer { refreshingProfile = false }
+            try? await auth.refreshProfile()
+        }
     }
 }

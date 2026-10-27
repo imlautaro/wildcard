@@ -74,7 +74,11 @@ the draft and show an error. A failed delete leaves the row available for retry.
 Deleting a contact already removed on another client removes its stale local row.
 
 Opening a contact reads its current record and opens its persisted conversation.
-Tap its title to edit its name or photo. See [chats](chats.md) for message storage and generation. A per-session record
+Tap its title to edit its name or photo. The editor shares `ProfileIdentityView`
+with Account: tap the centered avatar with its camera badge for Choose Photo or
+Remove Photo, and tap the centered name below for Edit name. Creating a contact
+uses the same controls, showing Add name until a name is entered. Create/Save
+persists the contact draft; shared-contact members have no editing menus. See [chats](chats.md) for message storage and generation. A per-session record
 cache preserves a contact detail when first-page refresh changes the visible list.
 Concurrent refreshes cannot overwrite successful mutations, and mutations retain
 loaded pages and their keyset cursor. A session rejection clears the saved token

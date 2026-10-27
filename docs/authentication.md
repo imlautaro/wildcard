@@ -68,13 +68,16 @@ in a separate banner. The mode switch stays in the navigation toolbar, and repea
 submissions are blocked while a request is in flight.
 Registration asks for name, email, and password. The signed-in root has Chats
 and Account tabs, defaulting to Chats. Account shows the current name/email and
-retains the existing sign-out flow. A single navigation stack wraps the tab view;
-The plus button pushes the contact editor over the whole tab layout, with native
-Back navigation and the selected tab preserved on return. Navigation and contact
+photo, with avatar/name editing menus directly on that screen. Confirmed changes
+save immediately; email remains read-only. It retains the existing sign-out flow.
+A single navigation stack wraps the tab view. The plus button opens Contacts,
+with creation/join actions and an alphabetical directory. Editors push over the
+whole tab layout, with native Back navigation and the selected tab preserved on return. Navigation and contact
 state reset for a different signed-in user. Contacts use authenticated, private D1
 storage; see [contacts](contacts.md) for creation, listing, renaming, deletion,
 pagination, and session-expiry handling. There are no sample contacts or chat
-messages and no periodic polling.
+messages. The signed-in shell refreshes contacts periodically while active;
+see [caching](caching.md) for polling and cache behavior.
 
 iOS uses `Wildcard/LaunchScreen.storyboard` through the explicit
 `UILaunchStoryboardName = LaunchScreen` entry in `Config/Info.plist` in both Debug
