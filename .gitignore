@@ -18,9 +18,11 @@ build/
 .dev.vars.*
 !.dev.vars.example
 
-# API dependencies and generated output
+# JavaScript dependencies and generated output
 node_modules/
 dist/
 .wrangler/
+.nuxt/
+.output/
 worker-configuration.d.ts
 *.tsbuildinfo

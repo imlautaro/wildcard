@@ -339,3 +339,39 @@ reopen a group and its details, revisit schedules and sharing
 back beyond 100 messages, navigate across more than eight groups, replace/remove
 member photos, refresh offline, revoke membership and switch fictional accounts.
 Static validation cannot establish scrolling smoothness or measured latency.
+
+## Web app
+
+The [web app](web.md) applies the same policy to a browser tab, with memory-only
+caches.
+
+- **Ownership.** Each store (`useChats`, `useConversation`, `useGroupConversation`,
+  `usePrivateImage`) calls `registerSessionReset`. Sign-out, a 401 from any
+  authenticated request, and signing in as a different account clear all of them
+  before new data loads. Stores also track a generation or revision, so a late
+  response from an earlier session or request is discarded.
+- **Navigation.** The chat list, directory, invitations, and up to 20 recently opened
+  private and group conversations render synchronously from memory, including empty
+  results. Spinners appear only on first load. Refreshes run in the background, and
+  failures keep loaded content visible with a retry notice.
+- **Freshness.** Polling runs only while the tab is visible (see [web app](web.md)),
+  and returning to the tab refreshes immediately. A conversation refresh replaces its
+  newest page, keeps older loaded pages, and keeps turns accepted after the request
+  started. "Load earlier messages" prepends older pages.
+- **Mutations.** Sends are optimistic. A pending send keeps its UUID, text, and
+  attachment across navigation and failures. Retry resends the same UUID (the API
+  treats it idempotently), and Edit moves the text back to the composer. Contact
+  edits, deletions, group leave/delete, and read receipts update the list in place.
+  A 404 marks the conversation unavailable and removes it from the list.
+- **Images.** Avatars and chat thumbnails are fetched through the proxy and kept as
+  blob URLs in a bounded (150 entry) LRU keyed by account ID, access path, and photo
+  version or message ID. Evicted and reset entries are revoked. Failed loads are not
+  cached. The API's `no-store` header keeps bytes out of the browser disk cache. No
+  private data goes to `localStorage`, IndexedDB, or a service worker. Files open
+  from a temporary blob URL that is revoked after a minute.
+- **Not cached.** Sharing details, group member management, and account data are
+  always loaded on open, because they gate permissions.
+
+Not yet verified in a browser: navigation reuse, background refresh, offline
+recovery, access revocation, and account switching. See the verification status in
+[web app](web.md#verification-status).

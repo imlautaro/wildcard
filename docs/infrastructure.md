@@ -13,6 +13,9 @@
 | Meta Model API | Runtime `META_API_KEY`, `META_CHAT_MODEL` / `muse-voice-transcribe-1.0` | Generate replies and Muse Voice Transcribe dictation |
 | Public origin | `BETTER_AUTH_URL` | Canonical auth origin, separate from the secret |
 | Workers Builds | GitHub `imlautaro/wildcard`, `main`, root `/` | Automatic releases from committed and pushed source |
+| Web Worker | `apps/web/wrangler.jsonc`, `wildcard-web` | Nuxt web app and same-origin API proxy; see [Web Worker](#web-worker) |
+| Service binding | `API` → `wildcard-api` | Private web-to-API calls that keep the client IP for rate limits |
+| Workers Builds (web) | Second project on the same repository and branch, root `/` | Automatic web releases |
 
 There are no KV, email service, or staging dependencies. R2 is required for
 [contact profile photos](profile-photos.md). The production bucket was created and verified on October 26, 2026. Chats require
@@ -125,6 +128,55 @@ and Traces are configured with sampling rates 1 and 0.01. Review quotas/retentio
 before public use. Preview branches must not share this production database.
 Separate Worker, D1, origin, and secret configuration is required for staging.
 
+## Web Worker
+
+The [web app](web.md) is a separate Worker, `wildcard-web`, configured in
+`apps/web/wrangler.jsonc`. It has no D1, R2, Workflow, Cron, or secret. Its only
+binding is the `API` service binding to `wildcard-api`, plus the static-assets
+`ASSETS` binding that Nitro adds at build time. `npm run build:web` merges the
+versioned Wrangler file into `apps/web/.output/server/wrangler.json` with `main`
+and `assets`. The release deploys that generated file.
+
+Provisioning (after the API Worker exists, because the service binding names it):
+
+1. In `apps/web/wrangler.jsonc`, replace `account_id`, and also `services[0].service`
+   if your API Worker has another name. Change `name` if `wildcard-web` is taken.
+2. In Cloudflare, create a second Workers Builds project connected to the same
+   GitHub repository and production branch: root `/`, build command
+   `npm ci && npm run typecheck:web && npm run build:web`, deploy command
+   `npm run release:web`. Use a credential limited to Workers Scripts edit and
+   account read; the web release needs no D1, R2, or Workflows permission. Disable
+   preview builds.
+3. Optional: set build watch paths so web-only pushes don't rebuild the API and the
+   reverse. For example, include `apps/web/**`, `package.json`, `package-lock.json`,
+   and `scripts/release-web.mjs` for the web project, and exclude `apps/web/**` for
+   the API project. Verify the option in your dashboard before relying on it. Without
+   it, every push runs both pipelines, and each releases only its own Worker.
+4. Push a commit. `scripts/release-web.mjs` applies the same guards as the API
+   release (Workers Builds only, production branch, clean checkout, HEAD equal to
+   `WORKERS_CI_COMMIT_SHA`) and tags the version with the commit.
+
+This installation targets `https://wildcard-web.imlautaro.workers.dev`. The second
+Workers Builds project was connected on October 27, 2026, with preview builds disabled
+and a deployment token limited to Workers Scripts edit and Account Settings read.
+Its initial build predates the web source commit; production verification follows
+the first automatic release. The web origin needs no API configuration: the proxy calls
+the API through the binding, and the API sees no browser `Origin` or cookies.
+
+Verification after the first release: the build log shows the source SHA, the
+active `wildcard-web` version has a `workers/tag` equal to it, and its bindings list
+`API` → `wildcard-api` and `ASSETS`. An unauthenticated `GET /api/v1/me` on the web
+origin returns 401 JSON, and sign-in sets the `__Host-wildcard_session` cookie with
+`HttpOnly`, `Secure`, and `SameSite=Strict`. Sign-in attempts from two client IPs must
+hit separate API rate limits, which confirms the binding forwards
+`CF-Connecting-IP`.
+
+Rollback: roll back the `wildcard-web` version, or delete that Worker. It stores
+no data. API sessions created on the web stay valid until they expire. The web
+release never changes the API, its database, or its secrets. API changes must keep
+working for the web client as well as iOS; see [web app](web.md) for the
+endpoints it uses.
+
 ## Local setup
 
 ```sh
@@ -132,6 +184,7 @@ npm ci
 npm run auth:setup:local
 npm run typecheck
 npm run dev
+npm run dev:web   # optional web app on http://localhost:3000, proxied to the local API
 ```
 
 Local setup generates an ignored, owner-only `apps/api/.dev.vars` containing a

@@ -1,6 +1,6 @@
 # Wildcard
 
-A native iOS app and Hono API for Cloudflare Workers, with email/password
+A native iOS app, a Nuxt web app, and a Hono API for Cloudflare Workers, with email/password
 authentication backed by Better Auth, private conversations in Cloudflare D1,
 and durable Muse Spark 1.3 replies through Cloudflare Workflows.
 
@@ -12,6 +12,10 @@ apps/
     src/app.ts               # Hono application and auth routes
     src/index.ts             # Worker entry point
     wrangler.jsonc           # Worker configuration
+  web/                       # Nuxt 4 web app and same-origin API proxy Worker
+    app/                     # Pages, components, session-owned stores
+    server/api/v1/           # Proxy to the API Worker through a service binding
+    wrangler.jsonc           # Web Worker configuration
   ios/
     Wildcard/                # SwiftUI app, auth client, and Icon Composer icon
     Wildcard.xcodeproj/       # Xcode project
@@ -20,6 +24,7 @@ apps/
 docs/
   infrastructure.md          # Reproducible provisioning and automatic releases
   authentication.md          # Auth contract, session behavior, and limitations
+  web.md                     # Web app architecture, features, and limitations
 ```
 
 ## API development
@@ -89,6 +94,20 @@ notification service extension. Tapping an alert opens the chat. Bundled message
 visible chat, replies elsewhere in the foreground, and background push alerts. Unread reply counts persist on the server and
 appear on chat rows, the Chats tab, and the app icon; returning to the app refreshes them immediately. Contacts can also [schedule messages](docs/schedules.md) once or at fixed intervals, edit or cancel them in chat, and inspect/cancel them from the chat toolbar clock button. Scheduling uses the existing D1, Cron, Workflow, and push services. The composer supports private [image and PDF attachments](docs/attachments.md) from Photos or Files, with native previews. Creators can [share contacts](docs/sharing.md) by an existing account’s email through in-app requests, or using expiring invitation codes: recipients start empty private chats with the same agent, shared memories/presence, and exclusive attention across participants. Schedules, unread counts, attachments, and notifications remain per recipient. The iOS sharing screens disclose shared-memory and Contributor data use and require explicit acceptance.
 
+## Web development
+
+The [web app](docs/web.md) is a Nuxt 4 SPA served by a separate Worker,
+`wildcard-web`. It proxies `/api/v1/*` to the API through a service binding and
+keeps the session token in an `httpOnly` cookie, so the API needs no CORS. It covers
+auth, account, the unified chat list, private and group chats with attachments,
+contacts, and contact sharing. Voice dictation, push, and schedules are not
+available on the web yet. With the API running locally:
+
+```sh
+npm run dev:web        # http://localhost:3000
+npm run typecheck:web
+```
+
 ## Group conversations
 
 [Groups](docs/groups.md) combine human accounts and existing contacts in one
@@ -135,6 +154,9 @@ or public installations should select Standard unless separately authorized; see
 [model configuration](docs/infrastructure.md#development-contributor-model).
 Wrangler configures the Workflow and recovery Cron Trigger in the same release. Commit and push to
 release; do not deploy manually. Preview builds are disabled.
+The web Worker `wildcard-web` needs a second Workers Builds project on the same
+repository (build `npm ci && npm run typecheck:web && npm run build:web`, deploy
+`npm run release:web`). See [Web Worker](docs/infrastructure.md#web-worker).
 
 Follow the [working agreements](AGENTS.md), including English-only project content
 and reproducible infrastructure documentation.

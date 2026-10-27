@@ -1,0 +1,26 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // Nitro merges this file into .output/server/wrangler.json and adds `main` and
+  // `assets`. Release with that generated file; never deploy manually.
+  "name": "wildcard-web",
+  "compatibility_date": "2026-10-26",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    }
+  },
+  "account_id": "a9e3a97d08ec5023cbe6b97a1a25fec6",
+  "services": [
+    {
+      "binding": "API",
+      "service": "wildcard-api"
+    }
+  ]
+}
