@@ -19,7 +19,16 @@ routes.use('*', async (c, next) => {
   await next();
 });
 routes.use('*', bodyLimit({ maxSize: 12000, onError: c => c.json({ error: 'Request body too large' }, 413) }));
-routes.onError((_error, c) => c.json({ error: 'Unable to connect. Check the HTTPS endpoint and token. For OAuth, verify the issuer, client configuration and redirect URI. The authorization may have expired; reconnect to try again.' }, 422));
+routes.onError((failure, c) => {
+  const code = failure instanceof Error ? failure.message : '';
+  const messages: Record<string, string> = {
+    MCP_OAUTH_CLIENT: 'This provider requires a registered OAuth client. Open Advanced OAuth settings and enter its authorization server and Client ID.',
+    MCP_OAUTH_STATIC_ISSUER: 'Enter the authorization server in Advanced OAuth settings when using your own client credentials.',
+    MCP_OAUTH_ISSUER_REQUIRED: 'This server does not advertise an authorization server. Enter it in Advanced OAuth settings.',
+  };
+  if (Object.hasOwn(messages, code)) return c.json({ error: messages[code], code }, 422);
+  return c.json({ error: 'Unable to connect. Check the HTTPS endpoint, or return to Connections and authorize again. If the provider requires manual configuration, open Advanced OAuth settings.' }, 422);
+});
 routes.get('/', async c => {
   const { results } = await c.env.DB.prepare(`SELECT ${connectionColumns} FROM mcp_connection WHERE contact_id = ? AND user_id = ? ORDER BY created_at, id`)
     .bind(c.req.param('contactID'), c.get('owner')).all<Connection>();
@@ -66,7 +75,7 @@ routes.post('/:connectionID/oauth/start', async c => {
   const connection = await owned(c.env.DB, c.req.param('contactID')!, c.get('owner'), c.req.param('connectionID'));
   if (!connection) return c.json({ error: 'Connection not found' }, 404);
   const body: unknown = await c.req.json();
-  if (!isRecord(body) || Object.keys(body).some(k => !['platform', 'issuer', 'scope', 'clientID', 'clientSecret'].includes(k))) return c.json({ error: 'Invalid OAuth configuration.' }, 400);
+  if (!isRecord(body) || Object.keys(body).some(k => !['platform', 'issuer', 'scope', 'clientID', 'clientSecret', 'rediscover'].includes(k))) return c.json({ error: 'Invalid OAuth configuration.' }, 400);
   return c.json(await beginOAuth(c.env, connection, c.get('sessionID'), body));
 });
 routes.post('/:connectionID/oauth/finish', async c => {

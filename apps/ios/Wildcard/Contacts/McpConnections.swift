@@ -88,6 +88,7 @@ struct McpConnectionsView: View {
     @State private var scope = ""
     @State private var clientID = ""
     @State private var clientSecret = ""
+    @State private var advancedOAuth = false
     @State private var configureID: String?
     @State private var callbackURL: String?
     @State private var browser = McpOAuthBrowser()
@@ -137,7 +138,6 @@ struct McpConnectionsView: View {
             }
             Section(configureID == nil ? "Add MCP server" : "Configure OAuth") {
                 if configureID == nil { Button("Use Gmail settings") { gmail() } }
-                if let callbackURL { Text("OAuth redirect URI: \(callbackURL)").font(.footnote).textSelection(.enabled) }
                 TextField("Name", text: $name).disabled(configureID != nil)
                 TextField("HTTPS endpoint", text: $url).disabled(configureID != nil).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                 Picker("Authentication", selection: $authType) {
@@ -148,11 +148,15 @@ struct McpConnectionsView: View {
                 if authType == "bearer" { SecureField("Bearer token (optional)", text: $token).textInputAutocapitalization(.never).autocorrectionDisabled() }
                 if authType == "oauth" {
                     if callbackURL == nil { Text("OAuth requires a public HTTPS API configuration.").font(.footnote) }
-                    TextField("Authorization server (issuer)", text: $issuer).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                    TextField("Requested scopes, separated by spaces", text: $scope).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    TextField("Client ID (optional for dynamic registration)", text: $clientID).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    SecureField("Client secret (if required)", text: $clientSecret).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Text("Trust this issuer before continuing. Register the redirect URI above with your provider. Google requires your own OAuth client marked for an AI-powered agent and access to the Workspace preview. Authorizing an account does not enable tools.").font(.footnote)
+                    Text("Wildcard discovers the OAuth settings and opens the provider's sign-in page. Authorizing an account does not enable tools.").font(.footnote)
+                    DisclosureGroup("Advanced OAuth settings (optional)", isExpanded: $advancedOAuth) {
+                        TextField("Authorization server (automatic when empty)", text: $issuer).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                        TextField("Scopes (automatic when empty)", text: $scope).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        TextField("Client ID (only if required by the provider)", text: $clientID).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        SecureField("Client secret (if required)", text: $clientSecret).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        if let callbackURL { Text("OAuth redirect URI: \(callbackURL)").font(.footnote).textSelection(.enabled) }
+                        Text("Most servers need no manual settings. If you use your own client credentials, enter their trusted authorization server too. Google requires your own registered Web OAuth client marked for an AI-powered agent and Workspace preview access.").font(.footnote)
+                    }
                 }
                 Toggle("I understand and accept the data access and privacy changes described above.", isOn: $consent)
                 Button(authType == "oauth" ? "Continue to authorization" : "Connect") { Task { await connect() } }.disabled(busy || !consent || name.trimmingCharacters(in: .whitespaces).isEmpty || url.isEmpty)
@@ -195,15 +199,18 @@ struct McpConnectionsView: View {
         catch { self.error = error.localizedDescription; return false }
     }
     private func gmail() {
+        advancedOAuth = true
         clientID = ""; clientSecret = ""
         name = "Gmail"; url = "https://gmailmcp.googleapis.com/mcp/v1"; authType = "oauth"
         issuer = "https://accounts.google.com"
         scope = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose"
     }
     private func configure(_ connection: McpConnection) {
+        advancedOAuth = false
         clientID = ""; clientSecret = ""; issuer = ""; scope = ""
         configureID = connection.id; name = connection.name; url = connection.url; authType = "oauth"
         if connection.url == "https://gmailmcp.googleapis.com/mcp/v1" {
+            advancedOAuth = true
             issuer = "https://accounts.google.com"
             scope = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose"
         }
@@ -222,7 +229,9 @@ struct McpConnectionsView: View {
             guard let id else { return }
             if authType == "oauth" {
                 configureID = id
-                var config = ["issuer": issuer, "scope": scope]
+                var config: [String: String] = [:]
+                if !issuer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { config["issuer"] = issuer.trimmingCharacters(in: .whitespacesAndNewlines) }
+                if !scope.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { config["scope"] = scope.trimmingCharacters(in: .whitespacesAndNewlines) }
                 if !clientID.isEmpty { config["clientID"] = clientID }
                 if !clientSecret.isEmpty { config["clientSecret"] = clientSecret }
                 clientSecret = ""
@@ -240,9 +249,12 @@ struct McpConnectionsView: View {
         catch is CancellationError { cache.invalidate(); await refresh() }
         catch { cache.invalidate(); await refresh(); self.error = error.localizedDescription }
     }
-    private func runAuthorization(_ id: String, _ config: [String: String] = [:]) async throws {
+    private func runAuthorization(_ id: String, _ config: [String: String]? = nil) async throws {
         let startingUser = auth.user?.id
-        var body = config; body["platform"] = "ios"
+        var body: [String: Any] = [:]
+        for (key, value) in config ?? [:] { body[key] = value }
+        body["platform"] = "ios"
+        if config != nil { body["rediscover"] = true }
         let data = try JSONSerialization.data(withJSONObject: body)
         let launch = try await auth.withSession { api, token in try await api.beginMcpOAuth(contactID: contactID, connectionID: id, body: data, token: token) }
         try Task.checkCancellation()

@@ -11,12 +11,13 @@ const issuer = ref('');
 const scope = ref('');
 const clientID = ref('');
 const clientSecret = ref('');
+const advancedOAuth = ref(false);
 const configureID = ref<string | null>(null);
 type OAuthLaunch = { flowID: string; launchURL: string };
-function gmail() { clientID.value = ''; clientSecret.value = ''; name.value = 'Gmail'; url.value = 'https://gmailmcp.googleapis.com/mcp/v1'; authType.value = 'oauth'; issuer.value = 'https://accounts.google.com'; scope.value = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose'; }
-function configure(connection: { id: string; name: string; url: string }) { clientID.value = ''; clientSecret.value = ''; issuer.value = ''; scope.value = ''; configureID.value = connection.id; name.value = connection.name; url.value = connection.url; authType.value = 'oauth'; if (connection.url === 'https://gmailmcp.googleapis.com/mcp/v1') { issuer.value = 'https://accounts.google.com'; scope.value = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose'; } }
+function gmail() { advancedOAuth.value = true; clientID.value = ''; clientSecret.value = ''; name.value = 'Gmail'; url.value = 'https://gmailmcp.googleapis.com/mcp/v1'; authType.value = 'oauth'; issuer.value = 'https://accounts.google.com'; scope.value = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose'; }
+function configure(connection: { id: string; name: string; url: string }) { advancedOAuth.value = false; clientID.value = ''; clientSecret.value = ''; issuer.value = ''; scope.value = ''; configureID.value = connection.id; name.value = connection.name; url.value = connection.url; authType.value = 'oauth'; if (connection.url === 'https://gmailmcp.googleapis.com/mcp/v1') { advancedOAuth.value = true; issuer.value = 'https://accounts.google.com'; scope.value = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose'; } }
 async function authorize(connectionID: string, config?: Record<string, string>) {
-  const result = await mutate<OAuthLaunch>(`/${connectionID}/oauth/start`, 'POST', { platform: 'web', ...config });
+  const result = await mutate<OAuthLaunch>(`/${connectionID}/oauth/start`, 'POST', { platform: 'web', ...(config ? { rediscover: true, ...config } : {}) });
   clientSecret.value = '';
   if (result && typeof result === 'object') {
     const userID = useSession().user.value?.id;
@@ -34,7 +35,7 @@ async function connect() {
     if (authType.value === 'oauth') configureID.value = connectionID;
   }
   token.value = '';
-  if (authType.value === 'oauth') await authorize(connectionID, { issuer: issuer.value, scope: scope.value, ...(clientID.value ? { clientID: clientID.value } : {}), ...(clientSecret.value ? { clientSecret: clientSecret.value } : {}) });
+  if (authType.value === 'oauth') await authorize(connectionID, { ...(issuer.value.trim() ? { issuer: issuer.value.trim() } : {}), ...(scope.value.trim() ? { scope: scope.value.trim() } : {}), ...(clientID.value ? { clientID: clientID.value } : {}), ...(clientSecret.value ? { clientSecret: clientSecret.value } : {}) });
   else { name.value = ''; url.value = ''; consent.value = false; }
 }
 async function permission(connection: string, tool: { name: string; fingerprint: string; allowed: boolean }) {
@@ -74,7 +75,7 @@ useHead({ title: 'Connections' });
     <form style="margin-top: 24px" @submit.prevent="connect">
       <div class="group-title">{{ configureID ? 'Configure OAuth' : 'Add MCP server' }}</div>
       <button v-if="!configureID" type="button" class="button" @click="gmail">Use Gmail settings</button>
-      <p v-if="callbackURL" class="group-footer" style="overflow-wrap: anywhere">OAuth redirect URI: {{ callbackURL }}</p>
+
       <div class="group">
         <div class="field"><input :readonly="!!configureID" v-model="name" placeholder="Name" aria-label="Server name" maxlength="80" required></div>
         <div class="field"><input :readonly="!!configureID" v-model="url" type="url" placeholder="https://example.com/mcp" aria-label="HTTPS endpoint" maxlength="2048" required></div>
@@ -82,11 +83,16 @@ useHead({ title: 'Connections' });
         <div v-if="authType === 'bearer'" class="field"><input v-model="token" type="password" placeholder="Bearer token (optional)" aria-label="Bearer token (optional)" autocomplete="off" maxlength="4096"></div>
         <template v-if="authType === 'oauth'">
           <p v-if="!callbackURL" class="text-block">OAuth requires a public HTTPS API configuration.</p>
-          <div class="field"><input v-model="issuer" type="url" placeholder="Authorization server (issuer)" aria-label="Authorization server (issuer)" required></div>
-          <div class="field"><input v-model="scope" placeholder="Requested scopes, separated by spaces" aria-label="Requested scopes" maxlength="2000"></div>
-          <div class="field"><input v-model="clientID" placeholder="Client ID (optional for dynamic registration)" aria-label="OAuth client ID" autocomplete="off" maxlength="2048"></div>
-          <div class="field"><input v-model="clientSecret" type="password" placeholder="Client secret (if required)" aria-label="OAuth client secret" autocomplete="off" maxlength="4096"></div>
-          <p class="text-block">Trust this issuer before continuing. Register the redirect URI above with your provider. Google requires your own OAuth client marked for an AI-powered agent and access to the Workspace preview. Authorizing an account does not enable tools.</p>
+          <p class="text-block">Wildcard discovers the OAuth settings and opens the provider's sign-in page. Authorizing an account does not enable tools.</p>
+          <details class="text-block" :open="advancedOAuth" @toggle="advancedOAuth = ($event.target as HTMLDetailsElement).open">
+            <summary>Advanced OAuth settings (optional)</summary>
+            <div class="field"><input v-model="issuer" type="url" placeholder="Authorization server (automatic when empty)" aria-label="Authorization server override"></div>
+            <div class="field"><input v-model="scope" placeholder="Scopes (automatic when empty)" aria-label="Requested scopes override" maxlength="2000"></div>
+            <div class="field"><input v-model="clientID" placeholder="Client ID (only if required by the provider)" aria-label="OAuth client ID" autocomplete="off" maxlength="2048"></div>
+            <div class="field"><input v-model="clientSecret" type="password" placeholder="Client secret (if required)" aria-label="OAuth client secret" autocomplete="off" maxlength="4096"></div>
+            <p v-if="callbackURL" style="overflow-wrap: anywhere">OAuth redirect URI: {{ callbackURL }}</p>
+            <p>Most servers need no manual settings. If you use your own client credentials, enter their trusted authorization server too. Google requires your own registered Web OAuth client marked for an AI-powered agent and Workspace preview access.</p>
+          </details>
         </template>
         <label class="text-block" style="display: flex; gap: 12px"><input v-model="consent" type="checkbox" required><span>I understand and accept the data access and privacy changes described above.</span></label>
       </div>

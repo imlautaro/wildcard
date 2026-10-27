@@ -1222,3 +1222,11 @@ initializes the explicitly pinned Zod runtime shared by Better Auth (`zod`) and 
 bootstrap order: the initial MCP automatic release passed TypeScript but Cloudflare
 rejected module initialization with `Class2 is not a constructor`. Migrations 0026
 and 0027 had already applied; rerunning the automatic release preserves them.
+
+Automatic MCP OAuth discovery and the public `/api/v1/mcp/oauth/client-metadata`
+JSON use existing API configuration and resources. There is no new migration,
+secret, binding or callback registration for this extension. Its advertised client_id
+is the exact public metadata URL; its redirect_uris contain only the existing API
+OAuth callback. Retain public-only egress and query redaction. See
+[automatic OAuth setup](connectors.md#automatic-setup-and-centralita) for provider
+selection, advanced credential boundaries and unverified end-to-end cases.

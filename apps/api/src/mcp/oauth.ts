@@ -45,50 +45,72 @@ export function oauthFetch(allowed: string[], method: 'GET' | 'POST', headersOnl
   };
 }
 function issuerURL(value: string) { const url = secureURL(value); return url.pathname === '/' ? url.origin : url.href; }
+export const clientMetadataURL = (env: Env) => new URL('/api/v1/mcp/oauth/client-metadata', secureURL(env.BETTER_AUTH_URL)).href;
+export function clientMetadata(env: Env) {
+  return { client_id: clientMetadataURL(env), client_name: 'Wildcard', redirect_uris: [callbackURL(env)],
+    grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none' };
+}
 export async function prepareConfig(connection: Connection, env: Env, body: Record<string, unknown>): Promise<OAuthConfig> {
-  if (typeof body.issuer !== 'string' || typeof body.scope !== 'string' || body.scope.length > 2000 || /[\u0000-\u001f\u007f]/.test(body.scope) ||
+  if ((body.issuer !== undefined && (typeof body.issuer !== 'string' || body.issuer.length > 2048)) ||
+    (body.scope !== undefined && (typeof body.scope !== 'string' || body.scope.length > 2000 || /[\u0000-\u001f\u007f]/.test(body.scope))) ||
     (body.clientID !== undefined && (typeof body.clientID !== 'string' || body.clientID.length > 2048 || /[\s\u0000-\u001f\u007f]/.test(body.clientID))) ||
     (body.clientSecret !== undefined && (typeof body.clientSecret !== 'string' || body.clientSecret.length > 4096 || /[\u0000-\u001f\u007f]/.test(body.clientSecret)))) throw new Error('MCP_OAUTH_CONFIG');
-  const issuer = issuerURL(body.issuer);
+  const explicitIssuer = typeof body.issuer === 'string' && body.issuer.trim() ? issuerURL(body.issuer.trim()) : null;
+  // Never attach pre-registered credentials to an automatically selected issuer.
+  if ((body.clientID || body.clientSecret) && !explicitIssuer) throw new Error('MCP_OAUTH_STATIC_ISSUER');
+  let issuer = explicitIssuer;
   const server = endpoint(connection.url);
   const probe = await oauthFetch([server.href], 'GET', true)(server, { method: 'GET', headers: { Accept: 'application/json, text/event-stream' } });
-  const hint = extractWWWAuthenticateParams(probe).resourceMetadataUrl;
+  const challenge = extractWWWAuthenticateParams(probe);
+  const hint = challenge.resourceMetadataUrl;
   const paths = [new URL(`/.well-known/oauth-protected-resource${server.pathname === '/' ? '' : server.pathname}`, server.origin).href,
     new URL('/.well-known/oauth-protected-resource', server.origin).href];
-  if (hint) { if (hint.origin !== server.origin) throw new Error('MCP_OAUTH_RESOURCE'); paths.push(hint.href); }
+  if (hint) {
+    // Resource metadata is public and credential-free; RFC 9728 permits another host.
+    // Its declared resource must still match this MCP server before trusting any issuer.
+    secureURL(hint.href); paths.push(hint.href);
+  }
   let resource = server.href;
+  let resourceScopes: string[] | undefined;
   try {
-    const metadata = await discoverOAuthProtectedResourceMetadata(server, { resourceMetadataUrl: hint }, oauthFetch(paths, 'GET'));
-    if (metadata.authorization_servers?.length && !metadata.authorization_servers.some(value => sameURL(value, issuer))) throw new Error('MCP_OAUTH_ISSUER');
-    const declared = secureURL(metadata.resource);
-    // Accept only the exact server or a parent resource on the same origin.
+    const resourceMetadata = await discoverOAuthProtectedResourceMetadata(server, { resourceMetadataUrl: hint }, oauthFetch(paths, 'GET'));
+    const declared = secureURL(resourceMetadata.resource);
     if (declared.origin !== server.origin || !(server.pathname === declared.pathname || server.pathname.startsWith(declared.pathname.replace(/\/$/, '') + '/'))) throw new Error('MCP_OAUTH_RESOURCE');
+    if (explicitIssuer && resourceMetadata.authorization_servers?.length && !resourceMetadata.authorization_servers.some(value => sameURL(value, explicitIssuer))) throw new Error('MCP_OAUTH_ISSUER');
+    // Select the first advertised server deterministically, never try a grid of issuers.
+    if (!issuer && resourceMetadata.authorization_servers?.length) issuer = issuerURL(resourceMetadata.authorization_servers[0]);
     resource = declared.href;
+    resourceScopes = resourceMetadata.scopes_supported;
   } catch (error) {
-    // A pinned, explicitly supplied issuer supports older providers without RFC 9728.
-    // Invalid/mismatching metadata must not silently fall back.
     if (error instanceof Error && /^MCP_/.test(error.message)) throw error;
     if (!(error instanceof Error) || !/404|not found|does not implement OAuth 2.0 Protected Resource Metadata/i.test(error.message)) throw new Error('MCP_OAUTH_RESOURCE');
   }
+  if (!issuer) throw new Error('MCP_OAUTH_ISSUER_REQUIRED');
   const discovery = buildDiscoveryUrls(issuer).map(v => v.url.href);
   const metadata = await discoverAuthorizationServerMetadata(issuer, { fetchFn: oauthFetch(discovery, 'GET') });
   if (!metadata || !sameURL(metadata.issuer, issuer) || !metadata.authorization_endpoint || !metadata.token_endpoint) throw new Error('MCP_OAUTH_METADATA');
   secureURL(metadata.authorization_endpoint); secureURL(metadata.token_endpoint);
   if (metadata.code_challenge_methods_supported && !metadata.code_challenge_methods_supported.includes('S256')) throw new Error('MCP_OAUTH_PKCE');
+  // Challenge scopes take precedence over resource scopes. AS-wide scopes can be
+  // unrelated to this MCP resource and must never be requested wholesale.
+  const scope = typeof body.scope === 'string' && body.scope.trim() ? body.scope.trim() : challenge.scope ?? resourceScopes?.join(' ') ?? '';
+  if (scope.length > 2000 || /[\u0000-\u001f\u007f]/.test(scope)) throw new Error('MCP_OAUTH_SCOPE');
   let client: OAuthClientInformationMixed;
   if (body.clientID) client = { client_id: body.clientID as string, ...(body.clientSecret ? { client_secret: body.clientSecret as string } : {}), issuer };
-  else {
-    if (body.clientSecret || !metadata.registration_endpoint) throw new Error('MCP_OAUTH_CLIENT');
+  else if (body.clientSecret) throw new Error('MCP_OAUTH_CLIENT');
+  else if (metadata.client_id_metadata_document_supported === true) client = { client_id: clientMetadataURL(env), issuer };
+  else if (metadata.registration_endpoint) {
     secureURL(metadata.registration_endpoint);
-    client = { ...await registerClient(issuer, { metadata, scope: body.scope, clientMetadata: {
-      client_name: 'Wildcard', redirect_uris: [callbackURL(env)], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none',
-    }, fetchFn: oauthFetch([metadata.registration_endpoint], 'POST') }), issuer };
-  }
+    const { client_id: _documentID, ...registrationMetadata } = clientMetadata(env);
+    client = { ...await registerClient(issuer, { metadata, scope, clientMetadata: registrationMetadata,
+      fetchFn: oauthFetch([metadata.registration_endpoint], 'POST') }), issuer };
+  } else throw new Error('MCP_OAUTH_CLIENT');
   if (size(client) > 16000) throw new Error('MCP_OAUTH_SIZE');
-  const config = { issuer, metadata, client, resource, scope: body.scope.trim() };
+  const config = { issuer, metadata, client, resource, scope };
   if (size(config) > 32000) throw new Error('MCP_OAUTH_SIZE');
   return config;
 }
+
 async function readOAuth(env: Env, connection: Connection) {
   return env.DB.prepare(`SELECT ${oauthColumns} FROM mcp_oauth WHERE connection_id = ?`).bind(connection.id).first<OAuthRow>();
 }
@@ -96,8 +118,10 @@ export async function beginOAuth(env: Env, connection: Connection, sessionID: st
   if (connection.authType !== 'oauth' || !['web', 'ios'].includes(String(body.platform))) throw new Error('MCP_OAUTH_PLATFORM');
   if (body.platform === 'web' && secureURL(env.MCP_WEB_ORIGIN).pathname !== '/') throw new Error('MCP_OAUTH_ORIGIN');
   const old = await readOAuth(env, connection);
-  const config = body.issuer !== undefined ? await prepareConfig(connection, env, body)
-    : old ? JSON.parse(await credential(env, connection, old.config, true)) as OAuthConfig : null;
+  if (body.rediscover !== undefined && typeof body.rediscover !== 'boolean') throw new Error('MCP_OAUTH_CONFIG');
+  const customized = ['issuer', 'scope', 'clientID', 'clientSecret'].some(k => typeof body[k] === 'string' && body[k].trim());
+  const config = !old || body.rediscover === true || customized ? await prepareConfig(connection, env, body)
+    : JSON.parse(await credential(env, connection, old.config, true)) as OAuthConfig;
   if (!config) throw new Error('MCP_OAUTH_CONFIG');
   const state = secret(), ticket = secret(), generation = secret(), id = crypto.randomUUID();
   const { authorizationUrl, codeVerifier } = await startAuthorization(config.issuer, { metadata: config.metadata,
@@ -130,6 +154,7 @@ oauthPublic.use('*', async (c, next) => {
   await next();
 });
 oauthPublic.onError((_error, c) => c.text('Authorization could not be completed. Return to Wildcard and try again.', 400));
+oauthPublic.get('/client-metadata', c => c.json(clientMetadata(c.env)));
 oauthPublic.get('/launch', async c => {
   if (new URL(c.req.url).searchParams.getAll('ticket').length !== 1) return c.text('Invalid authorization request.', 400);
   const ticket = c.req.query('ticket');

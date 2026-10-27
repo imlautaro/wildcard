@@ -201,3 +201,10 @@ stay encrypted in the API. Reauthorizing clears previous tool approvals. Configu
 `MCP_WEB_ORIGIN` in the API and register its displayed HTTPS callback URI with the
 provider; the web completion route is not the provider redirect URI. See the
 [OAuth lifecycle](connectors.md#oauth-setup-and-lifecycle) and pending verification.
+
+OAuth setup now discovers issuer/scopes and automatic client registration from the
+MCP URL. Technical overrides and static credentials are inside **Advanced OAuth
+settings (optional)** in web and iOS. Providers supporting client metadata documents
+use the public API metadata document; others may use DCR. Google remains a manual
+registered-client exception. See [automatic setup](connectors.md#automatic-setup-and-centralita)
+for the public Centralita metadata inspection and remaining live-flow verification.

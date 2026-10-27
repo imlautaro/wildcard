@@ -162,9 +162,9 @@ a network failure, refresh metadata before repeating a management action.
 ## Compatibility and pending verification
 
 OAuth authorization-code with S256 PKCE, public/confidential pre-registered clients,
-Dynamic Client Registration where supported, and refresh tokens are implemented.
-Implicit grants, device-code grants, client-credentials grants, OAuth client metadata
-URL registration, provider endpoints containing query parameters, legacy SSE-only
+automatic issuer/scope discovery, Client ID Metadata Documents, Dynamic Client
+Registration where supported, and refresh tokens are implemented.
+Implicit grants, device-code grants, client-credentials grants, provider endpoints containing query parameters, legacy SSE-only
 servers, stdio commands, custom headers, large paginated catalogs and non-text
 results remain unsupported. Full interoperability with a particular live server
 is not established by static checks or by this feature's Gmail preset.
@@ -197,15 +197,28 @@ Reference: [MCP SDK client](https://ts.sdk.modelcontextprotocol.io/client),
 
 ## OAuth setup and lifecycle
 
-Select **OAuth** when adding a connection. Supply the trusted authorization-server
-issuer, requested scopes, and either a registered Client ID (plus secret when
-required) or leave the Client ID empty for a provider supporting Dynamic Client
-Registration. The issuer is explicitly chosen by the user; the MCP server cannot
-silently choose where static credentials will be sent. Review the saved issuer
-and scopes in Connections before reauthorizing. Configuration is encrypted and
-never returned; only the public issuer/scope and status are displayed. If an
-operator rotates the encryption key, configuration becomes unavailable and the
-connection can still be listed/disconnected or reconfigured.
+Select **OAuth** and continue with the MCP URL. Wildcard discovers the authorization
+server from RFC 9728 metadata (including a WWW-Authenticate metadata URL), selects
+challenge scopes first and resource-supported scopes second, and chooses Client ID
+Metadata Documents or Dynamic Client Registration as advertised. It does not request
+all scopes listed by a general-purpose authorization server. If no scopes are
+advertised, scope is omitted and provider defaults/consent apply. With multiple
+advertised issuers, the first is selected deterministically; the authorization
+server's metadata issuer must match. The configured MCP server remains a trust
+boundary and must be chosen carefully.
+
+**Advanced OAuth settings (optional)** contains issuer/scope overrides and static
+Client ID/secret inputs. Leave these empty for automatic configuration. An issuer
+is mandatory only when supplying pre-registered credentials or when the server
+cannot advertise one. Static credentials are never sent to an automatically chosen
+issuer. A provider supporting neither metadata-document clients nor dynamic
+registration gets a specific manual-client-required error. Google still needs its
+own registered client; the Gmail preset expands advanced settings for this reason.
+Review the saved issuer and requested scopes before reauthorizing. Configuration
+stays encrypted; only public issuer/scope and status are displayed. Existing
+reauthorization reuses saved configuration, whereas submitting the setup form
+explicitly rediscovers/replaces it and clears previous tool approvals. A rotated
+encryption key leaves disconnect/reconfiguration available.
 
 For an independent installation, set public HTTPS `BETTER_AUTH_URL` and exact
 `MCP_WEB_ORIGIN` in that environment's versioned Worker configuration. Register:
@@ -303,9 +316,10 @@ Do not roll back to code unaware of OAuth generation or isolation tables.
 
 ## OAuth transport and verification limits
 
-Discovery is credential-free. Resource metadata stays on the MCP origin, declares
-a compatible resource and, when listing authorization servers, must include the
-explicitly pinned issuer. Older servers lacking resource metadata may use the
+Discovery is credential-free. A WWW-Authenticate resource metadata URL may be
+on another public HTTPS host, as permitted by RFC 9728, but its declared resource
+must match the MCP origin and a compatible path before its issuer is trusted.
+Explicit issuer overrides must match any advertised authorization-server list. Older servers lacking resource metadata may use the
 explicit issuer fallback. Issuer discovery is limited to the SDK's well-known
 URLs at that issuer, and the metadata issuer must match. Token exchange and refresh
 send secrets only to the exact pinned token endpoint; registration uses only the
@@ -344,3 +358,33 @@ API and web Worker configuration set `observability.redact_query_string = true`
 (supported by the pinned Wrangler schema), preserving logs/traces while removing
 query strings from captured request URLs. Verify that redaction in the automatic
 release and apply equivalent controls to any additional proxy/log exports.
+
+## Automatic setup and Centralita
+
+The public `/api/v1/mcp/oauth/client-metadata` document identifies Wildcard with
+that exact HTTPS URL as client_id and advertises only the configured API callback.
+It contains no user/session information or credentials. It is used only when the
+authorization server advertises `client_id_metadata_document_supported`; otherwise
+Wildcard uses the advertised registration endpoint. A static advanced client takes
+precedence over either automatic mechanism. Providers can fetch this public
+JSON without a Wildcard session. It uses the existing Worker/configuration and
+introduces no secret, binding, migration or new callback scheme.
+
+On October 27, 2026, a credential-free inspection of the user-supplied Centralita
+endpoint `https://centralita-api.imlautaro.workers.dev/mcp` returned a 401 challenge
+advertising the resource metadata URL and `centralita:read centralita:write`.
+Its public metadata declares the exact MCP resource, issuer at the same origin,
+`/oauth/register`, S256 PKCE and public clients (`none`). This supports the automatic
+setup path without asking a user to supply issuer, scopes or Client ID. Only
+public discovery was inspected: no client was registered, no account was connected
+and no Centralita application data was accessed. A complete browser flow and tool
+execution remain unverified.
+
+The automatic-setup change passes API/web TypeScript, complete iOS Simulator Swift
+static checking, diff checks and the existing 38-statement SQL compilation check.
+No tests/builds or deployments were run for this change. Validate CIMD and DCR
+end-to-end, scope precedence, absent/mismatched metadata, advanced overrides,
+manual-client errors, reauthorization, cancellation and both client return paths
+before claiming live-provider interoperability.
+
+Protocol reference: [MCP authorization discovery, scope selection and client registration](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization).
