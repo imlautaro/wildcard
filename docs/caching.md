@@ -18,8 +18,13 @@ empty cached lists retain their empty state during revalidation.
   same tick; overlapping requests are still prevented.
 - Conversation pull to refresh and Refresh bypass freshness. Refreshes of the same
   conversation, list, or individual contact do not overlap.
-- Sending and retrying update the cached turn immediately after server acceptance
-  and invalidate its freshness so polling can resume promptly. Changes to the last
+- Sending inserts a separate optimistic outgoing bubble before the network
+  request. It retains the submission UUID and local attachment bytes in the cached
+  store while sending, survives history refreshes, and is replaced by the matching
+  persisted turn without duplication. It never participates in server sequence or
+  read-state calculations. Unconfirmed failures remove it and restore an unchanged
+  draft. Sending and retrying update persisted cached turns after server acceptance
+  and invalidate freshness so polling can resume promptly. Changes to the last
   turn refresh the contact preview. Contact creation and rename update the local
   contact immediately and invalidate list freshness.
 - Revision checks discard responses superseded by mutations, invalidation, or a

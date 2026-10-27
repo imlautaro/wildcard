@@ -154,14 +154,26 @@ Dynamic Type and accessibility exposes Received/Read.
 
 ## Immediate composer clearing and server typing
 
-Tapping Send clears the composer immediately, before waiting for API acceptance.
-If persistence fails, the submitted text is restored only if the user has made
-no subsequent draft edits or dictation insertions. New draft text is never
-cleared by a previous request's successful completion. A failed request still
-uses ChatStore's existing idempotent submission/recovery behavior.
+Tapping Send immediately clears the submitted text/attachment from the composer
+and inserts an outgoing bubble before waiting for API acceptance. The bubble uses
+local time and a clock receipt while sending; image previews use the selected
+local bytes. Attachment preview actions become available after server acceptance.
+ChatStore holds this optimistic presentation separately from persisted history,
+so it never supplies a local sequence to pagination, read acknowledgements, or
+reply retry. Polling cannot discard it. A matching persisted UUID replaces it
+without a duplicate, using the server timestamp and normal receipts.
 
-Replies show **Typing…** only when their own turn is running and global D1 presence is `typing`. Queued turns show **Waiting for contact…**. No client timer decides whether the
-agent is generating a reply. Completed replies are never artificially delayed.
+If sending fails, the existing history recovery checks whether the same UUID was
+accepted despite the error. Only persisted history counts as acceptance. An
+unconfirmed send removes the optimistic bubble and restores the submitted text
+and attachment if there have been no subsequent draft edits. New draft text is
+never cleared by a previous request's successful completion. Retries retain the
+same UUID for unchanged content to avoid duplicate sends after uncertain results.
+The local outgoing bubble is session memory only and is cleared on invalidation.
+
+Replies show **Typing…** only when their own turn is running and global D1 presence
+is `typing`. Queued turns have no waiting label. No client timer decides whether
+the agent is generating a reply. Completed replies are never artificially delayed.
 
 ## Persisted contact presence
 

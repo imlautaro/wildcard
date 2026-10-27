@@ -76,6 +76,8 @@ struct ChatAttachmentView: View {
     let sentAt: Double
     let caption: String
     var readAt: Double? = nil
+    var isSending = false
+    var localData: Data? = nil
     @Environment(AuthStore.self) private var auth
     @State private var loading = false
     @State private var previewURL: URL?
@@ -96,7 +98,7 @@ struct ChatAttachmentView: View {
                     } else {
                         VStack(alignment: .trailing, spacing: 0) {
                             imageButton
-                            MessageTextContentView(text: caption, sentAt: sentAt, fromUser: true, readAt: readAt, fillsWidth: true)
+                            MessageTextContentView(text: caption, sentAt: sentAt, fromUser: true, readAt: readAt, isSending: isSending, fillsWidth: true)
                             .padding(.horizontal, 16).padding(.vertical, 12)
                         }
                         .frame(maxWidth: 260)
@@ -121,8 +123,12 @@ struct ChatAttachmentView: View {
             error = nil
             defer { loading = false }
             do {
-                let bytes = try await auth.withSession { api, token in
-                    try await api.chatAttachment(contactID: contactID, turnID: turnID, token: token)
+                let bytes: Data
+                if let localData { bytes = localData }
+                else {
+                    bytes = try await auth.withSession { api, token in
+                        try await api.chatAttachment(contactID: contactID, turnID: turnID, token: token)
+                    }
                 }
                 try Task.checkCancellation()
                 let decoded = await Task.detached(priority: .userInitiated) {
@@ -159,7 +165,7 @@ struct ChatAttachmentView: View {
                     Image(uiImage: thumbnail).resizable().scaledToFit()
                         .overlay(alignment: .bottomTrailing) {
                             if caption.isEmpty {
-                                MessageMetadataView(sentAt: sentAt, fromUser: true, readAt: readAt)
+                                MessageMetadataView(sentAt: sentAt, fromUser: true, readAt: readAt, isSending: isSending)
                                     .padding(.horizontal, 7).padding(.vertical, 4)
                                     .background(.black.opacity(0.6), in: Capsule())
                                     .environment(\.colorScheme, .dark)
@@ -191,7 +197,7 @@ struct ChatAttachmentView: View {
             .contentShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
         }
         .buttonStyle(.plain)
-        .disabled(loading)
+        .disabled(loading || isSending)
         .accessibilityLabel(thumbnail == nil ? "Retry loading image" : "Open image full screen: \(attachment.name)")
     }
 
@@ -226,13 +232,14 @@ struct ChatAttachmentView: View {
                     Text(attachment.name).lineLimit(2)
                     Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file)).font(.caption)
                 }
-                Image(systemName: "arrow.down.circle")
+                Image(systemName: isSending ? "clock" : "arrow.down.circle")
+                    .accessibilityLabel(isSending ? "Sending" : "Download attachment")
             }.manrope(.footnote).padding(12)
         }
         .buttonStyle(.plain)
         .background(Color("OutgoingMessageBackground"), in: MessageBubbleShape(cornerRadius: 16))
         .messageBubbleShadow()
-        .disabled(loading)
+        .disabled(loading || isSending)
     }
 
     private func clearPreview() {

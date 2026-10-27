@@ -2,7 +2,10 @@
 
 The composer has a paperclip button to the left of Message. Choose Photo library
 or Choose file, inspect the draft thumbnail/name, and remove or replace it before
-sending. A message can contain one attachment, with or without text. The right
+sending. A message can contain one attachment, with or without text. Sending
+immediately moves the attachment into an optimistic outgoing bubble; image
+thumbnails use local bytes while the request is pending. A clock indicates sending,
+and attachment preview actions wait for server acceptance. The right
 button sends when an attachment is selected; dictation remains available for an
 empty composer. Failed sends retain the draft and attachment, including the request
 identifier for uncertain network results. Images load automatically as inline thumbnails, preserving their aspect ratio.

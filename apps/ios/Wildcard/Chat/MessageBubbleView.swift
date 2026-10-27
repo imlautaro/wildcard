@@ -5,12 +5,13 @@ struct MessageBubbleView: View {
     let sentAt: Double
     let fromUser: Bool
     var readAt: Double? = nil
+    var isSending = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack {
             if fromUser { Spacer(minLength: 40) }
-            MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, readAt: readAt)
+            MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending)
             .padding(.horizontal, 16).padding(.vertical, 12)
             .foregroundStyle(Color.primary)
             .background(fromUser ? Color("OutgoingMessageBackground") : Color(uiColor: .secondarySystemBackground),
@@ -35,6 +36,7 @@ struct MessageTextContentView: View {
     let sentAt: Double
     let fromUser: Bool
     var readAt: Double? = nil
+    var isSending = false
     var fillsWidth = false
 
     var body: some View {
@@ -43,14 +45,14 @@ struct MessageTextContentView: View {
                 HStack(alignment: .lastTextBaseline, spacing: 8) {
                     messageText.fixedSize(horizontal: true, vertical: true)
                     if fillsWidth { Spacer(minLength: 0) }
-                    MessageMetadataView(sentAt: sentAt, fromUser: fromUser, readAt: readAt)
+                    MessageMetadataView(sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending)
                 }
                 .fixedSize(horizontal: !fillsWidth, vertical: false)
             }
             VStack(alignment: .trailing, spacing: 4) {
                 messageText.fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
-                MessageMetadataView(sentAt: sentAt, fromUser: fromUser, readAt: readAt)
+                MessageMetadataView(sentAt: sentAt, fromUser: fromUser, readAt: readAt, isSending: isSending)
             }
         }
     }
@@ -64,13 +66,14 @@ struct MessageMetadataView: View {
     let sentAt: Double
     let fromUser: Bool
     var readAt: Double? = nil
+    var isSending = false
 
     var body: some View {
         HStack(alignment: .lastTextBaseline, spacing: 3) {
             Text(Date(timeIntervalSince1970: sentAt / 1000), format: .dateTime.hour().minute())
                 .manrope(.caption2)
                 .foregroundStyle(.secondary)
-            if fromUser { MessageReceiptView(sentAt: sentAt, readAt: readAt) }
+            if fromUser { MessageReceiptView(sentAt: sentAt, readAt: readAt, isSending: isSending) }
         }
         .fixedSize()
     }

@@ -3,6 +3,19 @@ import Observation
 
 @Observable @MainActor
 final class ChatStore {
+    struct OutgoingMessage {
+        let turn: ChatTurn
+        let attachment: DraftAttachment?
+    }
+    private(set) var outgoingMessage: OutgoingMessage?
+    var displayedTurns: [ChatTurn] {
+        guard let outgoingMessage, !turns.contains(where: { $0.id == outgoingMessage.turn.id }) else { return turns }
+        return turns + [outgoingMessage.turn]
+    }
+    func isSubmitting(_ turnID: String) -> Bool {
+        outgoingMessage?.turn.id == turnID && !turns.contains(where: { $0.id == turnID })
+    }
+
     private(set) var presence: ContactPresence?
     private(set) var turns: [ChatTurn] = []
     private(set) var hasLoaded = false
@@ -36,6 +49,7 @@ final class ChatStore {
         newReplyIDs.removeAll()
         nextBefore = nil
         submission = nil
+        outgoingMessage = nil
         refreshedAt = nil
         isUnavailable = true
     }
@@ -119,7 +133,21 @@ final class ChatStore {
         isSending = true
         revision += 1
         error = nil
-        defer { isSending = false }
+        // Keep local presentation separate from persisted history and its server sequences.
+        let now = Date.now.timeIntervalSince1970 * 1000
+        outgoingMessage = OutgoingMessage(
+            turn: ChatTurn(
+                attachment: attachment.map { ChatAttachment(name: $0.name, mimeType: $0.mimeType, size: $0.data.count) },
+                scheduleID: nil, errorCode: nil, sequence: 0, id: submission.id,
+                userText: text, assistantText: nil, status: .queued, attempt: 0,
+                createdAt: now, readAt: nil, updatedAt: now
+            ),
+            attachment: attachment
+        )
+        defer {
+            isSending = false
+            if outgoingMessage?.turn.id == submission.id { outgoingMessage = nil }
+        }
         do {
             let turn = try await auth.withSession { api, token in
                 try await api.sendMessage(contactID: contactID, id: submission.id, text: text, attachment: attachment, token: token)

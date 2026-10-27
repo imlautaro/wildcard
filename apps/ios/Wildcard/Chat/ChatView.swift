@@ -53,7 +53,7 @@ struct ChatView: View {
                             .disabled(chat.isLoadingMore)
                     }
                     if !chat.hasLoaded && chat.error == nil { ProgressView("Loading messages…") }
-                    if chat.hasLoaded && chat.turns.isEmpty && !chat.isUnavailable {
+                    if chat.hasLoaded && chat.displayedTurns.isEmpty && !chat.isUnavailable {
                         ContentUnavailableView {
                             Label("Start a conversation", systemImage: "bubble.left.and.bubble.right")
                                 .manrope(.title2, weight: .semibold)
@@ -61,13 +61,13 @@ struct ChatView: View {
                             Text("Send your first message.").manrope()
                         }
                     }
-                    ForEach(chat.turns) { turn in
+                    ForEach(chat.displayedTurns) { turn in
                         if turn.scheduleID == nil {
                             if let attachment = turn.attachment {
-                                ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id, sentAt: turn.createdAt, caption: attachment.isImage ? turn.userText : "", readAt: turn.readAt)
+                                ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id, sentAt: turn.createdAt, caption: attachment.isImage ? turn.userText : "", readAt: turn.readAt, isSending: chat.isSubmitting(turn.id), localData: chat.outgoingMessage?.turn.id == turn.id ? chat.outgoingMessage?.attachment?.data : nil)
                             }
                             if !turn.userText.isEmpty && turn.attachment?.isImage != true {
-                                MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true, readAt: turn.readAt)
+                                MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true, readAt: turn.readAt, isSending: chat.isSubmitting(turn.id))
                             }
                         }
                         if let reply = turn.assistantText {
@@ -88,9 +88,6 @@ struct ChatView: View {
                                 }
                         } else if turn.status == .running && chat.presence?.status == .typing {
                             ReplyTypingIndicator()
-                        } else if turn.status == .queued {
-                            Text("Waiting for contact…").manrope(.footnote).foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
                         } else if turn.status == .failed {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(turn.errorCode == "SCHEDULE_CANCELLED" ? "Scheduled message cancelled." : "The reply could not be completed.").manrope(.footnote).foregroundStyle(.secondary)
@@ -105,12 +102,12 @@ struct ChatView: View {
                 }
                 .padding()
                 .animation(animateNewMessages ? .easeOut(duration: reduceMotion ? 0.15 : 0.22) : nil,
-                           value: chat.turns.last)
+                           value: chat.displayedTurns.last)
             }
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
-            .onChange(of: chat.turns.last) { _, _ in
+            .onChange(of: chat.displayedTurns.last) { _, _ in
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { proxy.scrollTo("latest", anchor: .bottom) }
                 Task { try? await contacts.refreshContact(id: contactID, using: auth) }
             }
@@ -370,11 +367,12 @@ struct ChatView: View {
                         let submitted = draft
                         let submittedRevision = draftRevision
                         draft = ""
+                        attachment = nil
                         Task {
                             let accepted = await chat.send(text: submitted, attachment: submittedAttachment, contactID: contactID, using: auth)
-                            if accepted, attachment?.id == submittedAttachment?.id { attachment = nil }
                             if !accepted, draftRevision == submittedRevision, draft.isEmpty {
                                 draft = submitted
+                                if attachment == nil { attachment = submittedAttachment }
                             }
                         }
                     }

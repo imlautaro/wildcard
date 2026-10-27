@@ -3,6 +3,7 @@ import SwiftUI
 struct MessageReceiptView: View {
     let sentAt: Double
     var readAt: Double? = nil
+    var isSending = false
     @Environment(\.colorScheme) private var colorScheme
     @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 16
     @ScaledMetric(relativeTo: .caption2) private var height: CGFloat = 9.6
@@ -13,12 +14,19 @@ struct MessageReceiptView: View {
     }
 
     var body: some View {
-        ReceiptChecks(doubled: true)
-            .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
-            .foregroundStyle(readAt != nil ? readColor : Color.secondary)
-            .frame(width: width, height: height)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(readAt != nil ? "Read" : "Received")
+        if isSending {
+            Image(systemName: "clock")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Sending")
+        } else {
+            ReceiptChecks(doubled: true)
+                .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+                .foregroundStyle(readAt != nil ? readColor : Color.secondary)
+                .frame(width: width, height: height)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(readAt != nil ? "Read" : "Received")
+        }
     }
 }
 
