@@ -91,7 +91,7 @@ photos and mutations require current membership. Responses have `no-store`.
 
 | Method/path | Purpose |
 | --- | --- |
-| GET / | Up to 100 memberships, latest message preview, model consent flag |
+| GET / | Up to 100 memberships, preview/time/sender, per-member `unreadCount`/`lastReadSequence`, up to 50 unread `activity` events, model consent flag |
 | POST / | Create with `name`, `shareMemory`, `contributorConsent`; returns `id` |
 | GET /invitations | Pending invitations for the signed-in recipient |
 | POST /invitations/:id/accept | Explicit consent; returns group `id` |
@@ -110,6 +110,7 @@ photos and mutations require current membership. Responses have `no-store`.
 | DELETE /:id/members/:userID | Remove a human or leave |
 | DELETE /:id | Owner deletes group |
 | GET /:id/messages?before=sequence | History, `messages` and `nextBefore` |
+| PUT /:id/read | Acknowledge displayed `sequence` for the current member |
 | POST /:id/messages | Submit UUID `id`, `text` and optional base64 `attachment`; HTTP 202 after persistence |
 | POST /:id/replies/:replyID/retry | Retry a failed reply after active work finishes |
 | GET /:id/photos/:kind/:memberID | Current member avatar, kind `user` or `agent` |
@@ -136,8 +137,20 @@ animations. The group header aligns its 38-point identity and compact title/memb
 subtitle beside the back button, matching the individual chat header layout.
 
 Groups support text, image/PDF attachments, voice dictation and foreground polling.
-Group push notifications, unread badges and schedules are not implemented.
-Groups appear in a separate section of Chats. Group identity avatars and message
+Group push alerts, per-member unread counts and foreground notifications are
+implemented; group schedules are not implemented.
+Groups and individual conversations appear together in one plain Chats list,
+ordered by the latest message timestamp with stable type-prefixed ID ties. Group
+rows use the same avatar/name/preview/date layout and no disclosure chevron.
+The preview renders **Sender: message**, with only the sender prefix in bold,
+using the name stored with that message. Line breaks collapse to spaces; attachment-
+only messages show the attachment label. Both row types share date formatting:
+local time today, Yesterday, weekday for two–six days ago, then dd/MM/yyyy.
+An empty group has no date and keeps its creation-time sorting fallback. Older
+groups wait behind the current private-chat page boundary until Load more reaches
+them, so unloaded newer private chats cannot be skipped. Older API responses may
+omit the new optional sender/time fields; rows retain their preview and use the
+existing activity timestamp as a fallback when a message exists. Group identity avatars and message
 images use the same bounded account-scoped protected image cache as private chats.
 Human/contact member avatars remain in view memory. Lost group membership or a
 group-history 404 conservatively clears the account image cache; logout clears it.
@@ -185,8 +198,8 @@ provider model, secret or storage service is required.
 
 ## Setup and verification
 
-See [infrastructure](infrastructure.md#group-conversations). Migrations `0016` and
-`0017` are additive and use existing D1, R2, Workflow, Cron and Meta bindings; no new
+See [infrastructure](infrastructure.md#group-conversations). Migrations `0016`,
+`0017` and `0018` are additive and use existing D1, R2, Workflow, Cron and Meta bindings; no new
 resource, secret, APNs topic, dependency or manual deployment is required.
 
 Static checks cover TypeScript, full Swift type checking and temporary SQLite
@@ -201,3 +214,55 @@ editing/removal, non-owner photo rejection, group image/PDF sending/preview,
 attachment-only messages, idempotent file retries, revoked file access, orphan
 cleanup, voice permission/stop/cancel/retry/background interruption, avatars,
 header overflow/Reduce Motion, Dynamic Type and keyboard layout on a device.
+
+
+## Notifications and unread messages
+
+Every new message from a different human or any contact counts as unread for each
+current human member until their read watermark advances. Your own messages do
+not count or notify your other devices. Opening the group acknowledges its loaded
+history only while the chat is visible and the app is active; Home, group details
+and background polling never acknowledge it. Counts appear on group rows, the
+Chats tab and the app icon, combined with private unread replies. `PUT /:id/read`
+accepts a positive displayed sequence, never moves backwards, clamps it to actual
+group history and removes read notifications from the server outbox. It has a
+separate 120-per-minute read-update budget. Stale list responses cannot overwrite
+a locally confirmed read state.
+
+Migration 0018 initializes existing memberships at the current history boundary,
+because earlier versions recorded no group read history. It does not infer old
+unread messages or send historical push alerts. Newly accepted members start with
+existing history read; messages saved after joining count normally.
+
+An SQL trigger creates a persistent per-device outbox in the same transaction as
+human and bot messages. It excludes the author and requires a current member,
+registered device and unexpired session. Human submission and the bot Workflow
+attempt immediate delivery; Cron retries missing attempts. Membership removal,
+logout/expired session, read acknowledgment and device reassignment are checked
+again before sending. Deletion cascades cancel queued group deliveries. APNs
+already accepted before revocation/read cannot be retracted across other devices.
+
+Alerts show the group title, sender subtitle and message or attachment label,
+with `groupID`, recipient `userID`, message ID/sequence and source time for routing.
+They use the existing background sound, Apple topic/provider secrets and device
+registration. Payloads remain bounded to 4096 UTF-8 bytes. Bot IDs are hashed for
+the 64-byte APNs collapse-ID limit. These are standard group alerts using the app
+icon; private-contact communication-avatar notifications keep their existing path.
+
+While active outside the group, a remote alert presents a system banner and the
+foreground chime. Three-second group polling also supplies bounded unread activity
+as a local foreground fallback. Stable message IDs deduplicate the banner and
+sound across polling/APNs. While viewing the group, a new received bubble uses
+the in-chat sound after insertion, with no banner. Outgoing sound requires server
+acceptance. Old messages from before foreground activation do not replay sounds
+or local alerts. Alert display respects system notification permissions; the app
+uses its existing foreground sound behavior. Reading advances the local watermark
+and removes that group's delivered notifications up to the acknowledged sequence.
+Account changes clear local notification state; taps route only to the matching
+signed-in account and still require server membership on history reads.
+
+Delivery uses the existing bounded batches (30 entries, five concurrent sends),
+two-minute claims, backoff, eight attempts and 24-hour expiry. Delivery is retryable,
+not exactly once; delayed accepted alerts can outlive an already displayed local
+fallback. No remote push or device behavior was exercised during implementation.
+See [notifications](notifications.md#group-notifications) for setup and checks.

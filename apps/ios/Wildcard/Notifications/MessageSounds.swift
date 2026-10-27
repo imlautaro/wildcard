@@ -48,6 +48,22 @@ final class MessageSounds {
         play(visibleContactID == contactID ? "mixkit-hard-pop-click-2364" : "mixkit-alert-quick-chime-766")
     }
 
+    static func groupConversationID(_ id: String) -> String { "group/\(id)" }
+
+    func canNotify(userID: String, completedAt: Date) -> Bool {
+        self.userID == userID && activeSince.map { completedAt >= $0 } == true
+            && UIApplication.shared.applicationState == .active
+    }
+
+    func sentGroup(messageID: String, groupID: String) {
+        sent(turnID: "group/\(messageID)", contactID: Self.groupConversationID(groupID))
+    }
+
+    func receivedGroup(messageID: String, groupID: String, userID: String, completedAt: Date, isVisible: Bool = false) {
+        received(turnID: "group/\(messageID)", contactID: Self.groupConversationID(groupID), userID: userID,
+                 completedAt: completedAt, replyIsVisible: isVisible)
+    }
+
     private func play(_ name: String) {
         guard userID != nil, activeSince != nil, UIApplication.shared.applicationState == .active else { return }
         if sounds[name] == nil {

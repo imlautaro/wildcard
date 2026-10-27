@@ -8,8 +8,22 @@ struct ChatGroup: Decodable, Hashable, Identifiable {
     let createdAt: Double
     let updatedAt: Double
     let lastMessageText: String?
+    let lastMessageAt: Double?
+    let lastMessageSenderName: String?
     let photoVersion: String?
+    var unreadCount: Int?
+    var lastReadSequence: Int?
 }
+struct GroupActivity: Decodable {
+    let messageID: String
+    let sequence: Int
+    let groupID: String
+    let groupName: String
+    let senderName: String
+    let sentAt: Double
+    let text: String
+}
+struct GroupReadState: Decodable { let lastReadSequence: Int; let unreadCount: Int }
 struct GroupMember: Decodable, Hashable, Identifiable {
     let id: String
     let kind: String
@@ -52,7 +66,11 @@ struct GroupInvitation: Decodable, Identifiable {
     let senderName: String
     let expiresAt: Double
 }
-struct GroupListResponse: Decodable { let groups: [ChatGroup]; let contributorModel: Bool }
+struct GroupListResponse: Decodable {
+    let groups: [ChatGroup]
+    let activity: [GroupActivity]?
+    let contributorModel: Bool
+}
 struct GroupInvitationsResponse: Decodable { let invitations: [GroupInvitation]; let contributorModel: Bool }
 struct GroupIDResponse: Decodable { let id: String }
 
@@ -77,20 +95,59 @@ final class GroupsStore {
     private(set) var hasLoaded = false
     private(set) var isLoading = false
     var error: String?
+    private var readRevision = 0
+    private var reading: Set<String> = []
+    private var readSequences: [String: Int] = [:]
+    var totalUnreadCount: Int { groups.reduce(0) { $0 + max(0, $1.unreadCount ?? 0) } }
 
-    func refresh(using auth: AuthStore) async {
+    func markRead(id: String, sequence: Int, using auth: AuthStore) async {
+        guard sequence > (readSequences[id] ?? 0), reading.insert(id).inserted else { return }
+        defer { reading.remove(id) }
+        do {
+            let data = try await GroupService.data("\(id)/read", method: "PUT", input: ["sequence": sequence], auth: auth)
+            let state = try JSONDecoder().decode(GroupReadState.self, from: data)
+            guard state.lastReadSequence >= (readSequences[id] ?? 0) else { return }
+            readSequences[id] = state.lastReadSequence
+            readRevision += 1
+            if let index = groups.firstIndex(where: { $0.id == id }) {
+                groups[index].unreadCount = state.unreadCount
+                groups[index].lastReadSequence = state.lastReadSequence
+            }
+            if let userID = auth.user?.id {
+                PushNotifications.shared.noteGroupRead(id: id, sequence: state.lastReadSequence, userID: userID)
+            }
+        } catch { /* Optional read synchronization retries on the next visible refresh. */ }
+    }
+
+    func refresh(using auth: AuthStore, refreshInvitations: Bool = true) async {
         guard !isLoading else { return }
         isLoading = true
+        let revision = readRevision
         defer { isLoading = false }
         do {
             let list = try await GroupService.read(GroupListResponse.self, auth: auth)
-            let inbox = try await GroupService.read(GroupInvitationsResponse.self, path: "invitations", auth: auth)
+            if refreshInvitations {
+                let inbox = try await GroupService.read(GroupInvitationsResponse.self, path: "invitations", auth: auth)
+                invitations = inbox.invitations
+            }
+            guard revision == readRevision else { return }
             if hasLoaded, !Set(groups.map(\.id)).subtracting(list.groups.map(\.id)).isEmpty {
                 await auth.images.clear(deactivate: false)
             }
+            guard revision == readRevision else { return }
             groups = list.groups
             contributorModel = list.contributorModel
-            invitations = inbox.invitations
+            for group in groups {
+                if let sequence = group.lastReadSequence, let userID = auth.user?.id {
+                    readSequences[group.id] = max(readSequences[group.id] ?? 0, sequence)
+                    PushNotifications.shared.noteGroupRead(id: group.id, sequence: sequence, userID: userID)
+                }
+            }
+            if let userID = auth.user?.id {
+                for activity in (list.activity ?? []).reversed() {
+                    PushNotifications.shared.presentGroupActivity(activity, userID: userID)
+                }
+            }
             error = nil
             hasLoaded = true
         } catch is CancellationError { }
@@ -102,6 +159,7 @@ final class GroupsStore {
 final class GroupChatStore {
     private(set) var snapshot: GroupSnapshot?
     private(set) var messages: [GroupMessage] = []
+    private(set) var newIncomingMessageIDs: Set<String> = []
     private(set) var nextBefore: Int?
     private(set) var isLoading = false
     private(set) var isSending = false
@@ -139,6 +197,10 @@ final class GroupChatStore {
             }
             snapshot = state
             if messages.isEmpty { nextBefore = page.nextBefore }
+            let knownIDs = Set(messages.map(\.id))
+            newIncomingMessageIDs = Set(incoming.filter {
+                !knownIDs.contains($0.id) && $0.userID != auth.user?.id && $0.sequence > (state.group.lastReadSequence ?? 0)
+            }.map(\.id))
             merge(incoming)
             if let pending, messages.contains(where: { $0.id == pending.id }) { self.pending = nil }
             error = nil
@@ -148,6 +210,7 @@ final class GroupChatStore {
             snapshot = nil
             nextBefore = nil
             messages = []
+            newIncomingMessageIDs = []
             pending = nil
             await auth.images.clear(deactivate: false)
             self.error = "This group is no longer available."
@@ -183,6 +246,7 @@ final class GroupChatStore {
             try await auth.withSession { api, token in
                 try await api.sendGroupMessage(groupID: id, id: submitted.id, text: submitted.text, attachment: submitted.attachment, token: token)
             }
+            MessageSounds.shared.sentGroup(messageID: submitted.id, groupID: id)
             if let file = submitted.attachment, file.mimeType.hasPrefix("image/") {
                 await auth.images.store(file.data, for: .groupAttachment(groupID: id, messageID: submitted.id))
             }

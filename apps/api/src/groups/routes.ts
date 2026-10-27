@@ -1,3 +1,4 @@
+import { deliverGroupPush } from './push';
 import media, { groupPhotoKey } from './media';
 import { removePhoto } from '../photos/storage';
 import { parseAttachment, sameAttachment, publicAttachment } from '../chat/attachments';
@@ -17,8 +18,12 @@ const membership = (db: D1Database, id: string, user: string) => db.prepare(`SEL
   WHERE m.group_id = ? AND m.user_id = ?`).bind(id, user).first<{ canInvite: number; ownerID: string }>();
 const mayInvite = `EXISTS (SELECT 1 FROM group_member m JOIN chat_group g ON g.id = m.group_id
   WHERE m.group_id = ?1 AND m.user_id = ?2 AND (m.can_invite = 1 OR g.owner_id = ?2))`;
-const summary = `g.id, g.name, g.owner_id AS ownerID, g.created_at AS createdAt, g.photo_version AS photoVersion,
+const summary = `m.last_read_sequence AS lastReadSequence,
+  (SELECT COUNT(*) FROM group_message gm WHERE gm.group_id = g.id AND gm.sequence > m.last_read_sequence
+    AND gm.user_id IS NOT m.user_id) AS unreadCount, g.id, g.name, g.owner_id AS ownerID, g.created_at AS createdAt, g.photo_version AS photoVersion,
   (SELECT CASE WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
+  (SELECT created_at FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageAt,
+  (SELECT sender_name FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageSenderName,
   COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt`;
 
 groups.use('*', async (c, next) => {
@@ -34,7 +39,7 @@ groups.use('*', async (c, next) => {
   return bodyLimit({ maxSize, onError: (c) => c.json({ error: 'File or request is too large' }, 413) })(c, next);
 });
 groups.use('*', async (c, next) => {
-  if (c.req.method !== 'GET') {
+  if (c.req.method !== 'GET' && !c.req.path.endsWith('/read')) {
     const admission = await admitAuthRequest(c.env.DB, c.get('owner'), 'group-write', 40);
     if (!admission.allowed) return c.json({ error: 'Too many requests. Please wait a minute.' }, 429);
   }
@@ -44,7 +49,13 @@ groups.use('*', async (c, next) => {
 groups.get('/', async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT ${summary} FROM chat_group g JOIN group_member m ON m.group_id = g.id
     WHERE m.user_id = ? ORDER BY updatedAt DESC, g.id LIMIT 100`).bind(c.get('owner')).all();
-  return c.json({ groups: results, contributorModel: contributor(c.env) });
+  const { results: activity } = await c.env.DB.prepare(`SELECT gm.id AS messageID, gm.sequence, gm.group_id AS groupID,
+    g.name AS groupName, gm.sender_name AS senderName, gm.created_at AS sentAt,
+    substr(CASE WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END, 1, 500) AS text
+    FROM group_message gm JOIN group_member m ON m.group_id = gm.group_id JOIN chat_group g ON g.id = gm.group_id
+    WHERE m.user_id = ? AND gm.sequence > m.last_read_sequence AND gm.user_id IS NOT m.user_id
+    ORDER BY gm.sequence DESC LIMIT 50`).bind(c.get('owner')).all();
+  return c.json({ groups: results, activity, contributorModel: contributor(c.env) });
 });
 groups.post('/', async (c) => {
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
@@ -104,7 +115,8 @@ groups.get('/:id', async (c) => {
   const id = c.req.param('id'), owner = c.get('owner');
   const member = await membership(c.env.DB, id, owner);
   if (!member) return c.json({ error: 'Group unavailable' }, 404);
-  const group = await c.env.DB.prepare(`SELECT ${summary} FROM chat_group g WHERE id = ?`).bind(id).first();
+  const group = await c.env.DB.prepare(`SELECT ${summary} FROM chat_group g JOIN group_member m ON m.group_id = g.id
+    WHERE g.id = ? AND m.user_id = ?`).bind(id, owner).first();
   const { results: members } = await c.env.DB.prepare(`SELECT u.id, 'user' AS kind, u.name, u.photo_version AS photoVersion,
     m.can_invite AS canInvite, NULL AS addedBy FROM group_member m JOIN user u ON u.id = m.user_id WHERE m.group_id = ?
     UNION ALL SELECT a.id, 'agent', a.name, a.photo_version, 0, ga.added_by FROM group_agent ga
@@ -205,6 +217,26 @@ groups.get('/:id/messages', async (c) => {
   const page = results.slice(0, 50);
   return c.json({ messages: page.reverse().map(({ attachmentJSON, ...message }) => ({ ...message, attachment: publicAttachment({ attachmentJSON }) })), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
+groups.put('/:id/read', async (c) => {
+  const admission = await admitAuthRequest(c.env.DB, c.get('owner'), 'group-read', 120);
+  if (!admission.allowed) return c.json({ error: 'Too many read updates' }, 429);
+  const b = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (typeof b?.sequence !== 'number' || !Number.isSafeInteger(b.sequence) || b.sequence < 1) {
+    return c.json({ error: 'Provide the last displayed message sequence' }, 400);
+  }
+  const id = c.req.param('id'), owner = c.get('owner');
+  const member = await c.env.DB.prepare(`UPDATE group_member SET last_read_sequence = MAX(last_read_sequence,
+    COALESCE((SELECT MAX(sequence) FROM group_message WHERE group_id = ?1 AND sequence <= ?3), 0))
+    WHERE group_id = ?1 AND user_id = ?2 RETURNING last_read_sequence AS lastReadSequence`)
+    .bind(id, owner, b.sequence).first<{ lastReadSequence: number }>();
+  if (!member) return c.json({ error: 'Group unavailable' }, 404);
+  await c.env.DB.prepare(`DELETE FROM group_push_delivery WHERE group_id = ? AND user_id = ? AND message_id IN (
+    SELECT id FROM group_message WHERE group_id = ? AND sequence <= ?)`)
+    .bind(id, owner, id, member.lastReadSequence).run();
+  const unread = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM group_message WHERE group_id = ?
+    AND sequence > ? AND user_id IS NOT ?`).bind(id, member.lastReadSequence, owner).first<{ count: number }>();
+  return c.json({ ...member, unreadCount: unread?.count ?? 0 });
+});
 groups.post('/:id/messages', async (c) => {
   const id = c.req.param('id'), owner = c.get('owner');
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
@@ -249,6 +281,7 @@ groups.post('/:id/messages', async (c) => {
     .bind(b.id, id, owner).first<{ id: string; text: string; attachmentJSON: string | null }>();
   if (!saved || saved.text !== b.text.trim() || !sameAttachment(saved, attachment?.metadata)) return c.json({ error: 'The group queue is full or model consent is required' }, 409);
   c.executionCtx.waitUntil(dispatchGroup(c.env, id));
+  c.executionCtx.waitUntil(deliverGroupPush(c.env, saved.id));
   return c.json({ id: saved.id }, 202);
 });
 groups.post('/:id/replies/:replyID/retry', async (c) => {

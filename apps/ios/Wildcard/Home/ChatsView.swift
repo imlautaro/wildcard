@@ -5,6 +5,7 @@ struct ChatsView: View {
     var mode: Mode = .chats
     let openContact: (Contact) -> Void
     let editContact: (Contact) -> Void
+    let openGroup: (ChatGroup) -> Void
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
     @Environment(GroupsStore.self) private var groups
@@ -23,28 +24,53 @@ struct ChatsView: View {
         }
     }
 
+    private var chatEntries: [ChatListEntry] {
+        var entries = displayedContacts.map(ChatListEntry.contact)
+        // Defer older groups until private-chat pagination reaches their timestamp.
+        // This avoids putting them ahead of newer private chats on unloaded pages.
+        let boundary = contacts.nextCursor?.split(separator: ":", maxSplits: 1).first.flatMap { Double($0) }
+        entries += groups.groups.filter { group in
+            boundary.map { (group.lastMessageAt ?? group.updatedAt) >= $0 } ?? true
+        }.map(ChatListEntry.group)
+        return entries.sorted {
+            let first = $0.timestamp(using: contacts)
+            let second = $1.timestamp(using: contacts)
+            return first == second ? $0.id > $1.id : first > second
+        }
+    }
+
+    private func contactRow(_ contact: Contact) -> some View {
+        Button { openContact(contact) } label: {
+            if mode == .chats {
+                ChatListRow(contact: contact)
+            } else {
+                HStack(spacing: 12) {
+                    ContactAvatar(contact: contact, size: 48)
+                    Text(contact.name).manrope(.body, weight: .semibold).foregroundStyle(.primary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 4).contentShape(Rectangle())
+            }
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button("Delete", role: .destructive) { deletion = contact }
+            if contact.canManage { Button("Edit") { editContact(contact) }.tint(.accentColor) }
+        }
+        .contextMenu {
+            if contact.canManage { Button("Edit") { editContact(contact) } }
+            Button("Delete", role: .destructive) { deletion = contact }
+        }
+        .disabled(contacts.isMutating)
+    }
+
     var body: some View {
+        let entries = chatEntries
         List {
             if mode == .chats {
                 if let error = groups.error {
                     Text(error).manrope(.footnote).foregroundStyle(.red)
                     Button("Refresh groups") { Task { await groups.refresh(using: auth) } }
-                }
-                if !groups.groups.isEmpty {
-                    Section("Groups") {
-                        ForEach(groups.groups) { group in
-                            NavigationLink(value: HomeDestination.group(group.id)) {
-                                HStack(spacing: 12) {
-                                    GroupPhotoAvatar(group: group, size: 48)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(group.name).manrope(.body, weight: .semibold)
-                                        Text(group.lastMessageText ?? "No messages yet").manrope(.subheadline).foregroundStyle(.secondary).lineLimit(2)
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                            }
-                        }
-                    }
                 }
             }
             if mode == .contacts {
@@ -91,44 +117,35 @@ struct ChatsView: View {
                     Button("Dismiss") { self.mutationError = nil }
                 }
             }
-            if !displayedContacts.isEmpty {
+            if mode == .chats && !entries.isEmpty {
                 Section {
-                    ForEach(displayedContacts) { contact in
-                        Button {
-                            openContact(contact)
-                        } label: {
-                            if mode == .chats {
-                                ChatListRow(contact: contact)
-                            } else {
-                                HStack(spacing: 12) {
-                                    ContactAvatar(contact: contact, size: 48)
-                                    Text(contact.name).manrope(.body, weight: .semibold)
-                                        .foregroundStyle(.primary)
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(.vertical, 4)
-                                .contentShape(Rectangle())
+                    ForEach(entries) { entry in
+                        Group {
+                            switch entry {
+                            case .contact(let contact):
+                                contactRow(contact)
+                            case .group(let group):
+                                Button { openGroup(group) } label: { GroupChatListRow(group: group) }
+                                    .buttonStyle(.plain)
                             }
                         }
-                        .buttonStyle(.plain)
-                        .listRowSeparator(contact.id == displayedContacts.first?.id ? .hidden : .visible, edges: .top)
-                        .listRowSeparator(contact.id == displayedContacts.last?.id ? .hidden : .visible, edges: .bottom)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button("Delete", role: .destructive) { deletion = contact }
-                            if contact.canManage {
-                                Button("Edit") { editContact(contact) }.tint(.accentColor)
-                            }
-                        }
-                        .contextMenu {
-                            if contact.canManage { Button("Edit") { editContact(contact) } }
-                            Button("Delete", role: .destructive) { deletion = contact }
-                        }
-                        .disabled(contacts.isMutating)
+                        .listRowSeparator(entry.id == entries.first?.id ? .hidden : .visible, edges: .top)
+                        .listRowSeparator(entry.id == entries.last?.id ? .hidden : .visible, edges: .bottom)
                     }
                 }
                 .listSectionSeparator(.hidden, edges: .all)
             }
-            if contacts.nextCursor != nil && mode == .chats && !displayedContacts.isEmpty {
+            if mode == .contacts && !displayedContacts.isEmpty {
+                Section {
+                    ForEach(displayedContacts) { contact in
+                        contactRow(contact)
+                            .listRowSeparator(contact.id == displayedContacts.first?.id ? .hidden : .visible, edges: .top)
+                            .listRowSeparator(contact.id == displayedContacts.last?.id ? .hidden : .visible, edges: .bottom)
+                    }
+                }
+                .listSectionSeparator(.hidden, edges: .all)
+            }
+            if contacts.nextCursor != nil && mode == .chats && !entries.isEmpty {
                 Button("Load more") { Task { await contacts.loadMore(using: auth) } }
                     .disabled(contacts.isLoading || contacts.isLoadingMore || contacts.isMutating)
             }
@@ -141,8 +158,8 @@ struct ChatsView: View {
         }
         .listStyle(.plain)
         .overlay {
-            if mode == .chats && displayedContacts.isEmpty && groups.groups.isEmpty && groups.error == nil && contacts.error == nil && mutationError == nil {
-                if !contacts.hasLoaded || contacts.nextCursor != nil {
+            if mode == .chats && entries.isEmpty && groups.error == nil && contacts.error == nil && mutationError == nil {
+                if !contacts.hasLoaded || !groups.hasLoaded || contacts.nextCursor != nil {
                     ProgressView("Loading contacts…")
                 } else {
                     ContentUnavailableView {
@@ -159,7 +176,10 @@ struct ChatsView: View {
             await groups.refresh(using: auth)
             if mode == .contacts { await invitations.refresh(using: auth, force: true) }
         }
-        .task { await contacts.refresh(using: auth, force: false) }
+        .task {
+            await contacts.refresh(using: auth, force: false)
+            if mode == .chats { await groups.refresh(using: auth) }
+        }
         .task(id: "\(contacts.nextCursor ?? "")-\(contacts.isLoading)-\(contacts.isMutating)") {
             // Load the complete directory, or skip empty pages until Chats has rows.
             while !Task.isCancelled, contacts.error == nil,
@@ -208,21 +228,6 @@ private struct ChatListRow: View {
             .joined(separator: " ")
     }
 
-    private func lastMessageTime(_ timestamp: Double, relativeTo now: Date) -> String {
-        let date = Date(timeIntervalSince1970: timestamp / 1000)
-        let calendar = Calendar.current
-        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date),
-                                           to: calendar.startOfDay(for: now)).day ?? 0
-        if days == 0 { return date.formatted(.dateTime.hour().minute()) }
-        if days == 1 { return "Yesterday" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = .current
-        formatter.dateFormat = (2...6).contains(days) ? "EEEE" : "dd/MM/yyyy"
-        return formatter.string(from: date)
-    }
-
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             ContactAvatar(contact: contact, size: 48)
@@ -237,12 +242,7 @@ private struct ChatListRow: View {
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 6) {
                 if let timestamp = contacts.lastMessageTimestamp(for: contact) {
-                    TimelineView(.periodic(from: .now, by: 60)) { context in
-                        Text(lastMessageTime(timestamp, relativeTo: context.date))
-                            .manrope(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                    ChatListTimestamp(timestamp: timestamp)
                 }
                 if let count = contact.unreadCount, count > 0 {
                     Text(count > 99 ? "99+" : String(count))
@@ -262,4 +262,90 @@ private struct ChatListRow: View {
             await contacts.loadMessageTimestamp(for: contact, using: auth)
         }
     }
+}
+
+private enum ChatListEntry: Identifiable {
+    case contact(Contact)
+    case group(ChatGroup)
+
+    var id: String {
+        switch self {
+        case .contact(let contact): "contact/\(contact.id)"
+        case .group(let group): "group/\(group.id)"
+        }
+    }
+    func timestamp(using contacts: ContactsStore) -> Double {
+        switch self {
+        case .contact(let contact): contacts.lastMessageTimestamp(for: contact) ?? contact.createdAt
+        case .group(let group): group.lastMessageAt ?? group.updatedAt
+        }
+    }
+}
+
+private struct GroupChatListRow: View {
+    let group: ChatGroup
+    @ScaledMetric(relativeTo: .subheadline) private var previewSize: CGFloat = 15
+
+    private var messagePreview: AttributedString {
+        let message = group.lastMessageText?.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ") ?? "No messages yet"
+        guard let sender = group.lastMessageSenderName, !sender.isEmpty else { return AttributedString(message) }
+        var preview = AttributedString(sender + ": ")
+        preview.font = Font(AppTypography.font(size: previewSize, weight: .bold))
+        preview += AttributedString(message)
+        return preview
+    }
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            GroupPhotoAvatar(group: group, size: 48)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(group.name).manrope(.body, weight: .semibold).foregroundStyle(.primary).lineLimit(1)
+                Text(messagePreview).manrope(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 6) {
+                if let timestamp = group.lastMessageAt ?? (group.lastMessageText == nil ? nil : group.updatedAt) {
+                    ChatListTimestamp(timestamp: timestamp)
+                }
+                if let count = group.unreadCount, count > 0 {
+                    Text(count > 99 ? "99+" : String(count))
+                        .manrope(.caption, weight: .bold).foregroundStyle(.white)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(Color.accentColor, in: Capsule())
+                        .accessibilityLabel("\(count) unread messages")
+                }
+            }
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct ChatListTimestamp: View {
+    let timestamp: Double
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            Text(lastMessageTime(timestamp, relativeTo: context.date))
+                .manrope(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }
+    }
+
+    private func lastMessageTime(_ timestamp: Double, relativeTo now: Date) -> String {
+        let date = Date(timeIntervalSince1970: timestamp / 1000)
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date),
+                                           to: calendar.startOfDay(for: now)).day ?? 0
+        if days == 0 { return date.formatted(.dateTime.hour().minute()) }
+        if days == 1 { return "Yesterday" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = .current
+        formatter.dateFormat = (2...6).contains(days) ? "EEEE" : "dd/MM/yyyy"
+        return formatter.string(from: date)
+    }
+
 }

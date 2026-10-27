@@ -1,5 +1,5 @@
 import { scheduleAllowed } from '../schedules/data';
-import { totalUnreadReplies } from '../lib/unread';
+import { totalUnreadMessages } from '../lib/unread';
 import { pushPhotoURL } from '../photos/push-access';
 import { replyPayload } from './payload';
 
@@ -27,7 +27,7 @@ export function enqueueReply(db: D1Database, turnID: string, attempt: number, no
     .bind(now, now + 86_400_000, turnID, attempt);
 }
 
-async function providerToken(env: PushEnvironment): Promise<string> {
+export async function providerToken(env: PushEnvironment): Promise<string> {
   const header = Buffer.from(JSON.stringify({ alg: 'ES256', kid: env.APNS_KEY_ID })).toString('base64url');
   const claims = Buffer.from(JSON.stringify({ iss: env.APNS_TEAM_ID, iat: Math.floor(Date.now() / 1000) })).toString('base64url');
   const input = `${header}.${claims}`;
@@ -83,30 +83,12 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
       if (!alert) return;
       const photoURL = alert.photoVersion
         ? await pushPhotoURL(env, item.contactID, alert.photoVersion, item.sessionID, item.expiresAt) : undefined;
-      const unreadCount = await totalUnreadReplies(env.DB, item.userID);
+      const unreadCount = await totalUnreadMessages(env.DB, item.userID);
       if (!await env.DB.prepare(`SELECT id FROM chat_turn t WHERE id = ? AND ${scheduleAllowed('t')}`)
         .bind(item.turnID).first()) return;
-      const host = item.environment === 'development' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
-      const response = await fetch(`https://${host}/3/device/${item.token}`, {
-        method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(15_000),
-        headers: {
-          authorization: `bearer ${jwt}`, 'content-type': 'application/json',
-          'apns-topic': env.APNS_TOPIC!, 'apns-push-type': 'alert', 'apns-priority': '10',
-          'apns-expiration': String(Math.floor(item.expiresAt / 1000)), 'apns-collapse-id': item.turnID,
-        },
-        body: replyPayload({ ...alert, turnID: item.turnID, photoURL, unreadCount, contactID: item.contactID, userID: item.userID }),
-      });
-      // Only inspect Apple's bounded reason field; never log tokens or message data.
-      let reason: string | undefined;
-      if (!response.ok) {
-        const reader = response.body?.getReader();
-        try {
-          const chunk = await reader?.read();
-          if (chunk?.value && chunk.value.byteLength <= 2048) {
-            try { reason = (JSON.parse(new TextDecoder().decode(chunk.value)) as { reason?: string }).reason; } catch { /* Retry safely. */ }
-          }
-        } finally { await reader?.cancel(); }
-      } else { await response.body?.cancel(); }
+      const response = await sendAPNS(env, jwt, { ...item, collapseID: item.turnID },
+        replyPayload({ ...alert, turnID: item.turnID, photoURL, unreadCount, contactID: item.contactID, userID: item.userID }));
+      const reason = response.reason;
       if (response.status === 410 || (response.status === 400 && ['BadDeviceToken', 'DeviceTokenNotForTopic'].includes(reason ?? ''))) {
         await env.DB.prepare('DELETE FROM push_device WHERE id = ? AND session_id = ?')
           .bind(item.deviceID, item.sessionID).run();
@@ -124,4 +106,30 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
       console.error(JSON.stringify({ event: 'push_batch_deferred' }));
     }
   }
+}
+
+export async function sendAPNS(env: PushEnvironment, jwt: string,
+  item: { token: string; environment: 'development' | 'production'; expiresAt: number; collapseID: string }, payload: string) {
+  const host = item.environment === 'development' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
+  const response = await fetch(`https://${host}/3/device/${item.token}`, {
+    method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(15_000),
+    headers: {
+      authorization: `bearer ${jwt}`, 'content-type': 'application/json',
+      'apns-topic': env.APNS_TOPIC!, 'apns-push-type': 'alert', 'apns-priority': '10',
+      'apns-expiration': String(Math.floor(item.expiresAt / 1000)), 'apns-collapse-id': item.collapseID,
+    },
+    body: payload,
+  });
+  // Only inspect Apple's bounded reason field; never log tokens or message data.
+  let reason: string | undefined;
+  if (!response.ok) {
+    const reader = response.body?.getReader();
+    try {
+      const chunk = await reader?.read();
+      if (chunk?.value && chunk.value.byteLength <= 2048) {
+        try { reason = (JSON.parse(new TextDecoder().decode(chunk.value)) as { reason?: string }).reason; } catch { /* Retry safely. */ }
+      }
+    } finally { await reader?.cancel(); }
+  } else { await response.body?.cancel(); }
+  return { ok: response.ok, status: response.status, reason };
 }

@@ -1,3 +1,4 @@
+import { deliverGroupPush } from './push';
 import { attachmentMessage, storedAttachment } from '../chat/attachments';
 import type { WorkflowStep } from 'cloudflare:workers';
 import { dispatchAgent, releaseAttention } from '../chat/dispatch';
@@ -84,6 +85,10 @@ export async function runGroup(env: Env, job: GroupJob, step: WorkflowStep) {
         env.DB.prepare(`UPDATE group_reply SET status = 'complete' WHERE id = ? AND attempt = ? AND status = 'running'`)
           .bind(job.turnID, job.attempt),
       ]);
+    });
+    await step.do('group-deliver-push', async () => {
+      try { await deliverGroupPush(env, job.turnID); }
+      catch { console.error(JSON.stringify({ event: 'group_push_deferred' })); }
     });
     try {
       await step.do('group-remember', { retries: { limit: 1, delay: '5 seconds' }, timeout: '1 minute' }, async () => {

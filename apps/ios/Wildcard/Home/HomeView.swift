@@ -36,16 +36,19 @@ struct HomeView: View {
     @State private var groups = GroupsStore()
     @State private var invitations = ContactInvitationsStore()
 
+    private var totalUnreadCount: Int { contacts.totalUnreadCount + groups.totalUnreadCount }
+
     var body: some View {
         NavigationStack(path: $destinations) {
             TabView(selection: $section) {
                 Tab("Chats", systemImage: "bubble.left.and.bubble.right", value: Section.chats) {
                     ChatsView(
                         openContact: { contact in destinations.append(.contact(contact.id)) },
-                        editContact: { contact in destinations.append(.editContact(contact.id)) }
+                        editContact: { contact in destinations.append(.editContact(contact.id)) },
+                        openGroup: { group in destinations.append(.group(group.id)) }
                     )
                 }
-                .badge(contacts.totalUnreadCount)
+                .badge(totalUnreadCount)
                 Tab("Account", systemImage: "person.crop.circle", value: Section.account) {
                     AccountView()
                 }
@@ -84,7 +87,8 @@ struct HomeView: View {
                     ChatsView(
                         mode: .contacts,
                         openContact: { contact in destinations = [.contact(contact.id)] },
-                        editContact: { contact in destinations.append(.editContact(contact.id)) }
+                        editContact: { contact in destinations.append(.editContact(contact.id)) },
+                        openGroup: { group in destinations.append(.group(group.id)) }
                     )
                     .navigationTitle("Contacts")
                     .navigationBarTitleDisplayMode(.inline)
@@ -121,24 +125,26 @@ struct HomeView: View {
             else { MessageSounds.shared.deactivate() }
         }
         .onDisappear { MessageSounds.shared.reset() }
-        .task(id: "\(contacts.hasLoaded)-\(contacts.totalUnreadCount)-\(scenePhase)") {
-            guard contacts.hasLoaded, scenePhase == .active else { return }
-            await push.updateBadge(count: contacts.totalUnreadCount)
+        .task(id: "\(contacts.hasLoaded)-\(groups.hasLoaded)-\(totalUnreadCount)-\(scenePhase)") {
+            guard contacts.hasLoaded, groups.hasLoaded, scenePhase == .active else { return }
+            await push.updateBadge(count: totalUnreadCount)
         }
         .task {
             await push.activate(using: auth, requestPermission: true)
-            if contacts.hasLoaded { await push.updateBadge(count: contacts.totalUnreadCount) }
+            if contacts.hasLoaded && groups.hasLoaded { await push.updateBadge(count: totalUnreadCount) }
         }
         .task(id: push.deviceToken) { await push.synchronize(using: auth) }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             MessageSounds.shared.activate(userID: auth.user?.id)
             await contacts.refresh(using: auth, preserveLoadedPages: true)
+            await groups.refresh(using: auth)
             await push.activate(using: auth)
-            if contacts.hasLoaded { await push.updateBadge(count: contacts.totalUnreadCount) }
+            if contacts.hasLoaded && groups.hasLoaded { await push.updateBadge(count: totalUnreadCount) }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(3)) } catch { return }
                 await contacts.refresh(using: auth, preserveLoadedPages: true)
+                await groups.refresh(using: auth, refreshInvitations: false)
             }
         }
         .task(id: scenePhase) {
@@ -158,9 +164,14 @@ struct HomeView: View {
                 return
             }
             section = .chats
-            destinations = [.contact(destination.contactID)]
-            await contacts.conversations.store(for: destination.contactID)
-                .refresh(contactID: destination.contactID, using: auth)
+            switch destination.conversation {
+            case .contact(let id):
+                destinations = [.contact(id)]
+                await contacts.conversations.store(for: id).refresh(contactID: id, using: auth)
+            case .group(let id):
+                destinations = [.group(id)]
+                await groups.refresh(using: auth, refreshInvitations: false)
+            }
             if push.destination?.id == destination.id { push.destination = nil }
         }
     }

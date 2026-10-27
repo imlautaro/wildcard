@@ -97,7 +97,11 @@ subtitle. Each human message starts a bounded automatic reply round. Groups and
 private chats share the same exclusive attention queue per agent. Create one from
 **Chats → + → Contacts → Create group**. Groups support editable avatars,
 image/PDF attachments with native previews, voice dictation with an editable
-transcript, and foreground polling. Group push, badges and schedules are not implemented.
+transcript, and foreground polling. Chats interleaves groups and individual
+conversations by latest message, with dates and a bold sender prefix on group
+previews. Group messages from other members generate push alerts, persistent
+unread counts and foreground banner/sound notifications; tapping an alert opens
+the group. Group schedules are not implemented.
 
 ## Infrastructure and releases
 

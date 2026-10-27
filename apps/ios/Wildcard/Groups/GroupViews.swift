@@ -153,8 +153,10 @@ struct GroupInvitationsView: View {
 struct GroupChatView: View {
     let groupID: String
     @Environment(AuthStore.self) private var auth
+    @Environment(GroupsStore.self) private var groups
     @Environment(\.scenePhase) private var scenePhase
     @State private var store = GroupChatStore()
+    @State private var isVisible = false
     @State private var draft = ""
     @State private var attachment: DraftAttachment?
     @State private var photoSelection: PhotosPickerItem?
@@ -205,7 +207,8 @@ struct GroupChatView: View {
                         }
                     }
                     ForEach(store.messages) { message in
-                        GroupMessageRow(message: message, groupID: groupID, members: store.snapshot?.members ?? [])
+                        GroupMessageRow(message: message, groupID: groupID, members: store.snapshot?.members ?? [],
+                                        isNew: store.newIncomingMessageIDs.contains(message.id))
                             .id(message.id)
                     }
                     if let pending = store.pendingText {
@@ -347,12 +350,26 @@ struct GroupChatView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { _ in voice.interrupt() }
-        .onDisappear { cancelRecording(); attachmentTask?.cancel() }
+        .onAppear {
+            isVisible = true
+            MessageSounds.shared.visibleContactID = MessageSounds.groupConversationID(groupID)
+        }
+        .onDisappear {
+            isVisible = false
+            if MessageSounds.shared.visibleContactID == MessageSounds.groupConversationID(groupID) {
+                MessageSounds.shared.visibleContactID = nil
+            }
+            cancelRecording()
+            attachmentTask?.cancel()
+        }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await store.refresh(id: groupID, auth: auth)
             animateNewMessages = true
             while !Task.isCancelled {
+                if isVisible, scenePhase == .active, let sequence = store.messages.last?.sequence {
+                    await groups.markRead(id: groupID, sequence: sequence, using: auth)
+                }
                 do { try await Task.sleep(for: .seconds(3)) } catch { return }
                 await store.refresh(id: groupID, auth: auth)
             }
@@ -516,6 +533,7 @@ private struct GroupMessageRow: View {
     let message: GroupMessage
     let groupID: String
     let members: [GroupMember]
+    let isNew: Bool
     @Environment(AuthStore.self) private var auth
     private var own: Bool { message.userID == auth.user?.id && message.agentID == nil }
     private var sender: GroupMember? {
@@ -535,6 +553,14 @@ private struct GroupMessageRow: View {
                                       senderName: own ? nil : (sender?.name ?? message.senderName))
                 }
             }
+        }
+        .task(id: message.id) {
+            guard isNew, !own else { return }
+            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            guard !Task.isCancelled, MessageSounds.shared.visibleContactID == MessageSounds.groupConversationID(groupID),
+                  let userID = auth.user?.id else { return }
+            MessageSounds.shared.receivedGroup(messageID: message.id, groupID: groupID, userID: userID,
+                completedAt: Date(timeIntervalSince1970: message.createdAt / 1000), isVisible: true)
         }
     }
 }

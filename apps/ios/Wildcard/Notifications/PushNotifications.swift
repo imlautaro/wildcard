@@ -6,9 +6,10 @@ import Observation
 @MainActor
 @Observable
 final class PushNotifications {
+    enum Conversation: Equatable { case contact(String), group(String) }
     struct Destination: Equatable {
         let id = UUID()
-        let contactID: String
+        let conversation: Conversation
         let userID: String
     }
 
@@ -23,6 +24,9 @@ final class PushNotifications {
     private(set) var isBusy = false
     var destination: Destination?
     private var permissionRequestInFlight = false
+    private var scheduledGroupMessages: Set<String> = []
+    private var presentedGroupMessages: Set<String> = []
+    private var groupReadSequences: [String: Int] = [:]
 
     private var environment: String? {
         Bundle.main.object(forInfoDictionaryKey: "WildcardPushEnvironment") as? String
@@ -116,8 +120,64 @@ final class PushNotifications {
         }
     }
 
+    func noteGroupRead(id: String, sequence: Int, userID: String) {
+        guard MessageSounds.shared.userID == userID, sequence > (groupReadSequences[id] ?? 0) else { return }
+        groupReadSequences[id] = sequence
+        Task {
+            let center = UNUserNotificationCenter.current()
+            let delivered = await center.deliveredNotifications()
+            let read = delivered.filter {
+                let info = $0.request.content.userInfo
+                return info["groupID"] as? String == id && info["userID"] as? String == userID
+                    && (info["sequence"] as? Int).map { $0 <= sequence } == true
+            }
+            center.removeDeliveredNotifications(withIdentifiers: read.map { $0.request.identifier })
+        }
+    }
+
+    func groupPresentation(groupID: String, userID: String, messageID: String, sequence: Int, sentAt: Date) -> UNNotificationPresentationOptions {
+        guard MessageSounds.shared.canNotify(userID: userID, completedAt: sentAt),
+              sequence > (groupReadSequences[groupID] ?? 0),
+              MessageSounds.shared.visibleContactID != MessageSounds.groupConversationID(groupID),
+              presentedGroupMessages.insert(messageID).inserted else { return [] }
+        MessageSounds.shared.receivedGroup(messageID: messageID, groupID: groupID, userID: userID, completedAt: sentAt)
+        return [.banner, .list]
+    }
+
+    func presentGroupActivity(_ activity: GroupActivity, userID: String) {
+        let sentAt = Date(timeIntervalSince1970: activity.sentAt / 1000)
+        guard MessageSounds.shared.canNotify(userID: userID, completedAt: sentAt),
+              activity.sequence > (groupReadSequences[activity.groupID] ?? 0),
+              MessageSounds.shared.visibleContactID != MessageSounds.groupConversationID(activity.groupID),
+              !presentedGroupMessages.contains(activity.messageID),
+              scheduledGroupMessages.insert(activity.messageID).inserted else { return }
+        MessageSounds.shared.receivedGroup(messageID: activity.messageID, groupID: activity.groupID, userID: userID, completedAt: sentAt)
+        let content = UNMutableNotificationContent()
+        content.title = activity.groupName
+        content.subtitle = activity.senderName
+        content.body = activity.text
+        content.threadIdentifier = "group-\(activity.groupID)"
+        content.userInfo = ["groupID": activity.groupID, "userID": userID, "messageID": activity.messageID,
+                            "sequence": activity.sequence, "sentAt": activity.sentAt]
+        let identifier = "foreground-group-\(activity.messageID)"
+        Task {
+            guard MessageSounds.shared.canNotify(userID: userID, completedAt: sentAt),
+                  activity.sequence > (groupReadSequences[activity.groupID] ?? 0) else { return }
+            do { try await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil)) }
+            catch { /* Polling already played the foreground sound; system alerts may be disabled. */ }
+            if MessageSounds.shared.userID != userID || activity.sequence <= (groupReadSequences[activity.groupID] ?? 0) {
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [identifier])
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+            }
+        }
+    }
+
     func clearAccountState() {
         MessageSounds.shared.reset()
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: scheduledGroupMessages.map { "foreground-group-\($0)" })
+        scheduledGroupMessages.removeAll()
+        presentedGroupMessages.removeAll()
+        groupReadSequences.removeAll()
         destination = nil
         error = nil
         status = "Not enabled"
@@ -150,7 +210,16 @@ final class PushAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
         let userID = notification.request.content.userInfo["userID"] as? String
         let turnID = notification.request.content.userInfo["turnID"] as? String
         let deliveredAt = notification.date
+        let groupID = notification.request.content.userInfo["groupID"] as? String
+        let messageID = notification.request.content.userInfo["messageID"] as? String
+        let sequence = notification.request.content.userInfo["sequence"] as? Int
+        let sentAt = notification.request.content.userInfo["sentAt"] as? Double
         DispatchQueue.main.async {
+            if let groupID, let userID, let messageID, let sequence, let sentAt {
+                completionHandler(PushNotifications.shared.groupPresentation(groupID: groupID, userID: userID,
+                    messageID: messageID, sequence: sequence, sentAt: Date(timeIntervalSince1970: sentAt / 1000)))
+                return
+            }
             defer { completionHandler([]) }
             guard let contactID, let userID, let turnID else { return }
             MessageSounds.shared.received(turnID: turnID, contactID: contactID, userID: userID,
@@ -163,13 +232,15 @@ final class PushAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
         let opensConversation = response.actionIdentifier == UNNotificationDefaultActionIdentifier
         let contactID = response.notification.request.content.userInfo["contactID"] as? String
         let userID = response.notification.request.content.userInfo["userID"] as? String
+        let groupID = response.notification.request.content.userInfo["groupID"] as? String
         // UIKit's completion can update its state-restoration snapshot. The async
         // delegate bridge completed on a background executor and crashed there.
         // Keep both routing and completion on the main queue, including ignored actions.
         DispatchQueue.main.async {
             defer { completionHandler() }
-            guard opensConversation, let contactID, let userID else { return }
-            PushNotifications.shared.destination = .init(contactID: contactID, userID: userID)
+            guard opensConversation, let userID else { return }
+            if let groupID { PushNotifications.shared.destination = .init(conversation: .group(groupID), userID: userID) }
+            else if let contactID { PushNotifications.shared.destination = .init(conversation: .contact(contactID), userID: userID) }
         }
     }
 }

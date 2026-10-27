@@ -3,8 +3,9 @@
 The iOS app registers with Apple Push Notification service (APNs) after sign-in
 and requests alert/sound/badge permission. Account → Notifications offers a retry
 and a link to system notification settings. Returning to the foreground refreshes
-registration and permission state. Foreground banners are suppressed; foreground
-message sounds are selected by the visible conversation, as described below.
+registration and permission state. Private-chat foreground banners are suppressed;
+group alerts show a banner when another screen is visible. Foreground sounds are
+selected by the visible conversation, as described below.
 Existing chat polling refreshes replies while the app is active. No background
 execution mode or silent push is required for these visible alerts.
 
@@ -16,7 +17,7 @@ No historical notifications are backfilled when enrolling a new device.
 
 The alert title is the contact's current name and its body is the assistant reply,
 as explicitly requested by the owner on October 26, 2026. The payload includes
-`aps.badge`, set to the total unread replies across the owner's contacts at send
+`aps.badge`, set to the combined unread private replies and group messages at send
 time. Very long replies are truncated with an ellipsis to keep the complete JSON
 payload within APNs' 4096-byte UTF-8 limit, including escaping and custom fields.
 The full reply remains in the chat. Notifications group by contact using
@@ -327,3 +328,61 @@ Directed [contact invitations](sharing.md) appear in their own foreground inbox,
 refreshed at most every 15 seconds or manually. They do not generate APNs alerts,
 mailbox emails, chat turns, message sounds, or unread-message/app-icon badges.
 Only the intended signed-in account can accept or decline an invitation.
+
+
+## Group notifications
+
+Groups now participate in all three notification paths: background APNs alerts,
+persistent per-member unread counts and foreground banner/sound presentation.
+Migration `0018_group_notifications.sql` adds `group_member.last_read_sequence`
+and `group_push_delivery`, with SQL triggers for initial read boundaries and atomic
+message fan-out. Existing memberships start caught up; no historical pushes or
+inferred unread backfill are created. New members start at join-time history.
+
+An incoming human or bot group message queues each current recipient device;
+the human author is excluded. The sender request or Workflow attempts delivery,
+and the existing Cron retries. Group outbox rows have device/session/member FKs,
+a 24-hour expiry, eight attempts, bounded batches of 30 and five concurrent sends.
+A two-minute lease prevents concurrent sends, and final eligibility checks cover
+read state, membership, session expiry and device reassignment. Provider signing
+and the APNs transport are shared with private pushes. Apple acceptance does not
+prove device display, and retries are at least once.
+
+Group payloads use title/group name, subtitle/sender, text or attachment label,
+combined unread badge, `groupID`, recipient `userID`, message ID, sequence and
+creation time. Long text uses the same UTF-8-aware payload bounding as private
+replies. A SHA-256 collapse ID accommodates long bot message IDs. Groups use plain
+APNs alerts with the app icon, so they do not invoke the private-contact avatar
+extension. No new Apple capability, topic, resource or secret is required.
+
+Group list/detail responses contain per-member counts/read sequence. The list also
+returns at most 50 unread activity entries across current memberships for the
+foreground polling fallback. The app polls groups approximately every three
+seconds while active and updates the row badge, Chats badge and app icon. It waits
+for both private/group initial snapshots before replacing the icon badge.
+`PUT /api/v1/groups/:id/read` acknowledges only existing displayed history, advances
+monotonically and clears queued deliveries for that member. Only a visible active
+group chat issues it; Home and details do not. Read revisions protect client state
+from stale list responses, and a confirmed read removes corresponding delivered
+notifications from the current device.
+
+The delegate shows group banners outside the visible group, using the foreground
+chime. Polling can schedule a local foreground banner if APNs has not arrived;
+message IDs deduplicate both paths during that foreground session. Inside the
+attended group, only the new bubble's in-chat sound plays after insertion. No old
+sounds/local alerts replay on activation. Alert permissions continue to apply;
+foreground sound follows the existing app behavior. Notification taps restore the
+matching account and navigate to the group with server authorization. Sign-out
+clears group presentation/read state and scheduled local notifications.
+
+Publish the migration/API automatically from committed/pushed source and install
+the updated app. With fictitious members/devices verify: human and bot push while
+backgrounded/closed; no author echo; foreground Home banner/chime; no banner and
+one sound inside the group; persistent counts after relaunch; combined private+
+group badges; read synchronization and late push suppression; notification taps;
+logout/account switch; member removal; expired/reassigned devices; retry recovery;
+attachment-only messages; and APNs/polling races. No push, runtime tests or device
+validation were performed while implementing this change.
+
+References: [Apple foreground presentation options](https://developer.apple.com/documentation/usernotifications/unnotificationpresentationoptions)
+and [APNs request headers and limits](https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns).

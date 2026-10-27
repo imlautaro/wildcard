@@ -1,3 +1,4 @@
+import { deliverGroupPush } from './groups/push';
 import { recoverGroups } from './groups/workflow';
 import { cleanAttachments } from './chat/attachments';
 import { dispatchSchedules } from './schedules/dispatch';
@@ -19,5 +20,6 @@ export default {
     ctx.waitUntil(expirePresence(env.DB));
     ctx.waitUntil(recoverVisits(env));
     ctx.waitUntil(deliverPush(env));
+    ctx.waitUntil(deliverGroupPush(env));
   },
 } satisfies ExportedHandler<Env>;

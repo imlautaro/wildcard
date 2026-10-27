@@ -724,3 +724,55 @@ cleanup. Group photo removal is best effort; orphan photos may persist. File
 cleanup waits at least 24 hours after registration and deletes only objects with
 no remaining private or group message reference. Deleting group metadata does not
 retract files/messages already received by a member or data already sent to Meta.
+
+
+### Unified chat list metadata
+
+Group list/detail summaries also return nullable `lastMessageAt` and
+`lastMessageSenderName`, derived from the newest persisted group message. Existing
+history indexes serve these queries. No migration, binding, resource or secret is
+required. The iOS inbox merges this metadata with private-contact pages and shares
+timestamp rendering. Release the API through the usual committed/pushed automatic
+pipeline to enable sender prefixes; older responses remain decodable with the
+existing preview/activity fallback. Static checks do not establish visual behavior
+or ordering across live concurrent updates; verify mixed pagination, sender names,
+attachment-only previews and timestamp changes with fictitious accounts.
+
+
+### Group notifications and read state
+
+Migration `0018_group_notifications.sql` adds a monotonic read watermark per group
+member, initializes existing members at the current history boundary, and creates
+a durable group push outbox. SQL triggers initialize future memberships at join
+time and atomically fan out new human/bot messages to registered devices of other
+members. The Drizzle schema mirrors the table/column; triggers stay SQL-managed.
+Existing D1 history/member/device/session indexes support reads and eligibility;
+the migration adds the outbox next-at index. No old push alerts are backfilled.
+
+This reuses DB, the minute Cron, the current Workflow, push-device registration,
+and the existing optional Apple secrets `APNS_PRIVATE_KEY`, `APNS_KEY_ID`,
+`APNS_TEAM_ID` and `APNS_TOPIC`. The provider key stays encrypted in the current
+build/runtime secret workflow. No additional resource, binding, dependency,
+Apple capability, app topic or secret is needed. Independent installs complete
+the existing D1/Worker setup and optional APNs signing/capability/secrets setup
+above, replacing their own account/database/topic/bundle/team values. Without
+APNs credentials the outbox remains retryable until expiry; unread counts and
+foreground polling still function. System banners require notification permission.
+
+Apply local migrations through the existing setup/migration script; production
+must use commit/push and the automatic release, which applies 0018 before new code
+queries it. No manual migration/deployment was performed here. Install the updated
+iOS app to decode group routing, read state and combined badges. Verify the active
+source commit and migration state, then execute the fictitious-device checks in
+[notifications](notifications.md#group-notifications). Static SQL/type checks do not
+establish Apple acceptance or actual device display; none was exercised remotely.
+
+Keep additive schema and read history on rollback. The fan-out trigger can queue
+messages from older Workflows, but older Workers do not deliver the new outbox and
+older clients do not acknowledge group reads or route group notifications. Prefer
+a compatible forward fix while messages are pending. Do not drop outbox tables or
+reset read watermarks. Existing private pushes retain their payload/routing and
+now include unread group messages when computing the app badge. Already accepted
+APNs notifications cannot be recalled after a read or revocation; the sender
+rechecks eligibility before sending and the app suppresses known read messages
+while active. Group alerts expose only content already visible to that recipient.

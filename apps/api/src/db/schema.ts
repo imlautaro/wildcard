@@ -276,6 +276,7 @@ export const chatGroup = sqliteTable('chat_group', {
   createdAt: date('created_at').notNull(),
 }, (t) => [check('group_name_length', sql`length(${t.name}) BETWEEN 1 AND 100`)]);
 export const groupMember = sqliteTable('group_member', {
+  lastReadSequence: integer('last_read_sequence').notNull().default(0),
   groupId: text('group_id').notNull().references(() => chatGroup.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   canInvite: integer('can_invite').notNull().default(0),
@@ -283,7 +284,7 @@ export const groupMember = sqliteTable('group_member', {
   contributorConsent: integer('contributor_consent').notNull().default(0),
   joinedAt: date('joined_at').notNull(),
 }, (t) => [primaryKey({ columns: [t.groupId, t.userId] }), index('group_member_user_idx').on(t.userId, t.groupId),
-  check('group_can_invite', sql`${t.canInvite} IN (0, 1)`), check('group_share_memory', sql`${t.shareMemory} = 1`),
+  check('group_read_sequence', sql`${t.lastReadSequence} >= 0`), check('group_can_invite', sql`${t.canInvite} IN (0, 1)`), check('group_share_memory', sql`${t.shareMemory} = 1`),
   check('group_contributor_consent', sql`${t.contributorConsent} IN (0, 1)`)]);
 export const groupAgent = sqliteTable('group_agent', {
   groupId: text('group_id').notNull(),
@@ -340,3 +341,17 @@ export const groupMemory = sqliteTable('group_memory', {
   check('group_memory_kind', sql`${t.kind} IN ('fact', 'preference', 'decision', 'pending')`),
   check('group_memory_content_length', sql`length(${t.content}) BETWEEN 1 AND 300`),
   check('group_memory_quote_length', sql`length(${t.sourceQuote}) BETWEEN 1 AND 240`)]);
+
+
+// Initial read watermarks and transactional push fan-out are SQL-managed triggers.
+export const groupPushDelivery = sqliteTable('group_push_delivery', {
+  messageId: text('message_id').notNull().references(() => groupMessage.id, { onDelete: 'cascade' }),
+  groupId: text('group_id').notNull(),
+  userId: text('user_id').notNull(),
+  deviceId: text('device_id').notNull().references(() => pushDevice.id, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull().references(() => session.id, { onDelete: 'cascade' }),
+  attempts: integer('attempts').notNull().default(0),
+  nextAt: date('next_at').notNull(),
+  expiresAt: date('expires_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.messageId, t.deviceId] }), index('group_push_delivery_next_idx').on(t.nextAt),
+  foreignKey({ columns: [t.groupId, t.userId], foreignColumns: [groupMember.groupId, groupMember.userId] }).onDelete('cascade')]);

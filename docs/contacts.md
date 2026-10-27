@@ -186,3 +186,12 @@ or infrastructure change is required. Scheduled replies participate normally.
 Static TypeScript, Swift, and SQL checks are recorded with this change. Runtime
 pagination and visual behavior have not been exercised; no tests/builds or
 release were run in this implementation turn.
+
+
+Group conversations are interleaved with populated private chats in the same
+section, sorted by their latest message timestamp. Both use plain buttons without
+chevrons, 48-point avatars and the same date presentation. Group previews add a
+bold sender prefix. Existing private-contact swipe/context-menu actions and the
+alphabetical Contacts directory remain available. Groups older than the current
+private-chat pagination boundary appear only as Load more reaches that timestamp.
+See [groups](groups.md).
