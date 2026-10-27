@@ -1,5 +1,7 @@
 import AVFAudio
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
 
 struct ChatView: View {
     let contactID: String
@@ -8,6 +10,13 @@ struct ChatView: View {
     @Environment(\.scenePhase) private var scenePhase
     let chat: ChatStore
     @State private var draft = ""
+    @State private var attachment: DraftAttachment?
+    @State private var photoSelection: PhotosPickerItem?
+    @State private var showPhotoPicker = false
+    @State private var showFilePicker = false
+    @State private var isLoadingAttachment = false
+    @State private var attachmentError: String?
+    @State private var attachmentTask: Task<Void, Never>?
     @State private var draftRevision = 0
     @State private var visitID: String?
     @State private var lastComposerActivity = Date.distantPast
@@ -21,14 +30,14 @@ struct ChatView: View {
     @ScaledMetric(relativeTo: .body) private var sendIconSize: CGFloat = 20
 
     private var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draft.unicodeScalars.count <= 4000
+        (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachment != nil) && draft.unicodeScalars.count <= 4000
             && chat.hasLoaded && !chat.hasPendingReply && !chat.isSending && !chat.isUnavailable
-            && !voice.isBusy && !voice.hasRecording
+            && !voice.isBusy && !voice.hasRecording && !isLoadingAttachment
     }
 
-    private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachment == nil }
     private var canUseMicrophone: Bool {
-        chat.hasLoaded && !chat.isUnavailable && !chat.isSending && !voice.isBusy
+        chat.hasLoaded && !chat.isUnavailable && !chat.isSending && !voice.isBusy && !isLoadingAttachment
     }
     private var actionEnabled: Bool {
         if voice.phase == .recording { return true }
@@ -54,7 +63,12 @@ struct ChatView: View {
                     }
                     ForEach(chat.turns) { turn in
                         if turn.scheduleID == nil {
-                            MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true)
+                            if let attachment = turn.attachment {
+                                ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id)
+                            }
+                            if !turn.userText.isEmpty {
+                                MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true)
+                            }
                         }
                         if let reply = turn.assistantText {
                             MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false)
@@ -100,6 +114,44 @@ struct ChatView: View {
             .safeAreaBar(edge: .bottom, spacing: 0) { composer }
             .refreshable { await chat.refresh(contactID: contactID, using: auth) }
         }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection, matching: .images, preferredItemEncoding: .compatible)
+        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: DraftAttachment.types) { result in
+            do { try selectFile(result.get()) }
+            catch { attachmentError = error.localizedDescription }
+        }
+        .onChange(of: photoSelection) { _, selected in
+            guard let selected else { return }
+            attachmentTask?.cancel()
+            isLoadingAttachment = true
+            attachmentError = nil
+            attachmentTask = Task {
+                defer { isLoadingAttachment = false; photoSelection = nil }
+                do {
+                    guard let data = try await selected.loadTransferable(type: Data.self), data.count <= DraftAttachment.limit,
+                          let image = UIImage(data: data) else {
+                        throw AuthAPI.Failure.rejected("Choose a photo up to 5 MB.")
+                    }
+                    try Task.checkCancellation()
+                    let scale = min(1, 2048 / max(image.size.width, image.size.height))
+                    let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+                    let format = UIGraphicsImageRendererFormat()
+                    format.scale = 1
+                    format.opaque = true
+                    let resized = UIGraphicsImageRenderer(size: size, format: format).image { context in
+                        UIColor.white.setFill()
+                        context.fill(CGRect(origin: .zero, size: size))
+                        image.draw(in: CGRect(origin: .zero, size: size))
+                    }
+                    guard let bytes = resized.jpegData(compressionQuality: 0.85), bytes.count <= DraftAttachment.limit else {
+                        throw AuthAPI.Failure.rejected("Choose a photo up to 5 MB.")
+                    }
+                    guard isVisible, !chat.isUnavailable else { return }
+                    attachment = DraftAttachment(name: "Photo.jpg", mimeType: "image/jpeg", data: bytes)
+                    draftRevision += 1
+                } catch is CancellationError { }
+                catch { attachmentError = error.localizedDescription }
+            }
+        }
         .onChange(of: voice.phase) { _, phase in
             if phase == .ready { transcribeRecording() }
         }
@@ -130,6 +182,7 @@ struct ChatView: View {
             endVisit()
             chat.clearPresence()
             cancelRecording()
+            attachmentTask?.cancel()
             chat.compactHistory()
         }
         .task(id: scenePhase) {
@@ -206,6 +259,12 @@ struct ChatView: View {
         }
     }
 
+    private func selectFile(_ url: URL) throws {
+        attachment = try DraftAttachment.load(url: url)
+        attachmentError = nil
+        draftRevision += 1
+    }
+
     private var composer: some View {
         VStack(spacing: 8) {
             if let error = chat.error {
@@ -244,7 +303,47 @@ struct ChatView: View {
                     Button("Cancel") { cancelRecording() }
                 }.manrope(.footnote)
             }
+            if let attachmentError {
+                Text(attachmentError).manrope(.footnote).foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if isLoadingAttachment {
+                HStack { ProgressView(); Text("Preparing attachment…").manrope(.footnote); Spacer() }
+            }
+            if let attachment {
+                HStack(spacing: 10) {
+                    if attachment.mimeType.hasPrefix("image/"), let image = UIImage(data: attachment.data) {
+                        Image(uiImage: image).resizable().scaledToFill().frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 8))
+                    } else { Image(systemName: "doc.richtext").font(.title2) }
+                    VStack(alignment: .leading) {
+                        Text(attachment.name).manrope(.footnote).lineLimit(1)
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.data.count), countStyle: .file))
+                            .manrope(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        self.attachment = nil
+                        attachmentError = nil
+                        draftRevision += 1
+                    } label: { Image(systemName: "xmark.circle.fill") }
+                    .accessibilityLabel("Remove attachment")
+                    .disabled(chat.isSending)
+                }.padding(10).background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
+            }
             HStack(alignment: .bottom, spacing: 12) {
+                Menu {
+                    Button("Photo library", systemImage: "photo.on.rectangle") { showPhotoPicker = true }
+                    Button("Choose file", systemImage: "doc") { showFilePicker = true }
+                } label: {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: sendIconSize, weight: .medium))
+                        .frame(width: composerHeight, height: composerHeight)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: Circle())
+                .accessibilityLabel("Add attachment")
+                .disabled(!chat.hasLoaded || chat.isUnavailable || chat.isSending || voice.isBusy || voice.hasRecording || isLoadingAttachment)
                 TextField("Message", text: Binding(get: { draft }, set: {
                     draftRevision += 1
                     lastComposerActivity = .now
@@ -264,11 +363,13 @@ struct ChatView: View {
                         voiceTask = Task { await voice.start() }
                     } else {
                         guard canSend else { return }
+                        let submittedAttachment = attachment
                         let submitted = draft
                         let submittedRevision = draftRevision
                         draft = ""
                         Task {
-                            let accepted = await chat.send(text: submitted, contactID: contactID, using: auth)
+                            let accepted = await chat.send(text: submitted, attachment: submittedAttachment, contactID: contactID, using: auth)
+                            if accepted, attachment?.id == submittedAttachment?.id { attachment = nil }
                             if !accepted, draftRevision == submittedRevision, draft.isEmpty {
                                 draft = submitted
                             }

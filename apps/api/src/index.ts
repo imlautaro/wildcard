@@ -1,3 +1,4 @@
+import { cleanAttachments } from './chat/attachments';
 import { dispatchSchedules } from './schedules/dispatch';
 import { recoverVisits } from './chat/visits';
 import { expirePresence } from './chat/presence';
@@ -10,6 +11,7 @@ export { ChatWorkflow } from './chat/workflow';
 export default {
   fetch: app.fetch,
   async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(cleanAttachments(env));
     ctx.waitUntil(dispatchSchedules(env));
     ctx.waitUntil(recoverChats(env));
     ctx.waitUntil(expirePresence(env.DB));

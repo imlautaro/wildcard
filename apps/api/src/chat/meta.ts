@@ -2,7 +2,8 @@ import { NonRetryableError } from 'cloudflare:workflows';
 
 export type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
 export type ModelMessage =
-  | { role: 'system' | 'user'; content: string }
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string | ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } } | { type: 'file'; file: { filename: string; file_data: string } })[] }
   | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] }
   | { role: 'tool'; content: string; tool_call_id: string };
 export type ModelTool = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } };

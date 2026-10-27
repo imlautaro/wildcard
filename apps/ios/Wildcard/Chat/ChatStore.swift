@@ -16,7 +16,7 @@ final class ChatStore {
     private var isRefreshing = false
     private var invalidated = false
     private var revision = 0
-    private var submission: (id: String, text: String)?
+    private var submission: (id: String, text: String, attachmentID: UUID?)?
     var hasPendingReply: Bool { turns.contains(where: \.isPending) }
 
     func clearPresence() { presence = nil }
@@ -107,12 +107,14 @@ final class ChatStore {
         }
     }
 
-    func send(text: String, contactID: String, using auth: AuthStore) async -> Bool {
+    func send(text: String, attachment: DraftAttachment? = nil, contactID: String, using auth: AuthStore) async -> Bool {
         guard !isSending, !hasPendingReply, !invalidated, !isUnavailable else { return false }
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, text.count <= 4000 else { return false }
+        guard (!text.isEmpty || attachment != nil), text.unicodeScalars.count <= 4000 else { return false }
         // Keep the identifier across an uncertain network result to prevent duplicate sends.
-        if submission?.text != text { submission = (UUID().uuidString.lowercased(), text) }
+        if submission?.text != text || submission?.attachmentID != attachment?.id {
+            submission = (UUID().uuidString.lowercased(), text, attachment?.id)
+        }
         guard let submission else { return false }
         isSending = true
         revision += 1
@@ -120,7 +122,7 @@ final class ChatStore {
         defer { isSending = false }
         do {
             let turn = try await auth.withSession { api, token in
-                try await api.sendMessage(contactID: contactID, id: submission.id, text: text, token: token)
+                try await api.sendMessage(contactID: contactID, id: submission.id, text: text, attachment: attachment, token: token)
             }
             revision += 1
             guard !invalidated else { return false }

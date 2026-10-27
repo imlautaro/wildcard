@@ -1,0 +1,66 @@
+import { Buffer } from 'node:buffer';
+import { isRecord, type ModelMessage } from './meta';
+import type { StoredTurn } from './data';
+
+export const attachmentLimit = 5 * 1024 * 1024;
+export type Attachment = { name: string; mimeType: string; size: number; digest: string; key: string };
+export type PublicAttachment = Pick<Attachment, 'name' | 'mimeType' | 'size'>;
+
+// Accept only the formats offered by the native picker; never fetch user URLs.
+export async function parseAttachment(value: unknown): Promise<{ metadata: Omit<Attachment, 'key'>; bytes: Buffer } | null> {
+  if (!isRecord(value) || Object.keys(value).some((key) => !['name', 'mimeType', 'data'].includes(key)) ||
+    typeof value.name !== 'string' || value.name.length < 1 || value.name.length > 180 || /[\x00-\x1f\x7f/\\]/.test(value.name) ||
+    typeof value.mimeType !== 'string' || typeof value.data !== 'string' ||
+    value.data.length > Math.ceil(attachmentLimit / 3) * 4 || /[^A-Za-z0-9+/=]/.test(value.data)) return null;
+  const bytes = Buffer.from(value.data, 'base64');
+  if (!bytes.length || bytes.length > attachmentLimit || bytes.toString('base64') !== value.data) return null;
+  const head = bytes.subarray(0, 12);
+  const valid = value.mimeType === 'application/pdf' ? head.subarray(0, 5).toString() === '%PDF-'
+    : value.mimeType === 'image/jpeg' ? head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff
+    : value.mimeType === 'image/png' ? head.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    : value.mimeType === 'image/gif' ? ['GIF87a', 'GIF89a'].includes(head.subarray(0, 6).toString())
+    : value.mimeType === 'image/webp' ? head.subarray(0, 4).toString() === 'RIFF' && head.subarray(8, 12).toString() === 'WEBP'
+    : false;
+  if (!valid) return null;
+  const digest = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
+  return { metadata: { name: value.name, mimeType: value.mimeType, size: bytes.length, digest }, bytes };
+}
+
+export function storedAttachment(turn: Pick<StoredTurn, 'attachmentJSON'>): Attachment | null {
+  return turn.attachmentJSON ? JSON.parse(turn.attachmentJSON) as Attachment : null;
+}
+export function sameAttachment(turn: Pick<StoredTurn, 'attachmentJSON'>, metadata: Omit<Attachment, 'key'> | undefined): boolean {
+  const saved = storedAttachment(turn);
+  return saved ? !!metadata && saved.digest === metadata.digest && saved.name === metadata.name &&
+    saved.mimeType === metadata.mimeType && saved.size === metadata.size : !metadata;
+}
+export function publicAttachment(turn: Pick<StoredTurn, 'attachmentJSON'>): PublicAttachment | null {
+  const attachment = storedAttachment(turn);
+  return attachment ? { name: attachment.name, mimeType: attachment.mimeType, size: attachment.size } : null;
+}
+export async function attachmentMessage(env: Env, turn: Pick<StoredTurn, 'attachmentJSON' | 'userText'>): Promise<Extract<ModelMessage, { role: 'user' }>> {
+  const attachment = storedAttachment(turn);
+  if (!attachment) return { role: 'user', content: turn.userText };
+  const object = await env.CONTACT_PHOTOS.get(attachment.key);
+  if (!object || object.size !== attachment.size || object.size > attachmentLimit) throw new Error('ATTACHMENT_UNAVAILABLE');
+  const data = `data:${attachment.mimeType};base64,${Buffer.from(await object.arrayBuffer()).toString('base64')}`;
+  return { role: 'user', content: [
+    { type: 'text', text: turn.userText || 'Please describe or summarize the attached file.' },
+    attachment.mimeType === 'application/pdf'
+      ? { type: 'file', file: { filename: attachment.name, file_data: data } }
+      : { type: 'image_url', image_url: { url: data } },
+  ] };
+}
+
+// Registry entries survive contact deletion and failed requests. A grace period
+// protects uploads that have not yet committed their turn. Cleanup is retryable.
+export async function cleanAttachments(env: Env): Promise<void> {
+  const { results } = await env.DB.prepare(`SELECT object_key AS key FROM chat_attachment_object
+    WHERE created_at < ? AND NOT EXISTS
+      (SELECT 1 FROM chat_turn WHERE json_extract(attachment_json, '$.key') = object_key)
+    ORDER BY created_at LIMIT 20`).bind(Date.now() - 86400000).all<{ key: string }>();
+  for (const { key } of results) {
+    await env.CONTACT_PHOTOS.delete(key);
+    await env.DB.prepare('DELETE FROM chat_attachment_object WHERE object_key = ?').bind(key).run();
+  }
+}

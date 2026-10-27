@@ -1,0 +1,82 @@
+# Chat attachments
+
+The composer has a paperclip button to the left of Message. Choose Photo library
+or Choose file, inspect the draft thumbnail/name, and remove or replace it before
+sending. A message can contain one attachment, with or without text. The right
+button sends when an attachment is selected; dictation remains available for an
+empty composer. Failed sends retain the draft and attachment, including the request
+identifier for uncertain network results. Sent attachments open in native Quick Look.
+
+## Formats and limits
+
+This implementation accepts JPEG, PNG, GIF, WebP, and PDF, up to 5 MiB per file.
+These are application limits, narrower than Meta's provider limits. The Files picker
+preserves bytes; Photo library selection converts to JPEG with a maximum 2048-point
+long edge rendered at scale 1, with a white background for transparency. The selected
+photo representation must also fit 5 MiB before conversion. Camera capture, multiple
+attachments, Word/Excel documents, video, and audio file input are not offered.
+Voice dictation continues to use the separate transcription endpoint.
+
+The API validates base64, MIME allowlist, file signatures, name, and size before
+storage; this is format validation, not a malware scan or full file parser. The model
+can reject malformed content even if its file signature is valid. PDF handling at
+Meta includes text from the first 100 pages and visual content from the first 50;
+longer documents are partial. See [Meta file handling](https://dev.meta.ai/docs/file-handling)
+and [image understanding](https://dev.meta.ai/docs/image-understanding).
+
+## API and storage
+
+`POST /api/v1/contacts/:id/chat/turns` accepts the existing fields plus optional
+`attachment: { name, mimeType, data }`, where `data` is standard base64. Empty `text`
+is valid only with an attachment. Total JSON request size is bounded to 7 MiB +
+32 KiB; decoded file bytes must fit 5 MiB. Omit `attachment` for text-only sends.
+Use the same message UUID and content to recover an uncertain send. Identical
+retries return the existing turn; different text or file metadata/digest returns 409.
+
+Turn responses include optional `attachment: { name, mimeType, size }` without any
+object key or base64 bytes. `GET /api/v1/contacts/:id/chat/turns/:turnID/attachment`
+requires the owner's bearer session and returns private, non-cacheable bytes with
+an attachment disposition. There are no public or provider-fetchable file URLs.
+Quick Look uses a protected temporary file removed on dismissal or leaving the view;
+files left by a process crash can remain in the OS temporary directory until purged.
+
+Migration `0012_chat_attachments.sql` adds turn metadata and a durable object registry.
+Bytes use the existing private `CONTACT_PHOTOS` R2 binding, under a distinct
+`attachments/` prefix. Each request writes a new immutable object before atomically
+accepting the turn in D1. The registry tracks uploads even if acceptance fails.
+The existing minute Cron deletes up to 20 unreferenced objects older than 24 hours
+per invocation, including files left after contact deletion. Referenced files are
+retained with the conversation. Contact deletion immediately revokes access; physical
+R2 cleanup is deferred. Failed cleanup retries on later Cron invocations.
+
+The Workflow reads the file from R2 and sends an inline `image_url` or `file` block
+to Meta Chat Completions, without adding provider Files API storage. At most one
+file is included per model request: the current file, or the latest attachment
+within the existing eight-turn/12 KB history budget for follow-up questions.
+Other historical files are represented by name only. Search and memory extraction
+use message text; they do not index, extract, or remember attachment bytes. An
+attachment-only message uses a neutral description/summary prompt for inference.
+Embedded file instructions do not authorize schedule tools or override system rules.
+
+Files sent for inference use the configured Meta model and its data policy. The
+owner's Contributor configuration also applies to attachments; this feature does
+not grant new consent or authorize uploading other people's private data.
+
+## Setup and verification
+
+No additional services, secrets, or public bucket permissions are needed. Follow
+[infrastructure](infrastructure.md) to provision D1 and the existing private R2
+bucket in an independent account. Apply migration 0012 locally with the normal
+local migration command. Production migration/release must run through commit,
+push, and the automatic pipeline; install the updated iOS app separately.
+
+Verify using fictional files: supported formats, attachment-only/text-plus-file
+sends, removal/replacement, invalid or oversized files, offline retry without a
+duplicate turn, Quick Look, a follow-up question, and denial from a different
+account. Confirm deletion immediately blocks download and later Cron cleans R2.
+These end-to-end checks and real Meta file inference have not been run by the agent.
+
+The schema is additive. Older clients can read turn responses but cannot display
+attachments or send them. On code rollback, keep migration 0012, the registry,
+and R2 objects; dropping the metadata loses file references. Restore compatible
+code and Cron cleanup before considering any data removal.

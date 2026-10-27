@@ -10,7 +10,7 @@ import { readBearerSession } from '../lib/session';
 
 type Contact = { id: string; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
 const columns = 'id, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence';
-const selection = `${columns}, (SELECT substr(COALESCE(t.assistant_text, CASE WHEN t.schedule_id IS NOT NULL THEN 'Scheduled message' ELSE t.user_text END), 1, 500)
+const selection = `${columns}, (SELECT substr(COALESCE(t.assistant_text, CASE WHEN t.schedule_id IS NOT NULL THEN 'Scheduled message' WHEN t.user_text = '' AND t.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(t.attachment_json, '$.name') ELSE t.user_text END), 1, 500)
   FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
   ORDER BY t.sequence DESC LIMIT 1) AS lastMessageText,
   (SELECT CASE WHEN t.assistant_text IS NOT NULL THEN t.updated_at ELSE t.created_at END

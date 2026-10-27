@@ -508,3 +508,25 @@ The old Worker does not dispatch new schedules, but already-started Workflows
 may continue on their original version. For a temporary pause without data loss,
 retain the new schema and cancellation-aware code and disable only
 `dispatchSchedules`; contact chat recovery and push Cron must remain available.
+
+
+## Private chat attachments
+
+[Chat attachments](attachments.md) reuse the existing private `CONTACT_PHOTOS` R2
+binding and bucket under `attachments/`; no public access, extra credentials, or
+new service provisioning is required. Independent installations must provision
+the existing photo bucket before enabling attachment sends, using the same
+`npm run infra:photos` setup and account replacements documented above. Migration
+`0012_chat_attachments.sql` adds nullable turn metadata, an expression index,
+and an orphan-object registry. Apply locally through the normal D1 migration
+command; production applies it through the automatic commit/push release pipeline.
+The existing minute Cron now also removes up to 20 unreferenced objects older
+than 24 hours, retrying failures later; contact deletion revokes download access
+immediately, with deferred byte cleanup. Keep this handler enabled in independent
+accounts. The configured Meta model/data policy applies to file inference too.
+
+Verification requires installing the new iOS app plus releasing the backend. Use
+fictional images/PDFs, inspect private retrieval, retries, and deferred cleanup as
+described in the attachment guide. Real inference, device previews, and remote
+cleanup remain unverified. The schema is additive: code rollback must preserve
+attachment metadata and R2 objects, and restore compatible Cron cleanup.

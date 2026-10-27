@@ -309,3 +309,12 @@ for them. Send optional IANA `timeZone` with new human messages to resolve local
 scheduling requests. Existing message-only clients can omit it. Scheduled turns
 share the normal presence, history, unread count, Workflow recovery, and push
 pipeline, but cannot be manually retried or mutate schedules.
+
+
+## Image and PDF messages
+
+The composer paperclip adds one private image or PDF, with optional message text.
+Turn JSON includes attachment display metadata; bytes are retrieved through an
+owner-authenticated route and sent inline to Meta during generation. See
+[attachments](attachments.md) for supported formats, API payloads, the 5 MiB limit,
+context retention, migration, cleanup, provider data policy, and validation status.

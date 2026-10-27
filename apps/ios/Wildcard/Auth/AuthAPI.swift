@@ -108,6 +108,10 @@ struct AuthAPI: Sendable {
                 }
             }
             if path.contains("/chat/") {
+                if response.statusCode == 413 { throw Failure.rejected("Choose a file up to 5 MB.") }
+                if response.statusCode == 400, let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String {
+                    throw Failure.rejected(message)
+                }
                 switch response.statusCode {
                 case 400, 422: throw Failure.rejected("Use a message with 1–4,000 characters.")
                 case 409: throw Failure.rejected("A reply is already in progress or the conversation changed. Refresh and try again.")

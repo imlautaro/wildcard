@@ -1,3 +1,4 @@
+import { parseAttachment, sameAttachment, storedAttachment } from '../chat/attachments';
 import { validTimeZone } from '../schedules/data';
 import { dispatchVisit } from '../chat/visits';
 import { readPresence } from '../chat/presence';
@@ -11,6 +12,7 @@ import { admitAuthRequest } from '../lib/auth-rate-limit';
 
 const chats = new Hono<{ Bindings: Env; Variables: { owner: string; contactID: string } }>();
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const attachmentBody = bodyLimit({ maxSize: 7 * 1024 * 1024 + 32768, onError: (c) => c.json({ error: 'Attachment must be 5 MB or smaller' }, 413) });
 const messageBody = bodyLimit({ maxSize: 32768, onError: (c) => c.json({ error: 'Request body too large' }, 413) });
 chats.use('*', async (c, next) => {
   const id = c.req.param('id');
@@ -82,11 +84,11 @@ chats.get('/turns', async (c) => {
   if (before !== undefined && (!/^\d{1,16}$/.test(before) || !Number.isSafeInteger(Number(before)) || Number(before) < 1)) {
     return c.json({ error: 'Invalid cursor' }, 400);
   }
-  const { results } = await c.env.DB.prepare(`SELECT ${turnColumns} FROM chat_turn
+  const { results } = await c.env.DB.prepare(`SELECT ${turnColumns}, attachment_json AS attachmentJSON FROM chat_turn
     WHERE contact_id = ?1 AND user_id = ?2 AND sequence < ?3 ORDER BY sequence DESC LIMIT 51`)
-    .bind(c.get('contactID'), c.get('owner'), before ? Number(before) : Number.MAX_SAFE_INTEGER).all<ChatTurn>();
+    .bind(c.get('contactID'), c.get('owner'), before ? Number(before) : Number.MAX_SAFE_INTEGER).all<ChatTurn & { attachmentJSON: string | null }>();
   const page = results.slice(0, 50);
-  return c.json({ presence, turns: page.reverse(), nextBefore: results.length > 50 ? page[0].sequence : null });
+  return c.json({ presence, turns: page.reverse().map(publicTurn), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 // Acknowledge only completed replies actually presented by the client. Never move backwards.
 chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }), async (c) => {
@@ -110,19 +112,21 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
   return c.json({ ...state, unreadCount: unread?.count ?? 0,
     totalUnreadCount: await totalUnreadReplies(c.env.DB, c.get('owner')) });
 });
-chats.post('/turns', messageBody, async (c) => {
+chats.post('/turns', attachmentBody, async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
-  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone'].includes(key))
+  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment'].includes(key))
     || (body.timeZone !== undefined && !validTimeZone(body.timeZone))
     || typeof body.id !== 'string' || !uuid.test(body.id) || typeof body.text !== 'string'
-    || !body.text.trim() || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
+    || (!body.text.trim() && body.attachment === undefined) || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
     return c.json({ error: 'Provide an id and a message using 1–4000 characters' }, 400);
   }
+  const attachment = body.attachment === undefined ? null : await parseAttachment(body.attachment);
+  if (body.attachment !== undefined && !attachment) return c.json({ error: 'Choose a JPEG, PNG, GIF, WebP, or PDF up to 5 MB' }, 400);
   const id = body.id.toLowerCase();
   const text = body.text.trim();
   const existing = await findTurn(c.env.DB, id, c.get('contactID'), c.get('owner'));
   if (existing) {
-    if (existing.userText !== text) return c.json({ error: 'Message id already used' }, 409);
+    if (existing.userText !== text || !sameAttachment(existing, attachment?.metadata)) return c.json({ error: 'Message id already used' }, 409);
     if (existing.status === 'queued') c.executionCtx.waitUntil(dispatchChat(c.env, existing));
     return c.json({ turn: publicTurn(existing), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) }, 200);
   }
@@ -133,21 +137,39 @@ chats.post('/turns', messageBody, async (c) => {
     return c.json({ error: 'Too many messages' }, 429);
   }
   const now = Date.now();
+  const key = attachment ? `attachments/${c.get('owner')}/${c.get('contactID')}/${id}/${crypto.randomUUID()}` : null;
+  const attachmentJSON = attachment && key ? JSON.stringify({ ...attachment.metadata, key }) : null;
+  if (attachment && key) {
+    await c.env.DB.prepare('INSERT INTO chat_attachment_object (object_key, created_at) VALUES (?, ?)').bind(key, now).run();
+    await c.env.CONTACT_PHOTOS.put(key, attachment.bytes, { httpMetadata: { contentType: attachment.metadata.mimeType } });
+  }
   const turn = await c.env.DB.prepare(`INSERT INTO chat_turn
-    (id, contact_id, user_id, user_text, status, workflow_id, created_at, updated_at, time_zone)
-    SELECT ?1, ?2, ?3, ?4, 'queued', ?5, ?6, ?6, ?7
+    (id, contact_id, user_id, user_text, status, workflow_id, created_at, updated_at, time_zone, attachment_json)
+    SELECT ?1, ?2, ?3, ?4, 'queued', ?5, ?6, ?6, ?7, ?8
     WHERE EXISTS (SELECT 1 FROM contact WHERE id = ?2 AND user_id = ?3)
       AND NOT EXISTS (SELECT 1 FROM chat_turn WHERE contact_id = ?2 AND status IN ('queued','running'))
       AND (SELECT COUNT(*) FROM chat_turn WHERE user_id = ?3 AND status IN ('queued','running')) < 10
     ON CONFLICT(id) DO NOTHING RETURNING ${storedColumns}`)
-    .bind(id, c.get('contactID'), c.get('owner'), text, `chat-${id}-a1`, now, body.timeZone ?? null).first<StoredTurn>();
+    .bind(id, c.get('contactID'), c.get('owner'), text, `chat-${id}-a1`, now, body.timeZone ?? null, attachmentJSON).first<StoredTurn>();
   if (!turn) {
     const duplicate = await findTurn(c.env.DB, id, c.get('contactID'), c.get('owner'));
-    if (duplicate?.userText === text) return c.json({ turn: publicTurn(duplicate), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
+    if (duplicate?.userText === text && sameAttachment(duplicate, attachment?.metadata)) return c.json({ turn: publicTurn(duplicate), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
     return c.json({ error: 'A reply is already in progress or the conversation changed' }, 409);
   }
   c.executionCtx.waitUntil(dispatchChat(c.env, turn));
   return c.json({ turn: publicTurn(turn), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) }, 202);
+});
+chats.get('/turns/:turnID/attachment', async (c) => {
+  const turn = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
+  const attachment = turn && storedAttachment(turn);
+  if (!attachment) return c.json({ error: 'Attachment not found' }, 404);
+  const object = await c.env.CONTACT_PHOTOS.get(attachment.key);
+  if (!object) return c.json({ error: 'Attachment not found' }, 404);
+  return new Response(object.body, { headers: {
+    'Content-Type': attachment.mimeType, 'Content-Length': String(object.size),
+    'Content-Disposition': `attachment; filename="attachment"; filename*=UTF-8''${encodeURIComponent(attachment.name)}`,
+    'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff',
+  } });
 });
 chats.post('/turns/:turnID/retry', messageBody, async (c) => {
   const previous = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
