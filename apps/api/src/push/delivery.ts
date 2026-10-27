@@ -1,3 +1,4 @@
+import { scheduleAllowed } from '../schedules/data';
 import { totalUnreadReplies } from '../lib/unread';
 import { pushPhotoURL } from '../photos/push-access';
 import { replyPayload } from './payload';
@@ -22,7 +23,7 @@ export function enqueueReply(db: D1Database, turnID: string, attempt: number, no
     JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
     JOIN session s ON s.user_id = t.user_id AND s.expires_at > ?1
     JOIN push_device d ON d.session_id = s.id
-    WHERE t.id = ?3 AND t.attempt = ?4 AND t.status = 'complete' AND t.sequence > c.last_read_sequence`)
+    WHERE t.id = ?3 AND t.attempt = ?4 AND t.status = 'complete' AND t.sequence > c.last_read_sequence AND ${scheduleAllowed('t')}`)
     .bind(now, now + 86_400_000, turnID, attempt);
 }
 
@@ -77,12 +78,14 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
       const alert = await env.DB.prepare(`SELECT c.name AS contactName, c.photo_version AS photoVersion, t.assistant_text AS reply
         FROM chat_turn t JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
         WHERE t.id = ? AND t.user_id = ? AND t.status = 'complete'
-          AND t.sequence > c.last_read_sequence`)
+          AND t.sequence > c.last_read_sequence AND ${scheduleAllowed('t')}`)
         .bind(item.turnID, item.userID).first<{ contactName: string; photoVersion: string | null; reply: string }>();
       if (!alert) return;
       const photoURL = alert.photoVersion
         ? await pushPhotoURL(env, item.contactID, alert.photoVersion, item.sessionID, item.expiresAt) : undefined;
       const unreadCount = await totalUnreadReplies(env.DB, item.userID);
+      if (!await env.DB.prepare(`SELECT id FROM chat_turn t WHERE id = ? AND ${scheduleAllowed('t')}`)
+        .bind(item.turnID).first()) return;
       const host = item.environment === 'development' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
       const response = await fetch(`https://${host}/3/device/${item.token}`, {
         method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(15_000),

@@ -28,6 +28,12 @@ struct ContactDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let contact = contacts.contact(id: contactID) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink(value: HomeDestination.schedules(contactID)) {
+                        Image(systemName: "clock")
+                    }
+                    .accessibilityLabel("Schedules")
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink(value: HomeDestination.editContact(contactID)) {
                         HStack(spacing: 8) {

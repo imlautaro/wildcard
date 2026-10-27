@@ -474,3 +474,37 @@ Release the API only through an authorized commit/push and verify its automatic
 build/source SHA. No resource provisioning, migration, new secret, or signing
 capability is required. See [message sound behavior and device verification](notifications.md#message-sounds-october-27-2026)
 for filenames, compatibility, rollback, and checks that remain unverified.
+
+## Scheduled contact messages
+
+[Schedules](schedules.md) reuse the existing D1, `CHAT_WORKFLOW` / `wildcard-chat`,
+minute Cron Trigger, Meta provider key, and optional APNs delivery. Independent
+installations need no additional resource, binding, secret, dependency, or
+Cloudflare permission. Follow the existing provisioning order and separate
+Worker/D1/Workflow/iOS origin for staging.
+
+Migration `0011_contact_schedules.sql` adds schedule and mutation-receipt tables,
+nullable chat columns, occurrence indexes, and cursor/cancellation triggers.
+`npm run auth:setup:local` applies it locally; an authorized commit/push release
+applies it remotely before publishing. Never apply a manual deployment.
+The exported handler now dispatches due schedules from the existing minute Cron;
+the existing chat recovery path retries durable jobs whose Workflow dispatch fails.
+APNs is optional: generated messages still persist without enrolled devices.
+
+Verification after an authorized release: confirm migration 0011, unchanged
+DB/Workflow/Cron bindings, automatic source SHA/version tag, and the authenticated
+schedule list/cancellation endpoints. Use fictitious tasks to verify future and
+interval scheduling, no duplicate occurrences, editing/cancelling pending work,
+contact deletion, time zones, and app-closed notifications. Real-time behavior
+and real provider tool calls have not been validated in this implementation turn;
+only static checks were performed. No remote migration or release was performed.
+
+Rollback must retain the additive tables/columns and existing Workflow class.
+Do not drop schedule tables while chat foreign keys/Workflow instances refer to
+them. Before rolling back to code without cancellation checks, cancel active
+schedules and settle/stop pending scheduled Workflow jobs and push deliveries;
+an older Workflow version cannot enforce this change's cancellation guarantees.
+The old Worker does not dispatch new schedules, but already-started Workflows
+may continue on their original version. For a temporary pause without data loss,
+retain the new schema and cancellation-aware code and disable only
+`dispatchSchedules`; contact chat recovery and push Cron must remain available.

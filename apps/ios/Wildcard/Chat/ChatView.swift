@@ -53,7 +53,9 @@ struct ChatView: View {
                         }
                     }
                     ForEach(chat.turns) { turn in
-                        MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true)
+                        if turn.scheduleID == nil {
+                            MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true)
+                        }
                         if let reply = turn.assistantText {
                             MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false)
                                 .task {
@@ -74,8 +76,8 @@ struct ChatView: View {
                             ReplyTypingIndicator()
                         } else if turn.status == .failed {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("The reply could not be completed.").manrope(.footnote).foregroundStyle(.secondary)
-                                if turn.id == chat.turns.last?.id {
+                                Text(turn.errorCode == "SCHEDULE_CANCELLED" ? "Scheduled message cancelled." : "The reply could not be completed.").manrope(.footnote).foregroundStyle(.secondary)
+                                if turn.scheduleID == nil && turn.id == chat.turns.last?.id {
                                     Button("Retry reply") { Task { await chat.retry(turn, contactID: contactID, using: auth) } }
                                         .disabled(chat.isSending || chat.hasPendingReply)
                                 }

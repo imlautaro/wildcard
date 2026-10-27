@@ -1,3 +1,4 @@
+import { validTimeZone } from '../schedules/data';
 import { dispatchVisit } from '../chat/visits';
 import { readPresence } from '../chat/presence';
 import { totalUnreadReplies } from '../lib/unread';
@@ -111,7 +112,8 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
 });
 chats.post('/turns', messageBody, async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
-  if (!body || Array.isArray(body) || Object.keys(body).sort().join(',') !== 'id,text'
+  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone'].includes(key))
+    || (body.timeZone !== undefined && !validTimeZone(body.timeZone))
     || typeof body.id !== 'string' || !uuid.test(body.id) || typeof body.text !== 'string'
     || !body.text.trim() || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
     return c.json({ error: 'Provide an id and a message using 1–4000 characters' }, 400);
@@ -132,13 +134,13 @@ chats.post('/turns', messageBody, async (c) => {
   }
   const now = Date.now();
   const turn = await c.env.DB.prepare(`INSERT INTO chat_turn
-    (id, contact_id, user_id, user_text, status, workflow_id, created_at, updated_at)
-    SELECT ?1, ?2, ?3, ?4, 'queued', ?5, ?6, ?6
+    (id, contact_id, user_id, user_text, status, workflow_id, created_at, updated_at, time_zone)
+    SELECT ?1, ?2, ?3, ?4, 'queued', ?5, ?6, ?6, ?7
     WHERE EXISTS (SELECT 1 FROM contact WHERE id = ?2 AND user_id = ?3)
       AND NOT EXISTS (SELECT 1 FROM chat_turn WHERE contact_id = ?2 AND status IN ('queued','running'))
       AND (SELECT COUNT(*) FROM chat_turn WHERE user_id = ?3 AND status IN ('queued','running')) < 10
     ON CONFLICT(id) DO NOTHING RETURNING ${storedColumns}`)
-    .bind(id, c.get('contactID'), c.get('owner'), text, `chat-${id}-a1`, now).first<StoredTurn>();
+    .bind(id, c.get('contactID'), c.get('owner'), text, `chat-${id}-a1`, now, body.timeZone ?? null).first<StoredTurn>();
   if (!turn) {
     const duplicate = await findTurn(c.env.DB, id, c.get('contactID'), c.get('owner'));
     if (duplicate?.userText === text) return c.json({ turn: publicTurn(duplicate), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
@@ -150,6 +152,7 @@ chats.post('/turns', messageBody, async (c) => {
 chats.post('/turns/:turnID/retry', messageBody, async (c) => {
   const previous = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
   if (!previous) return c.json({ error: 'Message not found' }, 404);
+  if (previous.scheduleID) return c.json({ error: 'Scheduled messages cannot be manually retried' }, 409);
   if (previous.status !== 'failed') return c.json({ turn: publicTurn(previous), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
   if (!c.env.META_API_KEY?.trim()) return c.json({ error: 'Replies are unavailable' }, 503);
   const limit = await admitAuthRequest(c.env.DB, c.get('owner'), 'chat-generation', 20);

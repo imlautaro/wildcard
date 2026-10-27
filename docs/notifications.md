@@ -309,3 +309,12 @@ Install the updated iOS binary to apply it to foreground sounds and background
 notifications; the API sound filenames stay the same and no backend release is
 needed. PCM sample scaling and unchanged WAV parameters were checked locally;
 audible loudness on a physical device remains unverified.
+
+## Scheduled contact messages
+
+[Scheduled messages](schedules.md) use the same assistant-reply APNs outbox and
+current session/device enrollment. Cancelling or editing a schedule removes
+unsent entries and invalidates generation from its old revision. Delivery checks
+the schedule immediately before the external request. Already in-flight/accepted
+APNs alerts cannot be recalled. Signing out removes this session's enrollment
+but does not cancel the user's schedules.

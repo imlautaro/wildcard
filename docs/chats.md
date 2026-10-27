@@ -300,3 +300,12 @@ up to 20 still-pending, unexpired visits in groups of five. Dispatch outages can
 prevent a short visit from connecting before its lease expires; the client retries
 uncertain registration with the same UUID. No realtime service or new binding is
 required, but visit jobs consume Workflows executions and activity adds D1 writes.
+
+## Scheduled messages
+
+[Schedules](schedules.md) add autonomous assistant turns with nullable `scheduleID`
+and `errorCode`. Their `userText` is empty; clients must not render a user bubble
+for them. Send optional IANA `timeZone` with new human messages to resolve local
+scheduling requests. Existing message-only clients can omit it. Scheduled turns
+share the normal presence, history, unread count, Workflow recovery, and push
+pipeline, but cannot be manually retried or mutate schedules.

@@ -2,6 +2,8 @@ import Foundation
 
 struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     enum Status: String, Decodable, Sendable { case queued, running, complete, failed }
+    let scheduleID: String?
+    let errorCode: String?
     let sequence: Int
     let id: String
     let userText: String
@@ -68,7 +70,7 @@ extension AuthAPI {
     }
 
     private struct TranscriptionEnvelope: Decodable { let text: String }
-    private struct MessageInput: Encodable { let id: String; let text: String }
+    private struct MessageInput: Encodable { let id: String; let text: String; let timeZone: String }
 
     func transcribeAudio(contactID: String, audio: Data, token: String) async throws -> String {
         let (data, _) = try await send(path: "contacts/\(contactID)/chat/transcriptions", method: "POST",
@@ -83,7 +85,7 @@ extension AuthAPI {
     }
 
     func sendMessage(contactID: String, id: String, text: String, token: String) async throws -> ChatSubmission {
-        let body = try JSONEncoder().encode(MessageInput(id: id, text: text))
+        let body = try JSONEncoder().encode(MessageInput(id: id, text: text, timeZone: TimeZone.current.identifier))
         let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: body, token: token)
         return try JSONDecoder().decode(ChatSubmission.self, from: data)
     }

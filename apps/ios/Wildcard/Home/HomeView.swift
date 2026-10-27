@@ -4,6 +4,7 @@ enum HomeDestination: Hashable {
     case addContact
     case contact(String)
     case editContact(String)
+    case schedules(String)
 }
 
 struct HomeView: View {
@@ -54,6 +55,8 @@ struct HomeView: View {
                     ContactEditorView()
                 case .contact(let id):
                     ContactDetailView(contactID: id)
+                case .schedules(let id):
+                    SchedulesView(contactID: id)
                 case .editContact(let id):
                     if let contact = contacts.contact(id: id) {
                         ContactEditorView(contact: contact)

@@ -1,3 +1,4 @@
+import { scheduleAllowed } from '../schedules/data';
 import { runVisit, type VisitJob } from './visits';
 import { expirePresence, markTyping } from './presence';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
@@ -37,7 +38,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob> {
         // Save before checkpointing. A replay sees completion and skips another call.
         const now = Date.now();
         await this.env.DB.batch([this.env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, status = 'complete', error_code = NULL, updated_at = ?2
-          WHERE id = ?3 AND attempt = ?4 AND status = 'running'`)
+          WHERE id = ?3 AND attempt = ?4 AND status = 'running' AND ${scheduleAllowed('chat_turn')}`)
           .bind(reply, now, job.turnID, job.attempt),
           enqueueReply(this.env.DB, job.turnID, job.attempt, now),
         ]);

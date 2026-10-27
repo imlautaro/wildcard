@@ -1,5 +1,5 @@
 import { desc, sql } from 'drizzle-orm';
-import { check, foreignKey, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { type AnySQLiteColumn, check, foreignKey, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const date = (name: string) => integer(name, { mode: 'timestamp_ms' });
 
@@ -66,6 +66,11 @@ export const contact = sqliteTable('contact', {
 ]);
 
 export const chatTurn = sqliteTable('chat_turn', {
+  timeZone: text('time_zone'),
+  scheduleId: text('schedule_id').references((): AnySQLiteColumn => contactSchedule.id),
+  scheduleRevision: integer('schedule_revision'),
+  scheduledAt: date('scheduled_at'),
+  scheduleInstruction: text('schedule_instruction'),
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
   id: text('id').notNull().unique(),
   contactId: text('contact_id').notNull(),
@@ -86,6 +91,8 @@ export const chatTurn = sqliteTable('chat_turn', {
   check('chat_completed_reply', sql`${table.status} != 'complete' OR ${table.assistantText} IS NOT NULL`),
   uniqueIndex('chat_one_active_turn_idx').on(table.contactId).where(sql`${table.status} IN ('queued', 'running')`),
   index('chat_contact_sequence_idx').on(table.contactId, desc(table.sequence)),
+  uniqueIndex('chat_schedule_occurrence_idx').on(table.scheduleId, table.scheduleRevision, table.scheduledAt).where(sql`${table.scheduleId} IS NOT NULL`),
+  index('chat_schedule_idx').on(table.scheduleId),
   index('chat_recovery_idx').on(table.status, table.checkedAt),
   index('chat_user_status_idx').on(table.userId, table.status),
   uniqueIndex('chat_turn_source_idx').on(table.id, table.contactId, table.userId),
@@ -181,3 +188,36 @@ export const chatVisit = sqliteTable('chat_visit', {
   check('visit_connected', sql`${table.connected} IN (0, 1)`),
   check('visit_closed', sql`${table.closed} IN (0, 1)`),
 ]);
+
+export const contactSchedule = sqliteTable('contact_schedule', {
+  id: text('id').primaryKey(),
+  contactId: text('contact_id').notNull(),
+  userId: text('user_id').notNull(),
+  instruction: text('instruction').notNull(),
+  timeZone: text('time_zone').notNull(),
+  nextAt: date('next_at').notNull(),
+  intervalSeconds: integer('interval_seconds'),
+  status: text('status', { enum: ['active', 'completed', 'cancelled'] }).notNull().default('active'),
+  revision: integer('revision').notNull().default(1),
+  lastMutation: text('last_mutation').notNull(),
+  createdAt: date('created_at').notNull(),
+  updatedAt: date('updated_at').notNull(),
+}, (table) => [
+  foreignKey({ columns: [table.contactId, table.userId], foreignColumns: [contact.id, contact.userId] }).onDelete('cascade'),
+  index('contact_schedule_due_idx').on(table.status, table.nextAt),
+  index('contact_schedule_owner_idx').on(table.userId, table.status),
+  index('contact_schedule_contact_idx').on(table.contactId, table.userId, table.createdAt),
+  check('schedule_instruction_length', sql`length(${table.instruction}) BETWEEN 1 AND 1000`),
+  check('schedule_interval', sql`${table.intervalSeconds} BETWEEN 600 AND 2592000`),
+  check('schedule_status', sql`${table.status} IN ('active', 'completed', 'cancelled')`),
+]);
+
+export const scheduleMutation = sqliteTable('schedule_mutation', {
+  id: text('id').primaryKey(),
+  turnId: text('turn_id').notNull().references(() => chatTurn.id, { onDelete: 'cascade' }),
+  request: text('request').notNull(),
+  result: text('result'),
+  createdAt: date('created_at').notNull(),
+});
+
+// Schedule cursor and cancellation triggers are maintained by SQL migrations.

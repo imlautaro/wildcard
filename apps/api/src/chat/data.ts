@@ -1,5 +1,7 @@
 export type ChatState = 'queued' | 'running' | 'complete' | 'failed';
 export type ChatTurn = {
+  scheduleID: string | null;
+  errorCode: string | null;
   sequence: number;
   id: string;
   userText: string;
@@ -9,15 +11,15 @@ export type ChatTurn = {
   createdAt: number;
   updatedAt: number;
 };
-export type StoredTurn = ChatTurn & { contactID: string; userID: string; workflowID: string };
+export type StoredTurn = ChatTurn & { contactID: string; userID: string; workflowID: string; timeZone: string | null; scheduleInstruction: string | null };
 export type ChatJob = { turnID: string; attempt: number };
 export const turnColumns = `sequence, id, user_text AS userText, assistant_text AS assistantText,
-  status, attempt, created_at AS createdAt, updated_at AS updatedAt`;
-export const storedColumns = `${turnColumns}, contact_id AS contactID, user_id AS userID, workflow_id AS workflowID`;
+  status, attempt, created_at AS createdAt, updated_at AS updatedAt, schedule_id AS scheduleID, error_code AS errorCode`;
+export const storedColumns = `${turnColumns}, contact_id AS contactID, user_id AS userID, workflow_id AS workflowID, time_zone AS timeZone, schedule_instruction AS scheduleInstruction`;
 
 export function publicTurn(turn: StoredTurn): ChatTurn {
-  const { sequence, id, userText, assistantText, status, attempt, createdAt, updatedAt } = turn;
-  return { sequence, id, userText, assistantText, status, attempt, createdAt, updatedAt };
+  const { sequence, id, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, errorCode } = turn;
+  return { sequence, id, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, errorCode };
 }
 
 export function findTurn(db: D1Database, id: string, contactID: string, userID: string) {
