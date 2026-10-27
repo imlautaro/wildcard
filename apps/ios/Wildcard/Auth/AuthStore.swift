@@ -63,6 +63,22 @@ final class AuthStore {
         }
     }
 
+    func saveProfile(name: String) async throws {
+        user = try await withSession { api, token in
+            try await api.saveProfile(name: name, token: token)
+        }
+    }
+
+    func saveProfilePhoto(data: Data?) async throws {
+        user = try await withSession { api, token in
+            try await api.saveProfilePhoto(data: data, token: token)
+        }
+    }
+
+    func refreshProfile() async throws {
+        user = try await withSession { api, token in try await api.currentUser(token: token) }
+    }
+
     func signOut() async {
         guard !isBusy, let token else { return }
         isBusy = true

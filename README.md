@@ -55,7 +55,8 @@ Open `apps/ios/Wildcard.xcodeproj`, or run `npm run ios` on macOS. Select the
 iOS 27.0. For a physical device, select your own signing team and bundle identifier.
 
 The app includes sign-up/sign-in, native Chats and Account tabs, Keychain session
-storage, restoration on launch, and logout. It preserves the Wildcard Icon Composer
+storage, restoration on launch, and logout. Account supports editing your name and
+choosing, cropping, replacing, or removing your own private [profile photo](docs/profile-photos.md#account-profile). It preserves the Wildcard Icon Composer
 icon and bundled [Manrope typography](docs/typography.md). Debug and Release
 default to the public API through `WILDCARD_API_URL`; an independent installation must replace that setting. See the auth guide for local
 simulator configuration.

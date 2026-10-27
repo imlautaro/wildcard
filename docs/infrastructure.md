@@ -631,3 +631,24 @@ matching, nonexistent/self/already-authorized recipients, duplicate/expired
 requests, isolation from third accounts, accept/decline/revoke races, membership
 limits, consent, and iOS refresh/account switching. Never log account emails,
 invitation codes, session tokens, or chat contents for verification.
+
+## Account profile storage
+
+Account editing uses the existing D1 database and private `CONTACT_PHOTOS` R2
+bucket. Apply `0015_account_photos.sql` after the existing migrations: it adds
+nullable `user.photo_version`. Local installations use `npm run auth:setup:local`
+or `npm run db:migrate:local`; production applies it before publishing through
+the existing automatic commit/push release. No manual deployment is required.
+No new binding, resource, permission, secret, or account-specific setting is added.
+Independent installations follow the existing D1 and private R2 provisioning
+steps; staging must use separate resources. Account images use
+`users/<user>/<version>.jpg`, while contact images retain their existing prefix.
+
+Verify with fictional accounts: edit a name, upload/crop/replace/remove a photo,
+reopen Account, sign out/in, and confirm another account cannot read the photo.
+These functional and device checks have not been performed for this change.
+See [account profile behavior](profile-photos.md#account-profile). Back up D1
+metadata with its R2 objects. Roll back code through commit/push while retaining
+the additive column and bucket; older code ignores the field. Deleted/replaced
+images are not restored by a code rollback. Best-effort object cleanup and the
+absence of an orphan sweeper remain unchanged.

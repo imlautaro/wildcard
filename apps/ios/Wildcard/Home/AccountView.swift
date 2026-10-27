@@ -9,7 +9,14 @@ struct AccountView: View {
         Form {
             if let user = auth.user {
                 Section {
+                    HStack {
+                        Spacer()
+                        AccountAvatar(user: user, size: 96)
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
                     LabeledContent("Name", value: user.name)
+                    NavigationLink("Edit Profile") { AccountEditorView(user: user) }
                     LabeledContent("Email", value: user.email)
                 } header: {
                     Text("Your account").manrope(.footnote, weight: .semibold)
@@ -45,5 +52,6 @@ struct AccountView: View {
                     .foregroundStyle(.red)
             }
         }
+        .task { try? await auth.refreshProfile() }
     }
 }

@@ -133,3 +133,14 @@ syntax checks as proof of device behavior or an end-to-end auth test.
 Sources: [Better Auth email/password](https://better-auth.com/docs/authentication/email-password),
 [signed bearer plugin](https://better-auth.com/docs/plugins/bearer), and
 [Drizzle adapter](https://better-auth.com/docs/adapters/drizzle).
+
+## Editing the current profile
+
+The bearer-only `/api/v1/me` endpoint returns nullable `photoVersion` alongside
+the existing user fields. `PATCH /api/v1/me` accepts only a validated `name`.
+Photo reads/replacements/removals use `/api/v1/me/photo`, restricted to the current
+account. Email, password, session ownership, and verification state cannot be
+changed through these routes. The general Better Auth endpoint allowlist remains
+unchanged. See [account profile](profile-photos.md#account-profile) and
+[infrastructure](infrastructure.md#account-profile-storage) for migration 0015
+and private storage reproduction.

@@ -117,3 +117,45 @@ References: [R2 Workers API](https://developers.cloudflare.com/r2/api/workers/wo
 ## Shared identity photos
 
 Migration 0013 projects the canonical name/photo version to all participant conversation records. Authenticated reads and signed notification-avatar reads first validate the recipient’s private contact/session, then resolve the original creator/agent storage key. Removing a member revokes their subsequent reads and does not delete the shared photo. Creator deletion removes the shared object with the existing best-effort cleanup.
+
+## Account profile
+
+Account displays your current name, email, and photo. Open **Edit Profile** to
+change your name and choose, crop, replace, or remove your own photo. It reuses
+the contact cropper and JPEG preparation described above. Save persists the name
+first, then the photo; if the photo request fails, the crop remains available to
+retry. Leaving without saving discards the draft. Account refreshes the profile
+when opened. Authentication responses may omit the optional photo version; the
+client reads the canonical profile from `/api/v1/me` after sign-in.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/api/v1/me` | Current user, including nullable `photoVersion` |
+| PATCH | `/api/v1/me` | Exactly one `name` field; returns the updated user |
+| GET | `/api/v1/me/photo` | Current JPEG; optional version must match |
+| PUT | `/api/v1/me/photo` | Replace with a raw square JPEG; returns the updated user |
+| DELETE | `/api/v1/me/photo` | Remove photo; returns the updated user |
+
+Every route requires a signed bearer session and derives the user ID exclusively
+from that session. Names are trimmed, nonempty, limited to 100 Unicode scalars,
+and reject control characters. Photos have the same streamed 512 KiB limit,
+content-type and structural JPEG checks as contact uploads. Photo writes share
+a per-account allowance of twelve changes per minute. Concurrent changes use
+compare-and-swap and return 409 rather than replacing a newer photo.
+
+Migration `0015_account_photos.sql` adds nullable `user.photo_version`; it does
+not repurpose Better Auth's image URL. The existing private `CONTACT_PHOTOS` R2
+binding stores `users/<user>/<version>.jpg`. Only the account owner can read
+these bytes; they are not exposed through contact sharing or push-avatar URLs.
+Reads use private/no-store headers. The app retains the displayed image in view
+state without persistent disk caching. Replacements/removals request best-effort
+cleanup with the existing helper; interrupted requests can leave orphan objects.
+Future account deletion must clean this prefix as well as contact objects.
+
+No new service, secret, bucket, capability, or Photos-library permission is
+required. Local setup and automatic releases apply the additive migration using
+the existing process in [infrastructure](infrastructure.md). Keep the column and
+private objects during code rollback; older code ignores the added profile field.
+Functional validation remains pending: name/photo persistence after re-login,
+crop/cancel/remove, photo retry after a saved name, concurrent writes, invalid
+uploads, and isolation between two fictional accounts.

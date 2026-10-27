@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { createAuth } from './lib/auth';
 import { admitAuthRequest } from './lib/auth-rate-limit';
-import { readBearerSession } from './lib/session';
+import me from './routes/me';
 import contacts from './routes/contacts';
 import push from './routes/push';
 import pushPhotos from './photos/push-access';
@@ -32,12 +32,7 @@ app.on(['GET', 'POST'], '/api/v1/auth/*', async (c) => {
   return createAuth(c.env).handler(c.req.raw);
 });
 
-app.get('/api/v1/me', async (c) => {
-  const result = await readBearerSession(c.env, c.req.raw.headers);
-  if (!result) return c.json({ error: 'Unauthorized' }, 401);
-  const { id, name, email, emailVerified } = result.user;
-  return c.json({ user: { id, name, email, emailVerified } });
-});
+app.route('/api/v1/me', me);
 
 app.route('/api/v1/contacts', contacts);
 app.route('/api/v1/push', push);

@@ -5,6 +5,7 @@ struct AuthUser: Codable, Sendable {
     let name: String
     let email: String
     let emailVerified: Bool
+    var photoVersion: String? = nil
 }
 
 struct AuthAPI: Sendable {
@@ -64,6 +65,24 @@ struct AuthAPI: Sendable {
         return try JSONDecoder().decode(UserResponse.self, from: data).user
     }
 
+    func saveProfile(name: String, token: String) async throws -> AuthUser {
+        let body = try JSONEncoder().encode(["name": name])
+        let (data, _) = try await send(path: "me", method: "PATCH", body: body, token: token)
+        return try JSONDecoder().decode(UserResponse.self, from: data).user
+    }
+
+    func profilePhoto(version: String, token: String) async throws -> Data {
+        let (data, _) = try await send(path: "me/photo", token: token,
+                                     query: [URLQueryItem(name: "version", value: version)])
+        return data
+    }
+
+    func saveProfilePhoto(data: Data?, token: String) async throws -> AuthUser {
+        let (response, _) = try await send(path: "me/photo", method: data == nil ? "DELETE" : "PUT",
+                                         body: data, token: token, contentType: "image/jpeg")
+        return try JSONDecoder().decode(UserResponse.self, from: response).user
+    }
+
     func signOut(token: String) async throws {
         _ = try await send(path: "auth/sign-out", method: "POST", body: Data("{}".utf8), token: token)
     }
@@ -90,6 +109,12 @@ struct AuthAPI: Sendable {
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if path == "me", [400, 422].contains(response.statusCode) {
+                throw Failure.rejected("Use a name with 1–100 characters and no control characters.")
+            }
+            if path == "me/photo", response.statusCode == 409 {
+                throw Failure.rejected("Your profile changed. Go back, refresh, and try again.")
+            }
             if path.hasPrefix("contacts/sharing/") {
                 if [400, 403, 404, 409, 413, 422, 429].contains(response.statusCode),
                    let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error,
