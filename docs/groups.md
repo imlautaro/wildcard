@@ -126,7 +126,7 @@ The marquee clips to an explicitly sized, leading-aligned subtitle viewport so
 moving text cannot draw behind the avatar. It pauses at each end, stays within
 the measured overflow and restarts from the left when members or width change.
 Group messages use the same `MessageBubbleView` as individual chats, including
-colors, tails, shadows, timestamps and typography, with sender avatars/names added
+colors, tails, flat backgrounds, timestamps and typography, with sender avatars/names added
 for other members. Group receipts do not claim every member has read the message.
 Both chats share the glass capsule composer field, circular tinted action button
 and floating scroll-to-latest control from `ChatControls.swift`. Groups use the

@@ -360,9 +360,8 @@ short single-line message shares its baseline with the time/checks; longer or
 multiline text puts metadata beneath it. Images have their own rounded corners
 inside the surrounding bubble and its 2-point rim.
 
-Text, image, captioned image, and document bubbles share a subtle black shadow
-at 6% opacity, with a 2-point blur radius and a 1-point downward offset. The
-shadow follows the complete bubble outline, including its tail.
+Text, image, captioned image, and document bubbles use a flat appearance without
+a drop shadow, in both individual and group conversations.
 
 
 Group conversations have shared human/agent history and reuse the global agent attention queue. See [groups](groups.md) for finite reply rounds, consent, sender identities, group avatars, attachments and voice dictation.

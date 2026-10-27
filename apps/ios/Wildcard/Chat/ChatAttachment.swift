@@ -93,7 +93,6 @@ struct ChatAttachmentView: View {
                 if attachment.isImage {
                     if caption.isEmpty && senderName == nil {
                         imageButton
-                            .messageBubbleShadow()
                     } else {
                         VStack(alignment: .leading, spacing: 0) {
                             if let senderName {
@@ -113,7 +112,6 @@ struct ChatAttachmentView: View {
                                 .allowsHitTesting(false)
                         }
                         .clipShape(MessageBubbleShape(fromUser: fromUser))
-                        .messageBubbleShadow()
                     }
                 } else {
                     documentButton
@@ -251,7 +249,6 @@ struct ChatAttachmentView: View {
         }
         .buttonStyle(.plain)
         .background(bubbleColor, in: MessageBubbleShape(cornerRadius: 16, fromUser: fromUser))
-        .messageBubbleShadow()
         .disabled(loading || isSending)
     }
 
