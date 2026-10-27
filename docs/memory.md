@@ -11,6 +11,15 @@ quote. No public memory-editing endpoint or comprehensive erasure UI is included
 
 ## Reply context and tools
 
+Private human turns can also [delegate one question to another agent in a shared
+group](group-requests.md), with separate authorization and a correlated private
+return. This is the only group write tool; group replies retain read-only tools.
+Delegated questions and private relays do not create persona-memory events for
+their sender, and automatic relays are excluded from human-memory extraction.
+The target's own group answer remains eligible for its own self profile. Group
+retrieval preserves the original speaker rather than copying another bot's
+preference into the asking bot's identity.
+
 `chat/context.ts` assembles the contact instructions, current UTC time, selected
 memories, recent completed turns, and current user message. It loads at most eight
 previous turns with a 12,000-byte UTF-8 budget. If the latest turn alone exceeds

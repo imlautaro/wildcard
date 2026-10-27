@@ -1,4 +1,5 @@
 import { deliverGroupPush } from './groups/push';
+import { dispatchGroupRequests } from './groups/request-results';
 import { recoverGroups } from './groups/workflow';
 import { cleanAttachments } from './chat/attachments';
 import { dispatchSchedules } from './schedules/dispatch';
@@ -17,6 +18,7 @@ export default {
     ctx.waitUntil(dispatchSchedules(env));
     ctx.waitUntil(recoverChats(env));
     ctx.waitUntil(recoverGroups(env));
+    ctx.waitUntil(dispatchGroupRequests(env));
     ctx.waitUntil(expirePresence(env.DB));
     ctx.waitUntil(recoverVisits(env));
     ctx.waitUntil(deliverPush(env));

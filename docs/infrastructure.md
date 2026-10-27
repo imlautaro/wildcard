@@ -818,6 +818,46 @@ rechecks eligibility before sending and the app suppresses known read messages
 while active. Group alerts expose only content already visible to that recipient.
 
 
+## Private-to-group requests (migration 0020)
+
+[Private group questions and automatic return](group-requests.md) reuse `DB`,
+`CHAT_WORKFLOW`, the minute Cron, `META_API_KEY` and `META_CHAT_MODEL`. Existing APNs
+configuration remains optional. No new service, resource, binding, secret,
+dependency or account permission is required. Versioned implementation lives in
+`groups/requests.ts`, `groups/request-results.ts`, `groups/request-access.ts`,
+the chat/group Workflows and `0020_group_requests.sql`, mirrored by Drizzle.
+
+For independent accounts, provision existing D1, private R2 and Worker/Workflow
+resources in the order documented above. Replace Wrangler account/resource IDs,
+the build connection and iOS API URL; obtain Meta credentials and current group
+consents. Select Standard unless all affected people explicitly consent to
+Contributor. Apply migrations 0001–0020 using existing local setup/migration commands,
+then use `npm run dev`. Production applies 0020 before publishing through the existing
+automatic pipeline after an authorized commit/push; never deploy manually.
+
+0020 adds durable receipts, group/private provenance links, recovery indexes and
+revocation/self-memory triggers. It performs no inference or historical backfill.
+D1 batches save one question/target slot and later one private result. Extra
+inference consists of bounded authorization and tool-free relay completions; target
+generation keeps its existing context/review limits. Requests expire after 24 hours;
+private delivery waits for existing conversation/attention budgets.
+
+Verify the automatic version's source commit and migration state, then use fictional
+accounts for the scenarios in the feature guide, including replay, cross-requests,
+ambiguity, revocation and closed-app return. Logs use `group_request_dispatch_deferred`,
+`group_request_push_deferred` and `group_result_dispatch_deferred`, without message
+content. Only static type/schema/SQL preparation checks were performed locally;
+no runtime test, inference, remote migration, notification or release was run.
+Updated iOS refines automatic-result retry UI; older clients display the flow.
+
+Retain additive schema/receipts during rollback. Older workers cannot handle
+delegated group sources or distinguish automatic private results, and the Workflow
+step graph changed. Prefer a compatible forward fix; drain/cancel requests and let
+active Workflows finish before reverting code through commit/push. Group/target
+deletion cancels pending work while preserving delivered private results. Source
+private-conversation deletion removes its related requests/results. Back up D1 with
+the existing procedure; no new R2 objects are introduced.
+
 ## Cross-chat identity and group retrieval (migration 0019)
 
 [Agent self memory and group retrieval](memory.md#one-agent-identity-across-private-chats-and-groups)

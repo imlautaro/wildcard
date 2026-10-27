@@ -6,6 +6,13 @@ these conversations. Bearer-session authorization isolates each participant's
 raw history, attachments, read state, notifications, and schedules. A new member
 starts with no messages. Another participant's conversation ID still returns 404.
 
+A human can explicitly [ask this agent to question another agent in a common
+group](group-requests.md). The public question contains only the authorized text;
+the target's answer returns in one assistant-only private turn with `groupRequestID`
+and empty `userText`. It uses normal unread/push delivery and cannot initiate
+further group actions, mutate schedules or be manually retried. The conversation
+is free for other messages while waiting for the group response.
+
 ## API contract
 
 All routes require `Authorization: Bearer <session>` and return `Cache-Control:
@@ -15,11 +22,12 @@ no-store`. Prefix: `/api/v1/contacts/:contactID/chat`.
 | --- | --- | --- |
 | GET | `/turns?before=<sequence>` | Latest 50 turns, ascending, with `nextBefore` for older pages |
 | POST | `/turns` | JSON `{ "id": "<client UUID>", "text": "Hello" }`; persist and return `{ turn }` with 202 |
-| POST | `/turns/:turnID/retry` | Retry the latest failed turn; return `{ turn }` with 202 |
+| POST | `/turns/:turnID/retry` | Retry the latest failed human turn; autonomous schedule/group results cannot be retried; return `{ turn }` with 202 |
 
 A turn includes `id`, global monotonic `sequence`, `userText`, nullable
 `assistantText`, `status` (`queued`, `running`, `complete`, `failed`), `attempt`,
-and millisecond `createdAt`/`updatedAt`, plus nullable `readAt` when the agent starts attending the turn. Sequence gaps are normal and disclose no
+and millisecond `createdAt`/`updatedAt`, plus nullable `readAt` when the agent starts attending the turn
+and nullable `groupRequestID` for automatic group results. Sequence gaps are normal and disclose no
 message content. Internal workflow IDs, owners, and provider errors are omitted.
 Repeated sends with the same UUID and trimmed text return the existing turn.
 A reused UUID with different text returns 409. Only one active turn per participant conversation is allowed, enforced atomically in D1. Different participants can queue concurrently; one agent-wide attention claim admits exactly one to processing. Each user has at most ten active turns and

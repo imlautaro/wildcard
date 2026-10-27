@@ -92,8 +92,8 @@ struct ChatView: View {
                             ReplyTypingIndicator()
                         } else if turn.status == .failed {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(turn.errorCode == "SCHEDULE_CANCELLED" ? "Scheduled message cancelled." : "The reply could not be completed.").manrope(.footnote).foregroundStyle(.secondary)
-                                if turn.scheduleID == nil && turn.id == chat.turns.last?.id {
+                                Text(turn.errorCode == "SCHEDULE_CANCELLED" ? "Scheduled message cancelled." : turn.errorCode == "GROUP_REQUEST_CANCELLED" ? "Group request cancelled." : "The reply could not be completed.").manrope(.footnote).foregroundStyle(.secondary)
+                                if turn.scheduleID == nil && turn.groupRequestID == nil && turn.id == chat.turns.last?.id {
                                     Button("Retry reply") { Task { await chat.retry(turn, contactID: contactID, using: auth) } }
                                         .disabled(chat.isSending || chat.hasPendingReply)
                                 }

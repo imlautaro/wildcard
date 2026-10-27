@@ -1,4 +1,6 @@
 import { maintainAgentMemories } from '../chat/agent-memory';
+import { groupSourceAccess } from './request-access';
+import { dispatchGroupRequests } from './request-results';
 import { prepareGroupDraft, type GroupDraft } from './context';
 import { deliverGroupPush } from './push';
 import type { WorkflowStep } from 'cloudflare:workers';
@@ -20,12 +22,9 @@ export async function recoverGroups(env: Env) {
 type PublishOutcome = 'published' | 'skipped' | 'changed' | 'inactive';
 // Recheck attention, source-author access, shared-agent consent and Contributor
 // eligibility at publication, not just before a potentially slow model request.
-const publicationAccess = `EXISTS (SELECT 1 FROM agent_attention attention
+const publicationAccess = (contributor: boolean) => `EXISTS (SELECT 1 FROM agent_attention attention
     WHERE attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt)
-  AND EXISTS (SELECT 1 FROM group_message source JOIN group_member author
-    ON author.group_id = source.group_id AND author.user_id = source.user_id
-    WHERE source.id = r.source_id AND author.share_memory = 1
-    AND (?5 = 0 OR (source.contributor_consent = 1 AND author.contributor_consent = 1)))
+  AND ${groupSourceAccess('r', contributor)}
   AND EXISTS (SELECT 1 FROM contact_agent agent JOIN contact owner_contact
     ON owner_contact.agent_id = agent.id AND owner_contact.user_id = agent.owner_id
     WHERE agent.id = r.agent_id AND agent.memory_shared = 1)
@@ -35,6 +34,7 @@ const unchangedHistory = `NOT EXISTS (SELECT 1 FROM group_message newer
   WHERE newer.group_id = r.group_id AND newer.sequence > ?6)`;
 
 async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft): Promise<PublishOutcome> {
+  const access = publicationAccess(env.META_CHAT_MODEL.includes('contributor'));
   const bindings = [job.turnID, job.attempt, draft.text, Date.now(), env.META_CHAT_MODEL.includes('contributor') ? 1 : 0,
     draft.throughSequence];
   // The watermark guard and insert run in the same transaction. If a message
@@ -43,10 +43,10 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft): Pr
     env.DB.prepare(`INSERT INTO group_message (id, group_id, agent_id, sender_name, text, created_at, contributor_consent)
       SELECT r.id, r.group_id, r.agent_id, a.name, ?3, ?4, ?5 FROM group_reply r JOIN contact_agent a ON a.id = r.agent_id
       WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND ?3 IS NOT NULL
-      AND ${publicationAccess} AND ${unchangedHistory} ON CONFLICT(id) DO NOTHING`).bind(...bindings),
+      AND ${access} AND ${unchangedHistory} ON CONFLICT(id) DO NOTHING`).bind(...bindings),
     env.DB.prepare(`UPDATE group_reply AS r SET status = 'complete' WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
       AND (EXISTS (SELECT 1 FROM group_message saved WHERE saved.id = r.id)
-        OR (?3 IS NULL AND ${publicationAccess} AND ${unchangedHistory}))`).bind(...bindings),
+        OR (?3 IS NULL AND ${access} AND ${unchangedHistory}))`).bind(...bindings),
     env.DB.prepare(`SELECT r.status, EXISTS (SELECT 1 FROM group_message WHERE id = r.id) AS published,
       EXISTS (SELECT 1 FROM group_message newer WHERE newer.group_id = r.group_id AND newer.sequence > ?3) AS changed
       FROM group_reply r WHERE r.id = ?1 AND r.attempt = ?2`).bind(job.turnID, job.attempt, draft.throughSequence),
@@ -129,6 +129,10 @@ export async function runGroup(env: Env, job: GroupJob, step: WorkflowStep) {
       .bind(job.turnID, job.attempt, Date.now() + 30_000).run();
     await releaseAttention(env, job);
     if (task) await dispatchGroup(env, task.groupID);
+  });
+  await step.do('group-dispatch-private-results', async () => {
+    try { await dispatchGroupRequests(env); }
+    catch { console.error(JSON.stringify({ event: 'group_result_dispatch_deferred' })); }
   });
 }
 

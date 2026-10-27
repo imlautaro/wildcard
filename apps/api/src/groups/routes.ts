@@ -8,6 +8,7 @@ import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { photoResponse } from '../photos/storage';
 import { dispatchGroup } from './workflow';
+import { groupSourceAccess } from './request-access';
 
 const groups = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 const contributor = (env: Env) => env.META_CHAT_MODEL.includes('contributor');
@@ -288,6 +289,7 @@ groups.post('/:id/replies/:replyID/retry', async (c) => {
   const id = c.req.param('id'), replyID = c.req.param('replyID');
   await c.env.DB.prepare(`UPDATE group_reply SET status = 'queued', attempt = attempt + 1,
     workflow_id = id || '-' || (attempt + 1) WHERE id = ? AND group_id = ? AND status = 'failed'
+    AND ${groupSourceAccess('group_reply', contributor(c.env))}
     AND NOT EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = group_reply.id)
     AND NOT EXISTS (SELECT 1 FROM group_reply other WHERE other.group_id = group_reply.group_id AND other.status IN ('queued','running'))`)
     .bind(replyID, id).run();

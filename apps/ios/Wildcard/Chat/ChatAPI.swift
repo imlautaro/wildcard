@@ -4,6 +4,7 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     enum Status: String, Decodable, Sendable { case queued, running, complete, failed }
     let attachment: ChatAttachment?
     let scheduleID: String?
+    let groupRequestID: String?
     let errorCode: String?
     let sequence: Int
     let id: String

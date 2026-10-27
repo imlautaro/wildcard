@@ -36,7 +36,7 @@ export async function executeScheduleTool(db: D1Database, turn: StoredTurn, name
       instruction: Array.from(schedule.instruction).slice(0, 300).join('') })), limit: 20, truncated: schedules.length > 20 });
   }
   // Autonomous turns have no permission to create, change, or perpetuate schedules.
-  if (turn.scheduleID) return JSON.stringify({ error: 'Scheduled messages cannot mutate schedules.' });
+  if (turn.scheduleID || turn.groupRequestID) return JSON.stringify({ error: 'Autonomous messages cannot mutate schedules.' });
   const receiptID = `${turn.id}:${name}:${name === 'create_schedule' ? 'new' : String(args.id)}`;
   const request = JSON.stringify([name, Object.entries(args).sort(([a], [b]) => a.localeCompare(b))]);
   const previous = await db.prepare('SELECT request, result FROM schedule_mutation WHERE id = ? AND turn_id = ?')

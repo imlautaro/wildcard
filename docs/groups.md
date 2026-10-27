@@ -74,7 +74,10 @@ admission threshold. Leaving does not erase history; the UI explains this.
 
 Each accepted human message snapshots the current contacts into a finite round:
 at most one response per contact in insertion order. New human messages can queue
-while contacts respond. Replies never enqueue more replies, preventing autonomous loops.
+while contacts respond. Ordinary replies never enqueue more replies, preventing autonomous loops.
+The additional trigger is an explicit human private [group question](group-requests.md):
+its asking agent posts once and the server queues only its named recipient. The
+target's answer returns privately without starting another round.
 Group replies are serialized by their persisted sequence. Agents added later do
 not answer old messages, including after an HTTP retry. A group can have no bots.
 
@@ -110,7 +113,7 @@ the slot completes without a message so the queue can continue. Explicitly
 canceled or clearly superseded requests can also be skipped at initial drafting.
 Skipping creates no message, unread count, push or self-memory event; grounded
 human-memory maintenance still follows its existing policy. Later human messages
-keep their existing rounds; bot replies never create new rounds.
+keep their existing rounds; ordinary bot replies never create new rounds.
 
 Draft/review calls and guarded publication use separate durable Workflow steps.
 Successful step results are reused on replay; transient failures retain the
@@ -260,7 +263,7 @@ provider model, secret or storage service is required.
 ## Setup and verification
 
 See [infrastructure](infrastructure.md#group-conversations). Migrations `0016`,
-`0017` and `0018` are additive and use existing D1, R2, Workflow, Cron and Meta bindings; no new
+`0017`, `0018`, `0019` and `0020` are additive and use existing D1, R2, Workflow, Cron and Meta bindings; no new
 resource, secret, APNs topic, dependency or manual deployment is required.
 
 Static checks cover TypeScript, full Swift type checking and temporary SQLite

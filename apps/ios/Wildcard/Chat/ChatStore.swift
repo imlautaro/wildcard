@@ -142,7 +142,7 @@ final class ChatStore {
         outgoingMessage = OutgoingMessage(
             turn: ChatTurn(
                 attachment: attachment.map { ChatAttachment(name: $0.name, mimeType: $0.mimeType, size: $0.data.count) },
-                scheduleID: nil, errorCode: nil, sequence: 0, id: submission.id,
+                scheduleID: nil, groupRequestID: nil, errorCode: nil, sequence: 0, id: submission.id,
                 userText: text, assistantText: nil, status: .queued, attempt: 0,
                 createdAt: now, readAt: nil, updatedAt: now
             ),

@@ -73,7 +73,7 @@ export async function museCompletion(key: string | undefined, messages: ModelMes
         call.type !== 'function' || !isRecord(call.function) || typeof call.function.name !== 'string' ||
         call.function.name.length > 80 || typeof call.function.arguments !== 'string' ||
         new TextEncoder().encode(call.function.arguments).byteLength >
-          (['create_schedule', 'update_schedule'].includes(call.function.name) ? 6000 : 1000) ||
+          (['create_schedule', 'update_schedule', 'ask_agent_in_group'].includes(call.function.name) ? 6000 : 1000) ||
         toolCalls.some((previous) => previous.id === call.id)) throw new Error('MODEL_INVALID_TOOL_CALLS');
       toolCalls.push({ id: call.id, type: 'function', function: { name: call.function.name, arguments: call.function.arguments } });
     }

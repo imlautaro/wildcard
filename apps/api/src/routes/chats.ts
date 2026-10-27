@@ -180,6 +180,7 @@ chats.post('/turns/:turnID/retry', messageBody, async (c) => {
   const previous = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
   if (!previous) return c.json({ error: 'Message not found' }, 404);
   if (previous.scheduleID) return c.json({ error: 'Scheduled messages cannot be manually retried' }, 409);
+  if (previous.groupRequestID) return c.json({ error: 'Automatic group results cannot be manually retried. Ask a new question instead.' }, 409);
   if (previous.status !== 'failed') return c.json({ turn: publicTurn(previous), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
   if (!c.env.META_API_KEY?.trim()) return c.json({ error: 'Replies are unavailable' }, 503);
   const limit = await admitAuthRequest(c.env.DB, c.get('owner'), 'chat-generation', 20);

@@ -117,6 +117,7 @@ export const chatTurn = sqliteTable('chat_turn', {
   scheduleRevision: integer('schedule_revision'),
   scheduledAt: date('scheduled_at'),
   scheduleInstruction: text('schedule_instruction'),
+  groupRequestId: text('group_request_id').references((): AnySQLiteColumn => groupRequest.id, { onDelete: 'cascade' }),
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
   id: text('id').notNull().unique(),
   contactId: text('contact_id').notNull(),
@@ -139,6 +140,7 @@ export const chatTurn = sqliteTable('chat_turn', {
   index('chat_contact_sequence_idx').on(table.contactId, desc(table.sequence)),
   uniqueIndex('chat_schedule_occurrence_idx').on(table.scheduleId, table.scheduleRevision, table.scheduledAt).where(sql`${table.scheduleId} IS NOT NULL`),
   index('chat_schedule_idx').on(table.scheduleId),
+  uniqueIndex('chat_group_request_idx').on(table.groupRequestId).where(sql`${table.groupRequestId} IS NOT NULL`),
   index('chat_recovery_idx').on(table.status, table.checkedAt),
   index('chat_user_status_idx').on(table.userId, table.status),
   uniqueIndex('chat_turn_source_idx').on(table.id, table.contactId, table.userId),
@@ -303,6 +305,7 @@ export const groupInvite = sqliteTable('group_invite', {
   uniqueIndex('group_invite_recipient_unique').on(t.groupId, t.recipientId), index('group_invite_recipient_idx').on(t.recipientId, t.expiresAt)]);
 export const groupMessage = sqliteTable('group_message', {
   attachmentJSON: text('attachment_json'),
+  requestId: text('request_id').references((): AnySQLiteColumn => groupRequest.id, { onDelete: 'set null' }),
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
   id: text('id').notNull().unique(),
   groupId: text('group_id').notNull().references(() => chatGroup.id, { onDelete: 'cascade' }),
@@ -314,6 +317,7 @@ export const groupMessage = sqliteTable('group_message', {
   text: text('text').notNull(),
   createdAt: date('created_at').notNull(),
 }, (t) => [index('group_message_history_idx').on(t.groupId, desc(t.sequence)),
+  uniqueIndex('group_message_request_idx').on(t.requestId).where(sql`${t.requestId} IS NOT NULL`),
   check('group_attachment_json', sql`${t.attachmentJSON} IS NULL OR json_valid(${t.attachmentJSON})`)]);
 export const groupReply = sqliteTable('group_reply', {
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
@@ -328,6 +332,27 @@ export const groupReply = sqliteTable('group_reply', {
 }, (t) => [foreignKey({ columns: [t.groupId, t.agentId], foreignColumns: [groupAgent.groupId, groupAgent.agentId] }).onDelete('cascade'),
   uniqueIndex('group_reply_source_agent_idx').on(t.sourceId, t.agentId), index('group_reply_pending_idx').on(t.status, t.createdAt, t.sequence),
   check('group_reply_status', sql`${t.status} IN ('queued', 'running', 'complete', 'failed')`)]);
+export const groupRequest = sqliteTable('group_request', {
+  id: text('id').primaryKey(),
+  sourceTurnId: text('source_turn_id').notNull().unique().references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'cascade' }),
+  groupId: text('group_id').references(() => chatGroup.id, { onDelete: 'set null' }),
+  requesterId: text('requester_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  senderAgentId: text('sender_agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  targetAgentId: text('target_agent_id').references(() => contactAgent.id, { onDelete: 'set null' }),
+  question: text('question').notNull(),
+  status: text('status').notNull().default('waiting'),
+  resultKind: text('result_kind'),
+  createdAt: date('created_at').notNull(),
+  expiresAt: date('expires_at').notNull(),
+  checkedAt: date('checked_at').notNull().default(sql`0`),
+}, (t) => [index('group_request_pending_idx').on(t.status, t.createdAt),
+  index('group_request_recovery_idx').on(t.status, t.checkedAt, t.createdAt),
+  index('group_request_group_idx').on(t.groupId, t.requesterId), index('group_request_requester_idx').on(t.requesterId, t.status),
+  check('group_request_question', sql`length(${t.question}) BETWEEN 1 AND 1000`),
+  check('group_request_status', sql`${t.status} IN ('waiting', 'queued', 'complete', 'cancelled')`),
+  check('group_request_result', sql`${t.resultKind} IN ('answered', 'skipped', 'failed', 'expired')`),
+  check('group_request_different_agents', sql`${t.senderAgentId} != ${t.targetAgentId}`),
+  check('group_request_destination', sql`${t.status} = 'cancelled' OR (${t.groupId} IS NOT NULL AND ${t.targetAgentId} IS NOT NULL)`)]);
 export const groupMemory = sqliteTable('group_memory', {
   agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
