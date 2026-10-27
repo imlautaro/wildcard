@@ -42,8 +42,12 @@ substitute for the supplied bearer token on these routes. Responses use
 
 ## iOS flow
 
-Chats loads the first page on appearance, refreshes on returning to the foreground,
-and supports pull to refresh and Load more. It distinguishes loading, empty,
+Chats shows only conversations with at least one persisted message, including
+attachment-only messages. Empty contacts stay available in Contacts. Chats keeps
+its recent-message ordering, loads the first page on appearance, refreshes on
+returning to the foreground, and supports pull to refresh and Load more. If a
+page contains only empty contacts, it automatically continues until it finds
+conversations or reaches the end. It distinguishes loading, empty,
 request failure, and populated states. While active, the signed-in shell refreshes
 contacts every three seconds and immediately on foreground activation. Loaded
 later pages survive automatic refreshes and are sorted with refreshed rows by
@@ -54,7 +58,15 @@ This can revisit a previously loaded page after activity changes. Contact snapsh
 read state is persisted on the server. The store is recreated when the signed-in user changes, and responses
 from a previous session or an invalidated request cannot populate the new state.
 
-Tap **+ → Create Contact**, enter a name, and tap Create. **+ → Join Shared Contact** accepts a code from a creator; it requires sharing consent and opens a new empty private chat. The person-plus button in a creator’s chat opens sharing/access management, including invitations by an existing account’s email. Recipients open the envelope button in Chats to accept or decline requests; no mailbox email is sent. Swipe a row for Edit or Delete; a context
+Tap **+** to open the **Contacts** screen. Its first two rows are **Create
+contact** and **Join Shared Contact**, followed by all contacts sorted
+alphabetically using localized name comparison, with IDs breaking equal-name ties.
+Contacts automatically loads remaining pages, re-sorting as they arrive; errors
+retain loaded rows and offer Retry. Tap a contact to open its chat and return to
+Home when navigating back. Swipe and context-menu Edit/Delete remain available
+in both lists. Choose **Create contact**, enter a name, and tap Create to return
+to Contacts. **Join Shared Contact** accepts a code from a creator; it requires
+sharing consent and opens a new empty private chat. The person-plus button in a creator’s chat opens sharing/access management, including invitations by an existing account’s email. Recipients open the envelope button in Chats to accept or decline requests; no mailbox email is sent. Swipe a row for Edit or Delete; a context
 menu offers the same actions. Edit pushes the editor on the existing shared
 navigation stack. Deletion requires confirmation. Successful mutations update the
 list from the server response; creation dismisses the editor. Failed saves retain

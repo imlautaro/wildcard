@@ -37,6 +37,16 @@ available through the existing pagination API. Unread acknowledgements invalidat
 cannot resurrect a cleared counter. Read state is persisted on the server; the
 navigation cache itself remains in memory.
 
+## Chats and Contacts lists
+
+Both screens share the same session contact cache and mutation state. Chats
+filters out contacts without message metadata and keeps activity order. Contacts
+sorts all loaded contacts by name and automatically fetches remaining pages so
+empty conversations remain reachable. Chats automatically skips pages containing
+only empty conversations. Loading and mutation guards prevent overlapping page
+requests; failures retain the cache and show Retry. Foreground refreshes still
+preserve loaded later pages and rebase pagination when first-page membership changes.
+
 ## Memory and isolation
 
 The cache keeps eight recently accessed conversations, evicting the least recently

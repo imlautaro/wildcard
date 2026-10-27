@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum HomeDestination: Hashable {
+    case contacts
     case addContact
     case contact(String)
     case editContact(String)
@@ -58,10 +59,7 @@ struct HomeView: View {
                         .accessibilityLabel(invitations.invitations.isEmpty ? "Contact Invitations" : "Contact Invitations, pending requests")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            NavigationLink("Create Contact", value: HomeDestination.addContact)
-                            NavigationLink("Join Shared Contact", value: HomeDestination.joinContact)
-                        } label: {
+                        NavigationLink(value: HomeDestination.contacts) {
                             Image(systemName: "plus")
                         }
                         .tint(Color(uiColor: .label))
@@ -73,6 +71,14 @@ struct HomeView: View {
             // Destinations replace the complete tab layout, sharing one back stack.
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
+                case .contacts:
+                    ChatsView(
+                        mode: .contacts,
+                        openContact: { contact in destinations = [.contact(contact.id)] },
+                        editContact: { contact in destinations.append(.editContact(contact.id)) }
+                    )
+                    .navigationTitle("Contacts")
+                    .navigationBarTitleDisplayMode(.inline)
                 case .addContact:
                     ContactEditorView()
                 case .joinContact:

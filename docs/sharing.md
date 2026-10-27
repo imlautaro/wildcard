@@ -20,7 +20,7 @@ and on manual refresh. Its toolbar indicator is separate from message badges.
 
 The optional **Invite with a code instead** disclosure retains the earlier flow:
 create a code, share it with the system share sheet, and have the recipient choose
-**+ → Join Shared Contact**. Codes expire after 24 hours, are single-use bearer
+**+ → Contacts → Join Shared Contact**. Codes expire after 24 hours, are single-use bearer
 capabilities, and are not bound to a recipient. Directed requests also expire
 after 24 hours, but only the resolved recipient account may accept/decline them,
 even if someone else knows their invitation ID.

@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ChatsView: View {
+    enum Mode { case chats, contacts }
+    var mode: Mode = .chats
     let openContact: (Contact) -> Void
     let editContact: (Contact) -> Void
     @Environment(AuthStore.self) private var auth
@@ -9,8 +11,28 @@ struct ChatsView: View {
     @State private var deletion: Contact?
     @State private var mutationError: String?
 
+    private var displayedContacts: [Contact] {
+        if mode == .chats {
+            return contacts.contacts.filter { $0.lastMessageAt != nil || $0.lastMessageText != nil }
+        }
+        return contacts.contacts.sorted {
+            let order = $0.name.localizedStandardCompare($1.name)
+            return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
+        }
+    }
+
     var body: some View {
         List {
+            if mode == .contacts {
+                Section {
+                    NavigationLink(value: HomeDestination.addContact) {
+                        Label("Create contact", systemImage: "person.badge.plus")
+                    }
+                    NavigationLink(value: HomeDestination.joinContact) {
+                        Label("Join Shared Contact", systemImage: "person.2")
+                    }
+                }
+            }
             if let error = contacts.error {
                 Section {
                     Text(error).foregroundStyle(.red)
@@ -24,17 +46,28 @@ struct ChatsView: View {
                     Button("Dismiss") { self.mutationError = nil }
                 }
             }
-            if !contacts.contacts.isEmpty {
+            if !displayedContacts.isEmpty {
                 Section {
-                    ForEach(contacts.contacts) { contact in
+                    ForEach(displayedContacts) { contact in
                         Button {
                             openContact(contact)
                         } label: {
-                            ChatListRow(contact: contact)
+                            if mode == .chats {
+                                ChatListRow(contact: contact)
+                            } else {
+                                HStack(spacing: 12) {
+                                    ContactAvatar(contact: contact, size: 48)
+                                    Text(contact.name).manrope(.body, weight: .semibold)
+                                        .foregroundStyle(.primary)
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(.vertical, 4)
+                                .contentShape(Rectangle())
+                            }
                         }
                         .buttonStyle(.plain)
-                        .listRowSeparator(contact.id == contacts.contacts.first?.id ? .hidden : .visible, edges: .top)
-                        .listRowSeparator(contact.id == contacts.contacts.last?.id ? .hidden : .visible, edges: .bottom)
+                        .listRowSeparator(contact.id == displayedContacts.first?.id ? .hidden : .visible, edges: .top)
+                        .listRowSeparator(contact.id == displayedContacts.last?.id ? .hidden : .visible, edges: .bottom)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button("Delete", role: .destructive) { deletion = contact }
                             if contact.canManage {
@@ -50,29 +83,44 @@ struct ChatsView: View {
                 }
                 .listSectionSeparator(.hidden, edges: .all)
             }
-            if contacts.nextCursor != nil {
+            if contacts.nextCursor != nil && mode == .chats && !displayedContacts.isEmpty {
                 Button("Load more") { Task { await contacts.loadMore(using: auth) } }
                     .disabled(contacts.isLoading || contacts.isLoadingMore || contacts.isMutating)
             }
-            if contacts.isLoadingMore { ProgressView() }
+            if contacts.isLoadingMore || (mode == .contacts && !contacts.hasLoaded && contacts.error == nil) {
+                ProgressView("Loading contacts…")
+            }
+            if mode == .contacts && contacts.hasLoaded && contacts.nextCursor == nil && displayedContacts.isEmpty && contacts.error == nil {
+                Text("No contacts yet").manrope().foregroundStyle(.secondary)
+            }
         }
         .listStyle(.plain)
         .overlay {
-            if contacts.contacts.isEmpty && contacts.error == nil && mutationError == nil {
-                if !contacts.hasLoaded {
+            if mode == .chats && displayedContacts.isEmpty && contacts.error == nil && mutationError == nil {
+                if !contacts.hasLoaded || contacts.nextCursor != nil {
                     ProgressView("Loading contacts…")
                 } else {
                     ContentUnavailableView {
-                        Label("No contacts yet", systemImage: "person.crop.circle.badge.plus")
+                        Label("No chats yet", systemImage: "bubble.left.and.bubble.right")
                             .manrope(.title2, weight: .semibold)
                     } description: {
-                        Text("Tap + to create your first contact.").manrope()
+                        Text("Tap + to choose a contact and start a conversation.").manrope()
                     }
                 }
             }
         }
         .refreshable { await contacts.refresh(using: auth) }
         .task { await contacts.refresh(using: auth, force: false) }
+        .task(id: "\(contacts.nextCursor ?? "")-\(contacts.isLoading)-\(contacts.isMutating)") {
+            // Load the complete directory, or skip empty pages until Chats has rows.
+            while !Task.isCancelled, contacts.error == nil,
+                  !contacts.isLoading, !contacts.isLoadingMore, !contacts.isMutating,
+                  let cursor = contacts.nextCursor,
+                  mode == .contacts || displayedContacts.isEmpty {
+                await contacts.loadMore(using: auth)
+                guard contacts.nextCursor != cursor else { break }
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await contacts.refresh(using: auth) } }
         }

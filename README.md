@@ -61,8 +61,10 @@ icon and bundled [Manrope typography](docs/typography.md). Debug and Release
 default to the public API through `WILDCARD_API_URL`; an independent installation must replace that setting. See the auth guide for local
 simulator configuration.
 
-The signed-in shell uses one navigation stack around the tabs. Tap **+** in Chats
-to create a contact by name. Swipe a contact to Edit or Delete (with confirmation);
+The signed-in shell uses one navigation stack around the tabs. Chats shows only
+conversations with at least one message, ordered by recent activity. Tap **+** to
+open Contacts: Create contact and Join Shared Contact appear first, followed by
+all contacts in alphabetical order. Tap a contact to open its conversation. Swipe a contact to Edit or Delete (with confirmation);
 tap a contact to open its conversation and its title to edit it. Editors
 push over the full tab layout, preserving the selected tab on return. Chats supports
 pull to refresh and paginated loading. Choose, crop, replace, or remove a [profile photo](docs/profile-photos.md) in the
