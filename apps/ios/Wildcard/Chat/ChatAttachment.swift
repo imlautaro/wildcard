@@ -74,6 +74,7 @@ struct ChatAttachmentView: View {
     let contactID: String
     let turnID: String
     let sentAt: Double
+    let caption: String
     @Environment(AuthStore.self) private var auth
     @State private var loading = false
     @State private var previewURL: URL?
@@ -88,38 +89,23 @@ struct ChatAttachmentView: View {
             Spacer(minLength: 40)
             VStack(alignment: .trailing, spacing: 6) {
                 if attachment.isImage {
-                    Button {
-                        if thumbnail != nil { showImage = true }
-                        else { imageAttempt += 1 }
-                    } label: {
-                        Group {
-                            if let thumbnail {
-                                Image(uiImage: thumbnail).resizable().scaledToFit()
-                                    .overlay(alignment: .bottomTrailing) {
-                                        MessageMetadataView(sentAt: sentAt, fromUser: true)
-                                            .padding(.horizontal, 7).padding(.vertical, 4)
-                                            .background(.black.opacity(0.6), in: Capsule())
-                                            .environment(\.colorScheme, .dark)
-                                            .padding(8)
-                                    }
-                                    // Clip the image's actual bounds before the flexible frame.
-                                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                                    .contentShape(RoundedRectangle(cornerRadius: 20))
-                                    .frame(maxWidth: 260, maxHeight: 260, alignment: .trailing)
-                            } else {
-                                ZStack {
-                                    Color("OutgoingMessageBackground")
-                                    if loading { ProgressView() }
-                                    else { Label("Retry image", systemImage: "arrow.clockwise").manrope(.footnote) }
-                                }.frame(width: 220, height: 180)
-                                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    if caption.isEmpty {
+                        imageButton
+                    } else {
+                        VStack(alignment: .trailing, spacing: 0) {
+                            imageButton
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text(caption).manrope().multilineTextAlignment(.leading)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                MessageMetadataView(sentAt: sentAt, fromUser: true)
                             }
+                            .padding(.horizontal, 16).padding(.vertical, 12)
                         }
-                        .contentShape(RoundedRectangle(cornerRadius: 20))
+                        .frame(maxWidth: 260)
+                        .background(Color("OutgoingMessageBackground"))
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
                     }
-                    .buttonStyle(.plain)
-                    .disabled(loading)
-                    .accessibilityLabel(thumbnail == nil ? "Retry loading image" : "Open image full screen: \(attachment.name)")
                 } else {
                     documentButton
                 }
@@ -159,6 +145,43 @@ struct ChatAttachmentView: View {
             documentTask?.cancel()
             clearPreview()
         }
+    }
+
+    private var imageButton: some View {
+        Button {
+            if thumbnail != nil { showImage = true }
+            else { imageAttempt += 1 }
+        } label: {
+            Group {
+                if let thumbnail {
+                    Image(uiImage: thumbnail).resizable().scaledToFit()
+                        .overlay(alignment: .bottomTrailing) {
+                            if caption.isEmpty {
+                                MessageMetadataView(sentAt: sentAt, fromUser: true)
+                                    .padding(.horizontal, 7).padding(.vertical, 4)
+                                    .background(.black.opacity(0.6), in: Capsule())
+                                    .environment(\.colorScheme, .dark)
+                                    .padding(8)
+                            }
+                        }
+                        // Clip the image's actual bounds before the flexible frame.
+                        .clipShape(RoundedRectangle(cornerRadius: caption.isEmpty ? 20 : 0))
+                        .contentShape(RoundedRectangle(cornerRadius: caption.isEmpty ? 20 : 0))
+                        .frame(maxWidth: 260, maxHeight: 260, alignment: .trailing)
+                } else {
+                    ZStack {
+                        Color("OutgoingMessageBackground")
+                        if loading { ProgressView() }
+                        else { Label("Retry image", systemImage: "arrow.clockwise").manrope(.footnote) }
+                    }.frame(width: 220, height: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: caption.isEmpty ? 20 : 0))
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: caption.isEmpty ? 20 : 0))
+        }
+        .buttonStyle(.plain)
+        .disabled(loading)
+        .accessibilityLabel(thumbnail == nil ? "Retry loading image" : "Open image full screen: \(attachment.name)")
     }
 
     private var documentButton: some View {
