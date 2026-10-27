@@ -548,6 +548,13 @@ attachments, and push records remain in place. Metadata projection and exclusive
 processing admission are enforced by triggers. The old `contact_presence` table
 is retained but is no longer authoritative for the new Worker.
 
+Presence responses project `typing` to `online` for conversations other than the
+one holding the agent's attention for a matching running turn/attempt. This uses
+the existing `agent_presence`, `agent_attention`, `contact`, and `chat_turn`
+tables; no new resource, configuration, secret, migration, or client schema is
+needed. Release this API change through the same commit/push automatic pipeline.
+The global connectivity, last-seen/expiry storage, and queue are preserved.
+
 Use the earlier independent-account creation order and account-specific binding,
 origin, model, iOS bundle/team, and optional APNs replacements. Prefer Standard
 unless the operator and every participant explicitly accept Contributor data use.

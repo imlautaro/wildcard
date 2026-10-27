@@ -173,6 +173,14 @@ Latest/older history pages and send/retry responses include `presence` with
 middleware. Presence is activity of the contact's server agent, not a human device
 connection. `readAt` separately records processing admission.
 
+For shared contacts, the API returns `typing` only to the recipient conversation
+holding the current attention claim for a running turn and matching attempt.
+Other participants receive `online` while the agent writes elsewhere. The global
+presence row, last-seen timestamp, expiry, and exclusive attention remain shared.
+This response projection uses existing D1 tables and the existing response shape;
+no migration, binding, or iOS update is needed. Static TypeScript, SQL preparation,
+and whitespace checks cover the change; runtime verification remains pending.
+
 Migration `0008_contact_presence.sql` adds a private, cascading D1 table and atomic
 turn triggers. Migration `0009_delayed_contact_connection.sql` updates them:
 accepting a

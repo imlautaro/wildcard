@@ -18,8 +18,14 @@ export async function readPresence(db: D1Database, contactID: string, userID: st
   await db.prepare(`UPDATE agent_presence SET status = 'offline', last_seen_at = expires_at, expires_at = NULL
     WHERE agent_id = (SELECT agent_id FROM contact WHERE id = ?1 AND user_id = ?2) AND expires_at <= ?3`)
     .bind(contactID, userID, Date.now()).run();
-  return await db.prepare(`SELECT status, last_seen_at AS lastSeenAt, expires_at AS expiresAt
-    FROM agent_presence WHERE agent_id = (SELECT agent_id FROM contact WHERE id = ?1 AND user_id = ?2)`)
+  // Typing belongs to the attended conversation; connectivity remains global.
+  return await db.prepare(`SELECT CASE WHEN p.status = 'typing' AND NOT EXISTS (
+      SELECT 1 FROM agent_attention a JOIN chat_turn t ON t.id = a.turn_id AND t.attempt = a.attempt
+      WHERE a.agent_id = p.agent_id AND t.contact_id = ?1 AND t.user_id = ?2 AND t.status = 'running'
+    ) THEN 'online' ELSE p.status END AS status,
+    p.last_seen_at AS lastSeenAt, p.expires_at AS expiresAt
+    FROM agent_presence p JOIN contact c ON c.agent_id = p.agent_id
+    WHERE c.id = ?1 AND c.user_id = ?2`)
     .bind(contactID, userID).first<ContactPresence>() ?? { status: 'offline', lastSeenAt: null, expiresAt: null };
 }
 

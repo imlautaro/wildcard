@@ -149,9 +149,11 @@ recovered by the existing minute Cron.
 `agent_presence` stores one status/deadline/last-seen value per agent. Reply and
 visit triggers update that same row; another participant's visit cannot override
 an active reply's typing lease. Reads and Cron reconcile expired leases. All
-participants observe the same global status, subject to their polling time.
-Header typing describes the agent's global activity; a queued conversation does
-not render a typing bubble. Checks use persisted `readAt` rather than the previous
+participants share online/offline connectivity, last seen, and expiry, subject to
+their polling time. Typing is visible only to the conversation whose running
+turn holds the agent's matching attention claim and attempt. Other participants
+receive `online`, even while the stored agent status is `typing`; a queued
+conversation does not render a typing bubble. Checks use persisted `readAt` rather than the previous
 three-second simulation: muted double checks mean server acceptance, colored
 double checks mean the agent started attending that turn. They do not certify
 human reading or APNs delivery. Legacy completed/running turns receive a
