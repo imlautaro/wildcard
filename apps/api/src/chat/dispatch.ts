@@ -8,18 +8,23 @@ export async function dispatchChat(env: Env, turn: StoredTurn) {
 }
 
 export async function dispatchAgent(env: Env, agentID: string) {
-  // Claim the oldest waiting conversation atomically. Queued messages are not read
-  // by a Workflow until the previous reply and its memory maintenance finish.
+  // Private chats and group rounds share one atomic claim per agent.
   await env.DB.prepare(`INSERT INTO agent_attention (agent_id, turn_id, attempt, workflow_id, acquired_at)
-    SELECT c.agent_id, t.id, t.attempt, t.workflow_id, ?2 FROM chat_turn t
-    JOIN contact c ON c.id = t.contact_id WHERE c.agent_id = ?1 AND t.status = 'queued'
-    ORDER BY t.sequence LIMIT 1 ON CONFLICT(agent_id) DO NOTHING`).bind(agentID, Date.now()).run();
-  const turn = await env.DB.prepare(`SELECT turn_id AS id, workflow_id AS workflowID, attempt
-    FROM agent_attention WHERE agent_id = ?`).bind(agentID)
-    .first<{ id: string; workflowID: string; attempt: number }>();
+    SELECT ?1, id, attempt, workflowID, ?2 FROM (
+      SELECT t.id, t.attempt, t.workflow_id AS workflowID, t.created_at AS createdAt, t.sequence AS sequence
+      FROM chat_turn t JOIN contact c ON c.id = t.contact_id WHERE c.agent_id = ?1 AND t.status = 'queued'
+      UNION ALL SELECT r.id, r.attempt, r.workflow_id, r.created_at, r.sequence FROM group_reply r
+      WHERE r.agent_id = ?1 AND r.status = 'queued' AND NOT EXISTS (
+        SELECT 1 FROM group_reply prior WHERE prior.group_id = r.group_id
+          AND prior.status IN ('queued','running') AND prior.sequence < r.sequence)
+    ) ORDER BY createdAt, sequence, id LIMIT 1 ON CONFLICT(agent_id) DO NOTHING`).bind(agentID, Date.now()).run();
+  const turn = await env.DB.prepare(`SELECT a.turn_id AS id, a.workflow_id AS workflowID, a.attempt,
+    EXISTS (SELECT 1 FROM group_reply r WHERE r.id = a.turn_id) AS isGroup
+    FROM agent_attention a WHERE a.agent_id = ?`).bind(agentID)
+    .first<{ id: string; workflowID: string; attempt: number; isGroup: number }>();
   if (!turn) return;
   try {
-    await env.CHAT_WORKFLOW.create({ id: turn.workflowID, params: { turnID: turn.id, attempt: turn.attempt } });
+    await env.CHAT_WORKFLOW.create({ id: turn.workflowID, params: turn.isGroup ? { kind: 'group', turnID: turn.id, attempt: turn.attempt } : { turnID: turn.id, attempt: turn.attempt } });
   } catch {
     try {
       const instance = await env.CHAT_WORKFLOW.get(turn.workflowID);
@@ -53,6 +58,8 @@ export async function recoverChats(env: Env) {
           await env.DB.prepare(`UPDATE chat_turn SET status = 'failed', error_code = 'GENERATION_INTERRUPTED', updated_at = ?
             WHERE id = ? AND attempt = ? AND status IN ('queued', 'running')`)
             .bind(now, claim.turnID, claim.attempt).run();
+          await env.DB.prepare(`UPDATE group_reply SET status = 'failed' WHERE id = ? AND attempt = ? AND status IN ('queued','running')`)
+            .bind(claim.turnID, claim.attempt).run();
           await releaseAttention(env, claim);
         }
       } catch { await dispatchAgent(env, claim.agentID); }

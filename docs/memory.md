@@ -130,3 +130,6 @@ and provider compatibility must be verified with fictional data when authorized.
 - [Meta structured output](https://dev.meta.ai/docs/cookbook/structured-output)
 - [D1 FTS5 support](https://developers.cloudflare.com/d1/sql-api/sql-statements/)
 - [D1 transactional batches](https://developers.cloudflare.com/d1/worker-api/d1-database/)
+
+
+Consented group messages can contribute attributed memories to the same agent. Private-chat memory selection also considers grounded group memories while both the source user and agent remain in the source group. Group replies receive selected shared memories, never raw private transcripts. See [groups](groups.md) for consent, revocation, model switching and limits.

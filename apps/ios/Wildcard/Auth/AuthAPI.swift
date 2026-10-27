@@ -109,6 +109,16 @@ struct AuthAPI: Sendable {
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if path.hasPrefix("groups") {
+                if response.statusCode == 404 && method == "GET" && !path.contains("/photos/") { throw Failure.notFound }
+                if [400, 403, 404, 409, 413, 422, 429].contains(response.statusCode),
+                   let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error,
+                   message.unicodeScalars.count <= 512,
+                   !message.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
+                    throw Failure.rejected(message)
+                }
+                throw Failure.rejected("Groups are temporarily unavailable. Please try again.")
+            }
             if path == "me", [400, 422].contains(response.statusCode) {
                 throw Failure.rejected("Use a name with 1–100 characters and no control characters.")
             }

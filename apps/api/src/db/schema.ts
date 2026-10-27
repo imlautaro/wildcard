@@ -267,3 +267,73 @@ export const scheduleMutation = sqliteTable('schedule_mutation', {
 });
 
 // Schedule cursor and cancellation triggers are maintained by SQL migrations.
+
+export const chatGroup = sqliteTable('chat_group', {
+  id: text('id').primaryKey(),
+  ownerId: text('owner_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  createdAt: date('created_at').notNull(),
+}, (t) => [check('group_name_length', sql`length(${t.name}) BETWEEN 1 AND 100`)]);
+export const groupMember = sqliteTable('group_member', {
+  groupId: text('group_id').notNull().references(() => chatGroup.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  canInvite: integer('can_invite').notNull().default(0),
+  shareMemory: integer('share_memory').notNull(),
+  contributorConsent: integer('contributor_consent').notNull().default(0),
+  joinedAt: date('joined_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.groupId, t.userId] }), index('group_member_user_idx').on(t.userId, t.groupId),
+  check('group_can_invite', sql`${t.canInvite} IN (0, 1)`), check('group_share_memory', sql`${t.shareMemory} = 1`),
+  check('group_contributor_consent', sql`${t.contributorConsent} IN (0, 1)`)]);
+export const groupAgent = sqliteTable('group_agent', {
+  groupId: text('group_id').notNull(),
+  agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  addedBy: text('added_by').notNull(),
+  joinedAt: date('joined_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.groupId, t.agentId] }),
+  foreignKey({ columns: [t.groupId, t.addedBy], foreignColumns: [groupMember.groupId, groupMember.userId] }).onDelete('cascade')]);
+export const groupInvite = sqliteTable('group_invite', {
+  id: text('id').primaryKey(),
+  groupId: text('group_id').notNull().references(() => chatGroup.id, { onDelete: 'cascade' }),
+  senderId: text('sender_id').notNull(),
+  recipientId: text('recipient_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  expiresAt: date('expires_at').notNull(),
+}, (t) => [foreignKey({ columns: [t.groupId, t.senderId], foreignColumns: [groupMember.groupId, groupMember.userId] }).onDelete('cascade'),
+  uniqueIndex('group_invite_recipient_unique').on(t.groupId, t.recipientId), index('group_invite_recipient_idx').on(t.recipientId, t.expiresAt)]);
+export const groupMessage = sqliteTable('group_message', {
+  sequence: integer('sequence').primaryKey({ autoIncrement: true }),
+  id: text('id').notNull().unique(),
+  groupId: text('group_id').notNull().references(() => chatGroup.id, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+  agentId: text('agent_id').references(() => contactAgent.id, { onDelete: 'set null' }),
+  senderName: text('sender_name').notNull(),
+  contributorConsent: integer('contributor_consent').notNull().default(0),
+  roundEnqueued: integer('round_enqueued').notNull().default(0),
+  text: text('text').notNull(),
+  createdAt: date('created_at').notNull(),
+}, (t) => [index('group_message_history_idx').on(t.groupId, desc(t.sequence))]);
+export const groupReply = sqliteTable('group_reply', {
+  sequence: integer('sequence').primaryKey({ autoIncrement: true }),
+  id: text('id').notNull().unique(),
+  groupId: text('group_id').notNull(),
+  agentId: text('agent_id').notNull(),
+  sourceId: text('source_id').notNull().references(() => groupMessage.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('queued'),
+  attempt: integer('attempt').notNull().default(1),
+  workflowId: text('workflow_id').notNull().unique(),
+  createdAt: date('created_at').notNull(),
+}, (t) => [foreignKey({ columns: [t.groupId, t.agentId], foreignColumns: [groupAgent.groupId, groupAgent.agentId] }).onDelete('cascade'),
+  uniqueIndex('group_reply_source_agent_idx').on(t.sourceId, t.agentId), index('group_reply_pending_idx').on(t.status, t.createdAt, t.sequence),
+  check('group_reply_status', sql`${t.status} IN ('queued', 'running', 'complete', 'failed')`)]);
+export const groupMemory = sqliteTable('group_memory', {
+  agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  memoryKey: text('memory_key').notNull(),
+  kind: text('kind').notNull(),
+  content: text('content').notNull(),
+  sourceId: text('source_id').notNull().references(() => groupMessage.id, { onDelete: 'cascade' }),
+  sourceQuote: text('source_quote').notNull(),
+  updatedAt: date('updated_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.agentId, t.userId, t.memoryKey] }),
+  check('group_memory_kind', sql`${t.kind} IN ('fact', 'preference', 'decision', 'pending')`),
+  check('group_memory_content_length', sql`length(${t.content}) BETWEEN 1 AND 300`),
+  check('group_memory_quote_length', sql`length(${t.sourceQuote}) BETWEEN 1 AND 240`)]);

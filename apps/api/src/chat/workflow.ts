@@ -1,3 +1,4 @@
+import { runGroup, type GroupJob } from '../groups/workflow';
 import { scheduleAllowed } from '../schedules/data';
 import { runVisit, type VisitJob } from './visits';
 import { expirePresence, markTyping } from './presence';
@@ -8,10 +9,11 @@ import { contactReply } from './context';
 import { maintainMemories } from './memory';
 import { releaseAttention } from './dispatch';
 
-export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob> {
-  async run(event: WorkflowEvent<ChatJob | VisitJob>, step: WorkflowStep) {
+export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob> {
+  async run(event: WorkflowEvent<ChatJob | VisitJob | GroupJob>, step: WorkflowStep) {
     if ('kind' in event.payload) {
-      await runVisit(this.env, event.payload, step);
+      if (event.payload.kind === 'group') await runGroup(this.env, event.payload, step);
+      else await runVisit(this.env, event.payload, step);
       return;
     }
     const job = event.payload;

@@ -87,6 +87,16 @@ notification service extension. Tapping an alert opens the chat. Bundled message
 visible chat, replies elsewhere in the foreground, and background push alerts. Unread reply counts persist on the server and
 appear on chat rows, the Chats tab, and the app icon; returning to the app refreshes them immediately. Contacts can also [schedule messages](docs/schedules.md) once or at fixed intervals, edit or cancel them in chat, and inspect/cancel them from the chat toolbar clock button. Scheduling uses the existing D1, Cron, Workflow, and push services. The composer supports private [image and PDF attachments](docs/attachments.md) from Photos or Files, with native previews. Creators can [share contacts](docs/sharing.md) by an existing account’s email through in-app requests, or using expiring invitation codes: recipients start empty private chats with the same agent, shared memories/presence, and exclusive attention across participants. Schedules, unread counts, attachments, and notifications remain per recipient. The iOS sharing screens disclose shared-memory and Contributor data use and require explicit acceptance.
 
+## Group conversations
+
+[Groups](docs/groups.md) combine human accounts and existing contacts in one
+shared chat, with explicit shared-memory and model consent, in-app invitations,
+per-member invitation permissions, sender avatars/names and a scrolling member
+subtitle. Each human message starts a bounded automatic reply round. Groups and
+private chats share the same exclusive attention queue per agent. Create one from
+**Chats → + → Create group**. This version supports text and foreground polling;
+group push, badges, attachments, dictation and schedules are not implemented.
+
 ## Infrastructure and releases
 
 See [infrastructure setup](docs/infrastructure.md), including private R2 bucket

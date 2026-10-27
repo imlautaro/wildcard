@@ -1,3 +1,4 @@
+import groups from './groups/routes';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { createAuth } from './lib/auth';
@@ -33,6 +34,7 @@ app.on(['GET', 'POST'], '/api/v1/auth/*', async (c) => {
 });
 
 app.route('/api/v1/me', me);
+app.route('/api/v1/groups', groups);
 
 app.route('/api/v1/contacts', contacts);
 app.route('/api/v1/push', push);

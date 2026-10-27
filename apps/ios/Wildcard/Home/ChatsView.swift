@@ -7,6 +7,7 @@ struct ChatsView: View {
     let editContact: (Contact) -> Void
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
+    @Environment(GroupsStore.self) private var groups
     @Environment(\.scenePhase) private var scenePhase
     @State private var deletion: Contact?
     @State private var mutationError: String?
@@ -23,8 +24,38 @@ struct ChatsView: View {
 
     var body: some View {
         List {
+            if mode == .chats {
+                if let error = groups.error {
+                    Text(error).manrope(.footnote).foregroundStyle(.red)
+                    Button("Refresh groups") { Task { await groups.refresh(using: auth) } }
+                }
+                if !groups.invitations.isEmpty {
+                    NavigationLink(value: HomeDestination.groupInvitations) {
+                        Label("Group Invitations (\(groups.invitations.count))", systemImage: "envelope.badge")
+                    }
+                }
+                if !groups.groups.isEmpty {
+                    Section("Groups") {
+                        ForEach(groups.groups) { group in
+                            NavigationLink(value: HomeDestination.group(group.id)) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "person.3.fill").font(.title2).foregroundStyle(.secondary).frame(width: 48, height: 48)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(group.name).manrope(.body, weight: .semibold)
+                                        Text(group.lastMessageText ?? "No messages yet").manrope(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                    }
+                }
+            }
             if mode == .contacts {
                 Section {
+                    NavigationLink(value: HomeDestination.createGroup) {
+                        Label("Create group", systemImage: "person.3")
+                    }
                     NavigationLink(value: HomeDestination.addContact) {
                         Label("Create contact", systemImage: "person.badge.plus")
                     }
@@ -96,7 +127,7 @@ struct ChatsView: View {
         }
         .listStyle(.plain)
         .overlay {
-            if mode == .chats && displayedContacts.isEmpty && contacts.error == nil && mutationError == nil {
+            if mode == .chats && displayedContacts.isEmpty && groups.groups.isEmpty && groups.invitations.isEmpty && groups.error == nil && contacts.error == nil && mutationError == nil {
                 if !contacts.hasLoaded || contacts.nextCursor != nil {
                     ProgressView("Loading contacts…")
                 } else {
@@ -109,7 +140,7 @@ struct ChatsView: View {
                 }
             }
         }
-        .refreshable { await contacts.refresh(using: auth) }
+        .refreshable { await contacts.refresh(using: auth); await groups.refresh(using: auth) }
         .task { await contacts.refresh(using: auth, force: false) }
         .task(id: "\(contacts.nextCursor ?? "")-\(contacts.isLoading)-\(contacts.isMutating)") {
             // Load the complete directory, or skip empty pages until Chats has rows.

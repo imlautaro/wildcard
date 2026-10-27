@@ -226,3 +226,6 @@ migration, push, or deployment were run. Existing-account email matching,
 duplicate requests, acceptance by a different account, decline/revoke/expiry,
 acceptance retries, inbox refresh, and foreground/account-switch behavior need
 authorized verification with fictional accounts before end-to-end claims.
+
+
+Groups extend sharing to a common conversation with several users and contact agents. Invitation rights are granted per group member; adding a contact requires its creator and explicit memory consent. See [groups](groups.md).

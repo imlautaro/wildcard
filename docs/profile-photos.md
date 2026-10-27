@@ -179,3 +179,6 @@ private objects during code rollback; older code ignores the added profile field
 Functional validation remains pending: name/photo persistence after re-login,
 crop/cancel/remove, photo retry after a saved name, concurrent writes, invalid
 uploads, and isolation between two fictional accounts.
+
+
+Group members explicitly accept sharing their display name and current profile photo with co-members. Authenticated group photo routes check current group and target membership, without granting private-contact or account-edit access. See [groups](groups.md).

@@ -2,6 +2,9 @@ import SwiftUI
 
 enum HomeDestination: Hashable {
     case contacts
+    case createGroup
+    case group(String)
+    case groupInvitations
     case addContact
     case contact(String)
     case editContact(String)
@@ -26,6 +29,7 @@ struct HomeView: View {
     @State private var section: Section = .chats
     @State private var destinations: [HomeDestination] = []
     @State private var contacts = ContactsStore()
+    @State private var groups = GroupsStore()
     @State private var invitations = ContactInvitationsStore()
 
     var body: some View {
@@ -59,9 +63,11 @@ struct HomeView: View {
                         .accessibilityLabel(invitations.invitations.isEmpty ? "Contact Invitations" : "Contact Invitations, pending requests")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        NavigationLink(value: HomeDestination.contacts) {
-                            Image(systemName: "plus")
-                        }
+                        Menu {
+                            NavigationLink("Contacts", value: HomeDestination.contacts)
+                            NavigationLink("Create group", value: HomeDestination.createGroup)
+                            NavigationLink("Group Invitations", value: HomeDestination.groupInvitations)
+                        } label: { Image(systemName: "plus") }
                         .tint(Color(uiColor: .label))
                         .accessibilityLabel("Add contact")
                         .disabled(contacts.isMutating)
@@ -71,6 +77,12 @@ struct HomeView: View {
             // Destinations replace the complete tab layout, sharing one back stack.
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
+                case .createGroup:
+                    CreateGroupView { id in destinations = [.group(id)] }
+                case .group(let id):
+                    GroupChatView(groupID: id)
+                case .groupInvitations:
+                    GroupInvitationsView { id in destinations = [.group(id)] }
                 case .contacts:
                     ChatsView(
                         mode: .contacts,
@@ -104,6 +116,7 @@ struct HomeView: View {
                 }
             }
         }
+        .environment(groups)
         .environment(contacts)
         .environment(invitations)
         .onChange(of: scenePhase) { _, phase in
@@ -133,9 +146,11 @@ struct HomeView: View {
         }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            await groups.refresh(using: auth)
             await invitations.refresh(using: auth, force: true)
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                await groups.refresh(using: auth)
                 await invitations.refresh(using: auth)
             }
         }

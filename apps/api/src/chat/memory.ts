@@ -1,3 +1,4 @@
+import { groupMemories } from '../groups/memory';
 import { isRecord, museCompletion } from './meta';
 import { contactModelAllowed } from './consent';
 
@@ -37,7 +38,10 @@ export async function readMemories(db: D1Database, scope: MemoryScope, ownOnly =
       AND (?5 = 0 OR source.user_id = a.owner_id OR source.contributor_consent = 1)
     ORDER BY m.source_sequence DESC, m.id DESC LIMIT 256`)
     .bind(scope.contactID, scope.userID, scope.beforeSequence, ownOnly ? 1 : 0, scope.contributorModel ? 1 : 0).all<Memory>();
-  return results;
+  if (ownOnly) return results;
+  const agent = await db.prepare('SELECT agent_id AS id FROM contact WHERE id = ? AND user_id = ?')
+    .bind(scope.contactID, scope.userID).first<{ id: string }>();
+  return agent ? [...results, ...await groupMemories(db, agent.id, !!scope.contributorModel)] : results;
 }
 
 export function selectMemories(memories: Memory[], query: string, includePreferences = false): Memory[] {

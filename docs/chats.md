@@ -363,3 +363,6 @@ inside the surrounding bubble and its 2-point rim.
 Text, image, captioned image, and document bubbles share a subtle black shadow
 at 6% opacity, with a 2-point blur radius and a 1-point downward offset. The
 shadow follows the complete bubble outline, including its tail.
+
+
+Group conversations have shared human/agent history and reuse the global agent attention queue. See [groups](groups.md) for finite reply rounds, consent, sender identities and text-only limits.

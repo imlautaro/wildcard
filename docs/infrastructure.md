@@ -659,3 +659,36 @@ metadata with its R2 objects. Roll back code through commit/push while retaining
 the additive column and bucket; older code ignores the field. Deleted/replaced
 images are not restored by a code rollback. Best-effort object cleanup and the
 absence of an orphan sweeper remain unchanged.
+
+
+## Group conversations
+
+Migration `0016_groups.sql` adds group identity, human membership with explicit
+memory/Contributor consent, owned agent membership, directed invitations, shared
+message history, reply jobs and grounded memories. The Drizzle schema mirrors the
+new tables; the attention-required trigger remains SQL-managed. Provision existing
+D1 first, then the existing private photo bucket and Meta/Workflow configuration
+as described above. Groups reuse `DB`, `CONTACT_PHOTOS`, `CHAT_WORKFLOW`,
+`META_API_KEY`, `META_CHAT_MODEL` and the minute Cron. No new service, secret,
+resource permission, dependency or binding is needed. Group photo routes permit
+current co-members to read each other's existing profile photos; the consent UI
+explains this change in visibility. See [group setup and API](groups.md).
+
+For independent accounts use the existing provisioning scripts, replace the
+account-specific Wrangler, iOS API and automatic build connection settings, and
+choose Standard unless every member explicitly accepts Contributor data use.
+Run `npm run db:migrate:local` for local development after configuring auth; the
+standard automatic release applies all D1 migrations before publishing. Source
+must be committed and pushed first. Never run a manual deployment. This change
+has not been migrated remotely, pushed or released as part of implementation.
+
+After automatic publication, verify its source commit/version and migration state,
+then use fictitious accounts for the group checks in the guide. No remote data,
+model inference or device verification was used during implementation. Existing
+private-chat UUIDs and tables remain compatible; dispatch now considers both job
+types under one agent lock. If rolling back, pause new group submissions and let
+active group Workflows finish before reverting code. Do not remove additive tables
+or change in-flight Workflow payload contracts. Older workers do not recover group
+jobs; a compatible forward fix is preferable while jobs are pending. Removing a
+member/group does not release an in-flight agent claim early; recovery waits for
+Workflow termination. Retain tables on code rollback to preserve stored messages.
