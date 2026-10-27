@@ -39,32 +39,40 @@ export function groupRequestTurnAllowed(table: string, contributor: boolean) {
           WHERE answer.id = 'group-' || request.id || '-' || request.target_agent_id AND answer.contributor_consent = 1))` : ''}))`;
 }
 
-// Every continuation retains its human root and current public group permissions.
-// A bot message never grants access to private conversations or action tools.
+// Separate authorization branches with UNION ALL rather than nesting receipt
+// predicates inside OR trees. D1 limits SQL expression depth to 100, including
+// the surrounding context/publication query. Keep current access checks intact.
 export function groupSourceAccess(reply: string, contributor: boolean) {
-  return `EXISTS (SELECT 1 FROM group_message source WHERE source.id = ${reply}.source_id
-    AND source.group_id = ${reply}.group_id ${contributor ? 'AND source.contributor_consent = 1' : ''}
-    AND ((source.user_id IS NOT NULL AND EXISTS (SELECT 1 FROM group_member author
-      WHERE author.group_id = source.group_id AND author.user_id = source.user_id AND author.share_memory = 1
-      ${contributor ? 'AND author.contributor_consent = 1' : ''}))
-    OR (source.user_id IS NULL AND EXISTS (SELECT 1 FROM group_request request
-      WHERE request.id = source.request_id AND request.id = source.id AND request.group_id = source.group_id
+  const source = `source.id = ${reply}.source_id AND source.group_id = ${reply}.group_id
+    ${contributor ? 'AND source.contributor_consent = 1' : ''}`;
+  const continuation = `FROM group_message source
+    JOIN group_message root ON root.id = source.exchange_id AND root.group_id = source.group_id
+      AND root.requester_id = source.requester_id
+    JOIN group_member requester ON requester.group_id = source.group_id AND requester.user_id = source.requester_id
+    JOIN group_agent speaker ON speaker.group_id = source.group_id AND speaker.agent_id = source.agent_id
+    JOIN contact_agent agent ON agent.id = speaker.agent_id
+    JOIN contact owner_contact ON owner_contact.agent_id = agent.id AND owner_contact.user_id = agent.owner_id`;
+  const continuedAccess = `${source} AND source.agent_id IS NOT NULL AND source.request_id IS NULL
+    AND requester.share_memory = 1 AND agent.memory_shared = 1
+    ${contributor ? 'AND requester.contributor_consent = 1 AND root.contributor_consent = 1' : ''}`;
+  return `EXISTS (
+    SELECT 1 FROM group_message source JOIN group_member author
+      ON author.group_id = source.group_id AND author.user_id = source.user_id
+    WHERE ${source} AND author.share_memory = 1
+      ${contributor ? 'AND author.contributor_consent = 1' : ''}
+    UNION ALL
+    SELECT 1 FROM group_message source JOIN group_request request
+      ON request.id = source.request_id AND request.id = source.id AND request.group_id = source.group_id
         AND request.sender_agent_id = source.agent_id AND request.target_agent_id = ${reply}.agent_id
-        AND request.status = 'waiting' AND request.expires_at > unixepoch() * 1000
-        AND ${groupRequestAccess('request', contributor)}))
-    OR (source.agent_id IS NOT NULL AND source.request_id IS NULL AND source.requester_id IS NOT NULL
-      AND EXISTS (SELECT 1 FROM group_agent speaker JOIN contact_agent agent ON agent.id = speaker.agent_id
-        WHERE speaker.group_id = source.group_id AND speaker.agent_id = source.agent_id AND agent.memory_shared = 1
-        AND EXISTS (SELECT 1 FROM contact WHERE agent_id = agent.id AND user_id = agent.owner_id))
-      AND EXISTS (SELECT 1 FROM group_member requester WHERE requester.group_id = source.group_id
-        AND requester.user_id = source.requester_id AND requester.share_memory = 1
-        ${contributor ? 'AND requester.contributor_consent = 1' : ''})
-      AND EXISTS (SELECT 1 FROM group_message root WHERE root.id = source.exchange_id AND root.group_id = source.group_id
-        AND root.requester_id = source.requester_id
-        ${contributor ? 'AND root.contributor_consent = 1' : ''}
-        AND (root.user_id = source.requester_id
-          OR EXISTS (SELECT 1 FROM group_post post WHERE post.id = root.id AND post.status = 'published'
-            AND ${groupPublicationAccess('post', contributor)})
-          OR EXISTS (SELECT 1 FROM group_request request WHERE request.id = root.id AND request.status != 'cancelled'
-            AND ${groupRequestAccess('request', contributor)}))))))`;
+    WHERE ${source} AND source.user_id IS NULL AND request.status = 'waiting'
+      AND request.expires_at > unixepoch() * 1000 AND ${groupRequestAccess('request', contributor)}
+    UNION ALL
+    SELECT 1 ${continuation} WHERE ${continuedAccess} AND root.user_id = source.requester_id
+    UNION ALL
+    SELECT 1 ${continuation} JOIN group_post post ON post.id = root.id
+    WHERE ${continuedAccess} AND post.status = 'published' AND ${groupPublicationAccess('post', contributor)}
+    UNION ALL
+    SELECT 1 ${continuation} JOIN group_request request ON request.id = root.id
+    WHERE ${continuedAccess} AND request.status != 'cancelled' AND ${groupRequestAccess('request', contributor)}
+  )`;
 }

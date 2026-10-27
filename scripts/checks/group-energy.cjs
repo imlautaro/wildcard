@@ -1,10 +1,20 @@
 // Real migration, publication SQL and Workflow with fictional data and simulated services.
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
+const capturedSQL = new Map();
 const { fixture, source } = require('./group-publication.cjs');
 let checks = 0;
 async function check(name, run) {
   const f = fixture();
+  const prepare = f.env.DB.prepare;
+  f.env.DB.prepare = sql => {
+    let parameters = 0;
+    for (const match of sql.matchAll(/\?(\d+)?/g)) parameters = match[1] ? Math.max(parameters, +match[1]) : parameters + 1;
+    capturedSQL.set(sql, { sql, parameters });
+    return prepare(sql);
+  };
   try {
     vm.runInContext(source('groups/workflow.ts'), f.context);
     await run(f); checks++; console.log('PASS ' + name);
@@ -59,6 +69,11 @@ function human(f,id='human-root') {
    assert.equal((await points(f,'sender')).points,48);
    f.sqlite.exec("UPDATE chat_turn SET assistant_text='Private reply',status='complete' WHERE status='running'");
    assert.equal((await points(f,'sender')).points,48);
+ });
+ await check('Standard group continuations work without Contributor consent',async f=>{
+   f.env.META_CHAT_MODEL='muse-spark-1.3';f.sqlite.exec('UPDATE group_member SET contributor_consent=0');
+   assert.equal((await f.call(f.turn())).published,true);
+   assert.equal(await publish(f,claim(f,'target')),'published');
  });
  await check('recharge includes offline time, preserves partial intervals and caps at 50',async f=>{
    const now=f.sqlite.prepare('SELECT unixepoch()*1000 n').get().n;
@@ -168,5 +183,11 @@ function human(f,id='human-root') {
    const before=f.count('group_reply');assert.equal((await reset(c('private','human'))).data.energy.points,50);assert.equal(f.count('group_reply'),before);
    f.context.admitAuthRequest=async()=>({allowed:false,retryAfter:60});assert.equal((await reset(c('private','human'))).status,429);
  });
+ if (process.env.WILDCARD_SQL_CAPTURE) require('node:fs').writeFileSync(process.env.WILDCARD_SQL_CAPTURE, JSON.stringify([...capturedSQL.values()]));
+ const depth = spawnSync('python3', [path.join(__dirname, 'sql-depth.py')], {
+   input: JSON.stringify([...capturedSQL.values()]), encoding: 'utf8', maxBuffer: 1024 * 1024,
+ });
+ assert.equal(depth.status, 0, depth.stderr);
+ console.log(`PASS ${capturedSQL.size} actual SQL statements prepare at expression depth 100`);
  console.log(`${checks} energy checks passed. No live services, inference, notifications or user data.`);
 })().catch(error=>{console.error(error);process.exitCode=1;});

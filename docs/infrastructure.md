@@ -1101,3 +1101,21 @@ API code alone is not a complete rollback because the new triggers would still e
 turns it cannot interpret. Restore the triggers through another versioned migration if
 re-enabling the feature. Ship rollback by commit/push and automatic release as usual;
 do not drop data tables or run a manual deployment.
+
+
+### Group authorization query depth
+
+D1 limits expression depth to 100. Keep source-authorization alternatives as UNION ALL
+branches rather than nesting public-post and directed-request predicates in OR trees.
+The opt-in `node scripts/checks/group-energy.cjs` now requires Python 3 with the standard
+`sqlite3` module and `Connection.setlimit` (Python 3.11+) to prepare captured actual SQL
+at that limit after all migrations. This adds no production dependency or binding.
+Verify both Contributor and Standard branches alongside energy/access regressions.
+The initial energy release failed a real bot turn during context preparation even
+though its SQLite checks passed with their default larger limit; the depth regression
+now fails on that query shape. Corrected context/insert/completion statements passed
+remote D1 EXPLAIN without executing application writes or model calls. Release this
+code fix through the existing commit/push automatic pipeline; no migration is needed.
+Existing failed turns are not automatically replayed and need a new user message or
+the existing explicit retry action. Model quality and actual subsequent conversation
+still need verification after the corrected release.

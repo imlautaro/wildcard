@@ -90,7 +90,15 @@ Opt-in checks: `node scripts/checks/group-energy.cjs`, plus the publication/rece
 checks. They use actual migrations, SQL, tool/context code and simulated providers on
 in-memory SQLite, covering offline recharge, fractional time, last/zero energy,
 replay, stale drafts, permission loss, queue bounds, cap despite refills, owner access
-and reset throttling. They do not prove D1 runtime equivalence or natural model behavior.
+and reset throttling. The energy script also invokes Python 3's built-in SQLite to
+prepare captured context/publication/admission SQL with `SQLITE_LIMIT_EXPR_DEPTH=100`,
+matching D1's expression depth limit. Authorization branches use UNION ALL to keep
+nested receipt checks within that limit. A deployed greeting previously enqueued a
+reply but failed during context SQL preparation before inference; the new depth check
+reproduced that failure before the query repair. Three corrected statements were also
+compiled with EXPLAIN in remote D1, with zero application rows read/written. These
+checks do not establish natural model behavior or a complete conversation round trip.
+Failed attempts remain failed; a fresh message starts a new attempt after release.
 
 After an authorized automatic release, with fictional accounts and an installed iOS
 build, verify: privately requested hello with three bots; human-started conversation;
