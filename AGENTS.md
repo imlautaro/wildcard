@@ -2,8 +2,15 @@
 
 - Write all project code, identifiers, team-authored strings, documentation,
   comments, and commit messages in English.
-- Keep the native app in `apps/ios` and the Worker API in `apps/api`. JavaScript
-  dependencies use npm workspaces and the root lockfile.
+- Keep the native app in `apps/ios`, the Nuxt web app in `apps/web`, and the Worker
+  API in `apps/api`. JavaScript dependencies use npm workspaces and the root lockfile.
+- Every requested product change must be implemented in both the iOS app
+  (`apps/ios`) and the web app (`apps/web`) in the same change, with matching
+  behavior, copy, and caching rules, and with both clients' guides updated
+  (`docs/web.md` plus the affected feature guides). Ship a change to only one client
+  only when the user explicitly scopes it that way, or when a platform limitation
+  prevents it; document that limitation in the affected guide and in `docs/web.md`
+  (for example, APNs push and WAV voice dictation).
 - Do not copy implementation, assets, configuration, credentials, or Git history
   from the archived project. Implement new features in this repository.
 - Do not run tests or builds unless the user asks. Static validation is allowed.
