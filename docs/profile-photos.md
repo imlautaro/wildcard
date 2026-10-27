@@ -59,11 +59,14 @@ keys or personal data. Interrupted requests or storage failures can leave privat
 orphan objects; there is no background orphan sweeper. Future account deletion
 must also clean R2 because SQL cascades cannot delete objects.
 
-Reads use `private, no-store`, a fixed JPEG content type, and `nosniff`. iOS uses
-an ephemeral authenticated URLSession and an NSCache of encoded image bytes with
-a 16 MiB cost limit, scoped to the signed-in ContactsStore and keyed by contact and
-version. Versions invalidate visible avatars; logout/account switching discards
-the store. There is no persistent image cache or public bucket delivery.
+Reads use `private, no-store`, a fixed JPEG content type, and `nosniff`. Network
+misses use an ephemeral authenticated URLSession. The app shares decoded-avatar
+memory and a protected, account-scoped disk cache with chat images; see
+[recent image caching](caching.md#recent-chat-images-and-avatars) for budgets,
+expiry, file protection, and invalidation. Keys include contact ID and version,
+so a changed photo cannot reuse the previous version. Accepted uploads seed the
+cache. Sign-out/session expiry clear cached bytes. There is no public bucket
+delivery; the cache does not alter server authorization or HTTP cache policy.
 
 ## Push avatars
 
@@ -162,9 +165,11 @@ Migration `0015_account_photos.sql` adds nullable `user.photo_version`; it does
 not repurpose Better Auth's image URL. The existing private `CONTACT_PHOTOS` R2
 binding stores `users/<user>/<version>.jpg`. Only the account owner can read
 these bytes; they are not exposed through contact sharing or push-avatar URLs.
-Reads use private/no-store headers. The app retains the displayed image in view
-state without persistent disk caching. Replacements/removals request best-effort
-cleanup with the existing helper; interrupted requests can leave orphan objects.
+Reads use private/no-store headers. Account avatars use the same protected
+[recent image cache](caching.md#recent-chat-images-and-avatars), keyed by the
+account photoVersion; a new version selects new bytes immediately.
+Replacements/removals request best-effort R2 cleanup with the existing helper;
+interrupted requests can leave orphan objects.
 Future account deletion must clean this prefix as well as contact objects.
 
 No new service, secret, bucket, capability, or Photos-library permission is

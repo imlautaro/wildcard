@@ -95,7 +95,11 @@ final class ChatStore {
             guard started == revision else { return }
             if (error as? URLError)?.code == .cancelled { return }
             refreshedAt = .now
-            if case AuthAPI.Failure.notFound = error { invalidate() }
+            if case AuthAPI.Failure.notFound = error {
+                await auth.images.clear(deactivate: false)
+                guard started == revision else { return }
+                invalidate()
+            }
             presence = nil
             self.error = error.localizedDescription
         }
@@ -159,6 +163,9 @@ final class ChatStore {
             hasLoaded = true
             refreshedAt = nil
             self.submission = nil
+            if let attachment, attachment.mimeType.hasPrefix("image/") {
+                await auth.images.store(attachment.data, for: .attachment(contactID: contactID, turnID: submission.id))
+            }
             MessageSounds.shared.sent(turnID: submission.id, contactID: contactID)
             return true
         } catch is CancellationError { return false }
@@ -169,6 +176,9 @@ final class ChatStore {
             if turns.contains(where: { $0.id == submission.id }) {
                 self.submission = nil
                 self.error = nil
+                if let attachment, attachment.mimeType.hasPrefix("image/") {
+                    await auth.images.store(attachment.data, for: .attachment(contactID: contactID, turnID: submission.id))
+                }
                 MessageSounds.shared.sent(turnID: submission.id, contactID: contactID)
                 return true
             }

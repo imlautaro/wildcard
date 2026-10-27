@@ -9,6 +9,7 @@ final class AuthStore {
     private(set) var user: AuthUser?
     private(set) var isBusy = false
     var error: String?
+    let images = PrivateImageCache()
     private let api = AuthAPI()
     private var token: String?
 
@@ -20,13 +21,17 @@ final class AuthStore {
         defer { isBusy = false }
         do {
             guard let savedToken = try SessionKeychain.load() else {
+                await images.clear()
                 state = .signedOut
                 return
             }
             token = savedToken
-            user = try await api.currentUser(token: savedToken)
+            let restoredUser = try await api.currentUser(token: savedToken)
+            user = restoredUser
+            images.activate(userID: restoredUser.id)
             state = .signedIn
         } catch AuthAPI.Failure.unauthorized {
+            await images.clear()
             do {
                 try SessionKeychain.delete()
                 token = nil
@@ -57,6 +62,7 @@ final class AuthStore {
             }
             token = newToken
             user = newUser
+            images.activate(userID: newUser.id)
             state = .signedIn
         } catch {
             self.error = error.localizedDescription
@@ -70,9 +76,14 @@ final class AuthStore {
     }
 
     func saveProfilePhoto(data: Data?) async throws {
-        user = try await withSession { api, token in
+        let updated = try await withSession { api, token in
             try await api.saveProfilePhoto(data: data, token: token)
         }
+        if let data, let version = updated.photoVersion {
+            await images.store(data, for: .accountAvatar(version: version))
+        }
+        guard state == .signedIn, user?.id == updated.id else { throw CancellationError() }
+        user = updated
     }
 
     func refreshProfile() async throws {
@@ -87,6 +98,7 @@ final class AuthStore {
         do {
             do { try await api.signOut(token: token) }
             catch AuthAPI.Failure.unauthorized { /* The session is already invalid. */ }
+            await images.clear()
             try SessionKeychain.delete()
             self.token = nil
             user = nil
@@ -105,6 +117,7 @@ final class AuthStore {
         } catch {
             guard token == credential else { throw CancellationError() }
             if case AuthAPI.Failure.unauthorized = error {
+                await images.clear()
                 do {
                     try SessionKeychain.delete()
                     token = nil

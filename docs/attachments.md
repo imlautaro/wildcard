@@ -62,12 +62,16 @@ Turn responses include optional `attachment: { name, mimeType, size }` without a
 object key or base64 bytes. `GET /api/v1/contacts/:id/chat/turns/:turnID/attachment`
 requires the owner's bearer session and returns private, non-cacheable bytes with
 an attachment disposition. There are no public or provider-fetchable file URLs.
-Image thumbnails and full-screen images use authenticated retrieval and stay in
-view memory, without writing image preview files to disk. Decoding happens outside
-the main actor with ImageIO downsampling (520-pixel thumbnails, up to 4096 pixels
-in the full-screen viewer); orientation is applied. Animated images display their
-first frame. Opening full-screen fetches the image again, so it requires network
-access and a valid session even if the thumbnail is already visible.
+Image thumbnails and full-screen images share the account-scoped
+[recent image cache](caching.md#recent-chat-images-and-avatars): decoded thumbnails
+in memory and protected original bytes on disk, capped at 64 MiB per account with
+a seven-day disk idle expiry. Cached recent images survive navigation and app
+restarts after successful session restoration. A fullscreen cache hit reuses the
+original without another download; a miss requires authenticated network access.
+Accepted outgoing images seed the cache; unaccepted optimistic previews remain
+local view state. Decoding happens outside the main actor with ImageIO downsampling
+(520-pixel thumbnails, up to 4096 pixels in the full-screen viewer); orientation
+is applied. Animated images display their first frame.
 Document Quick Look uses a protected temporary file removed on dismissal or leaving the view;
 files left by a process crash can remain in the OS temporary directory until purged.
 

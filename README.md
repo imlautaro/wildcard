@@ -78,7 +78,9 @@ continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the A
 limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1, selects bounded recent context, and provides shared attributed memories with private history search tools. An empty draft offers a microphone for
 [Muse Voice Transcribe dictation](docs/voice.md); the transcript is editable before
 sending. Navigation reuses a session-scoped [memory cache](docs/caching.md) and
-refreshes loaded content in the background. [Reply push notifications](docs/notifications.md)
+refreshes loaded content in the background. Recent chat images and avatars share
+a bounded memory/protected disk cache, reducing reloads across navigation and app
+restarts. [Reply push notifications](docs/notifications.md)
 use APNs when the app is closed/backgrounded, after configuring Apple signing
 and provider secrets. Alerts show the contact name, reply text, and a contact avatar through the embedded
 notification service extension. Tapping an alert opens the chat. Bundled message sounds distinguish activity in the

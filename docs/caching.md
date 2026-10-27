@@ -67,10 +67,11 @@ Invalidated stores reject late network results. Signing out, session expiration,
 and switching users remove the signed-in shell and its cache; withSession also
 rejects results belonging to a superseded credential.
 
-This is an application memory cache. It does not persist messages, contact data,
-or credentials to disk, bypass server authorization, or change HTTP no-store
-headers. Process termination starts a new cache. Session restoration still requires
-server validation and may show the existing splash. The original navigation cache adds no infrastructure. Unread tracking additionally
+Conversation records, contact metadata, and credentials are not persisted by the
+navigation cache. Process termination starts new conversation/contact stores.
+Recent image bytes use the separate protected cache below. Session restoration
+still requires server validation and may show the existing splash. HTTP no-store
+headers and authenticated network retrieval remain unchanged. The original navigation cache adds no infrastructure. Unread tracking additionally
 requires migration 0005 and the matching API release described in notifications.md.
 
 ## Verification
@@ -83,16 +84,57 @@ restore connectivity, finish a pending reply, load older pages, delete a contact
 and sign in with another fictional account. Reinstall/run the updated iOS app to
 use the change.
 
-## Profile photo bytes
+## Recent chat images and avatars
 
-ContactsStore keeps encoded profile images in a session-scoped NSCache with a
-16 MiB total cost limit, keyed by contact ID and photoVersion. Visible avatars
-load through the authenticated API, and version changes discard the previous
-visible image before fetching. Successful photo mutations evict the previous
-version from the cache; signing out discards the entire store. HTTP responses
-remain private/no-store and the app uses no disk photo cache. The notification
-extension uses an independent ephemeral download with no shared session token.
-See [profile photos](profile-photos.md).
+AuthStore owns `PrivateImageCache`, shared by chat thumbnails, the fullscreen
+viewer, contact avatars, and the account avatar. It activates only after a session
+has been verified. There are two levels:
+
+- Memory: NSCache cost targets of 32 MiB for decoded thumbnails/avatars and 16 MiB
+  for original encoded bytes. iOS may evict entries under memory pressure. Avatars
+  decode at up to 288 pixels and chat thumbnails at 520 pixels. Views consult the
+  decoded cache synchronously when recreated to avoid a placeholder flash on a hit.
+- Disk: up to 64 MiB of original image bytes per account in `Caches/PrivateImages-v1`,
+  with least-recently-read files removed first. Entries unused on disk for seven
+  days expire; reads prune at most once per minute and writes enforce the size
+  budget. The OS may purge Caches. Reads/writes and pruning run on a separate actor.
+  Directories and files use complete file protection; cache directories are
+  excluded from backups. Account and resource names are SHA-256 hashes on disk.
+  Cache I/O failure falls back to ordinary image loading without failing the image.
+
+Avatar keys include contact ID and photoVersion (or the account photoVersion).
+Chat image keys include conversation ID and immutable turn ID. All entries are
+also separated by account. New photo versions immediately choose new cache keys;
+old unreachable versions expire or are evicted. Accepted photo uploads and image
+messages seed the original-byte cache, including uncertain sends subsequently
+confirmed by history. Unaccepted optimistic previews remain in view memory only.
+PDFs are not cached here. Fullscreen images decode at up to 4096 pixels using the
+same cached original, without another download on a hit; large decoded fullscreen
+images remain owned by their viewer rather than consuming the thumbnail cache.
+
+Concurrent misses for the same resource share one disk/network request. Leaving
+a view does not cancel the shared download, so it can warm the cache for return.
+Session/cache epochs reject results after invalidation; disk invalidation also
+blocks late requests from repopulating cleared files. Decoding is off the main
+actor. Invalid image data is removed so a retry can fetch it again.
+
+Signing out or a rejected/absent restored session clears the relevant account
+cache (all cached accounts when the restored session has no known user ID).
+Session expiry also clears it. Deleting a contact, detecting a confirmed removal
+from the refreshed first page, or receiving a contact/history 404 conservatively
+clears the entire current account image cache. These checks do not discover
+revocation while offline; already loaded images may remain visible until normal
+metadata/history refresh detects a loss of access. Local cached files are private
+application data, not public URLs or authorization for another account. Cleanup
+is best effort; protected files can remain until a later purge if deletion fails.
+The notification extension keeps its independent ephemeral download.
+
+Installed-app verification remains pending: navigate away/back, cold-launch after
+successful session restoration, open fullscreen offline after caching, replace or
+remove an avatar, simulate memory pressure, exceed the disk budget, retry corrupted
+cache data, revoke/delete a contact, and sign out/sign in with another fictional
+account. No builds, runtime tests, private-media downloads, or live account actions
+were performed for this cache change.
 
 
 Foreground chat visits and composer edits also report activity through a separate

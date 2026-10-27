@@ -3,7 +3,6 @@ import UniformTypeIdentifiers
 import UIKit
 import QuickLook
 import SwiftUI
-import ImageIO
 
 struct ChatAttachment: Codable, Equatable, Sendable {
     let name: String
@@ -18,7 +17,7 @@ struct DraftAttachment: Encodable, Equatable, Sendable {
     let mimeType: String
     let data: Data
     enum CodingKeys: String, CodingKey { case name, mimeType, data }
-    static let limit = 5 * 1024 * 1024
+    nonisolated static let limit = 5 * 1024 * 1024
     static let types: [UTType] = [.jpeg, .png, .gif, .webP, .pdf]
 
     static func load(url: URL) throws -> DraftAttachment {
@@ -56,19 +55,6 @@ struct AttachmentQuickLook: UIViewControllerRepresentable {
     }
 }
 
-private enum AttachmentImageDecoder {
-    nonisolated static func decode(_ data: Data, maxPixelSize: Int) -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-                kCGImageSourceShouldCacheImmediately: true,
-              ] as CFDictionary) else { return nil }
-        return UIImage(cgImage: image)
-    }
-}
-
 struct ChatAttachmentView: View {
     let attachment: ChatAttachment
     let contactID: String
@@ -86,6 +72,11 @@ struct ChatAttachmentView: View {
     @State private var imageAttempt = 0
     @State private var showImage = false
     @State private var documentTask: Task<Void, Never>?
+
+    private var imageResource: CachedImageResource { .attachment(contactID: contactID, turnID: turnID) }
+    private var displayedThumbnail: UIImage? {
+        thumbnail ?? auth.images.cachedImage(imageResource, maxPixelSize: 520)
+    }
 
     var body: some View {
         HStack {
@@ -123,20 +114,16 @@ struct ChatAttachmentView: View {
             error = nil
             defer { loading = false }
             do {
-                let bytes: Data
-                if let localData { bytes = localData }
-                else {
-                    bytes = try await auth.withSession { api, token in
-                        try await api.chatAttachment(contactID: contactID, turnID: turnID, token: token)
-                    }
+                if let localData {
+                    let decoded = await Task.detached(priority: .userInitiated) {
+                        PrivateImageCache.decode(localData, maxPixelSize: 520)
+                    }.value
+                    try Task.checkCancellation()
+                    guard let decoded else { throw AuthAPI.Failure.rejected("This image could not be displayed.") }
+                    thumbnail = decoded
+                } else {
+                    thumbnail = try await auth.cachedImage(imageResource, maxPixelSize: 520)
                 }
-                try Task.checkCancellation()
-                let decoded = await Task.detached(priority: .userInitiated) {
-                    AttachmentImageDecoder.decode(bytes, maxPixelSize: 520)
-                }.value
-                try Task.checkCancellation()
-                guard let decoded else { throw AuthAPI.Failure.rejected("This image could not be displayed.") }
-                thumbnail = decoded
             } catch is CancellationError { }
             catch {
                 guard !Task.isCancelled else { return }
@@ -157,11 +144,11 @@ struct ChatAttachmentView: View {
 
     private var imageButton: some View {
         Button {
-            if thumbnail != nil { showImage = true }
+            if displayedThumbnail != nil { showImage = true }
             else { imageAttempt += 1 }
         } label: {
             Group {
-                if let thumbnail {
+                if let thumbnail = displayedThumbnail {
                     Color.clear
                         .aspectRatio(1, contentMode: .fit)
                         .overlay {
@@ -205,7 +192,7 @@ struct ChatAttachmentView: View {
         }
         .buttonStyle(.plain)
         .disabled(loading || isSending)
-        .accessibilityLabel(thumbnail == nil ? "Retry loading image" : "Open image full screen: \(attachment.name)")
+        .accessibilityLabel(displayedThumbnail == nil ? "Retry loading image" : "Open image full screen: \(attachment.name)")
     }
 
     private var documentButton: some View {
@@ -294,16 +281,7 @@ private struct AttachmentImageViewer: View {
         .task(id: attempt) {
             error = nil
             do {
-                let bytes = try await auth.withSession { api, token in
-                    try await api.chatAttachment(contactID: contactID, turnID: turnID, token: token)
-                }
-                try Task.checkCancellation()
-                let decoded = await Task.detached(priority: .userInitiated) {
-                    AttachmentImageDecoder.decode(bytes, maxPixelSize: 4096)
-                }.value
-                try Task.checkCancellation()
-                guard let decoded else { throw AuthAPI.Failure.rejected("This image could not be displayed.") }
-                image = decoded
+                image = try await auth.cachedImage(.attachment(contactID: contactID, turnID: turnID), maxPixelSize: 4096)
             } catch is CancellationError { }
             catch {
                 guard !Task.isCancelled else { return }

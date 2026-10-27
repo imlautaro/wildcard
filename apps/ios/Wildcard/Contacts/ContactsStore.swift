@@ -12,7 +12,6 @@ final class ContactsStore {
     private(set) var isMutating = false
     private(set) var error: String?
     private(set) var totalUnreadCount = 0
-    private let photoCache = NSCache<NSString, NSData>()
     private var markingRead: Set<String> = []
     let conversations = ConversationCache()
     private var refreshedAt: Date?
@@ -110,6 +109,13 @@ final class ContactsStore {
                 guard let boundary = page.contacts.last else { return false }
                 return isMoreRecent(boundary, than: existing)
             } : []
+            let removed = contacts.contains { existing in
+                guard firstPageIDs.contains(existing.id), !incomingIDs.contains(existing.id) else { return false }
+                guard page.nextCursor != nil, let boundary = page.contacts.last else { return true }
+                return !isMoreRecent(boundary, than: existing)
+            }
+            if removed { await auth.images.clear(deactivate: false) }
+            guard request == generation, readSnapshot == readRevision, !Task.isCancelled else { return }
             contacts = page.contacts + additional
             sortContacts()
             firstPageIDs = incomingIDs
@@ -189,27 +195,14 @@ final class ContactsStore {
         }
     }
 
-    func photo(for contact: Contact, using auth: AuthStore) async throws -> Data {
-        guard let version = contact.photoVersion else { throw AuthAPI.Failure.notFound }
-        let key = "\(contact.id)/\(version)" as NSString
-        if let cached = photoCache.object(forKey: key) { return cached as Data }
-        let data = try await auth.withSession { api, token in
-            try await api.contactPhoto(id: contact.id, version: version, token: token)
-        }
-        try Task.checkCancellation()
-        photoCache.totalCostLimit = 16 * 1024 * 1024
-        photoCache.setObject(data as NSData, forKey: key, cost: data.count)
-        return data
-    }
-
     func savePhoto(contactID: String, data: Data?, using auth: AuthStore) async throws {
         try beginMutation()
         defer { isMutating = false }
         let saved = try await auth.withSession { api, token in
             try await api.saveContactPhoto(id: contactID, data: data, token: token)
         }
-        if let previous = knownContacts[contactID]?.photoVersion {
-            photoCache.removeObject(forKey: "\(contactID)/\(previous)" as NSString)
+        if let data, let version = saved.photoVersion {
+            await auth.images.store(data, for: .contactAvatar(contactID: contactID, version: version))
         }
         knownContacts[contactID] = saved
         if let index = contacts.firstIndex(where: { $0.id == contactID }) { contacts[index] = saved }
@@ -226,6 +219,7 @@ final class ContactsStore {
             } catch AuthAPI.Failure.notFound {
                 // A contact removed on another client is already deleted.
             }
+            await auth.images.clear(deactivate: false)
             conversations.remove(contactID: contact.id)
             messageTimestamps.removeValue(forKey: contact.id)
             contactRefreshedAt.removeValue(forKey: contact.id)
@@ -257,6 +251,8 @@ final class ContactsStore {
         } catch {
             guard request == generation else { return }
             if case AuthAPI.Failure.notFound = error {
+                await auth.images.clear(deactivate: false)
+                guard request == generation else { return }
                 conversations.remove(contactID: id)
                 messageTimestamps.removeValue(forKey: id)
                 contactRefreshedAt.removeValue(forKey: id)

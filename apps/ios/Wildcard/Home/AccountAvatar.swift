@@ -7,9 +7,19 @@ struct AccountAvatar: View {
     @State private var image: UIImage?
     @State private var loadedVersion: String?
 
+    private var resource: CachedImageResource? {
+        guard let version = user?.photoVersion else { return nil }
+        return .accountAvatar(version: version)
+    }
+
+    private var displayedImage: UIImage? {
+        if loadedVersion == user?.photoVersion, let image { return image }
+        return resource.flatMap { auth.images.cachedImage($0, maxPixelSize: 288) }
+    }
+
     var body: some View {
         Group {
-            if let image, loadedVersion == user?.photoVersion {
+            if let image = displayedImage {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 Image(systemName: "person.crop.circle.fill")
@@ -21,13 +31,11 @@ struct AccountAvatar: View {
         .task(id: "\(user?.id ?? "")/\(user?.photoVersion ?? "")") {
             image = nil
             loadedVersion = nil
-            guard let version = user?.photoVersion else { return }
+            guard let resource else { return }
+            let version = user?.photoVersion
             do {
-                let data = try await auth.withSession { api, token in
-                    try await api.profilePhoto(version: version, token: token)
-                }
+                image = try await auth.cachedImage(resource, maxPixelSize: 288)
                 try Task.checkCancellation()
-                image = UIImage(data: data)
                 loadedVersion = version
             } catch { /* Keep the placeholder when the photo is unavailable. */ }
         }
