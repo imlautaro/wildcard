@@ -591,3 +591,43 @@ memory attribution/recall, canonical photo/presence, queued versus running reads
 exclusive processing across ordinary/scheduled messages, private notifications
 and badge totals, and cancellation/removal/recovery during generation. Verify
 that a missing/paused instance status never unlocks concurrent attention.
+
+## Directed invitations by account email
+
+Migration `0014_directed_contact_invitations.sql` extends the existing D1
+`contact_invite` table with an optional recipient-account foreign key, an inbox
+index, and a unique pending request per agent/recipient. Apply it after 0013 via
+`npm run db:migrate:local` for local work; the existing automatic commit/push
+release applies the same migration remotely before publishing the Worker.
+Existing codes retain null recipients and remain usable through their prior flow.
+No new resource, binding, account permission, secret, email provider, SMTP service,
+or provisioning step is required. The existing authenticated `user` table supplies
+exact email lookup and resolves the immutable recipient account ID. Emails are
+trimmed and compared case-insensitively; mailbox ownership verification remains
+unconfigured. This identifies an account, not a verified mailbox owner.
+
+The updated iOS client offers email-based in-app requests, a recipient inbox with
+accept/decline and consent, a toolbar indicator, and foreground refresh bounded
+to one fetch every 15 seconds plus explicit refresh/foreground entry. The earlier
+invitation-code flow remains optional. No email or invitation APNs alert is sent.
+The existing reply push devices, outbox, schedules, memory, and attention queue
+are used only after membership is accepted and normal chat work begins.
+
+Before production use, commit/push the intended changes, wait for Workers Builds,
+and verify its source SHA, live Worker, and no unapplied D1 migrations. Install
+the updated app with Xcode. No manual deployment is permitted. Keep the additive
+recipient column and indexes if fixing/rolling back code; use a sharing-aware
+Worker that enforces recipient binding on preview, insertion, consumption, and
+acceptance retry. An older iOS client cannot display directed requests, but can
+continue using invitation codes. Do not remove recipient bindings or convert
+pending requests into transferable capabilities to work around client versioning.
+
+Static checks for this extension: TypeScript/Swift types, all 14 migrations on an
+empty SQLite schema with foreign keys enabled, 21 sharing queries prepared with
+EXPLAIN, and whitespace validation. No runtime tests, builds, production account
+lookup, real invitation, remote migration, inference, or release were performed.
+Functional verification should use authorized fictional accounts for email case
+matching, nonexistent/self/already-authorized recipients, duplicate/expired
+requests, isolation from third accounts, accept/decline/revoke races, membership
+limits, consent, and iOS refresh/account switching. Never log account emails,
+invitation codes, session tokens, or chat contents for verification.

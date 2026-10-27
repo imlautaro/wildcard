@@ -50,7 +50,7 @@ This can revisit a previously loaded page after activity changes. Contact snapsh
 read state is persisted on the server. The store is recreated when the signed-in user changes, and responses
 from a previous session or an invalidated request cannot populate the new state.
 
-Tap **+ → Create Contact**, enter a name, and tap Create. **+ → Join Shared Contact** accepts a code from a creator; it requires sharing consent and opens a new empty private chat. The person-plus button in a creator’s chat opens sharing/access management. Swipe a row for Edit or Delete; a context
+Tap **+ → Create Contact**, enter a name, and tap Create. **+ → Join Shared Contact** accepts a code from a creator; it requires sharing consent and opens a new empty private chat. The person-plus button in a creator’s chat opens sharing/access management, including invitations by an existing account’s email. Recipients open the envelope button in Chats to accept or decline requests; no mailbox email is sent. Swipe a row for Edit or Delete; a context
 menu offers the same actions. Edit pushes the editor on the existing shared
 navigation stack. Deletion requires confirmation. Successful mutations update the
 list from the server response; creation dismisses the editor. Failed saves retain

@@ -7,6 +7,8 @@ enum HomeDestination: Hashable {
     case schedules(String)
     case sharing(String)
     case joinContact
+    case contactInvitations
+    case receivedInvitation(ReceivedContactInvitation)
 }
 
 struct HomeView: View {
@@ -23,6 +25,7 @@ struct HomeView: View {
     @State private var section: Section = .chats
     @State private var destinations: [HomeDestination] = []
     @State private var contacts = ContactsStore()
+    @State private var invitations = ContactInvitationsStore()
 
     var body: some View {
         NavigationStack(path: $destinations) {
@@ -41,6 +44,18 @@ struct HomeView: View {
             .navigationTitle(section.title)
             .toolbar {
                 if section == .chats && destinations.isEmpty {
+                    ToolbarItem(placement: .topBarLeading) {
+                        NavigationLink(value: HomeDestination.contactInvitations) {
+                            HStack(spacing: 4) {
+                                Image(systemName: invitations.invitations.isEmpty ? "envelope" : "envelope.badge")
+                                if !invitations.invitations.isEmpty {
+                                    Text(invitations.invitations.count > 99 ? "99+" : String(invitations.invitations.count))
+                                        .manrope(.caption, weight: .semibold)
+                                }
+                            }
+                        }
+                        .accessibilityLabel(invitations.invitations.isEmpty ? "Contact Invitations" : "Contact Invitations, pending requests")
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             NavigationLink("Create Contact", value: HomeDestination.addContact)
@@ -60,6 +75,12 @@ struct HomeView: View {
                     ContactEditorView()
                 case .joinContact:
                     JoinSharedContactView { id in destinations = [.contact(id)] }
+                case .contactInvitations:
+                    ContactInvitationsView()
+                case .receivedInvitation(let invitation):
+                    ReceivedContactInvitationView(invitation: invitation) { contactID in
+                        destinations = [.contact(contactID)]
+                    }
                 case .sharing(let id):
                     ContactSharingView(contactID: id)
                 case .contact(let id):
@@ -76,6 +97,7 @@ struct HomeView: View {
             }
         }
         .environment(contacts)
+        .environment(invitations)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { MessageSounds.shared.activate(userID: auth.user?.id) }
             else { MessageSounds.shared.deactivate() }
@@ -99,6 +121,14 @@ struct HomeView: View {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(3)) } catch { return }
                 await contacts.refresh(using: auth, preserveLoadedPages: true)
+            }
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await invitations.refresh(using: auth, force: true)
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                await invitations.refresh(using: auth)
             }
         }
         .task(id: push.destination?.id) {

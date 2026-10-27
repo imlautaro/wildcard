@@ -322,3 +322,8 @@ but does not cancel the user's schedules.
 ## Shared contacts
 
 [Shared contacts](sharing.md) keep notifications private to the turn recipient. Each participant has a separate contact/conversation ID, read watermark, unread total, schedules, session devices, sound keys, and notification tap destination. Sharing does not fan replies or reminders out to other members. Notification names/photos use the same canonical agent metadata; signed avatar reads resolve its creator/agent R2 object after validating the recipient’s membership/session. Member removal/leave cascades that person’s pending outbox entries; creator deletion cascades everyone’s. Already accepted APNs requests cannot be recalled.
+
+Directed [contact invitations](sharing.md) appear in their own foreground inbox,
+refreshed at most every 15 seconds or manually. They do not generate APNs alerts,
+mailbox emails, chat turns, message sounds, or unread-message/app-icon badges.
+Only the intended signed-in account can accept or decline an invitation.

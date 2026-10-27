@@ -78,12 +78,19 @@ export const contact = sqliteTable('contact', {
 ]);
 
 export const contactInvite = sqliteTable('contact_invite', {
+  recipientId: text('recipient_id').references(() => user.id, { onDelete: 'cascade' }),
   token: text('token').primaryKey(),
   agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
   expiresAt: date('expires_at').notNull(),
   acceptedBy: text('accepted_by').references(() => user.id, { onDelete: 'cascade' }),
   contributorConsent: integer('contributor_consent', { mode: 'boolean' }).notNull().default(false),
-}, (table) => [index('contact_invite_agent_idx').on(table.agentId, table.expiresAt)]);
+}, (table) => [
+  index('contact_invite_agent_idx').on(table.agentId, table.expiresAt),
+  index('contact_invite_inbox_idx').on(table.recipientId, table.expiresAt)
+    .where(sql`${table.recipientId} IS NOT NULL AND ${table.acceptedBy} IS NULL`),
+  uniqueIndex('contact_invite_pending_recipient_idx').on(table.agentId, table.recipientId)
+    .where(sql`${table.recipientId} IS NOT NULL AND ${table.acceptedBy} IS NULL`),
+]);
 
 export const agentAttention = sqliteTable('agent_attention', {
   agentId: text('agent_id').primaryKey().references(() => contactAgent.id, { onDelete: 'cascade' }),

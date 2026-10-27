@@ -10,6 +10,11 @@ struct ContactSharingView: View {
     @State private var busy = false
     @State private var error: String?
     @State private var removal: ContactSharing.Member?
+    @State private var recipientEmail = ""
+
+    private var canInvite: Bool {
+        sharing != nil && shareMemory && (sharing?.contributorModel != true || contributorConsent)
+    }
 
     var body: some View {
         Form {
@@ -22,17 +27,31 @@ struct ContactSharingView: View {
                     Text("This installation uses a Contributor model. Messages and shared memories sent to Meta may be used to train its models.")
                         .manrope(.footnote).foregroundStyle(.secondary)
                 }
-                Button("Create Invitation") { createInvitation() }
-                    .disabled(sharing == nil || !shareMemory || (sharing?.contributorModel == true && !contributorConsent))
+                TextField("Existing user's email", text: $recipientEmail)
+                    .textContentType(.emailAddress).keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                Button("Invite User") { createInvitation(byEmail: true) }
+                    .disabled(!canInvite || recipientEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                DisclosureGroup("Invite with a code instead") {
+                    Button("Create Invitation Code") { createInvitation() }.disabled(!canInvite)
+                    Text("Anyone with this code can accept it. Share it only with your intended recipient.")
+                        .manrope(.footnote).foregroundStyle(.secondary)
+                }
             } footer: {
-                Text("Invitations expire after 24 hours and can be used once. Up to four participants, including you. Anyone with the code can accept it; send it only to your intended recipient.")
+                Text("Enter the email of an existing Wildcard account. Their invitation appears inside Wildcard; no email is sent. Invitations expire after 24 hours. Up to four participants, including you.")
             }
             if let invitation {
                 Section("New Invitation") {
-                    Text(invitation.code).textSelection(.enabled).font(.system(.footnote, design: .monospaced))
-                    ShareLink(item: invitation.code) { Label("Share Invitation Code", systemImage: "square.and.arrow.up") }
-                    Text("The recipient signs in, taps + → Join Shared Contact, and pastes this code.")
-                        .manrope(.footnote).foregroundStyle(.secondary)
+                    if let code = invitation.code {
+                        Text(code).textSelection(.enabled).font(.system(.footnote, design: .monospaced))
+                        ShareLink(item: code) { Label("Share Invitation Code", systemImage: "square.and.arrow.up") }
+                        Text("The recipient signs in, taps + → Join Shared Contact, and pastes this code.")
+                            .manrope(.footnote).foregroundStyle(.secondary)
+                    } else if let email = invitation.recipientEmail {
+                        Label("Invitation sent to \(email)", systemImage: "checkmark.circle")
+                        Text("They can accept it from Contact Invitations in Wildcard.")
+                            .manrope(.footnote).foregroundStyle(.secondary)
+                    }
                 }
             }
             if let sharing {
@@ -49,8 +68,11 @@ struct ContactSharingView: View {
                 Section("Pending Invitations") {
                     ForEach(sharing.invitations) { invite in
                         HStack {
-                            Text("Expires \(Date(timeIntervalSince1970: invite.expiresAt / 1000).formatted(date: .abbreviated, time: .shortened))")
-                                .manrope(.footnote)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(invite.recipientEmail ?? "Invitation code")
+                                Text("Expires \(Date(timeIntervalSince1970: invite.expiresAt / 1000).formatted(date: .abbreviated, time: .shortened))")
+                                    .manrope(.footnote).foregroundStyle(.secondary)
+                            }
                             Spacer()
                             Button("Revoke", role: .destructive) { revoke(invitationID: invite.id) }
                         }
@@ -90,13 +112,14 @@ struct ContactSharingView: View {
         } catch { self.error = error.localizedDescription }
     }
 
-    private func createInvitation() {
+    private func createInvitation(byEmail: Bool = false) {
+        let email = byEmail ? recipientEmail.trimmingCharacters(in: .whitespacesAndNewlines) : nil
         busy = true
         error = nil
         Task {
             do {
                 invitation = try await auth.withSession { api, token in
-                    try await api.inviteContact(id: contactID, contributorConsent: contributorConsent, token: token)
+                    try await api.inviteContact(id: contactID, email: email, contributorConsent: contributorConsent, token: token)
                 }
                 busy = false
                 await load()

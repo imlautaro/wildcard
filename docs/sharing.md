@@ -9,11 +9,32 @@ starts an empty chat. It never clones an agent or copies someone else's history.
 
 The creator opens a contact and taps the person-plus toolbar button. **Share
 Contact** explains shared memory, requires approval to share existing and future
-memories, and creates an invitation code. Use the system share sheet to send that
-code. A signed-in recipient chooses **+ → Join Shared Contact**, pastes the code,
-previews the name, explicitly accepts shared memory, and joins. Codes expire after
-24 hours, are single-use, and are bearer capabilities: anyone possessing a code
-can accept it. They are not bound to an email address or a named recipient.
+memories, and lets the creator enter an existing user's email and tap **Invite
+User**. The server resolves that address to an immutable account ID and creates
+an in-app request for that account. The recipient opens the envelope button in
+Chats and accepts or declines from **Contact Invitations**. Acceptance still
+requires shared-memory consent and, when applicable, Contributor consent. No
+mailbox email or invitation push alert is sent. The foreground app refreshes its
+invitation inbox at most once every 15 seconds, immediately on foreground entry,
+and on manual refresh. Its toolbar indicator is separate from message badges.
+
+The optional **Invite with a code instead** disclosure retains the earlier flow:
+create a code, share it with the system share sheet, and have the recipient choose
+**+ → Join Shared Contact**. Codes expire after 24 hours, are single-use bearer
+capabilities, and are not bound to a recipient. Directed requests also expire
+after 24 hours, but only the resolved recipient account may accept/decline them,
+even if someone else knows their invitation ID.
+
+Email lookup trims whitespace and matches case-insensitively. It requires an
+existing account, rejects self-invites, and reports already-authorized members.
+An existing member may be invited again if new Contributor consent is required.
+Resending to the same account reuses an unexpired pending request without
+extending its expiry; it does not create duplicates. Declining or creator
+revocation removes the pending request without changing membership. Requests
+follow account IDs if an address changes, and are removed if that account is
+deleted. A new account registering the old address cannot claim them. Email
+ownership verification remains unconfigured in authentication; this feature
+selects an account by its registered address and does not prove mailbox ownership.
 
 This implementation supports four participants per agent, including its creator,
 and ten pending invitations. Existing participants can accept a new invitation
@@ -53,6 +74,11 @@ participant gets a new private `contact.id` referencing the same `agent_id`.
 `UNIQUE(agent_id, user_id)` prevents duplicate membership. API contact responses
 include `agentID` and `role` (`owner` or `member`). Use `id`, not `agentID`, for all
 existing chat, schedule, photo, unread, and notification routes.
+
+Migration `0014_directed_contact_invitations.sql` adds nullable `recipient_id`,
+recipient-inbox indexing, and a unique pending request per agent/recipient. Existing
+codes retain null recipients and their original behavior. Pending requests do not
+create contact rows, grant memory access, or affect the agent's attention queue.
 
 Canonical agent metadata is projected to all participant rows by D1 triggers;
 only creator-authorized endpoints can change it. Authenticated photo reads and
@@ -133,13 +159,17 @@ use that participant's private conversation ID.
 All routes require the existing bearer session and `no-store`. Prefix:
 `/api/v1/contacts/sharing`. Bodies are limited to 2 KiB and sharing admission to
 40 requests per minute per user. Identity/ownership comes only from the session.
+Email lookup additionally admits at most ten attempts per user per minute. There
+is no user-directory or autocomplete endpoint, and emails/requests are not logged.
 
 | Method | Path | Contract |
 | --- | --- | --- |
-| GET | `/:id` | Creator-only members, pending invitation IDs/expiry, and `contributorModel` |
-| POST | `/:id/invitations` | `{ "shareMemory": true, "contributorConsent": true/false }`; returns `code`, `expiresAt` |
+| GET | `/:id` | Creator-only members, pending invitation IDs/expiry/nullable `recipientEmail`, and `contributorModel` |
+| POST | `/:id/invitations` | Consent fields plus optional `email`; directed requests return `invitationID`, `recipientEmail`, `expiresAt`; without email, returns `code`, `expiresAt` |
 | POST | `/preview` | `{ "code": "..." }`; returns contact name, expiry, and `contributorModel` |
-| POST | `/accept` | Code plus both consent fields; returns recipient `contactID` |
+| POST | `/accept` | Either `code` or directed `invitationID`, plus consent fields; returns recipient `contactID` |
+| GET | `/inbox` | Current account's first 100 unexpired pending directed invitations, soonest expiry first, plus `contributorModel` |
+| DELETE | `/inbox/:inviteID` | Current recipient declines a pending request; idempotent 204 |
 | DELETE | `/:id/invitations/:inviteID` | Creator revokes a pending invitation |
 | DELETE | `/:id/members/:memberID` | Creator removes a non-owner participant |
 
@@ -147,8 +177,13 @@ All routes require the existing bearer session and `no-store`. Prefix:
 member list. Single-use acceptance and membership insertion share one D1 batch.
 Random UUID codes are returned only on creation; D1 stores their SHA-256 digest,
 not their usable plaintext. Codes travel in request bodies, not access-log URLs.
-The digest is the revocation ID and cannot itself be used as an invitation.
-No email, external message, or notification is sent by creating a code.
+The digest is the revocation ID and is not a transferable invitation capability.
+Directed requests expose this ID only to the creator and intended recipient;
+ID-based acceptance additionally requires the matching authenticated account.
+Code preview, membership insertion, consumption, and acceptance retries all
+enforce recipient binding when present. Directed creation discards its random
+plaintext code and returns no bearer code. No email, external message, or push
+notification is sent by either flow. Only directed requests appear in the inbox.
 
 ## Setup, rollout, and verification status
 
@@ -167,3 +202,15 @@ independent history/read/badges/schedules/attachments, cross-user recall,
 simultaneous sends, cancellation/removal during generation, failed memory
 maintenance, control-plane failure/recovery, and iOS presentation. Static
 validation does not establish runtime correctness or recall quality.
+
+## Directed invitation validation status
+
+Migration 0014 compiles with the previous migrations against an empty SQLite
+schema with foreign keys enabled. All 21 sharing SQL statements prepare with
+EXPLAIN without executing application statements. TypeScript and Swift type
+checks and whitespace checks cover this local extension. No builds, runtime
+tests, real invitations, account lookup in production, inference, remote
+migration, push, or deployment were run. Existing-account email matching,
+duplicate requests, acceptance by a different account, decline/revoke/expiry,
+acceptance retries, inbox refresh, and foreground/account-switch behavior need
+authorized verification with fictional accounts before end-to-end claims.
