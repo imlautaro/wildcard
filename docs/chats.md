@@ -318,3 +318,21 @@ Turn JSON includes attachment display metadata; bytes are retrieved through an
 owner-authenticated route and sent inline to Meta during generation. See
 [attachments](attachments.md) for supported formats, API payloads, the 5 MiB limit,
 context retention, migration, cleanup, provider data policy, and validation status.
+
+
+## Bubble appearance experiment
+
+Bubbles use a continuous outline with a small integrated pointed tail at the top
+corner: left for incoming messages, right for outgoing messages. The tip extends
+approximately 6 points outward and 3 points upward, with a slightly rounded tip
+curving back into the side of the bubble.
+The remaining corners retain their base radius (20 points for text/images,
+16 for documents). This replaces the earlier decorative circle and half-radius
+corner experiment. Image tails use the outgoing bubble color; image pixels remain
+clipped to the bubble outline with a 2-point inner border in the bubble color. Message alignment, receipts, and attachment opening
+retain their existing behavior.
+
+Text bubbles and image captions use the same adaptive text/metadata layout. A
+short single-line message shares its baseline with the time/checks; longer or
+multiline text puts metadata beneath it. Images have their own rounded corners
+inside the surrounding bubble and its 2-point rim.

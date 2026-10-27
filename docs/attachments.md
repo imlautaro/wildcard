@@ -7,9 +7,15 @@ button sends when an attachment is selected; dictation remains available for an
 empty composer. Failed sends retain the draft and attachment, including the request
 identifier for uncertain network results. Images load automatically as inline thumbnails, preserving their aspect ratio.
 When sent with text, the caption appears below the image inside the same outgoing
-bubble, with one time/receipt footer below the caption. Image-only messages keep
+bubble. Captions share the text-message layout: short single-line text keeps the
+time and receipt checks on its line; longer or multiline text puts them below. Image-only messages keep
 the metadata overlay.
-Images use 20-point rounded corners on the actual image bounds and align to the same
+Images use a rounded outline with an integrated pointed tail at the top right
+in the outgoing bubble color, replacing the decorative circle. A 2-point border
+in that same color surrounds the image, including images with captions. The tail
+tip has a rounded cap. The image itself has independent 16-point rounded corners (smaller than the 20-point bubble)
+inside a 2-point bubble-colored rim. With a caption, both lower image corners
+use a minimal 2-point radius where the image meets the text. They align to the same
 trailing edge as outgoing text bubbles. For image-only messages, a dark badge at the bottom right shows the
 message time and the same presentation-only receipt checks used by text messages;
 these checks do not represent server-confirmed delivery or reads. Tap

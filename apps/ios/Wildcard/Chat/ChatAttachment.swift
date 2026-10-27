@@ -94,17 +94,16 @@ struct ChatAttachmentView: View {
                     } else {
                         VStack(alignment: .trailing, spacing: 0) {
                             imageButton
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text(caption).manrope().multilineTextAlignment(.leading)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                MessageMetadataView(sentAt: sentAt, fromUser: true)
-                            }
+                            MessageTextContentView(text: caption, sentAt: sentAt, fromUser: true, fillsWidth: true)
                             .padding(.horizontal, 16).padding(.vertical, 12)
                         }
                         .frame(maxWidth: 260)
-                        .background(Color("OutgoingMessageBackground"))
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .background(Color("OutgoingMessageBackground"), in: MessageBubbleShape())
+                        .overlay {
+                            MessageBubbleShape().stroke(Color("OutgoingMessageBackground"), lineWidth: 4)
+                                .allowsHitTesting(false)
+                        }
+                        .clipShape(MessageBubbleShape())
                     }
                 } else {
                     documentButton
@@ -164,9 +163,17 @@ struct ChatAttachmentView: View {
                                     .padding(8)
                             }
                         }
-                        // Clip the image's actual bounds before the flexible frame.
-                        .clipShape(RoundedRectangle(cornerRadius: caption.isEmpty ? 20 : 0))
-                        .contentShape(RoundedRectangle(cornerRadius: caption.isEmpty ? 20 : 0))
+                        // The image has its own rounded corners inside a 2-point bubble-colored rim.
+                        .clipShape(UnevenRoundedRectangle(
+                            topLeadingRadius: 16,
+                            bottomLeadingRadius: caption.isEmpty ? 16 : 2,
+                            bottomTrailingRadius: caption.isEmpty ? 16 : 2,
+                            topTrailingRadius: 16
+                        ))
+                        .padding(2)
+                        .background(Color("OutgoingMessageBackground"), in: MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
+                        .clipShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
+                        .contentShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
                         .frame(maxWidth: 260, maxHeight: 260, alignment: .trailing)
                 } else {
                     ZStack {
@@ -174,10 +181,11 @@ struct ChatAttachmentView: View {
                         if loading { ProgressView() }
                         else { Label("Retry image", systemImage: "arrow.clockwise").manrope(.footnote) }
                     }.frame(width: 220, height: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: caption.isEmpty ? 20 : 0))
+                        .background(Color("OutgoingMessageBackground"), in: MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
+                        .clipShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
                 }
             }
-            .contentShape(RoundedRectangle(cornerRadius: caption.isEmpty ? 20 : 0))
+            .contentShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
         }
         .buttonStyle(.plain)
         .disabled(loading)
@@ -219,7 +227,7 @@ struct ChatAttachmentView: View {
             }.manrope(.footnote).padding(12)
         }
         .buttonStyle(.plain)
-        .background(Color("OutgoingMessageBackground"), in: RoundedRectangle(cornerRadius: 16))
+        .background(Color("OutgoingMessageBackground"), in: MessageBubbleShape(cornerRadius: 16))
         .disabled(loading)
     }
 
