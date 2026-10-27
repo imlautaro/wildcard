@@ -261,8 +261,9 @@ retest of a notification tap from a terminated/backgrounded app remains necessar
 
 The main app bundles the three owner-supplied Mixkit WAV files in `Wildcard/Sounds`.
 Xcode's synchronized app group includes them as resources; keep their filenames
-unchanged. All three bundled files are attenuated by 50 dB relative to the supplied
-originals for gentler playback, without changing their duration or metadata. The
+unchanged. The in-app pop and chime are attenuated by 40 dB, and the background
+notification flute by 10 dB, relative to the supplied originals, without changing
+their duration or metadata. The
 original source files remain outside the repository. They are 44.1 kHz, 16-bit PCM,
 each shorter than three seconds, within
 [Apple's custom notification sound requirements](https://developer.apple.com/documentation/usernotifications/unnotificationsound).
@@ -301,8 +302,8 @@ permission denial, and account switching on a physical device with fictional dat
 No build, runtime test, or real push was run for this change.
 
 
-The October 27, 2026 volume adjustment attenuates all three sounds by 50 dB at the
-owner's request. Samples are scaled directly from the original files in commit
+The October 27, 2026 volume adjustment applies -40 dB to the in-app pop and chime
+and -10 dB to the background notification flute at the owner's request. Samples are scaled directly from the original files in commit
 `6937d4d050f19648ecd29950c4168375bed2b536` to avoid cumulative rounding from earlier
 adjustments. The accompanying client change delays the visible reply sound until
 its bubble appears and its insertion/scroll animation has finished.
