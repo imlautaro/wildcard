@@ -1,5 +1,9 @@
 # Contacts and private conversations
 
+The Chats toolbar uses the adaptive system label color for the invitations and
+add-contact buttons. Chat toolbar sharing and schedule buttons use the same
+neutral color in light and dark appearance.
+
 Contact records are persisted in Cloudflare D1; optional
 [profile photos](profile-photos.md) are stored privately in R2. Every operation
 requires the current user's signed bearer session. The owner is taken exclusively

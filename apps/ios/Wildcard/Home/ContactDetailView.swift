@@ -33,6 +33,7 @@ struct ContactDetailView: View {
                         NavigationLink(value: HomeDestination.sharing(contactID)) {
                             Image(systemName: "person.badge.plus")
                         }
+                        .tint(Color(uiColor: .label))
                         .accessibilityLabel("Share contact")
                     }
                 }
@@ -40,6 +41,7 @@ struct ContactDetailView: View {
                     NavigationLink(value: HomeDestination.schedules(contactID)) {
                         Image(systemName: "clock")
                     }
+                    .tint(Color(uiColor: .label))
                     .accessibilityLabel("Schedules")
                 }
                 ToolbarItem(placement: .topBarLeading) {

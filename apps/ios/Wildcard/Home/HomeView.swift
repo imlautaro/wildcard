@@ -54,6 +54,7 @@ struct HomeView: View {
                                 }
                             }
                         }
+                        .tint(Color(uiColor: .label))
                         .accessibilityLabel(invitations.invitations.isEmpty ? "Contact Invitations" : "Contact Invitations, pending requests")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
@@ -63,6 +64,7 @@ struct HomeView: View {
                         } label: {
                             Image(systemName: "plus")
                         }
+                        .tint(Color(uiColor: .label))
                         .accessibilityLabel("Add contact")
                         .disabled(contacts.isMutating)
                     }
