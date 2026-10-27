@@ -252,7 +252,7 @@ private struct AttachmentImageViewer: View {
             Color.black.ignoresSafeArea()
             Group {
                 if let image {
-                    ZoomableAttachmentImage(image: image)
+                    ZoomableAttachmentImage(image: image, onDismiss: { dismiss() })
                         .accessibilityLabel(attachment.name)
                 } else if let error {
                     VStack(spacing: 16) {
@@ -297,17 +297,35 @@ private struct AttachmentImageViewer: View {
 
 private struct ZoomableAttachmentImage: UIViewRepresentable {
     let image: UIImage
+    let onDismiss: () -> Void
+
     func makeUIView(context: Context) -> AttachmentImageScrollView {
-        AttachmentImageScrollView(image: image)
+        AttachmentImageScrollView(image: image, onDismiss: onDismiss)
     }
-    func updateUIView(_ view: AttachmentImageScrollView, context: Context) {}
+    func updateUIView(_ view: AttachmentImageScrollView, context: Context) {
+        view.onDismiss = onDismiss
+    }
+}
+
+private final class ImageDismissGestureDelegate: NSObject, UIGestureRecognizerDelegate {
+    weak var scrollView: UIScrollView?
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let scrollView, let pan = gestureRecognizer as? UIPanGestureRecognizer,
+              !scrollView.isZooming, scrollView.zoomScale <= scrollView.minimumZoomScale + 0.01 else { return false }
+        let velocity = pan.velocity(in: scrollView)
+        return velocity.y > 0 && velocity.y > abs(velocity.x) * 1.2
+    }
 }
 
 private final class AttachmentImageScrollView: UIScrollView, UIScrollViewDelegate {
     private let imageView: UIImageView
     private var viewportSize: CGSize = .zero
+    private let dismissGestureDelegate = ImageDismissGestureDelegate()
+    var onDismiss: () -> Void
 
-    init(image: UIImage) {
+    init(image: UIImage, onDismiss: @escaping () -> Void) {
+        self.onDismiss = onDismiss
         imageView = UIImageView(image: image)
         super.init(frame: .zero)
         imageView.contentMode = .scaleAspectFit
@@ -322,6 +340,13 @@ private final class AttachmentImageScrollView: UIScrollView, UIScrollViewDelegat
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(toggleZoom(_:)))
         doubleTap.numberOfTapsRequired = 2
         addGestureRecognizer(doubleTap)
+        let dismissPan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
+        dismissPan.maximumNumberOfTouches = 1
+        dismissGestureDelegate.scrollView = self
+        dismissPan.delegate = dismissGestureDelegate
+        addGestureRecognizer(dismissPan)
+        // Once zoomed, this recognizer fails immediately and native panning takes over.
+        panGestureRecognizer.require(toFail: dismissPan)
     }
     required init?(coder: NSCoder) { nil }
 
@@ -334,6 +359,34 @@ private final class AttachmentImageScrollView: UIScrollView, UIScrollViewDelegat
         contentSize = viewportSize
     }
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
+
+    @objc private func handleDismissPan(_ gesture: UIPanGestureRecognizer) {
+        let translation = gesture.translation(in: self)
+        switch gesture.state {
+        case .changed:
+            imageView.transform = CGAffineTransform(translationX: translation.x * 0.15,
+                                                    y: max(0, translation.y))
+        case .ended:
+            let velocity = gesture.velocity(in: self)
+            if translation.y > 120 || (translation.y > 40 && velocity.y > 900) {
+                onDismiss()
+            } else {
+                restoreImagePosition()
+            }
+        case .cancelled, .failed:
+            restoreImagePosition()
+        default:
+            break
+        }
+    }
+
+    private func restoreImagePosition() {
+        guard !isZooming, zoomScale <= minimumZoomScale + 0.01 else { return }
+        UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0 : 0.2,
+                       delay: 0, options: [.beginFromCurrentState, .curveEaseOut]) {
+            self.imageView.transform = .identity
+        }
+    }
 
     @objc private func toggleZoom(_ gesture: UITapGestureRecognizer) {
         if zoomScale > 1 { setZoomScale(1, animated: true) }

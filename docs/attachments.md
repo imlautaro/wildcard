@@ -20,7 +20,10 @@ trailing edge as outgoing text bubbles. For image-only messages, a dark badge at
 message time and the same presentation-only receipt checks used by text messages;
 these checks do not represent server-confirmed delivery or reads. Tap
 an image to open a black full-screen viewer with pinch/pan, double-tap zoom, and a
-Close button. Documents continue to open in native Quick Look. Failed image loads
+Close button. Drag down at the default zoom level to dismiss: the image follows
+the finger and closes after a sufficient downward drag or a short fast swipe.
+Short or cancelled drags return the image to its position. When zoomed in,
+dragging continues to pan the image; zoom out before swiping to dismiss. Documents continue to open in native Quick Look. Failed image loads
 show retry controls; full-screen loading also supports retry and dismissal.
 
 ## Formats and limits
