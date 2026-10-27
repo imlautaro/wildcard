@@ -46,10 +46,10 @@ struct ContactDetailView: View {
                     NavigationLink(value: HomeDestination.editContact(contactID)) {
                         HStack(spacing: 6) {
                             ContactAvatar(contact: contact, size: 38)
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: -2) {
                                 Text(contact.name).manrope(.headline, weight: .semibold)
                                     .foregroundStyle(Color(uiColor: .label))
-                                Text(contacts.conversations.store(for: contactID).presence?.label ?? " ")
+                                Text(contacts.conversations.store(for: contactID).presence?.label ?? "Loading...")
                                     .manrope(.caption2)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -60,7 +60,7 @@ struct ContactDetailView: View {
                     }
                     .tint(Color(uiColor: .label))
                     .accessibilityLabel(contact.canManage ? "Edit \(contact.name)" : "View \(contact.name)")
-                    .accessibilityValue(contacts.conversations.store(for: contactID).presence?.label ?? "")
+                    .accessibilityValue(contacts.conversations.store(for: contactID).presence?.label ?? "Loading...")
                 }
             }
         }

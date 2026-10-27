@@ -204,13 +204,15 @@ work can therefore appear offline until another generation attempt starts.
 The visible chat polls authoritative history/presence every three seconds. This
 has polling latency and may miss very short Online/Typing phases; there is no
 WebSocket service. Navigation/backgrounding and refresh failures clear cached
-presence, leaving the status line blank until the next successful refresh.
+presence, showing **Loading...** until the next successful refresh.
 The leading navigation-bar header places the avatar beside left-aligned name
 and status. The avatar measures 38 points, with a compact 6-point gap before the
 text. The header retains the native toolbar background and link style, with a
 6-point leading padding reduction to bring the avatar closer to the capsule's
 edge and 8 points of extra trailing padding after the name/status. It reserves
-the subtitle line while loading, with no error placeholder.
+the subtitle line with **Loading...** while presence is unavailable, including
+its accessibility value. The name and status use -2 points of vertical spacing
+to tighten the visual gap left by the font line metrics.
 The title shows Online, Typing..., Last seen today/yesterday at HH:mm, or a dated
 Last seen
 for older activity. A contact without prior activity shows Offline rather than an
