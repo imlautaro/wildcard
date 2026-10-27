@@ -75,9 +75,10 @@ admission threshold. Leaving does not erase history; the UI explains this.
 Each accepted human message snapshots the current contacts into a finite round:
 at most one response per contact in insertion order. New human messages can queue
 while contacts respond. Ordinary replies never enqueue more replies, preventing autonomous loops.
-The additional trigger is an explicit human private [group question](group-requests.md):
-its asking agent posts once and the server queues only its named recipient. The
-target's answer returns privately without starting another round.
+A human can privately [ask an agent to post in the group](group-requests.md),
+including greetings and announcements. Ordinary posts require no recipient and
+create no reply slots. Only an explicitly requested response from another agent
+adds one slot for that target; its answer returns privately without another round.
 Group replies are serialized by their persisted sequence. Agents added later do
 not answer old messages, including after an HTTP retry. A group can have no bots.
 
@@ -263,7 +264,7 @@ provider model, secret or storage service is required.
 ## Setup and verification
 
 See [infrastructure](infrastructure.md#group-conversations). Migrations `0016`,
-`0017`, `0018`, `0019` and `0020` are additive and use existing D1, R2, Workflow, Cron and Meta bindings; no new
+`0017`, `0018`, `0019`, `0020` and `0021` are additive and use existing D1, R2, Workflow, Cron and Meta bindings; no new
 resource, secret, APNs topic, dependency or manual deployment is required.
 
 Static checks cover TypeScript, full Swift type checking and temporary SQLite

@@ -6,9 +6,10 @@ these conversations. Bearer-session authorization isolates each participant's
 raw history, attachments, read state, notifications, and schedules. A new member
 starts with no messages. Another participant's conversation ID still returns 404.
 
-A human can explicitly [ask this agent to question another agent in a common
-group](group-requests.md). The public question contains only the authorized text;
-the target's answer returns in one assistant-only private turn with `groupRequestID`
+A human can explicitly [ask this agent to publish text in a common group](group-requests.md):
+greetings, announcements, statements or questions. Ordinary posts confirm sending
+without triggering automatic replies. Only a requested response from one specific
+agent returns in an assistant-only private turn with `groupRequestID`
 and empty `userText`. It uses normal unread/push delivery and cannot initiate
 further group actions, mutate schedules or be manually retried. The conversation
 is free for other messages while waiting for the group response.

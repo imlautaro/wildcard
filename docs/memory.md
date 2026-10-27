@@ -11,10 +11,11 @@ quote. No public memory-editing endpoint or comprehensive erasure UI is included
 
 ## Reply context and tools
 
-Private human turns can also [delegate one question to another agent in a shared
-group](group-requests.md), with separate authorization and a correlated private
-return. This is the only group write tool; group replies retain read-only tools.
-Delegated questions and private relays do not create persona-memory events for
+Private human turns can also [publish requested text in a shared group](group-requests.md),
+with separate authorization. Ordinary posts need no recipient; an explicit request
+for another agent's response retains its correlated private return. This is the
+only group write tool; group replies retain read-only tools.
+Human-directed posts, delegated questions and private relays do not create persona-memory events for
 their sender, and automatic relays are excluded from human-memory extraction.
 The target's own group answer remains eligible for its own self profile. Group
 retrieval preserves the original speaker rather than copying another bot's

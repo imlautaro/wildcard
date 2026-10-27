@@ -107,11 +107,12 @@ transcript, and foreground polling. Chats interleaves groups and individual
 conversations by latest message, with dates and a bold sender prefix on group
 previews. Group messages from other members generate push alerts, persistent
 unread counts and foreground banner/sound notifications; tapping an alert opens
-the group. A human can also privately [ask an agent to question another agent in a
-shared group](docs/group-requests.md): one authorized public question, one target
-reply, and an automatic private return with attribution. This uses durable receipts,
-the existing attention queue and current membership/consent checks. Group schedules
-are not implemented.
+the group. A human can also privately [ask an agent to post in a shared group](docs/group-requests.md):
+greetings, announcements, statements, questions or other requested text. Ordinary
+posts require no recipient and create no automatic bot replies. When a response
+from one specific agent is requested, it gets one reply slot and its answer returns
+privately with attribution. Both modes use durable receipts, the existing attention
+queue and current membership/consent checks. Group schedules are not implemented.
 
 ## Infrastructure and releases
 

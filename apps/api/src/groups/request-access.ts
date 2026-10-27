@@ -1,22 +1,26 @@
 // Internal aliases are supplied by code, never by a model or HTTP parameter.
 // Apply at admission, inference, publication and push; a private instruction does
 // not grant access to a group after the requester or either agent has left it.
-export function groupRequestAccess(alias: string, contributor: boolean) {
+export function groupPublicationAccess(alias: string, contributor: boolean) {
   return `EXISTS (SELECT 1 FROM chat_turn origin JOIN contact private_contact
       ON private_contact.id = origin.contact_id AND private_contact.user_id = origin.user_id
       JOIN contact_agent sender ON sender.id = private_contact.agent_id
-      JOIN contact_agent target ON target.id = ${alias}.target_agent_id
       JOIN group_member requester ON requester.group_id = ${alias}.group_id AND requester.user_id = origin.user_id
       WHERE origin.id = ${alias}.source_turn_id AND origin.user_id = ${alias}.requester_id
         AND origin.schedule_id IS NULL AND origin.group_request_id IS NULL
-        AND sender.id = ${alias}.sender_agent_id AND sender.memory_shared = 1 AND target.memory_shared = 1
+        AND sender.id = ${alias}.sender_agent_id AND sender.memory_shared = 1
         AND EXISTS (SELECT 1 FROM contact WHERE agent_id = sender.id AND user_id = sender.owner_id)
-        AND EXISTS (SELECT 1 FROM contact WHERE agent_id = target.id AND user_id = target.owner_id)
         AND EXISTS (SELECT 1 FROM group_agent WHERE group_id = ${alias}.group_id AND agent_id = sender.id)
-        AND EXISTS (SELECT 1 FROM group_agent WHERE group_id = ${alias}.group_id AND agent_id = target.id)
         AND requester.share_memory = 1
         ${contributor ? `AND (private_contact.user_id = sender.owner_id OR private_contact.contributor_consent = 1)
           AND NOT EXISTS (SELECT 1 FROM group_member WHERE group_id = ${alias}.group_id AND contributor_consent = 0)` : ''})`;
+}
+
+export function groupRequestAccess(alias: string, contributor: boolean) {
+  return `(${groupPublicationAccess(alias, contributor)} AND EXISTS (SELECT 1 FROM contact_agent target
+    JOIN group_agent member ON member.agent_id = target.id AND member.group_id = ${alias}.group_id
+    WHERE target.id = ${alias}.target_agent_id AND target.memory_shared = 1
+      AND EXISTS (SELECT 1 FROM contact WHERE agent_id = target.id AND user_id = target.owner_id)))`;
 }
 
 export function groupRequestTurnAllowed(table: string, contributor: boolean) {

@@ -1,19 +1,26 @@
-# Private requests to ask an agent in a group
+# Private requests to publish in a group
 
-A human can privately ask a contact to question another contact in a group they all
-share: “Ask Bot Two in Friends what its favorite color is.” Bot One posts as itself;
-only Bot Two gets a reply slot. Bot Two answers in the group, and Bot One brings
-that answer back to the requester in a separate private message. Every group member
-can see the question and answer. The surrounding private conversation stays private.
+A human can privately ask a contact to post in a group they share: “Say hello in
+Friends”, “Tell the group the meeting starts at five”, or other requested text.
+The contact publishes as itself and confirms privately. No other bot is required;
+an ordinary post creates no reply slots or later private result. Every group member
+can see the publication. The surrounding private conversation stays private.
+
+When the human requests a response from one specific other agent, such as “Ask Bot
+Two in Friends what its favorite color is”, the target receives one group reply
+slot and its answer returns privately with attribution. Addressing or greeting a
+bot alone does not request an automatic reply.
 
 ## Authorization and audience
 
-`ask_agent_in_group` is available only in a human private turn. `search_groups`
-resolves actual identities. The human and both agents must currently share the
-group; agents need shared-memory permission and their owner contact. Contributor
+`send_group_message(groupID, text, targetAgentID)` is available only in a human private
+turn. Set `targetAgentID` to null for ordinary posts; use an agent ID only for a
+requested response. `search_groups` resolves actual identities. The human and
+publishing agent must currently share the group. Response mode also requires the
+target. Agents need shared-memory permission and their owner contact. Contributor
 requires current group/private consent and eligible source messages.
 
-A separate structured model decision reviews the proposed public question against
+A separate structured model decision reviews the proposed public text and reply mode against
 the current human message and common group/agent identities. It can use up to three
 immediate private exchanges solely to complete the same human request's clarification
 chain, stopping at autonomous work or an already executed request. Earlier human/
@@ -22,13 +29,16 @@ evidence is capped at 48,000 bytes. No attachments, retrieved memories, tool res
 or other humans' private chats are included. Extra private facts cannot be added
 just because the planner knows them. Polite action requests qualify; general
 capability inquiries, hypotheticals, quotes and assistant suggestions do not.
-An unnamed group can be resolved by a unique common target. Duplicate names or
+An unnamed group can be resolved by a unique common human-specified addressee;
+without one, there must be only one shared group or an explicit clarification.
+Quoted content in an explicit send/say request is allowed as message content.
+Duplicate names or
 ambiguous destinations require clarification.
 
 Semantic review is model-based and fallible. Deterministic protections are scoped
 tools, fixed authorship, SQL permission guards, uniqueness constraints and finite
 target slots. There is no guarantee of perfect intent detection or injection
-resistance. Permission covers only the requested question, not private transcripts,
+resistance. Permission covers only the requested publication, not private transcripts,
 arbitrary memories, attachments or continued autonomous bot conversations.
 
 ## Durable execution and limits
@@ -38,6 +48,16 @@ a nullable request link on group messages and a unique request link on private
 results. Drizzle mirrors the schema; lifecycle/revocation triggers are SQL-managed.
 The source private message is referenced, never copied publicly. Group context
 identifies the asking agent and requesting human separately without impersonation.
+
+Migration `0021_group_posts.sql` extends this with plain-post receipts and SQL
+triggers that enforce one publication across both tables. It does not rewrite
+0020 or alter in-flight directed requests. A D1 batch saves the plain-post receipt
+and message together after the same attention/access checks. It creates no
+`group_reply`, pending request or automatic private turn. Ordinary posts do not
+consume the pending-response budget or require another agent. Historical tool calls
+named `ask_agent_in_group` are still accepted internally, but only the generic tool
+is advertised to new model calls. Replays across tool names or modes return the
+original receipt; revoked access cannot resurrect a post after leave/rejoin.
 
 A D1 batch commits the receipt, question and single target slot together after
 rechecking the running private attempt and attention claim. Retries return the
@@ -66,13 +86,16 @@ Each pass rotates through at most 50 receipts by `checked_at` and admits at most
 fences a target from publication without releasing an in-flight claim early.
 Busy conversations can delay delivery; there is no exact-time guarantee.
 
-Limits: one question/target per human turn; 1,000 Unicode characters and 3,000 UTF-8
-bytes per question; ten pending requests per human; existing 64-slot group admission
+Limits: one publication per human turn across both modes. Plain posts allow 4,000
+Unicode characters / 12,000 UTF-8 bytes and inherit human private-send rate limits.
+Response mode allows 1,000 characters / 3,000 bytes and one target; ten pending
+requests per human; existing 64-slot group admission
 and ten active private turns per account. The planner keeps two tool rounds/six
 executions. The normal path adds authorization and relay completions to the existing
-group response; latency/cost are unmeasured. Arbitrary posts, multiple recipients,
-scheduled delegations and dedicated cancel/list request tools or UI are outside
-this version.
+group response; plain posts add only authorization inference. Latency/cost are
+unmeasured. Attachments, multiple publications per human turn, multiple automatic
+recipients, scheduled delegations and dedicated cancel/list request tools or UI
+are outside this version.
 
 ## Revocation, memory and notifications
 
@@ -87,7 +110,10 @@ removes related requests/results. Submitted model input and accepted APNs alerts
 cannot be recalled.
 
 Questions use group push/unread handling; results use private push/unread handling.
-Polling works without APNs. Questions and relays are excluded from the sender's
+Plain posts use the same group push/unread path and public sender identity. Their
+receipts are marked revoked on membership/consent/group removal, without retracting
+published messages. Deleting the source private conversation removes its receipt.
+Polling works without APNs. Human-directed posts, questions and relays are excluded from the sender's
 persona events; relays are excluded from human-memory extraction. Bot Two's own
 group answer can still maintain its self profile. Original speaker attribution
 prevents Bot Two's preference becoming Bot One's preference.
@@ -100,23 +126,30 @@ flow needs the backend release; the Retry-button refinement needs an updated app
 
 ## Setup and verification
 
-See [infrastructure](infrastructure.md#private-to-group-requests-migration-0020).
+See [infrastructure](infrastructure.md#general-group-publication-migration-0021).
 No new resource, binding, secret, dependency or account permission is required.
-0020 follows 0001–0019. Use existing local setup/migration commands. Production
+0021 follows 0001–0020. Use existing local setup/migration commands. Production
 migration/publication uses only the automatic pipeline after authorized commit/push.
 
-Verification is static: TypeScript, full Swift type checking, the 20-migration SQLite
-schema and SQL `EXPLAIN` preparation. No build, runtime test, model inference,
+This extension has static TypeScript verification, the 21-migration SQLite schema
+and 85 distinct SQL variants prepared with `EXPLAIN` for both reply modes and model
+consent settings. It changes no iOS code or configuration and needs no app reinstall.
+Swift checks belong to the earlier directed-request implementation. No build, runtime test, model inference,
 private user data, remote migration, notification, installation or release was run.
 After release, verify with fictitious accounts:
 
 - Closed-app favorite-color round trip, with a third agent receiving no slot.
+- A greeting, announcement and exact quoted text publish once with no automatic
+  bot replies or later private result, including a group with just one bot.
+- An addressed greeting does not request a response; an explicit question to
+  another agent retains its one response and private return.
 - Duplicate names, multiple groups, a unique common target, polite requests,
   capability inquiries, hypotheticals and a multi-turn clarification.
 - Private facts/files and injected instructions cannot add unrequested public text;
   group replies and private results cannot send more questions or create schedules.
 - Crashes after publication, changed retry arguments, failed confirmation, repeated
-  dispatch and Workflow recovery create no duplicate questions/results.
+  dispatch, a change between plain/response modes and Workflow recovery create no
+  duplicate publications/results.
 - Busy agents, simultaneous cross-requests, occupied private conversations, limits,
   review exhaustion and expiry.
 - Revocation, leave/rejoin, model changes and target/group deletion during inference,

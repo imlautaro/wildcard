@@ -858,6 +858,42 @@ deletion cancels pending work while preserving delivered private results. Source
 private-conversation deletion removes its related requests/results. Back up D1 with
 the existing procedure; no new R2 objects are introduced.
 
+## General group publication (migration 0021)
+
+[Private group publication](group-requests.md) now advertises `send_group_message`
+for requested greetings, announcements, statements and questions. A null target
+publishes only; an explicit response request retains the existing directed round
+and private return. Migration `0021_group_posts.sql` adds plain-post receipts,
+cross-table publication uniqueness and revocation/persona-event triggers. Drizzle
+mirrors the table. The already applied 0020 migration and in-flight directed jobs
+remain intact; legacy tool calls are accepted internally.
+
+Reuse the existing D1, private R2, Worker/Workflow, Meta model/credentials, Cron and
+optional APNs setup above. There are no new resources, bindings, secrets,
+dependencies, account permissions or iOS settings. Independent accounts replace
+the existing Wrangler account/resource IDs, build connection and API URL, obtain
+the existing group consents, and select Standard unless Contributor is explicitly
+authorized. Apply migrations 0001–0021 with existing local setup/migration commands
+before `npm run dev`. Production applies 0021 before publishing via the existing
+automatic pipeline after authorized commit/push. Never deploy manually.
+
+Plain posts commit their receipt and group message together, use normal group
+push/unread delivery and do not create reply slots, waiting jobs or private results.
+They add one bounded authorization completion. One publication per human turn
+is enforced across both kinds, including changed-mode replay. Retain the new
+table/triggers on rollback; older code ignores plain receipts. Prefer a forward
+fix while private turns or directed Workflows are active and do not change their
+step graph in flight.
+
+Only static TypeScript, 21-migration SQLite compilation and preparation of 85
+distinct SQL variants were checked for this extension. No inference, runtime test,
+remote migration, push, notification or deployment was performed. After automatic
+release, verify the source commit/version and pending migrations, then use
+fictitious accounts to check ordinary posts, a group with one bot, literal text,
+response mode, ambiguous groups, replay across modes, revocation and notifications.
+This backend extension needs no new iOS binary. Back up D1 as before; it introduces
+no R2 objects.
+
 ## Cross-chat identity and group retrieval (migration 0019)
 
 [Agent self memory and group retrieval](memory.md#one-agent-identity-across-private-chats-and-groups)

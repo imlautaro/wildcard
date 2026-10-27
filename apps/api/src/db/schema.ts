@@ -353,6 +353,20 @@ export const groupRequest = sqliteTable('group_request', {
   check('group_request_result', sql`${t.resultKind} IN ('answered', 'skipped', 'failed', 'expired')`),
   check('group_request_different_agents', sql`${t.senderAgentId} != ${t.targetAgentId}`),
   check('group_request_destination', sql`${t.status} = 'cancelled' OR (${t.groupId} IS NOT NULL AND ${t.targetAgentId} IS NOT NULL)`)]);
+export const groupPost = sqliteTable('group_post', {
+  id: text('id').primaryKey(),
+  sourceTurnId: text('source_turn_id').notNull().unique().references(() => chatTurn.id, { onDelete: 'cascade' }),
+  groupId: text('group_id').references(() => chatGroup.id, { onDelete: 'set null' }),
+  requesterId: text('requester_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  senderAgentId: text('sender_agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  text: text('text').notNull(),
+  status: text('status').notNull().default('published'),
+  createdAt: date('created_at').notNull(),
+}, (t) => [index('group_post_group_idx').on(t.groupId, t.requesterId),
+  check('group_post_text', sql`length(${t.text}) BETWEEN 1 AND 4000`),
+  check('group_post_status', sql`${t.status} IN ('published', 'revoked')`),
+  check('group_post_destination', sql`${t.status} = 'revoked' OR ${t.groupId} IS NOT NULL`)]);
+
 export const groupMemory = sqliteTable('group_memory', {
   agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
