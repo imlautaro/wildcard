@@ -208,11 +208,19 @@ errors, not successful empty results; group failures log `group_retrieval_failed
 Private raw group retrieval requires both the replying agent and current human to
 be current members of the source group with applicable consent. Knowing an agent
 through a shared contact alone does not grant access to its groups. In group
-replies tools are restricted to the current group and reply-round history snapshot;
+replies tools are restricted to the current group and the current draft/review
+sequence snapshot, including later human messages accepted within that watermark;
 they cannot carry another group's raw messages to that audience. Current source
 speaker membership and Contributor eligibility are checked on every search/excerpt.
 These stricter raw-history checks do not change the existing consented human-fact
 sharing policy. Excerpts and retrieved statements are untrusted evidence.
+
+Group drafting supplies the original request and earlier round replies separately
+from recent history. A pre-publication history guard can trigger up to two reviews
+using fresh snapshots and the previous draft. Skipped turns emit no assistant
+message or self-memory event; human-memory extraction retains its existing policy.
+See [group reply policy](groups.md#reply-rounds-and-exclusive-attention) for
+snapshot limits, cancellation, costs, replay and verification scenarios.
 
 The FTS index covers historical group messages immediately after migration;
 self profiles populate gradually. Search remains lexical, can miss synonyms or

@@ -694,6 +694,46 @@ member/group does not release an in-flight agent claim early; recovery waits for
 Workflow termination. Retain tables on code rollback to preserve stored messages.
 
 
+### Group context and pre-publication review
+
+Group context/review uses the existing `DB`, `CHAT_WORKFLOW`, Meta credentials,
+model selection and recovery Cron. There are no new migrations, resources,
+bindings, secrets, account permissions, dependencies or iOS configuration changes.
+The versioned behavior lives in `groups/context.ts`, `groups/workflow.ts` and
+`groups/retrieval.ts`. Independent installs follow the same D1 → private R2 →
+Worker/Workflow provisioning and auth/Meta setup above; replace account-specific
+Wrangler/build connection values and obtain the existing group consents. Local
+development uses the existing migration and `npm run dev` commands.
+
+Each initial draft or review fixes a group-message watermark. D1 `batch()` keeps
+the conditional message insert and completion update in one transaction; any
+newer message prevents publication until review. The current sequential group
+queue and global per-agent attention claim are unchanged. Up to two reviews add
+model/D1 work only when context changes; after another change the slot completes
+without a message. Canceled or superseded requests may also complete silently.
+Current membership, sharing and model consent are checked again at publication.
+See [group reply limits and checks](groups.md#reply-rounds-and-exclusive-attention).
+
+The durable Workflow stores each draft/review decision and publish result in its
+own step. Preparation steps retain two retries and a three-minute timeout; each
+has the existing two-tool-round/six-execution budget. No new inference is needed
+when the history guard succeeds immediately. Busy chats can take longer and cost
+more; neither model quality nor live latency has been measured for this change.
+
+Release only from committed/pushed source through the existing automatic pipeline,
+then verify the active version's source tag and run the fictional group scenarios.
+This implementation has only static TypeScript and SQL preparation validation;
+no live inference, remote migration, push or deployment was performed. No iOS
+reinstall is required for this backend change. Stored messages and job payloads
+remain schema-compatible. Let active Workflows finish before rolling code back;
+the step graph has changed, and replaying in-flight work against another graph is
+not supported here. Older code loses the freshness guard and natural group policy;
+prefer a compatible forward fix and retain all existing tables.
+
+References: [D1 batch transactions](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch),
+[Workflow idempotency](https://developers.cloudflare.com/workflows/build/rules-of-workflows/),
+and [Meta structured output](https://dev.meta.ai/docs/structured-output).
+
 ### Group media
 
 Migration `0017_group_media.sql` adds nullable `chat_group.photo_version` and

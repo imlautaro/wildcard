@@ -2,7 +2,7 @@ import { readAgentMemories, selectAgentMemories } from '../chat/agent-memory';
 import { byteLength, clipText, keywords } from '../chat/memory';
 import { isRecord, museCompletion, type ModelMessage, type ModelTool, type ToolCall } from '../chat/meta';
 
-export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; beforeSequence?: number; roundSourceSequence?: number };
+export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; beforeSequence?: number };
 export const groupRetrievalTools: ModelTool[] = [
   { type: 'function', function: { name: 'search_self_memories',
     description: 'Retrieve your own persistent preferences and persona across private and group chats, attributed to your agent ID. Never retrieves another agent’s private preferences.',
@@ -36,10 +36,7 @@ const messageAccess = `${access} AND gm.sequence < ?6
       WHERE author.group_id = gm.group_id AND author.user_id = gm.user_id AND author.share_memory = 1
       AND (?3 = 0 OR author.contributor_consent = 1)))
     AND (gm.agent_id IS NULL OR EXISTS (SELECT 1 FROM group_agent author
-      WHERE author.group_id = gm.group_id AND author.agent_id = gm.agent_id))
-    AND (?7 IS NULL OR gm.sequence <= ?7 OR EXISTS (
-      SELECT 1 FROM group_reply reply JOIN group_message source ON source.id = reply.source_id
-      WHERE reply.id = gm.id AND source.sequence <= ?7))`;
+      WHERE author.group_id = gm.group_id AND author.agent_id = gm.agent_id))`;
 
 function pack(rows: Record<string, unknown>[]) {
   const results: Record<string, unknown>[] = [];
@@ -99,10 +96,10 @@ export async function searchGroupMessages(db: D1Database, scope: GroupRetrievalS
       SELECT ga.group_id FROM group_agent ga JOIN group_member member ON member.group_id = ga.group_id
       WHERE ga.agent_id = ?1 AND member.user_id = ?2 AND member.share_memory = 1
       AND (?3 = 0 OR member.contributor_consent = 1)) AND (?5 IS NULL OR g.id = ?5)
-    ${match ? 'AND group_message_search MATCH ?8' : ''}
+    ${match ? 'AND group_message_search MATCH ?7' : ''}
     ORDER BY gm.sequence DESC LIMIT 5`).bind(scope.agentID, scope.userID, scope.contributor ? 1 : 0,
       scope.groupID ?? null, groupID ?? null, Math.min(before ?? Number.MAX_SAFE_INTEGER, scope.beforeSequence ?? Number.MAX_SAFE_INTEGER),
-      scope.roundSourceSequence ?? null, ...(match ? [match] : [])).all<Record<string, unknown>>();
+      ...(match ? [match] : [])).all<Record<string, unknown>>();
   const packed = pack(results.slice(0, 4).map((r) => ({ ...r, groupName: clipText(String(r.groupName), 140),
     senderName: clipText(String(r.senderName), 100), text: clipText(String(r.text), 600), textTruncated: true })));
   return { ...packed, hasMore: results.length > 4 || packed.truncated, nextBefore: packed.results.at(-1)?.sequence ?? null };
@@ -124,7 +121,7 @@ async function groupExcerpt(db: D1Database, scope: GroupRetrievalScope, messageI
     AND gm.sequence IN (SELECT sequence FROM center UNION ALL SELECT sequence FROM earlier UNION ALL SELECT sequence FROM later)
     ORDER BY (gm.id = ?5) DESC, gm.sequence LIMIT 5`)
     .bind(scope.agentID, scope.userID, scope.contributor ? 1 : 0, scope.groupID ?? null, messageID,
-      scope.beforeSequence ?? Number.MAX_SAFE_INTEGER, scope.roundSourceSequence ?? null)
+      scope.beforeSequence ?? Number.MAX_SAFE_INTEGER)
     .all<Record<string, unknown>>();
   if (!results.length) return { error: 'Message not found.' };
   return pack(results.map((r) => {
@@ -172,11 +169,12 @@ export async function executeGroupRetrieval(db: D1Database, scope: GroupRetrieva
   return JSON.stringify({ error: 'Unknown group retrieval tool.' });
 }
 
-export async function groupCompletion(env: Env, messages: ModelMessage[], scope: GroupRetrievalScope): Promise<string> {
+export async function groupCompletion(env: Env, messages: ModelMessage[], scope: GroupRetrievalScope,
+  responseFormat?: Record<string, unknown>): Promise<string> {
   let executions = 0;
   for (let round = 0; round < 3; round++) {
     const answer = await museCompletion(env.META_API_KEY, messages, env.META_CHAT_MODEL,
-      { maxTokens: 1200, ...(round < 2 ? { tools: groupRetrievalTools } : {}) });
+      { maxTokens: 1200, responseFormat, ...(round < 2 ? { tools: groupRetrievalTools } : {}) });
     if (!answer.tool_calls?.length) return answer.content!;
     messages.push(answer);
     for (const call of answer.tool_calls) {

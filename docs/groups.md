@@ -46,8 +46,8 @@ Agents also keep their own explicit persona/preferences across private and group
 replies in a separate agent-scoped profile. Private chats can discover common
 group members and retrieve that group's original human/bot statements only while
 both the current human and replying agent are members. Group tools search only
-the current group's history, within its reply-round snapshot. They do not expose
-another agent's private profile or raw private replies. Group FTS stores statements
+the current group's history, within the current draft/review sequence snapshot.
+They do not expose another agent's private profile or raw private replies. Group FTS stores statements
 once, with bounded search/excerpt tools rather than per-bot transcript copies.
 See [cross-chat identity and provenance](memory.md#one-agent-identity-across-private-chats-and-groups)
 for migration 0019, extraction/retry limits, revocation and verification.
@@ -73,10 +73,53 @@ admission threshold. Leaving does not erase history; the UI explains this.
 ## Reply rounds and exclusive attention
 
 Each accepted human message snapshots the current contacts into a finite round:
-one response per contact in insertion order. New human messages can queue while
-contacts respond. Replies never enqueue more replies, preventing autonomous loops.
+at most one response per contact in insertion order. New human messages can queue
+while contacts respond. Replies never enqueue more replies, preventing autonomous loops.
 Group replies are serialized by their persisted sequence. Agents added later do
 not answer old messages, including after an HTTP retry. A group can have no bots.
+
+Each draft identifies its original human request, current members, the round's
+participants and earlier replies in that round, plus up to 24 recent eligible
+messages. Earlier round replies (at most eight) are supplied separately so new
+human traffic cannot hide them outside the recent window. Text is clipped to
+1,600 UTF-8 bytes per history entry with truncation flags; the original request
+is supplied in full. History and read tools share a fixed inclusive sequence
+watermark for each draft or review. They now include later human messages already
+accepted before that watermark, rather than stopping at the original request.
+Current author membership and Contributor eligibility filter history and tools.
+Private transcripts and other groups' raw history remain inaccessible.
+
+The group instruction asks agents to continue the exchange, avoid repeated
+greetings/explanations and automatic closing questions, and mention another member
+only when useful. Agents keep their own preferences even when another bot shares
+them. A question addressed to everyone normally still receives each agent's own
+answer. Later human requests have separate rounds; this turn uses them to account
+for corrections, cancellation or supersession without answering the new request
+again. Structured decisions contain only an action and publishable text; review
+metadata is never posted as a chat message. These are model instructions, not a
+guarantee of conversational quality or perfect cancellation detection.
+
+Publication atomically checks for any group message after the draft's watermark,
+revalidates attention, source-author membership, agent sharing and Contributor
+consent, inserts at most one message and completes the slot. A race between the
+last read and insert therefore cannot post an unchecked draft. If history changed,
+the agent reviews its previous draft against a fresh bounded snapshot and can
+keep its exact text, revise it or skip the obsolete turn. There are at most two
+reviews after the initial draft. If history changes again after the second review,
+the slot completes without a message so the queue can continue. Explicitly
+canceled or clearly superseded requests can also be skipped at initial drafting.
+Skipping creates no message, unread count, push or self-memory event; grounded
+human-memory maintenance still follows its existing policy. Later human messages
+keep their existing rounds; bot replies never create new rounds.
+
+Draft/review calls and guarded publication use separate durable Workflow steps.
+Successful step results are reused on replay; transient failures retain the
+existing two retries per preparation step. Each preparation has the existing
+three-minute timeout and two tool rounds/six tool executions (up to three model
+requests), so active conversations can incur extra latency and inference cost.
+Snapshots are bounded, may omit older changes and expose tools for retrieval;
+there is no unlimited catch-up or parallel draft generation. No extra model
+review runs on the normal path when the publication watermark is unchanged.
 
 `agent_attention` remains the single unique lock per agent. Dispatch chooses the
 oldest eligible job across private chats and group rounds. A group agent waits for
@@ -87,6 +130,15 @@ a contact replying in a group appears Online in its private chats. Workflow retr
 check saved completion before generating again. Cron recovers missing dispatches
 and terminal claims. Removed group jobs leave active attention locked until their
 Workflow ends/recovery observes termination, preventing overlapping model calls.
+
+Static TypeScript checking and SQL EXPLAIN preparation cover this context/review
+change; runtime behavior and model quality remain unverified. With fictional
+accounts, check the three-bot favorite-color question (including equal preferences),
+one repeated follow-up question, a correction/cancellation during generation, a
+message arriving between review and save, continuous activity through both reviews,
+bounded-history truncation/tool retrieval, replay after saving, and access or
+consent changes before publication. Confirm skipped turns release the queue and
+create no bubble, notification or unread count.
 
 Client-generated message UUIDs make submission idempotent. An uncertain network
 failure retains the same UUID for retry. Database rejection restores the draft.

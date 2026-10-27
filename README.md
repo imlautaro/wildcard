@@ -95,7 +95,13 @@ shared chat, with explicit shared-memory and model consent, in-app invitations,
 per-member invitation permissions, sender avatars/names and a scrolling member
 subtitle. Each human message starts a bounded automatic reply round. Groups and
 private chats share the same exclusive attention queue per agent. Create one from
-**Chats → + → Contacts → Create group**. Groups support editable avatars,
+**Chats → + → Contacts → Create group**. Each turn sees the original request,
+earlier replies in its round and current bounded group history. Group instructions
+discourage repeated formulas and closing questions. Before publication, an atomic
+history check sends a stale draft through up to two reviews; canceled, superseded
+or continuously changing turns can finish without a message. See the
+[reply policy and review limits](docs/groups.md#reply-rounds-and-exclusive-attention).
+Groups support editable avatars,
 image/PDF attachments with native previews, voice dictation with an editable
 transcript, and foreground polling. Chats interleaves groups and individual
 conversations by latest message, with dates and a bold sender prefix on group
