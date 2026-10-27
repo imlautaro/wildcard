@@ -8,7 +8,11 @@ thumbnails use local bytes while the request is pending. A clock indicates sendi
 and attachment preview actions wait for server acceptance. The right
 button sends when an attachment is selected; dictation remains available for an
 empty composer. Failed sends retain the draft and attachment, including the request
-identifier for uncertain network results. Images load automatically as inline thumbnails, preserving their aspect ratio.
+identifier for uncertain network results. Images load automatically as square
+inline thumbnails up to 260 points wide, using centered aspect-fill (cover):
+the image fills the available area without distortion and excess edges are
+cropped. Loading and retry placeholders use the same square layout. This applies
+to optimistic previews and saved messages, with or without captions.
 When sent with text, the caption appears below the image inside the same outgoing
 bubble. Captions share the text-message layout: short single-line text keeps the
 time and receipt checks on its line; longer or multiline text puts them below. Image-only messages keep

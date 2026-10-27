@@ -162,7 +162,12 @@ struct ChatAttachmentView: View {
         } label: {
             Group {
                 if let thumbnail {
-                    Image(uiImage: thumbnail).resizable().scaledToFit()
+                    Color.clear
+                        .aspectRatio(1, contentMode: .fit)
+                        .overlay {
+                            Image(uiImage: thumbnail).resizable().scaledToFill()
+                        }
+                        .clipped()
                         .overlay(alignment: .bottomTrailing) {
                             if caption.isEmpty {
                                 MessageMetadataView(sentAt: sentAt, fromUser: true, readAt: readAt, isSending: isSending)
@@ -185,11 +190,13 @@ struct ChatAttachmentView: View {
                         .contentShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
                         .frame(maxWidth: 260, maxHeight: 260, alignment: .trailing)
                 } else {
-                    ZStack {
-                        Color("OutgoingMessageBackground")
-                        if loading { ProgressView() }
-                        else { Label("Retry image", systemImage: "arrow.clockwise").manrope(.footnote) }
-                    }.frame(width: 220, height: 180)
+                    Color("OutgoingMessageBackground")
+                        .aspectRatio(1, contentMode: .fit)
+                        .overlay {
+                            if loading { ProgressView() }
+                            else { Label("Retry image", systemImage: "arrow.clockwise").manrope(.footnote) }
+                        }
+                        .frame(maxWidth: 260, maxHeight: 260)
                         .background(Color("OutgoingMessageBackground"), in: MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
                         .clipShape(MessageBubbleShape(cornerRadius: caption.isEmpty ? 20 : 0))
                 }
