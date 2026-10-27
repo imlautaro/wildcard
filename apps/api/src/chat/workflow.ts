@@ -1,3 +1,4 @@
+import { maintainAgentMemories } from './agent-memory';
 import { runGroup, type GroupJob } from '../groups/workflow';
 import { scheduleAllowed } from '../schedules/data';
 import { runVisit, type VisitJob } from './visits';
@@ -31,6 +32,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         return true;
       });
       await this.refreshMemory(job, step, 'refresh-prior-memory', false);
+      await this.refreshAgentMemory(job, step, 'refresh-agent-self-memory');
       await step.do('generate-and-save', {
         retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' },
         timeout: '3 minutes',
@@ -66,6 +68,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       return true;
     });
     await this.refreshMemory(job, step, 'remember-completed-turn', true);
+    await this.refreshAgentMemory(job, step, 'remember-agent-self-reply');
     await step.do('release-attention', async () => { await releaseAttention(this.env, job); });
     const deadline = await step.do('presence-deadline', async () => {
       const row = await this.env.DB.prepare(`SELECT updated_at + 30000 AS expiresAt FROM chat_turn
@@ -77,6 +80,19 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       await step.sleepUntil('presence-idle', new Date(deadline));
       await step.do('expire-presence', async () => { await expirePresence(this.env.DB); });
     }
+  }
+
+  private async refreshAgentMemory(job: ChatJob, step: WorkflowStep, name: string) {
+    try {
+      await step.do(name, { retries: { limit: 1, delay: '5 seconds' }, timeout: '1 minute' }, async () => {
+        const row = await this.env.DB.prepare(`SELECT c.agent_id AS id FROM chat_turn t JOIN contact c ON c.id = t.contact_id
+          JOIN agent_attention attention ON attention.turn_id = t.id AND attention.attempt = t.attempt
+          WHERE t.id = ? AND t.attempt = ? AND t.status IN ('running', 'complete')`)
+          .bind(job.turnID, job.attempt).first<{ id: string }>();
+        if (row) await maintainAgentMemories(this.env, row.id);
+        return true;
+      });
+    } catch { console.error(JSON.stringify({ event: 'agent_memory_deferred' })); }
   }
 
   private async refreshMemory(job: ChatJob, step: WorkflowStep, name: string, includeCurrent: boolean) {

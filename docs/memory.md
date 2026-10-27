@@ -67,7 +67,7 @@ an idle contact immediately recovers a failed memory batch.
 
 Each batch reads the next six completed user messages after a persisted sequence
 cursor, stopping at 16,000 UTF-8 bytes. A first message is always kept whole within
-the API's existing size limit. Assistant replies are excluded as factual evidence.
+the API's existing size limit. Assistant replies are excluded from this human-fact extraction pipeline. The separate self-memory pipeline below learns only the replying agent’s own explicit persona/preferences.
 The extractor receives those messages, their dates/IDs, the server-resolved speaker identity, and at most 64 existing memories from that speaker alone. It uses the configured Muse Spark variant and schema-constrained JSON,
 then the backend validates every change before committing any change in that batch.
 
@@ -133,3 +133,99 @@ and provider compatibility must be verified with fictional data when authorized.
 
 
 Consented group messages can contribute attributed memories to the same agent. Private-chat memory selection also considers grounded group memories while both the source user and agent remain in the source group. Group replies receive selected shared memories, never raw private transcripts. See [groups](groups.md) for consent, revocation, model switching and limits.
+
+
+## One agent identity across private chats and groups
+
+Migration `0019_agent_identity_memory.sql` adds a separate `agent_memory` profile,
+keyed by stable agent ID and memory key. Human facts keep their existing attributed
+stores. An agent's own explicit preferences and persona choices belong to the agent,
+regardless of which private chat or group produced the reply. Other agents retain
+separate identities. A bot statement is evidence of what it said, not verification
+of facts about a human or the outside world.
+
+SQL triggers record one `agent_memory_event` with a source foreign key whenever a
+private reply completes or a bot group message is saved. This happens in the reply
+transaction, including replies saved by an older Worker during rollout. Existing
+completed replies receive metadata events in chronological order; migration does
+not call a model. Before generation and after saving a reply, the Workflow attempts
+one bounded self-memory batch while holding the agent's existing exclusive attention.
+The batch takes at most four newest eligible unprocessed replies, up to 6,000 UTF-8
+bytes per reply and 12,000 bytes combined. Older backlog is processed on subsequent
+turns; newest replies take priority so recent preferences need not wait behind it.
+
+The extractor receives only this agent's replies and existing self profile. It is
+instructed to exclude human/other-agent facts, quotations, roleplay, hypotheticals,
+credentials, secrets, external-world claims and invented physical biography. It
+returns at most eight distinct keys with exact quotes; validation checks both the
+supplied excerpt and original saved reply. Each agent retains at most 64 keys;
+new keys beyond that cap are skipped, existing keys can be updated. Profile writes
+and event acknowledgements use one D1 batch. A processed-event guard makes replay
+idempotent; source ordering prevents an older extraction overwriting a newer key.
+Invalid extraction/storage leaves events pending. Failures log only
+`agent_memory_deferred`, keep the saved reply successful, and are retried by a later
+private/group Workflow. No idle-agent recovery Cron or guaranteed immediate
+extraction is introduced. Extraction remains model-dependent and fallible.
+
+Every reply receives a query-ranked self profile capped at 6,000 UTF-8 bytes and can
+use `search_self_memories(query)` for up to eight profile entries in a bounded
+result. Private `search_memories` can also return agent-attributed self memories.
+Self preferences may be recalled by that same agent in its other private chats or
+groups; raw private replies never enter group context or another agent's tools.
+Private source participant/model consent and current group source membership/model
+consent are rechecked on reads and writes. Removing the agent from a source group
+cascades that source's self memories/events through a membership-removal trigger. Source deletion cascades its events and
+profile entries; this does not erase already delivered messages or provider data.
+There is no automatic unrelated eviction or new user-facing memory editor.
+
+## Group identities and observed statements
+
+Private reply context now includes a bounded page of shared groups/current member
+identities and relevant original group statements, with stable agent/user IDs.
+This lets bot 1 discover bot 2 through a common group and recall bot 2's answer.
+Group statements are stored/indexed once, not copied to every observing agent.
+The self profile of bot 2 is not exposed to bot 1; bot 1 retrieves what bot 2 said
+in an authorized group, with source/date attribution. A later private change to
+bot 2's preference is not silently revealed to other bots.
+
+Additional internal read-only tools are available in private and group replies:
+
+| Tool | Behavior |
+| --- | --- |
+| `search_groups(query?, after?)` | Two shared groups per page, current human/agent IDs and names; optional lexical group/member-name search and exclusive ID cursor |
+| `search_group_messages(query?, groupID?, before?)` | Up to four dated human/bot statements; FTS5 normalized word/prefix search of text and sender names, or recent messages when query is omitted; exclusive sequence cursor |
+| `get_group_excerpt(messageID, offset?)` | Requested message first and up to two eligible statements on each side in the same group; exact source text clipped to 600 UTF-8 bytes per message with Unicode offsets |
+| `search_self_memories(query)` | This replying agent's persona/preferences only; never another bot's private state |
+
+Query input is limited to 256 UTF-8 bytes; FTS operators cannot be supplied by the
+caller. Results carry truncation flags and fit approximately 4,000 UTF-8 bytes
+including metadata. Rosters prioritize matching members and agents when packing;
+member lists may be truncated. Tools have the same two-round/six-execution limit
+as existing private retrieval. Group generation now allows up to three model
+requests within its existing three-minute step. Search failures are explicit
+errors, not successful empty results; group failures log `group_retrieval_failed`.
+
+Private raw group retrieval requires both the replying agent and current human to
+be current members of the source group with applicable consent. Knowing an agent
+through a shared contact alone does not grant access to its groups. In group
+replies tools are restricted to the current group and reply-round history snapshot;
+they cannot carry another group's raw messages to that audience. Current source
+speaker membership and Contributor eligibility are checked on every search/excerpt.
+These stricter raw-history checks do not change the existing consented human-fact
+sharing policy. Excerpts and retrieved statements are untrusted evidence.
+
+The FTS index covers historical group messages immediately after migration;
+self profiles populate gradually. Search remains lexical, can miss synonyms or
+language changes, and adds bounded model/D1 cost. No embeddings or unlimited
+transcript loading are used. The implementation bounds work per generation; it
+has not been load-tested or benchmarked for latency/cost.
+
+Static TypeScript, SQL migration compilation and SQL EXPLAIN preparation were
+performed for this addition. No builds, runtime tests, real conversations, paid
+inference, remote migrations or releases were run. With fictional data, verify:
+(1) bot 1 red / bot 2 blue in a group, then bot 1 recalls bot 2 in private;
+(2) an agent keeps a preference first stated privately when asked in a group and
+vice versa; (3) recall beyond recent context, including a one-word answer beside
+a retrieved question; (4) explicit preference changes and older backlog/replays;
+(5) similarly named agents, unauthorized groups, removals/deletions and consent
+changes; (6) provider/storage failures and recovery on subsequent turns.

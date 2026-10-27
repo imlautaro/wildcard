@@ -355,3 +355,28 @@ export const groupPushDelivery = sqliteTable('group_push_delivery', {
   expiresAt: date('expires_at').notNull(),
 }, (t) => [primaryKey({ columns: [t.messageId, t.deviceId] }), index('group_push_delivery_next_idx').on(t.nextAt),
   foreignKey({ columns: [t.groupId, t.userId], foreignColumns: [groupMember.groupId, groupMember.userId] }).onDelete('cascade')]);
+
+// SQL triggers enqueue saved replies and maintain group FTS independently of
+// Workflow checkpoints. Search virtual tables/triggers live in migration 0019.
+export const agentMemoryEvent = sqliteTable('agent_memory_event', {
+  sequence: integer('sequence').primaryKey({ autoIncrement: true }),
+  agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  privateTurnId: text('private_turn_id').unique().references(() => chatTurn.id, { onDelete: 'cascade' }),
+  groupMessageId: text('group_message_id').unique().references(() => groupMessage.id, { onDelete: 'cascade' }),
+  processed: integer('processed').notNull().default(0),
+}, (t) => [index('agent_memory_event_pending_idx').on(t.agentId, t.processed, t.sequence),
+  check('agent_memory_event_processed', sql`${t.processed} IN (0, 1)`),
+  check('agent_memory_event_source', sql`(${t.privateTurnId} IS NOT NULL) != (${t.groupMessageId} IS NOT NULL)`)]);
+export const agentMemory = sqliteTable('agent_memory', {
+  agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  memoryKey: text('memory_key').notNull(),
+  kind: text('kind').notNull(),
+  content: text('content').notNull(),
+  sourceEventSequence: integer('source_event_sequence').notNull().references(() => agentMemoryEvent.sequence, { onDelete: 'cascade' }),
+  sourceQuote: text('source_quote').notNull(),
+  updatedAt: date('updated_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.agentId, t.memoryKey] }), index('agent_memory_source_idx').on(t.sourceEventSequence),
+  check('agent_memory_key_length', sql`length(${t.memoryKey}) BETWEEN 1 AND 80`),
+  check('agent_memory_kind', sql`${t.kind} IN ('fact', 'preference', 'decision', 'pending')`),
+  check('agent_memory_content_length', sql`length(${t.content}) BETWEEN 1 AND 300`),
+  check('agent_memory_quote_length', sql`length(${t.sourceQuote}) BETWEEN 1 AND 240`)]);

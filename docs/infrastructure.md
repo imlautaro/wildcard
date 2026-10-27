@@ -776,3 +776,46 @@ now include unread group messages when computing the app badge. Already accepted
 APNs notifications cannot be recalled after a read or revocation; the sender
 rechecks eligibility before sending and the app suppresses known read messages
 while active. Group alerts expose only content already visible to that recipient.
+
+
+## Cross-chat identity and group retrieval (migration 0019)
+
+[Agent self memory and group retrieval](memory.md#one-agent-identity-across-private-chats-and-groups)
+reuse the existing `DB`, `CHAT_WORKFLOW`, `META_API_KEY`, `META_CHAT_MODEL` and
+exclusive attention queue. No new Cloudflare resource, binding, environment
+variable, secret, account permission, dependency, embedding model or external
+service is required. Existing Standard/Contributor consent rules apply; independent
+installations should use Standard unless separately authorized.
+
+After provisioning D1/Workflow and the Meta secret as documented above, apply all
+migrations in order using `npm run auth:setup:local` for a new local installation
+or `npm run db:migrate:local` for an existing one. Migration
+`0019_agent_identity_memory.sql` adds the per-agent profile, durable extraction
+events with source foreign keys, trigger-managed reply events and membership-removal cleanup, a trigger-managed
+group-message FTS5 index and indexes for agent memberships/source deletion. It
+indexes existing group text and registers historical reply metadata once; allow
+D1 storage/time quota on a populated database. It performs no model inference.
+Profiles learn in bounded batches as agent Workflows continue, with newest replies
+prioritized; historical backlog is not guaranteed to finish while an agent is idle.
+
+Release only through the existing clean commit/push automatic pipeline; migrations
+run before Worker publication. Verify the automatic build source SHA/version tag,
+no pending migrations, existing binding continuity, and the fictional-data
+scenarios in the memory guide. Do not run a manual deployment or log memory text,
+quotes, retrieval arguments/results, or provider bodies. Sanitized new events are
+`agent_memory_deferred` and `group_retrieval_failed`. Inference cost now includes
+self-memory extraction and optional group tool rounds. Work per generation is
+bounded; production-scale latency/cost is unbenchmarked.
+
+The migration is additive. Rollback to the previous Worker keeps tables/indexes
+and triggers so saved replies continue registering pending events for a later
+forward release. Retain the existing Workflow binding/class and source data while
+active instances can reference them; do not drop the migration on rollback.
+Source deletion cascades profile/event references. Revoked group access makes its
+sources ineligible at retrieval rather than retracting already sent responses.
+Use independent D1/Worker/Workflow resources and secrets for staging.
+
+Local static TypeScript, all 19 migration compilations and new SQL EXPLAIN checks
+passed. No build, runtime test, inference, remote migration, commit, push or
+deployment was performed. Standard/Contributor provider behavior, functional recall,
+revocation races and independent-account installation remain unverified.

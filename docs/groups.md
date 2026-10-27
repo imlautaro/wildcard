@@ -42,6 +42,15 @@ Group extraction stores at most three grounded memories per human message and
 agent, with a verbatim source quote, up to 64 keys per agent/source user. These
 memories participate in private-chat memory selection as well as group replies.
 Extraction is best effort and does not support an explicit forget tool yet.
+Agents also keep their own explicit persona/preferences across private and group
+replies in a separate agent-scoped profile. Private chats can discover common
+group members and retrieve that group's original human/bot statements only while
+both the current human and replying agent are members. Group tools search only
+the current group's history, within its reply-round snapshot. They do not expose
+another agent's private profile or raw private replies. Group FTS stores statements
+once, with bounded search/excerpt tools rather than per-bot transcript copies.
+See [cross-chat identity and provenance](memory.md#one-agent-identity-across-private-chats-and-groups)
+for migration 0019, extraction/retry limits, revocation and verification.
 
 Leaving/removing a human stops retrieval of their group memories and removes the
 contacts they added. Removing a contact stops retrieval of its memories sourced
