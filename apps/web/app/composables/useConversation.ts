@@ -14,12 +14,13 @@ export type Conversation = {
   draft: string;
   loadingEarlier: boolean;
   retrying: boolean;
-  readSequence: number;
   revision: number;
 };
 
 const conversations = shallowReactive(new Map<string, Conversation>());
 const retained = 20;
+// Bounded catch-up when the newest page does not reach previously cached history.
+const catchUpPages = 10;
 
 registerSessionReset(() => {
   for (const conversation of conversations.values()) revokePreview(conversation.pending?.attachment);
@@ -28,6 +29,11 @@ registerSessionReset(() => {
 
 function revokePreview(attachment: DraftAttachment | null | undefined) {
   if (attachment?.previewURL) URL.revokeObjectURL(attachment.previewURL);
+}
+
+// Read-only lookup for Home: no LRU reordering, so rendering never mutates the cache.
+export function peekConversation(id: string): Conversation | undefined {
+  return conversations.get(id);
 }
 
 function conversation(id: string): Conversation {
@@ -39,7 +45,7 @@ function conversation(id: string): Conversation {
   }
   entry = reactive({
     turns: [], nextBefore: null, presence: null, loaded: false, error: null, unavailable: false,
-    pending: null, draft: '', loadingEarlier: false, retrying: false, readSequence: 0, revision: 0,
+    pending: null, draft: '', loadingEarlier: false, retrying: false, revision: 0,
   });
   conversations.set(id, entry);
   // Evict the least recently opened conversations without pending sends.
@@ -50,10 +56,49 @@ function conversation(id: string): Conversation {
   return entry;
 }
 
-function upsert(entry: Conversation, turn: ChatTurn) {
-  const index = entry.turns.findIndex((item) => item.id === turn.id);
-  if (index === -1) entry.turns = [...entry.turns, turn].sort((a, b) => a.sequence - b.sequence);
-  else if (turn.updatedAt >= entry.turns[index]!.updatedAt) entry.turns.splice(index, 1, turn);
+function mergeInto(existing: ChatTurn[], incoming: ChatTurn[]) {
+  const byID = new Map(existing.map((turn) => [turn.id, turn]));
+  for (const turn of incoming) {
+    const current = byID.get(turn.id);
+    byID.set(turn.id, current ? mergeTurn(current, turn) : turn);
+  }
+  return [...byID.values()].sort((a, b) => a.sequence - b.sequence);
+}
+
+export async function loadConversation(id: string) {
+  const chats = useChats();
+  const entry = conversation(id);
+  const revision = ++entry.revision;
+  try {
+    const page = await api<ChatPage>(`contacts/${id}/chat/turns`);
+    let cursor = page.nextBefore;
+    let fetched = page.turns;
+    const known = new Set(entry.turns.map((turn) => turn.id));
+    const overlaps = () => fetched.some((turn) => known.has(turn.id));
+    // Bridge any gap between cached history and the newest page. Past the bound,
+    // drop the disconnected cache instead of showing a hole.
+    for (let pages = 0; known.size && cursor !== null && !overlaps() && pages < catchUpPages; pages += 1) {
+      const earlier = await api<ChatPage>(`contacts/${id}/chat/turns`, { query: { before: cursor } });
+      fetched = [...earlier.turns, ...fetched];
+      cursor = earlier.nextBefore;
+    }
+    if (revision !== entry.revision || conversations.get(id) !== entry) return;
+    if (known.size && cursor !== null && !overlaps()) entry.turns = [];
+    const hadOlder = entry.turns.some((turn) => turn.sequence < (fetched[0]?.sequence ?? -Infinity));
+    entry.turns = mergeInto(entry.turns, fetched);
+    if (!hadOlder) entry.nextBefore = cursor;
+    entry.presence = page.presence;
+    entry.loaded = true;
+    entry.error = null;
+  } catch (error) {
+    if (conversations.get(id) !== entry) return;
+    if (error instanceof ApiError && error.status === 404) {
+      entry.unavailable = true;
+      chats.removeContact(id);
+      forgetRead(`contact:${id}`);
+    }
+    entry.error = errorMessage(error);
+  }
 }
 
 export function useConversation(contactID: MaybeRefOrGetter<string>) {
@@ -62,38 +107,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
   const state = shallowRef(conversation(toValue(contactID)));
   watch(() => toValue(contactID), (id) => { state.value = conversation(id); });
 
-  function syncListPreview(id: string, entry: Conversation) {
-    const last = entry.turns.at(-1);
-    if (last) chats.updateContactActivity(id, { lastMessageAt: last.createdAt, lastMessageText: last.assistantText ?? last.userText });
-  }
-
-  async function load() {
-    const id = toValue(contactID);
-    const entry = conversation(id);
-    const revision = ++entry.revision;
-    try {
-      const page = await api<ChatPage>(`contacts/${id}/chat/turns`);
-      if (revision !== entry.revision || conversations.get(id) !== entry) return;
-      const first = page.turns[0]?.sequence ?? -Infinity;
-      const last = page.turns.at(-1)?.sequence ?? 0;
-      const older = entry.turns.filter((turn) => turn.sequence < first);
-      // Keep turns accepted after this request started; the page may predate them.
-      const newer = entry.turns.filter((turn) => turn.sequence > last && !page.turns.some((item) => item.id === turn.id));
-      entry.turns = [...older, ...page.turns, ...newer];
-      if (!older.length) entry.nextBefore = page.nextBefore;
-      entry.presence = page.presence;
-      entry.loaded = true;
-      entry.error = null;
-      syncListPreview(id, entry);
-    } catch (error) {
-      if (conversations.get(id) !== entry) return;
-      if (error instanceof ApiError && error.status === 404) {
-        entry.unavailable = true;
-        chats.removeContact(id);
-      }
-      entry.error = errorMessage(error);
-    }
-  }
+  const load = () => loadConversation(toValue(contactID));
 
   async function loadEarlier() {
     const id = toValue(contactID);
@@ -102,8 +116,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
     entry.loadingEarlier = true;
     try {
       const page = await api<ChatPage>(`contacts/${id}/chat/turns`, { query: { before: entry.nextBefore } });
-      const ids = new Set(entry.turns.map((turn) => turn.id));
-      entry.turns = [...page.turns.filter((turn) => !ids.has(turn.id)), ...entry.turns];
+      entry.turns = mergeInto(entry.turns, page.turns);
       entry.nextBefore = page.nextBefore;
     } catch (error) {
       entry.error = errorMessage(error);
@@ -126,11 +139,10 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
         json: { id: pending.id, text: pending.text, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, attachment },
       });
       if (entry.pending?.id !== pending.id) return;
-      upsert(entry, result.turn);
+      entry.turns = mergeInto(entry.turns, [result.turn]);
       if (result.presence) entry.presence = result.presence;
       revokePreview(pending.attachment);
       entry.pending = null;
-      syncListPreview(id, entry);
     } catch (error) {
       if (entry.pending?.id === pending.id) entry.pending.failed = errorMessage(error);
     }
@@ -159,7 +171,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
     entry.retrying = true;
     try {
       const result = await api<ChatSubmission>(`contacts/${id}/chat/turns/${turn.id}/retry`, { method: 'POST' });
-      upsert(entry, result.turn);
+      entry.turns = mergeInto(entry.turns, [result.turn]);
       if (result.presence) entry.presence = result.presence;
     } catch (error) {
       entry.error = errorMessage(error);
@@ -168,19 +180,17 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
     }
   }
 
-  // Acknowledge only completed replies that were actually displayed.
-  async function markRead() {
+  // Acknowledge only completed replies that were actually displayed. The session
+  // queue finishes the write even if this chat is closed.
+  function markRead() {
     const id = toValue(contactID);
-    const entry = conversation(id);
-    const sequence = entry.turns.findLast((turn) => turn.status === 'complete')?.sequence ?? 0;
-    if (sequence <= entry.readSequence) return;
-    entry.readSequence = sequence;
-    try {
-      const result = await api<ChatReadState>(`contacts/${id}/chat/read`, { method: 'PUT', json: { sequence } });
-      chats.updateContactActivity(id, { unreadCount: result.unreadCount, lastReadSequence: result.lastReadSequence });
-    } catch {
-      entry.readSequence = 0; // Retried on the next visible refresh.
-    }
+    const sequence = conversation(id).turns.findLast((turn) => turn.status === 'complete')?.sequence ?? 0;
+    const confirmed = chats.contacts.value.find((contact) => contact.id === id)?.lastReadSequence ?? 0;
+    enqueueRead(`contact:${id}`, sequence, confirmed, async (value) => {
+      const result = await api<ChatReadState>(`contacts/${id}/chat/read`, { method: 'PUT', json: { sequence: value } });
+      chats.applyRead('contact', id, result.lastReadSequence, result.unreadCount);
+      return result.lastReadSequence;
+    });
   }
 
   return { state, load, loadEarlier, send, submit, discardPending, retryReply, markRead };

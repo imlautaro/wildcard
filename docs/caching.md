@@ -354,10 +354,26 @@ caches.
   private and group conversations render synchronously from memory, including empty
   results. Spinners appear only on first load. Refreshes run in the background, and
   failures keep loaded content visible with a retry notice.
-- **Freshness.** Polling runs only while the tab is visible (see [web app](web.md)),
-  and returning to the tab refreshes immediately. A conversation refresh replaces its
-  newest page, keeps older loaded pages, and keeps turns accepted after the request
-  started. "Load earlier messages" prepends older pages.
+- **Freshness.** Polling runs only while the tab is visible, on the iOS one-second
+  cadence (see [web app](web.md)), and returning to the tab refreshes immediately. A
+  conversation refresh merges its newest page into cached history by ID: private
+  turns follow the iOS `merging` rule (later attempt, then later update, then the more
+  advanced status, keeping the latest `readAt`), and group receipts only advance
+  Sent → Received → Read. If the newest page doesn't reach cached history, up to ten
+  earlier pages are fetched to bridge the gap; past that, the disconnected cache is
+  dropped. "Load earlier messages" prepends older pages.
+- **Home projection.** Home rows read the cached conversation without reordering the
+  cache: a pending send, or the latest cached turn/message when it is at least as
+  recent as the server summary, supplies the preview, sender, clock, and receipt.
+  Summary receipts reconcile back into the matching cached group message. A list
+  refresh warms already opened conversations with newer activity, at most four at a
+  time, without acknowledging them as received.
+- **Read state.** Unread watermarks go through a session queue that survives
+  navigation and retries on the list tick. Acknowledged watermarks are remembered, so
+  a list fetched before the write cannot bring a cleared counter back. Recipient
+  receipts are tracked per group outside reactivity: received and read IDs are
+  deduplicated (bounded to retained history), pending reads survive failures, and
+  confirmed Home previews are bounded to the current preview IDs.
 - **Mutations.** Sends are optimistic. A pending send keeps its UUID, text, and
   attachment across navigation and failures. Retry resends the same UUID (the API
   treats it idempotently), and Edit moves the text back to the composer. Contact
@@ -369,12 +385,17 @@ caches.
   cached. The API's `no-store` header keeps bytes out of the browser disk cache. No
   private data goes to `localStorage`, IndexedDB, or a service worker. Files open
   from a temporary blob URL that is revoked after a minute.
+- **Energy.** Creator energy uses up to eight memory-only snapshots reused
+  synchronously on entry, with shared in-flight reads, a five-second refresh while
+  the editor is visible, and a reset that invalidates earlier reads. A 404 drops the
+  snapshot. Contact deletion and session reset clear it.
 - **Not cached.** Sharing details, group member management, and account data are
   always loaded on open, because they gate permissions.
 
-Not yet verified in a browser: navigation reuse, background refresh, offline
-recovery, access revocation, and account switching. See the verification status in
-[web app](web.md#verification-status).
+Verified in a headless browser with fictional accounts: cached navigation, receipt
+progression, unread clearing, and sign-out/sign-in. Not yet verified: offline
+recovery, access revocation while a chat is open, and multi-page catch-up. See the
+verification status in [web app](web.md#verification-status).
 
 
 ## Contact energy

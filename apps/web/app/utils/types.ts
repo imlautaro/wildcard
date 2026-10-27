@@ -17,9 +17,14 @@ export type Contact = {
   updatedAt: number;
   lastMessageText: string | null;
   lastMessageAt: number | null;
+  // 1 when the latest turn is the user's own message (no reply, schedule, or group request).
+  lastMessageFromUser?: number | null;
+  lastMessageReadAt?: number | null;
   unreadCount?: number | null;
   lastReadSequence?: number | null;
 };
+
+export type ContactEnergy = { points: number; capacity: number; rechargeIntervalSeconds: number; nextPointAt: number | null };
 
 export type ContactsPage = { contacts: Contact[]; totalUnreadCount?: number | null; nextCursor: string | null };
 
@@ -57,6 +62,9 @@ export type ChatGroup = {
   lastMessageText: string | null;
   lastMessageAt: number | null;
   lastMessageSenderName: string | null;
+  lastMessageID?: string | null;
+  lastMessageUserID?: string | null;
+  lastMessageReceiptState?: string | null;
   photoVersion: string | null;
   unreadCount?: number | null;
   lastReadSequence?: number | null;
@@ -72,6 +80,8 @@ export type GroupMessage = {
   text: string;
   createdAt: number;
   attachment: Attachment | null;
+  // Aggregate recipient state: sent, received, or read; null for legacy messages.
+  receiptState?: string | null;
 };
 export type GroupSnapshot = { group: ChatGroup; members: GroupMember[]; replies: GroupReply[]; canInvite: boolean; contributorModel: boolean };
 export type GroupMessagesPage = { messages: GroupMessage[]; nextBefore: number | null };

@@ -5,7 +5,7 @@ const route = useRoute();
 const groupID = computed(() => String(route.params.id));
 const chats = useChats();
 const { user } = useSession();
-const { state, load, loadEarlier, send, submit, discardPending, retryReply, markRead } = useGroupConversation(groupID);
+const { state, load, loadEarlier, send, submit, discardPending, retryReply, noteSeen, markRead } = useGroupConversation(groupID);
 const scroller = ref<HTMLElement>();
 const composer = ref<{ focus: () => void }>();
 
@@ -52,6 +52,11 @@ function senderPhoto(message: GroupMessage) {
     ? `groups/${groupID.value}/photos/${member.kind}/${member.id}?version=${encodeURIComponent(member.photoVersion)}`
     : null;
 }
+// Stable per-group color from the message's own identity, so former members keep theirs.
+function senderStyle(message: GroupMessage) {
+  const identity = message.agentID ? `agent/${message.agentID}` : message.userID ? `user/${message.userID}` : `message/${message.id}`;
+  return senderColor(groupID.value, identity);
+}
 function attachmentPath(message: GroupMessage) {
   return `groups/${groupID.value}/messages/${message.id}/attachment`;
 }
@@ -67,7 +72,7 @@ async function refresh() {
   const stick = nearBottom();
   await load();
   if (stick) scrollToBottom();
-  if (document.visibilityState === 'visible' && document.hasFocus()) void markRead();
+  if (document.visibilityState === 'visible') markRead();
 }
 async function earlier() {
   const element = scroller.value;
@@ -81,15 +86,42 @@ async function onSend(text: string, attachment: DraftAttachment | null) {
   scrollToBottom();
 }
 
-const { now: pollNow } = usePolling(refresh, () => (activeReplies.value.length || state.value.pending ? 2000 : 6000));
-watch(groupID, async () => { scrollToBottom(); await pollNow(); });
+// Recipient read receipts: a message from someone else counts as read once at
+// least half of it is on screen while the tab is visible.
+let observer: IntersectionObserver | null = null;
+function observeRows() {
+  if (!observer || !scroller.value) return;
+  for (const element of scroller.value.querySelectorAll('[data-read-id]')) observer.observe(element);
+}
+function rescan() {
+  observer?.disconnect();
+  observeRows();
+}
+function onVisibility() {
+  if (document.visibilityState === 'visible') rescan();
+}
+watch(items, () => nextTick(observeRows));
+
+// One-second tick while visible, like the iOS session synchronizer.
+const { now: pollNow } = usePolling(refresh, () => 1000);
+watch(groupID, async () => { scrollToBottom(); rescan(); await pollNow(); });
 onMounted(async () => {
+  observer = new IntersectionObserver((entries) => {
+    if (document.visibilityState !== 'visible') return;
+    noteSeen(entries.filter((entry) => entry.isIntersecting).map((entry) => (entry.target as HTMLElement).dataset.readId!));
+  }, { root: scroller.value, threshold: 0.5 });
+  document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('focus', markRead);
   scrollToBottom();
   await pollNow();
+  nextTick(observeRows);
   composer.value?.focus();
 });
-onBeforeUnmount(() => window.removeEventListener('focus', markRead));
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  document.removeEventListener('visibilitychange', onVisibility);
+  window.removeEventListener('focus', markRead);
+});
 </script>
 
 <template>
@@ -128,33 +160,41 @@ onBeforeUnmount(() => window.removeEventListener('focus', markRead));
 
       <template v-for="item in items" :key="item.key">
         <div v-if="item.kind === 'day'" class="day">{{ item.label }}</div>
-        <div v-else class="bubble-row" :class="isMine(item.message) ? 'outgoing' : 'incoming'" :style="{ marginTop: item.first ? '6px' : '0' }">
+        <div
+          v-else class="bubble-row" :class="isMine(item.message) ? 'outgoing' : 'incoming'" :style="{ marginTop: item.first ? '6px' : '0' }"
+          :data-read-id="isMine(item.message) ? undefined : item.message.id"
+        >
           <div v-if="!isMine(item.message)" class="avatar-slot">
             <AppAvatar v-if="item.last" :name="item.message.senderName" :path="senderPhoto(item.message)" :size="28" />
           </div>
           <div class="bubble" :class="{ media: item.message.attachment?.mimeType.startsWith('image/') }">
-            <span v-if="!isMine(item.message) && item.first" class="sender" :style="item.message.attachment?.mimeType.startsWith('image/') ? 'padding: 4px 8px 0' : ''">{{ item.message.senderName }}</span>
+            <span
+              v-if="!isMine(item.message) && item.first" class="sender"
+              :style="[senderStyle(item.message), item.message.attachment?.mimeType.startsWith('image/') ? { padding: '4px 8px 0' } : {}]"
+            >{{ senderOf(item.message)?.name ?? item.message.senderName }}</span>
             <MessageAttachment v-if="item.message.attachment" :attachment="item.message.attachment" :path="attachmentPath(item.message)" />
             <div v-if="item.message.text" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }">{{ item.message.text }}</div>
-            <div class="meta" :style="item.message.attachment?.mimeType.startsWith('image/') ? 'padding: 0 6px 2px' : ''">{{ messageTime(item.message.createdAt) }}</div>
+            <div class="meta" :style="item.message.attachment?.mimeType.startsWith('image/') ? 'padding: 0 6px 2px' : ''">
+              {{ messageTime(item.message.createdAt) }}<MessageReceipt v-if="isMine(item.message)" :receipt-state="item.message.receiptState ?? 'sent'" />
+            </div>
           </div>
         </div>
       </template>
 
       <template v-if="state.pending">
         <div class="bubble-row outgoing">
-          <div class="bubble" :class="{ media: state.pending.attachment?.previewURL }" style="opacity: 0.75">
+          <div class="bubble" :class="{ media: state.pending.attachment?.previewURL }">
             <MessageAttachment v-if="state.pending.attachment" :attachment="state.pending.attachment" :path="null" :local-url="state.pending.attachment.previewURL" />
             <div v-if="state.pending.text" :class="{ caption: state.pending.attachment?.previewURL }">{{ state.pending.text }}</div>
+            <div class="meta" :style="state.pending.attachment?.previewURL ? 'padding: 0 6px 2px' : ''">
+              {{ messageTime(state.pending.createdAt) }}<MessageReceipt :sending="!state.pending.accepted" receipt-state="sent" />
+            </div>
           </div>
         </div>
-        <div class="status-line outgoing" :class="{ error: state.pending.failed }">
-          <template v-if="state.pending.failed">
-            {{ state.pending.failed }}
-            <button class="link-button" @click="submit">Retry</button>
-            <button class="link-button danger" @click="discardPending">Edit</button>
-          </template>
-          <template v-else>Sending…</template>
+        <div v-if="state.pending.failed" class="status-line outgoing error">
+          {{ state.pending.failed }}
+          <button class="link-button" @click="submit">Retry</button>
+          <button class="link-button danger" @click="discardPending">Edit</button>
         </div>
       </template>
 

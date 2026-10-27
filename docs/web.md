@@ -44,11 +44,15 @@ Matching iOS:
 
 - Email/password sign-up and sign-in, account name and photo, sign-out.
 - Unified chat list of contacts and groups, ordered by latest message, with unread
-  counts, sender prefixes, and an unread count in the tab title.
+  counts, sender prefixes, and an unread count in the tab title. It appears once both
+  sources load; if one fails, available rows stay visible with Retry. Your own last
+  message shows its receipt (and **You:** in groups), projected from the open
+  conversation when that is newer than the server summary.
 - Contacts directory with search, create, rename, photo (centered square JPEG,
   512 px, under 512 KB), delete, and leaving a shared contact.
 - Private chats with persisted history, earlier pages, optimistic sends with
-  idempotent UUIDs, reply retry, read receipts, Online/Typing/Last seen presence,
+  idempotent UUIDs, reply retry, receipts (clock while sending, two checks once
+  accepted, colored when the agent read it), Online/Typing/Last seen presence,
   activity leases (`open`/`typing`/`leave`, with no draft text), and image/PDF
   attachments up to 5 MB.
 - Contact sharing: invite by account email or by code, revoke invitations, remove
@@ -56,7 +60,20 @@ Matching iOS:
   and Contributor consent are explicit, with the iOS disclosure text.
 - Groups: create with consent, chat with sender names/avatars and attachments,
   reply progress and retry, invite by email, add your own contacts, member invite
-  permissions, remove members/contacts, leave or delete.
+  permissions, remove members/contacts, leave or delete. Sender labels use the same
+  stable color as iOS (FNV-1a of group ID and sender identity over the iOS palette,
+  dark inks in light mode and light tints in dark mode). [Delivery and read
+  receipts](groups.md#delivery-and-read-receipts) match iOS: an own message shows a
+  clock until accepted, then Sent, Received, and Read from the aggregate
+  `receiptState`. The web app acknowledges downloaded history as received only while
+  the group is visible, marks others' messages read once at least half of the row
+  is on screen in a visible tab, confirms Home previews with `PUT
+  /groups/receipts`, and refreshes older own messages with `GET
+  /groups/:id/receipts`. Acknowledgements are deduplicated so one-second polling
+  stays within the API's 120 writes per minute.
+- Creator-only **Group Energy** in the contact editor: points out of capacity, a bar
+  that turns orange at five or fewer points, the next recharge time, and **Reset Energy
+  to 50**. See [energy](energy.md).
 
 Not in the web app yet:
 
@@ -68,9 +85,13 @@ Not in the web app yet:
   editing, and the group "Confirm consent for future messages" action.
 - **Interactive photo cropping.** Photos are center-cropped.
 
-Polling replaces push while the tab is visible: every 15 s for the chat list, 2 s
-for a chat with a pending reply or typing contact, and 8 s (private) or 6 s (group)
-otherwise. Returning to the tab refreshes immediately.
+Polling replaces push while the tab is visible, with the same cadence as the iOS
+session synchronizer: chat lists and the open conversation every second, energy every
+five seconds while the editor is open, and invitations every 15 seconds. Returning to
+the tab refreshes immediately. Requests never overlap: the next tick waits for the
+previous one. Unread watermarks go through a session queue (a port of
+`ReadAcknowledgementQueue`) that survives navigation, coalesces to the highest
+sequence, and retries on the list tick.
 
 ## Caching
 
@@ -110,7 +131,8 @@ deploy manually.
 ## Verification status
 
 Checked locally on October 27, 2026, with fictional accounts and no Meta key (sends
-return 503, so no model replies were generated):
+return 503, so no model replies were generated). These checks were rerun for the
+update matching iOS commits `7f3ed3a`–`d68dc5f`:
 
 - `npm run typecheck:web`, `npm run typecheck`, and `npm run build:web` pass.
 - The built Worker ran under `wrangler dev` with the generated
@@ -122,20 +144,24 @@ return 503, so no model replies were generated):
   create/list/rename; photo upload and download (identical bytes, `no-store`); chat
   history, activity `open`, and the send error path; sharing invitation codes; group
   create, messages, image attachment round trip, and read state.
-- A headless Chrome run of the built Worker passed 18 UI checks: sign-in redirect,
+- A headless Chrome run of the built Worker passed 29 UI checks: sign-in redirect,
   sign-up, the session cookie is hidden from `document.cookie`, contact creation, a
   failed send keeps Retry and Edit, Edit restores the draft, rename, sharing consent
   gating and code creation, group creation, adding your own contact, a group send,
   the unified list, dark mode, the mobile single-column layout with no horizontal
-  overflow, sign-out, and sign-in again. No JavaScript exceptions occurred.
+  overflow, sign-out, and sign-in again. With a second fictional account in a
+  group: the sender label color equals the iOS palette value for that identity; a
+  visible message from the other account becomes Read and its unread count clears;
+  an own message goes Sent → Received → Read (colored) as the other account
+  confirms; Home shows **You:** with the Read receipt; Group Energy shows 50 / 50
+  and Reset works; the second account sees none of the first account's contacts.
+  No JavaScript exceptions occurred, and there were no 429 responses (4 group receipt
+  writes, 10 preview confirmations, and 4 read watermarks in the whole run).
 - `npm run dev:web` proxies to the local API over HTTP with a plain `wildcard_session`
   cookie. Node's `fetch` adds `Sec-Fetch-Mode`, so the dev path sends the local API
   origin to satisfy Better Auth; production builds never take that branch.
 
-Not yet verified: model replies, PDF attachments in a browser, photo selection
-through the file picker, interactive cross-account sharing/invitations, session
-expiry over time, rate-limit behavior and `CF-Connecting-IP` forwarding on the real
-Cloudflare network (locally the binding connects, but every request comes from the
-same address), and the deployed `wildcard-web` Worker, which has not been released.
-The web app does not yet acknowledge group delivery receipts (`PUT /groups/receipts`)
-the way iOS does.
+Not yet verified: model replies and private read receipts (they need a model run),
+group catch-up across more than 50 missed messages, PDF attachments in a browser,
+photo selection through the file picker, session expiry over time, and rate-limit
+behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.

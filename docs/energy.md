@@ -59,7 +59,8 @@ Authenticated creator endpoints, scoped through their own contact:
 
 Both recheck creator ownership and return 404 for absent/inaccessible contacts, including
 shared-contact members. Responses use Cache-Control: no-store. The iOS contact editor
-shows **Group Energy** and **Reset Energy to 50** only for confirmed owners. A session-owned
+shows **Group Energy** and **Reset Energy to 50** only for confirmed owners. The web contact editor shows the same section with the same
+snapshot rules (see [web caching](caching.md#web-app)). A session-owned
 `NavigationSnapshotCache<ContactEnergy>` reuses the last server value synchronously,
 including zero, and deduplicates requests. It revalidates on entry/Retry and every five
 seconds while active, preserving usable values during temporary failures. It never

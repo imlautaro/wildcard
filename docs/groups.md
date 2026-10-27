@@ -28,7 +28,7 @@ requests run concurrently. Existing cached rows remain visible during refreshes;
 a failed source exposes retry controls and any available rows. See
 [Chats list caching and verification](caching.md#chats-and-contacts-lists).
 
-## Sender colors on iOS
+## Sender colors
 
 Each human and agent identity receives a stable, pseudo-random palette color within
 a group. Sender labels use the same color in text, image/caption and PDF bubbles,
@@ -37,6 +37,8 @@ member ID keeps colors stable across launches, renames and history pagination;
 colors can repeat. The palette pairs darker inks for light mode with lighter tints
 for dark mode. Own messages retain their existing layout without a sender label.
 No network calls, persisted assignments or additional cache are needed.
+The [web app](web.md) uses the same hash and palette, so a sender has the same
+color on both clients.
 
 Device verification: compare sender labels across text, images and PDFs in both
 appearances, reopen the group, load older messages and rename/remove a member.

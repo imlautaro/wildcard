@@ -31,8 +31,9 @@ function failureMessage(path: string, method: string, status: number, body: unkn
     if (path.endsWith('/transcriptions') && status === 422) {
       return code === 'NO_SPEECH' ? 'No speech was detected. Please record again.' : 'The transcript is too long. Please record a shorter message.';
     }
+    if (status === 429 || status >= 500) return 'Groups are temporarily unavailable. Please try again.';
     if (status === 404 && method === 'GET' && !path.includes('/photos/')) return 'This group is no longer available.';
-    if ([400, 403, 404, 409, 413, 422, 429].includes(status)) return serverMessage(body) ?? 'Groups are temporarily unavailable. Please try again.';
+    if ([400, 403, 404, 409, 413, 422].includes(status)) return serverMessage(body) ?? 'Groups are temporarily unavailable. Please try again.';
     return 'Groups are temporarily unavailable. Please try again.';
   }
   if (path === 'me' && [400, 422].includes(status)) return 'Use a name with 1–100 characters and no control characters.';

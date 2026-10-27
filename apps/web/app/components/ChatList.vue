@@ -10,7 +10,13 @@ function accountPhotoPath() {
   return user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null;
 }
 
-usePolling(() => chats.refresh(), () => 15_000);
+// Same cadence as the iOS session synchronizer: lists every second while
+// visible (failed read acknowledgements retry on the same tick), invitations every 15 s.
+usePolling(async () => {
+  retryPendingReads();
+  await chats.refreshLists();
+}, () => 1000);
+usePolling(() => chats.refreshInvitations(), () => 15_000);
 onMounted(() => { void chats.refresh(); });
 </script>
 
@@ -25,13 +31,13 @@ onMounted(() => { void chats.refresh(); });
       <span v-if="chats.invitationCount.value" class="badge">{{ chats.invitationCount.value }}</span>
     </NuxtLink>
   </header>
-  <div v-if="chats.error.value && chats.loaded.value" class="notice" role="status">
+  <div v-if="chats.error.value && chats.rows.value.length" class="notice" role="status">
     {{ chats.error.value }}
     <button class="link-button" @click="chats.refresh()">Retry</button>
   </div>
   <div class="scroll">
     <div v-if="!chats.loaded.value && !chats.error.value" class="center"><span class="spinner" /> Loading chats…</div>
-    <div v-else-if="!chats.loaded.value" class="empty">
+    <div v-else-if="chats.error.value && !chats.rows.value.length" class="empty">
       <p>{{ chats.error.value }}</p>
       <button class="button secondary" @click="chats.refresh()">Try again</button>
     </div>
@@ -50,7 +56,10 @@ onMounted(() => { void chats.refresh(); });
               <time :datetime="new Date(row.at).toISOString()">{{ listDate(row.at) }}</time>
             </div>
             <div class="bottom">
-              <span class="preview"><b v-if="row.sender">{{ row.sender }}: </b>{{ row.preview }}</span>
+              <span class="preview">
+                <MessageReceipt v-if="row.own" :sending="row.sending" :read-at="row.readAt" :receipt-state="row.receiptState" />
+                <b v-if="row.sender">{{ row.sender }}: </b>{{ row.preview }}
+              </span>
               <span v-if="row.unread" class="badge" :aria-label="`${row.unread} unread`">{{ row.unread }}</span>
             </div>
           </div>

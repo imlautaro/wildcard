@@ -51,6 +51,8 @@ const remove = () => run(async () => {
   if (!window.confirm(message)) return;
   await api(`contacts/${id.value}`, { method: 'DELETE' });
   chats.removeContact(id.value);
+  forgetContactEnergy(id.value);
+  forgetRead(`contact:${id.value}`);
   await navigateTo('/', { replace: true });
 });
 
@@ -79,7 +81,9 @@ onMounted(() => run(async () => {
       <p v-if="saved" class="group-footer" role="status">Saved.</p>
       <button v-if="canManage" type="submit" class="button block" :disabled="!changed || !valid || busy" style="margin-bottom: 20px">Save</button>
 
-      <div class="group">
+      <ContactEnergySection v-if="contact.role === 'owner'" :contact-id="id" />
+
+      <div class="group" style="margin-top: 20px">
         <NuxtLink :to="`/chats/${id}`" class="button-row">Open chat</NuxtLink>
         <NuxtLink v-if="canManage" :to="`/contacts/${id}/sharing`" class="button-row">Share contact</NuxtLink>
       </div>

@@ -57,7 +57,7 @@ async function refresh() {
   const stick = nearBottom();
   await load();
   if (stick) scrollToBottom();
-  if (document.visibilityState === 'visible' && document.hasFocus()) void markRead();
+  if (document.visibilityState === 'visible') markRead();
 }
 
 async function earlier() {
@@ -74,8 +74,8 @@ async function onSend(text: string, attachment: DraftAttachment | null) {
   scrollToBottom();
 }
 
-const { now: pollNow } = usePolling(refresh, () =>
-  replying.value || state.value.pending || state.value.presence?.status === 'typing' ? 2000 : 8000);
+// One-second tick while visible, like the iOS session synchronizer.
+const { now: pollNow } = usePolling(refresh, () => 1000);
 
 watch(contactID, async () => {
   fetched.value = null;
@@ -138,11 +138,11 @@ onBeforeUnmount(() => window.removeEventListener('focus', markRead));
               <div class="bubble media">
                 <MessageAttachment :attachment="item.turn.attachment" :path="attachmentPath(item.turn)" />
                 <div v-if="item.turn.userText && item.turn.attachment.mimeType.startsWith('image/')" class="caption">{{ item.turn.userText }}</div>
-                <div class="meta" style="padding: 0 6px 2px">{{ messageTime(item.turn.createdAt) }}<span v-if="item.turn.readAt"> · Read</span></div>
+                <div class="meta" style="padding: 0 6px 2px">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
               </div>
             </div>
             <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble-row outgoing">
-              <div class="bubble">{{ item.turn.userText }}<div class="meta">{{ messageTime(item.turn.createdAt) }}<span v-if="item.turn.readAt"> · Read</span></div></div>
+              <div class="bubble">{{ item.turn.userText }}<div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
             </div>
           </template>
           <div v-if="item.turn.assistantText" class="bubble-row incoming">
@@ -166,18 +166,16 @@ onBeforeUnmount(() => window.removeEventListener('focus', markRead));
           <div class="bubble media">
             <MessageAttachment :attachment="state.pending.attachment" :path="null" :local-url="state.pending.attachment.previewURL" />
             <div v-if="state.pending.text && state.pending.attachment.previewURL" class="caption">{{ state.pending.text }}</div>
+            <div class="meta" style="padding: 0 6px 2px">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div>
           </div>
         </div>
         <div v-if="state.pending.text && !state.pending.attachment?.previewURL" class="bubble-row outgoing">
-          <div class="bubble" style="opacity: 0.75">{{ state.pending.text }}</div>
+          <div class="bubble">{{ state.pending.text }}<div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div></div>
         </div>
-        <div class="status-line outgoing" :class="{ error: state.pending.failed }">
-          <template v-if="state.pending.failed">
-            {{ state.pending.failed }}
-            <button class="link-button" @click="submit">Retry</button>
-            <button class="link-button danger" @click="discardPending">Edit</button>
-          </template>
-          <template v-else>Sending…</template>
+        <div v-if="state.pending.failed" class="status-line outgoing error">
+          {{ state.pending.failed }}
+          <button class="link-button" @click="submit">Retry</button>
+          <button class="link-button danger" @click="discardPending">Edit</button>
         </div>
       </template>
     </div>

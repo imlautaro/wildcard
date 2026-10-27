@@ -21,6 +21,8 @@
   --separator: rgba(60, 60, 67, 0.16);
   --danger: #d70015;
   --success: #248a3d;
+  --read: var(--accent);
+  --warning: #c93400;
   --hover: rgba(0, 0, 0, 0.04);
   --selected: rgba(4, 93, 227, 0.1);
   --radius: 12px;
@@ -41,6 +43,8 @@
     --separator: rgba(84, 84, 88, 0.5);
     --danger: #ff6961;
     --success: #30d158;
+    --read: #99e6ff;
+    --warning: #ff9f0a;
     --hover: rgba(255, 255, 255, 0.06);
     --selected: rgba(59, 139, 255, 0.18);
     color-scheme: dark;
@@ -190,7 +194,14 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
 }
 .outgoing .bubble { background: var(--outgoing); border-bottom-right-radius: 6px; }
 .incoming .bubble { border-bottom-left-radius: 6px; }
-.bubble .sender { display: block; font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 2px; }
+.bubble .sender { display: block; font-size: 13px; font-weight: 700; color: var(--sender-light, var(--secondary)); margin-bottom: 2px; }
+@media (prefers-color-scheme: dark) { .bubble .sender { color: var(--sender-dark, var(--secondary)); } }
+.receipt { color: var(--secondary); flex: none; vertical-align: -1px; margin-right: 4px; }
+.receipt.read { color: var(--read); }
+.bubble .meta .receipt { margin: 0 0 0 2px; vertical-align: baseline; align-self: center; }
+.meter { height: 6px; border-radius: 3px; background: var(--separator); overflow: hidden; }
+.meter > span { display: block; height: 100%; background: var(--success); transition: width 0.3s; }
+.meter.low > span { background: var(--warning); }
 .bubble .meta { display: flex; justify-content: flex-end; gap: 4px; font-size: 11px; color: var(--secondary); margin-top: 2px; white-space: nowrap; }
 .bubble.media { padding: 4px; overflow: hidden; }
 .bubble.media img { display: block; max-width: 100%; max-height: 320px; border-radius: 14px; object-fit: cover; min-width: 120px; min-height: 80px; background: var(--hover); }
