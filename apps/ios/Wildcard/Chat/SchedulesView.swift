@@ -76,7 +76,7 @@ struct SchedulesView: View {
                             Text("Cancelled").manrope(.footnote).foregroundStyle(.secondary)
                         } else {
                             if schedule.status == .completed {
-                                Text("Triggered · check the conversation for delivery status")
+                                Text("Dispatched · pending or failed; check the conversation")
                                     .manrope(.footnote).foregroundStyle(.secondary)
                             }
                             Button("Cancel schedule", role: .destructive) {
@@ -98,6 +98,12 @@ struct SchedulesView: View {
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await refresh()
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(5)) }
+                catch { return }
+                guard !Task.isCancelled else { return }
+                if !loading && cancelling.isEmpty { await refresh() }
+            }
         }
     }
 

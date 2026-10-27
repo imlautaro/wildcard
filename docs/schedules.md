@@ -22,6 +22,11 @@ and requires its current revision. Cancelled/completed schedules cannot be edite
 create a new one. Cancellation is also available from the **clock** button in the
 chat toolbar, including while the contact is generating. Pull to refresh the list.
 Creation and timing changes happen through chat; there is no separate form.
+The list refreshes every five seconds while the screen is open and the app is
+active. A one-time schedule disappears after its reply is saved successfully in
+the conversation, independently of push delivery. Queued, running, and failed
+one-time jobs remain visible so failures are not mistaken for successful sends.
+Schedule records remain stored for history and cancellation/push checks.
 
 Each schedule belongs to the current contact and user, who is the only recipient.
 Contact sharing does not exist yet and this implementation introduces no sharing
@@ -38,7 +43,8 @@ a queued `chat_turn`. The insert copies the instruction and schedule revision,
 uses an empty user message, and records the scheduled occurrence. A database
 trigger advances recurrence or marks a one-time schedule `completed` in that same
 transaction. Here, `completed` means **dispatched**, not successfully delivered;
-the conversation shows generation outcomes. iOS labels this state **Triggered**.
+the conversation shows generation outcomes. iOS labels visible completed schedules
+**Dispatched · pending or failed; check the conversation**.
 
 The conditional insert checks the original cursor/revision, one active turn per
 contact, and at most ten active turns per user. A unique index on schedule,
@@ -89,7 +95,8 @@ The existing two tool rounds / six executions bound chat-side operations.
   accepted as routing configuration.
 - Calendar recurrences such as daily at a local clock time across DST are not
   supported. Fixed elapsed intervals do not adjust for DST or device travel.
-- API lists return up to 100 schedules, active first and then newest. Model tools
+- API lists omit successfully saved one-time jobs, then return up to 100 schedules,
+  active first and then newest. Model tools retain completed history and
   return at most 20 with instructions clipped to 300 characters. The active limit
   ensures active schedules fit. There is no full historical pagination yet.
 - Cancellation API: sixty requests per user per minute.

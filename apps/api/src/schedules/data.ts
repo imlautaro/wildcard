@@ -13,9 +13,16 @@ export function validTimeZone(value: unknown): value is string {
   catch { return false; }
 }
 
-export async function listSchedules(db: D1Database, scope: ScheduleScope) {
+export async function listSchedules(db: D1Database, scope: ScheduleScope,
+  options: { hideDeliveredOnce?: boolean } = {}) {
+  // Keep history for model tools and retain the row for cancellation/push checks.
+  const visible = options.hideDeliveredOnce ? `AND NOT (status = 'completed' AND interval_seconds IS NULL
+    AND EXISTS (SELECT 1 FROM chat_turn t WHERE t.schedule_id = contact_schedule.id
+      AND t.schedule_revision = contact_schedule.revision AND t.contact_id = contact_schedule.contact_id
+      AND t.user_id = contact_schedule.user_id AND t.status = 'complete'))` : '';
   const { results } = await db.prepare(`SELECT ${scheduleColumns} FROM contact_schedule
-    WHERE contact_id = ? AND user_id = ? ORDER BY status = 'active' DESC, created_at DESC LIMIT 100`)
+    WHERE contact_id = ? AND user_id = ? ${visible}
+    ORDER BY status = 'active' DESC, created_at DESC LIMIT 100`)
     .bind(scope.contactID, scope.userID).all<ContactSchedule>();
   return results;
 }

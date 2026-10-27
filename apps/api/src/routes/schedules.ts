@@ -10,7 +10,7 @@ schedules.use('*', async (c, next) => {
   await next();
 });
 schedules.get('/', async (c) => c.json({ schedules: await listSchedules(c.env.DB,
-  { contactID: c.req.param('id')!, userID: c.get('owner') }) }));
+  { contactID: c.req.param('id')!, userID: c.get('owner') }, { hideDeliveredOnce: true }) }));
 schedules.delete('/:scheduleID', async (c) => {
   const admission = await admitAuthRequest(c.env.DB, c.get('owner'), 'schedule-cancel', 60);
   if (!admission.allowed) return c.json({ error: 'Too many requests' }, 429);
