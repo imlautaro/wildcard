@@ -22,6 +22,12 @@ cached history remains visible during refreshes. Initial failures show the exist
 error and **Refresh** control. See [cache verification](caching.md#group-navigation-and-secondary-screens)
 for device checks.
 
+The Home Chats list waits for the initial contacts and groups loads before showing
+its combined rows, ordered by activity within the loaded pagination window. These
+requests run concurrently. Existing cached rows remain visible during refreshes;
+a failed source exposes retry controls and any available rows. See
+[Chats list caching and verification](caching.md#chats-and-contacts-lists).
+
 ## Sender colors on iOS
 
 Each human and agent identity receives a stable, pseudo-random palette color within

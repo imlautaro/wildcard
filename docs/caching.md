@@ -50,6 +50,22 @@ navigation cache itself remains in memory.
 
 ## Chats and Contacts lists
 
+The initial Chats list waits for both the contacts and groups caches to load before
+revealing their merged, activity-sorted rows. Both requests start independently;
+foreground polling and pull to refresh also refresh the two sources concurrently.
+Existing loaded caches stay visible during revalidation. A failed source releases
+the initial loading gate so available rows remain accessible alongside its retry
+controls. Cancellation does not count as a successful empty list. The existing
+private-chat pagination boundary still determines which older groups are visible.
+No additional cache or network endpoint is introduced.
+
+Device verification: cold-open Chats with either list response delayed, with no
+contacts, with no groups and with both lists empty; confirm a single initial reveal
+and the correct empty state. Fail either request, retry, navigate away/back,
+refresh, resume from background and switch fictional accounts. Cached mixed rows
+should remain visible during successful revalidation and transient failures.
+These presentation checks remain pending on device.
+
 Both screens share the same session contact cache and mutation state. Chats
 filters out contacts without message metadata and keeps activity order. Contacts
 sorts all loaded contacts by name and automatically fetches remaining pages so

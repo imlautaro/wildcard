@@ -14,6 +14,10 @@ struct ChatsView: View {
     @State private var deletion: Contact?
     @State private var mutationError: String?
 
+    private var isWaitingForChatLists: Bool {
+        (!contacts.hasLoaded || !groups.hasLoaded) && contacts.error == nil && groups.error == nil
+    }
+
     private var displayedContacts: [Contact] {
         if mode == .chats {
             return contacts.contacts.filter { $0.lastMessageAt != nil || $0.lastMessageText != nil }
@@ -25,6 +29,9 @@ struct ChatsView: View {
     }
 
     private var chatEntries: [ChatListEntry] {
+        // Publish the initial mixed list only after both sources have loaded.
+        // On failure, keep the available rows accessible alongside retry controls.
+        guard !isWaitingForChatLists else { return [] }
         var entries = displayedContacts.map(ChatListEntry.contact)
         // Defer older groups until private-chat pagination reaches their timestamp.
         // This avoids putting them ahead of newer private chats on unloaded pages.
@@ -160,7 +167,7 @@ struct ChatsView: View {
         .overlay {
             if mode == .chats && entries.isEmpty && groups.error == nil && contacts.error == nil && mutationError == nil {
                 if !contacts.hasLoaded || !groups.hasLoaded || contacts.nextCursor != nil {
-                    ProgressView("Loading contacts…")
+                    ProgressView("Loading chats…")
                 } else {
                     ContentUnavailableView {
                         Label("No chats yet", systemImage: "bubble.left.and.bubble.right")
@@ -172,12 +179,15 @@ struct ChatsView: View {
             }
         }
         .refreshable {
-            await contacts.refresh(using: auth)
-            await groups.refresh(using: auth)
+            async let contactRefresh: Void = contacts.refresh(using: auth)
+            async let groupRefresh: Void = groups.refresh(using: auth)
+            _ = await (contactRefresh, groupRefresh)
             if mode == .contacts { await invitations.refresh(using: auth, force: true) }
         }
         .task {
             await contacts.refresh(using: auth, force: false)
+        }
+        .task {
             if mode == .chats { await groups.refresh(using: auth) }
         }
         .task(id: "\(contacts.nextCursor ?? "")-\(contacts.isLoading)-\(contacts.isMutating)") {

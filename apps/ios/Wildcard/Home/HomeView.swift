@@ -137,14 +137,16 @@ struct HomeView: View {
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             MessageSounds.shared.activate(userID: auth.user?.id)
-            await contacts.refresh(using: auth, preserveLoadedPages: true)
-            await groups.refresh(using: auth)
+            async let contactRefresh: Void = contacts.refresh(using: auth, preserveLoadedPages: true)
+            async let groupRefresh: Void = groups.refresh(using: auth)
+            _ = await (contactRefresh, groupRefresh)
             await push.activate(using: auth)
             if contacts.hasLoaded && groups.hasLoaded { await push.updateBadge(count: totalUnreadCount) }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(3)) } catch { return }
-                await contacts.refresh(using: auth, preserveLoadedPages: true)
-                await groups.refresh(using: auth, refreshInvitations: false)
+                async let contactRefresh: Void = contacts.refresh(using: auth, preserveLoadedPages: true)
+                async let groupRefresh: Void = groups.refresh(using: auth, refreshInvitations: false)
+                _ = await (contactRefresh, groupRefresh)
             }
         }
         .task(id: scenePhase) {
