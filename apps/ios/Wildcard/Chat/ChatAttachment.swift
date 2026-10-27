@@ -91,6 +91,7 @@ struct ChatAttachmentView: View {
                 if attachment.isImage {
                     if caption.isEmpty {
                         imageButton
+                            .messageBubbleShadow()
                     } else {
                         VStack(alignment: .trailing, spacing: 0) {
                             imageButton
@@ -104,6 +105,7 @@ struct ChatAttachmentView: View {
                                 .allowsHitTesting(false)
                         }
                         .clipShape(MessageBubbleShape())
+                        .messageBubbleShadow()
                     }
                 } else {
                     documentButton
@@ -228,6 +230,7 @@ struct ChatAttachmentView: View {
         }
         .buttonStyle(.plain)
         .background(Color("OutgoingMessageBackground"), in: MessageBubbleShape(cornerRadius: 16))
+        .messageBubbleShadow()
         .disabled(loading)
     }
 

@@ -14,11 +14,19 @@ struct MessageBubbleView: View {
             .foregroundStyle(Color.primary)
             .background(fromUser ? Color("OutgoingMessageBackground") : Color(uiColor: .secondarySystemBackground),
                         in: MessageBubbleShape(fromUser: fromUser))
+            .messageBubbleShadow()
             if !fromUser { Spacer(minLength: 40) }
         }
         .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(x: fromUser ? 8 : -8, y: 4)))
     }
 
+}
+
+extension View {
+    func messageBubbleShadow() -> some View {
+        compositingGroup()
+            .shadow(color: .black.opacity(0.06), radius: 2, x: 0, y: 1)
+    }
 }
 
 struct MessageTextContentView: View {

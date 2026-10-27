@@ -36,8 +36,8 @@ struct ContactDetailView: View {
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink(value: HomeDestination.editContact(contactID)) {
-                        HStack(spacing: 8) {
-                            ContactAvatar(contact: contact, size: 30)
+                        HStack(spacing: 6) {
+                            ContactAvatar(contact: contact, size: 38)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(contact.name).manrope(.headline, weight: .semibold)
                                     .foregroundStyle(Color(uiColor: .label))
@@ -47,6 +47,8 @@ struct ContactDetailView: View {
                                     .lineLimit(1)
                             }
                         }
+                        .padding(.leading, -6)
+                        .padding(.trailing, 8)
                     }
                     .tint(Color(uiColor: .label))
                     .accessibilityLabel("Edit \(contact.name)")

@@ -208,7 +208,11 @@ has polling latency and may miss very short Online/Typing phases; there is no
 WebSocket service. Navigation/backgrounding and refresh failures clear cached
 presence, leaving the status line blank until the next successful refresh.
 The leading navigation-bar header places the avatar beside left-aligned name
-and status. It reserves the subtitle line while loading, with no error placeholder.
+and status. The avatar measures 38 points, with a compact 6-point gap before the
+text. The header retains the native toolbar background and link style, with a
+6-point leading padding reduction to bring the avatar closer to the capsule's
+edge and 8 points of extra trailing padding after the name/status. It reserves
+the subtitle line while loading, with no error placeholder.
 The title shows Online, Typing..., Last seen today/yesterday at HH:mm, or a dated
 Last seen
 for older activity. A contact without prior activity shows Offline rather than an
@@ -336,3 +340,7 @@ Text bubbles and image captions use the same adaptive text/metadata layout. A
 short single-line message shares its baseline with the time/checks; longer or
 multiline text puts metadata beneath it. Images have their own rounded corners
 inside the surrounding bubble and its 2-point rim.
+
+Text, image, captioned image, and document bubbles share a subtle black shadow
+at 6% opacity, with a 2-point blur radius and a 1-point downward offset. The
+shadow follows the complete bubble outline, including its tail.
