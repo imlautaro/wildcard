@@ -1,7 +1,7 @@
 import Foundation
 import ActivityKit
 
-// Shared storage contains only explicitly exposed contact identities and draft inputs.
+// Shared storage contains exposed contact identities, drafts and opt-in remote-action metadata.
 // Authentication credentials never leave the main app's Keychain.
 nonisolated struct NativeContactIdentity: Codable, Hashable, Identifiable, Sendable {
     let id: String

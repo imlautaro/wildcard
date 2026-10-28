@@ -220,6 +220,7 @@ final class PushAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
         let messageID = notification.request.content.userInfo["messageID"] as? String
         let sequence = notification.request.content.userInfo["sequence"] as? Int
         let sentAt = notification.request.content.userInfo["sentAt"] as? Double
+        let isNativeAction = notification.request.content.userInfo["nativeActionID"] != nil
         let isLocalActivity = notification.request.identifier.hasPrefix("foreground-group-")
         DispatchQueue.main.async {
             guard let userID else { completionHandler([]); return }
@@ -233,7 +234,7 @@ final class PushAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
                 }
                 return
             }
-            if let contactID, turnID != nil {
+            if let contactID, turnID != nil || isNativeAction {
                 PushNotifications.shared.receivedForeground(.contact(contactID), userID: userID)
             }
             completionHandler([])

@@ -139,3 +139,9 @@ cadence. They do not verify that the real model follows the new greeting guidanc
 The earlier live Contributor run validated the previous policy; the new prompt
 still needs a separate live evaluation after an authorized release. UI, APNs,
 physical devices and sub-minute Cron timing were not exercised here.
+
+The [remote native transport prototype](native-remote.md#future-autonomous-initiative)
+is available only to explicit direct human requests. This planner still receives no
+native tools and does not schedule autonomous alarms/timers. Future reuse requires
+separate device/contact autonomy grants and policy; conversation initiative alone
+does not grant remote execution permission.

@@ -25,6 +25,7 @@ struct NativeAction: Decodable, Identifiable, Sendable {
     let payloadJSON: String
     let status: String
     let executionID: String?
+    let remoteDeviceID: String?
     let createdAt: Double
     let updatedAt: Double
     let expiresAt: Double

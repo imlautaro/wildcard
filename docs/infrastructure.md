@@ -1505,8 +1505,9 @@ An independent installation needs:
    identifiers and team settings in the Xcode project. Match versions across targets.
 2. One App Group, default `group.com.imlautaro.Wildcard`, registered for the main app,
    Widgets and Share App IDs. Replace `WILDCARD_APP_GROUP` in the project-level Debug
-   and Release settings; all three targets inherit it. The Notification Service
-   continues its existing configuration and does not need this App Group.
+   and Release settings; all three targets inherit it. The baseline notification avatar feature needs no App Group, but the optional
+   [remote timer/alarm prototype](#remote-native-device-execution) also requires
+   assigning this group to the Notification Service App ID and its signing profile.
 3. Enable App Groups and Associated Domains on the main App ID, App Groups on the
    Widgets/Share IDs, and NFC Tag Reading on the main App ID. Regenerate signing
    profiles. The versioned entitlements configure the corresponding capabilities.
@@ -1589,3 +1590,50 @@ stopped episodes to emulate old timing. Verify the source SHA, applied 0033,
 simulated model/time. No remote migration or new live-model evaluation was run
 for this adjustment; release and live prompt validation remain pending. iOS/web
 receive the same server behavior with their existing caches and API contract.
+
+## Remote native device execution
+
+The [remote timer/alarm prototype](native-remote.md) reuses the API Worker, D1,
+Cron and configured APNs provider. No new service, binding or secret is introduced.
+Apply additive migration `0034_remote_native_actions.sql` through the existing
+commit/push automatic release, before installing new clients for remote use. It
+adds remote device/grant tables and nullable native action routing/outbox/deadline
+fields. The server resolves browser targets and uses a domain-separated HMAC of the
+existing `BETTER_AUTH_SECRET` as a single-action claim/receipt capability; rotating
+that secret invalidates outstanding capabilities. Never expose the secret itself.
+
+For an independent Apple account, replace the existing team/bundle/group settings,
+enable App Groups on the **Notification Service App ID**, and assign the same group
+as main/Widgets/Share. Regenerate/refresh automatic profiles in Xcode. The versioned
+`Config/NotificationService.entitlements`, extension Info.plist and target settings
+add App Group access, AlarmKit usage description and shared Swift sources; they do
+not update Developer Portal permissions. Do not add an invented AlarmKit entitlement.
+Visible notifications and AlarmKit must have been permitted while the main app was
+open. No always-on background mode, VoIP, background audio or Critical Alerts grant
+is required by this design. The extension uses an isolated HTTPS claim endpoint and
+a local until-first-unlock-protected allowlist; it never receives the main session.
+
+Provision/verify in order: D1 migration and API automatic publication, Apple App
+Group/profile setup, new main app and embedded extension installation, explicit
+per-contact iPhone grant, then web automatic publication/target selection. Local
+API and web use the usual development commands; real APNs/signing and locked-device
+execution require a physical iPhone and the corresponding APNs environment. Do not
+send a production alert merely to verify metadata or compilation.
+
+Run the opted-in static SQL compiler with
+`python3 scripts/checks/remote-native-sql.py`; it migrates an empty in-memory SQLite
+and uses EXPLAIN, without fixtures or native actions. API/web and main/extension
+Swift static checks pass locally. Device behavior, Apple portal state/signing,
+AlarmKit extension authorization/client identity and receipt latency are unverified.
+Follow the feature guide's background, force-quit, revocation, account, expiry,
+duplicate delivery and network-failure cases before describing the feature as
+working on device. This prototype does not enable autonomous initiative actions.
+
+Rollback is another committed/pushed automatic release. Keep migration 0034; old
+foreground clients remain compatible with its nullable fields. Old code ignores
+remote outbox records, which expire rather than being replayed; never convert those
+records into foreground proposals. Revoke grants/local allowlists before reverting
+for a complete shutdown. Rollback/revocation does not cancel already scheduled
+system alarms. Device/session deletion removes grants; historical action receipts
+retain remote provenance and follow source conversation deletion. No manual deploy
+or production migration command is part of this workflow.

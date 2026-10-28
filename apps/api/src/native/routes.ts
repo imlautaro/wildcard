@@ -10,7 +10,7 @@ const access = `native_action.turn_id IN (SELECT t.id FROM chat_turn t JOIN cont
   AND json_extract(t.native_context_json, '$.deviceID') = ?3)`;
 const columns = `id, turn_id AS turnID, kind, payload_json AS payloadJSON,
   CASE WHEN status = 'pending' AND expires_at <= ?4 THEN 'expired' ELSE status END AS status,
-  execution_id AS executionID, created_at AS createdAt, updated_at AS updatedAt, expires_at AS expiresAt`;
+  execution_id AS executionID, remote_device_id AS remoteDeviceID, created_at AS createdAt, updated_at AS updatedAt, expires_at AS expiresAt`;
 routes.use('*', bodyLimit({ maxSize: 1024, onError: c => c.json({ error: 'Request body too large' }, 413) }));
 routes.use('*', async (c, next) => {
   if (!await c.env.DB.prepare('SELECT id FROM contact WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('owner')).first()) return c.json({ error: 'Contact not found' }, 404);
@@ -33,7 +33,7 @@ routes.post('/:actionID', async c => {
   const now = Date.now();
   const running = body.status === 'running';
   const row = await c.env.DB.prepare(`UPDATE native_action SET status = ?5, execution_id = ?6, updated_at = ?4
-    WHERE ${access} AND id = ?7 AND ${running ? "status = 'pending' AND expires_at > ?4" : body.status === 'cancelled' ? "(status = 'pending' OR (status = 'running' AND execution_id = ?6))" : "status = 'running' AND execution_id = ?6"}
+    WHERE ${access} AND id = ?7 AND remote_device_id IS NULL AND ${running ? "status = 'pending' AND expires_at > ?4" : body.status === 'cancelled' ? "(status = 'pending' OR (status = 'running' AND execution_id = ?6))" : "status = 'running' AND execution_id = ?6"}
     RETURNING ${columns}`).bind(c.req.param('id'), c.get('owner'), c.req.query('deviceID')!.toLowerCase(), now,
       body.status, body.executionID.toLowerCase(), c.req.param('actionID')).first();
   // Do not replay a claim: an uncertain claim must never cause a second device action.

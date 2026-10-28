@@ -572,9 +572,10 @@ It does not reset the cached submission or retry action claims.
 Operation claims are never automatically replayed. See
 [native experiments](native-experiments.md#cloud-action-contract-and-failure-handling).
 
-The App Group holds only explicitly enabled contact identities and bounded,
+The baseline App Group holds explicitly enabled contact identities and bounded,
 account-bound shared drafts (ten × 5 MB, 24-hour expiry), protected with complete
-file protection. Credentials remain in the main app's Keychain. Same-account cold
+file protection. Account credentials remain in the main app's Keychain. Optional remote execution
+adds the protected allowlist/alarm-ID handoff described below. Same-account cold
 launches preserve drafts; sign-out/account replacement clears them. Drafts are
 removed on send/discard, not on navigation. Identical identity snapshots do not
 rewrite storage or reload widgets. Widget timelines request a 15-minute refresh,
@@ -606,3 +607,21 @@ Live focus/recipe/speech cards use existing system activities and the session
 speaker. This system state needs no independent network cache. Model receipt
 reads are bounded to ten terminal outcomes and scoped to contact/person/device;
 they do not cache or expose another participant's state.
+
+### Remote timer/alarm prototype
+
+[Remote native execution](native-remote.md#local-storage-and-cache) adds session-owned
+web device/receipt snapshots for at most 20 contacts, with five-second freshness,
+shared in-flight reads, empty-result reuse, access/session invalidation and late-
+response rejection. Revocation updates cached choices; a pending submission keeps
+its original device, time zone and message ID. There is no browser disk persistence.
+
+On iOS the per-account remote preference lives with native settings. The App Group
+holds only the opted-in execution allowlist and up to 200 alarm-ID handoff records,
+readable while locked after first unlock through until-first-authentication file
+protection. Main account tokens remain in Keychain. Existing complete-protection
+drafts are unchanged. Sign-out/account replacement clears the execution allowlist;
+possibly scheduled alarm IDs remain available for same-account reconciliation.
+The main app imports confirmed IDs into the existing protected alarm ledger and
+prunes non-active expired handoffs on authorized refresh. See the feature guide for
+retention, device cases and the pending client-identity verification.

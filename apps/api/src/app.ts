@@ -1,3 +1,4 @@
+import { remoteExecution } from './native/remote-routes';
 import { oauthPublic } from './mcp/oauth';
 import mcp from './mcp/routes';
 import { contactAccess, groupAccess } from './mcp/access';
@@ -47,6 +48,7 @@ app.route('/api/v1/contacts/:contactID/mcp', contactAccess);
 app.route('/api/v1/groups/:groupID/mcp', groupAccess);
 app.route('/api/v1/contacts', contacts);
 app.route('/api/v1/push', push);
+app.route('/api/v1/native-execution', remoteExecution);
 app.route('/api/v1/push-photos', pushPhotos);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));

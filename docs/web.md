@@ -336,29 +336,36 @@ Install dependencies with the existing root `npm ci` workflow.
 
 ## Native iOS experiments
 
-The web guide explains iOS automatic execution: timers/alarms default to running
-without app confirmation while the requesting iPhone app is open. Other supported
-tools are opt-in per contact; Calendar/location reminders and older requests keep
-review. iOS permission prompts still apply. Browser turns cannot request or execute
-Apple system actions, so there is no browser execution toggle or extra cache.
-The guide also explains iOS in-app active cards, system countdown controls and
-per-message operation receipts. Live AlarmKit/ActivityKit/speech state is confined
-to the iPhone; browser chats do not import device IDs or display a fabricated live
-timer. The shared backend now briefly waits for automatic device receipts and
-supplies recent terminal outcomes only to native-enabled turns. Deploy that API
-change before expecting revised bot confirmations; new UI alone cannot change the
-old server's instructions. No new browser cache or network polling is added.
-The iOS client can retry an explicit old-API capabilities rejection once without
-the optional automatic-kind hint, preserving its message ID and content. Browser
-messages omit native context and need no compatibility retry.
+The [remote timer/alarm prototype](native-remote.md) adds a device selector to private
+web chats. After enabling **Allow remote timers and alarms** on iPhone, select that
+phone and request an action in chat. The browser submits `remoteDeviceID`; server-
+validated grants determine tool capabilities. Delivery uses a visible APNs alert
+and the notification extension, with no tap or unlocked phone required by the
+implementation. Runtime support, signing, system countdown and main-app visibility
+remain to be verified on a physical device. This does not enable autonomous actions.
 
-[Native experiments](native-experiments.md) are explicitly scoped to Apple system
-frameworks and device execution. **Account → Native experiments** explains the
-available iPhone capabilities and their permission/retention behavior. The web app
-omits native context from messages, does not expose native tools to browser turns,
-and does not execute or cache another device's requests. ActivityKit, AlarmKit,
-EventKit, Core NFC, App Intents and the iOS Share extension have no matching browser
-implementation in this change. Native UI and tool settings remain device-specific.
+The last 20 remote operation receipts appear beside their source messages. They
+confirm scheduling, not current live timer state. Web can revoke access; reconnecting
+iOS refreshes existing grants without restoring revoked ones. Target selection,
+device lists, empty results and receipts use bounded session caches; five-second
+freshness reuses chat polling. Pending sends snapshot target, time zone and UUID.
+Explicit refresh bypasses freshness, requests deduplicate, transient failures keep
+content, and session/access/contact changes clear state and reject late results.
+No private persistence or fabricated browser countdown is added.
+
+
+The iPhone's foreground tools still default timers/alarms to automatic execution;
+other tools are opt-in and Calendar/location reminders keep review. The browser
+cannot execute Apple frameworks itself or read a live iPhone countdown. Its linked-
+device receipts confirm operations only. Local native context remains iOS-only;
+web sends a selected `remoteDeviceID` and the server resolves its granted kinds.
+The existing old-API fallback for the iPhone's optional `automaticKinds` hint is
+unchanged. Remote settings, migration and extension require an updated API/app.
+
+ActivityKit, AlarmKit, EventKit, Core NFC, App Intents and the iOS Share extension
+have no local browser execution equivalent. The web guide describes their platform
+requirements; its remote timer/alarm selector and receipt cache are described above.
+Native per-kind permissions and explicit device linking remain controlled on iOS.
 
 The iOS Account entry and native contact directory share the root navigation path,
 including contact-tool pushes and Back navigation. This fixes an iOS-only issue

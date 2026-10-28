@@ -14,6 +14,8 @@ final class NativeExperiments {
     static let shared = NativeExperiments()
     static let kinds = ["focus", "recipe", "timer", "alarm", "calendar", "reminder", "location_reminder", "speech"]
     static let automaticKinds: Set<String> = ["timer", "alarm", "focus", "recipe", "reminder", "speech"]
+    var remoteEnabled: Set<String> = []
+    var remoteBusy = false
     private(set) var automaticSince: [String: [String: Double]] = [:]
     private var automaticAttempts: Set<String> = []
     static let labels = ["focus": "Focus sessions", "recipe": "Guided recipes", "timer": "Timers", "alarm": "Alarms", "calendar": "Calendar events", "reminder": "Reminders", "location_reminder": "Location reminders", "speech": "Spoken responses"]
@@ -51,6 +53,7 @@ final class NativeExperiments {
             self.userID = userID
             let values = UserDefaults.standard.dictionary(forKey: settingsKey(userID)) as? [String: [String]] ?? [:]
             enabled = values.mapValues { Set($0).intersection(Self.kinds) }
+            remoteEnabled = Set(UserDefaults.standard.stringArray(forKey: "native-remote.\(userID)") ?? [])
             if let saved = UserDefaults.standard.dictionary(forKey: "automatic-" + settingsKey(userID)) as? [String: [String: Double]] {
                 automaticSince = saved
             } else {
@@ -65,8 +68,11 @@ final class NativeExperiments {
         localAlarms = Self.alarmRecords().filter { $0.userID == userID }
         publish()
         drafts = NativeShared.drafts(userID: userID)
+        publishRemoteSettings()
     }
     func clear(preservingInboxFor owner: String? = nil) {
+        try? RemoteNativeShared.writeConfiguration(nil)
+        remoteEnabled = []; remoteBusy = false
         generation = UUID()
         requests.values.forEach { $0.cancel() }; requests = [:]
         automaticSince = [:]; automaticAttempts = []
@@ -85,6 +91,9 @@ final class NativeExperiments {
         }
     }
     func forget(contactID: String) {
+        remoteEnabled.remove(contactID)
+        if let userID { UserDefaults.standard.set(Array(remoteEnabled).sorted(), forKey: "native-remote.\(userID)") }
+        publishRemoteSettings()
         automaticSince.removeValue(forKey: contactID); saveAutomaticSettings()
         enabled.removeValue(forKey: contactID); actions.removeValue(forKey: contactID); loaded.removeValue(forKey: contactID)
         requests.removeValue(forKey: contactID)?.cancel()
@@ -109,6 +118,7 @@ final class NativeExperiments {
         }
         automaticSince[contactID] = automatic
         saveAutomaticSettings()
+        publishRemoteSettings()
         UserDefaults.standard.set(enabled.mapValues { Array($0).sorted() }, forKey: settingsKey(userID))
         publish()
         if kinds.isEmpty {
@@ -136,7 +146,7 @@ final class NativeExperiments {
             await refresh(contactID: contactID, using: auth)
             for action in (actions[contactID] ?? []).sorted(by: { $0.createdAt < $1.createdAt }) {
                 guard !Task.isCancelled, generation == current, UIApplication.shared.applicationState == .active else { return }
-                guard busy.isEmpty, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000,
+                guard action.remoteDeviceID == nil, busy.isEmpty, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000,
                       let since = automaticSince[contactID]?[action.kind], action.createdAt >= since,
                       !automaticAttempts.contains(action.id) else { continue }
                 // An uncertain claim or acknowledgement must never trigger another automatic attempt.
@@ -156,7 +166,7 @@ final class NativeExperiments {
         catch { self.error = "System integrations are unavailable. Check App Group signing in Xcode." }
         WidgetCenter.shared.reloadAllTimelines()
     }
-    private func deviceID() throws -> String {
+    func deviceID() throws -> String {
         if let device { return device }
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                    kSecAttrService as String: "\(Bundle.main.bundleIdentifier ?? "Wildcard").native-device",
@@ -211,7 +221,7 @@ final class NativeExperiments {
         return action.createdAt >= since
     }
     func run(_ action: NativeAction, contactID: String, using auth: AuthStore, automatically: Bool = false) async {
-        guard let payload = action.payload, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000,
+        guard action.remoteDeviceID == nil, let payload = action.payload, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000,
               auth.user?.id == userID, UIApplication.shared.applicationState == .active, enabled[contactID]?.contains(action.kind) == true, busy.isEmpty else { return }
         let owner = userID; let current = generation; let execution = UUID().uuidString.lowercased()
         busy.insert(action.id); error = nil

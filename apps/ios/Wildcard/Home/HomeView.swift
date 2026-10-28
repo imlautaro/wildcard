@@ -234,7 +234,10 @@ struct HomeView: View {
             await push.activate(using: auth, requestPermission: true)
             if contacts.hasLoaded && groups.hasLoaded { await push.updateBadge(count: totalUnreadCount) }
         }
-        .task(id: push.deviceToken) { await push.synchronize(using: auth) }
+        .task(id: "\(push.deviceToken ?? "")-\(native.remoteEnabled.sorted())-\(native.enabled.map { $0.key + $0.value.sorted().joined() }.sorted())") {
+            await push.synchronize(using: auth)
+            await native.syncRemoteRegistration(using: auth)
+        }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             MessageSounds.shared.activate(userID: auth.user?.id)

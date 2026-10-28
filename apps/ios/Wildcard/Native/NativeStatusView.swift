@@ -128,7 +128,7 @@ struct NativeActionReceiptView: View {
         case "cancelled": "Cancelled"
         case "failed": "Could not complete on this iPhone"
         case "unknown": "Outcome unknown · check the system app"
-        default: action.expiresAt <= Date.now.timeIntervalSince1970 * 1000 ? "Expired" : automatic ? "Waiting for automatic execution…" : "Ready for review"
+        default: action.remoteDeviceID != nil && action.expiresAt > Date.now.timeIntervalSince1970 * 1000 ? "Sent to iPhone · awaiting device confirmation" : action.expiresAt <= Date.now.timeIntervalSince1970 * 1000 ? "Expired" : automatic ? "Waiting for automatic execution…" : "Ready for review"
         }
     }
     var body: some View {
@@ -136,7 +136,7 @@ struct NativeActionReceiptView: View {
             Label(action.payload?.title ?? "Native action", systemImage: action.status == "completed" ? "checkmark.circle" : "iphone")
                 .font(.subheadline.weight(.semibold))
             Text(status).font(.caption).foregroundStyle(.secondary)
-            if action.status == "pending", !automatic, action.expiresAt > Date.now.timeIntervalSince1970 * 1000 {
+            if action.remoteDeviceID == nil, action.status == "pending", !automatic, action.expiresAt > Date.now.timeIntervalSince1970 * 1000 {
                 Button("Review and run") { Task { await native.run(action, contactID: contactID, using: auth) } }
                     .buttonStyle(.bordered).disabled(!native.busy.isEmpty || native.enabled[contactID]?.contains(action.kind) != true)
             }

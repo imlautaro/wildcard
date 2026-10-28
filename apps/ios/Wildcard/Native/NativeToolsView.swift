@@ -24,6 +24,14 @@ struct NativeToolsView: View {
                 Text("Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms run automatically when requested in this private chat while Wildcard is open. Choose other automatic tools below. Lock Screen activities may show their titles. Other people sharing this contact receive no device access.")
             }
             if !kinds.isEmpty {
+                Section {
+                    Toggle("Allow remote timers and alarms", isOn: Binding(
+                        get: { native.remoteEnabled.contains(contactID) },
+                        set: { on in Task { await native.setRemoteEnabled(on, contactID: contactID, using: auth) } }
+                    )).disabled(native.remoteBusy)
+                } footer: {
+                    Text("Lets requests from your other signed-in devices schedule timers and alarms on this iPhone, including while locked or Wildcard is closed. Requires AlarmKit and visible notifications. Delivery may be delayed; requests expire after one minute. This does not enable autonomous initiative actions.")
+                }
                 Section("Allowed tools") {
                     ForEach(NativeExperiments.kinds, id: \.self) { kind in
                         Toggle(NativeExperiments.labels[kind] ?? kind, isOn: Binding(get: { kinds.contains(kind) }, set: { on in
@@ -114,14 +122,14 @@ struct NativeToolsView: View {
                                 }
                             }
                             Text(statusLabel(action)).font(.caption).foregroundStyle(.secondary)
-                            if action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000 {
+                            if action.remoteDeviceID == nil, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000 {
                                 HStack {
                                     Button("Review and run") { Task { await native.run(action, contactID: contactID, using: auth) } }
                                         .disabled(!kinds.contains(action.kind) || !native.busy.isEmpty)
                                     Button("Dismiss", role: .destructive) { Task { await native.dismiss(action, contactID: contactID, using: auth) } }
                                         .disabled(native.busy.contains(action.id))
                                 }.buttonStyle(.bordered)
-                            } else if action.status == "running", !native.busy.contains(action.id) {
+                            } else if action.remoteDeviceID == nil, action.status == "running", !native.busy.contains(action.id) {
                                 Text("An interrupted action may already exist in iOS. Check before requesting another.").font(.caption)
                                 Button("Mark outcome unknown") { Task { await native.abandon(action, contactID: contactID, using: auth) } }
                             }
@@ -151,7 +159,7 @@ struct NativeToolsView: View {
     }
     private func statusLabel(_ action: NativeAction) -> String {
         switch action.status {
-        case "pending": action.expiresAt <= Date.now.timeIntervalSince1970 * 1000 ? "Expired" : "Waiting for you to run on this device"
+        case "pending": action.expiresAt <= Date.now.timeIntervalSince1970 * 1000 ? "Expired" : action.remoteDeviceID != nil ? "Sent to this iPhone · awaiting background execution" : "Waiting for you to run on this device"
         case "running": "Execution started · outcome not confirmed"
         case "completed": "Completed on this device"
         case "cancelled": "Cancelled"

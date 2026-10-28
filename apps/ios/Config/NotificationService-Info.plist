@@ -4,6 +4,8 @@
 <dict>
     <key>WildcardAPIURL</key>
     <string>$(WILDCARD_API_URL)</string>
+    <key>WildcardAppGroup</key><string>$(WILDCARD_APP_GROUP)</string>
+    <key>NSAlarmKitUsageDescription</key><string>Schedule timers and alarms you request from your other devices.</string>
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionPointIdentifier</key>

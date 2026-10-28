@@ -119,6 +119,14 @@ required; see [infrastructure](docs/infrastructure.md#native-ios-experiments).
 These Apple integrations have no browser execution equivalent; the web app offers
 a feature guide and authorized contact-link fallback. Device verification is pending.
 
+A first [remote timer/alarm prototype](docs/native-remote.md) lets a web chat target
+an explicitly linked iPhone through a visible APNs notification and its notification
+extension, including while locked or the main app is closed. Enable **Allow remote
+timers and alarms** per contact on iPhone, then select that phone in the web chat.
+Migration 0034 and App Groups signing for the Notification Service App ID are
+required. No autonomous initiative actions are enabled. Physical-device behavior
+remains unverified; a device receipt is required before claiming execution.
+
 ## Web development
 
 The [web app](docs/web.md) is a Nuxt 4 SPA served by a separate Worker,

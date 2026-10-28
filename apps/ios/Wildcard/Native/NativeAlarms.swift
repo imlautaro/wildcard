@@ -33,7 +33,16 @@ nonisolated struct NativeLocalAlarm: Codable, Identifiable, Sendable {
         do {
             let alarms = try AlarmManager.shared.alarms
             let active = Set(alarms.map { $0.id.uuidString.lowercased() })
-            let previous = Self.alarmRecords()
+            var previous = Self.alarmRecords()
+            for remote in RemoteNativeShared.alarms() where remote.userID == userID {
+                if active.contains(remote.id), !previous.contains(where: { $0.id == remote.id }), previous.count < 200 {
+                    previous.append(NativeLocalAlarm(id: remote.id, userID: remote.userID, contactID: remote.contactID, title: remote.title))
+                    try Self.saveAlarms(previous)
+                    RemoteNativeShared.removeAlarm(remote.id)
+                } else if !active.contains(remote.id), Date.now.timeIntervalSince1970 * 1000 - remote.fireAt > 86_400_000 {
+                    RemoteNativeShared.removeAlarm(remote.id)
+                }
+            }
             let records = previous.filter { active.contains($0.id) || schedulingAlarms.contains($0.id) }
             if records.count != previous.count { try Self.saveAlarms(records) }
             localAlarms = records.filter { $0.userID == userID }

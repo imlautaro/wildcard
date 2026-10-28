@@ -1,4 +1,4 @@
-#if !WILDCARD_SHARE_EXTENSION
+#if !WILDCARD_SHARE_EXTENSION && !WILDCARD_NOTIFICATION_EXTENSION
 import AppIntents
 import ActivityKit
 import Foundation
@@ -41,7 +41,7 @@ struct ChangeContactSessionIntent: LiveActivityIntent {
 
 #endif
 
-#if !WILDCARD_SHARE_EXTENSION
+#if !WILDCARD_SHARE_EXTENSION && !WILDCARD_NOTIFICATION_EXTENSION
 import AlarmKit
 struct ControlWildcardAlarmIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Control Wildcard alarm"

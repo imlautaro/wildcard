@@ -1,3 +1,4 @@
+import { remoteContext } from '../native/remote';
 import { parseNativeContext } from '../native/actions';
 import { reactionRoutes } from '../reactions/routes';
 import { parsePrivateReply, privateQuotes, privateTarget } from '../replies/data';
@@ -132,13 +133,18 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
 });
 chats.post('/turns', attachmentBody, async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
-  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'replyTo', 'nativeContext'].includes(key))
+  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'replyTo', 'nativeContext', 'remoteDeviceID'].includes(key))
     || (body.timeZone !== undefined && !validTimeZone(body.timeZone))
     || typeof body.id !== 'string' || !uuid.test(body.id) || typeof body.text !== 'string'
     || (!body.text.trim() && body.attachment === undefined) || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
     return c.json({ error: 'Provide an id and a message using 1–4000 characters' }, 400);
   }
-  const native = body.nativeContext === undefined ? null : parseNativeContext(body.nativeContext);
+  if (body.remoteDeviceID !== undefined && (typeof body.remoteDeviceID !== 'string' || !uuid.test(body.remoteDeviceID) || body.nativeContext !== undefined)) return c.json({ error: 'Choose one native device' }, 400);
+  const localNative = body.nativeContext === undefined ? null : parseNativeContext(body.nativeContext);
+  if (localNative?.remote) return c.json({ error: 'Use remoteDeviceID for remote actions' }, 400);
+  const native = typeof body.remoteDeviceID === 'string'
+    ? await remoteContext(c.env.DB, c.get('owner'), c.get('contactID'), body.remoteDeviceID.toLowerCase()) : localNative;
+  if (body.remoteDeviceID !== undefined && !native) return c.json({ error: 'Remote device unavailable or permission revoked' }, 403);
   if (body.nativeContext !== undefined && !native) return c.json({ error: 'Invalid native device capabilities' }, 400);
   const nativeJSON = native ? JSON.stringify(native) : null;
   const reply = parsePrivateReply(body.replyTo);

@@ -1,5 +1,11 @@
 # Native iOS experiments
 
+The [remote timer/alarm prototype](native-remote.md) additionally supports web requests
+to an explicitly linked iPhone through its notification extension. It requires
+migration 0034 and App Groups signing for that extension. Locked-device execution
+is experimental and not yet verified on our signed device. Autonomous initiative
+is unchanged.
+
 Native experiments let an individual contact propose actions for one person's iPhone.
 They are optional experiments, disabled until enabled per contact on that device.
 The same agent may be shared, but enabling its tools grants no access to another
@@ -30,8 +36,9 @@ confirmation while Wildcard is in the foreground, including after leaving the ch
 The session-owned runner checks enabled contacts every five seconds and uses the
 existing shared request cache. The initial AlarmKit permission prompt still applies.
 Once scheduled, system alarms/timers continue independently of the app. Requests
-received while the app is closed wait until it returns to the foreground; this is
-not background execution or an exact scheduling guarantee.
+on the original local foreground path while the app is closed wait until it returns
+to the foreground. The separately enabled [remote path](native-remote.md) uses the
+notification extension. Neither transport promises exact delivery timing.
 
 **Run without confirmation** controls each supported kind per contact, account and
 installation. Timers and alarms default on; focus, recipes, reminders and speech
@@ -167,7 +174,7 @@ notification to tap rather than silently running arbitrary actions.
 
 The web fallback resolves an existing authorized conversation using the session
 contact directory cache. Signed-out web visitors see sign-in; reopen the link after
-sign-in. No native actions are requested/executed by the browser. See [web](web.md).
+sign-in. The browser can now request timers/alarms on a linked iPhone; it never executes Apple frameworks locally. See [web](web.md).
 
 ## Cloud action contract and failure handling
 
@@ -182,7 +189,7 @@ attachment and quoted reply. Other errors do not trigger this fallback. Local
 automatic execution remains enabled; until the API is updated, the model may still
 describe manual review. This compatibility retry does not execute a device action. The model receives guidance
 for automatic requests without treating a pending proposal as execution success. It is snapshotted with
-the pending message ID across uncertain submissions. Other clients omit it.
+the pending message ID across uncertain submissions. Other clients omit local native context; web requests may pass a server-validated `remoteDeviceID`.
 The UUID lives in a When-Unlocked, This-Device-Only Keychain item, separate from
 the session credential. Device affinity is a routing constraint, not hardware
 attestation; authorization always requires the signed-in account and its contact.
@@ -226,7 +233,9 @@ Native experiments → Scheduled Wildcard alarms**, or its alarm Live Activity c
 The account list remains available after a contact is deleted or disabled.
 A protected Application Support ledger retains alarm IDs, titles, account and contact
 identity across sign-outs so the same account can manage its scheduled alarms after
-signing back in. It is never sent to the model or stored in the App Group. Up to 200
+signing back in. The main ledger is never sent to the model or stored in the App Group. The remote
+prototype uses a separate bounded App Group handoff for extension-created alarm
+IDs/titles until the main app imports them; see [remote retention](native-remote.md#local-storage-and-cache). Up to 200
 currently tracked alarms across local accounts are retained; system-removed alarms
 are pruned on authorized refresh. Account lists never expose another account's alarms.
 An alarm ID is saved before scheduling, so an uncertain scheduling result can still

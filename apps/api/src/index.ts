@@ -1,3 +1,4 @@
+import { deliverRemoteNative } from './native/remote';
 import './lib/schema-runtime';
 import { dispatchInitiatives } from './chat/initiative';
 import { cleanOAuthFlows } from './mcp/oauth';
@@ -27,6 +28,7 @@ export default {
     ctx.waitUntil(expirePresence(env.DB));
     ctx.waitUntil(recoverVisits(env));
     ctx.waitUntil(deliverPush(env));
+    ctx.waitUntil(deliverRemoteNative(env));
     ctx.waitUntil(deliverGroupPush(env));
   },
 } satisfies ExportedHandler<Env>;

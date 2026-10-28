@@ -1,3 +1,4 @@
+import { remoteSettings } from '../native/remote-routes';
 import nativeActions from '../native/routes';
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 import { accountEnvironment } from '../lib/model-preference';
@@ -235,6 +236,7 @@ contacts.delete('/:id', async (c) => {
 });
 
 contacts.route('/:id/native-actions', nativeActions);
+contacts.route('/:id/native-remote', remoteSettings);
 contacts.route('/sharing', sharing);
 
 contacts.route('/:id/chat', chats);

@@ -11,9 +11,17 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
         lock.lock()
         handler = contentHandler
-        original = request.content
+        if let safe = request.content.mutableCopy() as? UNMutableNotificationContent {
+            safe.userInfo.removeValue(forKey: "nativeTicket")
+            original = safe
+        } else { original = request.content }
         lock.unlock()
         let task = Task {
+            if request.content.userInfo["nativeActionID"] != nil {
+                let content = await RemoteNativeExecution.handle(request.content)
+                finish(content)
+                return
+            }
             let content = request.content
             guard let contactID = content.userInfo["contactID"] as? String,
                   let userID = content.userInfo["userID"] as? String else { finish(content); return }

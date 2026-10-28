@@ -254,6 +254,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				A1F070000000000000000002 /* WildcardNotificationService */,
+				A1F080000000000000000001 /* WildcardNativeShared */,
 			);
 			name = WildcardNotificationService;
 			productName = WildcardNotificationService;
@@ -740,6 +741,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/NotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9CHLS2987W;
@@ -755,6 +757,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.imlautaro.Wildcard.NotificationService;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) WILDCARD_NOTIFICATION_EXTENSION";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				WILDCARD_API_URL = "https://wildcard-api.imlautaro.workers.dev";
@@ -765,6 +768,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/NotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9CHLS2987W;
@@ -780,6 +784,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.imlautaro.Wildcard.NotificationService;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) WILDCARD_NOTIFICATION_EXTENSION";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				WILDCARD_API_URL = "https://wildcard-api.imlautaro.workers.dev";

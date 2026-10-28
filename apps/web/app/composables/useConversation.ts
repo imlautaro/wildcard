@@ -3,8 +3,9 @@ import type { ChatPage, ChatReadState, ChatSubmission, ChatTurn, DraftAttachment
 
 // Session cache of private conversations, keyed by contact. Pending sends keep
 // their UUID across navigation and failures so a retry can never duplicate them.
-export type PendingSend = { id: string; text: string; attachment: DraftAttachment | null; replyTo: ReplyQuote | null; failed: string | null; createdAt: number };
+export type PendingSend = { id: string; text: string; attachment: DraftAttachment | null; replyTo: ReplyQuote | null; failed: string | null; createdAt: number; remoteDeviceID: string | null; timeZone: string };
 export type Conversation = {
+  remoteDeviceID: string | null;
   reactions: ReactionCache;
   turns: ChatTurn[];
   nextBefore: number | null;
@@ -40,6 +41,7 @@ export function forgetConversation(id: string) {
   const entry = conversations.get(id);
   if (entry) clearReactionCache(entry.reactions);
   conversations.delete(id);
+  forgetRemoteNative(id);
   forgetRead(`contact:${id}`);
 }
 
@@ -56,6 +58,7 @@ function conversation(id: string): Conversation {
     return entry;
   }
   entry = reactive({
+    remoteDeviceID: null,
     reactions: createReactionCache(),
     turns: [], nextBefore: null, presence: null, loaded: false, error: null, unavailable: false,
     pending: null, draft: '', replyTo: null, loadingEarlier: false, retrying: false, revision: 0,
@@ -155,7 +158,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
       : undefined;
     try {
       const result = await api<ChatSubmission>(`contacts/${id}/chat/turns`, {
-        json: { id: pending.id, text: pending.text, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, attachment,
+        json: { id: pending.id, text: pending.text, timeZone: pending.timeZone, attachment, remoteDeviceID: pending.remoteDeviceID ?? undefined,
           replyTo: pending.replyTo ? { messageID: pending.replyTo.messageID, side: pending.replyTo.side } : undefined },
       });
       if (entry.pending?.id !== pending.id) return;
@@ -171,7 +174,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
   async function send(text: string, attachment: DraftAttachment | null) {
     const entry = state.value;
     if (entry.pending) return;
-    entry.pending = { id: crypto.randomUUID(), text: text.trim(), attachment, replyTo: entry.replyTo, failed: null, createdAt: Date.now() };
+    entry.pending = { id: crypto.randomUUID(), text: text.trim(), attachment, replyTo: entry.replyTo, failed: null, createdAt: Date.now(), remoteDeviceID: entry.remoteDeviceID, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
     entry.draft = '';
     entry.replyTo = null;
     await submit();

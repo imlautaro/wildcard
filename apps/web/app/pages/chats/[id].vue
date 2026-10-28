@@ -6,6 +6,17 @@ const contactID = computed(() => String(route.params.id));
 const chats = useChats();
 const { state, load, loadEarlier, send, submit, discardPending, retryReply, markRead } = useConversation(contactID);
 const activity = useChatActivity(contactID);
+const remote = useRemoteNative(contactID);
+const remoteError = ref<string | null>(null);
+function remoteStatus(status: string) {
+  return ({ completed: 'Scheduled on iPhone', pending: 'Sent · waiting for iPhone', running: 'Claimed · outcome not yet confirmed', expired: 'Expired without confirmation', failed: 'Could not schedule', cancelled: 'Cancelled', unknown: 'Outcome unknown · check iPhone' } as Record<string, string>)[status] ?? status;
+}
+async function revokeRemote() {
+  const deviceID = state.value.remoteDeviceID;
+  if (!deviceID) return;
+  try { await remote.revoke(deviceID); state.value.remoteDeviceID = null; remoteError.value = null; }
+  catch (failure) { remoteError.value = errorMessage(failure); }
+}
 const fetched = ref<Contact | null>(null);
 const contact = computed(() => chats.contacts.value.find((item) => item.id === contactID.value) ?? fetched.value);
 const scroller = ref<HTMLElement>();
@@ -90,7 +101,8 @@ function scrollToBottom() {
 
 async function refresh() {
   const stick = nearBottom();
-  await load();
+  await Promise.all([load(), remote.refresh()]);
+  if (remote.state.value.loaded && state.value.remoteDeviceID && !remote.state.value.devices.some(d => d.id === state.value.remoteDeviceID)) state.value.remoteDeviceID = null;
   if (stick) scrollToBottom();
   if (document.visibilityState === 'visible') markRead();
 }
@@ -153,6 +165,19 @@ onBeforeUnmount(() => {
     <NuxtLink to="/" class="button secondary">Back to Chats</NuxtLink>
   </div>
   <template v-else>
+    <div class="remote-native-bar">
+      <label>Timers and alarms
+        <select v-model="state.remoteDeviceID" :disabled="!!state.pending || !remote.state.value.loaded">
+          <option :value="null">No remote device</option>
+          <option v-for="device in remote.state.value.devices" :key="device.id" :value="device.id">{{ device.name }} · {{ device.id.slice(-6) }}</option>
+        </select>
+      </label>
+      <button class="link-button" @click="remote.refresh(true)">Refresh devices</button>
+      <button v-if="state.remoteDeviceID" class="link-button danger" @click="revokeRemote">Revoke access</button>
+      <p v-if="state.remoteDeviceID">Requests go to your iPhone through a visible notification, even while locked. Device confirmation is required before reporting success.</p>
+      <p v-else>Enable Allow remote timers and alarms in the iPhone contact’s Native experiments to connect it.</p>
+      <p v-if="remote.state.value.error || remoteError" class="error">{{ remoteError || remote.state.value.error }}</p>
+    </div>
     <div ref="scroller" class="messages" aria-live="polite">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
@@ -203,6 +228,9 @@ onBeforeUnmount(() => {
               class="link-button" :disabled="state.retrying || replying || !!state.pending" @click="retryReply(item.turn)"
             >Retry reply</button>
           </div>
+          <div v-for="action in remote.state.value.actions.filter(a => a.turnID === item.turn.id)" :key="action.id" class="status-line">
+            {{ action.title }} · {{ action.deviceName }} · {{ remoteStatus(action.status) }}
+          </div>
         </template>
       </template>
 
@@ -231,3 +259,11 @@ onBeforeUnmount(() => {
     />
   </template>
 </template>
+
+<style scoped>
+.remote-native-bar { padding: 10px 16px; border-bottom: 1px solid var(--border, #ddd); font-size: .85rem; }
+.remote-native-bar label { display: inline-flex; align-items: center; gap: 8px; }
+.remote-native-bar select { max-width: 230px; padding: 5px; }
+.remote-native-bar button { margin-left: 12px; }
+.remote-native-bar p { margin: 6px 0 0; opacity: .8; }
+</style>
