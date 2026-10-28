@@ -423,7 +423,9 @@ struct GroupChatView: View {
                 replyTarget = nil
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { _ in voice.interrupt() }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { notification in
+            voice.handleDeactivation(notification)
+        }
         .onAppear {
             store.isRetained = true
             isVisible = true

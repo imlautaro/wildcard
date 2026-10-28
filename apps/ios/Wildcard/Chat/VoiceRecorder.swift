@@ -8,6 +8,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
     private(set) var phase: Phase = .idle
     private(set) var error: String?
     private var recorder: AVAudioRecorder?
+    private var ownsAudioSession = false
     private var directory: URL?
     private var file: URL?
     private var startedAt: Date?
@@ -46,6 +47,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .default)
             try session.setActive(true)
+            ownsAudioSession = true
             let folder = FileManager.default.temporaryDirectory.appending(path: "wildcard-voice-\(UUID().uuidString)", directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false,
                 attributes: [.posixPermissions: 0o700, .protectionKey: FileProtectionType.complete])
@@ -84,7 +86,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         recorder?.delegate = nil
         recorder?.stop()
         recorder = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        deactivateAudioSession()
         if let directory { try? FileManager.default.removeItem(at: directory) }
         directory = nil
         file = nil
@@ -93,9 +95,19 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         error = nil
     }
 
-    func interrupt() {
+    private func deactivateAudioSession() {
+        guard ownsAudioSession else { return }
+        ownsAudioSession = false
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    func handleDeactivation(_ notification: Notification) {
+        // App-requested cleanup also posts this notification, possibly after a new recording starts.
+        guard let context = notification.userInfo?[AVAudioSession.deactivationContextKey] as? AVAudioSession.DeactivationContext,
+              context.source == .system else { return }
         guard phase == .recording else { return }
         cancel()
+        phase = .failed
         error = "Recording was interrupted. Please record again."
     }
 
@@ -134,8 +146,10 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             guard let self, let active = self.recorder, ObjectIdentifier(active) == identifier, self.phase == .recording else { return }
             self.recorder?.delegate = nil
             self.recorder = nil
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            if flag { self.phase = .ready }
+            if flag {
+                self.phase = .ready
+                self.deactivateAudioSession()
+            }
             else {
                 self.cancel()
                 self.phase = .failed

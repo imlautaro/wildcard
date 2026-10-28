@@ -254,8 +254,8 @@ struct ChatView: View {
         .onChange(of: chat.isUnavailable) { _, unavailable in
             if unavailable { cancelRecording() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { _ in
-            voice.interrupt()
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)) { notification in
+            voice.handleDeactivation(notification)
         }
         .onAppear {
             isVisible = true

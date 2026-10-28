@@ -21,8 +21,13 @@ Recording and transcription show distinct states and prevent overlapping uploads
 A failed transcription retains its protected temporary file while this screen
 remains active, offering Retry transcription or Discard recording. Starting a
 new recording discards the previous clip. Denied permission presents an error
-explaining how to enable the microphone in Settings. Audio interruptions discard
-an active recording; leaving the screen or entering the background cancels work
+explaining how to enable the microphone in Settings. System audio interruptions discard
+an active recording. The iOS 27 deactivation notification is filtered by its
+deactivation context: app-requested cleanup is ignored, including delayed events
+from a previous clip. A recorder only deactivates a session it activated, so
+canceling an idle recorder does not interfere with another screen's capture.
+Successful completion marks the clip ready before deactivating audio.
+Leaving the screen or entering the background cancels work
 and removes the temporary file. Permission dialogs becoming inactive do not cancel
 permission setup. Successful transcription deletes the clip as well.
 
@@ -97,6 +102,13 @@ Static TypeScript, Swift, Info.plist, and whitespace validation were performed.
 No tests, app builds, simulator runs, real microphone capture, paid transcription,
 or production release were performed during implementation. Device recording
 format, installed UI, and actual model access remain unverified.
+
+For the deactivation handling fix, device verification remains pending in both
+private and group chats: record/stop/transcribe, cancel and immediately record
+again, navigate back and reopen, and interrupt capture with a call or Siri.
+Normal cleanup must not show an interruption error; system interruption must
+discard the clip and allow a fresh recording. Temporary-file retention and
+no-store transcription behavior are unchanged.
 
 ## References
 
