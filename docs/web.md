@@ -499,3 +499,14 @@ change. Unsubmitted drafts are memory-only; submitted input resumes from the API
 Photos use the existing private image cache. See [onboarding](onboarding.md) for
 API, privacy, freshness, retry limits and the pending browser/device checks.
 No browser or device validation or live generation has been performed.
+
+### Contact access to profile images
+
+Private and group replies use the shared API's read-only `view_profile_photo`
+capability on both web and iOS. Contacts can inspect their own and the current
+human's avatar in private chat, plus current member avatars in groups. No client
+upload or extra UI is needed. Images are loaded only on demand with current
+membership, model consent and version checks; absent or revoked images are not
+guessed. Existing session-owned avatar caches remain unchanged; the inference
+path does not use client caches. See [profile image access](profile-photos.md#profile-images-available-to-contacts)
+for limits, privacy, retention and pending functional checks.

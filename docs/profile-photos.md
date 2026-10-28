@@ -203,3 +203,43 @@ validation stay unchanged. Generated portraits use the same authenticated photo
 routes, immutable versions, access-scoped cache keys and deletion paths as normal
 contact avatars. Partial setup images remain private in R2 for retries until setup
 completes; no separate image cache or public URL is introduced.
+
+## Profile images available to contacts
+
+Contacts can call `view_profile_photo` when visual profile context helps a reply.
+In private chats they can inspect their own canonical avatar and the current
+human's account photo. In a group they can also inspect the current human and
+agent members' avatars using roster IDs. Private calls cannot fetch other members'
+photos through shared-group search. This capability is shared by iOS and web;
+no additional picker, attachment, switch, or client update is required.
+
+The read-only tool returns an immutable identity/version reference. Before every
+subsequent inference, the server checks current conversation access, membership,
+shared-memory and Contributor consent where applicable, and the exact current
+photo version. It reads private R2 bytes through the existing binding and checks
+access/version again after reading. Missing, removed, replaced or inaccessible
+photos produce an unavailable marker; no old bytes or replacement photo are
+silently substituted. A new tool call can request a replacement. Names and image
+text are untrusted evidence. Avatars do not establish real identity or appearance,
+and the contact is instructed not to infer sensitive traits or invent unseen details.
+
+Each inference includes at most three distinct photos and 8 MiB of combined JPEG
+bytes, supporting generated onboarding portraits within that budget. Duplicate
+reads for one member select the last requested version. Reads consume the existing
+conversation tool budget. Images are sent to that conversation's selected model
+only after a photo tool call; they are not automatically attached to every turn.
+Connector conversations retain Standard processing and their existing isolation.
+
+There is no new public URL, endpoint, database migration, bucket, secret, or
+infrastructure configuration. Group Workflows checkpoint identity/version
+references only; image bytes are loaded inside inference steps and never returned
+from those steps. Model inputs are transient; no new image cache or stored visual
+summary is introduced. Existing memory extraction and chat retention stay in place.
+Client avatar caches and upload/remove invalidation are unchanged; see [caching](caching.md).
+
+Static verification does not establish visual quality or functional behavior.
+Pending checks with fictional data: own/user photos in private chat, human and
+bot photos in a group, missing photos, replacement/deletion between tool and
+inference, membership/consent revocation, Contributor/Standard selection, isolated
+connector chats, repeated calls, image budgets, and equivalent replies from iOS
+and web. Live model calls and device/browser validation require separate execution.

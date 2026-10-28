@@ -631,3 +631,13 @@ generated contacts after explicit shared-memory acceptance. Membership reference
 the same contact agents; it does not clone them or invite other people. The group
 starts empty, with normal permissions, memory rules, energy and reply policies.
 Setup uses Standard processing and stores no Contributor consent.
+
+### Looking at member profile photos
+
+During evidence gathering, contacts can call `view_profile_photo` for their own
+avatar or the account/contact avatars of current group members using roster IDs.
+The shared API provides the same behavior to iOS and web. Reads are limited to
+the current group, current consent and current photo version; no private contact
+or account edit permission is granted. Bytes are loaded inside inference steps,
+while tool checkpoints retain references only. See [profile photos](profile-photos.md#profile-images-available-to-contacts)
+for budgets, revocation behavior and pending functional checks.

@@ -628,3 +628,12 @@ human message. Group-result deliveries keep the contact's style while retaining
 attribution and their existing action restrictions. A seen-gap reaction requires
 actual read receipts, remains mild and decays without lowering durable rapport.
 Existing consent, tool, batching, publication and delivery rules continue to apply.
+
+### Looking at profile photos
+
+Private contacts can use `view_profile_photo` to inspect their own canonical
+avatar or the current human's account photo when useful. This is available from
+both iOS and web without attaching the image manually. Other people's photos
+are unavailable through private calls. Reads revalidate access and photo version
+before model inference; see [profile photos](profile-photos.md#profile-images-available-to-contacts)
+for image budgets, model processing, caching and pending validation.

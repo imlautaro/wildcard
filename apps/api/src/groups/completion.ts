@@ -1,3 +1,4 @@
+import { profilePhotoTool, viewProfilePhoto, withProfilePhotos } from '../photos/model';
 import type { WorkflowStep } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
 import { attachmentMessage } from '../chat/attachments';
@@ -62,13 +63,14 @@ async function assertCurrentAccess(env: Env, input: GroupInput) {
 
 async function modelMessages(env: Env, input: GroupInput, messages: ModelMessage[]) {
   // Bytes are fetched only inside inference steps, and are never checkpointed.
-  if (!input.attachment) return messages;
-  return [...messages.slice(0, input.messages.length), await attachmentMessage(env, input.attachment),
-    ...messages.slice(input.messages.length)];
+  const context = input.attachment
+    ? [...messages.slice(0, input.messages.length), await attachmentMessage(env, input.attachment),
+      ...messages.slice(input.messages.length)] : messages;
+  return withProfilePhotos(env, input.scope, context);
 }
 
 async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: number): Promise<string> {
-  const permitted = [...groupRetrievalTools, reactionTool, ...(input.scope.mcp ? mcpTools : [])];
+  const permitted = [...groupRetrievalTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : [])];
   if (!permitted.some(tool => tool.function.name === call.function.name)) return toolError('This tool is not permitted in this turn.');
   let args: unknown;
   try { args = JSON.parse(call.function.arguments); }
@@ -79,6 +81,7 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
     if (input.scope.mcp && mcpTools.some(tool => tool.function.name === call.function.name)) {
       return await executeMcp(env, input.scope.mcp, call.function.name, args, slot);
     }
+    if (call.function.name === profilePhotoTool.function.name) return await viewProfilePhoto(env, input.scope, args);
     if (call.function.name === reactionTool.function.name) return await groupReaction(env, input.scope, args);
     return await executeGroupRetrieval(env.DB, input.scope, call);
   } catch (error) {
@@ -114,7 +117,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
           return await museCompletion(env, await modelMessages(env, input, [...messages, {
             role: 'system', content: `Evidence-gathering phase. Use tools only when needed for the current trigger. You have ${executionLimit - executions} executions remaining. Do not produce a JSON decision or announce future work. Use real tools to obtain missing evidence. When ready, call finish_group_research alone, including when no tools are needed or data is unavailable. A final tool-free decision phase follows. Do not claim success without receipts.`,
           }]), env.META_CHAT_MODEL, { maxTokens: 4096,
-            tools: [...groupRetrievalTools, reactionTool, ...(input.scope.mcp ? mcpTools : []), finishTool] });
+            tools: [...groupRetrievalTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []), finishTool] });
         } catch (error) {
           const code = safeErrorCode(error);
           if (['MODEL_INCOMPLETE_RESPONSE', 'MODEL_INVALID_TOOL_CALLS', 'MODEL_TOOL_TEXT_TOO_LARGE', 'MODEL_EMPTY_RESPONSE'].includes(code)) {

@@ -764,3 +764,17 @@ resource; fixed option lists plus one snapshot/draft bound memory. Avatar keys
 retain account, access context, agent identity and immutable version in the
 existing private image cache. See [onboarding](onboarding.md#cache-and-account-isolation)
 for recovery, mutation behavior and pending device/browser verification.
+
+## On-demand profile images in model context
+
+The shared iOS/web API's `view_profile_photo` path deliberately avoids a persistent
+inference image cache. Every inference revalidates current conversation membership,
+consent and the requested immutable version, reads R2 inside the inference step,
+and checks access/version again after reading. Tool checkpoints hold references
+only; transient bytes are deduplicated per member and bounded to three images and
+8 MiB per inference. Missing/replaced/revoked images produce an unavailable marker.
+This prevents a checkpoint or cached image from granting later access. Client
+`PrivateImageCache` and web session caches retain their existing behavior and
+invalidation; no network-backed client state or navigation loader is added.
+See [profile photos](profile-photos.md#profile-images-available-to-contacts) for
+fictional-data validation cases; device and live-model behavior remains unverified.
