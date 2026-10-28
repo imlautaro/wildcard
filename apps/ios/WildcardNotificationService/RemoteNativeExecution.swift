@@ -69,7 +69,7 @@ enum RemoteNativeExecution {
             let presentation = AlarmPresentation(alert: .init(title: title),
                 countdown: command.kind == "timer" ? .init(title: title, pauseButton: .init(text: "Pause", textColor: .white, systemImageName: "pause.fill")) : nil,
                 paused: command.kind == "timer" ? .init(title: title, resumeButton: .init(text: "Resume", textColor: .white, systemImageName: "play.fill")) : nil)
-            let attributes = AlarmAttributes(presentation: presentation, metadata: WildcardAlarmMetadata(contactID: contactID), tintColor: .blue)
+            let attributes = AlarmAttributes(presentation: presentation, metadata: WildcardAlarmMetadata(contactID: contactID), tintColor: NativeStyle.tint(for: "alarm"))
             let configuration: AlarmManager.AlarmConfiguration<WildcardAlarmMetadata> = command.kind == "timer"
                 ? .timer(duration: remaining, attributes: attributes)
                 : .alarm(schedule: .fixed(Date(timeIntervalSince1970: command.fireAt / 1000)), attributes: attributes)

@@ -50,7 +50,6 @@ onMounted(async () => {
   <PageBar title="Account" />
   <div class="page">
     <form class="page-inner" @submit.prevent="save">
-      <div class="group" style="margin-bottom: 20px"><NuxtLink to="/native" class="field">Native experiments <span class="chevron">›</span></NuxtLink></div>
       <IdentityEditor :name="user?.name ?? ''" :path="photoPath" editable :busy="busy" @photo="changePhoto" />
       <div class="group">
         <div class="field"><label for="account-name">Name</label><input id="account-name" v-model="name" type="text" maxlength="100"></div>
@@ -73,7 +72,10 @@ onMounted(async () => {
       </div>
       <p class="group-footer">Contributor allows Meta to use submitted messages, files, context and responses to train models. Standard does not. Applies to new chat jobs, schedules and group exchanges you start; jobs already started keep their model. Shared data may still use Contributor when you separately consent. MCP chats always use Standard.</p>
       <button type="button" class="button block" :disabled="busy || !modelChanged || (chatModel === 'muse-spark-1.3-contributor' && !contributorConsent)" @click="saveChatModel">Save model</button>
-      <div class="group" style="margin-top: 24px"><NuxtLink class="button-row" to="/account/connections">Connections</NuxtLink></div>
+      <div class="group" style="margin-top: 24px">
+        <NuxtLink class="button-row" to="/account/connections">Connections</NuxtLink>
+        <NuxtLink class="button-row" to="/native">Native experiments</NuxtLink>
+      </div>
       <div class="group" style="margin-top: 24px">
         <button type="button" class="button-row danger" :disabled="busy" @click="leave">Sign out</button>
       </div>

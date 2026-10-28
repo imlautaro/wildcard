@@ -2,6 +2,7 @@ import SwiftUI
 import EventKitUI
 import MapKit
 import ActivityKit
+import AlarmKit
 
 struct NativeToolsView: View {
     let contactID: String
@@ -14,9 +15,21 @@ struct NativeToolsView: View {
     @State private var sessionRevision = 0
     private var kinds: Set<String> { native.enabled[contactID] ?? [] }
     private var contact: Contact? { contacts.contact(id: contactID) }
+    private static let examples: [(kind: String, text: String)] = [
+        ("focus", "“Help me focus for 25 minutes”"), ("recipe", "“Guide me through a recipe”"),
+        ("timer", "“Set a timer for 12 minutes”"), ("calendar", "“Add an event tomorrow at 3 PM”"), ("speech", "“Read this aloud”"),
+    ]
     var body: some View {
         Form {
             Section {
+                HStack(spacing: 14) {
+                    ContactAvatar(contact: contact, size: 52)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(contact?.name ?? "Contact").manrope(.headline, weight: .bold)
+                        Text(kinds.isEmpty ? "Off on this iPhone" : "\(kinds.count) of \(NativeExperiments.kinds.count) tools enabled on this iPhone")
+                            .manrope(.footnote).foregroundStyle(.secondary)
+                    }
+                }.padding(.vertical, 4)
                 Toggle("Enable native experiments", isOn: Binding(get: { !kinds.isEmpty }, set: {
                     native.setKinds($0 ? Set(NativeExperiments.kinds) : [], contactID: contactID)
                 }))
@@ -25,67 +38,80 @@ struct NativeToolsView: View {
             }
             if !kinds.isEmpty {
                 Section {
-                    Toggle("Allow remote timers and alarms", isOn: Binding(
+                    Toggle(isOn: Binding(
                         get: { native.remoteEnabled.contains(contactID) },
                         set: { on in Task { await native.setRemoteEnabled(on, contactID: contactID, using: auth) } }
-                    )).disabled(native.remoteBusy)
+                    )) {
+                        NativeToolLabel(kind: "timer", title: "Allow remote timers and alarms", symbol: "iphone.radiowaves.left.and.right")
+                    }.disabled(native.remoteBusy)
                 } footer: {
                     Text("Lets requests from your other signed-in devices schedule timers and alarms on this iPhone, including while locked or Wildcard is closed. Requires AlarmKit and visible notifications. Delivery may be delayed; requests expire after one minute. This does not enable autonomous initiative actions.")
                 }
                 Section("Allowed tools") {
                     ForEach(NativeExperiments.kinds, id: \.self) { kind in
-                        Toggle(NativeExperiments.labels[kind] ?? kind, isOn: Binding(get: { kinds.contains(kind) }, set: { on in
+                        Toggle(isOn: Binding(get: { kinds.contains(kind) }, set: { on in
                             var value = kinds
                             if on { value.insert(kind) } else { value.remove(kind) }
                             native.setKinds(value, contactID: contactID)
-                        }))
+                        })) { NativeToolLabel(kind: kind) }
                     }
                 }
                 Section {
                     ForEach(NativeExperiments.kinds.filter { kinds.contains($0) && NativeExperiments.automaticKinds.contains($0) }, id: \.self) { kind in
-                        Toggle(NativeExperiments.labels[kind] ?? kind, isOn: Binding(
+                        Toggle(isOn: Binding(
                             get: { native.automaticSince[contactID]?[kind] != nil },
                             set: { native.setAutomatic($0, kind: kind, contactID: contactID) }
-                        ))
+                        )) { NativeToolLabel(kind: kind) }
                     }
                 } header: { Text("Run without confirmation") } footer: {
                     Text("Applies to new requests on this iPhone while Wildcard is open. iOS may ask for permission the first time. Calendar and location reminders still require review. Older requests remain manual.")
                 }
                 Section {
-                    Text("Ask in chat: “Help me focus for 25 minutes”, “Guide me through a recipe”, “Set a timer for 12 minutes”, “Add an event tomorrow at 3 PM”, or “Read this aloud”.")
+                    ForEach(Self.examples, id: \.text) { example in
+                        Label { Text(example.text).manrope(.subheadline) } icon: { NativeGlyph(kind: example.kind, size: 26) }
+                    }
+                } header: { Text("Try it in chat") } footer: {
                     Text("Run an Open contact or Draft message shortcut from Siri, Spotlight or the Action button. Add the Contact widget to your Home Screen. Shared inputs remain drafts until you send them.")
-                } header: { Text("Try it") }
+                }
                 if let agent = contact?.agentID {
-                    Section("Physical contact") {
-                        ShareLink("Share contact link", item: NativeShared.link(agentID: agent))
-                        Button("Write contact link to NFC tag") { confirmNFCWrite = true }
+                    Section {
+                        ShareLink(item: NativeShared.link(agentID: agent)) { Label("Share contact link", systemImage: "square.and.arrow.up") }
+                        Button { confirmNFCWrite = true } label: { Label("Write contact link to NFC tag", systemImage: "sensor.tag.radiowaves.forward") }
                             .confirmationDialog("Replace the NFC tag’s content with this contact link?", isPresented: $confirmNFCWrite, titleVisibility: .visible) {
                                 Button("Replace tag content", role: .destructive) { nfc.write(NativeShared.link(agentID: agent)) }
                             }
                             .disabled(!NativeNFC.available || nfc.busy)
-                        Button("Read NFC tag") { nfc.read { native.receive($0) } }
+                        Button { nfc.read { native.receive($0) } } label: { Label("Read NFC tag", systemImage: "wave.3.right") }
                             .disabled(!NativeNFC.available || nfc.busy)
+                        if let message = nfc.message { Text(message).manrope(.footnote) }
+                    } header: { Text("Physical contact") } footer: {
                         Text("This link opens the same agent for existing participants. It does not invite people or grant access. NFC background opening requires Associated Domains configuration.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                        if let message = nfc.message { Text(message).font(.footnote) }
                     }
                 }
                 let sessions = Activity<ContactSessionAttributes>.activities.filter { $0.attributes.contactID == contactID && $0.attributes.userID == auth.user?.id }
                 if !sessions.isEmpty {
                     Section("Live sessions") {
                         ForEach(sessions, id: \.id) { session in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(session.attributes.title).font(.headline)
-                                NativeSessionContent(attributes: session.attributes, state: session.content.state)
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(alignment: .top, spacing: 12) {
+                                    NativeGlyph(kind: session.attributes.kind, size: 32)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(session.attributes.title).manrope(.headline, weight: .semibold)
+                                        NativeSessionContent(attributes: session.attributes, state: session.content.state)
+                                    }
+                                }
                                 HStack {
                                     if session.attributes.kind == "recipe" {
-                                        Button("Next step") { change(session, "next") }
+                                        Button { change(session, "next") } label: { Label("Next step", systemImage: "forward.fill") }
+                                            .buttonStyle(.borderedProminent)
                                     } else {
-                                        Button(session.content.state.endDate == nil ? "Resume" : "Pause") { change(session, "pause") }
+                                        let paused = session.content.state.endDate == nil
+                                        Button { change(session, "pause") } label: { Label(paused ? "Resume" : "Pause", systemImage: paused ? "play.fill" : "pause.fill") }
+                                            .buttonStyle(.borderedProminent)
                                     }
-                                    Button("Finish", role: .destructive) { change(session, "finish") }
-                                }.buttonStyle(.bordered)
-                            }
+                                    Button("Finish", role: .destructive) { change(session, "finish") }.buttonStyle(.bordered)
+                                }.buttonBorderShape(.capsule).manrope(.subheadline, weight: .semibold)
+                            }.padding(.vertical, 4)
                         }
                     }.id(sessionRevision)
                 }
@@ -93,56 +119,31 @@ struct NativeToolsView: View {
                 if !alarms.isEmpty {
                     Section("Scheduled system alarms") {
                         ForEach(alarms) { alarm in
-                            LabeledContent(alarm.title) {
-                                Button("Cancel alarm", role: .destructive) { native.cancelLocalAlarm(alarm) }
-                                    .disabled(!native.busy.isEmpty)
-                            }
+                            NativeAlarmRow(alarm: alarm)
                         }
                     }
                 }
                 Section {
                     if native.actions[contactID] == nil { ProgressView("Loading requests…") }
-                    else if native.actions[contactID]?.isEmpty == true { Text("No native requests yet.").foregroundStyle(.secondary) }
+                    else if native.actions[contactID]?.isEmpty == true {
+                        Label("No native requests yet.", systemImage: "tray").foregroundStyle(.secondary)
+                    }
                     ForEach(native.actions[contactID] ?? []) { action in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(action.payload?.title ?? "Native action").font(.headline)
-                            Text(NativeExperiments.labels[action.kind] ?? action.kind).font(.caption).foregroundStyle(.secondary)
-                            if let payload = action.payload {
-                                if let body = payload.body { Text(body).font(.subheadline) }
-                                if let seconds = payload.durationSeconds { Text("Duration: \(seconds) seconds").font(.subheadline) }
-                                if let date = payload.date { Text("Starts: \(date)").font(.subheadline).textSelection(.enabled) }
-                                if let date = payload.endDate { Text("Ends: \(date)").font(.subheadline).textSelection(.enabled) }
-                                if let steps = payload.steps {
-                                    ForEach(Array(steps.enumerated()), id: \.offset) { index, step in Text("\(index + 1). \(step)").font(.subheadline) }
-                                }
-                                if payload.kind == "location_reminder" {
-                                    Text("\(payload.trigger == "departure" ? "On departure" : "On arrival") · radius \(Int(payload.radius ?? 200)) m").font(.subheadline)
-                                    if let lat = payload.latitude, let lon = payload.longitude { Text("\(lat), \(lon)").font(.caption) }
-                                    else { Text("Choose the location on a map when you run this action.").font(.caption) }
-                                }
-                            }
-                            Text(statusLabel(action)).font(.caption).foregroundStyle(.secondary)
-                            if action.remoteDeviceID == nil, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000 {
-                                HStack {
-                                    Button("Review and run") { Task { await native.run(action, contactID: contactID, using: auth) } }
-                                        .disabled(!kinds.contains(action.kind) || !native.busy.isEmpty)
-                                    Button("Dismiss", role: .destructive) { Task { await native.dismiss(action, contactID: contactID, using: auth) } }
-                                        .disabled(native.busy.contains(action.id))
-                                }.buttonStyle(.bordered)
-                            } else if action.remoteDeviceID == nil, action.status == "running", !native.busy.contains(action.id) {
-                                Text("An interrupted action may already exist in iOS. Check before requesting another.").font(.caption)
-                                Button("Mark outcome unknown") { Task { await native.abandon(action, contactID: contactID, using: auth) } }
-                            }
-                        }.padding(.vertical, 4)
+                        requestRow(action)
                     }
                 } header: { Text("Requests on this iPhone") } footer: {
                     Text("Completed means this device finished the requested operation, such as scheduling an alarm. It does not mean the alarm rang or a real-world task was completed. Requests expire after 24 hours. Calendar and reminder items you save remain in their system apps.")
                 }
             }
-            if native.speaking { Button("Stop reading") { native.stopSpeaking() } }
-            if let error = native.error { Section { Text(error).foregroundStyle(.red) } }
+            if native.speaking {
+                Button { native.stopSpeaking() } label: { Label("Stop reading", systemImage: "stop.fill") }
+            }
+            if let error = native.error {
+                Section { Label { Text(error) } icon: { Image(systemName: "exclamationmark.triangle.fill") }.foregroundStyle(.red) }
+            }
         }
         .navigationTitle("Native experiments")
+        .navigationBarTitleDisplayMode(.inline)
         .refreshable { await native.refresh(contactID: contactID, using: auth, force: true) }
         .task(id: "\(scenePhase)-\(kinds.sorted())") {
             guard scenePhase == .active else { return }
@@ -153,6 +154,39 @@ struct NativeToolsView: View {
                 do { try await Task.sleep(for: .seconds(5)) } catch { return }
             }
         }
+    }
+    private func requestRow(_ action: NativeAction) -> some View {
+        let tone = NativeActionTone(action, busy: native.busy.contains(action.id))
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                NativeGlyph(kind: action.kind, size: 32)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(action.payload?.title ?? "Native action").manrope(.headline, weight: .semibold)
+                    Text(NativeExperiments.labels[action.kind] ?? action.kind).manrope(.caption).foregroundStyle(.secondary)
+                    if let payload = action.payload { NativePayloadDetails(payload: payload) }
+                    Label { Text(statusLabel(action)).manrope(.caption, weight: .semibold) } icon: { Image(systemName: tone.symbol) }
+                        .labelStyle(NativeCompactLabelStyle())
+                        .foregroundStyle(tone.color)
+                        .padding(.top, 2)
+                }
+            }
+            if action.remoteDeviceID == nil, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000 {
+                HStack {
+                    Button("Review and run") { Task { await native.run(action, contactID: contactID, using: auth) } }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!kinds.contains(action.kind) || !native.busy.isEmpty)
+                    Button("Dismiss", role: .destructive) { Task { await native.dismiss(action, contactID: contactID, using: auth) } }
+                        .buttonStyle(.bordered)
+                        .disabled(native.busy.contains(action.id))
+                }.buttonBorderShape(.capsule).manrope(.subheadline, weight: .semibold).padding(.leading, 44)
+            } else if action.remoteDeviceID == nil, action.status == "running", !native.busy.contains(action.id) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("An interrupted action may already exist in iOS. Check before requesting another.").manrope(.caption).foregroundStyle(.secondary)
+                    Button("Mark outcome unknown") { Task { await native.abandon(action, contactID: contactID, using: auth) } }
+                        .buttonStyle(.bordered).buttonBorderShape(.capsule).manrope(.subheadline, weight: .semibold)
+                }.padding(.leading, 44)
+            }
+        }.padding(.vertical, 4)
     }
     private func change(_ activity: Activity<ContactSessionAttributes>, _ action: String) {
         Task { _ = try? await ChangeContactSessionIntent(activityID: activity.id, action: action).perform(); sessionRevision += 1 }
@@ -169,16 +203,91 @@ struct NativeToolsView: View {
         }
     }
 }
+/// Human-readable request details; raw values remain selectable where they are not reformatted.
+private struct NativePayloadDetails: View {
+    let payload: NativePayload
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let body = payload.body { Text(body).manrope(.subheadline) }
+            if let seconds = payload.durationSeconds {
+                detail("hourglass", Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide)))
+            }
+            if let date = payload.date { detail("calendar", "Starts \(Self.format(date))") }
+            if let date = payload.endDate { detail("calendar.badge.checkmark", "Ends \(Self.format(date))") }
+            if let steps = payload.steps {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text("\(index + 1)").manrope(.caption, weight: .bold).foregroundStyle(.secondary).frame(minWidth: 14, alignment: .trailing)
+                            Text(step).manrope(.subheadline)
+                        }
+                    }
+                }.padding(.top, 2)
+            }
+            if payload.kind == "location_reminder" {
+                detail(payload.trigger == "departure" ? "figure.walk.departure" : "figure.walk.arrival",
+                       "\(payload.trigger == "departure" ? "On departure" : "On arrival") · radius \(Int(payload.radius ?? 200)) m")
+                if let lat = payload.latitude, let lon = payload.longitude {
+                    Text("\(lat), \(lon)").manrope(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                } else {
+                    Text("Choose the location on a map when you run this action.").manrope(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+    private func detail(_ symbol: String, _ text: String) -> some View {
+        Label { Text(text).manrope(.subheadline).textSelection(.enabled) } icon: { Image(systemName: symbol).foregroundStyle(.secondary) }
+            .labelStyle(NativeCompactLabelStyle())
+    }
+    private static func format(_ value: String) -> String {
+        let parser = ISO8601DateFormatter()
+        var date = parser.date(from: value)
+        if date == nil { parser.formatOptions.insert(.withFractionalSeconds); date = parser.date(from: value) }
+        return date?.formatted(date: .abbreviated, time: .shortened) ?? value
+    }
+}
+/// Settings-style row label: colored glyph and tool name.
+struct NativeToolLabel: View {
+    let kind: String
+    var title: String? = nil
+    var symbol: String? = nil
+    var body: some View {
+        Label { Text(title ?? NativeExperiments.labels[kind] ?? kind) } icon: { NativeGlyph(kind: kind, size: 28, symbol: symbol) }
+    }
+}
+struct NativeAlarmRow: View {
+    let alarm: NativeLocalAlarm
+    @Environment(NativeExperiments.self) private var native
+    var body: some View {
+        let system = native.systemAlarms[alarm.id]
+        HStack(spacing: 12) {
+            NativeGlyph(kind: system?.countdownDuration == nil ? "alarm" : "timer", size: 28)
+            Text(alarm.title).lineLimit(2)
+            Spacer(minLength: 8)
+            Button("Cancel alarm", role: .destructive) { native.cancelLocalAlarm(alarm) }
+                .buttonStyle(.bordered).buttonBorderShape(.capsule).manrope(.footnote, weight: .semibold)
+                .disabled(!native.busy.isEmpty)
+        }
+    }
+}
 struct NativeSessionContent: View {
     let attributes: ContactSessionAttributes
     let state: ContactSessionAttributes.ContentState
+    var compact = false
     var body: some View {
         if attributes.kind == "recipe", attributes.steps.indices.contains(state.step) {
-            Text("Step \(state.step + 1) of \(attributes.steps.count): \(attributes.steps[state.step])")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Step \(state.step + 1) of \(attributes.steps.count)").manrope(.caption, weight: .semibold).foregroundStyle(NativeStyle.tint(for: "recipe"))
+                Text(attributes.steps[state.step]).manrope(compact ? .footnote : .subheadline).foregroundStyle(compact ? .secondary : .primary)
+            }
         } else if let end = state.endDate, end > .now {
-            Text(timerInterval: Date.now...end, countsDown: true).monospacedDigit()
-        } else if state.pausedRemaining != nil { Text("Paused") }
-        else { Text("Session complete") }
+            Text(timerInterval: Date.now...end, countsDown: true)
+                .font(.system(compact ? .title3 : .title2, design: .rounded, weight: .semibold)).monospacedDigit()
+                .foregroundStyle(NativeStyle.tint(for: attributes.kind))
+        } else if let remaining = state.pausedRemaining {
+            Text("Paused · \(NativeStyle.remaining(remaining)) left").manrope(compact ? .footnote : .subheadline, weight: .semibold).foregroundStyle(.secondary)
+        }
+        else { Text("Session complete").manrope(compact ? .footnote : .subheadline).foregroundStyle(.secondary) }
     }
 }
 struct NativeCalendarEditor: UIViewControllerRepresentable {

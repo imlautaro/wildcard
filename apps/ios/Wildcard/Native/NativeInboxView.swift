@@ -4,30 +4,55 @@ struct NativeExperimentsDirectoryView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
     @Environment(NativeExperiments.self) private var native
+    private static let capabilities: [(kind: String, symbol: String?, title: String)] = [
+        ("focus", nil, "Live Activities and Dynamic Island"), ("timer", nil, "Timers and alarms"),
+        ("calendar", nil, "Calendar and Reminders"), ("speech", nil, "Spoken text"),
+        ("default", "square.and.arrow.up", "Shortcuts, widgets, sharing and NFC links"),
+    ]
     var body: some View {
         List {
             Section {
-                Text("Try native iOS tools with individual contacts. Enable each contact on this device, then request an action in its private chat.")
-                Text("Supports Live Activities, timers and alarms, Calendar, Reminders, spoken text, Shortcuts, widgets, sharing and NFC links.").foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Try native iOS tools with individual contacts. Enable each contact on this device, then request an action in its private chat.")
+                        .manrope(.subheadline)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Self.capabilities, id: \.title) { item in
+                            Label { Text(item.title).manrope(.footnote).foregroundStyle(.secondary) } icon: {
+                                NativeGlyph(kind: item.kind, size: 22, symbol: item.symbol)
+                            }
+                        }
+                    }
+                }.padding(.vertical, 4)
             }
             Section("Contacts") {
                 ForEach(contacts.nativeDirectoryContacts.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) { contact in
+                    let count = (native.enabled[contact.id] ?? []).count
                     NavigationLink(value: HomeDestination.nativeTools(contact.id)) {
-                        LabeledContent(contact.name, value: (native.enabled[contact.id] ?? []).isEmpty ? "Off" : "Enabled")
+                        HStack(spacing: 12) {
+                            ContactAvatar(contact: contact, size: 36)
+                            Text(contact.name).lineLimit(1)
+                            Spacer(minLength: 8)
+                            if count > 0 {
+                                Text("Enabled").manrope(.caption, weight: .semibold).foregroundStyle(.green)
+                                    .padding(.horizontal, 8).padding(.vertical, 3)
+                                    .background(.green.opacity(0.14), in: Capsule())
+                            } else {
+                                Text("Off").manrope(.subheadline).foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
             }
             if !native.localAlarms.isEmpty {
                 Section("Scheduled Wildcard alarms") {
                     ForEach(native.localAlarms) { alarm in
-                        LabeledContent(alarm.title) {
-                            Button("Cancel alarm", role: .destructive) { native.cancelLocalAlarm(alarm) }
-                                .disabled(!native.busy.isEmpty)
-                        }
+                        NativeAlarmRow(alarm: alarm)
                     }
                 }
             }
-            if let error = native.error { Text(error).foregroundStyle(.red) }
+            if let error = native.error {
+                Label { Text(error) } icon: { Image(systemName: "exclamationmark.triangle.fill") }.foregroundStyle(.red)
+            }
         }.navigationTitle("Native experiments")
             .task {
                 native.refreshLocalAlarms()
@@ -46,21 +71,35 @@ struct NativeInboxView: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         List {
-            if native.drafts.isEmpty { Text("No shared drafts.").foregroundStyle(.secondary) }
+            if native.drafts.isEmpty {
+                ContentUnavailableView("No shared drafts", systemImage: "tray",
+                    description: Text("Items you share to a Wildcard contact appear here until you send or discard them."))
+            }
             ForEach(native.drafts) { draft in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(contacts.contact(id: draft.contactID)?.name ?? "Contact").font(.headline)
-                    Text(draft.text.isEmpty ? "Shared attachment" : draft.text).lineLimit(6)
-                    if let file = draft.filename { Label(file, systemImage: "doc") }
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        ContactAvatar(contact: contacts.contact(id: draft.contactID), size: 32)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(contacts.contact(id: draft.contactID)?.name ?? "Contact").manrope(.headline, weight: .semibold)
+                            Text(draft.createdAt, format: .relative(presentation: .named)).manrope(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Text(draft.text.isEmpty ? "Shared attachment" : draft.text).manrope(.subheadline).lineLimit(6)
+                        .foregroundStyle(draft.text.isEmpty ? .secondary : .primary)
+                    if let file = draft.filename {
+                        Label(file, systemImage: "doc.fill").manrope(.footnote, weight: .medium).lineLimit(1)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
                     HStack {
                         Button("Review in chat") {
                             native.selectedDraft = draft
                             native.route = .init(contactID: draft.contactID, agentID: nil, draftID: draft.id)
                             dismiss()
-                        }
-                        Button("Discard", role: .destructive) { native.consumeDraft(draft.id) }
-                    }.buttonStyle(.bordered)
-                }
+                        }.buttonStyle(.borderedProminent)
+                        Button("Discard", role: .destructive) { native.consumeDraft(draft.id) }.buttonStyle(.bordered)
+                    }.buttonBorderShape(.capsule).manrope(.subheadline, weight: .semibold)
+                }.padding(.vertical, 4)
             }
         }
         .navigationTitle("Shared drafts")

@@ -63,7 +63,7 @@ struct ContactEditorView: View {
                 Section { NavigationLink("Connections") { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) } }
                 Section {
                     NavigationLink(value: HomeDestination.nativeTools(contactID)) {
-                        Text("Native experiments")
+                        Label { Text("Native experiments") } icon: { NativeGlyph(kind: "default", size: 28, symbol: "iphone") }
                     }
                 }
             }

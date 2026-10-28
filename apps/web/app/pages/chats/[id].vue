@@ -11,6 +11,13 @@ const remoteError = ref<string | null>(null);
 function remoteStatus(status: string) {
   return ({ completed: 'Scheduled on iPhone', pending: 'Sent · waiting for iPhone', running: 'Claimed · outcome not yet confirmed', expired: 'Expired without confirmation', failed: 'Could not schedule', cancelled: 'Cancelled', unknown: 'Outcome unknown · check iPhone' } as Record<string, string>)[status] ?? status;
 }
+// Visual tone per status; the same mapping as NativeActionTone on iOS.
+function remoteTone(status: string) {
+  return ({ completed: 'done', pending: 'waiting', running: 'attention', unknown: 'attention', failed: 'failed' } as Record<string, string>)[status] ?? 'inactive';
+}
+const remoteToneIcons = { done: 'check', waiting: 'clock', attention: 'alert', failed: 'x-circle', inactive: 'minus' } as const;
+// The device picker appears once this account has a linked iPhone; setup lives in /native.
+const showRemote = computed(() => remote.state.value.devices.length > 0 || !!state.value.remoteDeviceID || !!remoteError.value || !!remote.state.value.error);
 async function revokeRemote() {
   const deviceID = state.value.remoteDeviceID;
   if (!deviceID) return;
@@ -165,18 +172,25 @@ onBeforeUnmount(() => {
     <NuxtLink to="/" class="button secondary">Back to Chats</NuxtLink>
   </div>
   <template v-else>
-    <div class="remote-native-bar">
-      <label>Timers and alarms
-        <select v-model="state.remoteDeviceID" :disabled="!!state.pending || !remote.state.value.loaded">
-          <option :value="null">No remote device</option>
-          <option v-for="device in remote.state.value.devices" :key="device.id" :value="device.id">{{ device.name }} · {{ device.id.slice(-6) }}</option>
-        </select>
-      </label>
-      <button class="link-button" @click="remote.refresh(true)">Refresh devices</button>
-      <button v-if="state.remoteDeviceID" class="link-button danger" @click="revokeRemote">Revoke access</button>
-      <p v-if="state.remoteDeviceID">Requests go to your iPhone through a visible notification, even while locked. Device confirmation is required before reporting success.</p>
-      <p v-else>Enable Allow remote timers and alarms in the iPhone contact’s Native experiments to connect it.</p>
-      <p v-if="remote.state.value.error || remoteError" class="error">{{ remoteError || remote.state.value.error }}</p>
+    <div v-if="showRemote" class="remote-native-bar">
+      <span class="native-glyph small" data-kind="timer"><AppIcon name="iphone" /></span>
+      <div class="remote-copy">
+        <label for="remote-device">Timers and alarms</label>
+        <p v-if="state.remoteDeviceID">Requests go to your iPhone through a visible notification, even while locked. Device confirmation is required before reporting success.</p>
+        <p v-else>Choose your iPhone to schedule timers and alarms from this chat.</p>
+        <p v-if="remote.state.value.error || remoteError" class="error">{{ remoteError || remote.state.value.error }}</p>
+      </div>
+      <div class="remote-actions">
+        <span class="device-select">
+          <select id="remote-device" v-model="state.remoteDeviceID" :disabled="!!state.pending || !remote.state.value.loaded">
+            <option :value="null">No remote device</option>
+            <option v-for="device in remote.state.value.devices" :key="device.id" :value="device.id">{{ device.name }} · {{ device.id.slice(-6) }}</option>
+          </select>
+          <AppIcon name="chevron" />
+        </span>
+        <button type="button" class="icon-button" title="Refresh devices" aria-label="Refresh devices" @click="remote.refresh(true)"><AppIcon name="refresh" /></button>
+        <button v-if="state.remoteDeviceID" type="button" class="link-button danger" @click="revokeRemote">Revoke access</button>
+      </div>
     </div>
     <div ref="scroller" class="messages" aria-live="polite">
       <div class="spacer" />
@@ -228,8 +242,12 @@ onBeforeUnmount(() => {
               class="link-button" :disabled="state.retrying || replying || !!state.pending" @click="retryReply(item.turn)"
             >Retry reply</button>
           </div>
-          <div v-for="action in remote.state.value.actions.filter(a => a.turnID === item.turn.id)" :key="action.id" class="status-line">
-            {{ action.title }} · {{ action.deviceName }} · {{ remoteStatus(action.status) }}
+          <div v-for="action in remote.state.value.actions.filter(a => a.turnID === item.turn.id)" :key="action.id" class="native-receipt" :class="remoteTone(action.status)">
+            <span class="native-glyph" :data-kind="action.kind"><AppIcon :name="action.kind === 'alarm' ? 'alarm' : 'timer'" /></span>
+            <div>
+              <strong>{{ action.title }}</strong>
+              <span class="status"><AppIcon :name="remoteToneIcons[remoteTone(action.status) as keyof typeof remoteToneIcons]" />{{ action.deviceName }} · {{ remoteStatus(action.status) }}</span>
+            </div>
           </div>
         </template>
       </template>
@@ -261,9 +279,23 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.remote-native-bar { padding: 10px 16px; border-bottom: 1px solid var(--border, #ddd); font-size: .85rem; }
-.remote-native-bar label { display: inline-flex; align-items: center; gap: 8px; }
-.remote-native-bar select { max-width: 230px; padding: 5px; }
-.remote-native-bar button { margin-left: 12px; }
-.remote-native-bar p { margin: 6px 0 0; opacity: .8; }
+.remote-native-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--separator); background: var(--background); }
+.remote-copy { flex: 1; min-width: 0; }
+.remote-copy label { display: block; font-size: 14px; font-weight: 700; }
+.remote-copy p { margin: 1px 0 0; font-size: 12px; color: var(--secondary); }
+.remote-copy p.error { color: var(--danger); }
+.remote-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.device-select { position: relative; display: inline-flex; min-width: 0; }
+.device-select select {
+  width: 100%; max-width: 200px; padding: 6px 30px 6px 12px; border: 0; border-radius: 999px; font-size: 14px; font-weight: 600;
+  background: var(--selected); color: var(--accent); appearance: none; text-overflow: ellipsis;
+}
+.device-select svg { position: absolute; right: 10px; top: 50%; width: 13px; height: 13px; transform: translateY(-50%) rotate(90deg); color: var(--accent); pointer-events: none; stroke-width: 2.6; }
+.remote-actions .icon-button svg { width: 18px; height: 18px; }
+@media (max-width: 560px) {
+  .remote-native-bar { flex-wrap: wrap; }
+  .remote-actions { width: 100%; padding-left: 38px; }
+  .device-select { flex: 1; }
+  .device-select select { max-width: none; }
+}
 </style>

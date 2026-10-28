@@ -60,13 +60,14 @@ fired, a recipe was cooked, or the person completed a task.
 
 ### In-app status and agent awareness
 
-A pinned horizontal panel in the private chat shows this account/contact's active
-system alarms/timers, focus/recipe sessions and speech. Other screens show the same
-account's active panel with links to the relevant chats. Timers expose Pause/Resume
-and Cancel/Stop controls; focus/recipe cards expose their existing session controls.
-Each message also shows its native operation receipts, including pending, running,
-completed, failed, cancelled and uncertain outcomes. Manual requests can be run
-from their chat card. A receipt is historical: a timer can have been successfully
+A pinned strip of compact glass cards in the private chat shows this account/contact's
+active system alarms/timers, focus/recipe sessions and speech; a single card spans the
+width and several scroll horizontally. Other screens show the same account's cards;
+tapping a card's title opens the relevant chat. Timers expose round Pause/Resume and
+Cancel/Stop controls; focus/recipe cards expose their existing session controls.
+Each message also shows its native operation receipts as centered chips, including
+pending, running, completed, failed, cancelled and uncertain outcomes, with a status
+icon colored by outcome. Manual requests can be run from their chat chip. A receipt is historical: a timer can have been successfully
 scheduled and subsequently cancelled without changing that operation receipt.
 
 AlarmKit `alarmUpdates` refreshes account-filtered system snapshots while the app
@@ -123,7 +124,11 @@ Focus mode, or automatically message the bot. Request a separate timer if desire
 ActivityKit imposes an eight-hour activity lifetime. Pausing does not extend that
 lifetime. The client rejects activity payloads above a conservative 3,800-byte
 combined encoded attributes/state limit. The widget supplies Lock Screen and
-Dynamic Island presentations, with accessible system controls. Session controls
+Dynamic Island presentations, with accessible system controls. Session and alarm
+activities share the app's kind glyphs and show a large countdown or step counter,
+recipe step progress, timer countdown progress and capsule controls. A paused focus
+session or timer shows its remaining time; focus sessions show no progress bar because
+pausing does not record the original duration. Session controls
 require authentication and the currently exposed contact/account. Ending a session
 ends its presentation, not a cloud chat turn. No continuous bot-research progress
 or remote activity updates are implemented; ordinary reply push still applies.
@@ -138,8 +143,9 @@ review it in Wildcard's shared-draft inbox. Intents require device authenticatio
 These actions open the app; they are not an unrestricted Siri conversation proxy.
 The model remains the configured Meta model, not Apple's language model.
 
-Add the **Wildcard contacts** Home Screen widget to open up to three enabled
-contacts. It shows identities only, no message previews or conversation history.
+Add the **Wildcard contacts** Home Screen widget to open up to three (small) or four
+(medium) enabled contacts, shown with initials because photos are not shared with the
+extension. It shows identities only, no message previews or conversation history.
 Widget timelines use a 15-minute refresh request, subject to system scheduling;
 explicit identity changes request a reload. No real-time widget refresh guarantee.
 

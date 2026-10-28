@@ -96,9 +96,9 @@ onMounted(() => run(async () => {
       <button v-if="canManage" type="submit" class="button block" :disabled="!changed || !valid || busy" style="margin-bottom: 20px">Save</button>
 
       <div class="group">
-        <label class="button-row" style="display: flex; justify-content: space-between">
-          Conversation initiative
-          <input type="checkbox" :checked="contact.initiativeEnabled !== 0" :disabled="busy" @change="setInitiative">
+        <label class="toggle">
+          <span>Conversation initiative</span>
+          <input type="checkbox" role="switch" :checked="contact.initiativeEnabled !== 0" :disabled="busy" @change="setInitiative">
         </label>
       </div>
       <p class="group-footer">Allow thoughtful follow-ups when you have not replied. Stops after a few unanswered messages. Applies only to your private chat.</p>

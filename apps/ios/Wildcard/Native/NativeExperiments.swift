@@ -300,7 +300,7 @@ final class NativeExperiments {
             let presentation = AlarmPresentation(alert: alert,
                 countdown: p.kind == "timer" ? AlarmPresentation.Countdown(title: LocalizedStringResource(stringLiteral: p.title), pauseButton: AlarmButton(text: "Pause", textColor: .white, systemImageName: "pause.fill")) : nil,
                 paused: p.kind == "timer" ? AlarmPresentation.Paused(title: LocalizedStringResource(stringLiteral: p.title), resumeButton: AlarmButton(text: "Resume", textColor: .white, systemImageName: "play.fill")) : nil)
-            let attributes = AlarmAttributes(presentation: presentation, metadata: WildcardAlarmMetadata(contactID: contactID), tintColor: .blue)
+            let attributes = AlarmAttributes(presentation: presentation, metadata: WildcardAlarmMetadata(contactID: contactID), tintColor: NativeStyle.tint(for: "alarm"))
             let configuration: AlarmManager.AlarmConfiguration<WildcardAlarmMetadata>
             if p.kind == "timer" { configuration = .timer(duration: Double(p.durationSeconds ?? 60), attributes: attributes) }
             else { configuration = .alarm(schedule: .fixed(try date(p.date)), attributes: attributes) }

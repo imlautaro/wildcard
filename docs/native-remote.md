@@ -22,7 +22,8 @@ extension on a physical iPhone. A receipt, not APNs acceptance, establishes succ
    **Allow remote timers and alarms**. This grant belongs to this participant,
    contact and installation, including for shared contacts. At most 20 contacts per
    device can have grants. The extension checks the local per-kind allowlist too.
-4. In that contact's web chat, choose the iPhone under **Timers and alarms** and
+4. In that contact's web chat, choose the iPhone under **Timers and alarms** (the bar
+   appears on its own once chat polling lists the linked iPhone) and
    send “Set a timer for two minutes.” Multiple iPhones show an installation suffix.
    Selection stays in the session conversation cache; a pending send snapshots the
    target, time zone and message UUID. Retries cannot silently choose another phone.

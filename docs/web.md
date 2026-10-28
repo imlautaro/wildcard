@@ -364,6 +364,14 @@ Explicit refresh bypasses freshness, requests deduplicate, transient failures ke
 content, and session/access/contact changes clear state and reject late results.
 No private persistence or fabricated browser countdown is added.
 
+The device bar appears only once this account has a linked iPhone for the contact,
+a target is selected, or loading devices failed; setup instructions live on
+`/native`. It shows a compact device picker, a refresh icon and **Revoke access**.
+Receipts render as centered chips with a kind glyph and a status icon colored by
+outcome (confirmed, waiting, unconfirmed/unknown, failed, inactive), matching iOS.
+The contact page's **Conversation initiative** uses the standard switch, and
+**Native experiments** is listed with **Connections** on the account page.
+
 
 The iPhone's foreground tools still default timers/alarms to automatic execution;
 other tools are opt-in and Calendar/location reminders keep review. The browser

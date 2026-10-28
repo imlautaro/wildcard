@@ -183,16 +183,29 @@ struct HomeView: View {
                 NativeActiveStatusView(contactID: nil)
             }
             if let error = native.error {
-                HStack {
-                    Text(error).font(.footnote)
-                    Button("Dismiss") { native.error = nil }
-                }.padding(8).frame(maxWidth: .infinity).background(.bar)
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Text(error).manrope(.footnote).frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Dismiss") { native.error = nil }.manrope(.footnote, weight: .semibold)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.horizontal).padding(.vertical, 4)
             }
             if !native.drafts.isEmpty {
                 Button { showNativeInbox = true } label: {
-                    Label("Review shared drafts (\(native.drafts.count))", systemImage: "tray.and.arrow.down")
-                        .font(.footnote).padding(8).frame(maxWidth: .infinity)
-                }.background(.bar)
+                    HStack(spacing: 8) {
+                        Image(systemName: "tray.and.arrow.down.fill")
+                        Text("Review shared drafts").manrope(.footnote, weight: .semibold)
+                        Text("\(native.drafts.count)").manrope(.caption, weight: .bold).foregroundStyle(.white)
+                            .padding(.horizontal, 7).padding(.vertical, 2).background(Color.accentColor, in: Capsule())
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: Capsule())
+                .padding(.vertical, 4)
+                .accessibilityLabel("Review shared drafts (\(native.drafts.count))")
             }
         }
         .environment(groups)

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Minimal inline icon set; stroke icons inherit currentColor.
-defineProps<{ name: 'compose' | 'back' | 'chevron' | 'send' | 'attach' | 'person' | 'people' | 'plus' | 'mail' | 'key' | 'file' | 'close' | 'gear' | 'share' | 'group-add' | 'reply' | 'image' }>();
+defineProps<{ name: 'compose' | 'back' | 'chevron' | 'send' | 'attach' | 'person' | 'people' | 'plus' | 'mail' | 'key' | 'file' | 'close' | 'gear' | 'share' | 'group-add' | 'reply' | 'image' | 'timer' | 'alarm' | 'iphone' | 'calendar' | 'speaker' | 'target' | 'nfc' | 'check' | 'clock' | 'alert' | 'x-circle' | 'minus' | 'refresh' }>();
 </script>
 
 <template>
@@ -22,5 +22,18 @@ defineProps<{ name: 'compose' | 'back' | 'chevron' | 'send' | 'attach' | 'person
     <template v-else-if="name === 'reply'"><path d="m9 17-5-5 5-5" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></template>
     <template v-else-if="name === 'image'"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-5-5L5 21" /></template>
     <template v-else-if="name === 'group-add'"><circle cx="9" cy="8" r="3.5" /><path d="M2 20a7 7 0 0 1 12-4.9" /><path d="M19 14v6" /><path d="M16 17h6" /></template>
+    <template v-else-if="name === 'timer'"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2" /><path d="M10 2h4" /></template>
+    <template v-else-if="name === 'alarm'"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2" /><path d="M5 3 2 6" /><path d="m22 6-3-3" /></template>
+    <template v-else-if="name === 'iphone'"><rect x="6" y="2" width="12" height="20" rx="3" /><path d="M11 18h2" /></template>
+    <template v-else-if="name === 'calendar'"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4" /><path d="M8 2v4" /><path d="M3 10h18" /></template>
+    <template v-else-if="name === 'speaker'"><path d="M11 5 6 9H2v6h4l5 4Z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /><path d="M19 5a10 10 0 0 1 0 14" /></template>
+    <template v-else-if="name === 'target'"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></template>
+    <template v-else-if="name === 'nfc'"><path d="M6 8.3a6 6 0 0 1 0 7.4" /><path d="M10 5.5a10 10 0 0 1 0 13" /><path d="M14 3a14 14 0 0 1 0 18" /></template>
+    <template v-else-if="name === 'check'"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></template>
+    <template v-else-if="name === 'clock'"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></template>
+    <template v-else-if="name === 'alert'"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></template>
+    <template v-else-if="name === 'x-circle'"><circle cx="12" cy="12" r="9" /><path d="m15 9-6 6" /><path d="m9 9 6 6" /></template>
+    <template v-else-if="name === 'minus'"><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></template>
+    <template v-else-if="name === 'refresh'"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" /><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" /><path d="M21 3v5h-5" /><path d="M3 21v-5h5" /></template>
   </svg>
 </template>
