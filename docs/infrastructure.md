@@ -1209,6 +1209,18 @@ opens. A successful local type check or public metadata read does not validate
 Worker-to-Worker routing or the complete OAuth flow. Keep this flag in forward fixes
 and rollback configurations so arbitrary URLs cannot bypass public ingress controls.
 
+MCP DNS preflight uses `https://cloudflare-dns.com/dns-query` and the fixed
+`https://dns.google/resolve` fallback for availability failures. Both destinations
+must be reachable over HTTPS. No provider account, resource, key or migration is
+needed. Google sees only the public hostname/type and an explicit zero-length
+client subnet; no MCP URL path or credentials are sent. Three seconds per resolver
+and 16 KB per response bound this dependency. Negative/private answers never trigger
+fallback, and failure of both resolvers blocks the request. Diagnostics log only
+fixed resolver/family/reason labels and optional HTTP status, without hostnames or
+addresses. See [resolver behavior and verification](connectors.md#dns-availability-and-fallback).
+After automatic release, verify OAuth reaches the provider sign-in page and inspect
+the bounded diagnostics if it fails; successful deployment alone does not prove that.
+
 ### MCP OAuth extension
 
 Apply migration 0027 after 0026 through the automatic release pipeline. OAuth uses

@@ -93,7 +93,7 @@ works without eval/new Function in Workers. References, regex keywords,
 unsupported schema dialects and excessive catalogs fail closed. Even a single incompatible tool can prevent catalog discovery. HTTPS
 must use a public DNS hostname, default port, no credentials, query or fragment.
 Redirects and off-endpoint transport requests are rejected. Public DNS addresses
-are checked through Cloudflare DoH; local, reserved and IP-literal endpoints are
+are checked through Cloudflare DoH with Google Public DNS as an availability fallback; local, reserved and IP-literal endpoints are
 rejected. DNS preflight is not a pinned resolution: production must retain the
 Workers public egress boundary and no VPC/private-network bindings. Do not expose
 local Wrangler development to untrusted users or endpoints. A deployment adding
@@ -399,8 +399,9 @@ addresses. These failures never skip the DNS safety check or broaden permissions
 Errors remain transient UI state and do not enter connection snapshot caches.
 
 Operators can search Workers Logs for `mcp_connection_failure` and the displayed
-reference. Records contain only a fixed stage, an allowlisted code and that random
-reference; they never include remote exception text, URLs, account/contact IDs,
+reference. Records contain only a fixed stage, an allowlisted code, that random
+reference and bounded DNS diagnostics (resolver name, record family, fixed reason,
+and optional HTTP status); they never include remote exception text, URLs, account/contact IDs,
 codes, proofs, credentials or request/response bodies. Existing query redaction
 must remain enabled. Do not infer a need for manual client settings from a network
 failure. Use Advanced OAuth settings only when the provider actually requires them.
@@ -415,3 +416,41 @@ flag, but did not capture the hidden production exception or run a complete OAut
 flow. Validate the corrected route after automatic publication before declaring the
 reported failure resolved. No client was registered or external account accessed
 during this investigation.
+
+### DNS availability and fallback
+
+DNS safety checks query A and AAAA concurrently through Cloudflare's fixed HTTPS
+JSON endpoint. If that resolver cannot complete the check because of a transport,
+HTTP, malformed/truncated response or resolver failure, a single fallback queries
+Google Public DNS at `https://dns.google/resolve`. Each provider has a three-second
+deadline, bounded by the caller's existing deadline; each response is limited to
+16 KB. The six-second worst-case resolver budget stays inside the existing ten-second
+OAuth request and twenty-second MCP session deadlines. Only DNS queries are retried;
+MCP actions, registration and token requests retain their existing retry rules.
+
+Fallback never overrides NXDOMAIN, a complete empty address set or any private,
+reserved or invalid IP address. Both families must complete successfully at one
+provider before proceeding. One absent family is allowed if the other has public
+addresses. A failed AAAA request cannot hide a private A answer, or vice versa:
+both results settle before the fallback decision. Responses must identify the
+requested question and record type. IP literals are validated before classification.
+Both resolvers failing still blocks the connection; there is no fail-open path.
+
+Resolvers receive only the public server hostname and record type. Google is used
+only on availability failure and receives `edns_client_subnet=0.0.0.0/0` to avoid
+sending a client subnet to authoritative servers. Neither resolver receives the
+MCP path, user identifiers, credentials, authorization codes or token contents.
+Checks remain request-scoped and uncached in both clients and the backend; stored
+permissions and connection snapshots never bypass a new check. No new account,
+binding, secret or migration is required. Keep both fixed resolver destinations
+reachable from production and independent deployments. Do not replace them with
+user-supplied URLs or remove `global_fetch_strictly_public`.
+
+The reported reference `eaf11068-e933-4b48-97ae-1d0afa0031b6` identified a DNS
+availability failure during the endpoint probe. Its older log did not preserve the
+underlying transport/HTTP reason. The fallback and diagnostic changes pass API
+TypeScript checking; production resolver recovery and a complete OAuth flow remain
+unverified until this change is published and authorization is retried.
+
+References: [Cloudflare DNS JSON API](https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/)
+and [Google Public DNS JSON API](https://developers.google.com/speed/public-dns/docs/doh/json).

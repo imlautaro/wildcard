@@ -9,6 +9,15 @@ const setupMessages = {
   token_exchange: 'Wildcard could not exchange the authorization code with this provider. Authorize again.',
 } as const;
 type SetupStage = keyof typeof setupMessages;
+type DnsDiagnostic = {
+  resolver: 'cloudflare' | 'google';
+  type?: 'A' | 'AAAA';
+  reason: 'network' | 'timeout' | 'http' | 'invalid_response' | 'resolver_failure' | 'private_address' | 'no_addresses' | 'not_found';
+  httpStatus?: number;
+};
+export class DnsFailure extends Error {
+  constructor(code: 'MCP_DNS' | 'MCP_DNS_UNAVAILABLE', readonly diagnostics: DnsDiagnostic[]) { super(code); }
+}
 const knownCodes = new Set(['MCP_DNS', 'MCP_DNS_UNAVAILABLE', 'MCP_ENDPOINT', 'MCP_OAUTH_DESTINATION',
   'MCP_OAUTH_SIZE', 'MCP_OAUTH_RESOURCE', 'MCP_OAUTH_ISSUER', 'MCP_OAUTH_METADATA',
   'MCP_OAUTH_PKCE', 'MCP_OAUTH_SCOPE', 'MCP_OAUTH_CLIENT', 'MCP_OAUTH_STATIC_ISSUER',
@@ -18,9 +27,11 @@ export function safeFailureCode(failure: unknown) {
 }
 export class OAuthSetupFailure extends Error {
   readonly code: string;
+  readonly dns: DnsDiagnostic[] | undefined;
   constructor(readonly stage: SetupStage, failure: unknown) {
     super(setupMessages[stage]);
     this.code = safeFailureCode(failure);
+    this.dns = failure instanceof DnsFailure ? failure.diagnostics : undefined;
   }
 }
 export async function oauthStage<T>(stage: SetupStage, operation: () => Promise<T>): Promise<T> {

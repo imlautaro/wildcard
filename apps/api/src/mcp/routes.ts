@@ -5,7 +5,7 @@ import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { isRecord } from '../chat/meta';
 import { connectionColumns, credential, discover, endpoint, type Connection, type RemoteTool } from './client';
-import { OAuthSetupFailure, safeFailureCode } from './errors';
+import { DnsFailure, OAuthSetupFailure, safeFailureCode } from './errors';
 
 const routes = new Hono<{ Bindings: Env; Variables: { owner: string; sessionID: string } }>();
 routes.use('*', async (c, next) => {
@@ -32,8 +32,9 @@ routes.onError((failure, c) => {
   };
   const reference = crypto.randomUUID();
   const stage = failure instanceof OAuthSetupFailure ? failure.stage : 'connection';
-  // Log only fixed codes/stages and a random reference, never remote errors or URLs.
-  console.warn({ event: 'mcp_connection_failure', reference, stage, code });
+  const dns = failure instanceof OAuthSetupFailure ? failure.dns : failure instanceof DnsFailure ? failure.diagnostics : undefined;
+  // Only fixed labels, bounded DNS status details and a random reference; no remote text or URLs.
+  console.warn({ event: 'mcp_connection_failure', reference, stage, code, ...(dns ? { dns } : {}) });
   const message = messages[code] ?? (failure instanceof OAuthSetupFailure ? failure.message : 'Unable to connect. Check the HTTPS endpoint or authorize again from Connections.');
   return c.json({ error: `${message} Reference: ${reference}`, code, stage, reference }, 422);
 });
