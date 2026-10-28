@@ -9,6 +9,12 @@ clients render that tree with their own native components: SwiftUI lists, grids 
 Swift Charts on iOS, and the grouped-list styling of the app on web. There are no
 web views, iframes or remote scripts.
 
+A mini app opens as its own full-screen view, like an app: on iOS a
+`fullScreenCover` with a close button (✕) and a ⋯ menu in the top bar, and, for
+tabbed apps, a native `TabView` with one navigation stack per tab. On web it is the
+`/contacts/:id/mini-apps/:appID` page with the same top bar menu, a bottom tab bar and
+a composer pinned above it.
+
 This is a first implementation. Generated spec quality from Muse Spark, live MCP
 servers and device presentation have not been verified yet.
 
@@ -26,7 +32,7 @@ servers and device presentation have not been verified yet.
    **Runs each time you open or refresh** (reads) and **Only when you tap and
    confirm** (writes). Choose **Enable mini app**. Until then nothing loads.
 4. Opening an enabled app runs its reads, applies its transforms and shows the
-   result. Inputs (segmented controls, a text field) reload with new values.
+   result full screen. Close it with ✕ (iOS) or the back button (web). Inputs (segmented controls, a text field) reload with new values.
    Actions show a native confirmation with the text the contact wrote before
    running a write.
 
@@ -38,8 +44,9 @@ replacement increments the revision and requires review again.
 
 `create_mini_app` validates the spec on the server (`apps/api/src/miniapps/spec.ts`)
 and returns precise errors to the model, listing the available ids for broken
-references. Limits: 16 KB, eight state values, 12 data steps (at most four `mcp`),
-four inputs, 16 actions, 40 view components and one level of sections.
+references. Limits: 24 KB, eight state values, 12 data steps (at most four `mcp`),
+four inputs, 16 actions, five tabs, six menu items, 20 top-level components per
+screen, 80 components in total, and one level of sections or grids.
 
 **State** declares saved values: `number`, `text`, `boolean` or `list`
 (up to 200 flat objects, such as `{ "name": "Milk", "done": false }`). A `stat`,
@@ -47,6 +54,18 @@ four inputs, 16 actions, 40 view components and one level of sections.
 and templates read it with `{"$state": id}`. State, data steps and inputs each have
 their own namespace for ids, except that state and data step ids share one, because
 the view reads both.
+
+**Screens.** A spec has either `view` (one screen) or `tabs`: 2–5
+`{ id, title, icon, view }` entries shown in a native bottom tab bar. Tab and tile
+icons come from a closed catalog (`home`, `list`, `chart`, `check`, `star`,
+`calendar`, `clock`, `money`, `cart`, `bolt`, `folder`, `person`, `chat`, `book`,
+`trophy`, `heart`, `gear`, `grid`) that each client maps to SF Symbols or its own
+SVG icons. `menu` lists up to six field-less action ids for the top bar ⋯ menu, such
+as "Clear list" or "Reset". The app's own menu items come first, followed by
+Refresh, Disable and Delete. Inputs and the "Updated" footer show on the first
+screen only. A stored tabbed spec has no `view`. The resolved response carries
+`tabs` and `menu`, and its `view` is the first tab's view, so older clients still
+show the first screen.
 
 **Local actions** change state without any external tool:
 `{ "id": "add", "label": "+", "set": [{ "state": "count", "op": "increment" }] }`.
@@ -92,13 +111,22 @@ of a guess. Nothing is evaluated as code, and there are no regular expressions o
 remote references.
 
 View components:
-- `section`.
+- `section`, and `grid` (two or three columns of cards: `stat`, `progress`,
+  `chart`, `text`, field-less `action` and `tile`). Neither nests.
+- `tile`: a card in a grid, or a navigation row elsewhere, with an icon, title,
+  optional caption and value. It opens a tab (`tab`) or runs a field-less action.
+- `composer`: a text bar pinned to the bottom of its screen, with a send button,
+  for an action with exactly one text or number field (a to-do input, a log entry).
+  One per screen, at the top level. When its action only appends a row with
+  literal values plus that field, clients show the row immediately.
 - `stat`: a lone stat becomes a large hero number, and consecutive stats share a grid.
-- `progress`: the goal is a number or a number state id.
+- `progress`: the goal is a number or a number state id. `style: "ring"` draws a
+  circular gauge.
 - `list` (read-only) and `checklist` (list state; tap to toggle the boolean `done`
   field, swipe or ✕ to delete). When `done` is omitted, the first boolean field of
   the list's items is used.
-- `chart` (`bar` or `line`) and `text`.
+- `chart` (`bar`, `line`, `area` or `pie`, a donut with a legend and up to 12
+  slices) and `text`.
 - `toggle`, `choice` (segmented) and `input`, each bound to a state value.
 - `timer`: an on-device countdown with start, pause and reset. It is not saved and
   stops when the screen closes.
@@ -165,7 +193,7 @@ because it would add inference cost and nondeterminism to every load.
 - **Rate limits.** Per account per minute: 120 management requests (which include
   local taps and state edits), 20 loads, and 10 external actions. Each load has a 20-second MCP deadline per step, a 1 MiB transport limit,
   at most 5,000 rows per transform, 100 groups, 100 list rows, 60 chart points and
-  128 KB of resolved view.
+  160 KB of resolved views across all tabs.
 
 ## API
 
@@ -186,7 +214,7 @@ All routes require the bearer session and an owned contact:
 All direct private chats expose `create_mini_app` and `list_mini_apps`, and get
 three tool-enabled rounds (scheduled turns keep two) with up to 8,192 completion
 tokens, within the six-execution budget. `museCompletion` accepts `create_mini_app`
-arguments up to 20 KB; the earlier 1 KB limit for most tools rejected nearly every
+arguments up to 30 KB; the earlier 1 KB limit for most tools rejected nearly every
 spec. Risk: a turn can now make four model calls (up to 45 seconds each) plus MCP
 calls inside the existing three-minute `prepare-reply` step. Slow turns can time out
 and fall back to the existing tool-free recovery reply. Creation requires the live running turn. Each human message
@@ -257,6 +285,7 @@ expense data, including rejection cases and normalized-spec round trips.
 
 Still pending: Muse Spark spec quality in the production chat prompt (the evaluation
 uses a reduced system prompt); live MCP loads and actions;
-iOS sheet, Charts and form presentation on a device; web layout on narrow screens;
+iOS full-screen presentation, tab bar, composer, Charts and form presentation on a
+device; web layout, bottom tab bar and composer on narrow screens;
 grant invalidation after tool changes; and cache behavior across navigation, account
 switching and access revocation.

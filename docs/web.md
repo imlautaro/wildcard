@@ -445,9 +445,12 @@ resumed typing, failures, navigation, revocation and account switching is pendin
 The chat page shows a mini app card under the reply that created it and polls the
 contact's app list alongside the conversation. `/contacts/:id/mini-apps` lists apps,
 and `/contacts/:id/mini-apps/:appID` shows the review screen (reads vs confirmed
-writes, then **Enable mini app**) or the enabled app. `MiniAppView.vue` renders the
-server-resolved tree: stat grids, grouped lists, SVG bar/line charts, text, notices
-and action forms that confirm with the action's text. Values are formatted with
+writes, then **Enable mini app**) or the enabled app as its own screen: a top bar
+with a ⋯ menu (the app's menu actions, then Refresh, Disable and Delete), the
+current tab, a composer pinned to the bottom and a bottom tab bar for tabbed apps.
+`MiniAppView.vue` renders the server-resolved tree: stat grids, card grids, tiles,
+grouped lists, SVG bar/line/area/donut charts, progress bars and rings, text,
+notices and action forms that confirm with the action's text. Values are formatted with
 `Intl` in the viewer's locale. Behavior, copy and limits match iOS; see
 [mini apps](mini-apps.md) and [caching](caching.md#mini-apps). Browser layout and live
 loads have not been verified.

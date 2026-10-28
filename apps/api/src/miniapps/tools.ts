@@ -3,7 +3,10 @@ import type { StoredTurn } from '../chat/data';
 import { parseSpec, SpecError } from './spec';
 import { bindTools, contactConnectors, miniAppColumns, type MiniAppRow } from './runtime';
 
-const specGuide = 'spec (a JSON object, not a string) = {title, subtitle?, icon: chart|list|money|calendar|cart|check|clock|star|bolt|folder, state?, inputs?, data?, view, actions?}. '
+const specGuide = 'spec (a JSON object, not a string) = {title, subtitle?, icon: chart|list|money|calendar|cart|check|clock|star|bolt|folder, state?, inputs?, data?, view | tabs, menu?, actions?}. '
+  + 'The app opens full screen like a native app. Use view (array of components) for one screen, or tabs for 2–5 screens with a native bottom tab bar: tabs:[{id,title,icon,view}] '
+  + '(icon: home|list|chart|check|star|calendar|clock|money|cart|bolt|folder|person|chat|book|trophy|heart|gear|grid). '
+  + 'menu: up to 6 action ids without fields, shown in the top bar ⋯ menu (e.g. clear list, reset, shuffle); put secondary or destructive actions there instead of big buttons. '
   + 'state: saved values for this person, [{id,type:number|text|boolean|list,initial}]; a list holds flat objects, e.g. [{"name":"Milk","done":false}]. '
   + 'Read state in the view by id (stat.step, list.source) or with {"$state":"id"}; data steps may also read state with "from". '
   + 'data is an ordered list of steps; "from" may only name an EARLIER step or a state id. Step types: '
@@ -15,12 +18,16 @@ const specGuide = 'spec (a JSON object, not a string) = {title, subtitle?, icon:
   + 'Values may be JSON literals or expressions: {"$input":"id"}, {"$state":"id"}, {"$field":"id"} (actions), {"$date":{"days":-7,"format":"date"|"datetime"}}, '
   + 'math {"$add"|"$sub"|"$mul"|"$div"|"$min"|"$max":[a,b,…]}, {"$round":{"value":…,"digits":2}}, and {"$daysSince":"2026-10-01"} / {"$daysUntil":…} (whole days from today).  Example tip: {id:"tip",type:"const",value:{"$round":{"value":{"$mul":[{"$input":"bill"},{"$div":[{"$input":"pct"},100]}]},"digits":2}}}. '
   + 'inputs (not saved, recomputed live): {id,type:"segmented",label,options:[{value,label}],default}, {id,type:"number",label,default} or {id,type:"text",label,default}. '
-  + 'view components: {type:"section",title?,children} (one level); {type:"stat",label,step,path?,caption?,format?,currency?} (a single stat shows as a large number); '
-  + '{type:"progress",label,step,goal,caption?} (value toward a goal; goal is a number or a number state id); {type:"toggle",label,state} (boolean state, tap to flip); '
+  + 'view components: {type:"section",title?,children} (one level); {type:"grid",columns?:2|3,children} (cards side by side; children: stat, progress, chart, text, action, tile; not nested); '
+  + '{type:"stat",label,step,path?,caption?,format?,currency?} (a single stat shows as a large number); '
+  + '{type:"progress",label,step,goal,caption?,style?:bar|ring} (value toward a goal; goal is a number or a number state id; ring suits grids); '
+  + '{type:"tile",title,caption?,icon?,step?,path?,format?,tab?|action?} (a card: tab opens that tab, action runs a field-less action, step shows a value); '
+  + '{type:"composer",action,placeholder?} (a text bar pinned to the bottom of its screen with a send/add button, like a messaging app; its action has exactly one text or number field; at most one per screen, top level); '
+  + '{type:"toggle",label,state} (boolean state, tap to flip); '
   + '{type:"choice",label,state,options:[{value,label}]} (text state, pick one); {type:"input",label,state,placeholder?} (text/number state, edited in place); '
   + '{type:"checklist",state,title,done?,subtitle?,value?,removable?,empty?} (list state; rows tap to toggle the boolean "done" field and swipe to delete); '
   + '{type:"list",source,title,subtitle?,value?,limit?,empty?,format?,currency?} (read-only rows from a step or list state; title/subtitle/value are paths in each row); '
-  + '{type:"chart",source,kind:bar|line,x,y,title?,format?,currency?}; {type:"timer",label,minutes} (on-device countdown with start/pause/reset); '
+  + '{type:"chart",source,kind:bar|line|area|pie,x,y,title?,format?,currency?} (pie: up to 12 slices, e.g. a group step); {type:"timer",label,minutes} (on-device countdown with start/pause/reset); '
   + '{type:"text",text,style:body|caption|headline}; {type:"action",action} (consecutive buttons share one row). '
   + 'format: number|currency|percent|date|datetime|text; currency needs an ISO code. '
   + 'actions (ids separate from state ids): local {id,label,set:[{state,op,value?}],confirm?,style?,fields?} updates saved state instantly. ops: increment/decrement (number, default 1), set (number/text/boolean), toggle (boolean), '
@@ -30,7 +37,9 @@ const specGuide = 'spec (a JSON object, not a string) = {title, subtitle?, icon:
   + 'fields: [{id,label,kind:text|number|date|toggle,required?}] render a form with the button. '
   + 'Prefer the bound components (toggle, choice, input, checklist) over many buttons. Keep labels short (use "+" and "−" for counters) and write all text in the person\'s language. '
   + 'Example counter: {title:"Counter",icon:"bolt",state:[{id:"count",type:"number",initial:0}],view:[{type:"stat",label:"Count",step:"count"},{type:"action",action:"sub"},{type:"action",action:"add"}],actions:[{id:"sub",label:"−",set:[{state:"count",op:"decrement"}]},{id:"add",label:"+",set:[{state:"count",op:"increment"}]}]}. '
-  + 'Example shopping list: {title:"Groceries",icon:"cart",state:[{id:"items",type:"list",initial:[]}],view:[{type:"checklist",state:"items",title:"name",done:"done",empty:"Add your first item"},{type:"action",action:"add"}],actions:[{id:"add",label:"Add",fields:[{id:"item",label:"Item",kind:"text",required:true}],set:[{state:"items",op:"append",value:{"name":{"$field":"item"},"done":false}}]}]}.';
+  + 'Example to-do list with an input bar and a menu: {title:"To-do",icon:"check",state:[{id:"items",type:"list",initial:[]}],menu:["clearDone","clearAll"],view:[{type:"checklist",state:"items",title:"name",done:"done",empty:"Nothing to do"},{type:"composer",action:"add",placeholder:"New task"}],'
+  + 'actions:[{id:"add",label:"Add",fields:[{id:"item",label:"Task",kind:"text",required:true}],set:[{state:"items",op:"append",value:{"name":{"$field":"item"},"done":false}}]},{id:"clearDone",label:"Uncheck all",set:[{state:"items",op:"set_items",field:"done",value:false}]},{id:"clearAll",label:"Clear list",style:"destructive",confirm:"Delete every task?",set:[{state:"items",op:"clear"}]}]}. '
+  + 'Example tabs: tabs:[{id:"home",title:"Home",icon:"home",view:[{type:"grid",children:[{type:"stat",label:"Total",step:"total"},{type:"progress",label:"Goal",step:"total",goal:10,style:"ring"},{type:"tile",title:"History",icon:"list",tab:"history"}]}]},{id:"history",title:"History",icon:"list",view:[{type:"list",source:"log",title:"name"}]}].';
 
 export const miniAppTools: ModelTool[] = [{ type: 'function', function: {
   name: 'create_mini_app',

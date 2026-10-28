@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Minimal inline icon set; stroke icons inherit currentColor.
-defineProps<{ name: 'compose' | 'back' | 'chevron' | 'send' | 'attach' | 'person' | 'people' | 'plus' | 'mail' | 'key' | 'file' | 'close' | 'gear' | 'share' | 'group-add' | 'reply' | 'image' | 'timer' | 'alarm' | 'iphone' | 'calendar' | 'speaker' | 'target' | 'nfc' | 'check' | 'clock' | 'alert' | 'x-circle' | 'minus' | 'refresh' | 'chart' | 'list' | 'money' | 'cart' | 'star' | 'bolt' | 'folder' | 'grid' }>();
+defineProps<{ name: 'compose' | 'back' | 'chevron' | 'send' | 'attach' | 'person' | 'people' | 'plus' | 'mail' | 'key' | 'file' | 'close' | 'gear' | 'share' | 'group-add' | 'reply' | 'image' | 'timer' | 'alarm' | 'iphone' | 'calendar' | 'speaker' | 'target' | 'nfc' | 'check' | 'clock' | 'alert' | 'x-circle' | 'minus' | 'refresh' | 'chart' | 'list' | 'money' | 'cart' | 'star' | 'bolt' | 'folder' | 'grid' | 'home' | 'chat' | 'book' | 'trophy' | 'heart' | 'more' }>();
 </script>
 
 <template>
@@ -42,6 +42,12 @@ defineProps<{ name: 'compose' | 'back' | 'chevron' | 'send' | 'attach' | 'person
     <path v-else-if="name === 'bolt'" d="M13 2 4 14h7l-1 8 9-12h-7Z" />
     <path v-else-if="name === 'folder'" d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
     <template v-else-if="name === 'grid'"><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /><rect x="14" y="14" width="7" height="7" rx="2" /></template>
+    <template v-else-if="name === 'home'"><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9" /><path d="M10 21v-6h4v6" /></template>
+    <path v-else-if="name === 'chat'" d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12Z" />
+    <template v-else-if="name === 'book'"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5Z" /><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" /></template>
+    <template v-else-if="name === 'trophy'"><path d="M8 21h8" /><path d="M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0Z" /><path d="M17 5h3v2a3 3 0 0 1-3 3" /><path d="M7 5H4v2a3 3 0 0 0 3 3" /></template>
+    <path v-else-if="name === 'heart'" d="M20.8 5.6a5.5 5.5 0 0 0-7.8 0L12 6.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 22l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" />
+    <template v-else-if="name === 'more'"><circle cx="5" cy="12" r="1.2" fill="currentColor" /><circle cx="12" cy="12" r="1.2" fill="currentColor" /><circle cx="19" cy="12" r="1.2" fill="currentColor" /></template>
     <template v-else-if="name === 'refresh'"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" /><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" /><path d="M21 3v5h-5" /><path d="M3 21v-5h5" /></template>
   </svg>
 </template>

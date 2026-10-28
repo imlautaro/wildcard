@@ -14,6 +14,12 @@ struct MiniAppTool: Decodable, Hashable, Sendable {
     let toolName: String
     let role: String
 }
+/// A tab of a tabbed mini app; its title and icon are known before the data loads.
+struct MiniAppTabInfo: Decodable, Hashable, Sendable {
+    let id: String
+    let title: String
+    let icon: String
+}
 struct MiniApp: Decodable, Identifiable, Hashable, Sendable {
     let id: String
     let turnID: String?
@@ -24,13 +30,20 @@ struct MiniApp: Decodable, Identifiable, Hashable, Sendable {
     let status: String
     let inputs: [MiniAppInput]
     let tools: [MiniAppTool]
+    let tabs: [MiniAppTabInfo]?
     let createdAt: Double
     let updatedAt: Double
     var isEnabled: Bool { status == "enabled" }
     /// SF Symbols for the server's closed icon catalog.
-    var symbol: String {
-        ["chart": "chart.bar.fill", "list": "list.bullet", "money": "banknote.fill", "calendar": "calendar", "cart": "cart.fill",
-         "check": "checkmark.circle.fill", "clock": "clock.fill", "star": "star.fill", "bolt": "bolt.fill", "folder": "folder.fill"][icon] ?? "chart.bar.fill"
+    var symbol: String { Self.symbol(icon) }
+    /// SF Symbols for the server's closed icon catalogs (app, tab and tile icons).
+    static func symbol(_ icon: String?) -> String {
+        [
+            "chart": "chart.bar.fill", "list": "list.bullet", "money": "banknote.fill", "calendar": "calendar", "cart": "cart.fill",
+            "check": "checkmark.circle.fill", "clock": "clock.fill", "star": "star.fill", "bolt": "bolt.fill", "folder": "folder.fill",
+            "home": "house.fill", "person": "person.fill", "chat": "bubble.left.and.bubble.right.fill", "book": "book.fill", "trophy": "trophy.fill",
+            "heart": "heart.fill", "gear": "gearshape.fill", "grid": "square.grid.2x2.fill",
+        ][icon ?? ""] ?? "chart.bar.fill"
     }
 }
 struct MiniAppField: Decodable, Hashable, Sendable {
@@ -117,6 +130,8 @@ struct MiniAppUpdate: Codable, Hashable, Sendable {
             case ("set", .text): next[update.state] = .text(update.value?.label ?? "")
             case ("set", .bool): if case .bool(let b)? = update.value { next[update.state] = .bool(b) }
             case ("clear", .list): next[update.state] = .list([])
+            // Client-only: a composer submission appends its prepared rows before the server confirms them.
+            case ("append", .list(let items)): if case .list(let added)? = update.value { next[update.state] = .list(items + added) }
             case ("set_items", .list(let items)):
                 guard let field = update.field, let value = update.value else { continue }
                 next[update.state] = .list(items.map { item in var item = item; item[field] = value; return item })
@@ -159,11 +174,37 @@ struct MiniAppChecklist: Decodable, Hashable, Sendable {
     }
 }
 
+/// A tile card: shows a value and opens a tab or runs a field-less action.
+struct MiniAppTile: Decodable, Hashable, Sendable {
+    let title: String
+    let caption: String?
+    let icon: String?
+    let value: MiniAppScalar?
+    let format: String
+    let currency: String?
+    let state: String?
+    let tab: String?
+    let action: MiniAppComponent?
+}
+/// A text bar pinned to the bottom of its screen; it submits the action's only field.
+struct MiniAppComposer: Decodable, Hashable, Sendable {
+    struct Append: Decodable, Hashable, Sendable { let state: String; let key: String; let item: [String: MiniAppStateValue] }
+    let action: String
+    let field: String
+    let kind: String
+    let placeholder: String?
+    let label: String
+    let confirm: String?
+    let remote: Bool
+    /// Present when the submission only appends a row, so it can show immediately.
+    let append: Append?
+}
+
 /// The server-resolved component tree; the renderer never evaluates app logic.
 indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
     case section(title: String?, children: [MiniAppComponent])
     case stat(label: String, value: MiniAppScalar?, format: String, currency: String?, caption: String?, state: String?)
-    case progress(label: String, value: Double?, goal: Double, format: String, currency: String?, caption: String?, state: String?)
+    case progress(label: String, value: Double?, goal: Double, format: String, currency: String?, caption: String?, state: String?, ring: Bool)
     case list(items: [MiniAppListRow], format: String, currency: String?, empty: String)
     case checklist(MiniAppChecklist)
     case chart(kind: String, title: String?, points: [MiniAppPoint], format: String, currency: String?)
@@ -173,10 +214,13 @@ indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
     case input(label: String, state: String, value: MiniAppScalar, number: Bool, placeholder: String?)
     case timer(label: String, seconds: Int)
     case action(id: String, local: Bool, label: String, confirm: String?, destructive: Bool, fields: [MiniAppField], updates: [MiniAppUpdate]?)
+    case grid(columns: Int, children: [MiniAppComponent])
+    case tile(MiniAppTile)
+    case composer(MiniAppComposer)
     case notice(code: String)
     case unsupported
 
-    private enum Keys: String, CodingKey { case type, title, children, label, value, format, currency, caption, items, empty, kind, points, text, style, id, confirm, fields, code, state, updates, goal, options, placeholder, seconds }
+    private enum Keys: String, CodingKey { case type, title, children, label, value, format, currency, caption, items, empty, kind, points, text, style, id, confirm, fields, code, state, updates, goal, options, placeholder, seconds, columns }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         let format = try c.decodeIfPresent(String.self, forKey: .format) ?? "text"
@@ -187,7 +231,8 @@ indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
         case "stat": self = .stat(label: try c.decode(String.self, forKey: .label), value: try c.decodeIfPresent(MiniAppScalar.self, forKey: .value), format: format, currency: currency, caption: caption,
                                   state: try c.decodeIfPresent(String.self, forKey: .state))
         case "progress": self = .progress(label: try c.decode(String.self, forKey: .label), value: try c.decodeIfPresent(Double.self, forKey: .value), goal: try c.decode(Double.self, forKey: .goal),
-                                          format: format, currency: currency, caption: caption, state: try c.decodeIfPresent(String.self, forKey: .state))
+                                          format: format, currency: currency, caption: caption, state: try c.decodeIfPresent(String.self, forKey: .state),
+                                          ring: try c.decodeIfPresent(String.self, forKey: .style) == "ring")
         case "list": self = .list(items: try c.decode([MiniAppListRow].self, forKey: .items), format: format, currency: currency, empty: try c.decode(String.self, forKey: .empty))
         case "checklist": self = .checklist(try MiniAppChecklist(from: decoder))
         case "chart": self = .chart(kind: try c.decode(String.self, forKey: .kind), title: try c.decodeIfPresent(String.self, forKey: .title), points: try c.decode([MiniAppPoint].self, forKey: .points), format: format, currency: currency)
@@ -202,16 +247,29 @@ indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
                                       label: try c.decode(String.self, forKey: .label), confirm: try c.decodeIfPresent(String.self, forKey: .confirm),
                                       destructive: try c.decode(String.self, forKey: .style) == "destructive", fields: try c.decode([MiniAppField].self, forKey: .fields),
                                       updates: try c.decodeIfPresent([MiniAppUpdate].self, forKey: .updates))
+        case "grid": self = .grid(columns: try c.decode(Int.self, forKey: .columns), children: try c.decode([MiniAppComponent].self, forKey: .children))
+        case "tile": self = .tile(try MiniAppTile(from: decoder))
+        case "composer": self = .composer(try MiniAppComposer(from: decoder))
         case "notice": self = .notice(code: try c.decode(String.self, forKey: .code))
         default: self = .unsupported
         }
     }
 }
+struct MiniAppTab: Decodable, Hashable, Sendable {
+    let id: String
+    let title: String
+    let icon: String
+    let view: [MiniAppComponent]
+}
 struct MiniAppResolution: Decodable, Sendable {
     let revision: Int
     let inputs: [String: String]
     let resolvedAt: Double
+    /// The first tab's view in tabbed apps.
     let view: [MiniAppComponent]
+    let tabs: [MiniAppTab]?
+    /// Field-less actions shown in the top bar menu.
+    let menu: [MiniAppComponent]?
     let state: [String: MiniAppStateValue]?
     /// Whether the view includes connector data (and so can be stale).
     let remote: Bool?

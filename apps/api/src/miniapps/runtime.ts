@@ -1,6 +1,6 @@
 import { isRecord } from '../chat/meta';
 import { catalog, connectionColumns, remote, size, validator, type Connection, type RemoteTool } from '../mcp/client';
-import { applyUpdates, directUpdate, evaluate, normalizeState, parseSpec, present, StepError, toolData, transform, type Context, type ResolvedComponent, type Spec, type ToolUse } from './spec';
+import { applyUpdates, directUpdate, evaluate, normalizeState, parseSpec, present, resolvedAction, StepError, toolData, transform, type Context, type ResolvedAction, type ResolvedComponent, type ResolvedTab, type Spec, type ToolUse } from './spec';
 
 export type GrantedTool = ToolUse & { fingerprint: string };
 export type MiniAppRow = { id: string; contactID: string; userID: string; turnID: string | null; revision: number; title: string; specJSON: string; toolsJSON: string; approvedRevision: number | null; lastError: string | null; createdAt: number; updatedAt: number };
@@ -67,7 +67,8 @@ async function readState(db: D1Database, app: MiniAppRow, spec: Spec) {
   return { values: normalizeState(spec, row ? JSON.parse(row.valuesJSON) : null), version: row?.version ?? null };
 }
 
-export type Resolution = { view: ResolvedComponent[]; issues: { step: string; code: string }[]; state: Record<string, unknown>; remote: boolean };
+// `view` is the first tab's view in tabbed apps, so earlier clients still show something useful.
+export type Resolution = { view: ResolvedComponent[]; tabs?: ResolvedTab[]; menu: ResolvedAction[]; issues: { step: string; code: string }[]; state: Record<string, unknown>; remote: boolean };
 export async function resolve(env: Env, app: MiniAppRow, connectors: Connection[], inputs: Record<string, string>, timeZone: string, saved?: Record<string, unknown>): Promise<Resolution> {
   const { spec } = parseSpec(JSON.parse(app.specJSON));
   const granted = JSON.parse(app.toolsJSON) as GrantedTool[];
@@ -91,13 +92,14 @@ export async function resolve(env: Env, app: MiniAppRow, connectors: Connection[
     try { outputs.set(step.id, transform(step, outputs, context)); }
     catch (error) { errors.set(step.id, error instanceof StepError ? error.message : 'TRANSFORM_FAILED'); }
   }
-  const view = present(spec.view, spec, outputs, errors);
-  if (size(view) > 128_000) return { view: [{ type: 'notice', code: 'RESULT_TOO_LARGE' }], issues: [{ step: '*', code: 'RESULT_TOO_LARGE' }], state, remote };
+  const tabs = spec.tabs?.map(tab => ({ id: tab.id, title: tab.title, icon: tab.icon, view: present(tab.view, spec, outputs, errors) }));
+  const view = tabs ? tabs[0].view : present(spec.view ?? [], spec, outputs, errors), menu = spec.menu.map(id => resolvedAction(spec, id));
+  if (size({ view, tabs }) > 160_000) return { view: [{ type: 'notice', code: 'RESULT_TOO_LARGE' }], menu: [], issues: [{ step: '*', code: 'RESULT_TOO_LARGE' }], state, remote };
   // Only step IDs and codes are retained so the contact can repair the spec; never data.
   const issues = [...errors].map(([step, code]) => ({ step, code }));
   const lastError = issues.length ? JSON.stringify(issues.slice(0, 12)) : null;
   if (lastError !== app.lastError) await env.DB.prepare('UPDATE mini_app SET last_error = ? WHERE id = ? AND revision = ?').bind(lastError, app.id, app.revision).run();
-  return { view, issues, state, remote };
+  return { view, ...(tabs ? { tabs } : {}), menu, issues, state, remote };
 }
 
 function fieldValues(fields: Spec['actions'][number]['fields'], raw: unknown): Record<string, unknown> | null {

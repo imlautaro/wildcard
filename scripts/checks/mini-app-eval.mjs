@@ -98,7 +98,7 @@ for (const [index, prompt] of prompts.entries()) {
         if (next) state = next;
       }
     }
-    for (const component of spec.view.flatMap(c => c.type === 'section' ? c.children : [c])) {
+    for (const component of h.allComponents(spec)) {
       if (component.type !== 'checklist' || !component.done) continue;
       const update = h.directUpdate(spec, { state: component.state, op: 'toggle_item', index: 0 });
       const next = update && h.applyUpdates(spec, [update], state, { ...context, state });
@@ -112,7 +112,9 @@ for (const [index, prompt] of prompts.entries()) {
       try { outputs.set(step.id, h.transform(step, outputs, { ...context, state })); } catch (error) { errors.set(step.id, error.message); }
     }
     record.taps = taps;
-    record.resolution = { revision: 1, inputs: context.inputs, resolvedAt: Date.now(), view: h.present(spec.view, spec, outputs, errors), issues: [...errors].map(([step, code]) => ({ step, code })), state, remote: false };
+    const tabs = spec.tabs?.map(tab => ({ id: tab.id, title: tab.title, icon: tab.icon, view: h.present(tab.view, spec, outputs, errors) }));
+    record.resolution = { revision: 1, inputs: context.inputs, resolvedAt: Date.now(), view: tabs ? tabs[0].view : h.present(spec.view, spec, outputs, errors), ...(tabs ? { tabs } : {}),
+      menu: spec.menu.map(id => h.resolvedAction(spec, id)), issues: [...errors].map(([step, code]) => ({ step, code })), state, remote: false };
   }
   results.push(record);
   writeFileSync(join(out, `app-${String(index + 1).padStart(2, '0')}.json`), JSON.stringify({ title: record.spec?.title ?? prompt, inputs: record.spec?.inputs ?? [], resolution: record.resolution }, null, 1));

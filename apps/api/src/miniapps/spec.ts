@@ -4,10 +4,13 @@ import { isRecord } from '../chat/meta';
 // steps (an acyclic graph by construction), and a view tree of a closed component
 // catalog. Nothing here evaluates code, regular expressions or remote references.
 export const miniAppIcons = ['chart', 'list', 'money', 'calendar', 'cart', 'check', 'clock', 'star', 'bolt', 'folder'] as const;
+// Tab and tile icons: a closed catalog that both clients map to native symbols.
+export const symbolIcons = [...miniAppIcons, 'home', 'person', 'chat', 'book', 'trophy', 'heart', 'gear', 'grid'] as const;
 const formats = ['number', 'currency', 'percent', 'date', 'datetime', 'text'] as const;
 const comparisons = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'after', 'before'] as const;
 const aggregates = ['sum', 'avg', 'min', 'max', 'count'] as const;
 const arithmetic = ['$add', '$sub', '$mul', '$div', '$min', '$max'] as const;
+const chartKinds = ['bar', 'line', 'area', 'pie'] as const;
 const stateOps = ['increment', 'decrement', 'set', 'toggle', 'append', 'clear', 'pick', 'set_items', 'toggle_item', 'remove_item'] as const;
 type Format = typeof formats[number];
 type Aggregate = typeof aggregates[number];
@@ -38,17 +41,23 @@ type Value = { format?: Format; currency?: string };
 export type Component =
   | { type: 'section'; title?: string; children: Component[] }
   | ({ type: 'stat'; label: string; step: string; path?: string; caption?: string } & Value)
-  | ({ type: 'progress'; label: string; step: string; path?: string; goal: number | string; caption?: string } & Value)
+  | ({ type: 'progress'; label: string; step: string; path?: string; goal: number | string; caption?: string; style: 'bar' | 'ring' } & Value)
   | ({ type: 'list'; source: string; title: string; subtitle?: string; value?: string; limit: number; empty?: string } & Value)
   | ({ type: 'checklist'; state: string; title: string; subtitle?: string; value?: string; done?: string; removable: boolean; empty?: string } & Value)
-  | ({ type: 'chart'; source: string; kind: 'bar' | 'line'; x: string; y: string; title?: string } & Value)
+  | ({ type: 'chart'; source: string; kind: typeof chartKinds[number]; x: string; y: string; title?: string } & Value)
   | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
   | { type: 'toggle'; label: string; state: string }
   | { type: 'choice'; label: string; state: string; options: Option[] }
   | { type: 'input'; label: string; state: string; placeholder?: string }
   | { type: 'timer'; label: string; minutes: number }
-  | { type: 'action'; action: string };
-export type Spec = { title: string; subtitle?: string; icon: typeof miniAppIcons[number]; state: StateVar[]; inputs: Input[]; data: Step[]; view: Component[]; actions: Action[] };
+  | { type: 'action'; action: string }
+  // Layout: a grid of cards, a tappable tile (opens a tab or runs an action) and a text bar pinned to the bottom.
+  | { type: 'grid'; columns: 2 | 3; children: Component[] }
+  | ({ type: 'tile'; title: string; caption?: string; icon?: typeof symbolIcons[number]; step?: string; path?: string; tab?: string; action?: string } & Value)
+  | { type: 'composer'; action: string; placeholder?: string };
+export type Tab = { id: string; title: string; icon: typeof symbolIcons[number]; view: Component[] };
+// An app has either one `view` or 2–5 `tabs` (a native tab bar); `menu` lists field-less actions in the top bar.
+export type Spec = { title: string; subtitle?: string; icon: typeof miniAppIcons[number]; state: StateVar[]; inputs: Input[]; data: Step[]; view?: Component[]; tabs?: Tab[]; menu: string[]; actions: Action[] };
 export type ToolUse = { connectionID: string; toolName: string; role: 'read' | 'write' };
 
 export class SpecError extends Error {}
@@ -149,8 +158,8 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
   }
   if (!isRecord(raw)) fail('spec must be an object.');
   const value = raw as Record<string, unknown>;
-  if (JSON.stringify(value).length > 16000) fail('spec must be at most 16 KB.');
-  only(value, ['title', 'subtitle', 'icon', 'state', 'inputs', 'data', 'view', 'actions'], 'spec');
+  if (JSON.stringify(value).length > 24000) fail('spec must be at most 24 KB.');
+  only(value, ['title', 'subtitle', 'icon', 'state', 'inputs', 'data', 'view', 'tabs', 'menu', 'actions'], 'spec');
   // State and data steps share one namespace because the view reads both by id.
   const valueIDs = new Set<string>(), inputIDs = new Set<string>(), actionIDs = new Set<string>();
   const unique = (ids: Set<string>, id: unknown, name: string) => {
@@ -317,37 +326,55 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     const target = stateOf(field);
     return target && types.includes(target.type) ? target.id : fail(`${name} must name a ${types.join(' or ')} state value.`);
   };
+  const declaredAction = (field: unknown, name: string) => typeof field === 'string' && actionIDs.has(field) ? field : fail(`${name} must name a declared action (available: ${[...actionIDs].join(', ') || 'none'}).`);
+  // Tab ids are collected first so tiles anywhere can open any tab.
+  const tabIDs = new Set<string>();
+  if (value.tabs !== undefined && Array.isArray(value.tabs)) for (const [index, tab] of value.tabs.entries()) if (isRecord(tab)) unique(tabIDs, tab.id, `tabs[${index}]`);
   // Models often omit `type` or add stray keys. The type is inferred from distinctive
   // keys and unknown keys are dropped, since the normalized component is rebuilt anyway.
   const infer = (item: Record<string, unknown>) => item.type !== undefined ? item.type
-    : 'children' in item ? 'section' : 'action' in item ? 'action' : 'minutes' in item ? 'timer' : 'goal' in item ? 'progress'
+    : 'columns' in item ? 'grid' : 'children' in item ? 'section' : 'placeholder' in item && 'action' in item ? 'composer' : 'tab' in item || 'icon' in item ? 'tile'
+    : 'action' in item ? 'action' : 'minutes' in item ? 'timer' : 'goal' in item ? 'progress'
     : 'step' in item ? 'stat' : 'x' in item || 'y' in item ? 'chart' : 'source' in item ? 'list' : 'options' in item ? 'choice'
     : 'done' in item ? 'checklist' : 'text' in item ? 'text' : undefined;
   const keysByType: Record<string, string[]> = {
-    section: ['title', 'children'], stat: ['label', 'step', 'path', 'caption', 'format', 'currency'], progress: ['label', 'step', 'path', 'goal', 'caption', 'format', 'currency'],
+    section: ['title', 'children'], stat: ['label', 'step', 'path', 'caption', 'format', 'currency'], progress: ['label', 'step', 'path', 'goal', 'caption', 'style', 'format', 'currency'],
     list: ['source', 'title', 'subtitle', 'value', 'limit', 'empty', 'format', 'currency'], checklist: ['state', 'title', 'subtitle', 'value', 'done', 'removable', 'empty', 'format', 'currency'],
     chart: ['source', 'kind', 'x', 'y', 'title', 'format', 'currency'], text: ['text', 'style'], toggle: ['label', 'state'], choice: ['label', 'state', 'options'],
-    input: ['label', 'state', 'placeholder'], timer: ['label', 'minutes'], action: ['action'],
+    input: ['label', 'state', 'placeholder'], timer: ['label', 'minutes'], action: ['action'], grid: ['columns', 'children'],
+    tile: ['title', 'caption', 'icon', 'step', 'path', 'tab', 'action', 'format', 'currency'], composer: ['action', 'placeholder'],
   };
-  const component = (raw: unknown, name: string, nested: boolean): Component => {
-    if (++nodes > 40) return fail('view supports at most 40 components.');
+  // Cards in a grid are self-contained; lists, forms and bound controls need full-width rows.
+  const gridChildren = ['stat', 'progress', 'chart', 'text', 'action', 'tile'];
+  type Place = 'top' | 'section' | 'grid';
+  const component = (raw: unknown, name: string, place: Place): Component => {
+    if (++nodes > 80) return fail('An app supports at most 80 components in total.');
     if (!isRecord(raw)) return fail(`${name} must be an object.`);
     const type = infer(raw);
     const item: Record<string, unknown> = typeof type === 'string' && keysByType[type]
       ? Object.fromEntries(Object.entries(raw).filter(([key]) => key === 'type' || keysByType[type].includes(key)).map(([key, v]) => [key, key === 'type' ? type : v]))
       : raw;
     if (item.type === undefined && typeof type === 'string') item.type = type;
+    if (place === 'grid' && !gridChildren.includes(String(item.type))) fail(`${name}: a grid holds only ${gridChildren.join(', ')} cards.`);
     switch (item.type) {
-      case 'section': only(item, ['type', 'title', 'children'], name);
-        if (nested) fail(`${name}: sections cannot be nested.`);
-        return { type: 'section', title: text(item.title, `${name}.title`, 60, true), children: list(item.children, `${name}.children`, 20, true).map((child, at) => component(child, `${name}.children[${at}]`, true)) };
+      case 'section': case 'grid': {
+        if (place !== 'top') fail(`${name}: sections and grids cannot be nested.`);
+        if (item.type === 'section') {
+          only(item, ['type', 'title', 'children'], name);
+          return { type: 'section', title: text(item.title, `${name}.title`, 60, true), children: list(item.children, `${name}.children`, 20, true).map((child, at) => component(child, `${name}.children[${at}]`, 'section')) };
+        }
+        only(item, ['type', 'columns', 'children'], name);
+        if (item.columns !== undefined && item.columns !== 2 && item.columns !== 3) fail(`${name}.columns must be 2 or 3.`);
+        return { type: 'grid', columns: item.columns === 3 ? 3 : 2, children: list(item.children, `${name}.children`, 12, true).map((child, at) => component(child, `${name}.children[${at}]`, 'grid')) };
+      }
       case 'stat': only(item, ['type', 'label', 'step', 'path', 'caption', 'format', 'currency'], name);
         return { type: 'stat', label: text(item.label, `${name}.label`, 40)!, step: valueSource(item.step, `${name}.step`), path: path(item.path, `${name}.path`, true), caption: text(item.caption, `${name}.caption`, 80, true), ...format(item, name) };
-      case 'progress': only(item, ['type', 'label', 'step', 'path', 'goal', 'caption', 'format', 'currency'], name);
+      case 'progress': only(item, ['type', 'label', 'step', 'path', 'goal', 'caption', 'style', 'format', 'currency'], name);
         // The goal is a positive number, or the id of a number state/step (a goal the person can change).
         if (typeof item.goal === 'string') valueSource(item.goal, `${name}.goal`);
         else if (typeof item.goal !== 'number' || !Number.isFinite(item.goal) || item.goal <= 0 || item.goal > 1e12) fail(`${name}.goal must be a positive number or the id of a number state.`);
-        return { type: 'progress', label: text(item.label, `${name}.label`, 40)!, step: valueSource(item.step, `${name}.step`), path: path(item.path, `${name}.path`, true), goal: item.goal as number | string, caption: text(item.caption, `${name}.caption`, 80, true), ...format(item, name) };
+        return { type: 'progress', label: text(item.label, `${name}.label`, 40)!, step: valueSource(item.step, `${name}.step`), path: path(item.path, `${name}.path`, true), goal: item.goal as number | string,
+          caption: text(item.caption, `${name}.caption`, 80, true), style: choice(item.style, ['bar', 'ring'] as const, `${name}.style`, 'bar'), ...format(item, name) };
       case 'list': only(item, ['type', 'source', 'title', 'subtitle', 'value', 'limit', 'empty', 'format', 'currency'], name);
         if (item.limit !== undefined && (!Number.isInteger(item.limit) || Number(item.limit) < 1 || Number(item.limit) > 100)) fail(`${name}.limit must be 1–100.`);
         return { type: 'list', source: listSource(item.source, `${name}.source`), title: path(item.title, `${name}.title`)!, subtitle: path(item.subtitle, `${name}.subtitle`, true), value: path(item.value, `${name}.value`, true), limit: Number(item.limit ?? 20), empty: text(item.empty, `${name}.empty`, 80, true), ...format(item, name) };
@@ -362,7 +389,7 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
           done, removable: item.removable !== false, empty: text(item.empty, `${name}.empty`, 80, true), ...format(item, name) };
       }
       case 'chart': only(item, ['type', 'source', 'kind', 'x', 'y', 'title', 'format', 'currency'], name);
-        return { type: 'chart', source: listSource(item.source, `${name}.source`), kind: choice(item.kind, ['bar', 'line'] as const, `${name}.kind`, 'bar'), x: path(item.x, `${name}.x`)!, y: path(item.y, `${name}.y`)!, title: text(item.title, `${name}.title`, 60, true), ...format(item, name) };
+        return { type: 'chart', source: listSource(item.source, `${name}.source`), kind: choice(item.kind, chartKinds, `${name}.kind`, 'bar'), x: path(item.x, `${name}.x`)!, y: path(item.y, `${name}.y`)!, title: text(item.title, `${name}.title`, 60, true), ...format(item, name) };
       case 'text': only(item, ['type', 'text', 'style'], name);
         return { type: 'text', text: text(item.text, `${name}.text`, 500, false, true)!, style: choice(item.style, ['body', 'caption', 'headline'] as const, `${name}.style`, 'body') };
       case 'toggle': only(item, ['type', 'label', 'state'], name);
@@ -375,12 +402,54 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
         if (typeof item.minutes !== 'number' || !Number.isFinite(item.minutes) || item.minutes <= 0 || item.minutes > 240) fail(`${name}.minutes must be between 0 and 240.`);
         return { type: 'timer', label: text(item.label, `${name}.label`, 40)!, minutes: Number(item.minutes) };
       case 'action': only(item, ['type', 'action'], name);
-        return { type: 'action', action: typeof item.action === 'string' && actionIDs.has(item.action) ? item.action : fail(`${name}.action must name a declared action (available: ${[...actionIDs].join(', ') || 'none'}).`) };
-      default: return fail(`${name}.type must be section, stat, progress, list, checklist, chart, text, toggle, choice, input, timer or action.`);
+        if (place === 'grid' && actions.find(a => a.id === item.action)?.fields.length) fail(`${name}: an action with fields cannot be a grid card.`);
+        return { type: 'action', action: declaredAction(item.action, `${name}.action`) };
+      case 'tile': {
+        only(item, ['type', 'title', 'caption', 'icon', 'step', 'path', 'tab', 'action', 'format', 'currency'], name);
+        if (item.tab !== undefined && item.action !== undefined) fail(`${name}: a tile opens a tab or runs an action, not both.`);
+        if (item.tab !== undefined && (typeof item.tab !== 'string' || !tabIDs.has(item.tab))) fail(`${name}.tab must name a declared tab (available: ${[...tabIDs].join(', ') || 'none'}).`);
+        const action = item.action === undefined ? undefined : declaredAction(item.action, `${name}.action`);
+        if (action && actions.find(a => a.id === action)!.fields.length) fail(`${name}.action must be an action without fields.`);
+        return { type: 'tile', title: text(item.title, `${name}.title`, 40)!, caption: text(item.caption, `${name}.caption`, 80, true), icon: item.icon === undefined ? undefined : choice(item.icon, symbolIcons, `${name}.icon`),
+          step: item.step === undefined ? undefined : valueSource(item.step, `${name}.step`), path: path(item.path, `${name}.path`, true), tab: item.tab as string | undefined, action, ...format(item, name) };
+      }
+      case 'composer': {
+        only(item, ['type', 'action', 'placeholder'], name);
+        if (place !== 'top') fail(`${name}: a composer must be at the top level of a view or tab.`);
+        const action = actions.find(a => a.id === declaredAction(item.action, `${name}.action`))!;
+        if (action.fields.length !== 1 || !['text', 'number'].includes(action.fields[0].kind)) fail(`${name}: the composer's action must have exactly one text or number field, e.g. fields:[{"id":"item","label":"Item","kind":"text","required":true}].`);
+        return { type: 'composer', action: action.id, placeholder: text(item.placeholder, `${name}.placeholder`, 60, true) };
+      }
+      default: return fail(`${name}.type must be section, grid, stat, progress, list, checklist, chart, text, toggle, choice, input, timer, action, tile or composer.`);
     }
   };
-  const view = list(value.view, 'view', 20, true).map((item, index) => component(item, `view[${index}]`, false));
-  return { spec: { title: text(value.title, 'title', 60)!, subtitle: text(value.subtitle, 'subtitle', 120, true), icon: choice(value.icon, miniAppIcons, 'icon', 'chart'), state, inputs, data, view, actions }, tools };
+  const viewOf = (raw: unknown, name: string) => {
+    const parsed = list(raw, name, 20, true).map((item, index) => component(item, `${name}[${index}]`, 'top'));
+    if (parsed.filter(c => c.type === 'composer').length > 1) fail(`${name} supports one composer.`);
+    return parsed;
+  };
+  if ((value.view === undefined) === (value.tabs === undefined)) fail('spec needs either view (one screen) or tabs (2–5 screens with a tab bar), not both.');
+  const tabs: Tab[] | undefined = value.tabs === undefined ? undefined : list(value.tabs, 'tabs', 5, true).map((tab, index) => {
+    const name = `tabs[${index}]`;
+    if (!isRecord(tab)) return fail(`${name} must be an object.`);
+    only(tab, ['id', 'title', 'icon', 'view'], name);
+    return { id: tab.id as string, title: text(tab.title, `${name}.title`, 20)!, icon: choice(tab.icon, symbolIcons, `${name}.icon`, 'list'), view: viewOf(tab.view, `${name}.view`) };
+  });
+  if (tabs && tabs.length < 2) fail('tabs needs 2–5 tabs; use view for a single screen.');
+  const view = tabs ? undefined : viewOf(value.view, 'view');
+  const menu = list(value.menu, 'menu', 6).map((id, index) => {
+    const action = actions.find(a => a.id === declaredAction(id, `menu[${index}]`))!;
+    if (action.fields.length) fail(`menu[${index}]: menu actions cannot have fields; use a button or composer for ${action.id}.`);
+    return action.id;
+  });
+  if (new Set(menu).size !== menu.length) fail('menu lists an action twice.');
+  return { spec: { title: text(value.title, 'title', 60)!, subtitle: text(value.subtitle, 'subtitle', 120, true), icon: choice(value.icon, miniAppIcons, 'icon', 'chart'), state, inputs, data, ...(tabs ? { tabs } : { view }), menu, actions }, tools };
+}
+
+// Every component of the app, in tabs, sections and grids.
+export function allComponents(spec: Spec): Component[] {
+  const walk = (items: Component[]): Component[] => items.flatMap(c => c.type === 'section' || c.type === 'grid' ? [c, ...walk(c.children)] : [c]);
+  return spec.tabs ? spec.tabs.flatMap(tab => walk(tab.view)) : walk(spec.view ?? []);
 }
 
 // Runtime evaluation ---------------------------------------------------------
@@ -514,18 +583,43 @@ type Row = { title: string; subtitle: string | null; value: number | string | nu
 export type ResolvedComponent =
   | { type: 'section'; title: string | null; children: ResolvedComponent[] }
   | { type: 'stat'; label: string; value: number | string | null; format: Format; currency: string | null; caption: string | null; state: string | null }
-  | { type: 'progress'; label: string; value: number | null; goal: number; format: Format; currency: string | null; caption: string | null; state: string | null }
+  | { type: 'progress'; label: string; value: number | null; goal: number; format: Format; currency: string | null; caption: string | null; state: string | null; style: 'bar' | 'ring' }
   | { type: 'list'; items: Row[]; format: Format; currency: string | null; empty: string }
   // Checklist paths let clients re-derive rows from saved state for instant taps.
   | { type: 'checklist'; state: string; title: string; subtitle: string | null; value: string | null; done: string | null; removable: boolean; items: (Row & { done: boolean | null })[]; format: Format; currency: string | null; empty: string }
-  | { type: 'chart'; kind: 'bar' | 'line'; title: string | null; points: { x: string; y: number }[]; format: Format; currency: string | null }
+  | { type: 'chart'; kind: typeof chartKinds[number]; title: string | null; points: { x: string; y: number }[]; format: Format; currency: string | null }
   | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
   | { type: 'toggle'; label: string; state: string; value: boolean }
   | { type: 'choice'; label: string; state: string; value: string; options: Option[] }
   | { type: 'input'; label: string; state: string; value: string | number; kind: 'text' | 'number'; placeholder: string | null }
   | { type: 'timer'; label: string; seconds: number }
-  | { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: Field[]; updates: StateUpdate[] | null }
+  | ResolvedAction
+  | { type: 'grid'; columns: 2 | 3; children: ResolvedComponent[] }
+  | { type: 'tile'; title: string; caption: string | null; icon: string | null; value: number | string | null; format: Format; currency: string | null; state: string | null; tab: string | null; action: ResolvedAction | null }
+  // `append` lets clients show a submitted row at once: `item` plus the typed text under `key`.
+  | { type: 'composer'; action: string; field: string; kind: 'text' | 'number'; placeholder: string | null; label: string; confirm: string | null; remote: boolean; append: { state: string; key: string; item: Item } | null }
   | { type: 'notice'; code: string };
+export type ResolvedAction = { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: Field[]; updates: StateUpdate[] | null };
+export type ResolvedTab = { id: string; title: string; icon: string; view: ResolvedComponent[] };
+
+// Literal-only updates let clients show a tap instantly before the server confirms it.
+export function resolvedAction(spec: Spec, id: string): ResolvedAction {
+  const action = spec.actions.find(a => a.id === id)!;
+  const literal = (value: unknown) => value === undefined || value === null || ['number', 'string', 'boolean'].includes(typeof value);
+  const updates = action.kind === 'state' && !action.fields.length && action.set.every(u => literal(u.value)) ? action.set : null;
+  return { type: 'action', id: action.id, kind: action.kind, label: action.label, confirm: action.confirm ?? null, style: action.style, fields: action.fields, updates };
+}
+function composerAppend(action: Action): { state: string; key: string; item: Item } | null {
+  if (action.kind !== 'state' || action.confirm || action.set.length !== 1 || action.set[0].op !== 'append' || !isRecord(action.set[0].value)) return null;
+  const item: Item = {}, field = action.fields[0].id;
+  let key: string | null = null;
+  for (const [name, value] of Object.entries(action.set[0].value)) {
+    if (isRecord(value) && value.$field === field && Object.keys(value).length === 1 && key === null) key = name;
+    else if (typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) item[name] = value;
+    else return null;
+  }
+  return key ? { state: action.set[0].state, key, item } : null;
+}
 
 export function present(view: Component[], spec: Spec, outputs: Map<string, unknown>, errors: Map<string, string>): ResolvedComponent[] {
   const scalar = (value: unknown) => numeric(value) ?? (value === null || value === undefined ? null : label(value));
@@ -538,6 +632,20 @@ export function present(view: Component[], spec: Spec, outputs: Map<string, unkn
   return view.map((component): ResolvedComponent => {
     switch (component.type) {
       case 'section': return { type: 'section', title: component.title ?? null, children: present(component.children, spec, outputs, errors) };
+      case 'grid': return { type: 'grid', columns: component.columns, children: present(component.children, spec, outputs, errors) };
+      case 'composer': {
+        const action = spec.actions.find(a => a.id === component.action)!, field = action.fields[0];
+        return { type: 'composer', action: action.id, field: field.id, kind: field.kind === 'number' ? 'number' : 'text', placeholder: component.placeholder ?? field.label, label: action.label,
+          confirm: action.confirm ?? null, remote: action.kind === 'remote', append: composerAppend(action) };
+      }
+      case 'tile': {
+        if (component.step && errors.has(component.step)) return { type: 'notice', code: errors.get(component.step)! };
+        const value = component.step ? read(outputs.get(component.step), component.path) : undefined;
+        const state = component.step && !component.path && spec.state.some(v => v.id === component.step) ? component.step : null;
+        return { type: 'tile', title: component.title, caption: component.caption ?? null, icon: component.icon ?? null, value: value === undefined ? null : scalar(value),
+          format: component.format ?? (typeof value === 'number' ? 'number' : 'text'), currency: component.currency ?? null, state, tab: component.tab ?? null,
+          action: component.action ? resolvedAction(spec, component.action) : null };
+      }
       case 'text': return component;
       case 'timer': return { type: 'timer', label: component.label, seconds: Math.round(component.minutes * 60) };
       case 'toggle': return { type: 'toggle', label: component.label, state: component.state, value: outputs.get(component.state) === true };
@@ -546,20 +654,14 @@ export function present(view: Component[], spec: Spec, outputs: Map<string, unkn
         const value = outputs.get(component.state);
         return { type: 'input', label: component.label, state: component.state, value: typeof value === 'number' ? value : String(value ?? ''), kind: typeof value === 'number' ? 'number' : 'text', placeholder: component.placeholder ?? null };
       }
-      case 'action': {
-        const action = spec.actions.find(a => a.id === component.action)!;
-        // Literal-only updates let clients show a tap instantly before the server confirms it.
-        const literal = (value: unknown) => value === undefined || value === null || ['number', 'string', 'boolean'].includes(typeof value);
-        const updates = action.kind === 'state' && !action.fields.length && action.set.every(u => literal(u.value)) ? action.set : null;
-        return { type: 'action', id: action.id, kind: action.kind, label: action.label, confirm: action.confirm ?? null, style: action.style, fields: action.fields, updates };
-      }
+      case 'action': return resolvedAction(spec, component.action);
       case 'stat': case 'progress': {
         if (errors.has(component.step)) return { type: 'notice', code: errors.get(component.step)! };
         const value = read(outputs.get(component.step), component.path);
         const state = !component.path && spec.state.some(v => v.id === component.step) ? component.step : null;
         if (component.type === 'progress') {
           const goal = typeof component.goal === 'number' ? component.goal : numeric(outputs.get(component.goal));
-          return { type: 'progress', label: component.label, value: numeric(value), goal: goal !== null && goal > 0 ? goal : 1, format: component.format ?? 'number', currency: component.currency ?? null, caption: component.caption ?? null, state };
+          return { type: 'progress', label: component.label, value: numeric(value), goal: goal !== null && goal > 0 ? goal : 1, format: component.format ?? 'number', currency: component.currency ?? null, caption: component.caption ?? null, state, style: component.style };
         }
         return { type: 'stat', label: component.label, value: scalar(value), format: component.format ?? (typeof value === 'number' ? 'number' : 'text'), currency: component.currency ?? null, caption: component.caption ?? null, state };
       }
@@ -574,7 +676,8 @@ export function present(view: Component[], spec: Spec, outputs: Map<string, unkn
         const rows = outputs.get(component.source);
         if (!Array.isArray(rows)) return { type: 'notice', code: 'NOT_A_LIST' };
         if (component.type === 'list') return { type: 'list', items: rows.slice(0, component.limit).map(item => row(item, component)), format: component.format ?? 'text', currency: component.currency ?? null, empty: component.empty ?? 'Nothing to show.' };
-        const points = rows.slice(0, 60).flatMap(item => { const y = numeric(read(item, component.y)); return y === null ? [] : [{ x: [...label(read(item, component.x))].slice(0, 40).join(''), y }]; });
+        // Pie slices beyond a dozen are unreadable; bars and lines keep up to 60 points.
+        const points = rows.slice(0, component.kind === 'pie' ? 12 : 60).flatMap(item => { const y = numeric(read(item, component.y)); return y === null ? [] : [{ x: [...label(read(item, component.x))].slice(0, 40).join(''), y }]; });
         return { type: 'chart', kind: component.kind, title: component.title ?? null, points, format: component.format ?? 'number', currency: component.currency ?? null };
       }
     }
@@ -595,8 +698,7 @@ export function normalizeState(spec: Spec, stored: unknown): Record<string, Stat
 // Direct edits come from components bound to state; each binding allows only its own operation.
 export function directUpdate(spec: Spec, raw: unknown): StateUpdate | null {
   if (!isRecord(raw) || Object.keys(raw).some(key => !['state', 'op', 'value', 'index', 'field'].includes(key))) return null;
-  const bindings: Component[] = spec.view.flatMap(c => c.type === 'section' ? c.children : [c]);
-  for (const c of bindings) {
+  for (const c of allComponents(spec)) {
     if (c.type === 'toggle' && c.state === raw.state && raw.op === 'toggle') return { state: c.state, op: 'toggle' };
     if (c.type === 'choice' && c.state === raw.state && raw.op === 'set' && c.options.some(o => o.value === raw.value)) return { state: c.state, op: 'set', value: raw.value };
     if (c.type === 'input' && c.state === raw.state && raw.op === 'set' && (typeof raw.value === 'string' || typeof raw.value === 'number')) return { state: c.state, op: 'set', value: raw.value };

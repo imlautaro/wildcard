@@ -353,3 +353,61 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
 .mini-timer .value { font-size: 64px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.05; }
 .mini-timer .value.done { color: var(--success); }
 .mini-timer .row { display: flex; gap: 12px; width: 100%; }
+
+/* Mini app layout: full-height screen, bottom tab bar, pinned composer, top bar menu, grid cards. */
+.mini-app-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.mini-app-screen .page { flex: 1; }
+.mini-title { font-size: 30px; font-weight: 800; padding: 4px 4px 12px; }
+.mini-tabs { display: flex; justify-content: space-around; gap: 4px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid var(--separator);
+  background: color-mix(in srgb, var(--background) 88%, transparent); backdrop-filter: saturate(180%) blur(20px); }
+.mini-tabs button { flex: 1; max-width: 120px; border: 0; background: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; font-size: 11px; font-weight: 600; color: var(--secondary); }
+.mini-tabs button svg { width: 24px; height: 24px; }
+.mini-tabs button[aria-current='page'] { color: var(--accent); }
+.mini-composer { display: flex; gap: 8px; align-items: center; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--separator); background: var(--background); }
+.mini-tabs + .mini-composer, .mini-composer:has(+ .mini-tabs) { padding-bottom: 8px; }
+.mini-composer input { flex: 1; min-width: 0; min-height: 40px; border: 1px solid var(--separator); border-radius: 20px; padding: 0 16px; background: var(--surface); outline: none; }
+.mini-composer input:focus { border-color: var(--accent); }
+.mini-composer .send { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-contrast); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.mini-composer .send svg { width: 18px; height: 18px; }
+.mini-menu { position: relative; }
+.mini-menu .backdrop { position: fixed; inset: 0; z-index: 5; }
+.mini-menu .items { position: absolute; right: 0; top: 40px; z-index: 6; min-width: 220px; padding: 6px 0; border-radius: 14px; background: var(--surface);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18), 0 0 0 1px var(--separator); }
+.mini-menu .items button { display: block; width: 100%; border: 0; background: none; text-align: left; padding: 10px 16px; font-size: 15px; }
+.mini-menu .items button:hover:not(:disabled) { background: var(--hover); }
+.mini-menu .items button.danger { color: var(--danger); }
+.mini-menu .items hr { border: 0; border-top: 1px solid var(--separator); margin: 6px 0; }
+.mini-grid { display: grid; grid-template-columns: repeat(var(--columns, 2), minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.mini-card { background: var(--surface); border-radius: 18px; padding: 14px; min-width: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.mini-card.mini-stat { padding: 14px; }
+.mini-card-button { border: 0; min-height: 64px; justify-content: center; align-items: center; font-size: 17px; font-weight: 700; color: var(--accent); }
+.mini-card-button.danger { color: var(--danger); }
+.mini-tile { border: 0; text-align: left; color: inherit; min-height: 110px; }
+.mini-tile .icon { width: 24px; height: 24px; color: var(--accent); margin-bottom: auto; }
+.mini-tile .value { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mini-tile .caption, .mini-ring-card .caption { font-size: 12px; color: var(--secondary); }
+.mini-tile:hover:not(:disabled), .mini-card-button:hover:not(:disabled) { background: color-mix(in srgb, var(--surface) 92%, var(--text) 8%); }
+.mini-tile:disabled { opacity: 1; cursor: default; }
+.mini-tile-row { width: 100%; border: 0; background: none; text-align: left; color: inherit; }
+.mini-tile-row:disabled { opacity: 1; }
+.mini-tile-row .chevron { width: 16px; height: 16px; color: var(--tertiary); flex: none; }
+.small-glyph { width: 30px; height: 30px; border-radius: 8px; }
+.small-glyph svg { width: 17px; height: 17px; }
+.mini-card.mini-progress { padding: 14px; }
+.mini-ring-card { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 16px; }
+.mini-ring { width: 84px; height: 84px; }
+.mini-ring.large { width: 120px; height: 120px; }
+.mini-ring .track { fill: none; stroke: color-mix(in srgb, var(--text) 10%, transparent); stroke-width: 4; }
+.mini-ring .fill { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; transition: stroke-dasharray 0.35s ease; }
+.mini-ring .fill.met { stroke: var(--success); }
+.mini-ring text { font-size: 8px; font-weight: 800; text-anchor: middle; dominant-baseline: central; fill: currentColor; font-variant-numeric: tabular-nums; }
+.mini-card-chart { padding: 0; }
+.mini-card-chart .group { background: none; margin: 0; }
+.mini-card-chart svg { height: 110px; }
+.mini-pie { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.mini-pie svg { width: 150px; height: 150px; flex: none; }
+.mini-card-chart .mini-pie svg { width: 100px; height: 100px; }
+.mini-pie .legend { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.mini-pie .legend li { display: flex; align-items: center; gap: 8px; }
+.mini-pie .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.mini-pie .amount { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }

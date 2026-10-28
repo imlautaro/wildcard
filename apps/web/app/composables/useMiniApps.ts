@@ -3,8 +3,8 @@ import type { MiniApp, MiniAppResolution, MiniAppStateValue, MiniAppUpdate } fro
 // Session-owned caches: one app list per contact and one resolved view per app.
 // Resolved views hold connector data in memory only; nothing is persisted.
 type List = { apps: MiniApp[]; loaded: boolean; loadedAt: number; revision: number; request: Promise<void> | null; error: string | null };
-// A tap runs a local action (actionID) or edits state directly from a bound component.
-type Tap = { id: string; actionID: string | null; updates: MiniAppUpdate[] };
+// A tap runs a local action (actionID, with a composer's field if any) or edits state directly from a bound component.
+type Tap = { id: string; actionID: string | null; updates: MiniAppUpdate[]; fields: Record<string, unknown> };
 type View = { value: MiniAppResolution | null; inputs: Record<string, string>; loadedAt: number; revision: number; request: Promise<void> | null; error: string | null;
   taps: Tap[]; sending: boolean };
 const lists = shallowReactive(new Map<string, List>());
@@ -114,10 +114,10 @@ export function useMiniApps(contactID: MaybeRefOrGetter<string>) {
     return entry.taps.reduce((values, tap) => applyMiniAppUpdates(tap.updates, values), entry.value?.state ?? {});
   }
   // Literal local taps show immediately and are sent in order; the server's view stays authoritative.
-  async function tap(app: MiniApp, actionID: string | null, updates: MiniAppUpdate[]) {
+  async function tap(app: MiniApp, actionID: string | null, updates: MiniAppUpdate[], fields: Record<string, unknown> = {}) {
     const id = toValue(contactID), key = `${id}/${app.id}`, entry = view(app.id);
     if (entry.taps.length >= 20) return;
-    entry.taps.push({ id: crypto.randomUUID(), actionID, updates });
+    entry.taps.push({ id: crypto.randomUUID(), actionID, updates, fields });
     if (entry.sending) return;
     entry.sending = true;
     let failures = 0;
@@ -127,7 +127,7 @@ export function useMiniApps(contactID: MaybeRefOrGetter<string>) {
         try {
           const outcome = await api<{ status: string; resolution?: MiniAppResolution }>(next.actionID
             ? `contacts/${id}/mini-apps/${app.id}/actions/${next.actionID}` : `contacts/${id}/mini-apps/${app.id}/state`,
-            { json: next.actionID ? { executionID: next.id, revision: app.revision, inputs: entry.inputs, fields: {}, timeZone: timeZone() }
+            { json: next.actionID ? { executionID: next.id, revision: app.revision, inputs: entry.inputs, fields: next.fields, timeZone: timeZone() }
               : { executionID: next.id, revision: app.revision, inputs: entry.inputs, timeZone: timeZone(), update: next.updates[0] } });
           if (views.get(key) !== entry || entry.taps[0]?.id !== next.id) return;
           if (outcome.resolution) { entry.value = outcome.resolution; entry.loadedAt = Date.now(); entry.error = null; }

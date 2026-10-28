@@ -11,8 +11,8 @@ final class MiniAppStore {
     private(set) var viewErrors: [String: String] = [:]
     private(set) var inputs: [String: [String: String]] = [:]
     private(set) var resolving: Set<String> = []
-    /// A tap runs a local action, or edits state directly from a bound component.
-    struct PendingTap: Sendable { let id: UUID; let actionID: String?; let updates: [MiniAppUpdate] }
+    /// A tap runs a local action (with a composer's field, if any), or edits state directly from a bound component.
+    struct PendingTap: Sendable { let id: UUID; let actionID: String?; let updates: [MiniAppUpdate]; var fields: [String: MiniAppFieldValue] = [:] }
     /// Local taps shown immediately and sent in order; the server's view stays authoritative.
     private(set) var pendingTaps: [String: [PendingTap]] = [:]
     @ObservationIgnored private var tapWorkers: Set<String> = []
@@ -114,10 +114,10 @@ final class MiniAppStore {
         (pendingTaps[key] ?? []).reduce(views[key]?.state ?? [:]) { MiniAppUpdate.apply($1.updates, to: $0) }
     }
 
-    func tap(_ app: MiniApp, contactID: String, actionID: String?, updates: [MiniAppUpdate], using auth: AuthStore) {
+    func tap(_ app: MiniApp, contactID: String, actionID: String?, updates: [MiniAppUpdate], fields: [String: MiniAppFieldValue] = [:], using auth: AuthStore) {
         let key = "\(contactID)/\(app.id)"
         guard (pendingTaps[key]?.count ?? 0) < 20 else { return }
-        pendingTaps[key, default: []].append(PendingTap(id: UUID(), actionID: actionID, updates: updates))
+        pendingTaps[key, default: []].append(PendingTap(id: UUID(), actionID: actionID, updates: updates, fields: fields))
         guard !tapWorkers.contains(key) else { return }
         tapWorkers.insert(key)
         let current = generation
@@ -129,7 +129,7 @@ final class MiniAppStore {
                     let outcome = try await auth.withSession { [inputs] api, token in
                         if let actionID = next.actionID {
                             try await api.runMiniAppAction(contactID: contactID, appID: app.id, actionID: actionID, executionID: next.id,
-                                                           revision: app.revision, inputs: inputs[key] ?? [:], fields: [:], token: token)
+                                                           revision: app.revision, inputs: inputs[key] ?? [:], fields: next.fields, token: token)
                         } else {
                             try await api.editMiniAppState(contactID: contactID, appID: app.id, executionID: next.id, revision: app.revision, inputs: inputs[key] ?? [:], update: next.updates[0], token: token)
                         }

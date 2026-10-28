@@ -24,7 +24,9 @@ function summary(app: MiniAppRow, connectors: Connection[]) {
   const { spec } = parseSpec(JSON.parse(app.specJSON));
   const tools = JSON.parse(app.toolsJSON) as GrantedTool[];
   const status = app.approvedRevision !== app.revision ? 'needs_review' : grantValid(app, connectors) ? 'enabled' : 'needs_reapproval';
+  // Tab titles and icons let clients draw the app's tab bar before its data loads.
   return { id: app.id, turnID: app.turnID, revision: app.revision, title: spec.title, subtitle: spec.subtitle ?? null, icon: spec.icon, status, inputs: spec.inputs,
+    tabs: spec.tabs?.map(tab => ({ id: tab.id, title: tab.title, icon: tab.icon })) ?? [],
     tools: tools.map(t => ({ connectionID: t.connectionID, connectionName: connectors.find(c => c.id === t.connectionID)?.name ?? 'Unavailable connection', toolName: t.toolName, role: t.role })),
     issues: app.lastError ? JSON.parse(app.lastError) : [], createdAt: app.createdAt, updatedAt: app.updatedAt };
 }

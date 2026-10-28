@@ -124,25 +124,34 @@ export type MiniApp = {
   id: string; turnID: string | null; revision: number; title: string; subtitle: string | null; icon: string;
   status: 'needs_review' | 'enabled' | 'needs_reapproval'; inputs: MiniAppInput[];
   tools: { connectionID: string; connectionName: string; toolName: string; role: 'read' | 'write' }[];
+  tabs?: { id: string; title: string; icon: string }[];
   issues: { step: string; code: string }[]; createdAt: number; updatedAt: number;
 };
 export type MiniAppComponent =
   | { type: 'section'; title: string | null; children: MiniAppComponent[] }
   | { type: 'stat'; label: string; value: number | string | null; format: MiniAppFormat; currency: string | null; caption: string | null; state: string | null }
   | { type: 'list'; items: MiniAppRow[]; format: MiniAppFormat; currency: string | null; empty: string }
-  | { type: 'progress'; label: string; value: number | null; goal: number; format: MiniAppFormat; currency: string | null; caption: string | null; state: string | null }
+  | { type: 'progress'; label: string; value: number | null; goal: number; format: MiniAppFormat; currency: string | null; caption: string | null; state: string | null; style?: 'bar' | 'ring' }
   | { type: 'checklist'; state: string; title: string; subtitle: string | null; value: string | null; done: string | null; removable: boolean; items: (MiniAppRow & { done: boolean | null })[]; format: MiniAppFormat; currency: string | null; empty: string }
   | { type: 'toggle'; label: string; state: string; value: boolean }
   | { type: 'choice'; label: string; state: string; value: string; options: { value: string; label: string }[] }
   | { type: 'input'; label: string; state: string; value: string | number; kind: 'text' | 'number'; placeholder: string | null }
   | { type: 'timer'; label: string; seconds: number }
-  | { type: 'chart'; kind: 'bar' | 'line'; title: string | null; points: { x: string; y: number }[]; format: MiniAppFormat; currency: string | null }
+  | { type: 'chart'; kind: 'bar' | 'line' | 'area' | 'pie'; title: string | null; points: { x: string; y: number }[]; format: MiniAppFormat; currency: string | null }
   | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
-  | { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: MiniAppField[]; updates: MiniAppUpdate[] | null }
+  | MiniAppAction
+  | { type: 'grid'; columns: 2 | 3; children: MiniAppComponent[] }
+  | { type: 'tile'; title: string; caption: string | null; icon: string | null; value: number | string | null; format: MiniAppFormat; currency: string | null; state: string | null; tab: string | null; action: MiniAppAction | null }
+  | MiniAppComposer
   | { type: 'notice'; code: string };
+export type MiniAppAction = { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: MiniAppField[]; updates: MiniAppUpdate[] | null };
+// A text bar pinned to the bottom of its screen; `append` lets a submitted row show at once.
+export type MiniAppComposer = { type: 'composer'; action: string; field: string; kind: 'text' | 'number'; placeholder: string | null; label: string; confirm: string | null; remote: boolean;
+  append: { state: string; key: string; item: MiniAppItem } | null };
 export type MiniAppRow = { title: string; subtitle: string | null; value: number | string | null };
 export type MiniAppItem = Record<string, number | string | boolean>;
 export type MiniAppStateValue = number | string | boolean | MiniAppItem[];
 export type MiniAppUpdate = { state: string; op: 'increment' | 'decrement' | 'set' | 'toggle' | 'append' | 'clear' | 'pick' | 'set_items' | 'toggle_item' | 'remove_item'; value?: MiniAppStateValue | null; index?: number; field?: string };
-export type MiniAppResolution = { revision: number; inputs: Record<string, string>; resolvedAt: number; view: MiniAppComponent[]; issues: { step: string; code: string }[];
+export type MiniAppResolution = { revision: number; inputs: Record<string, string>; resolvedAt: number; view: MiniAppComponent[];
+  tabs?: { id: string; title: string; icon: string; view: MiniAppComponent[] }[]; menu?: MiniAppAction[]; issues: { step: string; code: string }[];
   state?: Record<string, MiniAppStateValue>; remote?: boolean };

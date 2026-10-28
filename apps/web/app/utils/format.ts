@@ -91,6 +91,8 @@ export function applyMiniAppUpdates(updates: MiniAppUpdate[], values: Record<str
     if (current === undefined) continue;
     if (Array.isArray(current)) {
       if (update.op === 'clear') next[update.state] = [];
+      // Client-only: a composer submission appends its prepared rows before the server confirms them.
+      else if (update.op === 'append' && Array.isArray(update.value)) next[update.state] = [...current, ...update.value];
       else if (update.op === 'set_items' && update.field && update.value !== undefined && update.value !== null && !Array.isArray(update.value)) {
         const field = update.field, value = update.value;
         next[update.state] = current.map(item => ({ ...item, [field]: value }));
@@ -115,7 +117,8 @@ export function applyMiniAppUpdates(updates: MiniAppUpdate[], values: Record<str
   }
   return next;
 }
-const miniAppIcons = ['chart', 'list', 'money', 'calendar', 'cart', 'check', 'clock', 'star', 'bolt', 'folder'] as const;
-export function miniAppIcon(icon: string): typeof miniAppIcons[number] {
+// App, tab and tile icons share one closed catalog; tab and tile icons add a few.
+const miniAppIcons = ['chart', 'list', 'money', 'calendar', 'cart', 'check', 'clock', 'star', 'bolt', 'folder', 'home', 'person', 'chat', 'book', 'trophy', 'heart', 'gear', 'grid'] as const;
+export function miniAppIcon(icon: string | null): typeof miniAppIcons[number] {
   return miniAppIcons.includes(icon as typeof miniAppIcons[number]) ? icon as typeof miniAppIcons[number] : 'chart';
 }
