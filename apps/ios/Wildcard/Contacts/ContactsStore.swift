@@ -126,7 +126,6 @@ final class ContactsStore {
         let readSnapshot = readRevision
         isLoading = true
         isLoadingMore = false
-        error = nil
         defer { if request == generation { isLoading = false } }
         do {
             let page = try await auth.withSession { api, token in try await api.contacts(token: token) }
@@ -186,12 +185,15 @@ final class ContactsStore {
             if additional.isEmpty || firstPageChanged { nextCursor = page.nextCursor }
             hasLoaded = true
             refreshedAt = .now
+            error = nil
             // List evidence updates receipts and warms existing histories before navigation.
             for contact in page.contacts { conversations.cachedStore(for: contact.id)?.reconcile(contact) }
             let changedIDs = Set(changedReplies.map(\.id))
             warmHistories(page.contacts, announcing: changedIDs, using: auth)
         } catch {
-            if request == generation && !isCancellation(error) { self.error = error.localizedDescription }
+            // Background revalidation keeps loaded rows visible through transient failures.
+            guard request == generation, !isCancellation(error), !(hasLoaded && AuthAPI.isTransient(error)) else { return }
+            self.error = error.localizedDescription
         }
     }
 
@@ -224,6 +226,7 @@ final class ContactsStore {
     }
 
     func loadMore(using auth: AuthStore) async {
+        if let request = refreshRequest { await request.task.value }
         guard !isLoading, !isLoadingMore, !isMutating, let cursor = nextCursor else { return }
         let request = generation
         let readSnapshot = readRevision

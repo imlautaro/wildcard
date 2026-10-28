@@ -143,7 +143,7 @@ final class NativeExperiments {
         let current = generation
         for contactID in enabled.keys.sorted() where !(automaticSince[contactID] ?? [:]).isEmpty {
             guard !Task.isCancelled, generation == current, UIApplication.shared.applicationState == .active else { return }
-            await refresh(contactID: contactID, using: auth)
+            await refresh(contactID: contactID, using: auth, inBackground: true)
             for action in (actions[contactID] ?? []).sorted(by: { $0.createdAt < $1.createdAt }) {
                 guard !Task.isCancelled, generation == current, UIApplication.shared.applicationState == .active else { return }
                 guard action.remoteDeviceID == nil, busy.isEmpty, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000,
@@ -187,7 +187,7 @@ final class NativeExperiments {
         guard !kinds.isEmpty else { return nil }
         return NativeContext(deviceID: try deviceID(), kinds: kinds.sorted(), automaticKinds: kinds.intersection(Set((automaticSince[contactID] ?? [:]).keys)).sorted())
     }
-    func refresh(contactID: String, using auth: AuthStore, force: Bool = false) async {
+    func refresh(contactID: String, using auth: AuthStore, force: Bool = false, inBackground: Bool = false) async {
         guard let owner = userID, owner == auth.user?.id, !(enabled[contactID] ?? []).isEmpty else { return }
         if let task = requests[contactID] { await task.value; return }
         if !force, let date = loaded[contactID], Date.now.timeIntervalSince(date) < 5 { return }
@@ -204,6 +204,8 @@ final class NativeExperiments {
             } catch is CancellationError { }
             catch {
                 guard generation == current else { return }
+                // Automatic runs and revalidation of loaded requests retry on the next poll.
+                if AuthAPI.isTransient(error) && (inBackground || actions[contactID] != nil) { return }
                 if case AuthAPI.Failure.notFound = error { forget(contactID: contactID) }
                 if case AuthAPI.Failure.rejected(let message) = error { self.error = message }
                 else { self.error = error.localizedDescription }

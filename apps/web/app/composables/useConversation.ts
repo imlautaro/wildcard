@@ -112,6 +112,8 @@ export async function loadConversation(id: string) {
     await refreshReactions(entry.reactions, `contacts/${id}/chat/reactions`, entry.turns.map((turn) => turn.id));
   } catch (error) {
     if (conversations.get(id) !== entry) return;
+    // Background revalidation keeps the loaded history visible through transient failures.
+    if (entry.loaded && isTransientFailure(error)) return;
     if (error instanceof ApiError && error.status === 404) {
       clearReactionCache(entry.reactions);
       entry.unavailable = true;

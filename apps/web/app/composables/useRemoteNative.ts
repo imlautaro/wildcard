@@ -27,9 +27,10 @@ export function useRemoteNative(contactID: MaybeRefOrGetter<string>) {
         entry.devices = value.devices; entry.actions = value.actions; entry.loaded = true; entry.loadedAt = Date.now(); entry.error = null;
       } catch (failure) {
         if (snapshots.get(id) !== entry || entry.revision !== revision) return;
+        entry.loadedAt = Date.now();
+        if (entry.loaded && isTransientFailure(failure)) return;
         if (failure instanceof ApiError && [401,403,404].includes(failure.status)) { entry.devices = []; entry.actions = []; entry.loaded = true; }
         entry.error = errorMessage(failure);
-        entry.loadedAt = Date.now();
       } finally { if (entry.revision === revision) entry.request = null; }
     })();
     return entry.request;

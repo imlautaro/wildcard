@@ -144,7 +144,8 @@ async function refreshLists() {
       if (!keepsOlder) nextCursor.value = page.value.nextCursor;
       contactsLoaded.value = true;
       contactsError.value = null;
-    } else {
+    } else if (!(contactsLoaded.value && isTransientFailure(page.reason))) {
+      // Background revalidation keeps loaded rows visible through transient failures.
       contactsError.value = errorMessage(page.reason);
     }
     if (groupList.status === 'fulfilled') {
@@ -159,7 +160,7 @@ async function refreshLists() {
         if (message) message.receiptState = mergeReceipt(message.receiptState, group.lastMessageReceiptState);
       }
       void confirmPreviews();
-    } else {
+    } else if (!(groupsLoaded.value && isTransientFailure(groupList.reason))) {
       groupsError.value = errorMessage(groupList.reason);
     }
     warm();

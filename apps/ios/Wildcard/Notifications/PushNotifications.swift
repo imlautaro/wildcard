@@ -103,6 +103,8 @@ final class PushNotifications {
             }
             if !shouldRemove { status = "Enabled" }
         } catch is CancellationError { }
+        // Activation and token changes retry registration; connectivity blips stay silent.
+        catch where AuthAPI.isTransient(error) { }
         catch { self.error = "Unable to update notifications. Open the app or tap Enable notifications to retry." }
     }
 

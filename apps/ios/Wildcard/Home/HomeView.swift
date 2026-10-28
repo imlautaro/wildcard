@@ -59,6 +59,7 @@ struct HomeView: View {
                     AccountView()
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) { topAccessories(for: nil) }
             .navigationTitle(section.title)
             .toolbar {
                 if section == .chats && destinations.isEmpty {
@@ -68,63 +69,13 @@ struct HomeView: View {
                         }
                         .tint(Color(uiColor: .label))
                         .accessibilityLabel("Open Contacts")
-                        .disabled(contacts.isMutating)
                     }
                 }
             }
             // Destinations replace the complete tab layout, sharing one back stack.
             .navigationDestination(for: HomeDestination.self) { destination in
-                switch destination {
-                case .nativeExperiments:
-                    NativeExperimentsDirectoryView()
-                case .nativeTools(let id):
-                    NativeToolsView(contactID: id)
-                case .createGroup:
-                    CreateGroupView { id in destinations = [.group(id)] }
-                case .group(let id):
-                    GroupChatView(groupID: id, store: groups.conversations.store(for: id))
-                case .groupDetails(let id):
-                    GroupMembersView(groupID: id, store: groups.conversations.store(for: id))
-                case .groupInviteUser(let id):
-                    InviteGroupUserView(groupID: id)
-                case .groupAddContact(let id):
-                    AddGroupContactView(groupID: id)
-                case .groupContactConsent(let groupID, let contactID):
-                    AddGroupContactConsentView(groupID: groupID, contactID: contactID)
-                case .groupInvitations:
-                    GroupInvitationsView { id in destinations = [.group(id)] }
-                case .contacts:
-                    ChatsView(
-                        mode: .contacts,
-                        openContact: { contact in destinations = [.contact(contact.id)] },
-                        editContact: { contact in destinations.append(.editContact(contact.id)) },
-                        openGroup: { group in destinations.append(.group(group.id)) }
-                    )
-                    .navigationTitle("Contacts")
-                    .navigationBarTitleDisplayMode(.inline)
-                case .addContact:
-                    ContactEditorView()
-                case .joinContact:
-                    JoinSharedContactView { id in destinations = [.contact(id)] }
-                case .contactInvitations:
-                    ContactInvitationsView()
-                case .receivedInvitation(let invitation):
-                    ReceivedContactInvitationView(invitation: invitation) { contactID in
-                        destinations = [.contact(contactID)]
-                    }
-                case .sharing(let id):
-                    ContactSharingView(contactID: id, cache: contacts.sharingSnapshots.store(for: id))
-                case .contact(let id):
-                    ContactDetailView(contactID: id)
-                case .schedules(let id):
-                    SchedulesView(contactID: id, cache: contacts.scheduleSnapshots.store(for: id))
-                case .editContact(let id):
-                    if let contact = contacts.contact(id: id) {
-                        ContactEditorView(contact: contact)
-                    } else {
-                        ContentUnavailableView("Contact not found", systemImage: "person.crop.circle.badge.questionmark")
-                    }
-                }
+                destinationView(destination)
+                    .safeAreaInset(edge: .top, spacing: 0) { topAccessories(for: destination) }
             }
         }
         .environment(sync)
@@ -178,36 +129,6 @@ struct HomeView: View {
         .alert("Unable to open contact", isPresented: Binding(get: { nativeRouteError != nil }, set: { if !$0 { nativeRouteError = nil } })) {
             Button("OK") { nativeRouteError = nil }
         } message: { Text(nativeRouteError ?? "") }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if case .contact = destinations.last {} else {
-                NativeActiveStatusView(contactID: nil)
-            }
-            if let error = native.error {
-                HStack(spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                    Text(error).manrope(.footnote).frame(maxWidth: .infinity, alignment: .leading)
-                    Button("Dismiss") { native.error = nil }.manrope(.footnote, weight: .semibold)
-                }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .padding(.horizontal).padding(.vertical, 4)
-            }
-            if !native.drafts.isEmpty {
-                Button { showNativeInbox = true } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "tray.and.arrow.down.fill")
-                        Text("Review shared drafts").manrope(.footnote, weight: .semibold)
-                        Text("\(native.drafts.count)").manrope(.caption, weight: .bold).foregroundStyle(.white)
-                            .padding(.horizontal, 7).padding(.vertical, 2).background(Color.accentColor, in: Capsule())
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 9)
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: Capsule())
-                .padding(.vertical, 4)
-                .accessibilityLabel("Review shared drafts (\(native.drafts.count))")
-            }
-        }
         .environment(groups)
         .onChange(of: destinations) { _, path in
             switch path.last {
@@ -283,5 +204,106 @@ struct HomeView: View {
             }
             if push.destination?.id == destination.id { push.destination = nil }
         }
+    }
+
+    @ViewBuilder
+    private func destinationView(_ destination: HomeDestination) -> some View {
+        switch destination {
+        case .nativeExperiments:
+            NativeExperimentsDirectoryView()
+        case .nativeTools(let id):
+            NativeToolsView(contactID: id)
+        case .createGroup:
+            CreateGroupView { id in destinations = [.group(id)] }
+        case .group(let id):
+            GroupChatView(groupID: id, store: groups.conversations.store(for: id))
+        case .groupDetails(let id):
+            GroupMembersView(groupID: id, store: groups.conversations.store(for: id))
+        case .groupInviteUser(let id):
+            InviteGroupUserView(groupID: id)
+        case .groupAddContact(let id):
+            AddGroupContactView(groupID: id)
+        case .groupContactConsent(let groupID, let contactID):
+            AddGroupContactConsentView(groupID: groupID, contactID: contactID)
+        case .groupInvitations:
+            GroupInvitationsView { id in destinations = [.group(id)] }
+        case .contacts:
+            ChatsView(
+                mode: .contacts,
+                openContact: { contact in destinations = [.contact(contact.id)] },
+                editContact: { contact in destinations.append(.editContact(contact.id)) },
+                openGroup: { group in destinations.append(.group(group.id)) }
+            )
+            .navigationTitle("Contacts")
+            .navigationBarTitleDisplayMode(.inline)
+        case .addContact:
+            ContactEditorView()
+        case .joinContact:
+            JoinSharedContactView { id in destinations = [.contact(id)] }
+        case .contactInvitations:
+            ContactInvitationsView()
+        case .receivedInvitation(let invitation):
+            ReceivedContactInvitationView(invitation: invitation) { contactID in
+                destinations = [.contact(contactID)]
+            }
+        case .sharing(let id):
+            ContactSharingView(contactID: id, cache: contacts.sharingSnapshots.store(for: id))
+        case .contact(let id):
+            ContactDetailView(contactID: id)
+        case .schedules(let id):
+            SchedulesView(contactID: id, cache: contacts.scheduleSnapshots.store(for: id))
+        case .editContact(let id):
+            if let contact = contacts.contact(id: id) {
+                ContactEditorView(contact: contact)
+            } else {
+                ContentUnavailableView("Contact not found", systemImage: "person.crop.circle.badge.questionmark")
+            }
+        }
+    }
+
+    /// Status shown below the navigation bar of the tab root and every destination,
+    /// so it never covers toolbar items.
+    private func topAccessories(for destination: HomeDestination?) -> some View {
+        VStack(spacing: 0) {
+            // Contact chats show their own contact-scoped status.
+            if case .contact = destination {} else {
+                NativeActiveStatusView(contactID: nil)
+            }
+            // Native tools list the same error inline next to the affected request.
+            if let error = native.error, !isNativeTools(destination) {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Text(error).manrope(.footnote).frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Dismiss") { native.error = nil }.manrope(.footnote, weight: .semibold)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.horizontal).padding(.vertical, 4)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            if !native.drafts.isEmpty {
+                Button { showNativeInbox = true } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "tray.and.arrow.down.fill")
+                        Text("Review shared drafts").manrope(.footnote, weight: .semibold)
+                        Text("\(native.drafts.count)").manrope(.caption, weight: .bold).foregroundStyle(.white)
+                            .padding(.horizontal, 7).padding(.vertical, 2).background(Color.accentColor, in: Capsule())
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: Capsule())
+                .padding(.vertical, 4)
+                .accessibilityLabel("Review shared drafts (\(native.drafts.count))")
+                .transition(.opacity)
+            }
+        }
+        .animation(.snappy, value: native.error)
+        .animation(.snappy, value: native.drafts.isEmpty)
+    }
+
+    private func isNativeTools(_ destination: HomeDestination?) -> Bool {
+        if case .nativeTools = destination { return true }
+        return false
     }
 }

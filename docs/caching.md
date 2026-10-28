@@ -6,6 +6,27 @@ on every navigation. Loaded content stays visible during refresh and network
 failures. A full loading indicator is reserved for the first successful load;
 empty cached lists retain their empty state during revalidation.
 
+### Transient failures during background revalidation
+
+Polling refreshes (one-second chat sync, five-second native actions) keep loaded
+content visible and stay silent when a request fails transiently, instead of
+showing an error that the next tick clears. Transient means a connectivity
+failure (iOS `URLError` timeout, offline, lost connection, unreachable host or
+DNS; web `ApiError` status 0) or a gateway failure (web 502/503/504; iOS
+`AuthAPI.Failure.temporarilyUnavailable`, which groups use for 429/5xx). Both
+clients share this rule through `AuthAPI.isTransient` (iOS) and
+`isTransientFailure` (web), applied to the contact and group lists, private and
+group histories, and native/remote action snapshots. First loads with no cache,
+user-initiated actions, and non-transient failures (404 access loss, 401,
+validation) still surface their error. An existing error stays visible until
+the next successful refresh rather than being cleared when a request starts.
+The iOS "Load more" control waits for an in-flight list refresh instead of being
+disabled by it, so background revalidation does not toggle its state.
+
+Verify on a device by enabling airplane mode with loaded chats: rows and
+histories stay visible without an error banner; disable it and confirm they
+catch up. With no cache, the first load still shows its error and Retry.
+
 ## Shared conversation synchronization
 
 `HomeView` owns `ConversationSync` for the signed-in session. A one-second

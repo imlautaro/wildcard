@@ -45,7 +45,9 @@ Matching iOS:
 - Email/password sign-up and sign-in, account name and photo, sign-out.
 - Unified chat list of contacts and groups, ordered by latest message, with unread
   counts, sender prefixes, and an unread count in the tab title. It appears once both
-  sources load; if one fails, available rows stay visible with Retry. Your own last
+  sources load; if one fails, available rows stay visible with Retry. Transient
+  failures during background polling keep loaded rows silent (see
+  [caching](caching.md#transient-failures-during-background-revalidation)). Your own last
   message shows its receipt (and **You:** in groups), projected from the open
   conversation when that is newer than the server summary.
 - Contacts directory with search, create, rename, photo (centered square JPEG,

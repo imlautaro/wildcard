@@ -35,6 +35,13 @@ extension on a physical iPhone. A receipt, not APNs acceptance, establishes succ
    timer working in the guided locked-phone check on October 28, 2026. The full
    sequence, force-quit behavior and alert/control verification remain pending.
 
+Existing grants re-register silently on launch and whenever APNs rotates the
+token. Because the token arrives after Home starts, re-registration waits for it
+(and for visible notifications) without showing an error, and retries transient
+network failures on the next launch or token change. Only an explicit
+**Allow remote timers and alarms** tap reports missing notifications or token.
+This is iOS-only: the web client registers no APNs device.
+
 The normal foreground native path remains available without remote grants.
 Installing this binary before publishing the backend cannot enable remote control;
 its settings request fails visibly. The existing local capabilities fallback is

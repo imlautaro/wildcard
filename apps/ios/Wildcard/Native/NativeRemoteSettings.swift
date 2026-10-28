@@ -36,7 +36,11 @@ import UIKit
             if requestPermission { await PushNotifications.shared.activate(using: auth, requestPermission: true) }
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             guard settings.alertSetting == .enabled, let pushToken = PushNotifications.shared.deviceToken,
-                  let environment = Bundle.main.object(forInfoDictionaryKey: "WildcardPushEnvironment") as? String else { throw AuthAPI.Failure.rejected("Enable visible notifications, then try again once this iPhone is registered.") }
+                  let environment = Bundle.main.object(forInfoDictionaryKey: "WildcardPushEnvironment") as? String else {
+                // At launch APNs delivers the token after this refresh starts; Home reruns it when the token arrives.
+                guard requestPermission else { return }
+                throw AuthAPI.Failure.rejected("Enable visible notifications, then try again once this iPhone is registered.")
+            }
             guard auth.user?.id == owner, userID == owner else { return }
             struct Registration: Encodable { let token: String; let environment: String; let name: String; let grant: String; let kinds: [String] }
             let body = try JSONEncoder().encode(Registration(token: pushToken, environment: environment, name: "iPhone", grant: requestPermission ? "enable" : "refresh",
@@ -58,6 +62,8 @@ import UIKit
                 UserDefaults.standard.set(Array(remoteEnabled).sorted(), forKey: "native-remote.\(owner)")
                 publishRemoteSettings()
             }
+            // Background re-registration retries on the next launch or token change.
+            if !requestPermission && AuthAPI.isTransient(error) { return }
             self.error = error.localizedDescription
         }
     }

@@ -32,6 +32,15 @@ struct AuthAPI: Sendable {
         }
     }
 
+    /// Connectivity and availability failures that the next background poll retries.
+    /// Stores keep cached content visible instead of surfacing these after a first load.
+    static func isTransient(_ error: Error) -> Bool {
+        if case Failure.temporarilyUnavailable = error { return true }
+        guard let code = (error as? URLError)?.code else { return false }
+        return [.timedOut, .notConnectedToInternet, .networkConnectionLost, .cannotConnectToHost,
+                .cannotFindHost, .dnsLookupFailed, .dataNotAllowed, .internationalRoamingOff].contains(code)
+    }
+
     private struct Credentials: Encodable {
         let name: String?
         let email: String

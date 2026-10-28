@@ -257,8 +257,10 @@ and revalidated after five seconds while the request screen or foreground automa
 runner is active. Both share in-flight requests and the same freshness window. Explicit
 pull-to-refresh bypasses freshness; in-flight requests are deduplicated. Chat reply
 updates also revalidate so newly created proposals are available on navigation.
-Transient errors retain usable content; confirmed access loss clears the relevant
-contact state. Lists are bounded to 20 contacts × 50 actions with oldest-load eviction.
+Transient errors retain usable content without an error banner when requests are
+already loaded or the foreground automatic runner polls; see
+[caching](caching.md#transient-failures-during-background-revalidation). Confirmed
+access loss clears the relevant contact state. Lists are bounded to 20 contacts × 50 actions with oldest-load eviction.
 There is no native-action disk cache, no draft cloud upload before Send, and no
 cross-account reuse. Server proposals/receipts follow source conversation retention
 and cascade on turn deletion; expiry does not delete the ledger. The last 20 device

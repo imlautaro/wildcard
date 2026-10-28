@@ -114,6 +114,12 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 }
 
+// Connectivity and gateway failures that the next background poll retries. Stores
+// keep cached content visible instead of surfacing these after a first load.
+export function isTransientFailure(error: unknown) {
+  return error instanceof ApiError && (error.status === 0 || [502, 503, 504].includes(error.status));
+}
+
 export function isAbort(error: unknown) {
   return error instanceof DOMException && error.name === 'AbortError';
 }

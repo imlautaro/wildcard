@@ -168,6 +168,8 @@ final class ChatStore {
             guard started == revision else { return }
             if (error as? URLError)?.code == .cancelled { return }
             refreshedAt = .now
+            // Background revalidation keeps the loaded history visible through transient failures.
+            if hasLoaded && AuthAPI.isTransient(error) { return }
             if case AuthAPI.Failure.notFound = error {
                 await auth.images.clear(deactivate: false)
                 guard started == revision else { return }

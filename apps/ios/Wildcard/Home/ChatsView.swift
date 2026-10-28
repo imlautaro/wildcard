@@ -60,15 +60,15 @@ struct ChatsView: View {
             }
         }
         .buttonStyle(.plain)
+        // Only conflicting mutations wait; rows stay openable while a change finishes.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button("Delete", role: .destructive) { deletion = contact }
+            Button("Delete", role: .destructive) { deletion = contact }.disabled(contacts.isMutating)
             if contact.canManage { Button("Edit") { editContact(contact) }.tint(.accentColor) }
         }
         .contextMenu {
             if contact.canManage { Button("Edit") { editContact(contact) } }
-            Button("Delete", role: .destructive) { deletion = contact }
+            Button("Delete", role: .destructive) { deletion = contact }.disabled(contacts.isMutating)
         }
-        .disabled(contacts.isMutating)
     }
 
     var body: some View {
@@ -115,7 +115,7 @@ struct ChatsView: View {
                 Section {
                     Text(error).foregroundStyle(.red)
                     Button("Retry") { Task { await contacts.refresh(using: auth) } }
-                        .disabled(contacts.isLoading || contacts.isMutating)
+                        .disabled(contacts.isMutating)
                 }
             }
             if let mutationError {
@@ -154,7 +154,7 @@ struct ChatsView: View {
             }
             if contacts.nextCursor != nil && mode == .chats && !entries.isEmpty {
                 Button("Load more") { Task { await contacts.loadMore(using: auth) } }
-                    .disabled(contacts.isLoading || contacts.isLoadingMore || contacts.isMutating)
+                    .disabled(contacts.isLoadingMore || contacts.isMutating)
             }
             if contacts.isLoadingMore || (mode == .contacts && !contacts.hasLoaded && contacts.error == nil) {
                 ProgressView("Loading contacts…")

@@ -231,7 +231,11 @@ final class GroupsStore {
                 } catch { /* Retry receipt-only failures on the next list refresh. */ }
             }
         } catch is CancellationError { }
-        catch { self.error = error.localizedDescription }
+        catch {
+            // Background revalidation keeps loaded groups visible through transient failures.
+            guard !(hasLoaded && AuthAPI.isTransient(error)) else { return }
+            self.error = error.localizedDescription
+        }
     }
 
     private func warmHistories(_ groups: [ChatGroup], using auth: AuthStore) {
@@ -513,7 +517,7 @@ final class GroupChatStore {
             await auth.images.clear(deactivate: false)
             self.error = "This group is no longer available."
         } catch {
-            guard !invalidated, epoch == accessEpoch else { return }
+            guard !invalidated, epoch == accessEpoch, !(hasLoadedMessages && AuthAPI.isTransient(error)) else { return }
             self.error = error.localizedDescription
         }
     }

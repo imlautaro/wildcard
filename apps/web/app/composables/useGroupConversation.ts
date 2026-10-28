@@ -183,6 +183,8 @@ export async function loadGroupConversation(id: string, visible = false) {
     if (pendingRead.size) await acknowledge(id, [...pendingRead], 'read');
   } catch (error) {
     if (groups.get(id) !== entry) return;
+    // Background revalidation keeps the loaded history visible through transient failures.
+    if (entry.loaded && isTransientFailure(error)) return;
     if (error instanceof ApiError && error.status === 404) {
       clearReactionCache(entry.reactions);
       entry.unavailable = true;
