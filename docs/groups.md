@@ -547,3 +547,47 @@ ledger prevents automatic retries of uncertain actions; draft reviews cannot rer
 tools. No grants are enabled by migration. Both clients cache schema-free access
 lists and revalidate on entry; see [caching](caching.md#mcp-connection-metadata) and
 [connector migration/verification](connectors.md#account-connector-migration-and-verification).
+
+
+## Failed replies and response recovery
+
+The group snapshot's reply metadata includes `sourceID`, `sourceSequence` and
+`attempt`, in addition to the existing ID, agent, name and status. Both clients
+place an exhausted failure directly below its source message, with the agent's
+name and **Retry reply**. No detached failure footer is shown. A source outside
+loaded history is displayed only when that source is loaded. Older API responses
+without source metadata are decoded safely, without guessing the source.
+
+A failed slot stops appearing when the same agent has any later group message
+(after that source's sequence); another agent's response does not clear it.
+The server filters resolved failures independently of loaded history, and clients
+also filter against loaded messages while their snapshot revalidates. Original
+failed rows remain diagnostic history, not unresolved chat alerts. Retry admission
+rejects a resolved slot or one blocked by current work with a 409; current
+membership, source access, attention and consent checks remain unchanged.
+
+After two invalid decisions, or a recoverable model failure, the group Workflow
+attempts one response-only recovery phase (up to two model calls under its existing
+one-retry step policy), capped at 2,048 output tokens per call. It uses already
+checkpointed evidence, no tools and no JSON decision schema, and asks for a short
+natural-language answer or an honest account of incomplete work. No fabricated
+static bot message is inserted when the model remains unavailable. The recovered
+draft still passes normal history-watermark/publication/energy checks. A later
+human request or ordinary bot continuation can close an obsolete recovery without
+publishing; mandatory human-requested openings retain their reply requirement.
+Only successful inference acknowledges newly processed context.
+
+Access, consent, credential/configuration and database errors do not enter this
+recovery path. MCP grants/OAuth generations/tool approvals and saved receipt access
+are rechecked before inference. Recovery never re-executes tools or creates a new
+request/attempt; uncertain external actions remain protected by their existing
+ledger. Recoverable transport failures are stored as bounded step results so a
+Workflow replay reaches the same recovery branch without repeating the exhausted
+call. It cannot guarantee the external task was completed.
+
+Decision validation now logs only a fixed reason (`invalid_json`, `invalid_shape`,
+`invalid_action`, `invalid_text`), with no provider text. The existing backend limit of 20,000 characters remains.
+Existing attempt limits,
+latest-history review, finite bot exchanges and memory isolation remain in force.
+See [infrastructure](infrastructure.md#reply-failure-diagnostics-and-recovery) for
+release, verification and the observed incident.

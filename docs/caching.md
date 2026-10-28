@@ -508,3 +508,24 @@ uses existing contact/group access refresh and invalidation; disconnect never
 promotes local knowledge to a shared profile. Verify reopen/back, failed refresh,
 grant/revoke, member removal and account switching with fictional local memories
 on both clients after an authorized release. Device checks remain pending.
+
+
+## Reply failure presentation
+
+Reply errors are projections of existing session-owned messages and group detail
+snapshots, not a separate cache. Group source metadata shares snapshot request
+deduplication, eviction, revision rejection and account/membership invalidation.
+Snapshot refresh removes resolved group failures; loaded-message checks hide a
+stale notice immediately when that bot's later message is present. Private notice
+visibility derives from the cached turn sequence and later saved assistant text.
+No local dismissal persistence or optimistic completion is used. Retry uses existing
+server admission and refresh; stale/resolved retries return 409 rather than silently
+claiming that a new job started. Server recovery keeps the same turn/reply ID, so
+existing merge/completion ranking and polling handle its saved message normally.
+
+With fictional data, verify both clients: a failed agent among successful group
+agents, notices beneath the correct human/bot source, loading earlier sources,
+reload/back with an old failure, subsequent responses by a different versus the
+same bot, a private failure followed by success, failed retry/refresh, offline
+reopen, access removal and account switching. View/device checks remain pending;
+static checking does not establish scrolling or accessibility behavior.

@@ -78,7 +78,7 @@ pull to refresh and paginated loading. Choose, crop, replace, or remove a [profi
 contact editor. Private photo bytes use R2. Contact identities are saved in D1; each participant has an isolated private conversation. See [contacts](docs/contacts.md). Conversations support
 [emoji reactions](docs/reactions.md) from humans and bots on their own or others’
 messages in both private chats and groups, [quoted replies](docs/replies.md) to any
-earlier message (swipe or hold on iOS, reply button on the web) that agents read as context, persisted messages, reply status, earlier history, and retries. The chat title shows
+earlier message (swipe or hold on iOS, reply button on the web) that agents read as context, persisted messages, reply status, earlier history, contextual failure notices, and bounded response-only recovery before manual retries. The chat title shows
 D1-backed Online/Typing/Last seen presence maintained by the server Workflow and Cron,
 with a brief durable wait before the agent connects. Opening a chat also connects
 the agent briefly; actual composer activity extends its server-side idle lease. Accepted replies

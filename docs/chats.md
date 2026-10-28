@@ -441,3 +441,33 @@ Private reply Workflows checkpoint the conversation account’s Standard/Contrib
 
 See [model settings](model-settings.md) for the API, shared consent, cache behavior,
 AI Gateway spending and pending runtime/device verification.
+
+
+## Failed replies and response recovery
+
+Both clients keep a failed-reply notice directly below the corresponding private
+turn: **The reply to this message couldn't be completed.** A notice stops being
+shown once a later turn in loaded history contains an assistant reply. Failed
+rows are retained; they no longer accumulate as active visual failures after the
+agent resumes replying. The existing latest-turn-only manual retry restriction
+remains, including its server-side concurrency and account checks.
+
+After the existing generation retries exhaust a recoverable model error, a direct
+human turn gets one separate, one-minute recovery step with no retry and no tools.
+It rebuilds bounded current context with the same model/isolation/consent rules and
+explicitly tells the agent the earlier attempt failed. Original tool receipts from
+the failed generation step are not supplied to this new context; it must not
+invent external outcomes or claim their success/failure. The agent can answer
+from available evidence or explain incomplete work and uncertainty. It cannot
+promise to act later or silently repeat MCP/group/schedule operations.
+
+This applies only while the original turn remains running and authorized; scheduled
+turns and private group-result deliveries retain their existing failure behavior.
+Access/configuration/storage errors do not trigger recovery. Saved replies use the
+same transaction, notification outbox, read acknowledgements, memory maintenance
+and attention release as normal replies. Persistent model outages still produce a
+contextual failure with manual retry, not a fabricated assistant message.
+Sanitized `chat_reply_failed`, `chat_reply_recovered` and
+`chat_reply_recovery_failed` events identify the branch without chat content;
+failed turns retain the sanitized code rather than a generic generation error.
+See [caching](caching.md#reply-failure-presentation) for cache/device verification.

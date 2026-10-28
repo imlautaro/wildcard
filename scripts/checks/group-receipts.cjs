@@ -153,6 +153,7 @@ async function check(name,fn){await fn(); count++; console.log('PASS '+name);}
    INSERT INTO agent_attention(agent_id,turn_id,attempt,workflow_id,acquired_at) VALUES ('bot','pt',1,'pw',0);`);
   const priv=vm.createContext({Date,JSON,Intl,Set,Map,console,
    scheduleTools:[],groupRetrievalTools:[],groupRequestTool:{},groupQuestionTool:{},
+   privateContact:async()=>false, privateQuotes:async()=>()=>null,
    contactModelAllowed:async()=>true, readMemories:async()=>[],selectMemories:()=>[],
    readAgentMemories:async()=>[],agentMemoryContext:()=> '{}',
    sharedGroups:async()=>({results:[]}),searchGroupMessages:async()=>({results:[]}),
@@ -170,6 +171,34 @@ async function check(name,fn){await fn(); count++; console.log('PASS '+name);}
   priv.museCompletion=async()=>({content:'Hello back'});
   assert.equal(await priv.contactReply(env,turn,'Demo Bot'),'Hello back');
   assert.ok(sql.prepare("SELECT read_at FROM chat_turn WHERE id='pt'").get().read_at);
+  let recoveryCalls=0;
+  priv.museCompletion=async(env,messages,model,options)=>{
+   recoveryCalls++;
+   assert.equal(options.tools,undefined);
+   assert.ok(messages.some(m=>m.role==='system'&&m.content.includes('Response recovery')));
+   return {content:'I could not finish that request; the earlier external outcome is uncertain.'};
+  };
+  assert.match(await priv.contactReply(env,turn,'Demo Bot','MODEL_INCOMPLETE_RESPONSE'),/uncertain/);
+  assert.equal(recoveryCalls,1);
+ });
+ await check('group failures identify their source and disappear only after the same bot replies',async()=>{
+  const f=require('./group-publication.cjs').fixture();
+  try {
+   const query=source('groups/routes.ts').match(/const \{ results: replies \} = await c.env.DB.prepare\(`([\s\S]*?)`\)/)[1];
+   f.sqlite.exec(`INSERT INTO group_message(id,group_id,user_id,sender_name,text,created_at) VALUES ('failed-source','group','human','Demo Human','Read fictional data',0);
+    INSERT INTO group_reply(id,group_id,agent_id,source_id,status,workflow_id,created_at)
+    VALUES ('failed','group','sender','failed-source','failed','failed-workflow',0);`);
+   let rows=(await f.env.DB.prepare(query).bind('group').all()).results;
+   assert.equal(rows.find(r=>r.id==='failed').sourceID,'failed-source');
+   f.sqlite.exec(`INSERT INTO group_message(id,group_id,agent_id,sender_name,text,created_at)
+    VALUES ('other-bot','group','target','Other Bot','I replied',1);`);
+   rows=(await f.env.DB.prepare(query).bind('group').all()).results;
+   assert.ok(rows.some(r=>r.id==='failed'));
+   f.sqlite.exec(`INSERT INTO group_message(id,group_id,agent_id,sender_name,text,created_at)
+    VALUES ('same-bot','group','sender','Bot One','I replied later',2);`);
+   rows=(await f.env.DB.prepare(query).bind('group').all()).results;
+   assert.ok(!rows.some(r=>r.id==='failed'));
+  } finally {f.sqlite.close();}
  });
  await check('private Home receipt fields follow the same latest turn as the preview',async()=>{
   const priv=vm.createContext({Hono:Router,bodyLimit:()=>()=>{},chats:{},schedules:{},sharing:{},

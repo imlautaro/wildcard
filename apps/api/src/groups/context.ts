@@ -177,22 +177,26 @@ export function groupDecisionFormat(input: GroupInput): Record<string, unknown> 
 }
 
 export function parseGroupDecision(answer: string, input: GroupInput): GroupDraft {
+  const invalid = (reason: 'invalid_json' | 'invalid_shape' | 'invalid_action' | 'invalid_text'): never => {
+    console.error(JSON.stringify({ event: 'group_decision_rejected', reason }));
+    throw new Error('GROUP_INVALID_DECISION');
+  };
   let decision: unknown;
   // SyntaxError messages may contain private provider text. Never let them reach
   // Workflow error storage or logs; expose a bounded diagnostic code instead.
   try { decision = JSON.parse(answer); }
-  catch { throw new Error('GROUP_INVALID_DECISION'); }
+  catch { return invalid('invalid_json'); }
   if (!isRecord(decision) || typeof decision.action !== 'string'
     || typeof decision.text !== 'string' || Object.keys(decision).some(key => !['action', 'text'].includes(key))) {
-    throw new Error('GROUP_INVALID_DECISION');
+    return invalid('invalid_shape');
   }
   const text = decision.text.trim();
   if (decision.action === 'skip' && input.openingReplyRequired) throw new Error('GROUP_OPENING_REPLY_REQUIRED');
-  if (!input.allowedActions.includes(decision.action)) throw new Error('GROUP_INVALID_DECISION');
+  if (!input.allowedActions.includes(decision.action)) return invalid('invalid_action');
   if (decision.action === 'skip' && !text) return { text: null, throughSequence: input.throughSequence };
   if (input.previous && decision.action === 'keep' && !text) return { ...input.previous, throughSequence: input.throughSequence };
   if (decision.action !== (input.previous ? 'revise' : 'reply') || !text || Array.from(text).length > 20_000) {
-    throw new Error('GROUP_INVALID_DECISION');
+    return invalid('invalid_text');
   }
   return { text, throughSequence: input.throughSequence };
 }

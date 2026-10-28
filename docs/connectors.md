@@ -619,3 +619,15 @@ recent-history window, matching-key separation between two groups, another user'
 private chat, Standard selection when Account chooses Contributor, grant revocation,
 isolation during extraction, and member/bot/source removal. These runtime checks
 remain pending; the opt-in conversation-memory regression has not been executed.
+
+
+## Reply recovery after MCP work
+
+A failed final response does not establish that an MCP action failed. Group reply
+recovery can use authorized checkpointed evidence without calling tools again;
+private recovery explicitly lacks the original step's receipts and must disclose
+uncertainty instead of inventing outcomes. Recovery cannot bypass revoked access,
+OAuth/grant generations, ledger reservations, or memory/model isolation. It never
+creates another external action. A fully unavailable model can still leave a
+contextual failure with manual retry. See [group recovery](groups.md#failed-replies-and-response-recovery)
+and [private recovery](chats.md#failed-replies-and-response-recovery).

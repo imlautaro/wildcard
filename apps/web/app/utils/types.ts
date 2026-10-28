@@ -85,7 +85,7 @@ export type ChatGroup = {
   lastReadSequence?: number | null;
 };
 export type GroupMember = { id: string; kind: 'user' | 'agent'; name: string; photoVersion: string | null; canInvite: number; addedBy: string | null };
-export type GroupReply = { id: string; agentID: string; name: string; status: string };
+export type GroupReply = { id: string; agentID: string; name: string; status: string; sourceID?: string; sourceSequence?: number; attempt?: number };
 export type GroupMessage = {
   sequence: number;
   id: string;

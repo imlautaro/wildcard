@@ -149,8 +149,12 @@ groups.get('/:id', async (c) => {
     m.can_invite AS canInvite, NULL AS addedBy FROM group_member m JOIN user u ON u.id = m.user_id WHERE m.group_id = ?
     UNION ALL SELECT a.id, 'agent', a.name, a.photo_version, 0, ga.added_by FROM group_agent ga
     JOIN contact_agent a ON a.id = ga.agent_id WHERE ga.group_id = ?`).bind(id, id).all();
-  const { results: replies } = await c.env.DB.prepare(`SELECT r.id, r.agent_id AS agentID, a.name, r.status FROM group_reply r
+  const { results: replies } = await c.env.DB.prepare(`SELECT r.id, r.agent_id AS agentID, a.name, r.status,
+    r.source_id AS sourceID, source.sequence AS sourceSequence, r.attempt FROM group_reply r
+    JOIN group_message source ON source.id = r.source_id
     JOIN contact_agent a ON a.id = r.agent_id WHERE r.group_id = ? AND r.status IN ('queued', 'running', 'failed')
+    AND (r.status != 'failed' OR NOT EXISTS (SELECT 1 FROM group_message later
+      WHERE later.group_id = r.group_id AND later.agent_id = r.agent_id AND later.sequence > source.sequence))
     ORDER BY (r.status = 'failed'), r.sequence DESC LIMIT 80`).bind(id).all();
   return c.json({ group, members, replies, canInvite: member.canInvite === 1 || member.ownerID === owner, contributorModel: contributor(c.env) });
 });
@@ -356,12 +360,15 @@ groups.post('/:id/messages', async (c) => {
 });
 groups.post('/:id/replies/:replyID/retry', async (c) => {
   const id = c.req.param('id'), replyID = c.req.param('replyID');
-  await c.env.DB.prepare(`UPDATE group_reply SET status = 'queued', attempt = attempt + 1,
+  const result = await c.env.DB.prepare(`UPDATE group_reply SET status = 'queued', attempt = attempt + 1,
     workflow_id = id || '-' || (attempt + 1) WHERE id = ? AND group_id = ? AND status = 'failed'
     AND ${groupSourceAccess('group_reply', contributor(c.env))}
+    AND NOT EXISTS (SELECT 1 FROM group_message later WHERE later.group_id = group_reply.group_id
+      AND later.agent_id = group_reply.agent_id AND later.sequence > (SELECT sequence FROM group_message WHERE id = group_reply.source_id))
     AND NOT EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = group_reply.id)
     AND NOT EXISTS (SELECT 1 FROM group_reply other WHERE other.group_id = group_reply.group_id AND other.status IN ('queued','running'))`)
     .bind(replyID, id).run();
+  if (!result.meta.changes) return c.json({ error: 'This reply is no longer available to retry. Refresh the conversation.' }, 409);
   c.executionCtx.waitUntil(dispatchGroup(c.env, id));
   return c.body(null, 204);
 });

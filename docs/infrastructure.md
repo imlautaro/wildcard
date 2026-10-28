@@ -1412,3 +1412,52 @@ A rollback must retain these tables, triggers, isolation markers, event history
 and source foreign keys; prefer a forward fix. Never drop local stores or clear
 markers to regain compatibility. Drain active Workflows before any incompatible
 code rollback. Local change only: no remote migration or release was performed.
+
+
+## Reply failure diagnostics and recovery
+
+Observed incident, October 28, 2026: the group Workflow running at 09:36:43–09:37:19
+UTC (06:36:43–06:37:19 Argentina) reached six exploration/tool slots. Its requested
+tool names included five catalog lookups and one `call_mcp_tool`; that MCP reply's
+technical flag was `isError: false`. Both final decision steps returned
+`GROUP_INVALID_DECISION` with successful response processing, followed by
+`group-save-failure`. The same bot's subsequent 09:38:32–09:39:00 UTC Workflow
+confirmed publication with no failure-save step. This identifies final-decision
+validation as the immediate failure, not a confirmed MCP outage. Prior diagnostics
+do not identify the invalid JSON field or shape. Reloading itself is not proven to
+have changed backend behavior.
+
+Investigation read bounded Workflow metadata, decision codes/consumption flags,
+tool names/error flags and publication booleans; no message, model prose, tool
+arguments or result bodies were inspected. An attempted aggregate execution-count
+query was rejected by D1 management authorization (7403); no application rows were
+returned. Workflow metadata provided the needed evidence without that query.
+
+Recovery reuses existing `DB`, `CHAT_WORKFLOW`, model credentials and bindings;
+there is no migration, new service, secret or provisioning/configuration change.
+Independent installs use the existing setup and [group](groups.md#failed-replies-and-response-recovery)/
+[private](chats.md#failed-replies-and-response-recovery) behavior. New private steps
+persist a response before checkpointing with existing guards/outbox; new group
+steps checkpoint recovered drafts and sanitized failure codes separately from
+external execution. Model-only recovery has bounded latency/cost and cannot
+retry an external action. Logs contain fixed events/codes/rejection reasons only.
+[Workflow idempotency guidance](https://developers.cloudflare.com/workflows/build/rules-of-workflows/)
+applies to replay and publication as before.
+
+Static verification: API/web TypeScript, Swift parsing, script syntax, whitespace
+checks and `node scripts/checks/reply-sql-compile.cjs` (19 query variants prepared
+against an empty migrated schema at expression depth 100). Opt-in
+`group-completion.cjs` and `group-receipts.cjs` regressions cover model-only recovery,
+no repeated MCP executions, replay, access revocation, obsolete human requests,
+source identity and suppression after the same bot responds. They were prepared,
+not executed, under the repository's no-tests instruction. No local builds,
+production inference, manual replay, remote mutation or publication was performed.
+
+Publish only through an authorized committed/pushed automatic release; check source
+SHA/version tags and both clients after release. The existing API response additions
+are optional/compatible with older decoders; no data rewrite occurs. Roll back via
+another pushed compatible commit while retaining ledgers, isolation markers and
+active Workflow support. Saved recovered messages remain ordinary history; a code
+rollback does not erase them. Prefer draining active runs or a forward fix when
+changing the step graph. Device recovery/scrolling and real provider behavior still
+need authorized functional verification with fictional data.

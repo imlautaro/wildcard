@@ -15,7 +15,10 @@ useHead({ title: computed(() => group.value?.name ?? 'Group') });
 const members = computed(() => new Map((state.value.snapshot?.members ?? []).map((member) => [`${member.kind}/${member.id}`, member])));
 const memberLine = computed(() => (state.value.snapshot?.members ?? []).map((member) => member.kind === 'user' && member.id === user.value?.id ? 'You' : member.name).join(', '));
 const activeReplies = computed(() => (state.value.snapshot?.replies ?? []).filter((reply) => reply.status === 'queued' || reply.status === 'running'));
-const failedReplies = computed(() => (state.value.snapshot?.replies ?? []).filter((reply) => reply.status === 'failed'));
+function failedRepliesFor(message: GroupMessage) {
+  return (state.value.snapshot?.replies ?? []).filter((reply) => reply.status === 'failed' && reply.sourceID === message.id
+    && !state.value.messages.some((later) => later.agentID === reply.agentID && later.sequence > message.sequence));
+}
 
 type Item = { kind: 'day'; key: string; label: string } | { kind: 'message'; key: string; message: GroupMessage; first: boolean; last: boolean };
 const items = computed<Item[]>(() => {
@@ -217,6 +220,12 @@ onBeforeUnmount(() => {
           </div>
           </MessageReactions>
         </div>
+        <template v-if="item.kind === 'message'">
+          <div v-for="reply in failedRepliesFor(item.message)" :key="reply.id" class="status-line" role="status">
+            {{ reply.name }} couldn't finish replying to this message.
+            <button class="link-button" :disabled="activeReplies.length > 0" @click="retryReply(reply.id)">Retry reply</button>
+          </div>
+        </template>
       </template>
 
       <template v-if="state.pending">
@@ -240,10 +249,6 @@ onBeforeUnmount(() => {
       <div v-for="reply in activeReplies" :key="reply.id" class="bubble-row incoming">
         <div class="avatar-slot" />
         <div class="typing" :aria-label="`${reply.name} is replying`"><span /><span /><span /></div>
-      </div>
-      <div v-for="reply in failedReplies" :key="reply.id" class="status-line">
-        {{ reply.name }} could not reply.
-        <button class="link-button" @click="retryReply(reply.id)">Retry</button>
       </div>
     </div>
     <ChatComposer

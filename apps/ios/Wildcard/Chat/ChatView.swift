@@ -126,9 +126,9 @@ struct ChatView: View {
                                 }
                         } else if turn.status == .running && chat.presence?.status == .typing {
                             ReplyTypingIndicator()
-                        } else if turn.status == .failed {
+                        } else if turn.status == .failed && !chat.turns.contains(where: { $0.sequence > turn.sequence && $0.assistantText != nil }) {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(turn.errorCode == "SCHEDULE_CANCELLED" ? "Scheduled message cancelled." : turn.errorCode == "GROUP_REQUEST_CANCELLED" ? "Group request cancelled." : "The reply could not be completed.").manrope(.footnote).foregroundStyle(.secondary)
+                                Text(turn.errorCode == "SCHEDULE_CANCELLED" ? "Scheduled message cancelled." : turn.errorCode == "GROUP_REQUEST_CANCELLED" ? "Group request cancelled." : "The reply to this message couldn't be completed.").manrope(.footnote).foregroundStyle(.secondary)
                                 if turn.scheduleID == nil && turn.groupRequestID == nil && turn.id == chat.turns.last?.id {
                                     Button("Retry reply") { Task { await chat.retry(turn, contactID: contactID, using: auth) } }
                                         .disabled(chat.isSending || chat.hasPendingReply)

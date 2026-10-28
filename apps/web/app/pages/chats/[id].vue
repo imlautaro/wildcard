@@ -74,7 +74,7 @@ function attachmentPath(turn: ChatTurn) {
 function failureText(turn: ChatTurn) {
   if (turn.errorCode === 'SCHEDULE_CANCELLED') return 'Scheduled message cancelled.';
   if (turn.errorCode === 'GROUP_REQUEST_CANCELLED') return 'Group request cancelled.';
-  return 'The reply could not be completed.';
+  return "The reply to this message couldn't be completed.";
 }
 
 function nearBottom() {
@@ -196,7 +196,7 @@ onBeforeUnmount(() => {
           <div v-else-if="item.turn.status === 'running' && state.presence?.status === 'typing'" class="bubble-row incoming">
             <div class="typing" aria-label="Typing"><span /><span /><span /></div>
           </div>
-          <div v-else-if="item.turn.status === 'failed'" class="status-line">
+          <div v-else-if="item.turn.status === 'failed' && !state.turns.some((later) => later.sequence > item.turn.sequence && later.assistantText !== null)" class="status-line">
             {{ failureText(item.turn) }}
             <button
               v-if="item.turn.scheduleID === null && item.turn.groupRequestID === null && item.turn.id === lastTurnID"

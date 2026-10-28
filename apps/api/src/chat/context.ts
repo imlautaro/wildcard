@@ -178,7 +178,7 @@ async function executeTool(env: Env, scope: MemoryScope & { agentID: string }, c
   return JSON.stringify({ error: 'Unknown tool. Use only the listed tools.' });
 }
 
-export async function contactReply(env: Env, turn: StoredTurn, name: string): Promise<string | null> {
+export async function contactReply(env: Env, turn: StoredTurn, name: string, recoveryCode?: string): Promise<string | null> {
   const isolated = await privateContact(env.DB, turn.contactID);
   const model = isolated ? 'muse-spark-1.3' : env.META_CHAT_MODEL;
   if (!isolated && !await contactModelAllowed(env, turn.contactID, turn.userID)) throw new Error('MODEL_CONSENT_REQUIRED');
@@ -272,13 +272,14 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string): Pr
     turn.scheduleID ? { role: 'user', content: `Scheduled task instruction: ${JSON.stringify(turn.scheduleInstruction)}. Execute now; this is not a new human request.` }
       : await attachmentMessage(env, { ...turn, userText: replyMarker(quotes(turn)) + turn.userText }),
   ];
+  if (recoveryCode) messages.push({ role: 'system', content: 'Response recovery: an earlier attempt failed to finish this request. No tools are available and no actions may be repeated. Write a brief message in the user’s language. Answer only what the supplied evidence supports; explain any incomplete work. No external execution receipts from that attempt are supplied, so never claim its actions succeeded or failed, and mention uncertainty when relevant. Do not invent results or promise a later retry.' });
   let executions = 0;
   let groupPublicationCalls = 0;
   const processedGroupResults: unknown[] = [...groupMessages.results];
   for (let round = 0; round < 3; round++) {
     if (round === 2) messages.push({ role: 'system', content: 'Tool budget exhausted. Answer using the available evidence; acknowledge any missing detail.' });
     const answer = await museCompletion(env, messages, model,
-      round < 2 ? { tools: turn.scheduleID ? turnTools.filter((tool) => !['create_schedule', 'update_schedule', 'cancel_schedule', 'send_group_message', 'ask_agent_in_group'].includes(tool.function.name)) : turnTools } : {});
+      !recoveryCode && round < 2 ? { tools: turn.scheduleID ? turnTools.filter((tool) => !['create_schedule', 'update_schedule', 'cancel_schedule', 'send_group_message', 'ask_agent_in_group'].includes(tool.function.name)) : turnTools } : {});
     await acknowledgeGroupResults(env.DB, agent.id, processedGroupResults);
     processedGroupResults.length = 0;
     // A successful model response proves the current input was processed, even if

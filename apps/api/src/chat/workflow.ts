@@ -9,6 +9,7 @@ import { expirePresence, markTyping } from './presence';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { enqueueReply, deliverPush } from '../push/delivery';
 import { activeTurn, type ChatJob } from './data';
+import { safeErrorCode } from './meta';
 import { contactReply } from './context';
 import { maintainMemories } from './memory';
 import { releaseAttention } from './dispatch';
@@ -49,24 +50,36 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         if (!contact) return false;
         await markTyping(env.DB, job);
         const reply = await contactReply(env, turn, contact.name);
-        // Save before checkpointing. A replay sees completion and skips another call.
-        const now = Date.now();
-        const resultAllowed = groupRequestTurnAllowed('chat_turn', env.META_CHAT_MODEL.includes('contributor'));
-        await env.DB.batch([env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, status = 'complete', error_code = NULL, updated_at = ?2
-          WHERE id = ?3 AND attempt = ?4 AND status = 'running' AND ${scheduleAllowed('chat_turn')} AND ${resultAllowed}`)
-          .bind(reply, now, job.turnID, job.attempt),
-          env.DB.prepare(`UPDATE chat_turn SET status = 'failed', error_code = 'GROUP_REQUEST_CANCELLED', updated_at = ?1
-            WHERE id = ?2 AND attempt = ?3 AND status = 'running' AND NOT (${resultAllowed})`)
-            .bind(now, job.turnID, job.attempt),
-          enqueueReply(env.DB, job.turnID, job.attempt, now),
-        ]);
+        await this.saveReply(env, job, reply);
         return true;
       });
-    } catch {
-      await step.do('save-failure', { retries: { limit: 3, delay: '5 seconds', backoff: 'exponential' } }, async () => {
-        await env.DB.prepare(`UPDATE chat_turn SET status = 'failed', error_code = 'GENERATION_FAILED', updated_at = ?1
+    } catch (error) {
+      const code = safeErrorCode(error);
+      console.error(JSON.stringify({ event: 'chat_reply_failed', code }));
+      let recovered = false;
+      if (['MODEL_TEMPORARILY_UNAVAILABLE', 'MODEL_INCOMPLETE_RESPONSE', 'MODEL_EMPTY_RESPONSE',
+        'MODEL_INVALID_JSON', 'MODEL_INVALID_RESPONSE', 'MODEL_INVALID_TOOL_CALLS', 'MODEL_TOOL_TEXT_TOO_LARGE',
+        'MODEL_RESPONSE_TOO_LARGE', 'MODEL_TOOL_BUDGET_EXCEEDED', 'REQUEST_TIMEOUT'].includes(code)) {
+        try {
+          recovered = await step.do('recover-response', { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' }, async () => {
+            const turn = await activeTurn(env.DB, job);
+            if (!turn || turn.status !== 'running' || turn.scheduleID || turn.groupRequestID) return false;
+            const contact = await env.DB.prepare('SELECT name FROM contact WHERE id = ? AND user_id = ?')
+              .bind(turn.contactID, turn.userID).first<{ name: string }>();
+            if (!contact) return false;
+            const reply = await contactReply(env, turn, contact.name, code);
+            await this.saveReply(env, job, reply);
+            console.log(JSON.stringify({ event: 'chat_reply_recovered', code }));
+            return true;
+          });
+        } catch (recoveryError) {
+          console.error(JSON.stringify({ event: 'chat_reply_recovery_failed', code: safeErrorCode(recoveryError) }));
+        }
+      }
+      if (!recovered) await step.do('save-failure', { retries: { limit: 3, delay: '5 seconds', backoff: 'exponential' } }, async () => {
+        await env.DB.prepare(`UPDATE chat_turn SET status = 'failed', error_code = ?4, updated_at = ?1
           WHERE id = ?2 AND attempt = ?3 AND status IN ('queued', 'running')`)
-          .bind(Date.now(), job.turnID, job.attempt).run();
+          .bind(Date.now(), job.turnID, job.attempt, code).run();
         return true;
       });
     }
@@ -93,6 +106,19 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       await step.sleepUntil('presence-idle', new Date(deadline));
       await step.do('expire-presence', async () => { await expirePresence(env.DB); });
     }
+  }
+
+  private async saveReply(env: Env, job: ChatJob, reply: string | null) {
+    const now = Date.now();
+    const resultAllowed = groupRequestTurnAllowed('chat_turn', env.META_CHAT_MODEL.includes('contributor'));
+    await env.DB.batch([env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, status = 'complete', error_code = NULL, updated_at = ?2
+      WHERE id = ?3 AND attempt = ?4 AND status = 'running' AND ${scheduleAllowed('chat_turn')} AND ${resultAllowed}`)
+      .bind(reply, now, job.turnID, job.attempt),
+      env.DB.prepare(`UPDATE chat_turn SET status = 'failed', error_code = 'GROUP_REQUEST_CANCELLED', updated_at = ?1
+        WHERE id = ?2 AND attempt = ?3 AND status = 'running' AND NOT (${resultAllowed})`)
+        .bind(now, job.turnID, job.attempt),
+      enqueueReply(env.DB, job.turnID, job.attempt, now),
+    ]);
   }
 
   private async refreshAgentMemory(env: Env, job: ChatJob, step: WorkflowStep, name: string) {

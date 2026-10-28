@@ -41,6 +41,9 @@ struct GroupReply: Decodable, Identifiable {
     let agentID: String
     let name: String
     let status: String
+    var sourceID: String? = nil
+    var sourceSequence: Int? = nil
+    var attempt: Int? = nil
 }
 struct GroupMessage: Decodable, Identifiable, Equatable {
     let sequence: Int

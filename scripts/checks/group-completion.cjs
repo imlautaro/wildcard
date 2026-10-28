@@ -98,13 +98,38 @@ async function check(name, run) {
     assert.equal(f.state.tools.length, 1);
     assert.equal(f.state.model.length, 4);
   });
-  await check('a transport failure in finalization resumes from saved tool results', async f => {
+  await check('a finalization transport failure recovers without replaying MCP', async f => {
     f.simulate([answer(call('call_mcp_tool',{connectionID:'connector',toolName:'read_total',arguments:{}})), finish(),
-      Error('MODEL_TEMPORARILY_UNAVAILABLE')]);
-    await assert.rejects(f.complete, /MODEL_TEMPORARILY_UNAVAILABLE/);
-    f.simulate([final()]);
+      Error('MODEL_TEMPORARILY_UNAVAILABLE'), {role:'assistant',content:'I could not finish the analysis, but the available total is 42.'}]);
+    assert.match((await f.complete()).text,/total is 42/);
+    assert.equal(f.state.tools.length,1);
+    assert.equal(f.state.model.at(-1).options.tools,undefined);
+    assert.equal(f.state.model.at(-1).options.responseFormat,undefined);
     await f.complete();
-    assert.equal(f.state.tools.length, 1);
+    assert.equal(f.state.tools.length,1);
+    assert.equal(f.state.model.length,4);
+  });
+  await check('two invalid decisions get a natural-language recovery from saved evidence', async f => {
+    f.simulate([answer(call('call_mcp_tool',{connectionID:'connector',toolName:'read_total',arguments:{}})), finish(),
+      {role:'assistant',content:'INVALID_PRIVATE_TEXT'}, {role:'assistant',content:'INVALID_PRIVATE_TEXT'},
+      {role:'assistant',content:'The fictional total is 42.'}]);
+    assert.equal((await f.complete()).text,'The fictional total is 42.');
+    assert.equal(f.state.tools.length,1);
+    assert.ok(!f.state.logs.join('').includes('INVALID_PRIVATE_TEXT'));
+  });
+  await check('failed recovery never publishes fabricated fallback text', async f => {
+    f.simulate([finish(), {role:'assistant',content:'INVALID'}, {role:'assistant',content:'INVALID'}, Error('MODEL_TEMPORARILY_UNAVAILABLE')]);
+    await assert.rejects(f.complete,/MODEL_TEMPORARILY_UNAVAILABLE/);
+    assert.equal(f.state.tools.length,0);
+  });
+  await check('later human messages cancel obsolete recovery', async f => {
+    f.simulate([finish(), {role:'assistant',content:'INVALID'}, () => {
+      f.sqlite.exec(`INSERT INTO group_message(id,group_id,user_id,sender_name,text,created_at,contributor_consent)
+        VALUES ('newer','group','human','Demo Human','Cancel this task',1,1)`);
+      return {role:'assistant',content:'INVALID'};
+    }]);
+    assert.equal((await f.complete()).text,null);
+    assert.equal(f.state.model.length,3);
   });
   await check('truncation moves to finalization and can recover with a larger final budget', async f => {
     f.simulate([Error('MODEL_INCOMPLETE_RESPONSE'), Error('MODEL_INCOMPLETE_RESPONSE'), final()]);

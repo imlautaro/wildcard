@@ -302,3 +302,18 @@ and [cache behavior](caching.md#group-generation-checkpoints).
 After an authorized automatic release, verify a fictional multi-step MCP analysis,
 reopening/back navigation during generation, offline recovery, grant revocation
 and account switching in both clients. Live/browser/device validation is pending.
+
+
+## Failed reply presentation
+
+Group failures sit directly below the source message and name the bot, matching
+iOS; no detached footer remains. Group snapshots carry optional `sourceID`,
+`sourceSequence` and `attempt`; the API omits failures resolved by a later response
+from that same bot, with a second local check against loaded messages. Private
+failure notices also disappear after a later assistant response. Existing cached
+messages stay usable while reply snapshots refresh. The same **Retry reply** copy
+and current-work disabling apply to group notices in both clients. Update API and
+clients together; old API snapshots without source IDs are not assigned guessed
+anchors. See [group recovery](groups.md#failed-replies-and-response-recovery) and
+[private recovery](chats.md#failed-replies-and-response-recovery). No new client
+endpoint, persistent store or permission is introduced.

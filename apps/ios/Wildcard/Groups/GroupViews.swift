@@ -197,6 +197,12 @@ struct GroupChatView: View {
         if voice.phase == .recording { return true }
         return draftIsEmpty ? canUseMicrophone : canSend
     }
+    private func failedReplies(for message: GroupMessage) -> [GroupReply] {
+        (store.snapshot?.replies ?? []).filter { reply in
+            reply.status == "failed" && reply.sourceID == message.id &&
+            !store.messages.contains { $0.agentID == reply.agentID && $0.sequence > message.sequence }
+        }
+    }
     private func replyPreview(_ quote: MessageReplyQuote) -> MessageReplyPreview {
         if quote.agentID == nil, let userID = quote.userID, userID == auth.user?.id {
             return MessageReplyPreview(quote: quote, author: "You", color: .accentColor)
@@ -261,6 +267,24 @@ struct GroupChatView: View {
                                         onReply: { reply(to: message) })
                             .messageHighlight(highlightedMessage == message.id)
                             .id(message.id)
+                        ForEach(failedReplies(for: message)) { reply in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(reply.name) couldn't finish replying to this message.")
+                                    .foregroundStyle(.secondary)
+                                Button("Retry reply") {
+                                    Task {
+                                        do {
+                                            _ = try await GroupService.data("\(groupID)/replies/\(reply.id)/retry", method: "POST", auth: auth)
+                                            await store.refresh(id: groupID, auth: auth)
+                                        } catch is CancellationError { }
+                                        catch { store.error = error.localizedDescription }
+                                    }
+                                }
+                                .disabled((store.snapshot?.replies ?? []).contains { $0.status == "queued" || $0.status == "running" })
+                            }
+                            .manrope(.footnote)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                     if let pending = store.pendingText {
                         let pendingQuote = store.pendingReplyTo.map(replyPreview)
@@ -281,18 +305,6 @@ struct GroupChatView: View {
                             Text(reply.name).manrope(.caption, weight: .semibold)
                             ReplyTypingIndicator()
                         }
-                    }
-                    ForEach((store.snapshot?.replies ?? []).filter { $0.status == "failed" }) { reply in
-                        Button("Retry reply from \(reply.name)") {
-                            Task {
-                                do {
-                                    _ = try await GroupService.data("\(groupID)/replies/\(reply.id)/retry", method: "POST", auth: auth)
-                                    await store.refresh(id: groupID, auth: auth)
-                                } catch is CancellationError { }
-                                catch { store.error = error.localizedDescription }
-                            }
-                        }
-                        .manrope(.footnote)
                     }
                     Color.clear.frame(height: 1).id("latest")
                 }
