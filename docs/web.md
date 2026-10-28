@@ -481,5 +481,8 @@ immediately and revalidates; a refresh never overwrites unsaved edits. Explicit
 refresh asks before discarding changes. Mutations invalidate older reads and
 use the draft's original server revision, so a 409 preserves the input for review.
 Deletion/access loss and account changes remove state. There is no disk retention.
-See [personality](personality.md) and [caching](caching.md). Functional visual,
-offline, multi-account, race, and real-model verification remain pending.
+See [personality](personality.md) and [caching](caching.md). The shared API's local
+live-model evaluation and classifier budget correction are documented in the
+[evaluation guide](personality.md#opt-in-live-model-evaluation); they affect both
+iOS and web replies without client changes or additional caching. Functional visual,
+offline, multi-account, race, and deployed client/model verification remain pending.

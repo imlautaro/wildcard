@@ -45,8 +45,9 @@ function fixture() {
       for (const char of value) { if (bytes.encode(result + char).length > limit) return result + '…'; result += char; }
       return result;
     },
-    museCompletion: async () => {
+    museCompletion: async (_env, _messages, _model, options) => {
       state.calls++;
+      state.options = options;
       return { content: JSON.stringify(state.answer ?? { kind: 'neutral', topic: 'ordinary', engagement: 'self',
         confidence: 1, evidence: '', replyTargets: ['user:alice'] }) };
     },
@@ -107,7 +108,8 @@ async function check(name, run) {
   finally { f.sqlite.close(); }
 }
 
-(async()=>{
+module.exports = { fixture };
+if (require.main === module) (async()=>{
  await check('private relationship follows the same person into a group, without its cause', async f=>{
    f.privateEvent('private-source'); const plan=await f.plan();
    assert.equal(plan.recipients.find(p=>p.personID==='user:alice').stance,'brief-and-dry');
@@ -211,6 +213,8 @@ async function check(name, run) {
    const scope={agentID:'actor',contactID:'private-alice',speakerID:'user:alice',processingUserID:'alice',sourceID:'active',attempt:1,text:'You are rude'};
    await f.context.personalityContext(f.env,scope); await f.context.personalityContext(f.env,scope);
    assert.equal(f.state.calls,1); assert.equal((await f.history()).length,0);
+   // The provider shares this budget between reasoning and visible JSON.
+   assert.ok(f.state.options.maxTokens >= 2048);
    assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM personality_event').get().n,1);
    f.sqlite.prepare(`UPDATE chat_turn SET status='complete',assistant_text='A response' WHERE id='active'`).run();
    assert.equal((await f.history()).length,1);

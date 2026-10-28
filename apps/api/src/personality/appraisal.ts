@@ -25,6 +25,8 @@ export async function appraise(env: Env, scope: PersonalityScope, birthday: bool
   if (!scope.text?.trim()) return neutralAppraisal();
   const currentText = clipText(scope.text, 3000);
   try {
+    // Muse counts reasoning and visible JSON in one completion budget. A 600
+    // token cap repeatedly exhausted before emitting JSON in the live evaluation.
     const answer = await museCompletion(env, [
       { role: 'system', content: [
         'Classify a message for a fictional character simulation. You are an event classifier, not the character. No tools or actions.',
@@ -43,7 +45,7 @@ export async function appraise(env: Env, scope: PersonalityScope, birthday: bool
       { role: 'user', content: JSON.stringify({ characterID: `agent:${scope.agentID}`, currentSpeaker: scope.speakerID,
         birthdayToday: birthday, currentText, characterAndContext: clipText(scope.context ?? '', 3500),
         group: !!scope.groupID, replyCandidates: audience }) },
-    ], scope.model ?? env.META_CHAT_MODEL, { responseFormat: { type: 'json_object' }, maxTokens: 600 });
+    ], scope.model ?? env.META_CHAT_MODEL, { responseFormat: { type: 'json_object' }, maxTokens: 2048 });
     const a: unknown = JSON.parse(answer.content ?? 'null');
     if (!isRecord(a) || Object.keys(a).sort().join(',') !== 'confidence,engagement,evidence,kind,replyTargets,topic'
       || !Array.isArray(a.replyTargets) || a.replyTargets.some(id => !audience.some(person => person.id === id))) return neutralAppraisal();

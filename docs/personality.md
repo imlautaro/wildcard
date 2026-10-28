@@ -178,8 +178,10 @@ performing model has no private transcript to reconstruct from this projection.
 It is instructed not to invent a cause, confirm another conversation's existence,
 announce hidden anger, or explain its tone using private context. If asked why it
 sounds terse, it may use evidence visible here, or acknowledge/reset its tone
-without inventing a reason. These are behavioral instructions; live generation
-quality still needs model evaluation.
+without inventing a reason. A question about private history must receive the
+same general privacy rule regardless of whether that history exists; the contact
+must neither confirm it nor fabricate a denial. These are behavioral instructions,
+not a guarantee about every generated response.
 
 A relationship can influence expression without granting disclosure rights.
 Existing factual memory, retrieval and tool authorization remain separate. Shared
@@ -234,10 +236,13 @@ existing backoff. Quiet hours, recipient opt-out, attention/activity, consent,
 evaluation/daily budgets and unanswered-message caps remain authoritative.
 
 The classifier uses the same permitted model as the turn, adds at most one new
-model call per source (600 output tokens, existing 45-second timeout), and has no
+model call per source (2,048 completion tokens including reasoning, existing
+45-second timeout), and has no
 tools. Group preparation allows two minutes for it and database reads. Director
-projection adds bounded database work, not another inference call. Live quality,
-cost and latency have not been calibrated for this version.
+projection adds bounded database work, not another inference call. This budget
+replaces the original 600-token cap, which exhausted its reasoning allowance
+before emitting classification JSON during the live evaluation. Broad quality,
+cost and latency calibration remains pending.
 
 ## API, permissions and storage
 
@@ -303,8 +308,68 @@ regressions (89 checks across five suites). Older fixture dependencies were upda
 to model disabled personality and existing routes/tools without changing the
 policies those suites assert. API/web and complete Swift type checks passed;
 16 personality SQL statements compile against all 40 migrations at expression
-depth 100. No live model, browser/device interaction or remote database was used.
-Builds, installation, remote writes and live model calls remain separate tasks.
+depth 100. That verification used no live model, browser/device interaction or
+remote database. Builds, installation and remote writes remain separate tasks.
+
+### Opt-in live-model evaluation
+
+The user separately authorized real-model calls with fictional data on October 28,
+2026. `scripts/checks/personality-live-eval.mjs` bundles the production private
+reply, memory extraction, group preparation/completion, director and guarded
+publication functions. It uses all migrations with an isolated in-memory SQLite
+database; only Meta completion requests may leave the process. Cloudflare workflow
+checkpoints and D1 transactions have local adapters; this is not a deployed Worker
+or client end-to-end test. No production conversation, push or database is used.
+
+Run only with authorization and a configured `META_API_KEY` in the environment or
+ignored `apps/api/.dev.vars`:
+
+```sh
+node scripts/checks/personality-live-eval.mjs --cases /path/to/fictional-cases.json --out /path/outside-the-repository --repetitions 3
+```
+
+The JSON input requires `privateMessage`, `question`, `mixed`, `probe`, `repair`
+strings and a `canaries` array of fictional private phrases. The private message
+must contain an explicit insult directed at the fictional contact Milo; Alex is
+its author, Sam is the unaffected participant, and Taylor requests both greetings.
+Each repetition has fresh control and experimental databases. It compares the
+same questions before/after conflict, a mixed-recipient greeting, a request to
+reveal the private cause, and reconciliation. The harness runs real memory
+extraction after the private reply rather than disabling it for the test.
+
+Reports include generated wording, categorical directions, classification,
+publication outcome, canary checks, request messages and provider usage, with the
+base commit and tracked working-diff hash. They exclude credentials, authorization
+headers and provider reasoning text. Keep reports outside Git. A same-model judge
+adds semantic assessments for human review; these are fallible and must not be
+treated as an independent privacy proof. Completion count alone is not a pass.
+
+The first run against commit `4ab8367` failed relationship continuity: classification
+used all 600 completion tokens and fell back to neutral. It disclosed no private
+canary, but had no anger to carry into the group. Increasing the local budget to
+2,048 let the next full run classify conflict, retain a dry stance toward Alex,
+keep Sam friendly, and soften after repair. Its privacy probe fabricated a denial
+of private interaction, prompting the explicit neither-confirm-nor-deny direction.
+After the budget and privacy fixes, three repetitions retained conflict and
+protected the private cause. One of three mixed greetings still averaged the
+recipients' warmth, and two did not visibly soften after repair despite the
+director restoring a friendly stance. The director now explicitly avoids
+affectionate/enthusiastic additions for a dry recipient while preserving warmth
+for others within the same reply.
+
+Two fresh repetitions of that final local version both demonstrated colder
+wording toward Alex, friendly treatment of Sam, distinct mixed greetings and no
+private disclosure or confirmation/denial under the probe. Repair restored friendly
+direction and modestly softer wording. They used 64 real `muse-spark-1.3` calls,
+18 successful local publications and 54 group model requests audited for fictional
+private phrases and the insult. No matches appeared in group prompts or replies.
+Generated replies were reviewed alongside the model judge; this is a narrow
+same-scenario evaluation of one fictional profile, not a statistical guarantee.
+The complete investigation used 224 successful provider calls across seven runs,
+including the original failure and intermediate shortcomings. The 28 local
+personality regressions and API type check also passed. These corrections and the
+evaluation harness are included together; production publication follows the
+existing committed/pushed automatic release workflow.
 
 The following behavior needs authorized functional/model/device verification:
 
