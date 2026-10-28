@@ -193,7 +193,10 @@ lets each bot owner/adder explicitly grant its assigned connectors to that bot i
 that group. Any human member can then request enabled tools; resulting responses
 are visible to everyone. No group access is inferred from a private assignment.
 Granting access permanently isolates the private chat or whole group from shared
-memory and forces Standard. Private posting/schedule creation restrictions remain.
+memory and forces Standard. Persistent human facts and bot preferences continue
+locally within that chat or group, matching iOS. Both grant confirmations explain
+local memory retention and exclusion from other chats. Existing reply/history
+payloads and session caches are unchanged. Private posting/schedule creation restrictions remain.
 See [connections](connectors.md) for consent, permissions and pending verification.
 
 OAuth connections use the same permissions and isolation as iOS, with a full-page

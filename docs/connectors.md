@@ -74,8 +74,8 @@ replace a token. Revoking the token at its provider also prevents future access.
 Granting a contact access permanently marks its private conversation as isolated, including
 its existing history. Private replies use `muse-spark-1.3` Standard regardless of
 the deployment's Contributor setting. External results and replies stay in the
-user's private chat. Human memory extraction stops for this contact; its human
-memories and assistant self-memory sources are excluded from shared retrieval,
+user's private chat. Human facts and assistant persona/preferences continue to
+be extracted with Standard into conversation-local memory. These sources are excluded from shared retrieval,
 including the creator-contact path used by groups. Existing private source data
 is retained, not deleted. The isolation marker survives disconnect, preventing
 historical output from later reentering shared memory or Contributor inference.
@@ -100,8 +100,9 @@ Data intentionally passed to an authorized tool leaves Wildcard for that server.
 Once group access is granted, `mcp_private_group` permanently marks the whole group.
 New jobs and HTTP group processing use Standard, even after grants are revoked.
 The entire group's history and memories are excluded from cross-group/private group
-search, human shared-memory retrieval and agent self-memory extraction/retrieval.
-Its own members can still read that history in the group. Existing private-source
+search and shared human/self-memory retrieval. Standard extraction retains human
+facts and agent persona/preferences in stores scoped to that group; its own members
+and agents can retrieve them there. Its members can still read that history in the group. Existing private-source
 isolation remains independent. Private result turns from group delegations do not
 become agent self memories. These conservative boundaries avoid carrying connector
 output to another audience through later conversation. Existing in-flight Contributor
@@ -573,8 +574,8 @@ and [Workers redirect-mode implementation](https://github.com/cloudflare/workerd
 ## Account model override
 
 Account now selects Standard/Contributor for ordinary chat jobs. MCP-isolated
-isolated private chats and groups continue to force Standard and omit shared memory regardless of
-that preference. See [model settings](model-settings.md); no new MCP permission
+private chats and groups continue to force Standard and retain conversation-local
+memory without exporting it to shared memory, regardless of that preference. See [model settings](model-settings.md); no new MCP permission
 is granted by changing the model.
 
 ## Account connector migration and verification
@@ -601,3 +602,20 @@ request from another member, reject non-owner grants and bot-triggered calls,
 revoke contact/group/tool/OAuth access during calls, retry uncertain writes, change
 accounts offline, delete contacts without losing account connectors, and confirm
 Standard/isolation survives revocation. Use fictional tools and data for these checks.
+
+
+## Local memory retention
+
+MCP access isolates where memory can be recalled; it does not disable memory.
+Private human facts stay in their contact profile; local bot preferences and group
+human facts use migration `0030` stores. Disconnect/revocation retains the marker,
+Standard selection, local memory and history, with no export to another audience.
+The confirmation in both clients explains this boundary. Retrieval/extraction is
+bounded and best effort; external tool results are not automatically turned into
+human facts. See [conversation-local memory](memory.md#conversation-local-memory-with-mcp).
+
+Before an authorized release, use fictional data to check local recall beyond the
+recent-history window, matching-key separation between two groups, another user's
+private chat, Standard selection when Account chooses Contributor, grant revocation,
+isolation during extraction, and member/bot/source removal. These runtime checks
+remain pending; the opt-in conversation-memory regression has not been executed.

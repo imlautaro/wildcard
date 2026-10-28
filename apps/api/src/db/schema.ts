@@ -396,6 +396,21 @@ export const groupMemory = sqliteTable('group_memory', {
   check('group_memory_content_length', sql`length(${t.content}) BETWEEN 1 AND 300`),
   check('group_memory_quote_length', sql`length(${t.sourceQuote}) BETWEEN 1 AND 240`)]);
 
+export const groupLocalMemory = sqliteTable('group_local_memory', {
+  groupId: text('group_id').notNull().references(() => chatGroup.id, { onDelete: 'cascade' }),
+  agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  memoryKey: text('memory_key').notNull(),
+  kind: text('kind').notNull(),
+  content: text('content').notNull(),
+  sourceId: text('source_id').notNull().references(() => groupMessage.id, { onDelete: 'cascade' }),
+  sourceQuote: text('source_quote').notNull(),
+  updatedAt: date('updated_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.groupId, t.agentId, t.userId, t.memoryKey] }), index('group_local_memory_source').on(t.sourceId),
+  check('group_local_memory_key_length', sql`length(${t.memoryKey}) BETWEEN 1 AND 80`),
+  check('group_local_memory_kind', sql`${t.kind} IN ('fact', 'preference', 'decision', 'pending')`),
+  check('group_local_memory_content_length', sql`length(${t.content}) BETWEEN 1 AND 300`),
+  check('group_local_memory_quote_length', sql`length(${t.sourceQuote}) BETWEEN 1 AND 240`)]);
 
 // Initial read watermarks and transactional push fan-out are SQL-managed triggers.
 export const groupPushDelivery = sqliteTable('group_push_delivery', {
@@ -434,6 +449,22 @@ export const agentMemory = sqliteTable('agent_memory', {
   check('agent_memory_kind', sql`${t.kind} IN ('fact', 'preference', 'decision', 'pending')`),
   check('agent_memory_content_length', sql`length(${t.content}) BETWEEN 1 AND 300`),
   check('agent_memory_quote_length', sql`length(${t.sourceQuote}) BETWEEN 1 AND 240`)]);
+
+export const agentLocalMemory = sqliteTable('agent_local_memory', {
+  agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  scopeKey: text('scope_key').notNull(),
+  memoryKey: text('memory_key').notNull(),
+  kind: text('kind').notNull(),
+  content: text('content').notNull(),
+  sourceEventSequence: integer('source_event_sequence').notNull().references(() => agentMemoryEvent.sequence, { onDelete: 'cascade' }),
+  sourceQuote: text('source_quote').notNull(),
+  updatedAt: date('updated_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.agentId, t.scopeKey, t.memoryKey] }), index('agent_local_memory_source').on(t.sourceEventSequence),
+  check('agent_local_memory_scope', sql`${t.scopeKey} LIKE 'private:%' OR ${t.scopeKey} LIKE 'group:%'`),
+  check('agent_local_memory_key_length', sql`length(${t.memoryKey}) BETWEEN 1 AND 80`),
+  check('agent_local_memory_kind', sql`${t.kind} IN ('fact', 'preference', 'decision', 'pending')`),
+  check('agent_local_memory_content_length', sql`length(${t.content}) BETWEEN 1 AND 300`),
+  check('agent_local_memory_quote_length', sql`length(${t.sourceQuote}) BETWEEN 1 AND 240`)]);
 
 // Recipient membership is intentionally not a foreign key: leaving cannot promote a receipt.
 export const groupMessageReceipt = sqliteTable('group_message_receipt', {

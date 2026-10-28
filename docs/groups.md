@@ -538,7 +538,10 @@ future admissions; actions already admitted may finish. Contact revocation remov
 associated group grants; account disconnection removes every grant.
 
 The first group grant permanently selects Standard and excludes the whole group
-from cross-chat memory and retrieval, even after revocation. Group members retain
+from cross-chat memory and retrieval, even after revocation. Human facts and bot
+persona/preferences continue to be extracted and recalled locally within that
+group; matching keys in other groups cannot overwrite them. See
+[conversation-local memory](memory.md#conversation-local-memory-with-mcp). Group members retain
 normal access to history within that group. An independent reply-owned execution
 ledger prevents automatic retries of uncertain actions; draft reviews cannot rerun
 tools. No grants are enabled by migration. Both clients cache schema-free access

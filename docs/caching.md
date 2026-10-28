@@ -496,3 +496,15 @@ Static checks cannot verify reopen/back, empty history, refresh, offline recover
 mutations, grant revocation or account switching on device. Verify those scenarios
 on both clients after authorized release using fictional MCP data, including
 closing the app during research and returning after the final response.
+
+
+## Conversation-local agent memory
+
+Local MCP memory is server-only and assembled during generation; clients do not
+fetch or persist fact/persona profiles. API payloads, session cache keys, deduplication,
+retention budgets, eviction and mutation invalidation stay unchanged. Both clients
+show the same local-retention disclosure before granting connector access. A grant
+uses existing contact/group access refresh and invalidation; disconnect never
+promotes local knowledge to a shared profile. Verify reopen/back, failed refresh,
+grant/revoke, member removal and account switching with fictional local memories
+on both clients after an authorized release. Device checks remain pending.

@@ -168,3 +168,9 @@ confirm token costs/cache reads and absent prompt/response payloads. Check missi
 shared consent and revoked membership, MCP Standard, queued/in-flight changes,
 reopen/offline/empty states, pending send preservation, and account switching.
 No inference or device verification was performed during this implementation.
+
+
+MCP-isolated conversations also force Standard for local human/persona extraction,
+including contact maintenance started by another account's job. Their local memory
+remains available only in its source private chat/group and never becomes shared
+Contributor input. See [local memory](memory.md#conversation-local-memory-with-mcp).

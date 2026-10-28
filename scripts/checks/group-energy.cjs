@@ -41,7 +41,7 @@ function human(f,id='human-root') {
 function groupContext(f, decision = {action:'reply',text:'A freely generated hello.'}) {
   const c=vm.createContext({console,Date,JSON,Array,Number,Error,
     readEnergy:f.context.readEnergy,groupSourceAccess:f.context.groupSourceAccess,
-    readMemories:async()=>[],selectMemories:()=>[],readAgentMemories:async()=>[],
+    localGroupMemories:async()=>[],readMemories:async()=>[],selectMemories:()=>[],readAgentMemories:async()=>[],
     agentMemoryContext:()=>'{}',clipText:s=>s,acknowledgeAgentContext:async()=>{},
     isRecord:x=>x&&typeof x==='object'&&!Array.isArray(x),
   });

@@ -1377,3 +1377,38 @@ and privacy semantics. Prefer a forward fix preserving connector records, grants
 isolation and both ledgers; restoring a backup needs its matching code and explicit
 recovery authorization. Never drop markers to regain compatibility. See
 [setup, retention and verification](connectors.md#account-connector-migration-and-verification).
+
+
+## Conversation-local memory
+
+Migration `0030_conversation_memory.sql` reuses D1 `DB`, `CHAT_WORKFLOW` and the
+existing Meta credential/Standard model. No new service, binding, secret, account
+permission or provisioning step is required. Independent installs apply all migrations
+in filename order through `npm run db:migrate:local`; the existing automatic API
+release applies the same versioned migrations remotely before publication. Production
+requires an explicitly authorized commit/push, then verification of the automatic
+build, deployed source SHA and migration list. Never deploy manually.
+
+The migration adds `group_local_memory` and `agent_local_memory` with source foreign
+keys, indexes and marker-insert preservation triggers. Existing shared tables and
+old-worker conflict targets remain intact. Existing isolated sources are copied
+locally without inference; private human facts already have contact-local storage.
+Local extraction always uses Standard and keeps bounded batches, keys, source
+validation and best-effort retries. Local key capacity is separate per audience.
+See [memory](memory.md#conversation-local-memory-with-mcp) for ownership and limits.
+
+Static verification can run `node scripts/checks/memory-sql-compile.cjs`; it only
+prepares SQL variants against an empty migrated in-memory schema at expression depth
+100. It does not run reply/extraction functions or inference. The opt-in functional
+regression `node scripts/checks/conversation-memory.cjs` covers fictional local
+recall, separate audiences, Standard, revocation, removal, concurrent isolation and
+failure recovery. It has not been executed under the current no-tests instruction.
+Validate populated migration/trigger behavior on an authorized staging backup and
+both clients before claiming production verification. Do not log memories or quotes.
+
+The additive migration is compatible with older Worker table shapes, but older
+code will stop local extraction again and cannot recall the new local profiles.
+A rollback must retain these tables, triggers, isolation markers, event history
+and source foreign keys; prefer a forward fix. Never drop local stores or clear
+markers to regain compatibility. Drain active Workflows before any incompatible
+code rollback. Local change only: no remote migration or release was performed.

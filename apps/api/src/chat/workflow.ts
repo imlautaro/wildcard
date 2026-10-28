@@ -98,11 +98,11 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
   private async refreshAgentMemory(env: Env, job: ChatJob, step: WorkflowStep, name: string) {
     try {
       await step.do(name, { retries: { limit: 1, delay: '5 seconds' }, timeout: '1 minute' }, async () => {
-        const row = await env.DB.prepare(`SELECT c.agent_id AS id FROM chat_turn t JOIN contact c ON c.id = t.contact_id
+        const row = await env.DB.prepare(`SELECT c.agent_id AS id, c.id AS contactID FROM chat_turn t JOIN contact c ON c.id = t.contact_id
           JOIN agent_attention attention ON attention.turn_id = t.id AND attention.attempt = t.attempt
           WHERE t.id = ? AND t.attempt = ? AND t.status IN ('running', 'complete')`)
-          .bind(job.turnID, job.attempt).first<{ id: string }>();
-        if (row) await maintainAgentMemories(env, row.id, await jobAccountID(env, job.turnID, false));
+          .bind(job.turnID, job.attempt).first<{ id: string; contactID: string }>();
+        if (row) await maintainAgentMemories(env, row.id, await jobAccountID(env, job.turnID, false), { contactID: row.contactID });
         return true;
       });
     } catch { console.error(JSON.stringify({ event: 'agent_memory_deferred' })); }

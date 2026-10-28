@@ -1,4 +1,4 @@
-import { accountEnvironment } from '../lib/model-preference';
+import { standardModel, accountEnvironment } from '../lib/model-preference';
 import { privateContact } from '../mcp/client';
 import { groupMemories } from '../groups/memory';
 import { isRecord, museCompletion } from './meta';
@@ -72,8 +72,10 @@ const extractionFormat = { type: 'json_schema', json_schema: { name: 'contact_me
 // Each invocation processes one bounded batch. A transaction compares the cursor
 // before every mutation, so a stale Workflow cannot overwrite a newer batch.
 export async function maintainMemories(bindings: Env, scope: MemoryScope): Promise<void> {
-  const env = await accountEnvironment(bindings, scope.userID);
-  if (await privateContact(env.DB, scope.contactID)) return;
+  const isolated = await privateContact(bindings.DB, scope.contactID);
+  const env = isolated ? { ...bindings, META_CHAT_MODEL: standardModel } : await accountEnvironment(bindings, scope.userID);
+  // Read existing local keys even when the Workflow did not request reply context.
+  scope = { ...scope, privateConversation: true, contributorModel: env.META_CHAT_MODEL.includes('contributor') };
   if (!await contactModelAllowed(env, scope.contactID, scope.userID)) return;
   await env.DB.prepare(`INSERT INTO contact_memory_state (contact_id, user_id, last_sequence)
     SELECT id, user_id, 0 FROM contact WHERE id = ?1 AND user_id = ?2

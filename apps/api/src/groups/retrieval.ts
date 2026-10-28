@@ -1,11 +1,15 @@
 import { readAgentMemories, selectAgentMemories } from '../chat/agent-memory';
-import { byteLength, clipText, keywords } from '../chat/memory';
+import { groupMemories, localGroupMemories } from './memory';
+import { byteLength, clipText, keywords, selectMemories } from '../chat/memory';
 import { isRecord, type ModelTool, type ToolCall } from '../chat/meta';
 
-export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; beforeSequence?: number; reactionJob?: { turnID: string; attempt: number }; mcp?: { id: string; attempt: number; contactID: string; userID: string; groupID: string; agentID: string } };
+export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; contactID?: string; beforeSequence?: number; reactionJob?: { turnID: string; attempt: number }; mcp?: { id: string; attempt: number; contactID: string; userID: string; groupID: string; agentID: string } };
 export const groupRetrievalTools: ModelTool[] = [
+  { type: 'function', function: { name: 'search_group_memories',
+    description: 'Search attributed human memories available to this agent. In a group this includes that group’s local memories; local memories never leave their source group. Uses lexical matching.',
+    parameters: { type: 'object', additionalProperties: false, required: ['query'], properties: { query: { type: 'string' } } } } },
   { type: 'function', function: { name: 'search_self_memories',
-    description: 'Retrieve your own persistent preferences and persona across private and group chats, attributed to your agent ID. Never retrieves another agent’s private preferences.',
+    description: 'Retrieve your shared persona and your current conversation’s local preferences, attributed to your agent ID. Local memories cannot be retrieved from another conversation. Never retrieves another agent’s private preferences.',
     parameters: { type: 'object', additionalProperties: false, required: ['query'], properties: { query: { type: 'string' } } } } },
   { type: 'function', function: { name: 'search_groups',
     description: 'Find shared groups and their current human/agent identities. Optional query matches group or member names. Use before guessing who another bot is. Paginate with after.',
@@ -151,7 +155,16 @@ export async function executeGroupRetrieval(db: D1Database, scope: GroupRetrieva
     if (Object.keys(args).some((k) => k !== 'query') || typeof args.query !== 'string' || !args.query.trim()) {
       return JSON.stringify({ error: 'Provide a nonempty query.' });
     }
-    return JSON.stringify(pack(selectAgentMemories(await readAgentMemories(db, scope.agentID, scope.contributor, scope.userID), args.query).slice(0, 8)));
+    return JSON.stringify(pack(selectAgentMemories(await readAgentMemories(db, scope.agentID, scope.contributor, scope.userID, scope.groupID ? { groupID: scope.groupID } : scope.contactID ? { contactID: scope.contactID } : undefined), args.query).slice(0, 8)));
+  }
+  if (call.function.name === 'search_group_memories') {
+    if (Object.keys(args).some((k) => k !== 'query') || typeof args.query !== 'string' || !args.query.trim()) {
+      return JSON.stringify({ error: 'Provide a nonempty query.' });
+    }
+    const local = scope.groupID && !scope.contributor
+      ? await localGroupMemories(db, scope.agentID, scope.groupID, scope.userID, scope.beforeSequence) : [];
+    const shared = await groupMemories(db, scope.agentID, scope.contributor);
+    return JSON.stringify(pack(selectMemories([...local, ...shared], args.query)));
   }
   if (call.function.name === 'search_groups') {
     if (Object.keys(args).some((k) => !['query', 'after'].includes(k))

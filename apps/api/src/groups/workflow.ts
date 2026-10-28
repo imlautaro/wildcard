@@ -160,11 +160,11 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
 async function refreshSelfMemory(env: Env, job: GroupJob, step: WorkflowStep, name: string) {
   try {
     await step.do(name, { retries: { limit: 1, delay: '5 seconds' }, timeout: '1 minute' }, async () => {
-      const row = await env.DB.prepare(`SELECT r.agent_id AS id FROM group_reply r
+      const row = await env.DB.prepare(`SELECT r.agent_id AS id, r.group_id AS groupID FROM group_reply r
         JOIN agent_attention attention ON attention.turn_id = r.id AND attention.attempt = r.attempt
         WHERE r.id = ? AND r.attempt = ? AND r.status IN ('running', 'complete')`)
-        .bind(job.turnID, job.attempt).first<{ id: string }>();
-      if (row) await maintainAgentMemories(env, row.id, await jobAccountID(env, job.turnID, true));
+        .bind(job.turnID, job.attempt).first<{ id: string; groupID: string }>();
+      if (row) await maintainAgentMemories(env, row.id, await jobAccountID(env, job.turnID, true), { groupID: row.groupID });
       return true;
     });
   } catch { console.error(JSON.stringify({ event: 'agent_memory_deferred' })); }

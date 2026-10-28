@@ -83,7 +83,7 @@ D1-backed Online/Typing/Last seen presence maintained by the server Workflow and
 with a brief durable wait before the agent connects. Opening a chat also connects
 the agent briefly; actual composer activity extends its server-side idle lease. Accepted replies
 continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
-limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1, selects bounded recent context, and provides shared attributed memories with private history search tools. Each agent also keeps its own stated persona/preferences across chats and can discover common group members and retrieve their attributed group statements through bounded, permission-checked search. An empty draft offers a microphone for
+limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1 (including conversation-local memory for MCP chats/groups), selects bounded recent context, and provides shared attributed memories with private history search tools. Each agent also keeps its own stated persona/preferences across chats and can discover common group members and retrieve their attributed group statements through bounded, permission-checked search. An empty draft offers a microphone for
 [Muse Voice Transcribe dictation](docs/voice.md); the transcript is editable before
 sending. Navigation reuses a bounded session-scoped [memory cache](docs/caching.md) for
 private/group chats, group details, schedules and sharing, and

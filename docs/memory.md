@@ -253,10 +253,14 @@ changes; (6) provider/storage failures and recovery on subsequent turns.
 
 ## Private external connections
 
-A contact chat marked by MCP connection setup remains excluded from shared human
-memories and agent self-memory, including group retrieval through the creator contact.
-It uses Standard for private replies and stops human memory extraction. Disconnect does
-not remove this marker. Existing source history is retained. See [connections](connectors.md).
+A contact chat marked by MCP connection setup uses Standard for replies and local
+human/self-memory extraction. Human facts remain in that contact's existing
+`contact_memory` profile; they are readable only within its private conversation.
+Agent preferences learned there use `agent_local_memory`, keyed by agent and
+`private:<contactID>`. Neither source is exported through shared retrieval,
+including the creator-contact path used by groups. Disconnect does not remove the
+marker or local memory. Existing source history remains searchable in the chat.
+See [connections](connectors.md).
 
 ## Account-selected extraction model
 
@@ -275,3 +279,63 @@ acceptance in the contact invitation flow is saved on their own contact row.
 Existing rows are not granted new consent automatically. Group processing
 distinguishes its human requester from the agent owner’s lookup contact.
 See [model settings](model-settings.md#sharing-and-mcp).
+
+
+## Conversation-local memory with MCP
+
+Migration `0030_conversation_memory.sql` restores bounded persistent memory for
+MCP-isolated private chats and groups without exporting connector-derived context.
+Recent-history limits and original-message search remain unchanged. There is no
+new embedding service, unlimited transcript loading, or full-chat summary.
+
+Private human extraction keeps the existing six-message/16,000-byte batch, source
+quotes, cursor transaction and 64-key limit, but forces Standard even if a different
+account's job triggers maintenance. It reads its own existing keys for correction;
+shared/group readers continue rejecting the source contact's permanent marker.
+
+For an isolated group, human facts use `group_local_memory`, keyed by group,
+agent, source user and memory key, with up to three facts per human source and
+64 keys per agent/user/group. Shared extraction still writes only `group_memory`.
+Read/write checks verify source group, human membership/consent and bot membership.
+A group becoming isolated during extraction cannot commit to shared storage.
+Existing isolated group history is not bulk-extracted; future completed reply jobs
+perform their normal best-effort human extraction. Failed group extraction retains
+the existing Workflow retry behavior; no new background backfill is introduced.
+
+Agent self extraction uses `agent_local_memory` for marked conversations, with
+64 keys per agent/audience and the existing four-reply/12,000-byte batch limits.
+Its event acknowledgements and mutations remain atomic. Shared self extraction
+never consumes isolated events. Local reads require the matching private owner or
+current group membership and Standard. The local profile overrides an identical
+shared persona key only in that audience; up to 64 local plus 64 eligible shared
+candidates feed the existing 6,000-byte profile packing budget. Shared profiles
+are never overwritten by a local preference.
+
+`search_self_memories` follows the server-resolved current audience.
+`search_group_memories(query)` retrieves lexical matches from shared group facts
+and, within a Standard group job, its own local human facts. The normal eight-match
+selection and bounded result packing remain; it cannot enumerate another isolated
+group's memories. Recent group context selects at most eight human memories from
+local and eligible shared candidates. Group local human reads respect the draft's
+sequence watermark. No raw external tool results are added to human-fact extraction;
+agent self extraction remains limited to explicit persona/preferences, not summaries
+of external data. Original conversation search is the fallback for such details.
+
+The migration copies existing shared-profile rows with already-isolated sources
+into the matching local store, without inference. Marker-insert triggers preserve
+existing knowledge locally when a conversation first becomes isolated. Original
+shared rows remain excluded by source checks. No local data is promoted after
+connector revocation. Source deletion cascades local rows; removed group members
+or bots lose access through current membership checks. Memory remains best effort,
+not a comprehensive erasure or editable-memory feature.
+
+Both iOS and web use this API behavior and explain local memory retention in the
+connector grant confirmation. No new payload, client memory cache or endpoint is
+required. See [infrastructure](infrastructure.md#conversation-local-memory) for
+migration/release/rollback and [caching](caching.md#conversation-local-agent-memory)
+for cache and device verification.
+
+Static verification: API/web TypeScript, Swift parsing, migration/SQL preparation and
+whitespace checks. The opt-in `node scripts/checks/conversation-memory.cjs` uses
+fictional data and simulated inference; it was authored, not executed. Tests,
+builds, real inference, remote migration and device behavior remain unverified.
