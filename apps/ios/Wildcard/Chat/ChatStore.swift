@@ -13,6 +13,35 @@ final class ChatStore {
         guard let outgoingMessage, !turns.contains(where: { $0.id == outgoingMessage.turn.id }) else { return turns }
         return turns + [outgoingMessage.turn]
     }
+    struct TimelineItem: Identifiable, Equatable {
+        enum Kind: Int { case user, assistant, status }
+        let turn: ChatTurn
+        let kind: Kind
+        let timestamp: Double
+        var id: String { "\(turn.id)/\(kind.rawValue)" }
+    }
+
+    // Turns remain ordered by server sequence for pagination/cache reconciliation.
+    // Only the presentation is split into independently timestamped messages.
+    var timelineItems: [TimelineItem] {
+        let displayed = displayedTurns
+        let latestTimestamp = displayed.map { max($0.createdAt, $0.updatedAt) }.max() ?? 0
+        return displayed.flatMap { turn -> [TimelineItem] in
+            var items = [TimelineItem(turn: turn, kind: .user, timestamp: turn.createdAt)]
+            if turn.assistantText != nil {
+                items.append(TimelineItem(turn: turn, kind: .assistant, timestamp: turn.updatedAt))
+            } else if turn.isPending || turn.status == .failed {
+                items.append(TimelineItem(turn: turn, kind: .status, timestamp: latestTimestamp + 1))
+            }
+            return items
+        }.sorted {
+            if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
+            if $0.kind != $1.kind { return $0.kind.rawValue < $1.kind.rawValue }
+            if $0.turn.sequence != $1.turn.sequence { return $0.turn.sequence < $1.turn.sequence }
+            return $0.id < $1.id
+        }
+    }
+
     func isSubmitting(_ turnID: String) -> Bool {
         outgoingMessage?.turn.id == turnID && !turns.contains(where: { $0.id == turnID })
     }

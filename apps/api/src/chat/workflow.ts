@@ -1,4 +1,4 @@
-import { batchIntoNext, shouldHoldReply, waitForComposer } from './pacing';
+import { batchStatement, batchIntoNext, shouldHoldReply, waitForComposer } from './pacing';
 import { runInitiative, type InitiativeJob } from './initiative';
 import { jobAccountID, jobModel } from '../lib/model-preference';
 import { maintainAgentMemories } from './agent-memory';
@@ -52,6 +52,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' },
         timeout: '3 minutes',
       }, async () => {
+        if (await batchIntoNext(env, job)) return null;
         const turn = await activeTurn(env.DB, job);
         if (!turn || turn.status === 'complete' || turn.status === 'failed') return null;
         const contact = await env.DB.prepare('SELECT name FROM contact WHERE id = ?1 AND user_id = ?2')
@@ -126,7 +127,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
   private async saveReply(env: Env, job: ChatJob, reply: string | null) {
     const now = Date.now();
     const resultAllowed = groupRequestTurnAllowed('chat_turn', env.META_CHAT_MODEL.includes('contributor'));
-    await env.DB.batch([env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, status = 'complete', error_code = NULL, updated_at = ?2
+    await env.DB.batch([batchStatement(env, job), env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, status = 'complete', error_code = NULL, updated_at = ?2
       WHERE id = ?3 AND attempt = ?4 AND status = 'running' AND ${scheduleAllowed('chat_turn')} AND ${resultAllowed}`)
       .bind(reply, now, job.turnID, job.attempt),
       env.DB.prepare(`UPDATE chat_turn SET status = 'failed', error_code = 'GROUP_REQUEST_CANCELLED', updated_at = ?1

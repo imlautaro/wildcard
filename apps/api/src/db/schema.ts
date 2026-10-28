@@ -116,6 +116,7 @@ export const agentPresence = sqliteTable('agent_presence', {
   check('agent_presence_status', sql`${table.status} IN ('offline', 'online', 'typing')`)]);
 
 export const chatTurn = sqliteTable('chat_turn', {
+  toolsStarted: integer('tools_started', { mode: 'boolean' }).notNull().default(false),
   initiativeSourceId: text('initiative_source_id').references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'set null' }),
   readAt: date('read_at'),
   timeZone: text('time_zone'),
@@ -142,6 +143,7 @@ export const chatTurn = sqliteTable('chat_turn', {
   checkedAt: integer('checked_at').notNull().default(0),
 }, (table) => [
   foreignKey({ columns: [table.contactId, table.userId], foreignColumns: [contact.id, contact.userId] }).onDelete('cascade'),
+  check('chat_tools_started', sql`${table.toolsStarted} IN (0, 1)`),
   check('chat_status', sql`${table.status} IN ('queued', 'running', 'complete', 'failed')`),
   check('chat_attempt', sql`${table.attempt} > 0`),
   check('chat_completed_reply', sql`${table.status} != 'complete' OR ${table.assistantText} IS NOT NULL`),

@@ -21,19 +21,31 @@ export async function waitForComposer(env: Env, job: ChatJob, step: WorkflowStep
   }
 }
 
-// Fold only consecutive ordinary text messages before any inference/tools run.
-// File, quoted, device, scheduled and automatic-result turns keep their own execution.
+// Fold consecutive text before generation or atomically before publication.
+// Device capabilities must match; any started tool prevents discarding its reply.
+// Files, quotes, scheduled messages and automatic results keep their execution.
 // The existing table requires text on complete rows. Use a terminal internal
 // marker, normalized to complete/no-reply by publicTurn, without rebuilding the
 // transcript table or manufacturing an assistant message/unread notification.
 export async function batchIntoNext(env: Env, job: ChatJob) {
   const previous = await activeTurn(env.DB, job);
   if (previous?.status === 'failed' && previous.errorCode === 'MESSAGE_BATCHED') return true;
-  const result = await env.DB.prepare(`UPDATE chat_turn SET status = 'failed',
+  const result = await batchStatement(env, job).run();
+  return result.meta.changes > 0;
+}
+
+// Used as the first statement in the reply-publication transaction. A new input
+// either precedes that transaction and coalesces, or follows a published reply.
+export function batchStatement(env: Env, job: ChatJob) {
+  return env.DB.prepare(`UPDATE chat_turn SET status = 'failed',
     error_code = 'MESSAGE_BATCHED', updated_at = ?3
-    WHERE id = ?1 AND attempt = ?2 AND status = 'queued'
+    WHERE id = ?1 AND attempt = ?2 AND status IN ('queued', 'running') AND tools_started = 0
+    AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)
     AND schedule_id IS NULL AND group_request_id IS NULL AND initiative_source_id IS NULL
-    AND attachment_json IS NULL AND native_context_json IS NULL AND reply_to_id IS NULL
+    AND attachment_json IS NULL AND reply_to_id IS NULL
+    AND NOT EXISTS (SELECT 1 FROM native_action WHERE turn_id = ?1)
+    AND NOT EXISTS (SELECT 1 FROM group_post WHERE source_turn_id = ?1)
+    AND NOT EXISTS (SELECT 1 FROM group_request WHERE source_turn_id = ?1)
     AND length(CAST(user_text AS BLOB)) <= 1000
     AND (SELECT COUNT(*) FROM chat_turn prior WHERE prior.contact_id = chat_turn.contact_id
       AND prior.user_id = chat_turn.user_id AND prior.sequence < chat_turn.sequence
@@ -45,10 +57,10 @@ export async function batchIntoNext(env: Env, job: ChatJob) {
       SELECT MIN(later.sequence) FROM chat_turn later WHERE later.contact_id = chat_turn.contact_id
       AND later.user_id = chat_turn.user_id AND later.sequence > chat_turn.sequence)
       AND next.status = 'queued' AND next.schedule_id IS NULL AND next.group_request_id IS NULL
-      AND next.initiative_source_id IS NULL AND next.attachment_json IS NULL AND next.native_context_json IS NULL
+      AND next.initiative_source_id IS NULL AND next.attachment_json IS NULL
+      AND next.native_context_json IS chat_turn.native_context_json
       AND next.reply_to_id IS NULL AND length(CAST(next.user_text AS BLOB)) <= 1000)`)
-    .bind(job.turnID, job.attempt, Date.now()).run();
-  return result.meta.changes > 0;
+    .bind(job.turnID, job.attempt, Date.now());
 }
 
 export async function shouldHoldReply(env: Env, job: ChatJob, reply: string | null) {

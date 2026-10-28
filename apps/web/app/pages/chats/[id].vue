@@ -31,20 +31,37 @@ const composer = ref<{ focus: () => void }>();
 
 useHead({ title: computed(() => contact.value?.name ?? 'Chat') });
 
-type Item =
-  | { kind: 'day'; key: string; label: string }
-  | { kind: 'turn'; key: string; turn: ChatTurn };
+type MessageItem = { kind: 'user' | 'assistant' | 'status'; key: string; turn: ChatTurn; timestamp: number };
+type PendingItem = { kind: 'pending'; key: string; timestamp: number };
+type Item = { kind: 'day'; key: string; label: string } | MessageItem | PendingItem;
 
+// Server turns retain sequence order for paging. Render each side independently
+// so a reply created after another human message cannot appear ahead of it.
 const items = computed<Item[]>(() => {
+  const turns = state.value.turns;
+  const latestTimestamp = Math.max(0, ...turns.map(turn => Math.max(turn.createdAt, turn.updatedAt)), state.value.pending?.createdAt ?? 0);
+  const messages: (MessageItem | PendingItem)[] = turns.flatMap((turn): MessageItem[] => [
+    ...((turn.scheduleID === null && (!!turn.userText || !!turn.attachment))
+      || remote.state.value.actions.some(action => action.turnID === turn.id)
+      ? [{ kind: 'user' as const, key: `${turn.id}-user`, turn, timestamp: turn.createdAt }] : []),
+    ...(turn.assistantText !== null
+      ? [{ kind: 'assistant' as const, key: `${turn.id}-assistant`, turn, timestamp: turn.updatedAt }]
+      : turn.status === 'queued' || turn.status === 'running' || turn.status === 'failed'
+        ? [{ kind: 'status' as const, key: `${turn.id}-status`, turn, timestamp: latestTimestamp + 1 }] : []),
+  ]);
+  if (state.value.pending) messages.push({ kind: 'pending', key: state.value.pending.id, timestamp: state.value.pending.createdAt });
+  const rank = { user: 0, pending: 0, assistant: 1, status: 2 };
+  messages.sort((a, b) => a.timestamp - b.timestamp || rank[a.kind] - rank[b.kind]
+    || ('turn' in a && 'turn' in b ? a.turn.sequence - b.turn.sequence : 0) || a.key.localeCompare(b.key));
   const result: Item[] = [];
   let day = '';
-  for (const turn of state.value.turns) {
-    const label = dayLabel(turn.createdAt);
+  for (const item of messages) {
+    const label = dayLabel(item.timestamp);
     if (label !== day) {
       day = label;
-      result.push({ kind: 'day', key: `day-${turn.sequence}`, label });
+      result.push({ kind: 'day', key: `day-${item.key}`, label });
     }
-    result.push({ kind: 'turn', key: turn.id, turn });
+    result.push(item);
   }
   return result;
 });
@@ -210,50 +227,7 @@ onBeforeUnmount(() => {
 
       <template v-for="item in items" :key="item.key">
         <div v-if="item.kind === 'day'" class="day">{{ item.label }}</div>
-        <template v-else>
-          <div
-            v-if="item.turn.scheduleID === null && (item.turn.userText || item.turn.attachment)" :id="`message-${item.turn.id}-user`"
-            class="bubble-row outgoing" :class="{ highlighted: highlighted === `${item.turn.id}-user` }"
-          >
-            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="user" :replyable="canReply" @reply="startReply(item.turn, 'user')">
-              <div class="private-message-content">
-                <div v-if="item.turn.attachment" class="bubble media">
-                  <MessageReplyQuote v-if="item.turn.replyTo" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />
-                  <MessageAttachment :attachment="item.turn.attachment" :path="attachmentPath(item.turn)" />
-                  <div v-if="item.turn.userText && item.turn.attachment.mimeType.startsWith('image/')" class="caption">{{ item.turn.userText }}</div>
-                  <div class="meta" style="padding: 0 6px 2px">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
-                </div>
-                <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble"><MessageReplyQuote v-if="item.turn.replyTo && !item.turn.attachment" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />{{ item.turn.userText }}<div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
-              </div>
-            </MessageReactions>
-          </div>
-          <div
-            v-if="item.turn.assistantText" :id="`message-${item.turn.id}-assistant`"
-            class="bubble-row incoming" :class="{ highlighted: highlighted === `${item.turn.id}-assistant` }"
-          >
-            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply" @reply="startReply(item.turn, 'assistant')"><div class="bubble"><MessageMarkdown :text="item.turn.assistantText" /><div class="meta">{{ messageTime(item.turn.updatedAt) }}</div></div></MessageReactions>
-          </div>
-          <div v-else-if="item.turn.status === 'running' && state.presence?.status === 'typing'" class="bubble-row incoming">
-            <div class="typing" aria-label="Typing"><span /><span /><span /></div>
-          </div>
-          <div v-else-if="item.turn.status === 'failed' && !state.turns.some((later) => later.sequence > item.turn.sequence && later.assistantText !== null)" class="status-line">
-            {{ failureText(item.turn) }}
-            <button
-              v-if="item.turn.scheduleID === null && item.turn.groupRequestID === null && item.turn.id === lastTurnID"
-              class="link-button" :disabled="state.retrying || replying || !!state.pending" @click="retryReply(item.turn)"
-            >Retry reply</button>
-          </div>
-          <div v-for="action in remote.state.value.actions.filter(a => a.turnID === item.turn.id)" :key="action.id" class="native-receipt" :class="remoteTone(action.status)">
-            <span class="native-glyph" :data-kind="action.kind"><AppIcon :name="action.kind === 'alarm' ? 'alarm' : 'timer'" /></span>
-            <div>
-              <strong>{{ action.title }}</strong>
-              <span class="status"><AppIcon :name="remoteToneIcons[remoteTone(action.status) as keyof typeof remoteToneIcons]" />{{ action.deviceName }} · {{ remoteStatus(action.status) }}</span>
-            </div>
-          </div>
-        </template>
-      </template>
-
-      <template v-if="state.pending">
+      <template v-else-if="item.kind === 'pending' && state.pending">
         <div v-if="state.pending.attachment" class="bubble-row outgoing">
           <div class="bubble media">
             <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
@@ -271,6 +245,50 @@ onBeforeUnmount(() => {
           <button class="link-button danger" @click="discardPending">Edit</button>
         </div>
       </template>
+        <template v-else-if="item.kind !== 'pending'">
+          <div
+            v-if="item.kind === 'user' && item.turn.scheduleID === null && (item.turn.userText || item.turn.attachment)" :id="`message-${item.turn.id}-user`"
+            class="bubble-row outgoing" :class="{ highlighted: highlighted === `${item.turn.id}-user` }"
+          >
+            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="user" :replyable="canReply" @reply="startReply(item.turn, 'user')">
+              <div class="private-message-content">
+                <div v-if="item.turn.attachment" class="bubble media">
+                  <MessageReplyQuote v-if="item.turn.replyTo" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />
+                  <MessageAttachment :attachment="item.turn.attachment" :path="attachmentPath(item.turn)" />
+                  <div v-if="item.turn.userText && item.turn.attachment.mimeType.startsWith('image/')" class="caption">{{ item.turn.userText }}</div>
+                  <div class="meta" style="padding: 0 6px 2px">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
+                </div>
+                <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble"><MessageReplyQuote v-if="item.turn.replyTo && !item.turn.attachment" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />{{ item.turn.userText }}<div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
+              </div>
+            </MessageReactions>
+          </div>
+          <div
+            v-if="item.kind === 'assistant' && item.turn.assistantText" :id="`message-${item.turn.id}-assistant`"
+            class="bubble-row incoming" :class="{ highlighted: highlighted === `${item.turn.id}-assistant` }"
+          >
+            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply" @reply="startReply(item.turn, 'assistant')"><div class="bubble"><MessageMarkdown :text="item.turn.assistantText" /><div class="meta">{{ messageTime(item.turn.updatedAt) }}</div></div></MessageReactions>
+          </div>
+          <div v-else-if="item.kind === 'status' && item.turn.status === 'running' && state.presence?.status === 'typing'" class="bubble-row incoming">
+            <div class="typing" aria-label="Typing"><span /><span /><span /></div>
+          </div>
+          <div v-else-if="item.kind === 'status' && item.turn.status === 'failed' && !state.turns.some((later) => later.sequence > item.turn.sequence && later.assistantText !== null)" class="status-line">
+            {{ failureText(item.turn) }}
+            <button
+              v-if="item.turn.scheduleID === null && item.turn.groupRequestID === null && item.turn.id === lastTurnID"
+              class="link-button" :disabled="state.retrying || replying || !!state.pending" @click="retryReply(item.turn)"
+            >Retry reply</button>
+          </div>
+          <div v-for="action in remote.state.value.actions.filter(a => item.kind === 'user' && a.turnID === item.turn.id)" :key="action.id" class="native-receipt" :class="remoteTone(action.status)">
+            <span class="native-glyph" :data-kind="action.kind"><AppIcon :name="action.kind === 'alarm' ? 'alarm' : 'timer'" /></span>
+            <div>
+              <strong>{{ action.title }}</strong>
+              <span class="status"><AppIcon :name="remoteToneIcons[remoteTone(action.status) as keyof typeof remoteToneIcons]" />{{ action.deviceName }} · {{ remoteStatus(action.status) }}</span>
+            </div>
+          </div>
+        </template>
+      </template>
+
+
     </div>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable" :sending="!!state.pending" :reply="replyTarget"

@@ -1679,3 +1679,25 @@ with the new code. Restoring the old unique index requires no conversation to ha
 multiple queued/running rows; do not recreate it while the queue is populated.
 Historical internal batch markers require the new normalization/history behavior;
 prefer a forward fix rather than running an older reader against those rows.
+
+
+### Reply publication guard (migration 0036)
+
+Apply `0036_reply_publication_guard.sql` after 0035. It adds `chat_turn.tools_started`
+with a zero default and boolean constraint. Existing running and previously retried
+turns are conservatively marked as started because older code may already have
+issued tools. New code persists the marker before any tool dispatch. It is never
+reset when retrying an uncertain outcome. The pre-publication batch check, reply
+write and push enqueue run in one D1 transaction, preserving agent attention and
+preventing a human send from racing between the check and publication. Matching
+native device contexts can coalesce only while no tool/action has started.
+
+No new services, secrets, bindings or account configuration are required. Independent
+installations apply all versioned migrations with normal local setup; production
+uses only the automatic commit/push pipeline. Publish the API with migration 0036
+before relying on the new guard. Both clients also need their updated timestamped
+history presentation. Keep the additive column on rollback; older code ignores it,
+but loses the publication guard. Prefer a forward fix and drain running workflows
+before changing execution policy. Empty-schema SQLite migration/SQL compilation,
+API/web TypeScript and full iOS Simulator Swift typechecking passed. Remote migration,
+UI, tool-replay and concurrent-message runtime verification remain pending.

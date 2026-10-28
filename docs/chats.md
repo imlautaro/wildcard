@@ -556,11 +556,12 @@ leaving closes the visit. Expired visits renew only after new input. No draft te
 is uploaded by activity reporting, and activity failures never block sends.
 
 After the existing three-second connection delay, a turn allows up to twelve
-seconds of additional composer pauses, checked every two seconds. Before inference,
-consecutive ordinary messages of at most 1,000 UTF-8 bytes each can fold into the
+seconds of additional composer pauses, checked every two seconds. Before inference
+and atomically before publication, consecutive ordinary messages of at most 1,000 UTF-8 bytes each can fold into the
 next queued message, with at most seven preceding messages per burst. Quoted
-messages, attachments, native contexts, scheduled messages and automatic results
-keep their own execution. Each original message retains its UUID, text and order.
+messages, attachments, scheduled messages and automatic results keep their own
+execution. Native-enabled messages can group when their device/capability context
+is identical; enabling native experiments alone does not prevent grouping. Each original message retains its UUID, text and order.
 The model and tool authorization receive the bounded burst as the current request,
 including later corrections. Existing tool budgets apply per burst, including the
 one-publication limit for group requests.
@@ -579,16 +580,34 @@ reply, using current model/consent and connector isolation rules. A positive dec
 allows up to six additional seconds, never an indefinite wait. The decision has no
 tools; invalid output/provider failure falls back to publication. Model latency is
 additional to these pause limits. Generation recovery retains its existing bounded
-response-only fallback and may publish immediately. Already generated replies are
-not regenerated because of typing, and messages arriving during generation keep
-subsequent queued turns. This first policy does not cancel or rewind actions already
-started by a preceding message. Group reply-round policy is unchanged.
+response-only fallback and may publish immediately. Typing alone does not regenerate
+replies. A newer eligible message accepted before publication discards the obsolete
+draft and folds its human input into the next queued turn. This final check and
+publication share one D1 transaction, so a send cannot slip between them. The check
+also runs after memory preparation to avoid unnecessary stale inference.
+
+Migration `0036_reply_publication_guard.sql` persists `tools_started` before any tool
+call, including reads. Once a tool has started, the reply retains its own execution
+and receipt; coalescing never hides or replays actions. Existing in-flight or retried
+rows are conservatively marked during migration. Independent checks for native
+actions/group publications preserve older recorded outcomes. Group reply-round
+policy is unchanged.
 
 Migration `0035_chat_message_queue.sql` is required before using the new API; it
 replaces the single-active-turn index with a queue index and adds the typing timestamp.
 See [infrastructure](infrastructure.md#consecutive-message-queue).
 
-Static validation covers TypeScript, Swift syntax and SQL compilation. No runtime
+Both clients present a timeline of independent messages: human bubbles use
+`createdAt`, assistant bubbles use publication `updatedAt`, with stable side-specific
+IDs and deterministic sequence/side tie breaks for equal timestamps. Status rows
+stay after the loaded messages; native receipts stay with their request. Web pending
+sends participate in this timeline too. A reply to an earlier turn saved after a
+second human message therefore appears after both, instead of between them. Existing
+historical bubbles gain the corrected order on refresh/reopen. Quoting, reactions
+and pagination still address original turn IDs/sequences.
+
+Static validation covers API/web TypeScript, complete iOS app Swift typechecking
+against the Simulator SDK and SQL compilation. No runtime
 or device verification is implied. Verify rapid sends, edits during generation,
 keyboard-only focus, abandoned drafts, resumed editing after idle, navigation,
 background/foreground, offline retry, attachments/device actions, shared-contact

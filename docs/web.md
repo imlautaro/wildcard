@@ -424,7 +424,16 @@ request and late activity responses cannot reopen that visit.
 
 Both clients use the same bounded server pauses, burst grouping and response-only
 wait/send decision described in [chats](chats.md#consecutive-messages-and-composer-pacing).
-Migration 0035 and an automatic API release are prerequisites. Messages arriving
-after generation starts remain queued; tools are not rerun merely due to typing.
+Migrations 0035–0036 and an automatic API release are prerequisites. A newer eligible
+message arriving during generation folds into the next turn at the atomic publication
+check; an obsolete conversational draft is discarded. Matching native contexts can
+group; a persisted tool-start marker prevents hiding/replaying an action receipt.
+
+Private history renders human and assistant sides as independent timestamped items,
+with stable IDs and deterministic tie breaks. Pending local sends share this timeline;
+status rows remain at the end, and native receipts stay with their human request.
+An older turn's late assistant reply can no longer be inserted above a newer human
+message. Day separators follow each message's own timestamp. Cached server turns
+remain sequence-ordered for pagination and reconciliation.
 Type checking passed; browser/device verification of rapid sends, idle drafts,
 resumed typing, failures, navigation, revocation and account switching is pending.

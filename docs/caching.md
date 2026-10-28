@@ -649,3 +649,23 @@ Verify cached reopen/back, multiple sends, empty chat, explicit refresh, delayed
 submission/response, offline recovery, access loss and account switching, plus
 leaving a keyboard or unfinished draft idle. These runtime/device checks remain
 pending; static checks do not establish UI behavior.
+
+
+### Chronological private-chat presentation
+
+The session stores still own sequence-ordered turns; a derived timeline splits each
+turn into human (`createdAt`) and assistant (publication `updatedAt`) items with
+stable turn/side IDs. Equal timestamps use side, sequence and ID tie breaks. Only
+presentation order changes, so pagination cursors, status merging, reply/reaction
+identities, UUID retries, LRU budgets and account invalidation retain their existing
+rules. Web optimistic sends and iOS outgoing messages join the timeline at their
+local creation time until the accepted server timestamp arrives. No extra network
+fetch or private persistence is added. iOS scroll observation and native receipt
+refresh now detect late changes to earlier turns as well as the latest sequence.
+
+The API can normalize a previously running conversational turn into a user-only
+completed turn if newer eligible input arrives before publication. Both clients
+already merge this terminal state. Only an unpublished, tool-free draft is discarded;
+existing replies and tool receipts remain. Reopen/back, refresh, earlier-page merges,
+optimistic sends, equal timestamps, quoted navigation, read receipts, revocation and
+account switching require runtime verification; static type/SQL checks passed.

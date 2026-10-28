@@ -85,8 +85,9 @@ struct ChatView: View {
                             Text("Send your first message.").manrope()
                         }
                     }
-                    ForEach(chat.displayedTurns) { turn in
-                        if turn.scheduleID == nil && (!turn.userText.isEmpty || turn.attachment != nil) {
+                    ForEach(chat.timelineItems) { item in
+                        let turn = item.turn
+                        if item.kind == .user && turn.scheduleID == nil && (!turn.userText.isEmpty || turn.attachment != nil) {
                             let quote = turn.replyTo.map(replyPreview)
                             let showQuote = { if let replyTo = turn.replyTo { showQuoted(replyTo, proxy: proxy) } }
                             VStack(spacing: 8) {
@@ -105,7 +106,7 @@ struct ChatView: View {
                             .messageHighlight(highlightedMessage == "\(turn.id)/user")
                             .id("\(turn.id)/user")
                         }
-                        if let reply = turn.assistantText {
+                        if item.kind == .assistant, let reply = turn.assistantText {
                             MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false, formatsMarkdown: true)
                                 .swipeToReply(enabled: canReply) { self.reply(to: turn, side: "assistant") }
                                 .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "assistant", fromUser: false,
@@ -126,9 +127,9 @@ struct ChatView: View {
                                         replyIsVisible: true
                                     )
                                 }
-                        } else if turn.status == .running && chat.presence?.status == .typing {
+                        } else if item.kind == .status && turn.status == .running && chat.presence?.status == .typing {
                             ReplyTypingIndicator()
-                        } else if turn.status == .failed && !chat.turns.contains(where: { $0.sequence > turn.sequence && $0.assistantText != nil }) {
+                        } else if item.kind == .status && turn.status == .failed && !chat.turns.contains(where: { $0.sequence > turn.sequence && $0.assistantText != nil }) {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(turn.errorCode == "SCHEDULE_CANCELLED" ? "Scheduled message cancelled." : turn.errorCode == "GROUP_REQUEST_CANCELLED" ? "Group request cancelled." : "The reply to this message couldn't be completed.").manrope(.footnote).foregroundStyle(.secondary)
                                 if turn.scheduleID == nil && turn.groupRequestID == nil && turn.id == chat.turns.last?.id {
@@ -137,15 +138,17 @@ struct ChatView: View {
                                 }
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        ForEach((native.actions[contactID] ?? []).filter { $0.turnID == turn.id }) { action in
-                            NativeActionReceiptView(action: action, contactID: contactID)
+                        if item.kind == .user {
+                            ForEach((native.actions[contactID] ?? []).filter { $0.turnID == turn.id }) { action in
+                                NativeActionReceiptView(action: action, contactID: contactID)
+                            }
                         }
                     }
                     Color.clear.frame(height: 1).id("latest")
                 }
                 .padding()
                 .animation(animateNewMessages ? .easeOut(duration: reduceMotion ? 0.15 : 0.22) : nil,
-                           value: chat.displayedTurns.last)
+                           value: chat.timelineItems.last)
             }
             .scrollDismissesKeyboard(.interactively)
             .contentShape(Rectangle())
@@ -157,8 +160,8 @@ struct ChatView: View {
             } action: { _, isAway in
                 isAwayFromBottom = isAway
             }
-            .onChange(of: chat.displayedTurns.last) { previous, latest in
-                if !isAwayFromBottom || previous == nil || latest.map({ chat.isSubmitting($0.id) }) == true {
+            .onChange(of: chat.timelineItems.last) { previous, latest in
+                if !isAwayFromBottom || previous == nil || latest.map({ chat.isSubmitting($0.turn.id) }) == true {
                     scrollToLatest(using: proxy)
                 }
                 sync.request(.contact(contactID))
@@ -192,7 +195,7 @@ struct ChatView: View {
             }
             importedDraftID = item.id; native.selectedDraft = nil
         }
-        .task(id: chat.turns.last?.updatedAt) {
+        .task(id: chat.turns.map(\.updatedAt).max()) {
             await native.refresh(contactID: contactID, using: auth)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection, matching: .images, preferredItemEncoding: .compatible)

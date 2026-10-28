@@ -89,6 +89,13 @@ function toolArgumentError(call: ToolCall, error: string): string {
 
 async function executeTool(env: Env, scope: MemoryScope & { agentID: string }, call: ToolCall, turn: StoredTurn, slot: number): Promise<string> {
   const db = env.DB;
+  // Persist before any tool, including read tools, so a crash/uncertain external
+  // outcome cannot later be mistaken for a disposable conversational draft.
+  const started = await db.prepare(`UPDATE chat_turn SET tools_started = 1
+    WHERE id = ?1 AND attempt = ?2 AND status = 'running'
+    AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)`)
+    .bind(turn.id, turn.attempt).run();
+  if (!started.meta.changes) return JSON.stringify({ error: 'This request is no longer active.' });
   if (nativeTools.some(t => t.function.name === call.function.name)) {
     let args: unknown;
     try { args = JSON.parse(call.function.arguments); } catch { return JSON.stringify({ error: 'Invalid JSON' }); }
