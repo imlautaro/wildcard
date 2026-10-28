@@ -2,6 +2,7 @@ import SwiftUI
 
 enum HomeDestination: Hashable {
     case contacts
+    case nativeTools(String)
     case createGroup
     case group(String)
     case groupDetails(String)
@@ -22,6 +23,7 @@ enum HomeDestination: Hashable {
 struct HomeView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(PushNotifications.self) private var push
+    @Environment(NativeExperiments.self) private var native
     @Environment(\.scenePhase) private var scenePhase
     private enum Section: Hashable {
         case chats
@@ -30,6 +32,8 @@ struct HomeView: View {
         var title: String { self == .chats ? "Chats" : "Account" }
     }
 
+    @State private var nativeRouteError: String?
+    @State private var showNativeInbox = false
     @State private var section: Section = .chats
     @State private var destinations: [HomeDestination] = []
     @State private var sync = ConversationSync()
@@ -70,6 +74,8 @@ struct HomeView: View {
             // Destinations replace the complete tab layout, sharing one back stack.
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
+                case .nativeTools(let id):
+                    NativeToolsView(contactID: id)
                 case .createGroup:
                     CreateGroupView { id in destinations = [.group(id)] }
                 case .group(let id):
@@ -119,6 +125,52 @@ struct HomeView: View {
             }
         }
         .environment(sync)
+        .sheet(isPresented: $showNativeInbox) { NavigationStack { NativeInboxView() }.environment(contacts) }
+        .onChange(of: contacts.nativeDirectoryContacts) { _, values in
+            if let userID = auth.user?.id { native.activate(userID: userID, contacts: values) }
+        }
+        .task {
+            if let userID = auth.user?.id { native.activate(userID: userID, contacts: contacts.nativeDirectoryContacts) }
+        }
+        .task(id: native.route?.id) {
+            guard let route = native.route else { return }
+            do {
+                let id: String
+                if let direct = route.contactID {
+                    try await contacts.refreshContact(id: direct, using: auth, force: true)
+                    id = direct
+                } else if let agentID = route.agentID {
+                    var cursor: String? = nil
+                    var found: Contact?
+                    var pages = 0
+                    repeat {
+                        let page = try await auth.withSession { api, token in try await api.contacts(token: token, before: cursor) }
+                        found = page.contacts.first { $0.agentID == agentID }
+                        cursor = page.nextCursor; pages += 1
+                    } while found == nil && cursor != nil && !Task.isCancelled && pages < 40
+                    guard let found else { nativeRouteError = "This contact link requires an existing invitation and accepted access."; native.route = nil; return }
+                    id = found.id
+                    try await contacts.refreshContact(id: id, using: auth, force: true)
+                } else { return }
+                guard !Task.isCancelled, native.route?.id == route.id else { return }
+                section = .chats; destinations = [.contact(id)]
+                native.reloadDrafts()
+                if let draftID = route.draftID { native.selectedDraft = native.drafts.first { $0.id == draftID } }
+            } catch is CancellationError { return }
+            catch { nativeRouteError = error.localizedDescription }
+            if native.route?.id == route.id { native.route = nil }
+        }
+        .alert("Unable to open contact", isPresented: Binding(get: { nativeRouteError != nil }, set: { if !$0 { nativeRouteError = nil } })) {
+            Button("OK") { nativeRouteError = nil }
+        } message: { Text(nativeRouteError ?? "") }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if !native.drafts.isEmpty {
+                Button { showNativeInbox = true } label: {
+                    Label("Review shared drafts (\(native.drafts.count))", systemImage: "tray.and.arrow.down")
+                        .font(.footnote).padding(8).frame(maxWidth: .infinity)
+                }.background(.bar)
+            }
+        }
         .environment(groups)
         .onChange(of: destinations) { _, path in
             switch path.last {
@@ -146,7 +198,7 @@ struct HomeView: View {
         .environment(contacts)
         .environment(invitations)
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { MessageSounds.shared.activate(userID: auth.user?.id) }
+            if phase == .active { MessageSounds.shared.activate(userID: auth.user?.id); native.reloadDrafts() }
             else { MessageSounds.shared.deactivate() }
         }
         .onDisappear { MessageSounds.shared.reset() }

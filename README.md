@@ -99,6 +99,20 @@ notification service extension. Tapping an alert opens the chat. Bundled message
 visible chat, replies elsewhere in the foreground, and background push alerts. Unread reply counts persist on the server and
 appear on chat rows, the Chats tab, and the app icon; returning to the app refreshes them immediately. Contacts can also [schedule messages](docs/schedules.md) once or at fixed intervals, edit or cancel them in chat, and inspect/cancel them from the chat toolbar clock button. Scheduling uses the existing D1, Cron, Workflow, and push services. The composer supports private [image and PDF attachments](docs/attachments.md) from Photos or Files, with native previews. Creators can [share contacts](docs/sharing.md) by an existing account’s email through in-app requests, or using expiring invitation codes: recipients start empty private chats with the same agent, shared memories/presence, and exclusive attention across participants. Schedules, unread counts, attachments, and notifications remain per recipient. The iOS sharing screens disclose shared-memory and Contributor data use and require explicit acceptance.
 
+## Native iOS experiments
+
+Optional [native experiments](docs/native-experiments.md) let a private contact
+prepare device-specific requests for focus/recipe Live Activities, system timers
+and alarms, Calendar, Reminders (including location reminders), and spoken text.
+Enable a contact from its native-tools toolbar button or **Account → Native
+experiments**, then review and run proposals on the requesting iPhone. The app also
+includes Siri/Shortcuts actions, Action button shortcuts, a contact widget, shared
+input drafts and NFC contact links. Actions and permissions remain per person and
+device. Apple App Group/Associated Domains/NFC signing setup and migration 0031 are
+required; see [infrastructure](docs/infrastructure.md#native-ios-experiments).
+These Apple integrations have no browser execution equivalent; the web app offers
+a feature guide and authorized contact-link fallback. Device verification is pending.
+
 ## Web development
 
 The [web app](docs/web.md) is a Nuxt 4 SPA served by a separate Worker,

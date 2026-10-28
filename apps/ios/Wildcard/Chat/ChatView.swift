@@ -10,6 +10,8 @@ struct ChatView: View {
     @Environment(ContactsStore.self) private var contacts
     @Environment(\.scenePhase) private var scenePhase
     let chat: ChatStore
+    @Environment(NativeExperiments.self) private var native
+    @State private var importedDraftID: String?
     @State private var draft = ""
     @State private var attachment: DraftAttachment?
     @State private var photoSelection: PhotosPickerItem?
@@ -174,6 +176,18 @@ struct ChatView: View {
             }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isAwayFromBottom)
             .refreshable { await chat.refresh(contactID: contactID, using: auth) }
+        }
+        .task(id: native.selectedDraft?.id) {
+            guard let item = native.selectedDraft, item.contactID == contactID, item.userID == auth.user?.id else { return }
+            guard draftIsEmpty else { attachmentError = "Finish or clear your current draft, then import the shared draft from the inbox."; return }
+            draft = item.text
+            if let bytes = item.data, let mime = item.mimeType {
+                attachment = DraftAttachment(name: item.filename ?? "Shared file", mimeType: mime, data: bytes)
+            }
+            importedDraftID = item.id; native.selectedDraft = nil
+        }
+        .task(id: chat.turns.last?.updatedAt) {
+            await native.refresh(contactID: contactID, using: auth)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection, matching: .images, preferredItemEncoding: .compatible)
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: DraftAttachment.types) { result in
@@ -473,6 +487,7 @@ struct ChatView: View {
                         replyTarget = nil
                         Task {
                             let accepted = await chat.send(text: submitted, attachment: submittedAttachment, replyTo: submittedReply, contactID: contactID, using: auth)
+                            if accepted, let importedDraftID { native.consumeDraft(importedDraftID); self.importedDraftID = nil }
                             sync.request(.contact(contactID))
                             if !accepted, draftRevision == submittedRevision, draft.isEmpty {
                                 draft = submitted

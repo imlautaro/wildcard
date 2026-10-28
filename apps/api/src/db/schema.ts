@@ -120,6 +120,7 @@ export const chatTurn = sqliteTable('chat_turn', {
   scheduleRevision: integer('schedule_revision'),
   scheduledAt: date('scheduled_at'),
   scheduleInstruction: text('schedule_instruction'),
+  nativeContextJson: text('native_context_json'),
   groupRequestId: text('group_request_id').references((): AnySQLiteColumn => groupRequest.id, { onDelete: 'cascade' }),
   replyToId: text('reply_to_id').references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'set null' }),
   replyToSide: text('reply_to_side'),
@@ -546,3 +547,12 @@ export const mcpGroupExecution = sqliteTable('mcp_group_execution', {
   argumentsJson: text('arguments_json').notNull(), resultJson: text('result_json'), uncertain: integer('uncertain').notNull().default(1),
   authGeneration: text('auth_generation'), accessGeneration: text('access_generation').notNull(),
 }, t => [primaryKey({ columns: [t.turnId, t.slot] }), uniqueIndex('mcp_group_execution_action').on(t.turnId, t.connectionId, t.toolName, t.argumentsJson)]);
+
+// Device action proposals remain separate from model execution and private memory.
+export const nativeAction = sqliteTable('native_action', {
+  id: text('id').primaryKey(),
+  turnId: text('turn_id').notNull().references(() => chatTurn.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(), payloadJson: text('payload_json').notNull(),
+  status: text('status').notNull().default('pending'), executionId: text('execution_id'),
+  createdAt: date('created_at').notNull(), updatedAt: date('updated_at').notNull(), expiresAt: date('expires_at').notNull(),
+}, t => [uniqueIndex('native_action_kind').on(t.turnId, t.kind), index('native_action_turn').on(t.turnId, t.createdAt)]);

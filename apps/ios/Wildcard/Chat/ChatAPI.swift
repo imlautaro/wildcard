@@ -99,7 +99,7 @@ extension AuthAPI {
 
     private struct TranscriptionEnvelope: Decodable { let text: String }
     private struct ReplyInput: Encodable { let messageID: String; let side: String }
-    private struct MessageInput: Encodable { let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment?; let replyTo: ReplyInput? }
+    private struct MessageInput: Encodable { let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment?; let replyTo: ReplyInput?; let nativeContext: NativeContext? }
 
     func transcribeAudio(contactID: String, audio: Data, token: String) async throws -> String {
         let (data, _) = try await send(path: "contacts/\(contactID)/chat/transcriptions", method: "POST",
@@ -113,11 +113,11 @@ extension AuthAPI {
         return try JSONDecoder().decode(ChatPage.self, from: data)
     }
 
-    func sendMessage(contactID: String, id: String, text: String, attachment: DraftAttachment? = nil, replyTo: MessageReplyQuote? = nil, token: String) async throws -> ChatSubmission {
+    func sendMessage(contactID: String, id: String, text: String, attachment: DraftAttachment? = nil, replyTo: MessageReplyQuote? = nil, nativeContext: NativeContext? = nil, token: String) async throws -> ChatSubmission {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .withoutEscapingSlashes
         let body = try encoder.encode(MessageInput(id: id, text: text, timeZone: TimeZone.current.identifier, attachment: attachment,
-                                                   replyTo: replyTo.map { ReplyInput(messageID: $0.messageID, side: $0.side) }))
+                                                   replyTo: replyTo.map { ReplyInput(messageID: $0.messageID, side: $0.side) }, nativeContext: nativeContext))
         let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: body, token: token, timeout: 90)
         return try JSONDecoder().decode(ChatSubmission.self, from: data)
     }

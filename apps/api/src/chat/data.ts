@@ -19,12 +19,12 @@ export type ChatTurn = {
   replyToSide: 'user' | 'assistant' | null;
 };
 export type PublicTurn = Omit<ChatTurn, 'replyToID' | 'replyToSide'> & { replyTo: ReplyQuote | null };
-export type StoredTurn = ChatTurn & { attachmentJSON: string | null; contactID: string; userID: string; workflowID: string; timeZone: string | null; scheduleInstruction: string | null };
+export type StoredTurn = ChatTurn & { nativeContextJSON?: string | null; attachmentJSON: string | null; contactID: string; userID: string; workflowID: string; timeZone: string | null; scheduleInstruction: string | null };
 export type ChatJob = { turnID: string; attempt: number };
 export const turnColumns = `sequence, id, read_at AS readAt, user_text AS userText, assistant_text AS assistantText,
   status, attempt, created_at AS createdAt, updated_at AS updatedAt, schedule_id AS scheduleID, group_request_id AS groupRequestID, error_code AS errorCode,
   reply_to_id AS replyToID, reply_to_side AS replyToSide`;
-export const storedColumns = `${turnColumns}, attachment_json AS attachmentJSON, contact_id AS contactID, user_id AS userID, workflow_id AS workflowID, time_zone AS timeZone, schedule_instruction AS scheduleInstruction`;
+export const storedColumns = `${turnColumns}, attachment_json AS attachmentJSON, contact_id AS contactID, user_id AS userID, workflow_id AS workflowID, time_zone AS timeZone, schedule_instruction AS scheduleInstruction, native_context_json AS nativeContextJSON`;
 
 export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }, replyTo: ReplyQuote | null): PublicTurn {
   const { sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode } = turn;

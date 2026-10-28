@@ -333,3 +333,21 @@ The API adds optional plain preview fields and cleans bot push bodies before
 truncation; original message text and cache freshness remain unchanged. No new
 service or infrastructure is required.
 Install dependencies with the existing root `npm ci` workflow.
+
+## Native iOS experiments
+
+[Native experiments](native-experiments.md) are explicitly scoped to Apple system
+frameworks and device execution. **Account → Native experiments** explains the
+available iPhone capabilities and their permission/retention behavior. The web app
+omits native context from messages, does not expose native tools to browser turns,
+and does not execute or cache another device's requests. ActivityKit, AlarmKit,
+EventKit, Core NFC, App Intents and the iOS Share extension have no matching browser
+implementation in this change. Native UI and tool settings remain device-specific.
+
+`/native/contact?agentID=<uuid>` is the browser fallback for contact Universal Links.
+It uses the existing session-owned contact directory and accepted memberships to
+resolve the agent, never the sender's contact ID. Existing cache refresh, request
+deduplication and account reset apply; no parallel native link cache is added.
+A link does not grant access or accept an invitation. Signed-out visitors sign in
+and reopen the link. The public, server-side Apple association route bypasses SPA
+auth and contains only public Team/App ID metadata. See [infrastructure](infrastructure.md#native-ios-experiments).

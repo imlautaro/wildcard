@@ -31,7 +31,7 @@ final class ChatStore {
     var isRetained = false
     private var invalidated = false
     private var revision = 0
-    private var submission: (id: String, text: String, attachmentID: UUID?, replyKey: String?)?
+    private var submission: (id: String, text: String, attachmentID: UUID?, replyKey: String?, nativeContext: NativeContext?)?
     var hasPendingReply: Bool { turns.contains(where: \.isPending) }
 
     func clearPresence() { presence = nil }
@@ -178,7 +178,8 @@ final class ChatStore {
         // A different quoted message is different content and needs a new identifier.
         let replyKey = replyTo.map { "\($0.messageID)/\($0.side)" }
         if submission?.text != text || submission?.attachmentID != attachment?.id || submission?.replyKey != replyKey {
-            submission = (UUID().uuidString.lowercased(), text, attachment?.id, replyKey)
+            do { submission = (UUID().uuidString.lowercased(), text, attachment?.id, replyKey, try NativeExperiments.shared.context(contactID: contactID)) }
+            catch { self.error = error.localizedDescription; return false }
         }
         guard let submission else { return false }
         isSending = true
@@ -201,7 +202,7 @@ final class ChatStore {
         }
         do {
             let turn = try await auth.withSession { api, token in
-                try await api.sendMessage(contactID: contactID, id: submission.id, text: text, attachment: attachment, replyTo: replyTo, token: token)
+                try await api.sendMessage(contactID: contactID, id: submission.id, text: text, attachment: attachment, replyTo: replyTo, nativeContext: submission.nativeContext, token: token)
             }
             revision += 1
             guard !invalidated else { return false }

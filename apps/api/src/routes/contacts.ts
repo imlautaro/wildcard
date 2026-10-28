@@ -1,3 +1,4 @@
+import nativeActions from '../native/routes';
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 import { accountEnvironment } from '../lib/model-preference';
 import { readEnergy } from '../groups/energy';
@@ -220,6 +221,7 @@ contacts.delete('/:id', async (c) => {
   return c.body(null, 204);
 });
 
+contacts.route('/:id/native-actions', nativeActions);
 contacts.route('/sharing', sharing);
 
 contacts.route('/:id/chat', chats);

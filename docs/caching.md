@@ -551,3 +551,29 @@ text and sender metadata, including optimistic human messages, so a prior bot's
 summary cannot survive a newer message. Server summaries parse full bot source
 before clipping; older snapshots use the client fallback. No timestamps or source
 text comparisons are based on the cleaned preview.
+
+## Native experiments
+
+The session-owned `NativeExperiments` store retains up to 20 contact action lists
+of 50 records. Empty results are cached; five-second freshness and shared in-flight
+requests avoid repeated navigation loads. The active requests screen revalidates;
+chat reply changes and explicit refresh also update it. Transient failures preserve
+lists, and account change/confirmed access loss rejects late results and clears
+applicable native state. Operation claims are never automatically replayed. See
+[native experiments](native-experiments.md#cloud-action-contract-and-failure-handling).
+
+The App Group holds only explicitly enabled contact identities and bounded,
+account-bound shared drafts (ten × 5 MB, 24-hour expiry), protected with complete
+file protection. Credentials remain in the main app's Keychain. Same-account cold
+launches preserve drafts; sign-out/account replacement clears them. Drafts are
+removed on send/discard, not on navigation. Identical identity snapshots do not
+rewrite storage or reload widgets. Widget timelines request a 15-minute refresh,
+subject to iOS scheduling. Native proposal lists have no disk cache; existing
+private image cache rules are unchanged. Device lifecycle and failure checks are
+listed in the feature guide and remain unverified until run on a signed device.
+
+Native AlarmKit management retains a separate protected Application Support ledger
+of at most 200 IDs/titles and account/contact identities, including across sign-out,
+to manage alarms that continue in iOS. The account view filters to its own records;
+authorized refresh prunes system-removed alarms. This local ledger is not a network
+cache or agent memory and is not exposed through the App Group or model tools.

@@ -1,3 +1,4 @@
+import { parseNativeContext } from '../native/actions';
 import { reactionRoutes } from '../reactions/routes';
 import { parsePrivateReply, privateQuotes, privateTarget } from '../replies/data';
 import { parseAttachment, sameAttachment, storedAttachment } from '../chat/attachments';
@@ -128,12 +129,15 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
 });
 chats.post('/turns', attachmentBody, async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
-  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'replyTo'].includes(key))
+  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'replyTo', 'nativeContext'].includes(key))
     || (body.timeZone !== undefined && !validTimeZone(body.timeZone))
     || typeof body.id !== 'string' || !uuid.test(body.id) || typeof body.text !== 'string'
     || (!body.text.trim() && body.attachment === undefined) || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
     return c.json({ error: 'Provide an id and a message using 1–4000 characters' }, 400);
   }
+  const native = body.nativeContext === undefined ? null : parseNativeContext(body.nativeContext);
+  if (body.nativeContext !== undefined && !native) return c.json({ error: 'Invalid native device capabilities' }, 400);
+  const nativeJSON = native ? JSON.stringify(native) : null;
   const reply = parsePrivateReply(body.replyTo);
   if (reply === null) return c.json({ error: 'Choose a message from this conversation to reply to' }, 400);
   const attachment = body.attachment === undefined ? null : await parseAttachment(body.attachment);
@@ -167,14 +171,14 @@ chats.post('/turns', attachmentBody, async (c) => {
     await c.env.CONTACT_PHOTOS.put(key, attachment.bytes, { httpMetadata: { contentType: attachment.metadata.mimeType } });
   }
   const turn = await c.env.DB.prepare(`INSERT INTO chat_turn
-    (id, contact_id, user_id, user_text, status, workflow_id, created_at, updated_at, time_zone, attachment_json, reply_to_id, reply_to_side)
-    SELECT ?1, ?2, ?3, ?4, 'queued', ?5, ?6, ?6, ?7, ?8, ?9, ?10
+    (id, contact_id, user_id, user_text, status, workflow_id, created_at, updated_at, time_zone, attachment_json, reply_to_id, reply_to_side, native_context_json)
+    SELECT ?1, ?2, ?3, ?4, 'queued', ?5, ?6, ?6, ?7, ?8, ?9, ?10, ?11
     WHERE EXISTS (SELECT 1 FROM contact WHERE id = ?2 AND user_id = ?3) AND ${replyTarget}
       AND NOT EXISTS (SELECT 1 FROM chat_turn WHERE contact_id = ?2 AND status IN ('queued','running'))
       AND (SELECT COUNT(*) FROM chat_turn WHERE user_id = ?3 AND status IN ('queued','running')) < 10
     ON CONFLICT(id) DO NOTHING RETURNING ${storedColumns}`)
     .bind(id, c.get('contactID'), c.get('owner'), text, `chat-${id}-a1`, now, body.timeZone ?? null, attachmentJSON,
-      reply?.messageID ?? null, reply?.side ?? null).first<StoredTurn>();
+      reply?.messageID ?? null, reply?.side ?? null, nativeJSON).first<StoredTurn>();
   if (!turn) {
     const duplicate = await findTurn(c.env.DB, id, c.get('contactID'), c.get('owner'));
     if (duplicate?.userText === text && sameAttachment(duplicate, attachment?.metadata) && sameReply(duplicate, reply)) return c.json({ turn: await quotedTurn(c.env.DB, duplicate), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });

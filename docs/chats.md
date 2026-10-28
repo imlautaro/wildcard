@@ -513,3 +513,12 @@ links with permitted and rejected schemes, malformed syntax, large text sizes,
 light/dark appearance, quotes/reactions/receipts and scrolling in both clients.
 Reopen cached history offline and switch accounts to confirm that formatted history
 follows the existing session cache and that human text remains literal.
+
+## Native iOS tools
+
+Direct private messages from explicitly enabled iOS contacts may carry snapshotted
+native device capabilities. `request_native_action` stores a reviewable proposal;
+`list_native_actions` retrieves that person's device-reported states in this chat.
+Neither tool reads system data or performs phone actions in the cloud. Pending
+must never be described as executed. Groups, schedules and automatic group-result
+turns receive neither tool. See [native experiments](native-experiments.md).

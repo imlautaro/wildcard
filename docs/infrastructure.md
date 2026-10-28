@@ -1478,3 +1478,79 @@ needs no data migration but can restore raw Markdown in alerts/previews. Verify
 with fictional private/group bot messages in chat list rows, quotes and APNs alerts
 with the app backgrounded/terminated; real delivery and release remain unverified
 for this local change.
+
+## Native iOS experiments
+
+[Native experiments](native-experiments.md) add optional iOS integrations, not a
+new cloud service or secret. Migration `0031_native_actions.sql` is required before
+new clients submit `nativeContext`. Existing clients omit it. Use the normal
+versioned local migration setup; production migrations run only through an
+authorized commit/push and the existing automatic release. Do not publish manually.
+The native bridge uses the existing authenticated API Worker and D1 binding.
+
+An independent installation needs:
+
+1. Its own Apple development team and explicit App IDs for the app, existing
+   Notification Service, `Wildcard.Widgets`, and `Wildcard.Share`. Replace all bundle
+   identifiers and team settings in the Xcode project. Match versions across targets.
+2. One App Group, default `group.com.imlautaro.Wildcard`, registered for the main app,
+   Widgets and Share App IDs. Replace `WILDCARD_APP_GROUP` in the project-level Debug
+   and Release settings; all three targets inherit it. The Notification Service
+   continues its existing configuration and does not need this App Group.
+3. Enable App Groups and Associated Domains on the main App ID, App Groups on the
+   Widgets/Share IDs, and NFC Tag Reading on the main App ID. Regenerate signing
+   profiles. The versioned entitlements configure the corresponding capabilities.
+   These checked-in files do not register App IDs or change the developer account.
+4. Replace `WILDCARD_LINK_HOST` with an HTTPS host you control. Associate
+   `applinks:<host>` with the main app. The web Worker serves the public JSON route
+   `/.well-known/apple-app-site-association` with the Apple Team ID + app bundle ID;
+   replace `9CHLS2987W.com.imlautaro.Wildcard` in that route for independent accounts.
+   Serve JSON with HTTP 200 and no redirect or authentication. Apple association
+   fetching/caching and workers.dev delivery must be verified on a physical device;
+   a custom HTTPS domain may be used with the same route and matching configuration.
+5. The embedded `WildcardWidgets` target includes focus/recipe and AlarmKit Live
+   Activity presentations plus the contact widget. `WildcardShare` imports drafts
+   through the App Group. Shared Swift sources participate in all three targets;
+   activity intents are excluded from Share with its build condition.
+6. Keep `NSSupportsLiveActivities`, `NSAlarmKitUsageDescription`,
+   `NSRemindersFullAccessUsageDescription`, and `NFCReaderUsageDescription` in the main
+   app plist, plus each extension's versioned Info.plist and entitlements. No broad
+   calendar permission or background location mode is needed for these experiments.
+   App Intent actions require an unlocked/authenticated device. The minimum target
+   remains iOS 27.0; alarm APIs are checked against the installed Xcode SDK.
+7. Install from Xcode with the configured signing team. Enable per-contact experiments
+   before expecting entities in Shortcuts, the widget, or the Share sheet. Request
+   system permissions only when explicitly executing the corresponding action.
+
+Live Activities are local in this release; no ActivityKit push tokens, broadcast
+channels, new APNs credentials or delivery service are provisioned. Existing chat
+APNs configuration still applies to reply notifications. NFC background opening
+requires the HTTPS association; foreground NFC additionally requires supported
+hardware. Neither an NFC link nor an agent ID grants contact access.
+
+Rollback: retain the additive D1 column/table and stored ledgers; older clients
+ignore them. An older API cannot accept new native-context submissions, so disable
+experiments in new clients before an API rollback. Already saved Calendar/Reminders
+items and system alarms remain user-owned system data and must not be removed by
+DB rollback. Disable experiments/remove widgets and Live Activities before removing
+capabilities from signing profiles. App Group drafts are device-local and protected;
+sign-out clears them, and uninstalling/removing the group can make them unavailable.
+
+Static checks do not validate signing, App Intent metadata extraction, extension
+embedding, Universal Link association, physical NFC, AlarmKit alerts, permission
+prompts, Lock Screen controls or App Store review. All remain device verification
+steps in the feature guide. No Apple account configuration has been changed.
+
+### Current installation verification — October 28, 2026
+
+The Apple Developer portal was inspected for team `9CHLS2987W`. The main App ID
+`com.imlautaro.Wildcard` already had App Groups, Associated Domains, NFC Tag Reading,
+Communication Notifications and Push Notifications enabled. Its selected App Group
+was `group.com.imlautaro.Wildcard`. The Share and Widgets App IDs also existed;
+Xcode showed automatic signing with the same team and managed development profiles
+for both extensions. The Widgets profile was created October 28, 2026.
+These were observations of the existing account state, not a claim that local
+entitlements register developer resources themselves. No agreement was accepted,
+no signing key was created/exported, and no device permission was granted during
+this configuration check. A signed device Run is still needed to validate embedding,
+App Intent metadata, system prompts and actual native interactions.

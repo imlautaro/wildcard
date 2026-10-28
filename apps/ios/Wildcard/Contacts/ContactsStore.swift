@@ -42,6 +42,10 @@ final class ContactsStore {
     }
     private var loadingMessageTimestamps: Set<MessageTimestampRequest> = []
 
+    var nativeDirectoryContacts: [Contact] {
+        Array(knownContacts.values).sorted { $0.id < $1.id }
+    }
+
     func contact(id: String) -> Contact? { knownContacts[id] }
 
     func preview(for contact: Contact) -> Contact {
@@ -154,6 +158,7 @@ final class ContactsStore {
             for contact in removed {
                 readAcknowledgements.remove(id: contact.id)
                 conversations.remove(contactID: contact.id)
+                NativeExperiments.shared.forget(contactID: contact.id)
                 scheduleSnapshots.remove(id: contact.id)
                 sharingSnapshots.remove(id: contact.id)
                 energySnapshots.remove(id: contact.id)
@@ -294,6 +299,7 @@ final class ContactsStore {
                 // A contact removed on another client is already deleted.
             }
             await auth.images.clear(deactivate: false)
+            NativeExperiments.shared.forget(contactID: contact.id)
             scheduleSnapshots.remove(id: contact.id)
             sharingSnapshots.remove(id: contact.id)
             energySnapshots.remove(id: contact.id)
@@ -332,6 +338,7 @@ final class ContactsStore {
             if case AuthAPI.Failure.notFound = error {
                 await auth.images.clear(deactivate: false)
                 guard request == generation else { return }
+                NativeExperiments.shared.forget(contactID: id)
                 scheduleSnapshots.remove(id: id)
                 sharingSnapshots.remove(id: id)
                 energySnapshots.remove(id: id)
