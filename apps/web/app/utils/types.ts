@@ -4,6 +4,7 @@ export type AuthUser = {
   name: string;
   email: string;
   emailVerified: boolean;
+  onboardingRequired?: boolean;
   chatModel?: 'muse-spark-1.3' | 'muse-spark-1.3-contributor';
   photoVersion?: string | null;
 };

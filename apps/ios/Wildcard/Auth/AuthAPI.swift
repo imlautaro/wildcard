@@ -5,6 +5,7 @@ struct AuthUser: Codable, Sendable {
     let name: String
     let email: String
     let emailVerified: Bool
+    var onboardingRequired: Bool? = nil
     var chatModel: String? = nil
     var photoVersion: String? = nil
 }
@@ -144,6 +145,14 @@ struct AuthAPI: Sendable {
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if path.hasPrefix("onboarding") {
+                let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
+                if let message, !message.isEmpty, message.count <= 512,
+                   !message.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
+                    throw Failure.rejected(message)
+                }
+                throw Failure.rejected("Setup is temporarily unavailable. Please try again.")
+            }
             if path.hasSuffix("/personality") {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
@@ -189,9 +198,6 @@ struct AuthAPI: Sendable {
             }
             if path == "me/model", response.statusCode == 422 {
                 throw Failure.rejected("Choose a supported model and agree to Meta's Contributor data use before enabling Contributor.")
-            }
-            if path.hasPrefix("auth/sign-up"), response.statusCode == 403 {
-                throw Failure.rejected("New account registration is closed.")
             }
             if path == "me", [400, 422].contains(response.statusCode) {
                 throw Failure.rejected("Use a name with 1–100 characters and no control characters.")

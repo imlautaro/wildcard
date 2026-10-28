@@ -5,10 +5,10 @@ import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readPhoto, validPhoto, removePhoto } from '../photos/storage';
 import { contributorModel, validChatModel } from '../lib/model-preference';
 
-type Profile = { id: string; name: string; email: string; emailVerified: number; photoVersion: string | null; chatModel: string };
-const columns = 'id, name, email, email_verified AS emailVerified, photo_version AS photoVersion, chat_model AS chatModel';
+type Profile = { id: string; name: string; email: string; emailVerified: number; photoVersion: string | null; chatModel: string; onboardingRequired: number };
+const columns = 'id, name, email, email_verified AS emailVerified, photo_version AS photoVersion, chat_model AS chatModel, onboarding_required AS onboardingRequired';
 const key = (owner: string, version: string) => `users/${owner}/${version}.jpg`;
-const responseUser = (row: Profile) => ({ ...row, emailVerified: Boolean(row.emailVerified) });
+const responseUser = (row: Profile) => ({ ...row, emailVerified: Boolean(row.emailVerified), onboardingRequired: Boolean(row.onboardingRequired) });
 const me = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 
 me.use('*', async (c, next) => {

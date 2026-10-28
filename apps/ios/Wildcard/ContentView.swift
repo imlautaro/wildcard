@@ -20,8 +20,11 @@ struct ContentView: View {
                     Button("Try again") { Task { await auth.restore() } }
                 }
             case .signedIn:
-                HomeView()
-                    .id(auth.user?.id)
+                Group {
+                    if auth.user?.onboardingRequired == true { OnboardingView() }
+                    else { HomeView() }
+                }
+                .id(auth.user?.id)
             }
         }
     }

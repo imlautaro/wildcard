@@ -623,3 +623,11 @@ removes a source's influence. Connector groups/chats stay local and neither impo
 nor export relationships. Factual memory, tool permissions, energy and round
 limits are independent. See the feature guide for bounded retention and privacy
 limitations and the opt-in fictional-data regression checks.
+
+## First-circle group
+
+[Onboarding](onboarding.md) creates one group with the new account and its five
+generated contacts after explicit shared-memory acceptance. Membership references
+the same contact agents; it does not clone them or invite other people. The group
+starts empty, with normal permissions, memory rules, energy and reply policies.
+Setup uses Standard processing and stores no Contributor consent.

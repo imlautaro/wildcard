@@ -52,7 +52,15 @@ async function authenticate(email: string, password: string, name: string | null
   const path = name === null ? 'auth/sign-in/email' : 'auth/sign-up/email';
   const result = await api<{ user: AuthUser }>(path, { json: name === null ? { email, password } : { name, email, password } });
   if (user.value?.id !== result.user.id) resetCaches();
-  user.value = result.user;
+  user.value = { ...result.user, onboardingRequired: true };
+  try { user.value = (await api<{ user: AuthUser }>('me')).user; }
+  catch (failure) {
+    if (failure instanceof ApiError && failure.status === 401) {
+      resetCaches(); user.value = null; status.value = 'signed-out';
+      throw failure;
+    }
+    // A temporary profile failure keeps setup gated until the next refresh.
+  }
   status.value = 'signed-in';
 }
 

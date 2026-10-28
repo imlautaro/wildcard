@@ -486,3 +486,16 @@ live-model evaluation and classifier budget correction are documented in the
 [evaluation guide](personality.md#opt-in-live-model-evaluation); they affect both
 iOS and web replies without client changes or additional caching. Functional visual,
 offline, multi-account, race, and deployed client/model verification remain pending.
+
+## Account onboarding
+
+New registrations use the same first-circle flow as iOS: `/onboarding` requires a
+name, Male/Female, a language and country dropdown, one of four visual styles and
+explicit shared-memory acceptance. It shows durable progress and retries, then
+opens the normal app with five generated contacts and their group. Existing
+accounts bypass setup. The session-owned store caches options, progress and drafts,
+deduplicates requests/submissions and rejects late responses on mutation/account
+change. Unsubmitted drafts are memory-only; submitted input resumes from the API.
+Photos use the existing private image cache. See [onboarding](onboarding.md) for
+API, privacy, freshness, retry limits and the pending browser/device checks.
+No browser or device validation or live generation has been performed.

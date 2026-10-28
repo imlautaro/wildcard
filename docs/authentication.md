@@ -11,7 +11,7 @@ All paths are relative to the configured API origin:
 
 | Method | Path | Body / behavior |
 | --- | --- | --- |
-| POST | `/api/v1/auth/sign-up/email` | Registration closed; always 403, including older clients |
+| POST | `/api/v1/auth/sign-up/email` | `{ "name": "New member", "email": "demo@example.com", "password": "a-long-example-password" }`; starts required onboarding |
 | POST | `/api/v1/auth/sign-in/email` | `{ "email": "demo@example.com", "password": "a-long-example-password" }` |
 | GET | `/api/v1/auth/get-session` | Current session or null; accepts signed bearer authentication |
 | POST | `/api/v1/auth/sign-out` | `{}`; revokes the current session |
@@ -29,7 +29,7 @@ verification, sign-in OAuth, account sharing, and account deletion are not confi
 Passwords must contain 8–128 characters and are hashed by Better Auth's password
 implementation; plaintext passwords are never stored. Sessions expire after seven
 days and are refreshed after one day of activity. There is no stateless JWT or
-cross-user shared memory in this setup.
+stateless profile cache in this auth setup. Contact shared memory is documented separately.
 
 **Email addresses are unverified.** Registration does not establish ownership of
 an address. Do not use this email as a verified identity or enable private sharing
@@ -40,7 +40,7 @@ No mail provider, domain, or external account is changed by this feature.
 ## Abuse controls and privacy
 
 Auth bodies are limited to 16 KiB. Atomic D1 upserts enforce per-minute, per-IP,
-per-endpoint fixed-window limits: ten sign-ins, thirty sign-outs,
+per-endpoint fixed-window limits: five sign-ups, ten sign-ins, thirty sign-outs,
 and 120 session reads. Only Cloudflare's `CF-Connecting-IP` header is used for
 remote client identification; local requests share a fallback bucket. Rate limit
 rows use a hashed IP/path/window key, not the raw address. Expired rows are removed
@@ -152,18 +152,20 @@ External account OAuth for [MCP connections](connectors.md#oauth-setup-and-lifec
 is separate from signing in to Wildcard. It requires an existing signed Wildcard
 session and never creates a Wildcard account or changes the signed-in identity.
 
-## Closed registration and account model
+## Registration, onboarding and account model
 
-On October 27, 2026, new registrations were disabled at the API entry point and
-with Better Auth `emailAndPassword.disableSignUp`. Both clients remove account
-creation and show "New account registration is closed." Existing accounts,
-sessions and sign-in remain available. This applies locally too; no alternative
-public account-creation endpoint was introduced. Earlier sign-up UI/setup
-verification descriptions in this guide are historical.
+Registration reopened on October 28, 2026, superseding the October 27 closure.
+The public auth allowlist and Better Auth permit email registration, with an
+atomic per-IP limit of five attempts per minute. Both clients offer account
+creation and route new accounts through [onboarding](onboarding.md). `GET /me`
+and profile mutations include `user.onboardingRequired`. Migration 0041 exempts
+existing accounts and requires setup for future accounts. Clients reload `/me`
+after authentication instead of trusting Better Auth's narrower response shape.
 
-Account now includes a Standard/Contributor selector with explicit Contributor
+Account includes a Standard/Contributor selector with explicit Contributor
 acceptance. `GET /me` and profile mutations include `user.chatModel`;
 `PUT /me/model` saves the authenticated account only. See [model settings](model-settings.md)
-for default migration, sharing consent, MCP Standard, cache behavior, background
-jobs and verification. No registration request or real inference was executed
-while implementing this change.
+for model selection, sharing consent, MCP Standard, cache behavior and background
+jobs. Onboarding always uses Standard without changing the account's later model
+choice. No real registration or live inference was executed while implementing
+this change.

@@ -43,6 +43,7 @@
     ]
   },
   "workflows": [
+    { "name": "wildcard-onboarding", "binding": "ONBOARDING_WORKFLOW", "class_name": "OnboardingWorkflow" },
     {
       "name": "wildcard-chat",
       "binding": "CHAT_WORKFLOW",

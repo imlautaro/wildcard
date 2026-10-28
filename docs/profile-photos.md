@@ -193,3 +193,13 @@ private R2 bucket, the same dimensions/size validation and compare-and-swap patt
 Header/list avatars use the existing protected image cache with distinct group
 keys. See [groups](groups.md#group-photos-attachments-and-voice) for endpoints,
 cleanup, limits and validation still needed on a device.
+
+## Generated onboarding portraits
+
+[First-circle onboarding](onboarding.md) uses Meta Muse Image 1.0 for five private
+JPEG portraits. Unlike manual uploads, generated images may be up to 4096 pixels
+square and 8 MiB; Meta's requested size specifies aspect ratio. Upload limits and
+validation stay unchanged. Generated portraits use the same authenticated photo
+routes, immutable versions, access-scoped cache keys and deletion paths as normal
+contact avatars. Partial setup images remain private in R2 for retries until setup
+completes; no separate image cache or public URL is introduced.

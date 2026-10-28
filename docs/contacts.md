@@ -209,3 +209,12 @@ factual memories. Relationships follow each person across eligible chats and
 groups through per-recipient acting direction; private causes stay private and
 connector conversations remain isolated. See [personality](personality.md) for the complete API, behavior,
 privacy, cache, and pending device/model verification.
+
+## First-circle contacts
+
+New-account [onboarding](onboarding.md) creates five owned contacts with contrasting
+enabled personalities, names proposed as common in the chosen country and a
+preferred conversation language. Meta Muse Image 1.0 generates private avatars
+in the selected visual style. They use the normal contact/agent trigger, photo
+routes and caches. The onboarding group references those same five identities.
+Existing accounts and their contacts are unaffected.

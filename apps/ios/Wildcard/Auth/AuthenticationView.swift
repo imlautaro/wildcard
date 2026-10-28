@@ -6,14 +6,13 @@ struct AuthenticationView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .largeTitle) private var headingSize = 46
     @FocusState private var selection: Input?
-    private let registration = false
-    @State private var name = ""
+    @State private var registration = false
     @State private var email = ""
     @State private var password = ""
     @State private var passwordVisible = false
     @State private var attempted = false
 
-    private enum Input: Hashable { case name, email, password }
+    private enum Input: Hashable { case email, password }
     private var colors: SignInColors { SignInColors(dark: colorScheme == .dark) }
     private var heading: [String] { registration ? ["Make yourself", "at home."] : ["Welcome", "back."] }
 
@@ -40,6 +39,13 @@ struct AuthenticationView: View {
                     }
                     primaryAction
                         .padding(.top, 28)
+                    Button(registration ? "Already have an account? Sign in" : "New here? Create account") {
+                        registration.toggle()
+                        attempted = false
+                        auth.error = nil
+                    }
+                    .disabled(auth.isBusy)
+                    .padding(.top, 20)
                 }
                 .frame(maxWidth: 420)
                 .padding(.horizontal, 28)
@@ -70,7 +76,7 @@ struct AuthenticationView: View {
             .accessibilityLabel(heading.joined(separator: " "))
             .accessibilityAddTraits(.isHeader)
 
-            Text("Sign in to pick up where you left off. New account registration is closed.")
+            Text(registration ? "Create your account, then meet your circle." : "Sign in to pick up where you left off.")
                 .manrope(.subheadline)
                 .foregroundStyle(colors.secondary)
         }
@@ -81,18 +87,6 @@ struct AuthenticationView: View {
 
     private var credentials: some View {
         VStack(alignment: .leading, spacing: 22) {
-            if registration {
-                CredentialBox(title: "Your name", symbol: "person", error: issue(.name), active: selection == .name, colors: colors) {
-                    TextField("What should we call you?", text: $name)
-                        .textContentType(.name)
-                        .focused($selection, equals: .name)
-                        .submitLabel(.next)
-                        .onSubmit { selection = .email }
-                        .accessibilityLabel("Your name")
-                        .accessibilityIdentifier("auth.name")
-                }
-            }
-
             CredentialBox(title: "Email address", symbol: "envelope", error: issue(.email), active: selection == .email, colors: colors) {
                 TextField("you@example.com", text: $email)
                     .keyboardType(.emailAddress)
@@ -172,8 +166,6 @@ struct AuthenticationView: View {
     private func issue(_ field: Input) -> String? {
         guard attempted else { return nil }
         switch field {
-        case .name:
-            return registration && name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Enter your name." : nil
         case .email:
             let value = email.trimmingCharacters(in: .whitespacesAndNewlines)
             if value.isEmpty { return "Enter your email address." }
@@ -188,14 +180,14 @@ struct AuthenticationView: View {
         guard !auth.isBusy else { return }
         attempted = true
         auth.error = nil
-        let required: [Input] = registration ? [.name, .email, .password] : [.email, .password]
+        let required: [Input] = [.email, .password]
         if let invalid = required.first(where: { issue($0) != nil }) {
             selection = invalid
             return
         }
         selection = nil
         let submittedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        let submittedName = registration ? name.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+        let submittedName = registration ? "New member" : nil
         let submittedPassword = password
         Task {
             await auth.authenticate(email: submittedEmail, password: submittedPassword, name: submittedName)

@@ -41,7 +41,7 @@ npm run dev
 ```
 
 Wrangler serves the API locally at `http://localhost:8787`. Local setup creates an
-ignored auth secret and applies D1 migrations. Sign in through `/api/v1/auth/sign-in/email`; new account registration is closed.
+ignored auth secret and applies D1 migrations. Sign in through `/api/v1/auth/sign-in/email` or register through `/api/v1/auth/sign-up/email`. New accounts complete [onboarding](docs/onboarding.md), which creates five personalized AI contacts, generated portraits and a group.
 Existing accounts are preserved; `/api/v1/me` requires
 a signed bearer session. Unrelated paths return HTTP 404 JSON. See
 [authentication](docs/authentication.md) for the contract and limitations.
@@ -62,7 +62,7 @@ Open `apps/ios/Wildcard.xcodeproj`, or run `npm run ios` on macOS. Select the
 `Wildcard` scheme in Xcode 27.1 or later. The current minimum deployment target is
 iOS 27.0. For a physical device, select your own signing team and bundle identifier.
 
-The app includes sign-in for existing accounts, native Chats and Account tabs, Keychain session
+The app includes sign-up/sign-in, a [first-circle onboarding](docs/onboarding.md), native Chats and Account tabs, Keychain session
 storage, restoration on launch, and logout. Account supports editing your name and
 choosing, cropping, replacing, or removing your own private [profile photo](docs/profile-photos.md#account-profile)
 directly through the centered avatar/name menus shared with contact editing. It preserves the Wildcard Icon Composer

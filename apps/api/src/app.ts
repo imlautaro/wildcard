@@ -1,3 +1,4 @@
+import onboarding from './onboarding/routes';
 import { remoteExecution } from './native/remote-routes';
 import { oauthPublic } from './mcp/oauth';
 import mcp from './mcp/routes';
@@ -15,6 +16,7 @@ import pushPhotos from './photos/push-access';
 const app = new Hono<{ Bindings: Env }>();
 const authEndpoints = new Map([
   ['POST /api/v1/auth/sign-in/email', 10],
+  ['POST /api/v1/auth/sign-up/email', 5],
   ['POST /api/v1/auth/sign-out', 30],
   ['GET /api/v1/auth/get-session', 120],
 ]);
@@ -26,9 +28,6 @@ app.use('/api/v1/*', async (c, next) => {
 app.use('/api/v1/auth/*', bodyLimit({ maxSize: 16 * 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }));
 
 app.on(['GET', 'POST'], '/api/v1/auth/*', async (c) => {
-  if (c.req.path.startsWith('/api/v1/auth/sign-up')) {
-    return c.json({ error: 'New account registration is closed.' }, 403);
-  }
   const max = authEndpoints.get(`${c.req.method} ${c.req.path}`);
   if (!max) return c.json({ error: 'Not found' }, 404);
   const admission = await admitAuthRequest(c.env.DB, c.req.header('CF-Connecting-IP') ?? 'local', c.req.path, max);
@@ -40,6 +39,7 @@ app.on(['GET', 'POST'], '/api/v1/auth/*', async (c) => {
 });
 
 app.route('/api/v1/mcp/oauth', oauthPublic);
+app.route('/api/v1/onboarding', onboarding);
 app.route('/api/v1/me', me);
 app.route('/api/v1/groups', groups);
 

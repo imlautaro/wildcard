@@ -749,3 +749,18 @@ The editor copy on both platforms explains continuity without private causes and
 the connector exception. Its existing snapshot/draft API and retention are
 unchanged by relationship continuity; no additional network-backed UI state is
 introduced.
+
+## First-circle onboarding
+
+Both clients keep one session-owned options snapshot, progress snapshot and draft;
+empty/pending results are cached. First reads load, navigation reuses content and
+revalidates in the background. Reads and submissions deduplicate. Mutation/session
+revisions reject stale responses, and logout/expiry/account switching clear all
+state. Polling is 3 seconds during generation and 10 seconds otherwise, with
+manual refresh after errors. Pending submission tasks survive view navigation.
+Drafts persist in memory only; accepted input/identity plans persist in D1 for
+resumption, with no automatic expiry. No pagination is needed for the single setup
+resource; fixed option lists plus one snapshot/draft bound memory. Avatar keys
+retain account, access context, agent identity and immutable version in the
+existing private image cache. See [onboarding](onboarding.md#cache-and-account-isolation)
+for recovery, mutation behavior and pending device/browser verification.

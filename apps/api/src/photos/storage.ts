@@ -12,7 +12,7 @@ export async function photoResponse(env: Env, owner: string, contactID: string, 
 }
 
 // Check JPEG markers and dimensions without decoding untrusted pixels in the Worker.
-export function validPhoto(bytes: Uint8Array): boolean {
+export function validPhoto(bytes: Uint8Array, maxDimension = 1024): boolean {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 ||
       bytes.at(-2) !== 0xff || bytes.at(-1) !== 0xd9) return false;
   let offset = 2;
@@ -27,7 +27,7 @@ export function validPhoto(bytes: Uint8Array): boolean {
       if (length < 8) return false;
       const height = (bytes[offset + 3] << 8) | bytes[offset + 4];
       const width = (bytes[offset + 5] << 8) | bytes[offset + 6];
-      return width >= 64 && width <= 1024 && height === width;
+      return width >= 64 && width <= maxDimension && height === width;
     }
     offset += length;
   }

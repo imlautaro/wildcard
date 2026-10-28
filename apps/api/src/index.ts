@@ -1,5 +1,6 @@
 // Initialize schema constructors before imports that transitively load auth or MCP.
 import './lib/schema-runtime';
+import { recoverOnboarding } from './onboarding/routes';
 import { deliverRemoteNative } from './native/remote';
 import { dispatchInitiatives } from './chat/initiative';
 import { cleanOAuthFlows } from './mcp/oauth';
@@ -15,11 +16,14 @@ import app from './app';
 import { recoverChats } from './chat/dispatch';
 import { prunePersonalityEvents } from './personality/engine';
 
+export { OnboardingWorkflow } from './onboarding/workflow';
+
 export { ChatWorkflow } from './chat/workflow';
 
 export default {
   fetch: app.fetch,
   async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(recoverOnboarding(env));
     ctx.waitUntil(cleanOAuthFlows(env));
     ctx.waitUntil(prunePersonalityEvents(env.DB));
     ctx.waitUntil(cleanAttachments(env));

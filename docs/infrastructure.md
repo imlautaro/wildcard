@@ -1771,3 +1771,48 @@ and its additive index when rolling back the director; v1 code can ignore v2
 observation fields and keeps its older conversation-local behavior. Restore a matching
 API before reenabling the experiment. Profiles can be recreated, but cleared
 emotional observations are intentionally not recoverable from this feature.
+
+## Account onboarding
+
+Registration and the first-circle flow require migration **0041_onboarding.sql**,
+the existing private `CONTACT_PHOTOS` bucket and runtime `META_API_KEY` with access
+to **muse-spark-1.3** Standard and **muse-image-1.0**. No new secret or external
+account is required. Never print the secret; independent accounts must supply
+their own Meta key, model access and usage credits through the existing encrypted
+build/runtime secret setup. See [onboarding](onboarding.md) for the data contract.
+
+Resource order: provision D1 and the private R2 bucket using the existing setup,
+configure auth/Meta secrets, then apply all migrations locally through
+`npm run auth:setup:local` or `npm run db:migrate:local`. Migration 0041 preserves
+existing account behavior and makes future registrations require onboarding.
+The committed API Wrangler configuration adds `ONBOARDING_WORKFLOW`, class
+`OnboardingWorkflow`, name `wildcard-onboarding`. The normal automatic Worker
+release provisions this Workflow alongside `wildcard-chat`; the existing Cron
+recovers interrupted dispatch. Independent accounts must replace Worker names,
+D1/bucket/account IDs, auth URL, web origin and web API service binding as described
+earlier. Staging uses separate resources/secrets and Workflow names; it must never
+point to production D1 or R2. The web Worker has no new storage/secret bindings.
+
+Local `wrangler dev` uses the declared Workflow and local D1/R2 emulation; keep
+fictional inputs and remember real model requests incur Meta usage when configured.
+No model calls are required for type checking or static SQL compilation.
+Registration allows five attempts per IP/minute, but is not a global inference
+spending cap. Portraits use one request per contact, with bounded retries; an
+interrupted provider/storage handoff can repeat billed generation.
+
+Release only by committing and pushing to the configured branch, then check both
+automatic builds and the deployed source SHA. The existing API release applies
+migration 0041 before publishing code, preserving the required creation order.
+Do not manually deploy or bypass automatic migration/release. No remote resource,
+migration, account registration or deployment was changed by this implementation.
+
+Verify model access, the new Workflow binding, Cron recovery, old-account exemption,
+real sign-up, background completion/retry, private portraits, all five personalities
+and final group membership using fictional data in staging first. Static checks
+cannot establish these runtime behaviors. For rollback, push a compatible source
+change through automatic release and close registration if disabling setup. Keep
+the additive column/table and existing completed contacts/groups. Existing old
+code ignores the new flag; rolling back client gating alone lets pending accounts
+into the old shell. Stop pending Workflows before retiring their class/binding.
+Failed setups retain private staged R2 images and D1 plans for retry; account-data
+maintenance must include these keys and rows because no automatic TTL is added.
