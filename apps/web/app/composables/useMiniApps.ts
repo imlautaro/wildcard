@@ -96,10 +96,13 @@ export function useMiniApps(contactID: MaybeRefOrGetter<string>) {
   }
   // The execution ID is created once per confirmed submission and reused for its retries.
   async function run(app: MiniApp, actionID: string, executionID: string, fields: Record<string, unknown>) {
-    const id = toValue(contactID), entry = view(app.id);
-    const outcome = await api<{ status: 'completed' | 'failed' | 'unknown' }>(`contacts/${id}/mini-apps/${app.id}/actions/${actionID}`,
+    const id = toValue(contactID), key = `${id}/${app.id}`, entry = view(app.id), revision = entry.revision;
+    const outcome = await api<{ status: 'completed' | 'failed' | 'unknown'; resolution?: MiniAppResolution }>(`contacts/${id}/mini-apps/${app.id}/actions/${actionID}`,
       { json: { executionID, revision: app.revision, inputs: entry.inputs, fields, timeZone: timeZone() } });
-    if (outcome.status === 'completed') await resolve(app, undefined, true);
+    // State-only apps return the updated view with the action, so a tap needs no extra load.
+    if (outcome.resolution) {
+      if (views.get(key) === entry && entry.revision === revision) { entry.value = outcome.resolution; entry.loadedAt = Date.now(); entry.error = null; }
+    } else if (outcome.status === 'completed') await resolve(app, undefined, true);
     return outcome.status;
   }
   return { state, refresh, approve, remove, view, resolve, run };

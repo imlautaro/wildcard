@@ -132,6 +132,6 @@ export type MiniAppComponent =
   | { type: 'list'; items: { title: string; subtitle: string | null; value: number | string | null }[]; format: MiniAppFormat; currency: string | null; empty: string }
   | { type: 'chart'; kind: 'bar' | 'line'; title: string | null; points: { x: string; y: number }[]; format: MiniAppFormat; currency: string | null }
   | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
-  | { type: 'action'; id: string; label: string; confirm: string; style: 'default' | 'destructive'; fields: MiniAppField[] }
+  | { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: MiniAppField[] }
   | { type: 'notice'; code: string };
 export type MiniAppResolution = { revision: number; inputs: Record<string, string>; resolvedAt: number; view: MiniAppComponent[]; issues: { step: string; code: string }[] };

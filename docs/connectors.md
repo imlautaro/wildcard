@@ -115,7 +115,7 @@ jobs do not gain MCP tools; their existing consent filters still apply.
 
 Private and authorized direct-human group model loops expose `list_mcp_tools` and
 `call_mcp_tool`, with at most six internal/external executions. Private connector
-chats also expose `create_mini_app`/`list_mini_apps` and allow three tool-enabled
+chats (like every direct private chat) also expose `create_mini_app`/`list_mini_apps` and allow three tool-enabled
 rounds (list tools, inspect a result, build a mini app) and a final answer; other
 private replies keep two. Group replies allow up to six
 research rounds within a three-minute admission window, followed by a separate

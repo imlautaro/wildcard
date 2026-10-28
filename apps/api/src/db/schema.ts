@@ -596,6 +596,13 @@ export const miniAppAction = sqliteTable('mini_app_action', {
   status: text('status').notNull(), createdAt: date('created_at').notNull(), updatedAt: date('updated_at').notNull(),
 }, t => [check('mini_app_action_status', sql`${t.status} IN ('running', 'completed', 'failed', 'unknown')`), index('mini_app_action_app').on(t.appId, t.createdAt)]);
 
+// Saved values for local mini app actions (migration 0038).
+export const miniAppState = sqliteTable('mini_app_state', {
+  appId: text('app_id').primaryKey().references(() => miniApp.id, { onDelete: 'cascade' }),
+  valuesJson: text('values_json').notNull(), version: integer('version').notNull().default(0),
+  lastExecution: text('last_execution'), updatedAt: date('updated_at').notNull(),
+});
+
 // Episode creation/invalidation triggers live in migration 0032.
 export const conversationInitiative = sqliteTable('conversation_initiative', {
   contactId: text('contact_id').primaryKey().references(() => contact.id, { onDelete: 'cascade' }),

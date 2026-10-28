@@ -83,9 +83,18 @@ routes.post('/:appID/actions/:actionID', async c => {
   if (!app) return c.json({ error: 'Mini app not found' }, 404);
   const connectors = await contactConnectors(c.env.DB, contactID, owner);
   if (app.revision !== body.revision || !grantValid(app, connectors)) return c.json({ error: 'This mini app changed. Review it again.', code: 'REVIEW_REQUIRED' }, 409);
-  if (!(await admitAuthRequest(c.env.DB, owner, 'mini-app-action', 10)).allowed) return c.json({ error: 'Too many actions. Please wait a minute.' }, 429);
+  // Local state taps (a counter's +) are cheap; external writes keep a strict budget.
+  const local = parseSpec(JSON.parse(app.specJSON)).spec.actions.find(a => a.id === c.req.param('actionID'))?.kind === 'state';
+  if (!(await admitAuthRequest(c.env.DB, owner, local ? 'mini-app-state' : 'mini-app-action', local ? 120 : 10)).allowed) return c.json({ error: 'Too many actions. Please wait a minute.' }, 429);
   const outcome = await runAction(c.env, app, connectors, c.req.param('actionID'), body.executionID.toLowerCase(), body.inputs, body.fields, timeZone);
-  return 'error' in outcome ? c.json({ error: outcome.error }, outcome.status as 400) : c.json(outcome);
+  if ('error' in outcome) return c.json({ error: outcome.error }, outcome.status as 400);
+  // Apps without remote reads return the updated view directly, so a tap costs no extra load.
+  const spec = parseSpec(JSON.parse(app.specJSON)).spec;
+  if (local && outcome.status === 'completed' && !spec.data.some(step => step.type === 'mcp')) {
+    const inputs = validInputs(spec, body.inputs) ?? validInputs(spec, undefined)!;
+    return c.json({ ...outcome, resolution: { revision: app.revision, inputs, resolvedAt: Date.now(), ...await resolve(c.env, app, connectors, inputs, timeZone) } });
+  }
+  return c.json(outcome);
 });
 routes.delete('/:appID', async c => {
   await c.env.DB.prepare('DELETE FROM mini_app WHERE id = ? AND contact_id = ? AND user_id = ?').bind(c.req.param('appID'), c.req.param('id'), c.get('owner')).run();

@@ -57,7 +57,7 @@ indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
     case list(items: [MiniAppListRow], format: String, currency: String?, empty: String)
     case chart(kind: String, title: String?, points: [MiniAppPoint], format: String, currency: String?)
     case text(String, style: String)
-    case action(id: String, label: String, confirm: String, destructive: Bool, fields: [MiniAppField])
+    case action(id: String, local: Bool, label: String, confirm: String?, destructive: Bool, fields: [MiniAppField])
     case notice(code: String)
     case unsupported
 
@@ -72,7 +72,8 @@ indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
         case "list": self = .list(items: try c.decode([MiniAppListRow].self, forKey: .items), format: format, currency: currency, empty: try c.decode(String.self, forKey: .empty))
         case "chart": self = .chart(kind: try c.decode(String.self, forKey: .kind), title: try c.decodeIfPresent(String.self, forKey: .title), points: try c.decode([MiniAppPoint].self, forKey: .points), format: format, currency: currency)
         case "text": self = .text(try c.decode(String.self, forKey: .text), style: try c.decode(String.self, forKey: .style))
-        case "action": self = .action(id: try c.decode(String.self, forKey: .id), label: try c.decode(String.self, forKey: .label), confirm: try c.decode(String.self, forKey: .confirm),
+        case "action": self = .action(id: try c.decode(String.self, forKey: .id), local: try c.decodeIfPresent(String.self, forKey: .kind) == "state",
+                                      label: try c.decode(String.self, forKey: .label), confirm: try c.decodeIfPresent(String.self, forKey: .confirm),
                                       destructive: try c.decode(String.self, forKey: .style) == "destructive", fields: try c.decode([MiniAppField].self, forKey: .fields))
         case "notice": self = .notice(code: try c.decode(String.self, forKey: .code))
         default: self = .unsupported
@@ -100,7 +101,7 @@ enum MiniAppFieldValue: Encodable, Hashable, Sendable {
 extension AuthAPI {
     private struct ListEnvelope: Decodable { let miniApps: [MiniApp] }
     private struct AppEnvelope: Decodable { let miniApp: MiniApp }
-    private struct Outcome: Decodable { let status: String }
+    struct MiniAppOutcome: Decodable, Sendable { let status: String; let resolution: MiniAppResolution? }
     func miniApps(contactID: String, token: String) async throws -> [MiniApp] {
         let (data, _) = try await send(path: "contacts/\(contactID)/mini-apps", token: token)
         return try JSONDecoder().decode(ListEnvelope.self, from: data).miniApps
@@ -120,10 +121,10 @@ extension AuthAPI {
         return try JSONDecoder().decode(MiniAppResolution.self, from: data)
     }
     func runMiniAppAction(contactID: String, appID: String, actionID: String, executionID: UUID, revision: Int, inputs: [String: String],
-                          fields: [String: MiniAppFieldValue], token: String) async throws -> String {
+                          fields: [String: MiniAppFieldValue], token: String) async throws -> MiniAppOutcome {
         struct Input: Encodable { let executionID: String; let revision: Int; let inputs: [String: String]; let fields: [String: MiniAppFieldValue]; let timeZone: String }
         let body = try JSONEncoder().encode(Input(executionID: executionID.uuidString.lowercased(), revision: revision, inputs: inputs, fields: fields, timeZone: TimeZone.current.identifier))
         let (data, _) = try await send(path: "contacts/\(contactID)/mini-apps/\(appID)/actions/\(actionID)", method: "POST", body: body, token: token, timeout: 60)
-        return try JSONDecoder().decode(Outcome.self, from: data).status
+        return try JSONDecoder().decode(MiniAppOutcome.self, from: data)
     }
 }

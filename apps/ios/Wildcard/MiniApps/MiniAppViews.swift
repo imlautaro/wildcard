@@ -56,7 +56,7 @@ struct MiniAppScreen: View {
     @State private var error: String?
     @State private var notice: String?
     @State private var confirmDelete = false
-    @State private var pendingAction: (id: String, label: String, confirm: String, fields: [String: MiniAppFieldValue])?
+    @State private var pendingAction: (id: String, label: String, confirm: String, local: Bool, fields: [String: MiniAppFieldValue])?
     @State private var confirming = false
     @State private var runningAction: String?
     /// An uncertain submission keeps its execution ID so a retry can never run twice.
@@ -96,7 +96,7 @@ struct MiniAppScreen: View {
             } message: { Text("The contact can build it again later.") }
             .alert(pendingAction?.label ?? "", isPresented: $confirming, presenting: pendingAction) { action in
                 Button("Cancel", role: .cancel) { }
-                Button("Continue") { Task { await run(action.id, label: action.label, fields: action.fields) } }
+                Button("Continue") { Task { await run(action.id, label: action.label, local: action.local, fields: action.fields) } }
             } message: { action in Text(action.confirm) }
         }
         .task {
@@ -172,8 +172,9 @@ struct MiniAppScreen: View {
                 }
             }
             if let view = store.views[key] {
-                MiniAppRenderer(components: view.view, runningAction: runningAction) { id, label, confirm, fields in
-                    pendingAction = (id, label, confirm, fields); confirming = true
+                MiniAppRenderer(components: view.view, runningAction: runningAction) { id, local, label, confirm, fields in
+                    if let confirm { pendingAction = (id, label, confirm, local, fields); confirming = true }
+                    else { Task { await run(id, label: label, local: local, fields: fields) } }
                 }
                 Section { } footer: {
                     Text("Updated \(Date(timeIntervalSince1970: view.resolvedAt / 1000).formatted(date: .omitted, time: .shortened))")
@@ -204,7 +205,7 @@ struct MiniAppScreen: View {
         catch { self.error = error.localizedDescription }
     }
 
-    private func run(_ actionID: String, label: String, fields: [String: MiniAppFieldValue]) async {
+    private func run(_ actionID: String, label: String, local: Bool, fields: [String: MiniAppFieldValue]) async {
         guard let app, runningAction == nil else { return }
         let id = execution.flatMap { $0.actionID == actionID && $0.fields == fields ? $0.id : nil } ?? UUID()
         execution = (actionID, fields, id)
@@ -213,6 +214,8 @@ struct MiniAppScreen: View {
         do {
             let status = try await store.run(app, contactID: contactID, actionID: actionID, executionID: id, fields: fields, using: auth)
             execution = nil
+            // Local state changes show up in the view itself; only external writes report an outcome.
+            guard !local else { return }
             notice = status == "completed" ? "\(label): done." : status == "failed" ? "\(label) failed. Nothing was confirmed by the service."
                 : "\(label): the outcome is unknown. Check the service before trying again."
         } catch is CancellationError { }
@@ -242,7 +245,7 @@ private struct MiniAppTextInput: View {
 struct MiniAppRenderer: View {
     let components: [MiniAppComponent]
     let runningAction: String?
-    let onAction: (String, String, String, [String: MiniAppFieldValue]) -> Void
+    let onAction: (String, Bool, String, String?, [String: MiniAppFieldValue]) -> Void
 
     private enum Block: Identifiable {
         case stats(Int, [MiniAppComponent]), section(Int, String?, [MiniAppComponent]), single(Int, MiniAppComponent)
@@ -317,8 +320,8 @@ struct MiniAppRenderer: View {
         case .text(let text, let style):
             Text(text).manrope(style == "headline" ? .headline : style == "caption" ? .footnote : .body, weight: style == "headline" ? .bold : .regular)
                 .foregroundStyle(style == "caption" ? Color.secondary : Color.primary)
-        case .action(let id, let label, let confirm, let destructive, let fields):
-            MiniAppActionForm(id: id, label: label, destructive: destructive, fields: fields, running: runningAction) { values in onAction(id, label, confirm, values) }
+        case .action(let id, let local, let label, let confirm, let destructive, let fields):
+            MiniAppActionForm(id: id, local: local, label: label, destructive: destructive, fields: fields, running: runningAction) { values in onAction(id, local, label, confirm, values) }
         case .notice(let code):
             Label(MiniAppFormat.issue(code), systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
         case .stat, .section, .unsupported: EmptyView()
@@ -351,6 +354,7 @@ private struct MiniAppStatGrid: View {
 
 private struct MiniAppActionForm: View {
     let id: String
+    let local: Bool
     let label: String
     let destructive: Bool
     let fields: [MiniAppField]
@@ -394,7 +398,7 @@ private struct MiniAppActionForm: View {
             }
         }
         Button(role: destructive ? .destructive : nil) { if let values { submit(values) } } label: {
-            HStack { Text(running == id ? "Working…" : label).manrope(.body, weight: .semibold); if running == id { Spacer(); ProgressView() } }
+            HStack { Text(running == id && !local ? "Working…" : label).manrope(.body, weight: .semibold); if running == id && !local { Spacer(); ProgressView() } }
         }
         .disabled(running != nil || values == nil)
     }

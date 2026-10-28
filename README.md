@@ -218,9 +218,10 @@ public/Bearer access and OAuth authorization-code with PKCE, registered or dynam
 clients, encrypted credentials and refresh tokens. Gmail setup requires your own
 Google OAuth client and preview access; live provider/device validation is pending.
 
-In connector chats a contact can build [mini apps](docs/mini-apps.md): declarative
-dashboards and small tools (stats, lists, charts, confirmed actions) rendered with
-native SwiftUI and web components. Each one stays disabled until you review its
-tools; enabled apps re-run their read tools when opened. Migration 0037 is required.
+In private chats a contact can build [mini apps](docs/mini-apps.md): declarative
+small tools and dashboards (saved state such as counters, stats, lists, charts and
+actions) rendered with native SwiftUI and web components. Apps that use connector
+tools stay disabled until you review those tools, and enabled apps re-run their
+reads when opened. Migrations 0037–0038 are required.
 
 Private contacts also support [conversation initiative](docs/initiative.md): durable AI reviews choose whether to wait, send a useful follow-up or stop after silence. Each participant can disable it in contact details on iOS or web. It reuses D1, Cron and Workflows; migrations 0032–0033 are required. Initial reviews become due after 30 seconds, with progressively longer gaps for unanswered follow-ups.

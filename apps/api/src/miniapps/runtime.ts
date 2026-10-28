@@ -1,6 +1,6 @@
 import { isRecord } from '../chat/meta';
 import { catalog, connectionColumns, remote, size, validator, type Connection, type RemoteTool } from '../mcp/client';
-import { evaluate, parseSpec, present, StepError, toolData, transform, type Context, type ResolvedComponent, type Spec, type ToolUse } from './spec';
+import { applyUpdates, evaluate, normalizeState, parseSpec, present, StepError, toolData, transform, type Context, type ResolvedComponent, type Spec, type ToolUse } from './spec';
 
 export type GrantedTool = ToolUse & { fingerprint: string };
 export type MiniAppRow = { id: string; contactID: string; userID: string; turnID: string | null; revision: number; title: string; specJSON: string; toolsJSON: string; approvedRevision: number | null; lastError: string | null; createdAt: number; updatedAt: number };
@@ -60,11 +60,18 @@ export function validInputs(spec: Spec, raw: unknown): Record<string, string> | 
   return isRecord(raw) && Object.keys(raw).some(key => !spec.inputs.some(i => i.id === key)) ? null : values;
 }
 
+// Saved state is per app and person (the app row is already person-scoped).
+async function readState(db: D1Database, app: MiniAppRow, spec: Spec) {
+  const row = await db.prepare('SELECT values_json AS valuesJSON, version FROM mini_app_state WHERE app_id = ?').bind(app.id).first<{ valuesJSON: string; version: number }>();
+  return { values: normalizeState(spec, row ? JSON.parse(row.valuesJSON) : null), version: row?.version ?? null };
+}
+
 export async function resolve(env: Env, app: MiniAppRow, connectors: Connection[], inputs: Record<string, string>, timeZone: string): Promise<{ view: ResolvedComponent[]; issues: { step: string; code: string }[] }> {
   const { spec } = parseSpec(JSON.parse(app.specJSON));
   const granted = JSON.parse(app.toolsJSON) as GrantedTool[];
-  const context: Context = { inputs, timeZone, now: Date.now() };
-  const outputs = new Map<string, unknown>(), errors = new Map<string, string>();
+  const state = spec.state.length ? (await readState(env.DB, app, spec)).values : {};
+  const context: Context = { inputs, state, timeZone, now: Date.now() };
+  const outputs = new Map<string, unknown>(Object.entries(state)), errors = new Map<string, string>();
   // Remote reads depend only on inputs, so they run concurrently before local transforms.
   await Promise.all(spec.data.map(async step => {
     if (step.type !== 'mcp') return;
@@ -114,7 +121,9 @@ export async function runAction(env: Env, app: MiniAppRow, connectors: Connectio
   if (!action) return { error: 'Action not found', status: 404 };
   const inputs = validInputs(spec, rawInputs), fields = fieldValues(action.fields, rawFields ?? {});
   if (!inputs || !fields) return { error: 'Check the form values.', status: 400 };
-  const args = evaluate(action.arguments, { inputs, fields, timeZone, now: Date.now() }) as Record<string, unknown>;
+  if (action.kind === 'state') return runStateAction(env, app, spec, action.set, actionID, executionID, { inputs, fields, timeZone });
+  const { values: state } = await readState(env.DB, app, spec);
+  const args = evaluate(action.arguments, { inputs, state, fields, timeZone, now: Date.now() }) as Record<string, unknown>;
   const argumentsJSON = JSON.stringify(args);
   if (argumentsJSON.length > 16_000) return { error: 'Action arguments are too large.', status: 400 };
   const existing = await env.DB.prepare('SELECT status, action_id AS actionID, arguments_json AS args FROM mini_app_action WHERE id = ? AND app_id = ?')
@@ -140,4 +149,33 @@ export async function runAction(env: Env, app: MiniAppRow, connectors: Connectio
   }
   await env.DB.prepare("UPDATE mini_app_action SET status = ?, updated_at = ? WHERE id = ? AND status = 'running'").bind(status, Date.now(), executionID).run();
   return { status, replayed: false };
+}
+
+// A local action changes only saved state: one compare-and-swap per attempt, with the
+// ledger row written in the same transaction so a retried execution ID never applies twice.
+async function runStateAction(env: Env, app: MiniAppRow, spec: Spec, updates: Extract<Spec['actions'][number], { kind: 'state' }>['set'], actionID: string,
+  executionID: string, context: Omit<Context, 'state' | 'now'>): Promise<ActionOutcome | { error: string; status: number }> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const existing = await env.DB.prepare('SELECT status, action_id AS actionID FROM mini_app_action WHERE id = ? AND app_id = ?').bind(executionID, app.id).first<{ status: string; actionID: string }>();
+    if (existing) return existing.actionID === actionID ? { status: existing.status as ActionOutcome['status'], replayed: true } : { error: 'This action was already submitted.', status: 409 };
+    const current = await readState(env.DB, app, spec);
+    const next = applyUpdates(spec, updates, current.values, { ...context, state: current.values, now: Date.now() });
+    if (!next) return { error: 'This change is not valid.', status: 400 };
+    const now = Date.now(), valuesJSON = JSON.stringify(next);
+    const approved = 'EXISTS (SELECT 1 FROM mini_app WHERE id = ?1 AND revision = ?5 AND approved_revision = revision)';
+    const [written] = await env.DB.batch([
+      current.version === null
+        ? env.DB.prepare(`INSERT INTO mini_app_state (app_id, values_json, version, last_execution, updated_at) SELECT ?1, ?2, 1, ?3, ?4 WHERE ${approved} ON CONFLICT(app_id) DO NOTHING`)
+          .bind(app.id, valuesJSON, executionID, now, app.revision)
+        : env.DB.prepare(`UPDATE mini_app_state SET values_json = ?2, version = version + 1, last_execution = ?3, updated_at = ?4 WHERE app_id = ?1 AND version = ?6 AND ${approved}`)
+          .bind(app.id, valuesJSON, executionID, now, app.revision, current.version),
+      env.DB.prepare(`INSERT OR IGNORE INTO mini_app_action (id, app_id, revision, action_id, arguments_json, status, created_at, updated_at)
+        SELECT ?3, ?1, ?5, ?2, '{}', 'completed', ?4, ?4 WHERE (SELECT last_execution FROM mini_app_state WHERE app_id = ?1) = ?3`)
+        .bind(app.id, actionID, executionID, now, app.revision),
+    ]);
+    if (written.meta.changes) return { status: 'completed', replayed: false };
+    if (!await env.DB.prepare(`SELECT 1 FROM mini_app WHERE id = ? AND revision = ? AND approved_revision = revision`).bind(app.id, app.revision).first())
+      return { error: 'This mini app changed. Refresh it.', status: 409 };
+  }
+  return { error: 'This mini app is busy. Try again.', status: 409 };
 }

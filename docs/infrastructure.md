@@ -1717,3 +1717,9 @@ pipeline, which applies migrations before publishing. Publish the API before rel
 on the clients: older APIs return 404 for mini app routes, which clients show as an
 empty list. Rollback is another automatic release. Keep the additive tables; older
 code ignores them. Remote migration and live verification remain pending.
+
+Migration `0038_mini_app_state.sql` (apply after 0037) adds `mini_app_state`. It holds
+saved values for local actions, with a version for compare-and-swap and the last
+execution ID so that the action ledger commits in the same transaction. It cascades
+with its app. There are no new services or secrets. Keep the table on rollback; older
+code ignores it, but specs with `state` would then fail validation in older code.

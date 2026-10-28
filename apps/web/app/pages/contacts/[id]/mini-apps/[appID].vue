@@ -47,7 +47,7 @@ async function remove() {
 }
 async function run(actionID: string, fields: Record<string, unknown>) {
   const current = app.value, action = view.value.value && findAction(view.value.value.view, actionID);
-  if (!current || !action || busyAction.value || !window.confirm(action.confirm)) return;
+  if (!current || !action || busyAction.value || (action.confirm && !window.confirm(action.confirm))) return;
   const serialized = JSON.stringify(fields);
   const pending = pendingExecution.value;
   const executionID = pending && pending.actionID === actionID && pending.fields === serialized ? pending.executionID : crypto.randomUUID();
@@ -56,6 +56,8 @@ async function run(actionID: string, fields: Record<string, unknown>) {
   try {
     const status = await apps.run(current, actionID, executionID, fields);
     pendingExecution.value = null;
+    // Local state changes show up in the view itself; only external writes report an outcome.
+    if (action.kind === 'state') return;
     notice.value = status === 'completed' ? `${action.label}: done.` : status === 'failed' ? `${action.label} failed. Nothing was confirmed by the service.`
       : `${action.label}: the outcome is unknown. Check the service before trying again.`;
   } catch (failure) {

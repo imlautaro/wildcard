@@ -1,7 +1,8 @@
 # Mini apps
 
-A contact can build a **mini app** for one person from that person's connected MCP
-tools: for example, "make me a mini app for last week's expenses." A mini app is a
+A contact can build a **mini app** for one person: a counter or tracker with saved
+values, or a view over that person's connected MCP tools ("make me a mini app for
+last week's expenses"). A mini app is a
 declarative JSON spec, not code. Its data steps form an acyclic graph, similar to
 a node workflow, and its view is a tree of a closed catalog of components. Both
 clients render that tree with their own native components: SwiftUI lists, grids and
@@ -13,14 +14,17 @@ servers and device presentation have not been verified yet.
 
 ## Using it
 
-1. Assign a connector to a private contact and enable the relevant tools (see
-   [MCP connections](connectors.md)). Mini app tools are only offered in these
-   connector chats, and only for direct human messages.
-2. Ask the contact for an app, dashboard or tracker. It calls `list_mcp_tools`,
-   inspects one real result with `call_mcp_tool`, then calls `create_mini_app`.
-3. A card appears under the reply. Open it to review the tools: **Runs each time
-   you open or refresh** (reads) and **Only when you tap and confirm** (writes).
-   Choose **Enable mini app**. Until then nothing loads.
+1. In any direct private chat, ask the contact for an app, counter, tracker or
+   dashboard. Mini app tools are offered for direct human messages, not for
+   schedules or group work.
+2. Apps that use only **state**, inputs, constant data and local actions (a
+   counter with a **+** button) are enabled when created and open immediately.
+3. Apps over connected data need a connector assigned to the contact with the
+   relevant tools enabled (see [MCP connections](connectors.md)). The contact calls
+   `list_mcp_tools`, inspects one real result with `call_mcp_tool`, then calls
+   `create_mini_app`. A card appears under the reply. Open it to review the tools:
+   **Runs each time you open or refresh** (reads) and **Only when you tap and
+   confirm** (writes). Choose **Enable mini app**. Until then nothing loads.
 4. Opening an enabled app runs its reads, applies its transforms and shows the
    result. Inputs (segmented controls, a text field) reload with new values.
    Actions show a native confirmation with the text the contact wrote before
@@ -33,8 +37,19 @@ replacement increments the revision and requires review again.
 ## Spec
 
 `create_mini_app` validates the spec on the server (`apps/api/src/miniapps/spec.ts`)
-and returns precise errors to the model. Limits: 16 KB, 12 data steps (at most four
-`mcp`), four inputs, four actions, 40 view components and one level of sections.
+and returns precise errors to the model. Limits: 16 KB, eight state values, 12 data
+steps (at most four `mcp`), four inputs, four actions, 40 view components and one
+level of sections.
+
+**State** declares saved values: `[{ "id": "count", "type": "number", "initial": 0 }]`
+(`number`, `text` or `boolean`). A `stat` can show a state value directly
+(`"step": "count"`), and templates can read it with `{"$state": "count"}`.
+**Local actions** change state without any external tool:
+`{ "id": "add", "label": "+1", "set": [{ "state": "count", "op": "increment" }] }`.
+The available ops are `increment`/`decrement` (default 1), `set` (with a templated
+`value`, which may use form fields) and `toggle`. A local action needs no confirmation
+unless it declares `confirm`, for example for a destructive reset. **Remote actions**
+(`connectionID`, `tool`, `arguments`) always require `confirm`.
 
 | Step | Purpose |
 | --- | --- |
@@ -77,6 +92,12 @@ because it would add inference cost and nondeterminism to every load.
   without a chat message. The person explicitly approves that when enabling the
   app. Read/write roles come from the spec and the person's approval, never from
   MCP annotations. One tool cannot be both a read and an action.
+- **Saved state** lives in D1 (`mini_app_state`), per app and therefore per person,
+  so iPhone and web show the same values. Each tap is one compare-and-swap on a
+  version, with its ledger row in the same transaction. A retried execution ID
+  returns its recorded result and never applies twice. Numbers stay within ±10¹² and
+  text within 500 characters. Values survive revisions when the id and type are
+  unchanged, and otherwise reset to `initial`. State is not sent to the model.
 - **Writes** run only from an action that the person taps and confirms. The client
   creates one execution UUID per confirmed submission and reuses it for network
   retries. `mini_app_action` reserves that ID before the remote call, so a replay
@@ -91,8 +112,8 @@ because it would add inference cost and nondeterminism to every load.
   extracted into memory. Only step IDs and error codes are kept (`last_error`), so
   `list_mini_apps` can help the contact repair a spec. Its output is bounded to about
 20 KB; specs that do not fit are omitted.
-- **Rate limits.** 120 management requests, 20 loads and 10 actions per account per
-  minute. Each load has a 20-second MCP deadline per step, a 1 MiB transport limit,
+- **Rate limits.** Per account per minute: 120 management requests, 20 loads, 120
+  local state actions and 10 external actions. Each load has a 20-second MCP deadline per step, a 1 MiB transport limit,
   at most 5,000 rows per transform, 100 groups, 100 list rows, 60 chart points and
   128 KB of resolved view.
 
@@ -106,13 +127,13 @@ All routes require the bearer session and an owned contact:
 | GET | `/` | Up to 20 apps: status (`needs_review`, `enabled`, `needs_reapproval`), inputs, tools, last issues |
 | POST | `/:appID/approval` | `{ revision, allowed }`; enabling binds the current tool fingerprints |
 | POST | `/:appID/resolve` | `{ inputs?, timeZone }`; returns `{ revision, inputs, resolvedAt, view, issues }`, or 409 `REVIEW_REQUIRED` |
-| POST | `/:appID/actions/:actionID` | `{ executionID, revision, inputs?, fields?, timeZone }`; returns `{ status, replayed }` |
+| POST | `/:appID/actions/:actionID` | `{ executionID, revision, inputs?, fields?, timeZone }`; returns `{ status, replayed }`, plus `resolution` for local actions in apps without remote reads |
 | DELETE | `/:appID` | Deletes the app and its action ledger |
 
 ## Model behavior
 
-Connector chats expose `create_mini_app` and `list_mini_apps` and get a third
-tool-enabled round, still within the six-execution budget. Risk: that path can now
+All direct private chats expose `create_mini_app` and `list_mini_apps`. Connector
+chats also get a third tool-enabled round, still within the six-execution budget. Risk: that path can now
 make four model calls (up to 45 seconds each) plus MCP calls inside the existing
 three-minute `prepare-reply` step. Slow turns can time out and fall back to the
 existing tool-free recovery reply. Real latency has not been measured. Creation requires the live running turn. Each human message
@@ -136,8 +157,8 @@ See [caching](caching.md#mini-apps).
 
 ## Setup and verification
 
-Apply additive migration `0037_mini_apps.sql` through the automatic commit/push
-release. No new service, binding or secret is needed; see
+Apply additive migrations `0037_mini_apps.sql` and `0038_mini_app_state.sql`
+through the automatic commit/push release. No new service, binding or secret is needed; see
 [infrastructure](infrastructure.md#mini-apps-migration-0037). Static checks performed:
 API/web TypeScript, Vue template compilation of the changed pages/components, full
 iOS Simulator Swift typecheck, SQL compilation of the new statements against all 37

@@ -92,13 +92,16 @@ final class MiniAppStore {
 
     /// The caller keeps `executionID` for one confirmed submission so a retry never runs twice.
     func run(_ app: MiniApp, contactID: String, actionID: String, executionID: UUID, fields: [String: MiniAppFieldValue], using auth: AuthStore) async throws -> String {
-        let key = "\(contactID)/\(app.id)"
-        let status = try await auth.withSession { [inputs] api, token in
+        let key = "\(contactID)/\(app.id)", revision = viewRevisions[key], current = generation
+        let outcome = try await auth.withSession { [inputs] api, token in
             try await api.runMiniAppAction(contactID: contactID, appID: app.id, actionID: actionID, executionID: executionID,
                                            revision: app.revision, inputs: inputs[key] ?? [:], fields: fields, token: token)
         }
-        if status == "completed" { await resolve(app, contactID: contactID, force: true, using: auth) }
-        return status
+        // State-only apps return the updated view with the action, so a tap needs no extra load.
+        if let resolution = outcome.resolution {
+            if generation == current, viewRevisions[key] == revision { views[key] = resolution; viewLoaded[key] = .now; viewErrors[key] = nil }
+        } else if outcome.status == "completed" { await resolve(app, contactID: contactID, force: true, using: auth) }
+        return outcome.status
     }
 
     private func dropView(key: String) {

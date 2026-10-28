@@ -697,7 +697,9 @@ account switching require runtime verification; static type/SQL checks passed.
 contacts, five-second freshness, revalidated by visible chat polling and contact
 details) and one resolved view per app (bounded to 16, oldest-load eviction) on iOS
 (`MiniAppStore` inside `ContactsStore`) and web (`useMiniApps`). A view is reused for
-60 seconds because each load runs the app's remote reads. Explicit refresh, pull to
+60 seconds because each load runs the app's remote reads. Local state actions in
+apps without remote reads return the updated view, which replaces the cached view
+unless a newer load started; otherwise a completed action forces a reload. Explicit refresh, pull to
 refresh, a changed input or a completed action bypass that window. In-flight loads are
 deduplicated; a newer input selection, invalidation or account change rejects late
 responses. Transient failures keep the loaded view visible; a first-load failure

@@ -75,7 +75,7 @@ function submit(id: string) {
         <input v-else v-model="form(block.item.id)[field.id]" :type="field.kind === 'date' ? 'date' : 'text'" :required="field.required" maxlength="500">
       </label>
       <button type="submit" class="button-row" :class="{ danger: block.item.style === 'destructive' }" :disabled="!!busyAction">
-        {{ busyAction === block.item.id ? 'Working…' : block.item.label }}
+        {{ busyAction === block.item.id && block.item.kind === 'remote' ? 'Working…' : block.item.label }}
       </button>
     </form>
   </template>

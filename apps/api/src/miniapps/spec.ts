@@ -22,7 +22,12 @@ export type Step =
 type Input = { id: string; type: 'segmented'; label: string; options: { value: string; label: string }[]; default: string }
   | { id: string; type: 'text'; label: string; default: string };
 type Field = { id: string; label: string; kind: 'text' | 'number' | 'date' | 'toggle'; required: boolean };
-export type Action = { id: string; label: string; confirm: string; style: 'default' | 'destructive'; connectionID: string; tool: string; arguments: Record<string, unknown>; fields: Field[] };
+export type StateVar = { id: string; type: 'number' | 'text' | 'boolean'; initial: number | string | boolean };
+export type StateUpdate = { state: string; op: 'increment' | 'decrement' | 'set' | 'toggle'; value?: unknown };
+type ActionBase = { id: string; label: string; style: 'default' | 'destructive'; fields: Field[] };
+// Remote actions call an MCP write tool after confirmation; local actions only update saved state.
+export type Action = (ActionBase & { kind: 'remote'; confirm: string; connectionID: string; tool: string; arguments: Record<string, unknown> })
+  | (ActionBase & { kind: 'state'; confirm?: string; set: StateUpdate[] });
 type Value = { format?: Format; currency?: string };
 export type Component =
   | { type: 'section'; title?: string; children: Component[] }
@@ -31,7 +36,7 @@ export type Component =
   | ({ type: 'chart'; source: string; kind: 'bar' | 'line'; x: string; y: string; title?: string } & Value)
   | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
   | { type: 'action'; action: string };
-export type Spec = { title: string; subtitle?: string; icon: typeof miniAppIcons[number]; inputs: Input[]; data: Step[]; view: Component[]; actions: Action[] };
+export type Spec = { title: string; subtitle?: string; icon: typeof miniAppIcons[number]; state: StateVar[]; inputs: Input[]; data: Step[]; view: Component[]; actions: Action[] };
 export type ToolUse = { connectionID: string; toolName: string; role: 'read' | 'write' };
 
 export class SpecError extends Error {}
@@ -66,8 +71,9 @@ function format(value: Record<string, unknown>, name: string): Value {
   return result;
 }
 
-// Templates are literal JSON plus three single-key expressions.
-function template(value: unknown, name: string, scope: { inputs: Set<string>; fields?: Set<string> }, depth = 0): unknown {
+// Templates are literal JSON plus four single-key expressions.
+type Scope = { inputs: Set<string>; states: Set<string>; fields?: Set<string> };
+function template(value: unknown, name: string, scope: Scope, depth = 0): unknown {
   if (depth > 6) return fail(`${name} is nested too deeply.`);
   if (value === null || typeof value === 'boolean' || typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) return value;
   if (Array.isArray(value)) return value.length > 50 ? fail(`${name} has too many items.`) : value.map((item, index) => template(item, `${name}[${index}]`, scope, depth + 1));
@@ -77,6 +83,7 @@ function template(value: unknown, name: string, scope: { inputs: Set<string>; fi
     if (keys.length !== 1) return fail(`${name}: an expression object must contain only its "$" key.`);
     const [key] = keys, argument = value[key];
     if (key === '$input') return typeof argument === 'string' && scope.inputs.has(argument) ? value : fail(`${name}: $input must name a declared input.`);
+    if (key === '$state') return typeof argument === 'string' && scope.states.has(argument) ? value : fail(`${name}: $state must name a declared state value.`);
     if (key === '$field') return scope.fields && typeof argument === 'string' && scope.fields.has(argument) ? value : fail(`${name}: $field is only available in actions and must name one of its fields.`);
     if (key === '$date') {
       if (!isRecord(argument)) return fail(`${name}: $date expects {"days": -7, "format": "date"}.`);
@@ -85,7 +92,7 @@ function template(value: unknown, name: string, scope: { inputs: Set<string>; fi
       choice(argument.format, ['date', 'datetime'] as const, `${name}.$date.format`);
       return value;
     }
-    return fail(`${name}: unknown expression ${key}. Use $input, $field or $date.`);
+    return fail(`${name}: unknown expression ${key}. Use $input, $state, $field or $date.`);
   }
   if (keys.length > 50) return fail(`${name} has too many keys.`);
   return Object.fromEntries(keys.map(key => [key, template(value[key], `${name}.${key}`, scope, depth + 1)]));
@@ -95,7 +102,7 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
   if (!isRecord(raw)) fail('spec must be an object.');
   const value = raw as Record<string, unknown>;
   if (JSON.stringify(value).length > 16000) fail('spec must be at most 16 KB.');
-  only(value, ['title', 'subtitle', 'icon', 'inputs', 'data', 'view', 'actions'], 'spec');
+  only(value, ['title', 'subtitle', 'icon', 'state', 'inputs', 'data', 'view', 'actions'], 'spec');
   const ids = new Set<string>();
   const unique = (id: unknown, name: string) => {
     if (typeof id !== 'string' || !identifier.test(id)) return fail(`${name}.id must start with a letter and contain only letters, digits or _ (max 32).`);
@@ -107,6 +114,18 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     if (!Array.isArray(field) || (required && !field.length) || field.length > max) return fail(`${name} must be an array of ${required ? '1' : '0'}–${max} items.`);
     return field;
   };
+  const state: StateVar[] = list(value.state, 'state', 8).map((item, index) => {
+    const name = `state[${index}]`;
+    if (!isRecord(item)) return fail(`${name} must be an object.`);
+    only(item, ['id', 'type', 'initial'], name);
+    const id = unique(item.id, name), type = choice(item.type, ['number', 'text', 'boolean'] as const, `${name}.type`);
+    const fallback = { number: 0, text: '', boolean: false }[type];
+    const initial = item.initial ?? fallback;
+    if (type === 'number' ? typeof initial !== 'number' || !Number.isFinite(initial) || Math.abs(initial) > 1e12
+      : type === 'text' ? typeof initial !== 'string' || initial.length > 500 : typeof initial !== 'boolean') fail(`${name}.initial must be a ${type}.`);
+    return { id, type, initial: initial as StateVar['initial'] };
+  });
+  const stateIDs = new Set(state.map(v => v.id));
   const inputs: Input[] = list(value.inputs, 'inputs', 4).map((item, index) => {
     const name = `inputs[${index}]`;
     if (!isRecord(item)) return fail(`${name} must be an object.`);
@@ -131,6 +150,7 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     return fail(`${name}.type must be segmented or text.`);
   });
   const inputIDs = new Set(inputs.map(i => i.id));
+  const scope: Scope = { inputs: inputIDs, states: stateIDs };
   const tools: ToolUse[] = [];
   const remote = (item: Record<string, unknown>, name: string, role: ToolUse['role']) => {
     const connectionID = typeof item.connectionID === 'string' && item.connectionID.length <= 80 ? item.connectionID : fail(`${name}.connectionID must be the connectionID from list_mcp_tools.`);
@@ -143,23 +163,23 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
   };
   const stepIDs = new Set<string>();
   const earlier = (from: unknown, name: string) => typeof from === 'string' && stepIDs.has(from) ? from : fail(`${name}.from must name an earlier data step.`);
-  const data: Step[] = list(value.data, 'data', 12, true).map((item, index) => {
+  const data: Step[] = list(value.data, 'data', 12).map((item, index) => {
     const name = `data[${index}]`;
     if (!isRecord(item)) return fail(`${name} must be an object.`);
     const id = unique(item.id, name);
     let step: Step;
     switch (item.type) {
       case 'mcp': only(item, ['id', 'type', 'connectionID', 'tool', 'arguments'], name);
-        step = { id, type: 'mcp', ...remote(item, name, 'read'), arguments: template(item.arguments ?? {}, `${name}.arguments`, { inputs: inputIDs }) as Record<string, unknown> }; break;
+        step = { id, type: 'mcp', ...remote(item, name, 'read'), arguments: template(item.arguments ?? {}, `${name}.arguments`, scope) as Record<string, unknown> }; break;
       case 'const': only(item, ['id', 'type', 'value'], name);
-        step = { id, type: 'const', value: template(item.value ?? null, `${name}.value`, { inputs: inputIDs }) }; break;
+        step = { id, type: 'const', value: template(item.value ?? null, `${name}.value`, scope) }; break;
       case 'select': only(item, ['id', 'type', 'from', 'path'], name);
         step = { id, type: 'select', from: earlier(item.from, name), path: path(item.path, `${name}.path`)! }; break;
       case 'filter': only(item, ['id', 'type', 'from', 'where'], name);
         step = { id, type: 'filter', from: earlier(item.from, name), where: list(item.where, `${name}.where`, 6, true).map((condition, at) => {
           if (!isRecord(condition)) return fail(`${name}.where[${at}] must be an object.`);
           only(condition, ['field', 'op', 'value'], `${name}.where[${at}]`);
-          return { field: path(condition.field, `${name}.where[${at}].field`)!, op: choice(condition.op, comparisons, `${name}.where[${at}].op`), value: template(condition.value ?? null, `${name}.where[${at}].value`, { inputs: inputIDs }) };
+          return { field: path(condition.field, `${name}.where[${at}].field`)!, op: choice(condition.op, comparisons, `${name}.where[${at}].op`), value: template(condition.value ?? null, `${name}.where[${at}].value`, scope) };
         }) }; break;
       case 'sort': only(item, ['id', 'type', 'from', 'field', 'order'], name);
         step = { id, type: 'sort', from: earlier(item.from, name), field: path(item.field, `${name}.field`)!, order: choice(item.order, ['asc', 'desc'] as const, `${name}.order`, 'asc') }; break;
@@ -181,7 +201,10 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
   const actions: Action[] = list(value.actions, 'actions', 4).map((item, index) => {
     const name = `actions[${index}]`;
     if (!isRecord(item)) return fail(`${name} must be an object.`);
-    only(item, ['id', 'label', 'confirm', 'style', 'connectionID', 'tool', 'arguments', 'fields'], name);
+    // `kind` is optional on input and always present in stored (normalized) specs.
+    const local = item.set !== undefined;
+    if (item.kind !== undefined && item.kind !== (local ? 'state' : 'remote')) fail(`${name}.kind must be ${local ? 'state' : 'remote'} for this action.`);
+    only(item, local ? ['id', 'kind', 'label', 'confirm', 'style', 'set', 'fields'] : ['id', 'kind', 'label', 'confirm', 'style', 'connectionID', 'tool', 'arguments', 'fields'], name);
     const id = unique(item.id, name);
     const fields: Field[] = list(item.fields, `${name}.fields`, 6).map((field, at) => {
       if (!isRecord(field)) return fail(`${name}.fields[${at}] must be an object.`);
@@ -191,12 +214,29 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
       return { id: field.id as string, label: text(field.label, `${name}.fields[${at}].label`, 40)!, kind: choice(field.kind, ['text', 'number', 'date', 'toggle'] as const, `${name}.fields[${at}].kind`, 'text'), required: field.required === true };
     });
     if (new Set(fields.map(f => f.id)).size !== fields.length) fail(`${name}.fields ids must be distinct.`);
-    return { id, label: text(item.label, `${name}.label`, 40)!, confirm: text(item.confirm, `${name}.confirm`, 200)!, style: choice(item.style, ['default', 'destructive'] as const, `${name}.style`, 'default'),
-      ...remote(item, name, 'write'), arguments: template(item.arguments ?? {}, `${name}.arguments`, { inputs: inputIDs, fields: new Set(fields.map(f => f.id)) }) as Record<string, unknown>, fields };
+    const base = { id, label: text(item.label, `${name}.label`, 40)!, style: choice(item.style, ['default', 'destructive'] as const, `${name}.style`, 'default'), fields };
+    const actionScope = { ...scope, fields: new Set(fields.map(f => f.id)) };
+    if (local) {
+      const set = list(item.set, `${name}.set`, 6, true).map((update, at): StateUpdate => {
+        const where = `${name}.set[${at}]`;
+        if (!isRecord(update)) return fail(`${where} must be an object.`);
+        only(update, ['state', 'op', 'value'], where);
+        const target = state.find(v => v.id === update.state) ?? fail(`${where}.state must name a declared state value.`);
+        const op = choice(update.op, ['increment', 'decrement', 'set', 'toggle'] as const, `${where}.op`);
+        if ((op === 'increment' || op === 'decrement') && target.type !== 'number') fail(`${where}: ${op} needs a number state.`);
+        if (op === 'toggle' && target.type !== 'boolean') fail(`${where}: toggle needs a boolean state.`);
+        if (op === 'set' && update.value === undefined) fail(`${where}.value is required for set.`);
+        return { state: target.id, op, ...(update.value === undefined ? {} : { value: template(update.value, `${where}.value`, actionScope) }) };
+      });
+      return { ...base, kind: 'state', confirm: text(item.confirm, `${name}.confirm`, 200, true), set };
+    }
+    return { ...base, kind: 'remote', confirm: text(item.confirm, `${name}.confirm`, 200)!,
+      ...remote(item, name, 'write'), arguments: template(item.arguments ?? {}, `${name}.arguments`, actionScope) as Record<string, unknown> };
   });
   const actionIDs = new Set(actions.map(a => a.id));
   let nodes = 0;
   const source = (field: unknown, name: string) => typeof field === 'string' && stepIDs.has(field) ? field : fail(`${name} must name a data step.`);
+  const valueSource = (field: unknown, name: string) => typeof field === 'string' && (stepIDs.has(field) || stateIDs.has(field)) ? field : fail(`${name} must name a data step or state value.`);
   const component = (item: unknown, name: string, nested: boolean): Component => {
     if (++nodes > 40) return fail('view supports at most 40 components.');
     if (!isRecord(item)) return fail(`${name} must be an object.`);
@@ -205,7 +245,7 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
         if (nested) fail(`${name}: sections cannot be nested.`);
         return { type: 'section', title: text(item.title, `${name}.title`, 60, true), children: list(item.children, `${name}.children`, 20, true).map((child, at) => component(child, `${name}.children[${at}]`, true)) };
       case 'stat': only(item, ['type', 'label', 'step', 'path', 'caption', 'format', 'currency'], name);
-        return { type: 'stat', label: text(item.label, `${name}.label`, 40)!, step: source(item.step, `${name}.step`), path: path(item.path, `${name}.path`, true), caption: text(item.caption, `${name}.caption`, 80, true), ...format(item, name) };
+        return { type: 'stat', label: text(item.label, `${name}.label`, 40)!, step: valueSource(item.step, `${name}.step`), path: path(item.path, `${name}.path`, true), caption: text(item.caption, `${name}.caption`, 80, true), ...format(item, name) };
       case 'list': only(item, ['type', 'source', 'title', 'subtitle', 'value', 'limit', 'empty', 'format', 'currency'], name);
         if (item.limit !== undefined && (!Number.isInteger(item.limit) || Number(item.limit) < 1 || Number(item.limit) > 100)) fail(`${name}.limit must be 1–100.`);
         return { type: 'list', source: source(item.source, `${name}.source`), title: path(item.title, `${name}.title`)!, subtitle: path(item.subtitle, `${name}.subtitle`, true), value: path(item.value, `${name}.value`, true), limit: Number(item.limit ?? 20), empty: text(item.empty, `${name}.empty`, 80, true), ...format(item, name) };
@@ -219,12 +259,12 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     }
   };
   const view = list(value.view, 'view', 20, true).map((item, index) => component(item, `view[${index}]`, false));
-  return { spec: { title: text(value.title, 'title', 60)!, subtitle: text(value.subtitle, 'subtitle', 120, true), icon: choice(value.icon, miniAppIcons, 'icon', 'chart'), inputs, data, view, actions }, tools };
+  return { spec: { title: text(value.title, 'title', 60)!, subtitle: text(value.subtitle, 'subtitle', 120, true), icon: choice(value.icon, miniAppIcons, 'icon', 'chart'), state, inputs, data, view, actions }, tools };
 }
 
 // Runtime evaluation ---------------------------------------------------------
 
-export type Context = { inputs: Record<string, string>; fields?: Record<string, unknown>; timeZone: string; now: number };
+export type Context = { inputs: Record<string, string>; state: Record<string, unknown>; fields?: Record<string, unknown>; timeZone: string; now: number };
 function localDate(timestamp: number, timeZone: string) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(timestamp));
   const part = (type: string) => parts.find(p => p.type === type)!.value;
@@ -234,6 +274,7 @@ export function evaluate(value: unknown, context: Context): unknown {
   if (Array.isArray(value)) return value.map(item => evaluate(item, context));
   if (!isRecord(value)) return value;
   if ('$input' in value) return context.inputs[String(value.$input)] ?? null;
+  if ('$state' in value) return context.state[String(value.$state)] ?? null;
   if ('$field' in value) return context.fields?.[String(value.$field)] ?? null;
   if ('$date' in value && isRecord(value.$date)) {
     const timestamp = context.now + Number(value.$date.days ?? 0) * 86_400_000;
@@ -330,7 +371,7 @@ export type ResolvedComponent =
   | { type: 'list'; items: { title: string; subtitle: string | null; value: number | string | null }[]; format: Format; currency: string | null; empty: string }
   | { type: 'chart'; kind: 'bar' | 'line'; title: string | null; points: { x: string; y: number }[]; format: Format; currency: string | null }
   | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
-  | { type: 'action'; id: string; label: string; confirm: string; style: 'default' | 'destructive'; fields: Field[] }
+  | { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: Field[] }
   | { type: 'notice'; code: string };
 
 export function present(view: Component[], spec: Spec, outputs: Map<string, unknown>, errors: Map<string, string>): ResolvedComponent[] {
@@ -341,7 +382,7 @@ export function present(view: Component[], spec: Spec, outputs: Map<string, unkn
       case 'text': return component;
       case 'action': {
         const action = spec.actions.find(a => a.id === component.action)!;
-        return { type: 'action', id: action.id, label: action.label, confirm: action.confirm, style: action.style, fields: action.fields };
+        return { type: 'action', id: action.id, kind: action.kind, label: action.label, confirm: action.confirm ?? null, style: action.style, fields: action.fields };
       }
       case 'stat': {
         if (errors.has(component.step)) return { type: 'notice', code: errors.get(component.step)! };
@@ -358,4 +399,34 @@ export function present(view: Component[], spec: Spec, outputs: Map<string, unkn
       }
     }
   });
+}
+
+// Saved values keep their declared type across revisions; anything else resets to initial.
+export function normalizeState(spec: Spec, stored: unknown): Record<string, number | string | boolean> {
+  const values: Record<string, number | string | boolean> = {};
+  for (const variable of spec.state) {
+    const value = isRecord(stored) ? stored[variable.id] : undefined;
+    values[variable.id] = typeof value === typeof variable.initial && (typeof value !== 'number' || Number.isFinite(value)) ? value as number | string | boolean : variable.initial;
+  }
+  return values;
+}
+export function applyUpdates(spec: Spec, updates: StateUpdate[], current: Record<string, number | string | boolean>, context: Context): Record<string, number | string | boolean> | null {
+  const next = { ...current };
+  for (const update of updates) {
+    const variable = spec.state.find(v => v.id === update.state)!;
+    const value = update.value === undefined ? undefined : evaluate(update.value, { ...context, state: next });
+    if (update.op === 'toggle') { next[variable.id] = !next[variable.id]; continue; }
+    if (update.op === 'set') {
+      const coerced = variable.type === 'number' ? numeric(value) : variable.type === 'boolean' ? (typeof value === 'boolean' ? value : null) : (value === null || value === undefined ? '' : label(value));
+      if (coerced === null || (typeof coerced === 'string' && coerced.length > 500)) return null;
+      next[variable.id] = coerced;
+      continue;
+    }
+    const amount = value === undefined ? 1 : numeric(value);
+    if (amount === null) return null;
+    const result = Number(next[variable.id]) + (update.op === 'increment' ? amount : -amount);
+    if (!Number.isFinite(result) || Math.abs(result) > 1e12) return null;
+    next[variable.id] = result;
+  }
+  return next;
 }
