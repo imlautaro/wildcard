@@ -2,6 +2,7 @@ import Foundation
 import UserNotifications
 import AlarmKit
 import SwiftUI
+import OSLog
 
 private struct RemoteCommand: Decodable {
     let id: String
@@ -18,6 +19,7 @@ private struct RemoteAlarmPayload: Decodable { let kind: String; let title: Stri
 
 /// Called only for a visible APNs alert. A claim is never replayed after uncertainty.
 enum RemoteNativeExecution {
+    private static let logger = Logger(subsystem: "com.imlautaro.Wildcard.NotificationService", category: "RemoteNative")
     static func handle(_ content: UNNotificationContent) async -> UNNotificationContent {
         guard let actionID = content.userInfo["nativeActionID"] as? String,
               let ticket = content.userInfo["nativeTicket"] as? String,
@@ -29,18 +31,36 @@ enum RemoteNativeExecution {
               !(local.contacts[contactID] ?? []).isEmpty else { return result(content, "Remote action unavailable on this iPhone.") }
         let executionID = UUID().uuidString.lowercased()
         var claimed = false
+        var stage = "claim"
         do {
             let command = try await update(actionID: actionID, ticket: ticket, deviceID: deviceID, executionID: executionID, status: "running")
             claimed = true
-            guard command.userID == userID, command.contactID == contactID, command.deviceID == deviceID,
-                  command.id == actionID, command.executionID == executionID,
-                  ["timer", "alarm"].contains(command.kind), command.expiresAt > Date.now.timeIntervalSince1970 * 1000,
-                  command.fireAt > Date.now.timeIntervalSince1970 * 1000,
-                  allowed(userID: userID, deviceID: deviceID, contactID: contactID, kind: command.kind),
-                  AlarmManager.shared.authorizationState == .authorized, !Task.isCancelled else {
+            stage = "validation"
+            let rejection: String?
+            if command.userID != userID || command.contactID != contactID || command.deviceID != deviceID
+                || command.id != actionID || command.executionID != executionID {
+                rejection = "The remote request does not match this iPhone."
+            } else if !["timer", "alarm"].contains(command.kind) {
+                rejection = "This remote action is not supported."
+            } else if command.expiresAt <= Date.now.timeIntervalSince1970 * 1000 {
+                rejection = "The remote request expired before scheduling. Ask for a new timer or alarm."
+            } else if command.fireAt <= Date.now.timeIntervalSince1970 * 1000 {
+                rejection = "The requested timer or alarm deadline has already passed."
+            } else if !allowed(userID: userID, deviceID: deviceID, contactID: contactID, kind: command.kind) {
+                rejection = "Remote access for this contact or tool is disabled on this iPhone."
+            } else if Task.isCancelled {
+                rejection = "Notification processing was interrupted before scheduling."
+            } else { rejection = nil }
+            if let rejection {
+                logger.notice("Remote action rejected before scheduling: \(rejection, privacy: .public)")
                 _ = try? await update(actionID: actionID, ticket: ticket, deviceID: deviceID, executionID: executionID, status: "cancelled")
-                return result(content, "Timer or alarm was not started. Check permissions or request a new one.")
+                return result(content, rejection)
             }
+            // The main app checks authorization when enabling the grant. An extension's
+            // synchronous snapshot is not proof that scheduling will be denied. Let
+            // AlarmKit enforce permission in schedule(); never request permission here.
+            let authorization = authorizationLabel()
+            logger.info("Remote scheduling attempt; extension authorization snapshot: \(authorization, privacy: .public)")
             let payload = try JSONDecoder().decode(RemoteAlarmPayload.self, from: Data(command.payloadJSON.utf8))
             guard payload.kind == command.kind, !payload.title.isEmpty, payload.title.count <= 100 else { throw URLError(.cannotParseResponse) }
             let remaining = command.fireAt / 1000 - Date.now.timeIntervalSince1970
@@ -53,10 +73,12 @@ enum RemoteNativeExecution {
             let configuration: AlarmManager.AlarmConfiguration<WildcardAlarmMetadata> = command.kind == "timer"
                 ? .timer(duration: remaining, attributes: attributes)
                 : .alarm(schedule: .fixed(Date(timeIntervalSince1970: command.fireAt / 1000)), attributes: attributes)
+            stage = "handoff"
             // Save the ID before scheduling, so a crash cannot hide a possibly successful operation.
             try RemoteNativeShared.remember(RemoteNativeAlarm(id: executionID, userID: userID, contactID: contactID, title: payload.title,
                 fireAt: command.fireAt, createdAt: Date.now.timeIntervalSince1970 * 1000))
             guard allowed(userID: userID, deviceID: deviceID, contactID: contactID, kind: command.kind), !Task.isCancelled else { throw CancellationError() }
+            stage = "schedule"
             _ = try await AlarmManager.shared.schedule(id: UUID(uuidString: executionID)!, configuration: configuration)
             do {
                 _ = try await update(actionID: actionID, ticket: ticket, deviceID: deviceID, executionID: executionID, status: "completed")
@@ -66,8 +88,21 @@ enum RemoteNativeExecution {
                 return result(content, "\(payload.title) · Scheduled; server confirmation unavailable")
             }
         } catch {
+            let failure = error as NSError
+            let domain = String(failure.domain.prefix(100))
+            logger.error("Remote action failed at \(stage, privacy: .public); domain=\(domain, privacy: .public), code=\(failure.code, privacy: .public)")
             if claimed { _ = try? await update(actionID: actionID, ticket: ticket, deviceID: deviceID, executionID: executionID, status: "unknown") }
-            return result(content, "Unable to confirm this timer or alarm. Check Wildcard before requesting another.")
+            return result(content, stage == "schedule"
+                ? "AlarmKit could not confirm scheduling in the notification extension (\(domain), \(failure.code)). Check Wildcard before retrying."
+                : "Unable to confirm this timer or alarm during \(stage). Check Wildcard before requesting another.")
+        }
+    }
+    private static func authorizationLabel() -> String {
+        switch AlarmManager.shared.authorizationState {
+        case .authorized: "authorized"
+        case .denied: "denied"
+        case .notDetermined: "notDetermined"
+        @unknown default: "unknown"
         }
     }
     private static func allowed(userID: String, deviceID: String, contactID: String, kind: String) -> Bool {

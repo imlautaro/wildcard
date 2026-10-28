@@ -344,6 +344,13 @@ and the notification extension, with no tap or unlocked phone required by the
 implementation. Runtime support, signing, system countdown and main-app visibility
 remain to be verified on a physical device. This does not enable autonomous actions.
 
+A Cancelled remote receipt means the iPhone rejected a claimed request before
+scheduling, not that the browser cancelled it. The updated iOS extension supplies
+a specific rejection reason in the visible iPhone notification and reports actual
+AlarmKit scheduling errors separately. Existing web receipts and their cache remain
+unchanged; updating web alone cannot change extension execution. Fresh requests
+are required after installing the corrected binary; old cancellations never replay.
+
 The last 20 remote operation receipts appear beside their source messages. They
 confirm scheduling, not current live timer state. Web can revoke access; reconnecting
 iOS refreshes existing grants without restoring revoked ones. Target selection,

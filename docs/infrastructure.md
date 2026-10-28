@@ -1644,3 +1644,11 @@ constructors and disables JIT. Moving a consumer ahead of it can pass TypeScript
 but fail Worker upload validation with `Class2 is not a constructor` in the MCP
 schema graph. A failed upload can follow successful migrations; preserve additive
 migrations and fix the entry order through another commit/push automatic release.
+
+The remote cancellation diagnostic correction is iOS-only: it changes no service,
+secret, binding, migration or remote status schema. Install a newly signed binary
+with its extension to use the revised request-validation messages and system-
+scheduling permission check. Main-app AlarmKit authorization and per-contact
+remote grants remain required; never replay a prior cancelled action. The extension
+logs only bounded stage/authorization/error codes, without tickets or private
+payloads. Real-device validation remains necessary.

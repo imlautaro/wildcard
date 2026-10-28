@@ -30,7 +30,9 @@ extension on a physical iPhone. A receipt, not APNs acceptance, establishes succ
    closing it from the app switcher. Expect a visible “Preparing…” notification,
    followed by the timer/alarm and a device receipt. Do not tap the notification as
    part of verifying unattended execution. Check sound, countdown and cancellation.
-   This physical-device sequence has not been executed for this change.
+   After the cancellation correction below, the user reported a new web-to-iPhone
+   timer working in the guided locked-phone check on October 28, 2026. The full
+   sequence, force-quit behavior and alert/control verification remain pending.
 
 The normal foreground native path remains available without remote grants.
 Installing this binary before publishing the backend cannot enable remote control;
@@ -63,8 +65,10 @@ The payload contains a domain-separated HMAC capability derived from the existin
 is shared. The capability authorizes only that action's claim and receipt endpoint;
 there is no conversation read or arbitrary-action API. The extension obtains the
 canonical arguments from the server instead of trusting push arguments. It checks
-local account, installation, contact/kind allowlist, expiry and preexisting AlarmKit
-authorization. It never prompts for permission while locked.
+local account, installation, contact/kind allowlist and expiry. The main app requires
+AlarmKit authorization before enabling a grant; the extension lets `schedule()`
+enforce system permission rather than treating its synchronous authorization
+snapshot as a cancellation decision. It never prompts for permission while locked.
 
 A pending→running claim is atomic and never replayed, even with the same execution
 UUID. Duplicate APNs deliveries or simultaneous local/extension processing cannot
@@ -157,3 +161,29 @@ Sources: [Apple extension behavior](https://developer.apple.com/forums/thread/80
 [notification extension requirements](https://developer.apple.com/documentation/usernotifications/modifying-content-in-newly-delivered-notifications),
 [AlarmKit sample](https://developer.apple.com/documentation/alarmkit/scheduling-an-alarm-with-alarmkit),
 and [an independently demonstrated extension scheduling prototype](https://blog.jacobstechtavern.com/p/apps-system-design).
+
+### Cancellation diagnostics
+
+The original prototype grouped request identity, expiry, local revocation,
+notification cancellation and the extension's AlarmKit authorization snapshot into
+one `cancelled` branch. A reported Cancelled receipt could not identify the failed
+condition. The extension now gives a distinct visible notification reason for each
+request-validation cancellation. Its authorization snapshot is diagnostic only:
+main-app authorization remains required when enabling remote access, and AlarmKit
+itself validates permission in `schedule()`. No permission request is made from the
+extension and no system authorization is bypassed. A scheduling error stays unknown,
+never completed, because an error or lost acknowledgement cannot prove absence.
+
+Bounded OSLog entries contain only the stage, authorization enum and NSError
+domain/code, never action tickets, IDs, payloads or message contents. The visible
+notification distinguishes scheduling errors from request rejection. The backend
+status contract, web receipt cache and foreground execution path are unchanged.
+New behavior needs a new installed iOS binary and a fresh request: previously
+cancelled operations are never replayed. Extension client identity/permission
+behavior still requires checking on a physical device; this code change alone does
+not prove AlarmKit scheduling succeeds from the extension.
+
+On October 28, 2026, after installing this correction and asking the user to lock
+the phone and request a fresh web timer, the user reported that it worked. This is
+one user-reported successful case, not an independently traced confirmation of the
+old cancellation cause, force-quit behavior, sound at expiry or main-app controls.
