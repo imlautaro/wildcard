@@ -49,6 +49,13 @@ participant may still process shared data with Contributor when existing sharing
 permissions allow it. Conversely, selecting Contributor never grants consent on
 behalf of a contact recipient or group participant. Existing request, retrieval,
 membership, publication and consent checks remain enforced for Contributor.
+Contact and persona memory sent to Contributor must belong to the processing
+account or have explicit contact Contributor consent. Being the contact creator
+alone grants no exception for another account's job. A creator's explicit
+Contributor acceptance in the contact invitation flow is now recorded on their
+own contact row; no historic creator consent is invented or backfilled. Group
+memory retrieval identifies the human processing account separately from the
+agent owner's contact used to locate the shared agent.
 Groups with missing required consent continue to reject/stop Contributor replies;
 users can choose Standard or explicitly update that group's consent.
 
@@ -130,7 +137,8 @@ force. No model preference is stored in unprotected client disk storage.
 API/web typechecks, complete iOS Simulator Swift typechecking with the project’s
 actor/macro settings, all 28 migration scripts on an empty in-memory schema,
 EXPLAIN compilation of the three new account/model SQL statements, provisioning
-script syntax and diff checks passed. These do not prove runtime behavior. After authorized release, verify signup returns 403 for old clients,
+script syntax and diff checks passed. The consent follow-up also passed API
+typechecking and EXPLAIN compilation of all four persona-memory SQL statements. These do not prove runtime behavior. After authorized release, verify signup returns 403 for old clients,
 existing sign-in still works, preferences persist across devices/accounts, and a
 user cannot change another account. Check both model IDs in gateway logs with
 fictional messages, tool turns, schedules, group bot replies and extraction;

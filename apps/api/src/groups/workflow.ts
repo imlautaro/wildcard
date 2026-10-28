@@ -1,4 +1,4 @@
-import { jobModel } from '../lib/model-preference';
+import { jobAccountID, jobModel } from '../lib/model-preference';
 import { groupEnergyAvailable } from './energy';
 import { maintainAgentMemories } from '../chat/agent-memory';
 import { groupSourceAccess } from './request-access';
@@ -159,7 +159,7 @@ async function refreshSelfMemory(env: Env, job: GroupJob, step: WorkflowStep, na
         JOIN agent_attention attention ON attention.turn_id = r.id AND attention.attempt = r.attempt
         WHERE r.id = ? AND r.attempt = ? AND r.status IN ('running', 'complete')`)
         .bind(job.turnID, job.attempt).first<{ id: string }>();
-      if (row) await maintainAgentMemories(env, row.id);
+      if (row) await maintainAgentMemories(env, row.id, await jobAccountID(env, job.turnID, true));
       return true;
     });
   } catch { console.error(JSON.stringify({ event: 'agent_memory_deferred' })); }

@@ -153,7 +153,7 @@ export async function executeGroupRetrieval(db: D1Database, scope: GroupRetrieva
     if (Object.keys(args).some((k) => k !== 'query') || typeof args.query !== 'string' || !args.query.trim()) {
       return JSON.stringify({ error: 'Provide a nonempty query.' });
     }
-    return JSON.stringify(pack(selectAgentMemories(await readAgentMemories(db, scope.agentID, scope.contributor), args.query).slice(0, 8)));
+    return JSON.stringify(pack(selectAgentMemories(await readAgentMemories(db, scope.agentID, scope.contributor, scope.userID), args.query).slice(0, 8)));
   }
   if (call.function.name === 'search_groups') {
     if (Object.keys(args).some((k) => !['query', 'after'].includes(k))

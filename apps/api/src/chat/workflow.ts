@@ -1,4 +1,4 @@
-import { jobModel } from '../lib/model-preference';
+import { jobAccountID, jobModel } from '../lib/model-preference';
 import { maintainAgentMemories } from './agent-memory';
 import { dispatchGroupRequests } from '../groups/request-results';
 import { groupRequestTurnAllowed } from '../groups/request-access';
@@ -102,7 +102,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
           JOIN agent_attention attention ON attention.turn_id = t.id AND attention.attempt = t.attempt
           WHERE t.id = ? AND t.attempt = ? AND t.status IN ('running', 'complete')`)
           .bind(job.turnID, job.attempt).first<{ id: string }>();
-        if (row) await maintainAgentMemories(env, row.id);
+        if (row) await maintainAgentMemories(env, row.id, await jobAccountID(env, job.turnID, false));
         return true;
       });
     } catch { console.error(JSON.stringify({ event: 'agent_memory_deferred' })); }

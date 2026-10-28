@@ -119,7 +119,7 @@ async function executeTool(env: Env, scope: MemoryScope & { agentID: string }, c
     if (Object.keys(args).some((key) => key !== 'query') || typeof args.query !== 'string' ||
       !args.query.trim() || byteLength(args.query) > 256) return JSON.stringify({ error: 'Provide query, at most 256 UTF-8 bytes.' });
     const terms = keywords(args.query);
-    const self = (await readAgentMemories(db, scope.agentID, !!scope.contributorModel))
+    const self = (await readAgentMemories(db, scope.agentID, !!scope.contributorModel, scope.userID))
       .filter((m) => terms.some((term) => JSON.stringify(m).normalize('NFKC').toLowerCase().includes(term))).slice(0, 8);
     return packResults([...self, ...selectMemories(await readMemories(db, scope), args.query)]);
   }
@@ -219,7 +219,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string): Pr
   const memories = packResults(selectMemories(await readMemories(env.DB, scope), query, true));
   const groupScope = { agentID: agent.id, userID: turn.userID, contributor: scope.contributorModel };
   const [selfMemories, groups, groupMessages, existingGroupRequest, recentDestinations] = await Promise.all([
-    readAgentMemories(env.DB, agent.id, scope.contributorModel), sharedGroups(env.DB, groupScope),
+    readAgentMemories(env.DB, agent.id, scope.contributorModel, scope.userID), sharedGroups(env.DB, groupScope),
     searchGroupMessages(env.DB, groupScope, turn.scheduleInstruction ?? turn.userText),
     groupRequestReceipt(env, turn), recentGroupDestinations(env, turn),
   ]);

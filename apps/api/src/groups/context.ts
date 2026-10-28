@@ -102,8 +102,8 @@ export async function prepareGroupDraft(env: Env, job: GroupJob, previous?: Grou
   const quoted = new Map(quotedMessages.map((message) => [message.id, message]));
   const describe = (message: GroupContextMessage) => contextMessage(message, quoted);
   const memories = selectMemories(await readMemories(env.DB, { contactID: contact.id, userID: contact.userID,
-    beforeSequence: Number.MAX_SAFE_INTEGER, contributorModel: !!contributor }), row.text, true);
-  const selfMemories = await readAgentMemories(env.DB, row.agentID, !!contributor);
+    beforeSequence: Number.MAX_SAFE_INTEGER, contributorModel: !!contributor, processingUserID: row.userID }), row.text, true);
+  const selfMemories = await readAgentMemories(env.DB, row.agentID, !!contributor, row.userID);
   const { results: reactions } = await env.DB.prepare(`SELECT ${reactionColumns} FROM message_reaction r ${reactionJoins}
     WHERE r.group_message_id IN (SELECT value FROM json_each(?1))
     AND (r.user_id IS NULL OR EXISTS (SELECT 1 FROM group_member member WHERE member.group_id = ?2

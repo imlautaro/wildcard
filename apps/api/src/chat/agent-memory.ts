@@ -7,24 +7,24 @@ type Event = { sequence: number; text: string; createdAt: number };
 
 // Eligibility is checked again on every read/write; a stale extraction cannot
 // restore memory from a deleted source or revoked group membership/consent.
-const eligibleEvent = `FROM agent_memory_event e
+const eligibleEvent = (requester: string) => `FROM agent_memory_event e
   JOIN contact_agent a ON a.id = e.agent_id
   LEFT JOIN chat_turn t ON t.id = e.private_turn_id
   LEFT JOIN contact c ON c.id = t.contact_id AND c.agent_id = e.agent_id
   LEFT JOIN group_message gm ON gm.id = e.group_message_id AND gm.agent_id = e.agent_id
   WHERE e.agent_id = ?1 AND (
-    (t.status = 'complete' AND c.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = c.id) AND (?2 = 0 OR c.user_id = a.owner_id OR c.contributor_consent = 1))
+    (t.status = 'complete' AND c.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = c.id) AND (?2 = 0 OR c.user_id = ${requester} OR c.contributor_consent = 1))
     OR (gm.id IS NOT NULL AND EXISTS (SELECT 1 FROM group_agent ga WHERE ga.group_id = gm.group_id AND ga.agent_id = e.agent_id)
       AND (?2 = 0 OR (gm.contributor_consent = 1 AND NOT EXISTS (
         SELECT 1 FROM group_member member WHERE member.group_id = gm.group_id AND member.contributor_consent = 0))))
   )`;
 
-export async function readAgentMemories(db: D1Database, agentID: string, contributor: boolean): Promise<AgentMemory[]> {
+export async function readAgentMemories(db: D1Database, agentID: string, contributor: boolean, userID: string | null = null): Promise<AgentMemory[]> {
   const { results } = await db.prepare(`SELECT m.agent_id AS agentID, a.name AS agentName, m.memory_key AS key,
     m.kind, m.content, m.source_event_sequence AS sourceSequence, m.source_quote AS sourceQuote, m.updated_at AS updatedAt
     FROM agent_memory m JOIN contact_agent a ON a.id = m.agent_id WHERE m.agent_id = ?1
-    AND EXISTS (SELECT e.sequence ${eligibleEvent} AND e.sequence = m.source_event_sequence) ORDER BY m.source_event_sequence DESC LIMIT 64`)
-    .bind(agentID, contributor ? 1 : 0).all<AgentMemory>();
+    AND EXISTS (SELECT e.sequence ${eligibleEvent('?3')} AND e.sequence = m.source_event_sequence) ORDER BY m.source_event_sequence DESC LIMIT 64`)
+    .bind(agentID, contributor ? 1 : 0, userID).all<AgentMemory>();
   return results;
 }
 
@@ -46,11 +46,11 @@ export function agentMemoryContext(memories: AgentMemory[], query: string): stri
   return JSON.stringify({ selfMemories: selected, truncated: selected.length < memories.length });
 }
 
-export async function maintainAgentMemories(env: Env, agentID: string): Promise<void> {
+export async function maintainAgentMemories(env: Env, agentID: string, userID: string | null = null): Promise<void> {
   const contributor = env.META_CHAT_MODEL.includes('contributor') ? 1 : 0;
   const { results } = await env.DB.prepare(`SELECT e.sequence, COALESCE(t.assistant_text, gm.text) AS text,
-    COALESCE(t.updated_at, gm.created_at) AS createdAt ${eligibleEvent} AND e.processed = 0 ORDER BY e.sequence DESC LIMIT 4`)
-    .bind(agentID, contributor).all<Event>();
+    COALESCE(t.updated_at, gm.created_at) AS createdAt ${eligibleEvent('?3')} AND e.processed = 0 ORDER BY e.sequence DESC LIMIT 4`)
+    .bind(agentID, contributor, userID).all<Event>();
   const events: Event[] = [];
   let bytes = 0;
   for (const event of results) {
@@ -62,7 +62,7 @@ export async function maintainAgentMemories(env: Env, agentID: string): Promise<
     bytes += byteLength(text);
   }
   if (!events.length) return;
-  const existing = await readAgentMemories(env.DB, agentID, !!contributor);
+  const existing = await readAgentMemories(env.DB, agentID, !!contributor, userID);
   const agent = await env.DB.prepare('SELECT id, name FROM contact_agent WHERE id = ?').bind(agentID).first();
   const answer = await museCompletion(env, [
     { role: 'system', content: [
@@ -101,16 +101,16 @@ export async function maintainAgentMemories(env: Env, agentID: string): Promise<
     keys.add(change.key);
     statements.push(env.DB.prepare(`INSERT INTO agent_memory
       (agent_id, memory_key, kind, content, source_event_sequence, source_quote, updated_at)
-      SELECT ?1, ?3, ?4, ?5, ?6, ?7, ?8 WHERE EXISTS (SELECT e.sequence ${eligibleEvent} AND e.sequence = ?6 AND e.processed = 0)
+      SELECT ?1, ?3, ?4, ?5, ?6, ?7, ?8 WHERE EXISTS (SELECT e.sequence ${eligibleEvent('?9')} AND e.sequence = ?6 AND e.processed = 0)
       AND ((SELECT COUNT(*) FROM agent_memory WHERE agent_id = ?1) < 64
         OR EXISTS (SELECT 1 FROM agent_memory WHERE agent_id = ?1 AND memory_key = ?3))
       ON CONFLICT(agent_id, memory_key) DO UPDATE SET kind = excluded.kind, content = excluded.content,
         source_event_sequence = excluded.source_event_sequence, source_quote = excluded.source_quote, updated_at = excluded.updated_at
       WHERE agent_memory.source_event_sequence <= excluded.source_event_sequence`)
-      .bind(agentID, contributor, change.key, String(change.kind), change.content.trim(), source.sequence, change.quote, Date.now()));
+      .bind(agentID, contributor, change.key, String(change.kind), change.content.trim(), source.sequence, change.quote, Date.now(), userID));
   }
   for (const event of events) statements.push(env.DB.prepare(`UPDATE agent_memory_event SET processed = 1
-    WHERE agent_id = ?1 AND sequence = ?3 AND sequence IN (SELECT e.sequence ${eligibleEvent} AND e.sequence = ?3)`)
-    .bind(agentID, contributor, event.sequence));
+    WHERE agent_id = ?1 AND sequence = ?3 AND sequence IN (SELECT e.sequence ${eligibleEvent('?4')} AND e.sequence = ?3)`)
+    .bind(agentID, contributor, event.sequence, userID));
   await env.DB.batch(statements);
 }

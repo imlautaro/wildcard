@@ -130,6 +130,8 @@ sharing.post('/:id/invitations', async (c) => {
       c.env.DB.prepare('DELETE FROM contact_invite WHERE agent_id = ? AND recipient_id = ? AND accepted_by IS NULL AND expires_at <= ?')
         .bind(agent.id, recipient.id, now),
       c.env.DB.prepare('UPDATE contact_agent SET memory_shared = 1 WHERE id = ? AND owner_id = ?').bind(agent.id, c.get('owner')),
+      c.env.DB.prepare('UPDATE contact SET contributor_consent = MAX(contributor_consent, ?) WHERE agent_id = ? AND user_id = ?')
+        .bind(body?.contributorConsent === true ? 1 : 0, agent.id, c.get('owner')),
       c.env.DB.prepare(`INSERT OR IGNORE INTO contact_invite (token, agent_id, expires_at, recipient_id)
         SELECT ?1, a.id, ?3, u.id FROM contact_agent a JOIN user u ON u.id = ?5
         WHERE a.id = ?2 AND a.owner_id = ?4
@@ -147,6 +149,8 @@ sharing.post('/:id/invitations', async (c) => {
   const hash = await tokenHash(code);
   await c.env.DB.batch([
     c.env.DB.prepare('UPDATE contact_agent SET memory_shared = 1 WHERE id = ? AND owner_id = ?').bind(agent.id, c.get('owner')),
+      c.env.DB.prepare('UPDATE contact SET contributor_consent = MAX(contributor_consent, ?) WHERE agent_id = ? AND user_id = ?')
+        .bind(body?.contributorConsent === true ? 1 : 0, agent.id, c.get('owner')),
     c.env.DB.prepare(`INSERT INTO contact_invite (token, agent_id, expires_at)
       SELECT ?1, id, ?3 FROM contact_agent WHERE id = ?2 AND owner_id = ?4
       AND (SELECT COUNT(*) FROM contact_invite WHERE agent_id = ?2 AND accepted_by IS NULL AND expires_at > ?5) < 10`)

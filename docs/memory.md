@@ -264,3 +264,14 @@ Contact-memory extraction resolves the source account’s preference, even when 
 
 See [model settings](model-settings.md) for the API, shared consent, cache behavior,
 AI Gateway spending and pending runtime/device verification.
+
+## Contributor account isolation
+
+With per-account selection, a contact creator no longer has an implicit
+Contributor exemption for other accounts’ memory retrieval/extraction. Foreign
+contact/persona sources require explicit contact Contributor consent; the
+processing account can submit its own bounded history. The creator’s explicit
+acceptance in the contact invitation flow is saved on their own contact row.
+Existing rows are not granted new consent automatically. Group processing
+distinguishes its human requester from the agent owner’s lookup contact.
+See [model settings](model-settings.md#sharing-and-mcp).

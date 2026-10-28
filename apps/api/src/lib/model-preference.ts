@@ -18,7 +18,7 @@ export async function accountEnvironment(env: Env, userID: string): Promise<Env>
   return { ...env, META_CHAT_MODEL: await accountModel(env, userID) };
 }
 
-export async function jobModel(env: Env, turnID: string, group: boolean): Promise<ChatModel> {
+export async function jobAccountID(env: Env, turnID: string, group: boolean): Promise<string | null> {
   const row = group
     ? await env.DB.prepare(`SELECT COALESCE(source.user_id, source.requester_id, request.requester_id) AS userID
         FROM group_reply reply JOIN group_message source ON source.id = reply.source_id
@@ -26,5 +26,9 @@ export async function jobModel(env: Env, turnID: string, group: boolean): Promis
       .bind(turnID).first<{ userID: string | null }>()
     : await env.DB.prepare('SELECT user_id AS userID FROM chat_turn WHERE id = ?')
       .bind(turnID).first<{ userID: string | null }>();
-  return accountModel(env, row?.userID ?? null);
+  return row?.userID ?? null;
+}
+
+export async function jobModel(env: Env, turnID: string, group: boolean): Promise<ChatModel> {
+  return accountModel(env, await jobAccountID(env, turnID, group));
 }
