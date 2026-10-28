@@ -44,26 +44,31 @@ function publicAddress(address: string): boolean {
     !(a === 198 && (b === 18 || b === 19 || b === 51)) && !(a === 203 && b === 0);
 }
 export async function checkPublicDNS(host: string, signal: AbortSignal) {
-  const answers = await Promise.all(['A', 'AAAA'].map(async type => {
-    const url = new URL('https://cloudflare-dns.com/dns-query');
-    url.searchParams.set('name', host); url.searchParams.set('type', type);
-    const response = await fetch(url, { headers: { Accept: 'application/dns-json' }, redirect: 'error', signal });
-    if (!response.ok || !response.body) throw new Error('MCP_DNS');
-    const reader = response.body.getReader();
-    let bytes = 0, text = '';
-    const decoder = new TextDecoder();
-    try {
-      while (true) {
-        const part = await reader.read(); if (part.done) break;
-        bytes += part.value.byteLength;
-        if (bytes > 16000) throw new Error('MCP_DNS');
-        text += decoder.decode(part.value, { stream: true });
-      }
-      const data: unknown = JSON.parse(text + decoder.decode());
-      if (!isRecord(data) || data.Status !== 0) throw new Error('MCP_DNS');
-      return (Array.isArray(data.Answer) ? data.Answer : []).filter(v => isRecord(v) && [1, 28].includes(Number(v.type)))
-        .map(v => String(v.data));
-    } finally { await reader.cancel().catch(() => undefined); }
-  }));
-  if (!answers.flat().length || answers.flat().some(a => !publicAddress(a))) throw new Error('MCP_DNS');
+  try {
+    const answers = await Promise.all(['A', 'AAAA'].map(async type => {
+      const url = new URL('https://cloudflare-dns.com/dns-query');
+      url.searchParams.set('name', host); url.searchParams.set('type', type);
+      const response = await fetch(url, { headers: { Accept: 'application/dns-json' }, redirect: 'error', signal });
+      if (!response.ok || !response.body) throw new Error('MCP_DNS_UNAVAILABLE');
+      const reader = response.body.getReader();
+      let bytes = 0, text = '';
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          const part = await reader.read(); if (part.done) break;
+          bytes += part.value.byteLength;
+          if (bytes > 16000) throw new Error('MCP_DNS');
+          text += decoder.decode(part.value, { stream: true });
+        }
+        const data: unknown = JSON.parse(text + decoder.decode());
+        if (!isRecord(data) || data.Status !== 0) throw new Error('MCP_DNS');
+        return (Array.isArray(data.Answer) ? data.Answer : []).filter(v => isRecord(v) && [1, 28].includes(Number(v.type)))
+          .map(v => String(v.data));
+      } finally { await reader.cancel().catch(() => undefined); }
+    }));
+    if (!answers.flat().length || answers.flat().some(a => !publicAddress(a))) throw new Error('MCP_DNS');
+  } catch (failure) {
+    if (failure instanceof Error && failure.message === 'MCP_DNS') throw failure;
+    throw new Error('MCP_DNS_UNAVAILABLE');
+  }
 }

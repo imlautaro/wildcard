@@ -208,3 +208,13 @@ settings (optional)** in web and iOS. Providers supporting client metadata docum
 use the public API metadata document; others may use DCR. Google remains a manual
 registered-client exception. See [automatic setup](connectors.md#automatic-setup-and-centralita)
 for the public Centralita metadata inspection and remaining live-flow verification.
+
+Web and iOS display the same API setup-stage error and diagnostic reference. DNS
+availability, public-address rejection and provider setup failures have distinct
+messages; errors stay in transient UI state, outside the connection cache. Operators
+can find the matching sanitized record in Workers Logs. The API's explicit
+`global_fetch_strictly_public` flag enables public calls to same-zone Workers such
+as Centralita. This shared backend correction needs no client cache migration.
+After automatic publication, verify opening provider authorization and returning
+on both platforms; a static check does not establish a complete OAuth run. See
+[connection troubleshooting](connectors.md#troubleshooting-connection-setup).

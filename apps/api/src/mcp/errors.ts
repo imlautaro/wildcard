@@ -1,0 +1,29 @@
+const setupMessages = {
+  endpoint_probe: 'Wildcard could not reach the MCP endpoint to start OAuth.',
+  resource_metadata: 'Wildcard could not read valid OAuth resource metadata from this MCP server.',
+  authorization_metadata: 'Wildcard could not read valid metadata from the authorization server.',
+  client_registration: 'Wildcard could not register an OAuth client with this provider.',
+  authorization_start: 'Wildcard could not prepare the authorization request.',
+  saved_configuration: 'Wildcard could not read the saved OAuth configuration. Open Configure OAuth and authorize again.',
+  flow_storage: 'Wildcard could not save the authorization request. Please try again.',
+  token_exchange: 'Wildcard could not exchange the authorization code with this provider. Authorize again.',
+} as const;
+type SetupStage = keyof typeof setupMessages;
+const knownCodes = new Set(['MCP_DNS', 'MCP_DNS_UNAVAILABLE', 'MCP_ENDPOINT', 'MCP_OAUTH_DESTINATION',
+  'MCP_OAUTH_SIZE', 'MCP_OAUTH_RESOURCE', 'MCP_OAUTH_ISSUER', 'MCP_OAUTH_METADATA',
+  'MCP_OAUTH_PKCE', 'MCP_OAUTH_SCOPE', 'MCP_OAUTH_CLIENT', 'MCP_OAUTH_STATIC_ISSUER',
+  'MCP_OAUTH_ISSUER_REQUIRED', 'MCP_OAUTH_NETWORK']);
+export function safeFailureCode(failure: unknown) {
+  return failure instanceof Error && knownCodes.has(failure.message) ? failure.message : 'MCP_CONNECTION';
+}
+export class OAuthSetupFailure extends Error {
+  readonly code: string;
+  constructor(readonly stage: SetupStage, failure: unknown) {
+    super(setupMessages[stage]);
+    this.code = safeFailureCode(failure);
+  }
+}
+export async function oauthStage<T>(stage: SetupStage, operation: () => Promise<T>): Promise<T> {
+  try { return await operation(); }
+  catch (failure) { throw new OAuthSetupFailure(stage, failure); }
+}

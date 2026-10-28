@@ -388,3 +388,30 @@ manual-client errors, reauthorization, cancellation and both client return paths
 before claiming live-provider interoperability.
 
 Protocol reference: [MCP authorization discovery, scope selection and client registration](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization).
+
+## Troubleshooting connection setup
+
+Both iOS and web display API-supplied setup errors with a random reference. Errors
+distinguish the endpoint probe, resource/authorization metadata, client registration,
+authorization request, saved configuration, flow storage and token exchange. A failed
+DNS resolver request is separate from a hostname that does not resolve to public
+addresses. These failures never skip the DNS safety check or broaden permissions.
+Errors remain transient UI state and do not enter connection snapshot caches.
+
+Operators can search Workers Logs for `mcp_connection_failure` and the displayed
+reference. Records contain only a fixed stage, an allowlisted code and that random
+reference; they never include remote exception text, URLs, account/contact IDs,
+codes, proofs, credentials or request/response bodies. Existing query redaction
+must remain enabled. Do not infer a need for manual client settings from a network
+failure. Use Advanced OAuth settings only when the provider actually requires them.
+
+The API explicitly enables `global_fetch_strictly_public`, which is required for
+public calls to another Worker in the same zone, including this Centralita endpoint.
+Without it Cloudflare can reject a call before Centralita's request handler runs.
+This also preserves the documented public egress boundary. See
+[Cloudflare Worker-to-Worker fetch](https://developers.cloudflare.com/workers/runtime-apis/fetch/).
+The October 27 investigation confirmed valid public metadata and a missing routing
+flag, but did not capture the hidden production exception or run a complete OAuth
+flow. Validate the corrected route after automatic publication before declaring the
+reported failure resolved. No client was registered or external account accessed
+during this investigation.

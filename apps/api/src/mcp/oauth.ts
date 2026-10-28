@@ -7,6 +7,7 @@ import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { isRecord } from '../chat/meta';
 import type { Connection } from './client';
 import { credential, digest, endpoint, checkPublicDNS, size } from './security';
+import { oauthStage } from './errors';
 
 export type OAuthConfig = { issuer: string; metadata: AuthorizationServerMetadata; client: OAuthClientInformationMixed; resource: string; scope: string };
 type OAuthRow = { config: string; tokens: string | null; expiresAt: number | null; generation: string; lock: string | null; lockedUntil: number | null };
@@ -29,7 +30,9 @@ export function oauthFetch(allowed: string[], method: 'GET' | 'POST', headersOnl
     if (!destinations.has(url.href) || (init?.method ?? 'GET').toUpperCase() !== method) throw new Error('MCP_OAUTH_DESTINATION');
     const signal = AbortSignal.timeout(10_000);
     await checkPublicDNS(url.hostname, signal);
-    const response = await fetch(url, { ...init, redirect: 'error', signal });
+    let response: Response;
+    try { response = await fetch(url, { ...init, redirect: 'error', signal }); }
+    catch { throw new Error('MCP_OAUTH_NETWORK'); }
     if (headersOnly) { await response.body?.cancel(); return new Response(null, { status: response.status, headers: response.headers }); }
     if (!response.body) return response;
     const reader = response.body.getReader(); let text = ''; let bytes = 0; const decoder = new TextDecoder();
@@ -60,7 +63,7 @@ export async function prepareConfig(connection: Connection, env: Env, body: Reco
   if ((body.clientID || body.clientSecret) && !explicitIssuer) throw new Error('MCP_OAUTH_STATIC_ISSUER');
   let issuer = explicitIssuer;
   const server = endpoint(connection.url);
-  const probe = await oauthFetch([server.href], 'GET', true)(server, { method: 'GET', headers: { Accept: 'application/json, text/event-stream' } });
+  const probe = await oauthStage('endpoint_probe', () => oauthFetch([server.href], 'GET', true)(server, { method: 'GET', headers: { Accept: 'application/json, text/event-stream' } }));
   const challenge = extractWWWAuthenticateParams(probe);
   const hint = challenge.resourceMetadataUrl;
   const paths = [new URL(`/.well-known/oauth-protected-resource${server.pathname === '/' ? '' : server.pathname}`, server.origin).href,
@@ -72,25 +75,31 @@ export async function prepareConfig(connection: Connection, env: Env, body: Reco
   }
   let resource = server.href;
   let resourceScopes: string[] | undefined;
-  try {
-    const resourceMetadata = await discoverOAuthProtectedResourceMetadata(server, { resourceMetadataUrl: hint }, oauthFetch(paths, 'GET'));
-    const declared = secureURL(resourceMetadata.resource);
-    if (declared.origin !== server.origin || !(server.pathname === declared.pathname || server.pathname.startsWith(declared.pathname.replace(/\/$/, '') + '/'))) throw new Error('MCP_OAUTH_RESOURCE');
-    if (explicitIssuer && resourceMetadata.authorization_servers?.length && !resourceMetadata.authorization_servers.some(value => sameURL(value, explicitIssuer))) throw new Error('MCP_OAUTH_ISSUER');
-    // Select the first advertised server deterministically, never try a grid of issuers.
-    if (!issuer && resourceMetadata.authorization_servers?.length) issuer = issuerURL(resourceMetadata.authorization_servers[0]);
-    resource = declared.href;
-    resourceScopes = resourceMetadata.scopes_supported;
-  } catch (error) {
-    if (error instanceof Error && /^MCP_/.test(error.message)) throw error;
-    if (!(error instanceof Error) || !/404|not found|does not implement OAuth 2.0 Protected Resource Metadata/i.test(error.message)) throw new Error('MCP_OAUTH_RESOURCE');
-  }
+  await oauthStage('resource_metadata', async () => {
+    try {
+      const resourceMetadata = await discoverOAuthProtectedResourceMetadata(server, { resourceMetadataUrl: hint }, oauthFetch(paths, 'GET'));
+      const declared = secureURL(resourceMetadata.resource);
+      if (declared.origin !== server.origin || !(server.pathname === declared.pathname || server.pathname.startsWith(declared.pathname.replace(/\/$/, '') + '/'))) throw new Error('MCP_OAUTH_RESOURCE');
+      if (explicitIssuer && resourceMetadata.authorization_servers?.length && !resourceMetadata.authorization_servers.some(value => sameURL(value, explicitIssuer))) throw new Error('MCP_OAUTH_ISSUER');
+      // Select the first advertised server deterministically, never try a grid of issuers.
+      if (!issuer && resourceMetadata.authorization_servers?.length) issuer = issuerURL(resourceMetadata.authorization_servers[0]);
+      resource = declared.href;
+      resourceScopes = resourceMetadata.scopes_supported;
+    } catch (error) {
+      if (error instanceof Error && /^MCP_/.test(error.message)) throw error;
+      if (!(error instanceof Error) || !/404|not found|does not implement OAuth 2.0 Protected Resource Metadata/i.test(error.message)) throw new Error('MCP_OAUTH_RESOURCE');
+    }
+  });
   if (!issuer) throw new Error('MCP_OAUTH_ISSUER_REQUIRED');
-  const discovery = buildDiscoveryUrls(issuer).map(v => v.url.href);
-  const metadata = await discoverAuthorizationServerMetadata(issuer, { fetchFn: oauthFetch(discovery, 'GET') });
-  if (!metadata || !sameURL(metadata.issuer, issuer) || !metadata.authorization_endpoint || !metadata.token_endpoint) throw new Error('MCP_OAUTH_METADATA');
-  secureURL(metadata.authorization_endpoint); secureURL(metadata.token_endpoint);
-  if (metadata.code_challenge_methods_supported && !metadata.code_challenge_methods_supported.includes('S256')) throw new Error('MCP_OAUTH_PKCE');
+  const selectedIssuer = issuer;
+  const metadata = await oauthStage('authorization_metadata', async () => {
+    const discovery = buildDiscoveryUrls(selectedIssuer).map(v => v.url.href);
+    const metadata = await discoverAuthorizationServerMetadata(selectedIssuer, { fetchFn: oauthFetch(discovery, 'GET') });
+    if (!metadata || !sameURL(metadata.issuer, selectedIssuer) || !metadata.authorization_endpoint || !metadata.token_endpoint) throw new Error('MCP_OAUTH_METADATA');
+    secureURL(metadata.authorization_endpoint); secureURL(metadata.token_endpoint);
+    if (metadata.code_challenge_methods_supported && !metadata.code_challenge_methods_supported.includes('S256')) throw new Error('MCP_OAUTH_PKCE');
+    return metadata;
+  });
   // Challenge scopes take precedence over resource scopes. AS-wide scopes can be
   // unrelated to this MCP resource and must never be requested wholesale.
   const scope = typeof body.scope === 'string' && body.scope.trim() ? body.scope.trim() : challenge.scope ?? resourceScopes?.join(' ') ?? '';
@@ -100,10 +109,13 @@ export async function prepareConfig(connection: Connection, env: Env, body: Reco
   else if (body.clientSecret) throw new Error('MCP_OAUTH_CLIENT');
   else if (metadata.client_id_metadata_document_supported === true) client = { client_id: clientMetadataURL(env), issuer };
   else if (metadata.registration_endpoint) {
-    secureURL(metadata.registration_endpoint);
-    const { client_id: _documentID, ...registrationMetadata } = clientMetadata(env);
-    client = { ...await registerClient(issuer, { metadata, scope, clientMetadata: registrationMetadata,
-      fetchFn: oauthFetch([metadata.registration_endpoint], 'POST') }), issuer };
+    const registrationEndpoint = metadata.registration_endpoint;
+    client = await oauthStage('client_registration', async () => {
+      secureURL(registrationEndpoint);
+      const { client_id: _documentID, ...registrationMetadata } = clientMetadata(env);
+      return { ...await registerClient(selectedIssuer, { metadata, scope, clientMetadata: registrationMetadata,
+        fetchFn: oauthFetch([registrationEndpoint], 'POST') }), issuer: selectedIssuer };
+    });
   } else throw new Error('MCP_OAUTH_CLIENT');
   if (size(client) > 16000) throw new Error('MCP_OAUTH_SIZE');
   const config = { issuer, metadata, client, resource, scope };
@@ -117,19 +129,19 @@ async function readOAuth(env: Env, connection: Connection) {
 export async function beginOAuth(env: Env, connection: Connection, sessionID: string, body: Record<string, unknown>) {
   if (connection.authType !== 'oauth' || !['web', 'ios'].includes(String(body.platform))) throw new Error('MCP_OAUTH_PLATFORM');
   if (body.platform === 'web' && secureURL(env.MCP_WEB_ORIGIN).pathname !== '/') throw new Error('MCP_OAUTH_ORIGIN');
-  const old = await readOAuth(env, connection);
+  const old = await oauthStage('flow_storage', () => readOAuth(env, connection));
   if (body.rediscover !== undefined && typeof body.rediscover !== 'boolean') throw new Error('MCP_OAUTH_CONFIG');
   const customized = ['issuer', 'scope', 'clientID', 'clientSecret'].some(k => typeof body[k] === 'string' && body[k].trim());
   const config = !old || body.rediscover === true || customized ? await prepareConfig(connection, env, body)
-    : JSON.parse(await credential(env, connection, old.config, true)) as OAuthConfig;
+    : await oauthStage('saved_configuration', async () => JSON.parse(await credential(env, connection, old.config, true)) as OAuthConfig);
   if (!config) throw new Error('MCP_OAUTH_CONFIG');
   const state = secret(), ticket = secret(), generation = secret(), id = crypto.randomUUID();
-  const { authorizationUrl, codeVerifier } = await startAuthorization(config.issuer, { metadata: config.metadata,
-    clientInformation: config.client, redirectUrl: callbackURL(env), scope: config.scope, state, resource: config.resource });
+  const { authorizationUrl, codeVerifier } = await oauthStage('authorization_start', () => startAuthorization(config.issuer, { metadata: config.metadata,
+    clientInformation: config.client, redirectUrl: callbackURL(env), scope: config.scope, state, resource: config.resource }));
   if (config.issuer === 'https://accounts.google.com') { authorizationUrl.searchParams.set('access_type', 'offline'); authorizationUrl.searchParams.set('prompt', 'consent'); }
   if (authorizationUrl.origin !== secureURL(config.metadata.authorization_endpoint!).origin) throw new Error('MCP_OAUTH_DESTINATION');
   const payload: FlowPayload = { config, verifier: codeVerifier, authorizationURL: authorizationUrl.href, platform: body.platform as 'web' | 'ios' };
-  await env.DB.batch([
+  await oauthStage('flow_storage', async () => env.DB.batch([
     env.DB.prepare('DELETE FROM mcp_oauth_flow WHERE expires_at <= ?').bind(Date.now()),
     env.DB.prepare('DELETE FROM mcp_oauth_flow WHERE connection_id = ?').bind(connection.id),
     env.DB.prepare(`INSERT INTO mcp_oauth (connection_id, config_json, generation) SELECT id, ?2, ?3 FROM mcp_connection WHERE id = ?1
@@ -139,7 +151,7 @@ export async function beginOAuth(env: Env, connection: Connection, sessionID: st
     env.DB.prepare(`INSERT INTO mcp_oauth_flow (id, connection_id, session_id, generation, launch_hash, state_hash, payload_json, expires_at)
       SELECT ?1, id, ?3, ?4, ?5, ?6, ?7, ?8 FROM mcp_connection WHERE id = ?2`)
       .bind(id, connection.id, sessionID, generation, await digest(ticket), await digest(state), await credential(env, connection, JSON.stringify(payload)), Date.now() + 10 * 60_000),
-  ]);
+  ]));
   return { flowID: id, launchURL: launchURL(env, ticket), callbackURL: callbackURL(env) };
 }
 async function flowConnection(env: Env, id: string) {
@@ -217,8 +229,9 @@ export async function finishOAuth(env: Env, connection: Connection, sessionID: s
   if (payload.denied) return false;
   if (!payload.code) throw new Error('MCP_OAUTH_CODE');
   const config = payload.config;
-  const tokens = await exchangeAuthorization(config.issuer, { metadata: config.metadata, clientInformation: config.client, authorizationCode: payload.code,
-    codeVerifier: payload.verifier, redirectUri: callbackURL(env), resource: config.resource, fetchFn: oauthFetch([config.metadata.token_endpoint!], 'POST') });
+  const code = payload.code;
+  const tokens = await oauthStage('token_exchange', () => exchangeAuthorization(config.issuer, { metadata: config.metadata, clientInformation: config.client, authorizationCode: code,
+    codeVerifier: payload.verifier, redirectUri: callbackURL(env), resource: config.resource, fetchFn: oauthFetch([config.metadata.token_endpoint!], 'POST') }));
   const expiresAt = expires(tokens);
   const result = await env.DB.prepare('UPDATE mcp_oauth SET tokens_json = ?, expires_at = ? WHERE connection_id = ? AND generation = ?')
     .bind(await credential(env, connection, JSON.stringify(tokens)), expiresAt, connection.id, flow.generation).run();

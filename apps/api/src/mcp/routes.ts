@@ -5,6 +5,7 @@ import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { isRecord } from '../chat/meta';
 import { connectionColumns, credential, discover, endpoint, type Connection, type RemoteTool } from './client';
+import { OAuthSetupFailure, safeFailureCode } from './errors';
 
 const routes = new Hono<{ Bindings: Env; Variables: { owner: string; sessionID: string } }>();
 routes.use('*', async (c, next) => {
@@ -20,14 +21,21 @@ routes.use('*', async (c, next) => {
 });
 routes.use('*', bodyLimit({ maxSize: 12000, onError: c => c.json({ error: 'Request body too large' }, 413) }));
 routes.onError((failure, c) => {
-  const code = failure instanceof Error ? failure.message : '';
+  const code = failure instanceof OAuthSetupFailure ? failure.code : safeFailureCode(failure);
   const messages: Record<string, string> = {
     MCP_OAUTH_CLIENT: 'This provider requires a registered OAuth client. Open Advanced OAuth settings and enter its authorization server and Client ID.',
     MCP_OAUTH_STATIC_ISSUER: 'Enter the authorization server in Advanced OAuth settings when using your own client credentials.',
     MCP_OAUTH_ISSUER_REQUIRED: 'This server does not advertise an authorization server. Enter it in Advanced OAuth settings.',
+    MCP_DNS_UNAVAILABLE: 'Wildcard could not complete its DNS safety check. Please try again shortly.',
+    MCP_DNS: 'The server hostname must resolve to public internet addresses.',
+    MCP_ENDPOINT: 'Enter a public HTTPS endpoint with no query, fragment, credentials, or custom port.',
   };
-  if (Object.hasOwn(messages, code)) return c.json({ error: messages[code], code }, 422);
-  return c.json({ error: 'Unable to connect. Check the HTTPS endpoint, or return to Connections and authorize again. If the provider requires manual configuration, open Advanced OAuth settings.' }, 422);
+  const reference = crypto.randomUUID();
+  const stage = failure instanceof OAuthSetupFailure ? failure.stage : 'connection';
+  // Log only fixed codes/stages and a random reference, never remote errors or URLs.
+  console.warn({ event: 'mcp_connection_failure', reference, stage, code });
+  const message = messages[code] ?? (failure instanceof OAuthSetupFailure ? failure.message : 'Unable to connect. Check the HTTPS endpoint or authorize again from Connections.');
+  return c.json({ error: `${message} Reference: ${reference}`, code, stage, reference }, 422);
 });
 routes.get('/', async c => {
   const { results } = await c.env.DB.prepare(`SELECT ${connectionColumns} FROM mcp_connection WHERE contact_id = ? AND user_id = ? ORDER BY created_at, id`)

@@ -1194,6 +1194,21 @@ VPC/private bindings; DNS preflight alone is not an enforcing network boundary. 
 code cannot safely replace the privacy filters after connector output exists. Follow
 the existing commit/push and automatic migration/release pipeline; no manual deploy.
 
+The API must explicitly retain `global_fetch_strictly_public` in its compatibility
+flags. A recent compatibility date does not enable it automatically. It routes
+global fetches through the public internet boundary, including MCP/OAuth calls to
+another Worker in the same zone; without it Cloudflare can reject these calls with
+1042 before the destination Worker receives them. Never substitute private service
+bindings for arbitrary MCP endpoints. The web's existing API service binding remains
+the internal authenticated proxy path. No new resource, secret or migration is needed.
+See [Cloudflare public fetch routing](https://developers.cloudflare.com/workers/configuration/compatibility-flags/#global-fetch-strictly-public).
+
+After the automatic release, verify the deployed API's flags and source commit,
+then start OAuth from each client and confirm that Centralita's authorization page
+opens. A successful local type check or public metadata read does not validate
+Worker-to-Worker routing or the complete OAuth flow. Keep this flag in forward fixes
+and rollback configurations so arbitrary URLs cannot bypass public ingress controls.
+
 ### MCP OAuth extension
 
 Apply migration 0027 after 0026 through the automatic release pipeline. OAuth uses
