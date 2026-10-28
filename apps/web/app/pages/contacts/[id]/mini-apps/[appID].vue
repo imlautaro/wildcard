@@ -110,13 +110,13 @@ onMounted(() => load());
             <button v-for="option in input.options" :key="option.value" type="button" :aria-pressed="(view.inputs[input.id] ?? input.default) === option.value" @click="setInput(input.id, option.value)">{{ option.label }}</button>
           </div>
           <div v-else class="group">
-            <label class="field mini-field"><span>{{ input.label }}</span><input type="text" :value="view.inputs[input.id] ?? input.default" maxlength="200" @change="setInput(input.id, ($event.target as HTMLInputElement).value)"></label>
+            <label class="field mini-field"><span>{{ input.label }}</span><input :type="input.type === 'number' ? 'number' : 'text'" step="any" :inputmode="input.type === 'number' ? 'decimal' : 'text'" :value="view.inputs[input.id] ?? input.default" maxlength="200" @change="setInput(input.id, ($event.target as HTMLInputElement).value)"></label>
           </div>
         </template>
         <div v-if="!view.value && view.request" class="center"><span class="spinner" /> Loading data…</div>
         <p v-else-if="view.error" class="notice" style="margin: 0 0 12px">{{ view.error }} <button class="link-button" @click="load(true)">Retry</button></p>
-        <MiniAppView v-if="view.value" :components="view.value.view" :busy-action="busyAction" @action="run" />
-        <p v-if="view.value" class="group-footer" style="padding-top: 4px">Updated {{ messageTime(view.value.resolvedAt) }}</p>
+        <MiniAppView v-if="view.value" :components="view.value.view" :busy-action="busyAction" :state="apps.displayState(app.id)" @action="run" @tap="(id, updates) => apps.tap(app!, id, updates)" @edit="update => apps.tap(app!, null, [update])" />
+        <p v-if="view.value?.remote" class="group-footer" style="padding-top: 4px">Updated {{ messageTime(view.value.resolvedAt) }}</p>
       </template>
 
       <div class="group" style="margin-top: 20px">

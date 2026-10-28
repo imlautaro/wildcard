@@ -158,7 +158,7 @@ struct MiniAppScreen: View {
                         .pickerStyle(.segmented)
                         .listRowBackground(Color.clear).listRowInsets(EdgeInsets())
                     } else {
-                        MiniAppTextInput(label: input.label, initial: store.inputs[key]?[input.id] ?? input.default) { value in
+                        MiniAppTextInput(label: input.label, initial: store.inputs[key]?[input.id] ?? input.default, number: input.type == "number") { value in
                             Task { await store.resolve(app, contactID: contactID, inputs: (store.inputs[key] ?? [:]).merging([input.id: value]) { $1 }, using: auth) }
                         }
                     }
@@ -172,12 +172,19 @@ struct MiniAppScreen: View {
                 }
             }
             if let view = store.views[key] {
-                MiniAppRenderer(components: view.view, runningAction: runningAction) { id, local, label, confirm, fields in
+                MiniAppRenderer(components: view.view, state: store.displayState(key: key), runningAction: runningAction) { id, local, label, confirm, fields in
                     if let confirm { pendingAction = (id, label, confirm, local, fields); confirming = true }
                     else { Task { await run(id, label: label, local: local, fields: fields) } }
+                } onTap: { id, updates in
+                    store.tap(app, contactID: contactID, actionID: id, updates: updates, using: auth)
+                } onEdit: { update in
+                    store.tap(app, contactID: contactID, actionID: nil, updates: [update], using: auth)
                 }
-                Section { } footer: {
-                    Text("Updated \(Date(timeIntervalSince1970: view.resolvedAt / 1000).formatted(date: .omitted, time: .shortened))")
+                // Only connector data can be stale; saved state is always current.
+                if view.remote == true {
+                    Section { } footer: {
+                        Text("Updated \(Date(timeIntervalSince1970: view.resolvedAt / 1000).formatted(date: .omitted, time: .shortened))")
+                    }
                 }
             } else if store.resolving.contains(key) {
                 Section { HStack { Spacer(); ProgressView("Loading data…"); Spacer() } }.listRowBackground(Color.clear)
@@ -226,38 +233,116 @@ struct MiniAppScreen: View {
     }
 }
 
-private struct MiniAppTextInput: View {
+/// A text or number field bound to saved state; saves when submitted.
+private struct MiniAppStateInput: View {
     let label: String
-    let initial: String
-    let submit: (String) -> Void
+    let placeholder: String?
+    let number: Bool
+    let value: String
+    let save: (String) -> Void
     @State private var text = ""
+    @FocusState private var focused: Bool
 
     var body: some View {
-        TextField(label, text: $text)
-            .onAppear { text = initial }
-            .onSubmit { submit(String(text.prefix(200))) }
-            .submitLabel(.search)
+        LabeledContent(label) {
+            TextField(placeholder ?? label, text: $text)
+                .multilineTextAlignment(.trailing)
+                .keyboardType(number ? .decimalPad : .default)
+                .focused($focused)
+                .submitLabel(.done)
+                .onSubmit { if text != value { save(text) } }
+        }
+        .onAppear { text = value }
+        .onChange(of: value) { _, updated in if !focused { text = updated } }
+        .onChange(of: focused) { _, isFocused in if !isFocused, text != value { save(text) } }
     }
 }
 
-/// Renders the server-resolved tree as native list sections. Consecutive stats
-/// share one grid, matching the web renderer.
+/// An on-device countdown; it is not saved and stops when the screen closes.
+private struct MiniAppTimer: View {
+    let label: String
+    let duration: Int
+    @State private var endsAt: Date?
+    @State private var remaining: TimeInterval?
+
+    private func left(at now: Date) -> TimeInterval { endsAt.map { max(0, $0.timeIntervalSince(now)) } ?? remaining ?? TimeInterval(duration) }
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { context in
+            let seconds = Int(left(at: context.date).rounded(.up))
+            VStack(spacing: 14) {
+                Text(label).manrope(.headline, weight: .semibold).foregroundStyle(.secondary)
+                Text(Duration.seconds(seconds).formatted(.time(pattern: seconds >= 3600 ? .hourMinuteSecond : .minuteSecond)))
+                    .font(.system(size: 64, weight: .bold, design: .rounded)).monospacedDigit()
+                    .contentTransition(.numericText(countsDown: true)).animation(.snappy, value: seconds)
+                    .foregroundStyle(seconds == 0 ? Color.green : Color.primary)
+                HStack(spacing: 12) {
+                    if endsAt != nil {
+                        Button { remaining = left(at: .now); endsAt = nil } label: { Text("Pause").manrope(.headline, weight: .semibold).frame(maxWidth: .infinity, minHeight: 50) }.buttonStyle(.glass)
+                    } else {
+                        Button { endsAt = .now.addingTimeInterval(seconds == 0 ? TimeInterval(duration) : left(at: .now)); remaining = nil } label: {
+                            Text(remaining == nil || seconds == 0 ? "Start" : "Resume").manrope(.headline, weight: .semibold).frame(maxWidth: .infinity, minHeight: 50)
+                        }.buttonStyle(.glassProminent)
+                    }
+                    Button { endsAt = nil; remaining = nil } label: { Text("Reset").manrope(.headline, weight: .semibold).frame(maxWidth: .infinity, minHeight: 50) }.buttonStyle(.glass)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .sensoryFeedback(.success, trigger: seconds == 0 && endsAt != nil)
+        }
+    }
+}
+
+private struct MiniAppTextInput: View {
+    let label: String
+    let initial: String
+    var number = false
+    let submit: (String) -> Void
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        LabeledContent(label) {
+            TextField(label, text: $text)
+                .multilineTextAlignment(.trailing)
+                .keyboardType(number ? .decimalPad : .default)
+                .focused($focused)
+                .onSubmit { submit(String(text.prefix(200))) }
+                .submitLabel(.done)
+        }
+        .onAppear { text = initial }
+        // Decimal pads have no return key, so leaving the field applies the value too.
+        .onChange(of: focused) { _, isFocused in if !isFocused, text != initial { submit(String(text.prefix(200))) } }
+    }
+}
+
+/// Renders the server-resolved tree as native list sections. A lone stat becomes a
+/// hero number, consecutive stats share one grid, and consecutive field-less actions
+/// share one button row, matching the web renderer.
 struct MiniAppRenderer: View {
     let components: [MiniAppComponent]
+    let state: [String: MiniAppStateValue]
     let runningAction: String?
     let onAction: (String, Bool, String, String?, [String: MiniAppFieldValue]) -> Void
+    let onTap: (String, [MiniAppUpdate]) -> Void
+    /// Direct edits from components bound to state.
+    let onEdit: (MiniAppUpdate) -> Void
 
     private enum Block: Identifiable {
-        case stats(Int, [MiniAppComponent]), section(Int, String?, [MiniAppComponent]), single(Int, MiniAppComponent)
-        var id: Int { switch self { case .stats(let i, _), .section(let i, _, _), .single(let i, _): i } }
+        case stats(Int, [MiniAppComponent]), buttons(Int, [MiniAppComponent]), section(Int, String?, [MiniAppComponent]), single(Int, MiniAppComponent)
+        var id: Int { switch self { case .stats(let i, _), .buttons(let i, _), .section(let i, _, _), .single(let i, _): i } }
     }
     private static func blocks(_ components: [MiniAppComponent]) -> [Block] {
         var result: [Block] = []
         for (index, component) in components.enumerated() {
-            if case .stat = component {
+            switch component {
+            case .stat:
                 if case .stats(let i, let items) = result.last { result[result.count - 1] = .stats(i, items + [component]) } else { result.append(.stats(index, [component])) }
-            } else if case .section(let title, let children) = component { result.append(.section(index, title, children)) }
-            else { result.append(.single(index, component)) }
+            case .action(_, _, _, _, _, let fields, _) where fields.isEmpty:
+                if case .buttons(let i, let items) = result.last { result[result.count - 1] = .buttons(i, items + [component]) } else { result.append(.buttons(index, [component])) }
+            case .section(let title, let children): result.append(.section(index, title, children))
+            default: result.append(.single(index, component))
+            }
         }
         return result
     }
@@ -265,12 +350,14 @@ struct MiniAppRenderer: View {
     var body: some View {
         ForEach(Self.blocks(components)) { block in
             switch block {
-            case .stats(_, let stats): Section { MiniAppStatGrid(stats: stats) }.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+            case .stats(_, let stats): Section { MiniAppStatGrid(stats: stats, state: state) }.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+            case .buttons(_, let actions): Section { buttonRow(actions) }.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             case .section(_, let title, let children):
                 Section {
                     ForEach(Array(Self.blocks(children).enumerated()), id: \.offset) { _, child in
                         switch child {
-                        case .stats(_, let stats): MiniAppStatGrid(stats: stats).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+                        case .stats(_, let stats): MiniAppStatGrid(stats: stats, state: state).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+                        case .buttons(_, let actions): buttonRow(actions).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
                         case .single(_, let component): rows(component)
                         case .section: EmptyView()
                         }
@@ -278,6 +365,14 @@ struct MiniAppRenderer: View {
                 } header: { if let title { Text(title) } }
             case .single(_, let component): Section { rows(component) }
             }
+        }
+    }
+
+    private func buttonRow(_ actions: [MiniAppComponent]) -> some View {
+        MiniAppButtonRow(actions: actions, runningAction: runningAction) { action in
+            guard case .action(let id, let local, let label, let confirm, _, _, let updates) = action else { return }
+            // Literal local taps apply instantly; anything else goes through the confirmed path.
+            if local, confirm == nil, let updates { onTap(id, updates) } else { onAction(id, local, label, confirm, [:]) }
         }
     }
 
@@ -320,10 +415,73 @@ struct MiniAppRenderer: View {
         case .text(let text, let style):
             Text(text).manrope(style == "headline" ? .headline : style == "caption" ? .footnote : .body, weight: style == "headline" ? .bold : .regular)
                 .foregroundStyle(style == "caption" ? Color.secondary : Color.primary)
-        case .action(let id, let local, let label, let confirm, let destructive, let fields):
+        case .action(let id, let local, let label, let confirm, let destructive, let fields, _):
             MiniAppActionForm(id: id, local: local, label: label, destructive: destructive, fields: fields, running: runningAction) { values in onAction(id, local, label, confirm, values) }
         case .notice(let code):
             Label(MiniAppFormat.issue(code), systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+        case .progress(let label, let value, let goal, let format, let currency, let caption, let stateID):
+            let current = stateID.flatMap { id -> Double? in if case .number(let n)? = state[id] { n } else { nil } } ?? value ?? 0
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(label).manrope(.body, weight: .semibold)
+                    Spacer()
+                    Text("\(MiniAppFormat.text(.number(current), format: format, currency: currency)) / \(MiniAppFormat.text(.number(goal), format: format, currency: currency))")
+                        .manrope(.body, weight: .semibold).monospacedDigit().foregroundStyle(current >= goal ? Color.green : Color.secondary)
+                        .contentTransition(.numericText()).animation(.snappy(duration: 0.25), value: current)
+                }
+                ProgressView(value: min(max(current / goal, 0), 1)).tint(current >= goal ? .green : .accentColor).animation(.snappy(duration: 0.3), value: current)
+                if let caption { Text(caption).manrope(.footnote).foregroundStyle(.secondary) }
+            }
+            .padding(.vertical, 4)
+        case .checklist(let checklist):
+            let rows = checklist.rows(from: state)
+            if rows.isEmpty { Text(checklist.empty).foregroundStyle(.secondary) }
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                Button {
+                    if let field = checklist.done { onEdit(MiniAppUpdate(state: checklist.state, op: "toggle_item", index: index, field: field)) }
+                } label: {
+                    HStack(spacing: 12) {
+                        if let done = row.done {
+                            Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(done ? Color.green : Color.secondary)
+                                .contentTransition(.symbolEffect(.replace))
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title).manrope(.body).strikethrough(row.done == true).foregroundStyle(row.done == true ? Color.secondary : Color.primary)
+                            if let subtitle = row.subtitle { Text(subtitle).manrope(.footnote).foregroundStyle(.secondary) }
+                        }
+                        Spacer(minLength: 8)
+                        if let value = row.value { Text(MiniAppFormat.text(value, format: checklist.format, currency: checklist.currency)).manrope(.body, weight: .semibold).monospacedDigit() }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(checklist.done == nil)
+                .swipeActions {
+                    if checklist.removable {
+                        Button(role: .destructive) { onEdit(MiniAppUpdate(state: checklist.state, op: "remove_item", index: index)) } label: { Label("Delete", systemImage: "trash") }
+                    }
+                }
+            }
+        case .toggle(let label, let stateID, let value):
+            let isOn = state[stateID].map { $0 == .bool(true) } ?? value
+            Toggle(label, isOn: Binding(get: { isOn }, set: { _ in onEdit(MiniAppUpdate(state: stateID, op: "toggle")) })).manrope(.body)
+        case .choice(let label, let stateID, let value, let options):
+            let selected = state[stateID]?.label ?? value
+            VStack(alignment: .leading, spacing: 8) {
+                Text(label).manrope(.subheadline, weight: .semibold).foregroundStyle(.secondary)
+                Picker(label, selection: Binding(get: { selected }, set: { onEdit(MiniAppUpdate(state: stateID, op: "set", value: .text($0))) })) {
+                    ForEach(options, id: \.value) { Text($0.label).tag($0.value) }
+                }
+                .pickerStyle(.segmented)
+            }
+            .padding(.vertical, 4)
+        case .input(let label, let stateID, let value, let number, let placeholder):
+            MiniAppStateInput(label: label, placeholder: placeholder, number: number, value: state[stateID]?.label ?? MiniAppStateValue.text({ if case .text(let t) = value { t } else if case .number(let n) = value { n.formatted(.number.grouping(.never)) } else { "" } }()).label) { text in
+                if number { if let n = try? Double(text, format: .number) { onEdit(MiniAppUpdate(state: stateID, op: "set", value: .number(n))) } }
+                else { onEdit(MiniAppUpdate(state: stateID, op: "set", value: .text(String(text.prefix(500))))) }
+            }
+        case .timer(let label, let seconds):
+            MiniAppTimer(label: label, duration: seconds)
         case .stat, .section, .unsupported: EmptyView()
         }
     }
@@ -331,23 +489,98 @@ struct MiniAppRenderer: View {
 
 private struct MiniAppStatGrid: View {
     let stats: [MiniAppComponent]
+    let state: [String: MiniAppStateValue]
+
+    private func display(_ value: MiniAppScalar?, _ stateID: String?) -> MiniAppScalar? {
+        stateID.flatMap { state[$0]?.scalar } ?? value
+    }
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
-            ForEach(Array(stats.enumerated()), id: \.offset) { _, stat in
-                if case .stat(let label, let value, let format, let currency, let caption) = stat {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(label).manrope(.footnote, weight: .semibold).foregroundStyle(.secondary)
-                        Text(value.map { MiniAppFormat.text($0, format: format, currency: currency) } ?? "—")
-                            .manrope(.title, weight: .extraBold).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1)
-                        if let caption { Text(caption).manrope(.caption).foregroundStyle(.secondary) }
+        if stats.count == 1, case .stat(let label, let value, let format, let currency, let caption, let stateID) = stats[0] {
+            // A single stat is the app's main number: large, centered and animated.
+            let shown = display(value, stateID)
+            VStack(spacing: 4) {
+                Text(label).manrope(.headline, weight: .semibold).foregroundStyle(.secondary)
+                Text(shown.map { MiniAppFormat.text($0, format: format, currency: currency) } ?? "—")
+                    .font(.system(size: 76, weight: .bold, design: .rounded)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.4)
+                    .contentTransition(.numericText(countsDown: false))
+                    .animation(.snappy(duration: 0.25), value: shown)
+                if let caption { Text(caption).manrope(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center) }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+            .accessibilityElement(children: .combine)
+        } else {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
+                ForEach(Array(stats.enumerated()), id: \.offset) { _, stat in
+                    if case .stat(let label, let value, let format, let currency, let caption, let stateID) = stat {
+                        let shown = display(value, stateID)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(label).manrope(.footnote, weight: .semibold).foregroundStyle(.secondary)
+                            Text(shown.map { MiniAppFormat.text($0, format: format, currency: currency) } ?? "—")
+                                .manrope(.title, weight: .extraBold).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1)
+                                .contentTransition(.numericText()).animation(.snappy(duration: 0.25), value: shown)
+                            if let caption { Text(caption).manrope(.caption).foregroundStyle(.secondary) }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16).padding(.vertical, 12)
+                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .accessibilityElement(children: .combine)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16).padding(.vertical, 12)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .accessibilityElement(children: .combine)
                 }
             }
+        }
+    }
+}
+
+/// Field-less actions as large native buttons: short symbols (+, −) share one row,
+/// longer labels stack below. The first non-destructive action is prominent.
+private struct MiniAppButtonRow: View {
+    let actions: [MiniAppComponent]
+    let runningAction: String?
+    let perform: (MiniAppComponent) -> Void
+    @State private var taps = 0
+
+    private struct Item: Identifiable { let id: String; let label: String; let destructive: Bool; let local: Bool; let component: MiniAppComponent }
+    private var items: [Item] {
+        actions.compactMap { component in
+            guard case .action(let id, let local, let label, _, let destructive, _, _) = component else { return nil }
+            return Item(id: id, label: label, destructive: destructive, local: local, component: component)
+        }
+    }
+    /// The action that adds (+, increment, append) is prominent; otherwise the first non-destructive one.
+    private var primaryID: String? {
+        let adds = items.first { item in
+            guard !item.destructive, case .action(_, _, _, _, _, _, let updates) = item.component else { return false }
+            return item.label.hasPrefix("+") || (updates ?? []).contains { $0.op == "increment" || $0.op == "append" }
+        }
+        return (adds ?? items.first { !$0.destructive })?.id
+    }
+
+    var body: some View {
+        let short = items.filter { $0.label.count <= 3 }, long = items.filter { $0.label.count > 3 }
+        VStack(spacing: 12) {
+            if !short.isEmpty { HStack(spacing: 12) { ForEach(short) { button($0, symbol: true) } } }
+            ForEach(long) { button($0, symbol: false) }
+        }
+        .padding(.vertical, 4)
+        .sensoryFeedback(.impact(weight: .light), trigger: taps)
+    }
+
+    @ViewBuilder private func button(_ item: Item, symbol: Bool) -> some View {
+        let label = Group {
+            if runningAction == item.id && !item.local { ProgressView() }
+            else if symbol { Text(item.label == "-" ? "−" : item.label).font(.system(size: 34, weight: .semibold, design: .rounded)) }
+            else { Text(item.label).manrope(.headline, weight: .semibold) }
+        }
+        .frame(maxWidth: .infinity, minHeight: symbol ? 64 : 50)
+        let action = { taps += 1; perform(item.component) }
+        let disabled = runningAction != nil && !item.local
+        if item.id == primaryID {
+            Button(action: action) { label }.buttonStyle(.glassProminent).disabled(disabled)
+        } else {
+            Button(role: item.destructive ? .destructive : nil, action: action) { label }.buttonStyle(.glass).tint(item.destructive ? .red : nil).disabled(disabled)
         }
     }
 }

@@ -451,3 +451,6 @@ and action forms that confirm with the action's text. Values are formatted with
 `Intl` in the viewer's locale. Behavior, copy and limits match iOS; see
 [mini apps](mini-apps.md) and [caching](caching.md#mini-apps). Browser layout and live
 loads have not been verified.
+Saved state, checklists, toggles, choices, inputs, progress bars, timers and button
+rows render with the same rules as iOS (`MiniAppView.vue`, `MiniAppTimer.vue`). Taps
+apply instantly and are reconciled with the server (`useMiniApps`).

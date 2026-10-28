@@ -7,6 +7,8 @@ export const miniAppIcons = ['chart', 'list', 'money', 'calendar', 'cart', 'chec
 const formats = ['number', 'currency', 'percent', 'date', 'datetime', 'text'] as const;
 const comparisons = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'after', 'before'] as const;
 const aggregates = ['sum', 'avg', 'min', 'max', 'count'] as const;
+const arithmetic = ['$add', '$sub', '$mul', '$div', '$min', '$max'] as const;
+const stateOps = ['increment', 'decrement', 'set', 'toggle', 'append', 'clear', 'pick', 'set_items', 'toggle_item', 'remove_item'] as const;
 type Format = typeof formats[number];
 type Aggregate = typeof aggregates[number];
 type Condition = { field: string; op: typeof comparisons[number]; value: unknown };
@@ -19,11 +21,15 @@ export type Step =
   | { id: string; type: 'limit'; from: string; count: number }
   | { id: string; type: 'aggregate'; from: string; op: Aggregate; field?: string }
   | { id: string; type: 'group'; from: string; by: string; op: Aggregate; field?: string; order: 'key' | 'value-asc' | 'value-desc' };
-type Input = { id: string; type: 'segmented'; label: string; options: { value: string; label: string }[]; default: string }
-  | { id: string; type: 'text'; label: string; default: string };
+type Option = { value: string; label: string };
+type Input = { id: string; type: 'segmented'; label: string; options: Option[]; default: string }
+  | { id: string; type: 'text' | 'number'; label: string; default: string };
 type Field = { id: string; label: string; kind: 'text' | 'number' | 'date' | 'toggle'; required: boolean };
-export type StateVar = { id: string; type: 'number' | 'text' | 'boolean'; initial: number | string | boolean };
-export type StateUpdate = { state: string; op: 'increment' | 'decrement' | 'set' | 'toggle'; value?: unknown };
+export type Scalar = number | string | boolean;
+export type Item = Record<string, Scalar>;
+export type StateValue = Scalar | Item[];
+export type StateVar = { id: string; type: 'number' | 'text' | 'boolean' | 'list'; initial: StateValue };
+export type StateUpdate = { state: string; op: typeof stateOps[number]; value?: unknown; index?: number; field?: string };
 type ActionBase = { id: string; label: string; style: 'default' | 'destructive'; fields: Field[] };
 // Remote actions call an MCP write tool after confirmation; local actions only update saved state.
 export type Action = (ActionBase & { kind: 'remote'; confirm: string; connectionID: string; tool: string; arguments: Record<string, unknown> })
@@ -32,29 +38,37 @@ type Value = { format?: Format; currency?: string };
 export type Component =
   | { type: 'section'; title?: string; children: Component[] }
   | ({ type: 'stat'; label: string; step: string; path?: string; caption?: string } & Value)
+  | ({ type: 'progress'; label: string; step: string; path?: string; goal: number | string; caption?: string } & Value)
   | ({ type: 'list'; source: string; title: string; subtitle?: string; value?: string; limit: number; empty?: string } & Value)
+  | ({ type: 'checklist'; state: string; title: string; subtitle?: string; value?: string; done?: string; removable: boolean; empty?: string } & Value)
   | ({ type: 'chart'; source: string; kind: 'bar' | 'line'; x: string; y: string; title?: string } & Value)
   | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
+  | { type: 'toggle'; label: string; state: string }
+  | { type: 'choice'; label: string; state: string; options: Option[] }
+  | { type: 'input'; label: string; state: string; placeholder?: string }
+  | { type: 'timer'; label: string; minutes: number }
   | { type: 'action'; action: string };
 export type Spec = { title: string; subtitle?: string; icon: typeof miniAppIcons[number]; state: StateVar[]; inputs: Input[]; data: Step[]; view: Component[]; actions: Action[] };
 export type ToolUse = { connectionID: string; toolName: string; role: 'read' | 'write' };
 
 export class SpecError extends Error {}
 const fail = (message: string): never => { throw new SpecError(message); };
-const identifier = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
+// Ids are internal keys, so letters in any script are fine ("hábito").
+const identifier = /^\p{L}[\p{L}\p{N}_]{0,31}$/u;
+const maxItems = 200;
 function text(value: unknown, name: string, max: number, optional = false, multiline = false): string | undefined {
-  if (value === undefined && optional) return undefined;
+  if ((value === undefined || value === null) && optional) return undefined;
   if (typeof value !== 'string' || !value.trim() || [...value].length > max || (multiline ? /[\u0000-\u0009\u000b-\u001f\u007f]/ : /[\u0000-\u001f\u007f]/).test(value)) return fail(`${name} must be non-empty text of at most ${max} characters.`);
   return value.trim();
 }
 function path(value: unknown, name: string, optional = false): string | undefined {
-  if (value === undefined && optional) return undefined;
+  if ((value === undefined || value === null) && optional) return undefined;
   if (typeof value !== 'string' || value.length > 200 || (value !== '' && value.split('.').some(part => !part || part.length > 64 || /[\u0000-\u001f]/.test(part))) || value.split('.').length > 8) return fail(`${name} must be a dot path such as "data.items" (up to 8 segments).`);
   return value;
 }
 function only(value: Record<string, unknown>, keys: string[], name: string) {
   const extra = Object.keys(value).find(key => !keys.includes(key));
-  if (extra) fail(`${name} does not support "${extra}".`);
+  if (extra) fail(`${name} does not support "${extra}". Allowed: ${keys.join(', ')}.`);
 }
 function choice<T extends string>(value: unknown, options: readonly T[], name: string, fallback?: T): T {
   if (value === undefined && fallback !== undefined) return fallback;
@@ -70,18 +84,28 @@ function format(value: Record<string, unknown>, name: string): Value {
   if (result.format === 'currency' && !result.currency) fail(`${name} needs currency when format is currency.`);
   return result;
 }
+function isItem(value: unknown): value is Item {
+  return isRecord(value) && Object.keys(value).length <= 10 && Object.entries(value).every(([key, v]) => identifier.test(key)
+    && (typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 500)));
+}
 
-// Templates are literal JSON plus four single-key expressions.
+// Templates are literal JSON plus single-key expressions. Arithmetic is structured
+// ({"$mul": [a, b]}), never parsed from text.
 type Scope = { inputs: Set<string>; states: Set<string>; fields?: Set<string> };
-function template(value: unknown, name: string, scope: Scope, depth = 0): unknown {
-  if (depth > 6) return fail(`${name} is nested too deeply.`);
+function template(raw: unknown, name: string, scope: Scope, depth = 0): unknown {
+  let value = raw;
+  if (depth > 8) return fail(`${name} is nested too deeply.`);
   if (value === null || typeof value === 'boolean' || typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) return value;
   if (Array.isArray(value)) return value.length > 50 ? fail(`${name} has too many items.`) : value.map((item, index) => template(item, `${name}[${index}]`, scope, depth + 1));
   if (!isRecord(value)) return fail(`${name} must be JSON.`);
-  const keys = Object.keys(value);
+  let keys = Object.keys(value);
+  // A frequent model slip: {"$round": {...}, "digits": 2}. Fold the sibling into the expression.
+  if (keys.length === 2 && keys.includes('$round') && keys.includes('digits') && isRecord(value.$round)) {
+    value = { $round: { digits: value.digits, ...value.$round } }; keys = ['$round'];
+  }
   if (keys.some(key => key.startsWith('$'))) {
     if (keys.length !== 1) return fail(`${name}: an expression object must contain only its "$" key.`);
-    const [key] = keys, argument = value[key];
+    const [key] = keys, argument = (value as Record<string, unknown>)[key];
     if (key === '$input') return typeof argument === 'string' && scope.inputs.has(argument) ? value : fail(`${name}: $input must name a declared input.`);
     if (key === '$state') return typeof argument === 'string' && scope.states.has(argument) ? value : fail(`${name}: $state must name a declared state value.`);
     if (key === '$field') return scope.fields && typeof argument === 'string' && scope.fields.has(argument) ? value : fail(`${name}: $field is only available in actions and must name one of its fields.`);
@@ -92,21 +116,46 @@ function template(value: unknown, name: string, scope: Scope, depth = 0): unknow
       choice(argument.format, ['date', 'datetime'] as const, `${name}.$date.format`);
       return value;
     }
-    return fail(`${name}: unknown expression ${key}. Use $input, $state, $field or $date.`);
+    if ((arithmetic as readonly string[]).includes(key)) {
+      if (!Array.isArray(argument) || argument.length < 2 || argument.length > 8) return fail(`${name}: ${key} expects an array of 2–8 values.`);
+      return { [key]: argument.map((item, index) => template(item, `${name}.${key}[${index}]`, scope, depth + 1)) };
+    }
+    if (key === '$daysSince' || key === '$daysUntil') {
+      // Whole days between today (person's time zone) and a YYYY-MM-DD date, which may itself be a template.
+      return { [key]: typeof argument === 'string' ? (/^\d{4}-\d{2}-\d{2}$/.test(argument) && Number.isFinite(Date.parse(argument)) ? argument : fail(`${name}: ${key} expects a YYYY-MM-DD date.`))
+        : template(argument, `${name}.${key}`, scope, depth + 1) };
+    }
+    if (key === '$round') {
+      if (!isRecord(argument)) return fail(`${name}: $round expects {"value": …, "digits": 2}.`);
+      only(argument, ['value', 'digits'], `${name}.$round`);
+      if (argument.digits !== undefined && (!Number.isInteger(argument.digits) || Number(argument.digits) < 0 || Number(argument.digits) > 6)) fail(`${name}.$round.digits must be 0–6.`);
+      return { $round: { value: template(argument.value, `${name}.$round.value`, scope, depth + 1), digits: Number(argument.digits ?? 0) } };
+    }
+    return fail(`${name}: unknown expression ${key}. Use $input, $state, $field, $date, $daysSince, $daysUntil, $add, $sub, $mul, $div, $min, $max or $round.`);
   }
   if (keys.length > 50) return fail(`${name} has too many keys.`);
-  return Object.fromEntries(keys.map(key => [key, template(value[key], `${name}.${key}`, scope, depth + 1)]));
+  return Object.fromEntries(keys.map(key => [key, template((value as Record<string, unknown>)[key], `${name}.${key}`, scope, depth + 1)]));
 }
 
 export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
+  // Models sometimes send the spec as a JSON string; accept it when it parses to an object.
+  if (typeof raw === 'string') {
+    // Models that stringify long specs often add stray closing brackets at the end; trim only those.
+    let source = raw.trim(), parsed: unknown = undefined;
+    for (let attempt = 0; attempt < 6 && parsed === undefined; attempt++) {
+      try { parsed = JSON.parse(source); } catch { if (!/[}\]]$/.test(source)) break; source = source.slice(0, -1).trimEnd(); }
+    }
+    raw = parsed ?? fail('spec must be a JSON object, not text. Send spec as an object and check that brackets balance.');
+  }
   if (!isRecord(raw)) fail('spec must be an object.');
   const value = raw as Record<string, unknown>;
   if (JSON.stringify(value).length > 16000) fail('spec must be at most 16 KB.');
   only(value, ['title', 'subtitle', 'icon', 'state', 'inputs', 'data', 'view', 'actions'], 'spec');
-  const ids = new Set<string>();
-  const unique = (id: unknown, name: string) => {
+  // State and data steps share one namespace because the view reads both by id.
+  const valueIDs = new Set<string>(), inputIDs = new Set<string>(), actionIDs = new Set<string>();
+  const unique = (ids: Set<string>, id: unknown, name: string) => {
     if (typeof id !== 'string' || !identifier.test(id)) return fail(`${name}.id must start with a letter and contain only letters, digits or _ (max 32).`);
-    if (ids.has(id)) return fail(`Duplicate id "${id}".`);
+    if (ids.has(id)) return fail(`Duplicate id "${id}" in ${name.replace(/\[.*$/, '')}.`);
     ids.add(id); return id;
   };
   const list = (field: unknown, name: string, max: number, required = false) => {
@@ -114,42 +163,51 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     if (!Array.isArray(field) || (required && !field.length) || field.length > max) return fail(`${name} must be an array of ${required ? '1' : '0'}–${max} items.`);
     return field;
   };
+  const options = (field: unknown, name: string, min: number, max: number): Option[] => {
+    const parsed = list(field, name, max, true).map((option, at) => {
+      if (!isRecord(option)) return fail(`${name}[${at}] must be an object.`);
+      only(option, ['value', 'label'], `${name}[${at}]`);
+      // Option values are text; numbers such as 15 are accepted as "15".
+      const raw = typeof option.value === 'number' || typeof option.value === 'boolean' ? String(option.value) : option.value;
+      return { value: text(raw, `${name}[${at}].value`, 60)!, label: text(option.label ?? raw, `${name}[${at}].label`, 24)! };
+    });
+    if (parsed.length < min || new Set(parsed.map(o => o.value)).size !== parsed.length) fail(`${name} needs ${min}–${max} options with distinct values.`);
+    return parsed;
+  };
   const state: StateVar[] = list(value.state, 'state', 8).map((item, index) => {
     const name = `state[${index}]`;
     if (!isRecord(item)) return fail(`${name} must be an object.`);
     only(item, ['id', 'type', 'initial'], name);
-    const id = unique(item.id, name), type = choice(item.type, ['number', 'text', 'boolean'] as const, `${name}.type`);
-    const fallback = { number: 0, text: '', boolean: false }[type];
-    const initial = item.initial ?? fallback;
-    if (type === 'number' ? typeof initial !== 'number' || !Number.isFinite(initial) || Math.abs(initial) > 1e12
+    const id = unique(valueIDs, item.id, name), type = choice(item.type, ['number', 'text', 'boolean', 'list'] as const, `${name}.type`);
+    const initial = item.initial ?? { number: 0, text: '', boolean: false, list: [] }[type];
+    if (type === 'list') {
+      if (!Array.isArray(initial) || initial.length > maxItems || !initial.every(isItem)) fail(`${name}.initial must be a list of up to ${maxItems} flat objects, e.g. [{"name":"Milk","done":false}].`);
+    } else if (type === 'number' ? typeof initial !== 'number' || !Number.isFinite(initial) || Math.abs(initial) > 1e12
       : type === 'text' ? typeof initial !== 'string' || initial.length > 500 : typeof initial !== 'boolean') fail(`${name}.initial must be a ${type}.`);
-    return { id, type, initial: initial as StateVar['initial'] };
+    return { id, type, initial: initial as StateValue };
   });
+  const stateOf = (id: unknown) => state.find(v => v.id === id);
   const stateIDs = new Set(state.map(v => v.id));
   const inputs: Input[] = list(value.inputs, 'inputs', 4).map((item, index) => {
     const name = `inputs[${index}]`;
     if (!isRecord(item)) return fail(`${name} must be an object.`);
-    const id = unique(item.id, name), label = text(item.label, `${name}.label`, 40)!;
+    const id = unique(inputIDs, item.id, name), label = text(item.label, `${name}.label`, 40)!;
     if (item.type === 'segmented') {
       only(item, ['id', 'type', 'label', 'options', 'default'], name);
-      const options = list(item.options, `${name}.options`, 5, true).map((option, at) => {
-        if (!isRecord(option)) return fail(`${name}.options[${at}] must be an object.`);
-        only(option, ['value', 'label'], `${name}.options[${at}]`);
-        return { value: text(option.value, `${name}.options[${at}].value`, 60)!, label: text(option.label, `${name}.options[${at}].label`, 24)! };
-      });
-      if (options.length < 2 || new Set(options.map(o => o.value)).size !== options.length) fail(`${name} needs 2–5 options with distinct values.`);
-      const fallback = item.default ?? options[0].value;
-      if (!options.some(o => o.value === fallback)) fail(`${name}.default must be one of its option values.`);
-      return { id, type: 'segmented', label, options, default: String(fallback) };
+      const parsed = options(item.options, `${name}.options`, 2, 5);
+      const fallback = item.default ?? parsed[0].value;
+      if (!parsed.some(o => o.value === String(fallback))) fail(`${name}.default must be one of its option values.`);
+      return { id, type: 'segmented', label, options: parsed, default: String(fallback) };
     }
-    if (item.type === 'text') {
+    if (item.type === 'text' || item.type === 'number') {
       only(item, ['id', 'type', 'label', 'default'], name);
-      if (item.default !== undefined && (typeof item.default !== 'string' || item.default.length > 200)) fail(`${name}.default must be text.`);
-      return { id, type: 'text', label, default: typeof item.default === 'string' ? item.default : '' };
+      const fallback = item.default ?? '';
+      if (item.type === 'number' ? fallback !== '' && (typeof fallback !== 'number' && typeof fallback !== 'string' || !Number.isFinite(Number(fallback)))
+        : typeof fallback !== 'string' || fallback.length > 200) fail(`${name}.default must be a ${item.type}.`);
+      return { id, type: item.type, label, default: String(fallback) };
     }
-    return fail(`${name}.type must be segmented or text.`);
+    return fail(`${name}.type must be segmented, text or number.`);
   });
-  const inputIDs = new Set(inputs.map(i => i.id));
   const scope: Scope = { inputs: inputIDs, states: stateIDs };
   const tools: ToolUse[] = [];
   const remote = (item: Record<string, unknown>, name: string, role: ToolUse['role']) => {
@@ -162,11 +220,16 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     return { connectionID, tool };
   };
   const stepIDs = new Set<string>();
-  const earlier = (from: unknown, name: string) => typeof from === 'string' && stepIDs.has(from) ? from : fail(`${name}.from must name an earlier data step.`);
+  // Transforms may read earlier steps and saved state (for example a list of expenses).
+  const known = () => [...stateIDs, ...stepIDs].join(', ') || 'none';
+  const earlier = (from: unknown, name: string) => typeof from === 'string' && (stepIDs.has(from) || stateIDs.has(from)) ? from : fail(`${name}.from must name an earlier data step or a state value (available: ${known()}).`);
   const data: Step[] = list(value.data, 'data', 12).map((item, index) => {
     const name = `data[${index}]`;
     if (!isRecord(item)) return fail(`${name} must be an object.`);
-    const id = unique(item.id, name);
+    const id = unique(valueIDs, item.id, name);
+    // Infer an omitted step type from its distinctive keys.
+    if (item.type === undefined) item.type = 'tool' in item ? 'mcp' : 'by' in item ? 'group' : 'where' in item ? 'filter' : 'count' in item ? 'limit'
+      : 'path' in item ? 'select' : 'op' in item && 'from' in item ? 'aggregate' : 'order' in item ? 'sort' : 'value' in item ? 'const' : undefined;
     let step: Step;
     switch (item.type) {
       case 'mcp': only(item, ['id', 'type', 'connectionID', 'tool', 'arguments'], name);
@@ -175,7 +238,11 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
         step = { id, type: 'const', value: template(item.value ?? null, `${name}.value`, scope) }; break;
       case 'select': only(item, ['id', 'type', 'from', 'path'], name);
         step = { id, type: 'select', from: earlier(item.from, name), path: path(item.path, `${name}.path`)! }; break;
-      case 'filter': only(item, ['id', 'type', 'from', 'where'], name);
+      case 'filter':
+        // Accept the single-condition shorthand {field, op, value} next to or instead of `where`.
+        if (item.where === undefined && item.field !== undefined) item.where = [{ field: item.field, op: item.op, value: item.value }];
+        delete item.field; delete item.op; delete item.value;
+        only(item, ['id', 'type', 'from', 'where'], name);
         step = { id, type: 'filter', from: earlier(item.from, name), where: list(item.where, `${name}.where`, 6, true).map((condition, at) => {
           if (!isRecord(condition)) return fail(`${name}.where[${at}] must be an object.`);
           only(condition, ['field', 'op', 'value'], `${name}.where[${at}]`);
@@ -192,20 +259,38 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
       case 'group': only(item, ['id', 'type', 'from', 'by', 'op', 'field', 'order'], name);
         step = { id, type: 'group', from: earlier(item.from, name), by: path(item.by, `${name}.by`)!, op: choice(item.op, aggregates, `${name}.op`), field: path(item.field, `${name}.field`, true), order: choice(item.order, ['key', 'value-asc', 'value-desc'] as const, `${name}.order`, 'value-desc') };
         if (step.op !== 'count' && step.field === undefined) fail(`${name}.field is required unless op is count.`); break;
-      default: return fail(`${name}.type must be mcp, const, select, filter, sort, limit, aggregate or group.`);
+      default: return fail(`${name}.type must be mcp, const, select, filter, sort, limit, aggregate or group. Use const with $add/$mul/… for calculations.`);
     }
     stepIDs.add(id);
     return step;
   });
   if (data.filter(s => s.type === 'mcp').length > 4) fail('Use at most four mcp data steps.');
-  const actions: Action[] = list(value.actions, 'actions', 4).map((item, index) => {
+  const update = (raw: unknown, where: string, actionScope: Scope): StateUpdate => {
+    if (!isRecord(raw)) return fail(`${where} must be an object.`);
+    // {state, field, value} without op can only mean setting that field on every item.
+    if (raw.op === undefined && raw.field !== undefined) raw = { ...raw, op: 'set_items' };
+    if (!isRecord(raw)) return fail(`${where} must be an object.`);
+    only(raw, ['state', 'op', 'value', 'field'], where);
+    const target = stateOf(raw.state) ?? fail(`${where}.state must name a declared state value.`);
+    const op = choice(raw.op, stateOps.filter(o => o !== 'toggle_item' && o !== 'remove_item'), `${where}.op`);
+    const needs = { increment: 'number', decrement: 'number', toggle: 'boolean', append: 'list', clear: 'list', set_items: 'list' } as Record<string, string>;
+    if (needs[op] && target.type !== needs[op]) fail(`${where}: ${op} needs a ${needs[op]} state.`);
+    if (op === 'set' && target.type === 'list') fail(`${where}: use append, clear or set_items for lists.`);
+    if (['set', 'append', 'pick', 'set_items'].includes(op) && raw.value === undefined) fail(`${where}.value is required for ${op}.`);
+    if (op === 'pick' && (target.type === 'list' || target.type === 'boolean' || !Array.isArray(raw.value) || raw.value.length < 2 || raw.value.length > 50
+      || raw.value.some(v => typeof v !== 'string' && typeof v !== 'number'))) fail(`${where}: pick needs a text or number state and a value array of 2–50 options.`);
+    if (op === 'set_items' && (typeof raw.field !== 'string' || !identifier.test(raw.field))) fail(`${where}.field must name the item field to set, e.g. "done".`);
+    if (raw.field !== undefined && op !== 'set_items') fail(`${where}.field is only used with set_items.`);
+    return { state: target.id, op, ...(raw.value === undefined ? {} : { value: template(raw.value, `${where}.value`, actionScope) }), ...(op === 'set_items' ? { field: raw.field as string } : {}) };
+  };
+  const actions: Action[] = list(value.actions, 'actions', 16).map((item, index) => {
     const name = `actions[${index}]`;
     if (!isRecord(item)) return fail(`${name} must be an object.`);
     // `kind` is optional on input and always present in stored (normalized) specs.
     const local = item.set !== undefined;
     if (item.kind !== undefined && item.kind !== (local ? 'state' : 'remote')) fail(`${name}.kind must be ${local ? 'state' : 'remote'} for this action.`);
     only(item, local ? ['id', 'kind', 'label', 'confirm', 'style', 'set', 'fields'] : ['id', 'kind', 'label', 'confirm', 'style', 'connectionID', 'tool', 'arguments', 'fields'], name);
-    const id = unique(item.id, name);
+    const id = unique(actionIDs, item.id, name);
     const fields: Field[] = list(item.fields, `${name}.fields`, 6).map((field, at) => {
       if (!isRecord(field)) return fail(`${name}.fields[${at}] must be an object.`);
       only(field, ['id', 'label', 'kind', 'required'], `${name}.fields[${at}]`);
@@ -217,45 +302,81 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     const base = { id, label: text(item.label, `${name}.label`, 40)!, style: choice(item.style, ['default', 'destructive'] as const, `${name}.style`, 'default'), fields };
     const actionScope = { ...scope, fields: new Set(fields.map(f => f.id)) };
     if (local) {
-      const set = list(item.set, `${name}.set`, 6, true).map((update, at): StateUpdate => {
-        const where = `${name}.set[${at}]`;
-        if (!isRecord(update)) return fail(`${where} must be an object.`);
-        only(update, ['state', 'op', 'value'], where);
-        const target = state.find(v => v.id === update.state) ?? fail(`${where}.state must name a declared state value.`);
-        const op = choice(update.op, ['increment', 'decrement', 'set', 'toggle'] as const, `${where}.op`);
-        if ((op === 'increment' || op === 'decrement') && target.type !== 'number') fail(`${where}: ${op} needs a number state.`);
-        if (op === 'toggle' && target.type !== 'boolean') fail(`${where}: toggle needs a boolean state.`);
-        if (op === 'set' && update.value === undefined) fail(`${where}.value is required for set.`);
-        return { state: target.id, op, ...(update.value === undefined ? {} : { value: template(update.value, `${where}.value`, actionScope) }) };
-      });
-      return { ...base, kind: 'state', confirm: text(item.confirm, `${name}.confirm`, 200, true), set };
+      const set = list(item.set, `${name}.set`, 6, true).map((raw, at) => update(raw, `${name}.set[${at}]`, actionScope));
+      // An empty confirmation on a local action means none; `true` asks with the button's label.
+      const confirm = item.confirm === false || (typeof item.confirm === 'string' && !item.confirm.trim()) ? undefined : item.confirm === true ? `${base.label}?` : item.confirm;
+      return { ...base, kind: 'state', confirm: text(confirm, `${name}.confirm`, 200, true), set };
     }
-    return { ...base, kind: 'remote', confirm: text(item.confirm, `${name}.confirm`, 200)!,
+    return { ...base, kind: 'remote', confirm: text(item.confirm === true ? `${base.label}?` : item.confirm, `${name}.confirm`, 200)!,
       ...remote(item, name, 'write'), arguments: template(item.arguments ?? {}, `${name}.arguments`, actionScope) as Record<string, unknown> };
   });
-  const actionIDs = new Set(actions.map(a => a.id));
   let nodes = 0;
-  const source = (field: unknown, name: string) => typeof field === 'string' && stepIDs.has(field) ? field : fail(`${name} must name a data step.`);
-  const valueSource = (field: unknown, name: string) => typeof field === 'string' && (stepIDs.has(field) || stateIDs.has(field)) ? field : fail(`${name} must name a data step or state value.`);
-  const component = (item: unknown, name: string, nested: boolean): Component => {
+  const listSource = (field: unknown, name: string) => typeof field === 'string' && (stepIDs.has(field) || stateOf(field)?.type === 'list') ? field : fail(`${name} must name a data step or a list state (available: ${known()}).`);
+  const valueSource = (field: unknown, name: string) => typeof field === 'string' && (stepIDs.has(field) || stateIDs.has(field)) ? field : fail(`${name} must name a data step or state value (available: ${known()}). Declare it in data or state first.`);
+  const bound = (field: unknown, name: string, types: StateVar['type'][]) => {
+    const target = stateOf(field);
+    return target && types.includes(target.type) ? target.id : fail(`${name} must name a ${types.join(' or ')} state value.`);
+  };
+  // Models often omit `type` or add stray keys. The type is inferred from distinctive
+  // keys and unknown keys are dropped, since the normalized component is rebuilt anyway.
+  const infer = (item: Record<string, unknown>) => item.type !== undefined ? item.type
+    : 'children' in item ? 'section' : 'action' in item ? 'action' : 'minutes' in item ? 'timer' : 'goal' in item ? 'progress'
+    : 'step' in item ? 'stat' : 'x' in item || 'y' in item ? 'chart' : 'source' in item ? 'list' : 'options' in item ? 'choice'
+    : 'done' in item ? 'checklist' : 'text' in item ? 'text' : undefined;
+  const keysByType: Record<string, string[]> = {
+    section: ['title', 'children'], stat: ['label', 'step', 'path', 'caption', 'format', 'currency'], progress: ['label', 'step', 'path', 'goal', 'caption', 'format', 'currency'],
+    list: ['source', 'title', 'subtitle', 'value', 'limit', 'empty', 'format', 'currency'], checklist: ['state', 'title', 'subtitle', 'value', 'done', 'removable', 'empty', 'format', 'currency'],
+    chart: ['source', 'kind', 'x', 'y', 'title', 'format', 'currency'], text: ['text', 'style'], toggle: ['label', 'state'], choice: ['label', 'state', 'options'],
+    input: ['label', 'state', 'placeholder'], timer: ['label', 'minutes'], action: ['action'],
+  };
+  const component = (raw: unknown, name: string, nested: boolean): Component => {
     if (++nodes > 40) return fail('view supports at most 40 components.');
-    if (!isRecord(item)) return fail(`${name} must be an object.`);
+    if (!isRecord(raw)) return fail(`${name} must be an object.`);
+    const type = infer(raw);
+    const item: Record<string, unknown> = typeof type === 'string' && keysByType[type]
+      ? Object.fromEntries(Object.entries(raw).filter(([key]) => key === 'type' || keysByType[type].includes(key)).map(([key, v]) => [key, key === 'type' ? type : v]))
+      : raw;
+    if (item.type === undefined && typeof type === 'string') item.type = type;
     switch (item.type) {
       case 'section': only(item, ['type', 'title', 'children'], name);
         if (nested) fail(`${name}: sections cannot be nested.`);
         return { type: 'section', title: text(item.title, `${name}.title`, 60, true), children: list(item.children, `${name}.children`, 20, true).map((child, at) => component(child, `${name}.children[${at}]`, true)) };
       case 'stat': only(item, ['type', 'label', 'step', 'path', 'caption', 'format', 'currency'], name);
         return { type: 'stat', label: text(item.label, `${name}.label`, 40)!, step: valueSource(item.step, `${name}.step`), path: path(item.path, `${name}.path`, true), caption: text(item.caption, `${name}.caption`, 80, true), ...format(item, name) };
+      case 'progress': only(item, ['type', 'label', 'step', 'path', 'goal', 'caption', 'format', 'currency'], name);
+        // The goal is a positive number, or the id of a number state/step (a goal the person can change).
+        if (typeof item.goal === 'string') valueSource(item.goal, `${name}.goal`);
+        else if (typeof item.goal !== 'number' || !Number.isFinite(item.goal) || item.goal <= 0 || item.goal > 1e12) fail(`${name}.goal must be a positive number or the id of a number state.`);
+        return { type: 'progress', label: text(item.label, `${name}.label`, 40)!, step: valueSource(item.step, `${name}.step`), path: path(item.path, `${name}.path`, true), goal: item.goal as number | string, caption: text(item.caption, `${name}.caption`, 80, true), ...format(item, name) };
       case 'list': only(item, ['type', 'source', 'title', 'subtitle', 'value', 'limit', 'empty', 'format', 'currency'], name);
         if (item.limit !== undefined && (!Number.isInteger(item.limit) || Number(item.limit) < 1 || Number(item.limit) > 100)) fail(`${name}.limit must be 1–100.`);
-        return { type: 'list', source: source(item.source, `${name}.source`), title: path(item.title, `${name}.title`)!, subtitle: path(item.subtitle, `${name}.subtitle`, true), value: path(item.value, `${name}.value`, true), limit: Number(item.limit ?? 20), empty: text(item.empty, `${name}.empty`, 80, true), ...format(item, name) };
+        return { type: 'list', source: listSource(item.source, `${name}.source`), title: path(item.title, `${name}.title`)!, subtitle: path(item.subtitle, `${name}.subtitle`, true), value: path(item.value, `${name}.value`, true), limit: Number(item.limit ?? 20), empty: text(item.empty, `${name}.empty`, 80, true), ...format(item, name) };
+      case 'checklist': only(item, ['type', 'state', 'title', 'subtitle', 'value', 'done', 'removable', 'empty', 'format', 'currency'], name);
+        if (item.removable !== undefined && typeof item.removable !== 'boolean') fail(`${name}.removable must be a boolean.`);
+      {
+        const list = bound(item.state, `${name}.state`, ['list']);
+        // Without an explicit `done`, use the first boolean field of the list's items.
+        const samples = [...(stateOf(list)!.initial as Item[]), ...actions.flatMap(a => a.kind === 'state' ? a.set.filter(u => u.state === list && u.op === 'append').map(u => u.value) : [])];
+        const done = path(item.done, `${name}.done`, true) ?? samples.flatMap(v => isRecord(v) ? Object.keys(v).filter(k => typeof v[k] === 'boolean') : [])[0];
+        return { type: 'checklist', state: list, title: path(item.title, `${name}.title`)!, subtitle: path(item.subtitle === '' ? undefined : item.subtitle, `${name}.subtitle`, true), value: path(item.value, `${name}.value`, true),
+          done, removable: item.removable !== false, empty: text(item.empty, `${name}.empty`, 80, true), ...format(item, name) };
+      }
       case 'chart': only(item, ['type', 'source', 'kind', 'x', 'y', 'title', 'format', 'currency'], name);
-        return { type: 'chart', source: source(item.source, `${name}.source`), kind: choice(item.kind, ['bar', 'line'] as const, `${name}.kind`, 'bar'), x: path(item.x, `${name}.x`)!, y: path(item.y, `${name}.y`)!, title: text(item.title, `${name}.title`, 60, true), ...format(item, name) };
+        return { type: 'chart', source: listSource(item.source, `${name}.source`), kind: choice(item.kind, ['bar', 'line'] as const, `${name}.kind`, 'bar'), x: path(item.x, `${name}.x`)!, y: path(item.y, `${name}.y`)!, title: text(item.title, `${name}.title`, 60, true), ...format(item, name) };
       case 'text': only(item, ['type', 'text', 'style'], name);
         return { type: 'text', text: text(item.text, `${name}.text`, 500, false, true)!, style: choice(item.style, ['body', 'caption', 'headline'] as const, `${name}.style`, 'body') };
+      case 'toggle': only(item, ['type', 'label', 'state'], name);
+        return { type: 'toggle', label: text(item.label, `${name}.label`, 60)!, state: bound(item.state, `${name}.state`, ['boolean']) };
+      case 'choice': only(item, ['type', 'label', 'state', 'options'], name);
+        return { type: 'choice', label: text(item.label, `${name}.label`, 60)!, state: bound(item.state, `${name}.state`, ['text']), options: options(item.options, `${name}.options`, 2, 6) };
+      case 'input': only(item, ['type', 'label', 'state', 'placeholder'], name);
+        return { type: 'input', label: text(item.label, `${name}.label`, 60)!, state: bound(item.state, `${name}.state`, ['text', 'number']), placeholder: text(item.placeholder, `${name}.placeholder`, 60, true) };
+      case 'timer': only(item, ['type', 'label', 'minutes'], name);
+        if (typeof item.minutes !== 'number' || !Number.isFinite(item.minutes) || item.minutes <= 0 || item.minutes > 240) fail(`${name}.minutes must be between 0 and 240.`);
+        return { type: 'timer', label: text(item.label, `${name}.label`, 40)!, minutes: Number(item.minutes) };
       case 'action': only(item, ['type', 'action'], name);
-        return { type: 'action', action: typeof item.action === 'string' && actionIDs.has(item.action) ? item.action : fail(`${name}.action must name a declared action.`) };
-      default: return fail(`${name}.type must be section, stat, list, chart, text or action.`);
+        return { type: 'action', action: typeof item.action === 'string' && actionIDs.has(item.action) ? item.action : fail(`${name}.action must name a declared action (available: ${[...actionIDs].join(', ') || 'none'}).`) };
+      default: return fail(`${name}.type must be section, stat, progress, list, checklist, chart, text, toggle, choice, input, timer or action.`);
     }
   };
   const view = list(value.view, 'view', 20, true).map((item, index) => component(item, `view[${index}]`, false));
@@ -270,6 +391,7 @@ function localDate(timestamp: number, timeZone: string) {
   const part = (type: string) => parts.find(p => p.type === type)!.value;
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
+const finite = (value: number) => Number.isFinite(value) && Math.abs(value) <= 1e15 ? value : null;
 export function evaluate(value: unknown, context: Context): unknown {
   if (Array.isArray(value)) return value.map(item => evaluate(item, context));
   if (!isRecord(value)) return value;
@@ -279,6 +401,29 @@ export function evaluate(value: unknown, context: Context): unknown {
   if ('$date' in value && isRecord(value.$date)) {
     const timestamp = context.now + Number(value.$date.days ?? 0) * 86_400_000;
     return value.$date.format === 'date' ? localDate(timestamp, context.timeZone) : new Date(timestamp).toISOString();
+  }
+  const operator = arithmetic.find(key => key in value);
+  if (operator) {
+    // Missing or non-numeric operands make the whole result empty instead of guessing.
+    const values = (value[operator] as unknown[]).map(item => numeric(evaluate(item, context)));
+    if (values.some(v => v === null)) return null;
+    const numbers = values as number[];
+    if (operator === '$add') return finite(numbers.reduce((a, b) => a + b));
+    if (operator === '$sub') return finite(numbers.reduce((a, b) => a - b));
+    if (operator === '$mul') return finite(numbers.reduce((a, b) => a * b));
+    if (operator === '$div') return numbers.slice(1).some(n => n === 0) ? null : finite(numbers.reduce((a, b) => a / b));
+    return operator === '$min' ? Math.min(...numbers) : Math.max(...numbers);
+  }
+  if ('$daysSince' in value || '$daysUntil' in value) {
+    const target = evaluate('$daysSince' in value ? value.$daysSince : value.$daysUntil, context);
+    if (typeof target !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(target)) return null;
+    const days = Math.round((Date.parse(localDate(context.now, context.timeZone)) - Date.parse(target.slice(0, 10))) / 86_400_000);
+    return Number.isFinite(days) ? ('$daysSince' in value ? days : -days) : null;
+  }
+  if ('$round' in value && isRecord(value.$round)) {
+    const number = numeric(evaluate(value.$round.value, context));
+    const factor = 10 ** Number(value.$round.digits ?? 0);
+    return number === null ? null : Math.round(number * factor) / factor;
   }
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, evaluate(item, context)]));
 }
@@ -292,7 +437,7 @@ export function read(value: unknown, at: string | undefined): unknown {
   }
   return current;
 }
-const numeric = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value
+export const numeric = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value
   : typeof value === 'string' && value.trim() && Number.isFinite(Number(value)) ? Number(value) : null;
 function compare(left: unknown, op: Condition['op'], right: unknown): boolean {
   if (op === 'after' || op === 'before') {
@@ -365,36 +510,71 @@ export function toolData(result: Record<string, unknown>): unknown {
   throw new StepError('RESULT_NOT_JSON');
 }
 
+type Row = { title: string; subtitle: string | null; value: number | string | null };
 export type ResolvedComponent =
   | { type: 'section'; title: string | null; children: ResolvedComponent[] }
-  | { type: 'stat'; label: string; value: number | string | null; format: Format; currency: string | null; caption: string | null }
-  | { type: 'list'; items: { title: string; subtitle: string | null; value: number | string | null }[]; format: Format; currency: string | null; empty: string }
+  | { type: 'stat'; label: string; value: number | string | null; format: Format; currency: string | null; caption: string | null; state: string | null }
+  | { type: 'progress'; label: string; value: number | null; goal: number; format: Format; currency: string | null; caption: string | null; state: string | null }
+  | { type: 'list'; items: Row[]; format: Format; currency: string | null; empty: string }
+  // Checklist paths let clients re-derive rows from saved state for instant taps.
+  | { type: 'checklist'; state: string; title: string; subtitle: string | null; value: string | null; done: string | null; removable: boolean; items: (Row & { done: boolean | null })[]; format: Format; currency: string | null; empty: string }
   | { type: 'chart'; kind: 'bar' | 'line'; title: string | null; points: { x: string; y: number }[]; format: Format; currency: string | null }
   | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
-  | { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: Field[] }
+  | { type: 'toggle'; label: string; state: string; value: boolean }
+  | { type: 'choice'; label: string; state: string; value: string; options: Option[] }
+  | { type: 'input'; label: string; state: string; value: string | number; kind: 'text' | 'number'; placeholder: string | null }
+  | { type: 'timer'; label: string; seconds: number }
+  | { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: Field[]; updates: StateUpdate[] | null }
   | { type: 'notice'; code: string };
 
 export function present(view: Component[], spec: Spec, outputs: Map<string, unknown>, errors: Map<string, string>): ResolvedComponent[] {
   const scalar = (value: unknown) => numeric(value) ?? (value === null || value === undefined ? null : label(value));
+  // Missing subtitles/values are omitted rather than shown as a dash.
+  const optional = (item: unknown, at?: string) => { const v = at ? read(item, at) : undefined; return v === undefined || v === null || v === '' ? null : v; };
+  const row = (item: unknown, c: { title: string; subtitle?: string; value?: string }): Row => {
+    const subtitle = optional(item, c.subtitle), value = optional(item, c.value);
+    return { title: label(read(item, c.title)), subtitle: subtitle === null ? null : label(subtitle), value: value === null ? null : scalar(value) };
+  };
   return view.map((component): ResolvedComponent => {
     switch (component.type) {
       case 'section': return { type: 'section', title: component.title ?? null, children: present(component.children, spec, outputs, errors) };
       case 'text': return component;
+      case 'timer': return { type: 'timer', label: component.label, seconds: Math.round(component.minutes * 60) };
+      case 'toggle': return { type: 'toggle', label: component.label, state: component.state, value: outputs.get(component.state) === true };
+      case 'choice': return { type: 'choice', label: component.label, state: component.state, value: String(outputs.get(component.state) ?? ''), options: component.options };
+      case 'input': {
+        const value = outputs.get(component.state);
+        return { type: 'input', label: component.label, state: component.state, value: typeof value === 'number' ? value : String(value ?? ''), kind: typeof value === 'number' ? 'number' : 'text', placeholder: component.placeholder ?? null };
+      }
       case 'action': {
         const action = spec.actions.find(a => a.id === component.action)!;
-        return { type: 'action', id: action.id, kind: action.kind, label: action.label, confirm: action.confirm ?? null, style: action.style, fields: action.fields };
+        // Literal-only updates let clients show a tap instantly before the server confirms it.
+        const literal = (value: unknown) => value === undefined || value === null || ['number', 'string', 'boolean'].includes(typeof value);
+        const updates = action.kind === 'state' && !action.fields.length && action.set.every(u => literal(u.value)) ? action.set : null;
+        return { type: 'action', id: action.id, kind: action.kind, label: action.label, confirm: action.confirm ?? null, style: action.style, fields: action.fields, updates };
       }
-      case 'stat': {
+      case 'stat': case 'progress': {
         if (errors.has(component.step)) return { type: 'notice', code: errors.get(component.step)! };
         const value = read(outputs.get(component.step), component.path);
-        return { type: 'stat', label: component.label, value: scalar(value), format: component.format ?? (typeof value === 'number' ? 'number' : 'text'), currency: component.currency ?? null, caption: component.caption ?? null };
+        const state = !component.path && spec.state.some(v => v.id === component.step) ? component.step : null;
+        if (component.type === 'progress') {
+          const goal = typeof component.goal === 'number' ? component.goal : numeric(outputs.get(component.goal));
+          return { type: 'progress', label: component.label, value: numeric(value), goal: goal !== null && goal > 0 ? goal : 1, format: component.format ?? 'number', currency: component.currency ?? null, caption: component.caption ?? null, state };
+        }
+        return { type: 'stat', label: component.label, value: scalar(value), format: component.format ?? (typeof value === 'number' ? 'number' : 'text'), currency: component.currency ?? null, caption: component.caption ?? null, state };
+      }
+      case 'checklist': {
+        const items = outputs.get(component.state);
+        return { type: 'checklist', state: component.state, title: component.title, subtitle: component.subtitle ?? null, value: component.value ?? null, done: component.done ?? null, removable: component.removable,
+          items: (Array.isArray(items) ? items : []).slice(0, maxItems).map(item => ({ ...row(item, component), done: component.done ? read(item, component.done) === true : null })),
+          format: component.format ?? 'text', currency: component.currency ?? null, empty: component.empty ?? 'Nothing here yet.' };
       }
       case 'list': case 'chart': {
         if (errors.has(component.source)) return { type: 'notice', code: errors.get(component.source)! };
         const rows = outputs.get(component.source);
         if (!Array.isArray(rows)) return { type: 'notice', code: 'NOT_A_LIST' };
-        if (component.type === 'list') return { type: 'list', items: rows.slice(0, component.limit).map(row => ({ title: label(read(row, component.title)), subtitle: component.subtitle ? label(read(row, component.subtitle)) : null, value: component.value ? scalar(read(row, component.value)) : null })), format: component.format ?? 'text', currency: component.currency ?? null, empty: component.empty ?? 'Nothing to show.' };
-        const points = rows.slice(0, 60).flatMap(row => { const y = numeric(read(row, component.y)); return y === null ? [] : [{ x: [...label(read(row, component.x))].slice(0, 40).join(''), y }]; });
+        if (component.type === 'list') return { type: 'list', items: rows.slice(0, component.limit).map(item => row(item, component)), format: component.format ?? 'text', currency: component.currency ?? null, empty: component.empty ?? 'Nothing to show.' };
+        const points = rows.slice(0, 60).flatMap(item => { const y = numeric(read(item, component.y)); return y === null ? [] : [{ x: [...label(read(item, component.x))].slice(0, 40).join(''), y }]; });
         return { type: 'chart', kind: component.kind, title: component.title ?? null, points, format: component.format ?? 'number', currency: component.currency ?? null };
       }
     }
@@ -402,31 +582,80 @@ export function present(view: Component[], spec: Spec, outputs: Map<string, unkn
 }
 
 // Saved values keep their declared type across revisions; anything else resets to initial.
-export function normalizeState(spec: Spec, stored: unknown): Record<string, number | string | boolean> {
-  const values: Record<string, number | string | boolean> = {};
+export function normalizeState(spec: Spec, stored: unknown): Record<string, StateValue> {
+  const values: Record<string, StateValue> = {};
   for (const variable of spec.state) {
     const value = isRecord(stored) ? stored[variable.id] : undefined;
-    values[variable.id] = typeof value === typeof variable.initial && (typeof value !== 'number' || Number.isFinite(value)) ? value as number | string | boolean : variable.initial;
+    const valid = variable.type === 'list' ? Array.isArray(value) && value.length <= maxItems && value.every(isItem)
+      : typeof value === typeof variable.initial && (typeof value !== 'number' || Number.isFinite(value));
+    values[variable.id] = valid ? value as StateValue : variable.initial;
   }
   return values;
 }
-export function applyUpdates(spec: Spec, updates: StateUpdate[], current: Record<string, number | string | boolean>, context: Context): Record<string, number | string | boolean> | null {
+// Direct edits come from components bound to state; each binding allows only its own operation.
+export function directUpdate(spec: Spec, raw: unknown): StateUpdate | null {
+  if (!isRecord(raw) || Object.keys(raw).some(key => !['state', 'op', 'value', 'index', 'field'].includes(key))) return null;
+  const bindings: Component[] = spec.view.flatMap(c => c.type === 'section' ? c.children : [c]);
+  for (const c of bindings) {
+    if (c.type === 'toggle' && c.state === raw.state && raw.op === 'toggle') return { state: c.state, op: 'toggle' };
+    if (c.type === 'choice' && c.state === raw.state && raw.op === 'set' && c.options.some(o => o.value === raw.value)) return { state: c.state, op: 'set', value: raw.value };
+    if (c.type === 'input' && c.state === raw.state && raw.op === 'set' && (typeof raw.value === 'string' || typeof raw.value === 'number')) return { state: c.state, op: 'set', value: raw.value };
+    if (c.type === 'checklist' && c.state === raw.state && Number.isInteger(raw.index) && Number(raw.index) >= 0) {
+      if (raw.op === 'toggle_item' && c.done) return { state: c.state, op: 'toggle_item', index: Number(raw.index), field: c.done };
+      if (raw.op === 'remove_item' && c.removable) return { state: c.state, op: 'remove_item', index: Number(raw.index) };
+    }
+  }
+  return null;
+}
+export function applyUpdates(spec: Spec, updates: StateUpdate[], current: Record<string, StateValue>, context: Context): Record<string, StateValue> | null {
   const next = { ...current };
   for (const update of updates) {
     const variable = spec.state.find(v => v.id === update.state)!;
     const value = update.value === undefined ? undefined : evaluate(update.value, { ...context, state: next });
-    if (update.op === 'toggle') { next[variable.id] = !next[variable.id]; continue; }
-    if (update.op === 'set') {
-      const coerced = variable.type === 'number' ? numeric(value) : variable.type === 'boolean' ? (typeof value === 'boolean' ? value : null) : (value === null || value === undefined ? '' : label(value));
-      if (coerced === null || (typeof coerced === 'string' && coerced.length > 500)) return null;
-      next[variable.id] = coerced;
-      continue;
+    const items = Array.isArray(next[variable.id]) ? next[variable.id] as Item[] : [];
+    switch (update.op) {
+      case 'toggle': next[variable.id] = !next[variable.id]; break;
+      case 'clear': next[variable.id] = []; break;
+      case 'pick': {
+        // Server-side choice: clients wait for the result instead of guessing it.
+        const options = Array.isArray(value) ? value.filter(v => typeof v === 'string' || typeof v === 'number') : [];
+        if (!options.length) return null;
+        const picked = options[Math.floor(Math.random() * options.length)];
+        next[variable.id] = variable.type === 'number' ? (numeric(picked) ?? 0) : label(picked);
+        break;
+      }
+      case 'set_items': {
+        if (value !== null && typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return null;
+        next[variable.id] = items.map(item => value === null ? Object.fromEntries(Object.entries(item).filter(([key]) => key !== update.field)) : { ...item, [update.field!]: value });
+        break;
+      }
+      case 'append': {
+        // Scalars become {"value": …}; objects keep only flat scalar fields.
+        const item = isRecord(value) ? Object.fromEntries(Object.entries(value).filter(([, v]) => v !== null && v !== undefined && v !== '')) : value === null || value === undefined || value === '' ? null : { value };
+        if (!item || !isItem(item) || !Object.keys(item).length || items.length >= maxItems) return null;
+        next[variable.id] = [...items, item as Item];
+        break;
+      }
+      case 'toggle_item': case 'remove_item': {
+        if (update.index === undefined || update.index >= items.length) return null;
+        next[variable.id] = update.op === 'remove_item' ? items.filter((_, index) => index !== update.index)
+          : items.map((item, index) => index === update.index ? { ...item, [update.field!]: item[update.field!] !== true } : item);
+        break;
+      }
+      case 'set': {
+        const coerced = variable.type === 'number' ? numeric(value) : variable.type === 'boolean' ? (typeof value === 'boolean' ? value : null) : (value === null || value === undefined ? '' : label(value));
+        if (coerced === null || (typeof coerced === 'string' && coerced.length > 500)) return null;
+        next[variable.id] = coerced;
+        break;
+      }
+      default: {
+        const amount = value === undefined ? 1 : numeric(value);
+        if (amount === null) return null;
+        const result = Number(next[variable.id]) + (update.op === 'increment' ? amount : -amount);
+        if (!Number.isFinite(result) || Math.abs(result) > 1e12) return null;
+        next[variable.id] = result;
+      }
     }
-    const amount = value === undefined ? 1 : numeric(value);
-    if (amount === null) return null;
-    const result = Number(next[variable.id]) + (update.op === 'increment' ? amount : -amount);
-    if (!Number.isFinite(result) || Math.abs(result) > 1e12) return null;
-    next[variable.id] = result;
   }
   return next;
 }

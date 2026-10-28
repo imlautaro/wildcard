@@ -320,12 +320,13 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   let executions = 0;
   let groupPublicationCalls = 0;
   const processedGroupResults: unknown[] = [...groupMessages.results];
-  // Connector chats get a third tool round: list tools, inspect a result, then build a mini app.
-  const toolRounds = isolated && !turn.scheduleID ? 3 : 2;
+  // A third tool round covers list tools → inspect a result → build a mini app, and
+  // lets the contact repair a rejected mini app spec once.
+  const toolRounds = turn.scheduleID ? 2 : 3;
   for (let round = 0; round <= toolRounds; round++) {
     if (round === toolRounds) messages.push({ role: 'system', content: 'Tool budget exhausted. Answer using the available evidence; acknowledge any missing detail.' });
     const answer = await museCompletion(env, messages, model,
-      !recoveryCode && round < toolRounds ? { tools: turn.scheduleID ? turnTools.filter((tool) => !['create_schedule', 'update_schedule', 'cancel_schedule', 'send_group_message', 'ask_agent_in_group'].includes(tool.function.name)) : turnTools } : {});
+      !recoveryCode && round < toolRounds ? { maxTokens: 8192, tools: turn.scheduleID ? turnTools.filter((tool) => !['create_schedule', 'update_schedule', 'cancel_schedule', 'send_group_message', 'ask_agent_in_group'].includes(tool.function.name)) : turnTools } : {});
     await acknowledgeGroupResults(env.DB, agent.id, processedGroupResults);
     processedGroupResults.length = 0;
     // A successful model response proves the current input was processed, even if

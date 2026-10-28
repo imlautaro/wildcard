@@ -1,4 +1,4 @@
-import type { MiniAppFormat, Presence } from './types';
+import type { MiniAppFormat, MiniAppStateValue, MiniAppUpdate, Presence } from './types';
 
 const time = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
 const weekday = new Intl.DateTimeFormat(undefined, { weekday: 'long' });
@@ -83,6 +83,38 @@ const miniAppIssues: Record<string, string> = {
   TOO_MANY_ITEMS: 'Too many items to show.', TOO_MANY_GROUPS: 'Too many groups to show.', RESULT_TOO_LARGE: 'This result is too large to show.',
 };
 export function miniAppIssue(code: string) { return miniAppIssues[code] ?? "Couldn't load this part."; }
+// Mirrors the server's applyUpdates for literal values, so taps show before confirmation.
+export function applyMiniAppUpdates(updates: MiniAppUpdate[], values: Record<string, MiniAppStateValue>) {
+  const next = { ...values };
+  for (const update of updates) {
+    const current = next[update.state];
+    if (current === undefined) continue;
+    if (Array.isArray(current)) {
+      if (update.op === 'clear') next[update.state] = [];
+      else if (update.op === 'set_items' && update.field && update.value !== undefined && update.value !== null && !Array.isArray(update.value)) {
+        const field = update.field, value = update.value;
+        next[update.state] = current.map(item => ({ ...item, [field]: value }));
+      }
+      else if (update.index !== undefined && update.index < current.length && update.op === 'remove_item') next[update.state] = current.filter((_, index) => index !== update.index);
+      else if (update.index !== undefined && update.index < current.length && update.op === 'toggle_item' && update.field) {
+        const field = update.field;
+        next[update.state] = current.map((item, index) => index === update.index ? { ...item, [field]: item[field] !== true } : item);
+      }
+      continue;
+    }
+    const number = typeof update.value === 'number' ? update.value : typeof update.value === 'string' && update.value.trim() && Number.isFinite(Number(update.value)) ? Number(update.value) : null;
+    if (update.op === 'toggle' && typeof current === 'boolean') next[update.state] = !current;
+    else if ((update.op === 'increment' || update.op === 'decrement') && typeof current === 'number') {
+      const amount = update.value === undefined || update.value === null ? 1 : number;
+      if (amount !== null) next[update.state] = current + (update.op === 'increment' ? amount : -amount);
+    } else if (update.op === 'set') {
+      if (typeof current === 'number' && number !== null) next[update.state] = number;
+      else if (typeof current === 'string') next[update.state] = update.value === undefined || update.value === null ? '' : String(update.value);
+      else if (typeof current === 'boolean' && typeof update.value === 'boolean') next[update.state] = update.value;
+    }
+  }
+  return next;
+}
 const miniAppIcons = ['chart', 'list', 'money', 'calendar', 'cart', 'check', 'clock', 'star', 'bolt', 'folder'] as const;
 export function miniAppIcon(icon: string): typeof miniAppIcons[number] {
   return miniAppIcons.includes(icon as typeof miniAppIcons[number]) ? icon as typeof miniAppIcons[number] : 'chart';

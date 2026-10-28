@@ -14,6 +14,20 @@ struct WildcardApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            // Renders a resolved mini app fixture for visual checks (scripts/checks/mini-app-eval.mjs).
+            if let fixture = MiniAppFixtureView.load() {
+                fixture.manrope().tint(Color(red: 4 / 255, green: 93 / 255, blue: 227 / 255))
+            } else {
+                app
+            }
+            #else
+            app
+            #endif
+        }
+    }
+
+    private var app: some View {
             ContentView()
                 .environment(auth)
                 .environment(push)
@@ -39,6 +53,5 @@ struct WildcardApp: App {
                 .onChange(of: auth.state) { _, state in
                     if state == .signedOut { push.clearAccountState(); native.clear() }
                 }
-        }
     }
 }

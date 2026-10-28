@@ -56,7 +56,7 @@ Source excerpts clip each side to 600 UTF-8 bytes; use `nextUserOffset` or
 packing may omit neighbors and reports truncation. Private history searches exclude the current turn and future sequences in that conversation. Memory search can also retrieve completed facts from other participants of the same agent, attributed by source user ID/name. Tools cannot access other agents, other participants’ raw transcripts/schedules, the internet, external services, or modify memory data. Missing/foreign source IDs return
 the same generic not-found result.
 
-Each generation attempt allows two tool rounds and six executions, then makes a
+Each private generation attempt allows three tool rounds (two for scheduled turns) and six executions, then makes a
 final model request with tool definitions omitted. Meta Chat Completions only
 accepts `tool_choice: auto`; the implementation never sends unsupported `none` or
 `required`. It replays the assistant's tool calls and pairs each with its result.

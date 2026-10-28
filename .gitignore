@@ -26,3 +26,4 @@ dist/
 .output/
 worker-configuration.d.ts
 *.tsbuildinfo
+.mini-app-eval/

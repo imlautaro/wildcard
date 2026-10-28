@@ -118,7 +118,7 @@ export type ReceivedContactInvitation = { id: string; contactName: string; sende
 
 export type MiniAppFormat = 'number' | 'currency' | 'percent' | 'date' | 'datetime' | 'text';
 export type MiniAppInput = { id: string; type: 'segmented'; label: string; options: { value: string; label: string }[]; default: string }
-  | { id: string; type: 'text'; label: string; default: string };
+  | { id: string; type: 'text' | 'number'; label: string; default: string };
 export type MiniAppField = { id: string; label: string; kind: 'text' | 'number' | 'date' | 'toggle'; required: boolean };
 export type MiniApp = {
   id: string; turnID: string | null; revision: number; title: string; subtitle: string | null; icon: string;
@@ -128,10 +128,21 @@ export type MiniApp = {
 };
 export type MiniAppComponent =
   | { type: 'section'; title: string | null; children: MiniAppComponent[] }
-  | { type: 'stat'; label: string; value: number | string | null; format: MiniAppFormat; currency: string | null; caption: string | null }
-  | { type: 'list'; items: { title: string; subtitle: string | null; value: number | string | null }[]; format: MiniAppFormat; currency: string | null; empty: string }
+  | { type: 'stat'; label: string; value: number | string | null; format: MiniAppFormat; currency: string | null; caption: string | null; state: string | null }
+  | { type: 'list'; items: MiniAppRow[]; format: MiniAppFormat; currency: string | null; empty: string }
+  | { type: 'progress'; label: string; value: number | null; goal: number; format: MiniAppFormat; currency: string | null; caption: string | null; state: string | null }
+  | { type: 'checklist'; state: string; title: string; subtitle: string | null; value: string | null; done: string | null; removable: boolean; items: (MiniAppRow & { done: boolean | null })[]; format: MiniAppFormat; currency: string | null; empty: string }
+  | { type: 'toggle'; label: string; state: string; value: boolean }
+  | { type: 'choice'; label: string; state: string; value: string; options: { value: string; label: string }[] }
+  | { type: 'input'; label: string; state: string; value: string | number; kind: 'text' | 'number'; placeholder: string | null }
+  | { type: 'timer'; label: string; seconds: number }
   | { type: 'chart'; kind: 'bar' | 'line'; title: string | null; points: { x: string; y: number }[]; format: MiniAppFormat; currency: string | null }
   | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
-  | { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: MiniAppField[] }
+  | { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: MiniAppField[]; updates: MiniAppUpdate[] | null }
   | { type: 'notice'; code: string };
-export type MiniAppResolution = { revision: number; inputs: Record<string, string>; resolvedAt: number; view: MiniAppComponent[]; issues: { step: string; code: string }[] };
+export type MiniAppRow = { title: string; subtitle: string | null; value: number | string | null };
+export type MiniAppItem = Record<string, number | string | boolean>;
+export type MiniAppStateValue = number | string | boolean | MiniAppItem[];
+export type MiniAppUpdate = { state: string; op: 'increment' | 'decrement' | 'set' | 'toggle' | 'append' | 'clear' | 'pick' | 'set_items' | 'toggle_item' | 'remove_item'; value?: MiniAppStateValue | null; index?: number; field?: string };
+export type MiniAppResolution = { revision: number; inputs: Record<string, string>; resolvedAt: number; view: MiniAppComponent[]; issues: { step: string; code: string }[];
+  state?: Record<string, MiniAppStateValue>; remote?: boolean };

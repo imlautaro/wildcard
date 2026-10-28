@@ -83,7 +83,7 @@ creation per human message and at most one edit/cancellation per target/action
 in that message. Replays return the original result, including when regenerated
 arguments differ, rather than applying another change. An updated user request
 must be a new message. Only a currently running human turn can create a receipt.
-The existing two tool rounds / six executions bound chat-side operations.
+The existing tool rounds (three for human turns, two for scheduled turns) and six executions bound chat-side operations.
 
 ## Limits and timing
 

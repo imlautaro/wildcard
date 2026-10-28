@@ -1,9 +1,12 @@
-import type { MiniApp, MiniAppResolution } from '~/utils/types';
+import type { MiniApp, MiniAppResolution, MiniAppStateValue, MiniAppUpdate } from '~/utils/types';
 
 // Session-owned caches: one app list per contact and one resolved view per app.
 // Resolved views hold connector data in memory only; nothing is persisted.
 type List = { apps: MiniApp[]; loaded: boolean; loadedAt: number; revision: number; request: Promise<void> | null; error: string | null };
-type View = { value: MiniAppResolution | null; inputs: Record<string, string>; loadedAt: number; revision: number; request: Promise<void> | null; error: string | null };
+// A tap runs a local action (actionID) or edits state directly from a bound component.
+type Tap = { id: string; actionID: string | null; updates: MiniAppUpdate[] };
+type View = { value: MiniAppResolution | null; inputs: Record<string, string>; loadedAt: number; revision: number; request: Promise<void> | null; error: string | null;
+  taps: Tap[]; sending: boolean };
 const lists = shallowReactive(new Map<string, List>());
 const views = shallowReactive(new Map<string, View>());
 function invalidate<T extends { revision: number }>(map: Map<string, T>, key: string) { const entry = map.get(key); if (entry) entry.revision++; map.delete(key); }
@@ -65,7 +68,7 @@ export function useMiniApps(contactID: MaybeRefOrGetter<string>) {
     const key = `${toValue(contactID)}/${appID}`;
     let value = views.get(key);
     if (!value) {
-      value = reactive({ value: null, inputs: {}, loadedAt: 0, revision: 0, request: null, error: null }) as View;
+      value = reactive({ value: null, inputs: {}, loadedAt: 0, revision: 0, request: null, error: null, taps: [], sending: false }) as View;
       views.set(key, value);
       while (views.size > 16) invalidate(views, views.keys().next().value!);
     }
@@ -105,5 +108,42 @@ export function useMiniApps(contactID: MaybeRefOrGetter<string>) {
     } else if (outcome.status === 'completed') await resolve(app, undefined, true);
     return outcome.status;
   }
-  return { state, refresh, approve, remove, view, resolve, run };
+  // Saved state plus taps not yet confirmed, in tap order.
+  function displayState(appID: string): Record<string, MiniAppStateValue> {
+    const entry = view(appID);
+    return entry.taps.reduce((values, tap) => applyMiniAppUpdates(tap.updates, values), entry.value?.state ?? {});
+  }
+  // Literal local taps show immediately and are sent in order; the server's view stays authoritative.
+  async function tap(app: MiniApp, actionID: string | null, updates: MiniAppUpdate[]) {
+    const id = toValue(contactID), key = `${id}/${app.id}`, entry = view(app.id);
+    if (entry.taps.length >= 20) return;
+    entry.taps.push({ id: crypto.randomUUID(), actionID, updates });
+    if (entry.sending) return;
+    entry.sending = true;
+    let failures = 0;
+    try {
+      while (views.get(key) === entry && entry.taps.length) {
+        const next = entry.taps[0]!;
+        try {
+          const outcome = await api<{ status: string; resolution?: MiniAppResolution }>(next.actionID
+            ? `contacts/${id}/mini-apps/${app.id}/actions/${next.actionID}` : `contacts/${id}/mini-apps/${app.id}/state`,
+            { json: next.actionID ? { executionID: next.id, revision: app.revision, inputs: entry.inputs, fields: {}, timeZone: timeZone() }
+              : { executionID: next.id, revision: app.revision, inputs: entry.inputs, timeZone: timeZone(), update: next.updates[0] } });
+          if (views.get(key) !== entry || entry.taps[0]?.id !== next.id) return;
+          if (outcome.resolution) { entry.value = outcome.resolution; entry.loadedAt = Date.now(); entry.error = null; }
+          entry.taps.shift();
+          failures = 0;
+          if (!outcome.resolution && !entry.taps.length) await resolve(app, undefined, true);
+        } catch (failure) {
+          if (views.get(key) !== entry) return;
+          // Retrying reuses the tap's execution ID, so the server never applies it twice.
+          if (isTransientFailure(failure) && ++failures < 3) { await new Promise(done => setTimeout(done, 1000)); continue; }
+          entry.taps = []; entry.error = errorMessage(failure);
+          await resolve(app, undefined, true);
+          return;
+        }
+      }
+    } finally { entry.sending = false; }
+  }
+  return { state, refresh, approve, remove, view, resolve, run, displayState, tap };
 }

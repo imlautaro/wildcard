@@ -3,24 +3,34 @@ import type { StoredTurn } from '../chat/data';
 import { parseSpec, SpecError } from './spec';
 import { bindTools, contactConnectors, miniAppColumns, type MiniAppRow } from './runtime';
 
-const specGuide = 'spec = {title, subtitle?, icon: chart|list|money|calendar|cart|check|clock|star|bolt|folder, state?, inputs?, data?, view, actions?}. '
-  + 'state: saved values for this person, [{id,type:number|text|boolean,initial}]; read them in view by id (stat.step) or with {"$state":"id"}. '
-  + 'data is an ordered list of steps; "from" may only name an EARLIER step. Step types: '
-  + '{id,type:"mcp",connectionID,tool,arguments} (a read run each time the app opens); {id,type:"const",value}; {id,type:"select",from,path}; '
+const specGuide = 'spec (a JSON object, not a string) = {title, subtitle?, icon: chart|list|money|calendar|cart|check|clock|star|bolt|folder, state?, inputs?, data?, view, actions?}. '
+  + 'state: saved values for this person, [{id,type:number|text|boolean|list,initial}]; a list holds flat objects, e.g. [{"name":"Milk","done":false}]. '
+  + 'Read state in the view by id (stat.step, list.source) or with {"$state":"id"}; data steps may also read state with "from". '
+  + 'data is an ordered list of steps; "from" may only name an EARLIER step or a state id. Step types: '
+  + '{id,type:"mcp",connectionID,tool,arguments} (a read run each time the app opens); {id,type:"const",value} (also for calculations); {id,type:"select",from,path}; '
   + '{id,type:"filter",from,where:[{field,op:eq|neq|gt|gte|lt|lte|contains|after|before,value}]}; {id,type:"sort",from,field,order:asc|desc}; '
   + '{id,type:"limit",from,count}; {id,type:"aggregate",from,op:sum|avg|min|max|count,field?} (a number); '
   + '{id,type:"group",from,by,op,field?,order:key|value-asc|value-desc} (rows {key,value,count}). '
-  + 'Paths are dot paths into the parsed JSON tool result, e.g. "data.expenses" or "amount"; "" is the whole value. '
-  + 'Argument and filter values may be JSON literals or {"$input":"inputID"}, {"$date":{"days":-7,"format":"date"|"datetime"}} (relative to now, person time zone). '
-  + 'inputs: {id,type:"segmented",label,options:[{value,label}],default} or {id,type:"text",label,default}. '
-  + 'view components: {type:"section",title?,children}; {type:"stat",label,step,path?,caption?,format?,currency?}; '
-  + '{type:"list",source,title,subtitle?,value?,limit?,empty?,format?,currency?} (title/subtitle/value are paths inside each row); '
-  + '{type:"chart",source,kind:bar|line,x,y,title?,format?,currency?}; {type:"text",text,style:body|caption|headline}; {type:"action",action}. '
+  + 'Paths are dot paths, e.g. "data.expenses" or "amount"; "" is the whole value. '
+  + 'Values may be JSON literals or expressions: {"$input":"id"}, {"$state":"id"}, {"$field":"id"} (actions), {"$date":{"days":-7,"format":"date"|"datetime"}}, '
+  + 'math {"$add"|"$sub"|"$mul"|"$div"|"$min"|"$max":[a,b,…]}, {"$round":{"value":…,"digits":2}}, and {"$daysSince":"2026-10-01"} / {"$daysUntil":…} (whole days from today).  Example tip: {id:"tip",type:"const",value:{"$round":{"value":{"$mul":[{"$input":"bill"},{"$div":[{"$input":"pct"},100]}]},"digits":2}}}. '
+  + 'inputs (not saved, recomputed live): {id,type:"segmented",label,options:[{value,label}],default}, {id,type:"number",label,default} or {id,type:"text",label,default}. '
+  + 'view components: {type:"section",title?,children} (one level); {type:"stat",label,step,path?,caption?,format?,currency?} (a single stat shows as a large number); '
+  + '{type:"progress",label,step,goal,caption?} (value toward a goal; goal is a number or a number state id); {type:"toggle",label,state} (boolean state, tap to flip); '
+  + '{type:"choice",label,state,options:[{value,label}]} (text state, pick one); {type:"input",label,state,placeholder?} (text/number state, edited in place); '
+  + '{type:"checklist",state,title,done?,subtitle?,value?,removable?,empty?} (list state; rows tap to toggle the boolean "done" field and swipe to delete); '
+  + '{type:"list",source,title,subtitle?,value?,limit?,empty?,format?,currency?} (read-only rows from a step or list state; title/subtitle/value are paths in each row); '
+  + '{type:"chart",source,kind:bar|line,x,y,title?,format?,currency?}; {type:"timer",label,minutes} (on-device countdown with start/pause/reset); '
+  + '{type:"text",text,style:body|caption|headline}; {type:"action",action} (consecutive buttons share one row). '
   + 'format: number|currency|percent|date|datetime|text; currency needs an ISO code. '
-  + 'actions: local {id,label,set:[{state,op:increment|decrement|set|toggle,value?}],confirm?,style?,fields?} updates saved state instantly (increment/decrement default 1); '
+  + 'actions (ids separate from state ids): local {id,label,set:[{state,op,value?}],confirm?,style?,fields?} updates saved state instantly. ops: increment/decrement (number, default 1), set (number/text/boolean), toggle (boolean), '
+  + 'append (list; value is an object, often from fields, e.g. {"name":{"$field":"item"},"done":false}), clear (list), set_items (list; {field:"done",value:false} sets that field on every item, e.g. to restart a checklist), '
+  + 'pick (text/number; value is an array of options, one chosen at random, e.g. a dinner roulette). Omit confirm unless the action is destructive. '
   + 'remote {id,label,confirm,style?:default|destructive,connectionID,tool,arguments,fields?} runs an external write only after the person taps and confirms. '
-  + 'fields: [{id,label,kind:text|number|date|toggle,required?}]; action values and arguments may use {"$field":"fieldID"}. '
-  + 'Example counter: {title:"Counter",icon:"bolt",state:[{id:"count",type:"number",initial:0}],view:[{type:"stat",label:"Count",step:"count"},{type:"action",action:"add"}],actions:[{id:"add",label:"+1",set:[{state:"count",op:"increment"}]}]}.';
+  + 'fields: [{id,label,kind:text|number|date|toggle,required?}] render a form with the button. '
+  + 'Prefer the bound components (toggle, choice, input, checklist) over many buttons. Keep labels short (use "+" and "−" for counters) and write all text in the person\'s language. '
+  + 'Example counter: {title:"Counter",icon:"bolt",state:[{id:"count",type:"number",initial:0}],view:[{type:"stat",label:"Count",step:"count"},{type:"action",action:"sub"},{type:"action",action:"add"}],actions:[{id:"sub",label:"−",set:[{state:"count",op:"decrement"}]},{id:"add",label:"+",set:[{state:"count",op:"increment"}]}]}. '
+  + 'Example shopping list: {title:"Groceries",icon:"cart",state:[{id:"items",type:"list",initial:[]}],view:[{type:"checklist",state:"items",title:"name",done:"done",empty:"Add your first item"},{type:"action",action:"add"}],actions:[{id:"add",label:"Add",fields:[{id:"item",label:"Item",kind:"text",required:true}],set:[{state:"items",op:"append",value:{"name":{"$field":"item"},"done":false}}]}]}.';
 
 export const miniAppTools: ModelTool[] = [{ type: 'function', function: {
   name: 'create_mini_app',

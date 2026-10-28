@@ -11,6 +11,11 @@ final class MiniAppStore {
     private(set) var viewErrors: [String: String] = [:]
     private(set) var inputs: [String: [String: String]] = [:]
     private(set) var resolving: Set<String> = []
+    /// A tap runs a local action, or edits state directly from a bound component.
+    struct PendingTap: Sendable { let id: UUID; let actionID: String?; let updates: [MiniAppUpdate] }
+    /// Local taps shown immediately and sent in order; the server's view stays authoritative.
+    private(set) var pendingTaps: [String: [PendingTap]] = [:]
+    @ObservationIgnored private var tapWorkers: Set<String> = []
     @ObservationIgnored private var listLoaded: [String: Date] = [:]
     @ObservationIgnored private var viewLoaded: [String: Date] = [:]
     @ObservationIgnored private var listRequests: [String: Task<Void, Never>] = [:]
@@ -104,7 +109,52 @@ final class MiniAppStore {
         return outcome.status
     }
 
+    /// Saved state plus taps not yet confirmed, in tap order.
+    func displayState(key: String) -> [String: MiniAppStateValue] {
+        (pendingTaps[key] ?? []).reduce(views[key]?.state ?? [:]) { MiniAppUpdate.apply($1.updates, to: $0) }
+    }
+
+    func tap(_ app: MiniApp, contactID: String, actionID: String?, updates: [MiniAppUpdate], using auth: AuthStore) {
+        let key = "\(contactID)/\(app.id)"
+        guard (pendingTaps[key]?.count ?? 0) < 20 else { return }
+        pendingTaps[key, default: []].append(PendingTap(id: UUID(), actionID: actionID, updates: updates))
+        guard !tapWorkers.contains(key) else { return }
+        tapWorkers.insert(key)
+        let current = generation
+        Task { @MainActor in
+            defer { if generation == current { tapWorkers.remove(key) } }
+            var failures = 0
+            while generation == current, let next = pendingTaps[key]?.first {
+                do {
+                    let outcome = try await auth.withSession { [inputs] api, token in
+                        if let actionID = next.actionID {
+                            try await api.runMiniAppAction(contactID: contactID, appID: app.id, actionID: actionID, executionID: next.id,
+                                                           revision: app.revision, inputs: inputs[key] ?? [:], fields: [:], token: token)
+                        } else {
+                            try await api.editMiniAppState(contactID: contactID, appID: app.id, executionID: next.id, revision: app.revision, inputs: inputs[key] ?? [:], update: next.updates[0], token: token)
+                        }
+                    }
+                    guard generation == current, pendingTaps[key]?.first?.id == next.id else { return }
+                    if let resolution = outcome.resolution { views[key] = resolution; viewLoaded[key] = .now; viewErrors[key] = nil }
+                    pendingTaps[key]?.removeFirst()
+                    failures = 0
+                    if outcome.resolution == nil, pendingTaps[key]?.isEmpty != false { await resolve(app, contactID: contactID, force: true, using: auth) }
+                } catch is CancellationError { return }
+                catch {
+                    guard generation == current else { return }
+                    failures += 1
+                    // Retrying reuses the tap's execution ID, so the server never applies it twice.
+                    if AuthAPI.isTransient(error) && failures < 3 { try? await Task.sleep(for: .seconds(1)); continue }
+                    pendingTaps[key] = nil; viewErrors[key] = error.localizedDescription
+                    await resolve(app, contactID: contactID, force: true, using: auth)
+                    return
+                }
+            }
+        }
+    }
+
     private func dropView(key: String) {
+        pendingTaps.removeValue(forKey: key)
         viewRevisions[key] = (viewRevisions[key] ?? 0) + 1
         views.removeValue(forKey: key); viewErrors.removeValue(forKey: key); inputs.removeValue(forKey: key)
         viewLoaded.removeValue(forKey: key); resolving.remove(key)
@@ -117,7 +167,7 @@ final class MiniAppStore {
     func removeAll() {
         generation += 1
         for task in listRequests.values { task.cancel() }
-        listRequests.removeAll(); apps.removeAll(); errors.removeAll(); listLoaded.removeAll()
+        listRequests.removeAll(); apps.removeAll(); errors.removeAll(); listLoaded.removeAll(); tapWorkers.removeAll()
         for key in Set(views.keys).union(inputs.keys) { dropView(key: key) }
     }
 }

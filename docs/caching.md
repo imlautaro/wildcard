@@ -710,3 +710,11 @@ data stays in memory only, with no disk cache. A pending action keeps its execut
 UUID only in its screen's state; leaving the screen drops it, and an unknown
 outcome is never resubmitted. Device checks for reopen, back navigation, refresh,
 offline recovery, revocation and account switching are pending.
+
+Local taps and direct state edits from bound components (toggle, choice, input,
+checklist rows) are queued per app view, in memory, and applied immediately to the
+displayed state. They are sent in order with one execution UUID each. A response
+with a `resolution` replaces the cached view; the display is that view plus the taps
+still pending. A transient failure retries the same UUID twice, then drops the queue
+and reloads. Leaving the screen keeps the queue running in the session store. Account
+changes and view invalidation discard it, and late responses are rejected.

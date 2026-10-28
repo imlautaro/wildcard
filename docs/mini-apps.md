@@ -37,41 +37,91 @@ replacement increments the revision and requires review again.
 ## Spec
 
 `create_mini_app` validates the spec on the server (`apps/api/src/miniapps/spec.ts`)
-and returns precise errors to the model. Limits: 16 KB, eight state values, 12 data
-steps (at most four `mcp`), four inputs, four actions, 40 view components and one
-level of sections.
+and returns precise errors to the model, listing the available ids for broken
+references. Limits: 16 KB, eight state values, 12 data steps (at most four `mcp`),
+four inputs, 16 actions, 40 view components and one level of sections.
 
-**State** declares saved values: `[{ "id": "count", "type": "number", "initial": 0 }]`
-(`number`, `text` or `boolean`). A `stat` can show a state value directly
-(`"step": "count"`), and templates can read it with `{"$state": "count"}`.
+**State** declares saved values: `number`, `text`, `boolean` or `list`
+(up to 200 flat objects, such as `{ "name": "Milk", "done": false }`). A `stat`,
+`progress` or `list` can read state directly by id, data steps can use it as `from`,
+and templates read it with `{"$state": id}`. State, data steps and inputs each have
+their own namespace for ids, except that state and data step ids share one, because
+the view reads both.
+
 **Local actions** change state without any external tool:
-`{ "id": "add", "label": "+1", "set": [{ "state": "count", "op": "increment" }] }`.
-The available ops are `increment`/`decrement` (default 1), `set` (with a templated
-`value`, which may use form fields) and `toggle`. A local action needs no confirmation
-unless it declares `confirm`, for example for a destructive reset. **Remote actions**
-(`connectionID`, `tool`, `arguments`) always require `confirm`.
+`{ "id": "add", "label": "+", "set": [{ "state": "count", "op": "increment" }] }`.
+
+| Op | State | Effect |
+| --- | --- | --- |
+| `increment`, `decrement` | number | Default amount is 1 |
+| `set` | number, text, boolean | Templated `value`, which may use form fields |
+| `toggle` | boolean | |
+| `append` | list | Adds an object (scalars become `{ "value": … }`) |
+| `clear` | list | Removes every item |
+| `set_items` | list | Sets `field` to `value` on every item, for example to restart a checklist |
+| `pick` | text, number | Picks one of the `value` options at random, on the server |
+
+A local action needs no confirmation unless it declares `confirm`, for example for a
+destructive reset. **Remote actions** (`connectionID`, `tool`, `arguments`) always
+require `confirm`. Components bound to state (`toggle`, `choice`, `input`, and
+`checklist` rows) edit it directly through `POST /:appID/state`. That route accepts
+only the operation the bound component allows: flipping a toggle, choosing one of
+the declared options, setting an input, or toggling/removing a checklist row.
 
 | Step | Purpose |
 | --- | --- |
 | `mcp` | Call an enabled read tool with templated arguments |
-| `const` | A literal value |
+| `const` | A literal or computed value |
 | `select` | Pick a dot path, such as `data.expenses` |
 | `filter` | Keep rows matching all conditions (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `contains`, `after`, `before`) |
 | `sort`, `limit` | Order rows by a field; keep the first 1–500 |
 | `aggregate` | `sum`, `avg`, `min`, `max` or `count`, giving a number |
 | `group` | Group rows by a field into `{ key, value, count }` |
 
-A step's `from` may only name an earlier step, so the graph is acyclic by
-construction. Templates are JSON literals plus three expressions: `{"$input": id}`,
-`{"$date": {"days": -7, "format": "date" | "datetime"}}` (relative to now in the
-viewer's time zone) and, in actions only, `{"$field": id}`. Nothing is evaluated as
-code, and there are no regular expressions or remote references.
+A step's `from` may only name an earlier step or a state id, so the graph is acyclic
+by construction. Templates are JSON literals plus structured expressions:
+- `{"$input": id}`, `{"$state": id}`, and `{"$field": id}` (actions only).
+- `{"$date": {"days": -7, "format": "date" | "datetime"}}`, relative to now in the
+  viewer's time zone.
+- `{"$daysSince": "YYYY-MM-DD"}` and `{"$daysUntil": …}`, in whole days from today.
+- `$add`, `$sub`, `$mul`, `$div` and `$min`/`$max` over 2–8 operands, and
+  `{"$round": {"value", "digits"}}`.
 
-View components: `section`, `stat` (consecutive stats share one grid), `list`,
-`chart` (`bar` or `line`), `text` and `action`. Values carry a format (`number`,
-`currency` with an ISO code, `percent`, `date`, `datetime`, `text`), which each
-client formats with the viewer's locale. Date-only strings are shown as calendar
-days without time zone shifts.
+A missing or non-numeric operand, or division by zero, gives an empty value instead
+of a guess. Nothing is evaluated as code, and there are no regular expressions or
+remote references.
+
+View components:
+- `section`.
+- `stat`: a lone stat becomes a large hero number, and consecutive stats share a grid.
+- `progress`: the goal is a number or a number state id.
+- `list` (read-only) and `checklist` (list state; tap to toggle the boolean `done`
+  field, swipe or ✕ to delete). When `done` is omitted, the first boolean field of
+  the list's items is used.
+- `chart` (`bar` or `line`) and `text`.
+- `toggle`, `choice` (segmented) and `input`, each bound to a state value.
+- `timer`: an on-device countdown with start, pause and reset. It is not saved and
+  stops when the screen closes.
+- `action`: consecutive buttons without fields share one row. Short symbols such as
+  `+` and `−` sit side by side. The adding action (`+`, increment or append) is
+  prominent. Actions with fields render as a form.
+
+Values carry a format (`number`, `currency` with an ISO code, `percent`, `date`,
+`datetime`, `text`), which each client formats with the viewer's locale. Date-only
+strings are shown as calendar days without time zone shifts. Inputs (`segmented`,
+`number`, `text`) are not saved; they recompute the view.
+
+**Tolerance for model output.** The parser accepts a few common slips instead of
+spending a retry:
+- A `spec` sent as a JSON string, including stray closing brackets at the end.
+- A missing component or step `type` that the keys make unambiguous.
+- Unknown keys on view components, which are dropped.
+- Numeric option values, and `confirm: ""`/`true` on local actions.
+- A filter's single-condition shorthand.
+- `{field, value}` updates without `op`, meaning `set_items`.
+- `$round` with a sibling `digits`.
+
+Anything ambiguous is still rejected.
 
 Tool results are parsed as JSON from text blocks first, because that is the shape the
 contact inspected. `structuredContent` is the fallback. A tool that returns prose
@@ -112,8 +162,8 @@ because it would add inference cost and nondeterminism to every load.
   extracted into memory. Only step IDs and error codes are kept (`last_error`), so
   `list_mini_apps` can help the contact repair a spec. Its output is bounded to about
 20 KB; specs that do not fit are omitted.
-- **Rate limits.** Per account per minute: 120 management requests, 20 loads, 120
-  local state actions and 10 external actions. Each load has a 20-second MCP deadline per step, a 1 MiB transport limit,
+- **Rate limits.** Per account per minute: 120 management requests (which include
+  local taps and state edits), 20 loads, and 10 external actions. Each load has a 20-second MCP deadline per step, a 1 MiB transport limit,
   at most 5,000 rows per transform, 100 groups, 100 list rows, 60 chart points and
   128 KB of resolved view.
 
@@ -128,15 +178,18 @@ All routes require the bearer session and an owned contact:
 | POST | `/:appID/approval` | `{ revision, allowed }`; enabling binds the current tool fingerprints |
 | POST | `/:appID/resolve` | `{ inputs?, timeZone }`; returns `{ revision, inputs, resolvedAt, view, issues }`, or 409 `REVIEW_REQUIRED` |
 | POST | `/:appID/actions/:actionID` | `{ executionID, revision, inputs?, fields?, timeZone }`; returns `{ status, replayed }`, plus `resolution` for local actions in apps without remote reads |
-| DELETE | `/:appID` | Deletes the app and its action ledger |
+| POST | `/:appID/state` | `{ executionID, revision, timeZone, update, inputs? }`; a direct edit from a bound component. Returns `{ status, replayed }`, plus `resolution` for apps without remote reads |
+| DELETE | `/:appID` | Deletes the app, its saved state and its action ledger |
 
 ## Model behavior
 
-All direct private chats expose `create_mini_app` and `list_mini_apps`. Connector
-chats also get a third tool-enabled round, still within the six-execution budget. Risk: that path can now
-make four model calls (up to 45 seconds each) plus MCP calls inside the existing
-three-minute `prepare-reply` step. Slow turns can time out and fall back to the
-existing tool-free recovery reply. Real latency has not been measured. Creation requires the live running turn. Each human message
+All direct private chats expose `create_mini_app` and `list_mini_apps`, and get
+three tool-enabled rounds (scheduled turns keep two) with up to 8,192 completion
+tokens, within the six-execution budget. `museCompletion` accepts `create_mini_app`
+arguments up to 20 KB; the earlier 1 KB limit for most tools rejected nearly every
+spec. Risk: a turn can now make four model calls (up to 45 seconds each) plus MCP
+calls inside the existing three-minute `prepare-reply` step. Slow turns can time out
+and fall back to the existing tool-free recovery reply. Creation requires the live running turn. Each human message
 can create one new app (`<turnID>:app`), so a replayed Workflow step returns the
 original instead of a duplicate. Each chat holds up to 20 apps. The tool result tells
 the model that the app is disabled until reviewed, so it does not claim to show data.
@@ -155,6 +208,43 @@ clears the view and revalidates the list. Contact deletion, access loss and
 sign-out clear everything. Views stay in memory and are never written to disk.
 See [caching](caching.md#mini-apps).
 
+## Taps and latency
+
+Each tap is a request. To feel instant, the server marks literal updates in the
+resolved view: `updates` on actions, `state` on stats and progress, and paths on
+checklists. Both clients apply those updates to the displayed state immediately,
+queue the taps and send them in order, one execution ID each. Each response that
+carries a `resolution` replaces the base view, so the display is always the server
+state plus the taps not yet confirmed. Transient failures retry the same execution
+ID up to twice. Anything else drops the pending taps and reloads. A local tap costs
+about five D1 queries, and no connector lookup when the app has no tools. Updates
+that are not literal (form values, `pick`, computed values) wait for the server.
+
+## Evaluation and visual checks
+
+`scripts/checks/mini-app-eval.mjs` generates mini apps from a list of prompts with
+the real `museCompletion`, tool definitions and spec interpreter. It reads
+`META_API_KEY` from the environment or the ignored `apps/api/.dev.vars` and never
+prints it. It simulates local taps and writes resolved fixtures
+(`app-NN.json`) plus `results.json` with attempts, rejected arguments and latency.
+Debug iOS builds launched with `MINIAPP_FIXTURE=<path>` (for example
+`SIMCTL_CHILD_MINIAPP_FIXTURE=… xcrun simctl launch …`) render a fixture with the real
+renderer and no network, for Simulator screenshots.
+
+On October 28, 2026, with `muse-spark-1.3-contributor`:
+- Ten varied Spanish prompts (counter, shopping list, water, tip calculator, padel
+  scoreboard, habits, mood journal, expenses, pomodoro and reading progress) went
+  from 6/10 built, with frequent retries, to 10/10 built on the first attempt after
+  the fixes above.
+- A combined run of 20 prompts, including ten new ones (tasks with priority, days
+  without smoking, bill split, weight chart, movie list, gym reps, trip savings,
+  dinner roulette, morning routine and temperature converter), built 18/20. One
+  failure was a provider 500, and 13 apps built on the first try. Median generation
+  time was about 14 seconds, almost all model time.
+- iOS Simulator and a static web preview rendered every built fixture.
+
+These runs did not use connectors, a real chat turn, or a physical device.
+
 ## Setup and verification
 
 Apply additive migrations `0037_mini_apps.sql` and `0038_mini_app_state.sql`
@@ -165,7 +255,8 @@ iOS Simulator Swift typecheck, SQL compilation of the new statements against all
 migrations on empty SQLite, and a local run of the spec interpreter on fictional
 expense data, including rejection cases and normalized-spec round trips.
 
-Still pending: whether Muse Spark produces valid specs; live MCP loads and actions;
+Still pending: Muse Spark spec quality in the production chat prompt (the evaluation
+uses a reduced system prompt); live MCP loads and actions;
 iOS sheet, Charts and form presentation on a device; web layout on narrow screens;
 grant invalidation after tool changes; and cache behavior across navigation, account
 switching and access revocation.
