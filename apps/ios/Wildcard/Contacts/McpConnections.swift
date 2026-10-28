@@ -97,6 +97,7 @@ struct McpConnectionsView: View {
     @State private var error: String?
     @State private var toolQuery = ""
     @State private var pendingPermission: (String, McpTool)?
+    @State private var pendingEnableAll: McpConnection?
     @State private var pendingDisconnect: String?
     private let notice = "Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard. This private chat stays excluded from shared memory, even after disconnecting. Group posting and schedule creation/editing from this chat will be disabled."
 
@@ -126,6 +127,10 @@ struct McpConnectionsView: View {
                             Button("Authorize / Reauthorize") { Task { await authorize(connection.id) } }.disabled(busy)
                         }
                         Button("Configure OAuth") { configure(connection) }.disabled(busy)
+                    }
+                    if !connection.tools.isEmpty {
+                        Button("Enable all tools") { pendingEnableAll = connection }
+                            .disabled(busy || connection.tools.allSatisfy(\.allowed) || (connection.authType == "oauth" && !connection.authenticated))
                     }
                     ForEach(visibleTools(connection)) { tool in
                         VStack(alignment: .leading, spacing: 8) {
@@ -175,6 +180,19 @@ struct McpConnectionsView: View {
             Button("Allow") { if let (id, tool) = pendingPermission { Task { await permission(id, tool, true) } } }
             Button("Cancel", role: .cancel) { pendingPermission = nil }
         } message: { Text("This tool may read, change, or send external data. Only enable tools you understand and trust.") }
+        .alert("Enable all tools?", isPresented: Binding(get: { pendingEnableAll != nil }, set: { if !$0 { pendingEnableAll = nil } })) {
+            Button("Enable all tools") {
+                if let connection = pendingEnableAll {
+                    Task { await mutate("/\(connection.id)", "PATCH", ["fingerprints": connection.tools.map(\.fingerprint), "allowed": true]) }
+                }
+                pendingEnableAll = nil
+            }
+            Button("Cancel", role: .cancel) { pendingEnableAll = nil }
+        } message: {
+            if let connection = pendingEnableAll {
+                Text("Enable all \(connection.tools.count) tools for \(connection.name) without asking again? This includes tools hidden by search. These tools may read, change, or send external data. Only enable tools you understand and trust.")
+            }
+        }
         .confirmationDialog("Disconnect this server?", isPresented: Binding(get: { pendingDisconnect != nil }, set: { if !$0 { pendingDisconnect = nil } }), titleVisibility: .visible) {
             Button("Disconnect", role: .destructive) { if let id = pendingDisconnect { Task { await mutate("/\(id)", "DELETE") } } }
         } message: { Text("Future calls will be blocked. Actions already started may finish. Historical messages remain private.") }

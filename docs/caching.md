@@ -437,6 +437,15 @@ invalidated by mutations and clear on access loss/account change. iOS uses the e
 NavigationSnapshotCache; web uses useMcpConnections. Tokens are never cached. See
 [the full cache and verification contract](connectors.md#client-caching).
 
+Enable all tools uses the existing permission mutation path: invalidate pending reads,
+send one complete catalog fingerprint set, then revalidate saved permissions once.
+The search filter does not reduce approval scope. Confirmation retains the reviewed
+snapshot; the server rejects catalog mismatches and conditional-update conflicts
+without partial changes. Failed saves retain visible cached content and surface the
+error; no automatic retry or new cache is introduced. Check cancellation, filtered
+approval, stale catalog conflicts, offline recovery, reopen and account switching on
+both clients; bulk approval runtime/device verification is pending.
+
 OAuth status, public issuer/scope and callback URI share the MCP session snapshots.
 Provider tokens, PKCE state, codes and client secrets do not. Web sessionStorage
 holds only initiating flow/contact/connection/user IDs during full-page OAuth and

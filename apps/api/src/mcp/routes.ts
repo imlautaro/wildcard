@@ -19,7 +19,7 @@ routes.use('*', async (c, next) => {
   if (!(await admitAuthRequest(c.env.DB, session.user.id, 'mcp-management', 30)).allowed) return c.json({ error: 'Too many attempts. Please wait a minute.' }, 429);
   await next();
 });
-routes.use('*', bodyLimit({ maxSize: 12000, onError: c => c.json({ error: 'Request body too large' }, 413) }));
+routes.use('*', bodyLimit({ maxSize: 20000, onError: c => c.json({ error: 'Request body too large' }, 413) }));
 routes.onError((failure, c) => {
   const code = failure instanceof OAuthSetupFailure ? failure.code : safeFailureCode(failure);
   const messages: Record<string, string> = {
@@ -117,12 +117,21 @@ routes.patch('/:connectionID', async c => {
   const connection = await owned(c.env.DB, c.req.param('contactID')!, c.get('owner'), c.req.param('connectionID'));
   if (!connection) return c.json({ error: 'Connection not found' }, 404);
   const body: unknown = await c.req.json();
-  if (!isRecord(body) || Object.keys(body).sort().join(',') !== 'allowed,fingerprint' || typeof body.fingerprint !== 'string' || typeof body.allowed !== 'boolean') return c.json({ error: 'Provide a tool fingerprint and permission.' }, 400);
+  if (!isRecord(body) || typeof body.allowed !== 'boolean') return c.json({ error: 'Provide tool fingerprints and permission.' }, 400);
+  const single = Object.keys(body).sort().join(',') === 'allowed,fingerprint' && typeof body.fingerprint === 'string';
+  const bulk = Object.keys(body).sort().join(',') === 'allowed,fingerprints' && body.allowed === true &&
+    Array.isArray(body.fingerprints) && body.fingerprints.length > 0 && body.fingerprints.length <= 256 &&
+    body.fingerprints.every(f => typeof f === 'string' && /^[a-f0-9]{64}$/.test(f));
+  if (!single && !bulk) return c.json({ error: 'Provide a tool fingerprint or the complete catalog fingerprints and permission.' }, 400);
   const tools = JSON.parse(connection.toolsJSON) as RemoteTool[];
-  const tool = tools.find(t => t.fingerprint === body.fingerprint);
-  if (!tool) return c.json({ error: 'Tool changed. Refresh tools and review permissions.' }, 409);
+  const fingerprints = new Set<string>(single ? [body.fingerprint as string] : body.fingerprints as string[]);
+  // Bulk approval is bound to exactly the catalog reviewed by the client, including hidden search results.
+  if (single ? !tools.some(t => fingerprints.has(t.fingerprint)) :
+    fingerprints.size !== (body.fingerprints as string[]).length || fingerprints.size !== tools.length || tools.some(t => !fingerprints.has(t.fingerprint))) {
+    return c.json({ error: 'Tools changed. Refresh tools and review permissions.' }, 409);
+  }
   if (body.allowed && connection.authType === 'oauth' && !await c.env.DB.prepare('SELECT connection_id FROM mcp_oauth WHERE connection_id = ? AND tokens_json IS NOT NULL').bind(connection.id).first()) return c.json({ error: 'Authorize this connection before enabling tools.' }, 409);
-  tool.allowed = body.allowed;
+  for (const tool of tools) if (fingerprints.has(tool.fingerprint)) tool.allowed = body.allowed;
   const result = await c.env.DB.prepare('UPDATE mcp_connection SET tools_json = ? WHERE id = ? AND tools_json = ?')
     .bind(JSON.stringify(tools), connection.id, connection.toolsJSON).run();
   return result.meta.changes ? c.json({ ok: true }) : c.json({ error: 'Permissions changed. Refresh and try again.' }, 409);

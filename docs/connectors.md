@@ -17,6 +17,21 @@ ongoing execution permission to this user/contact pair. This permission includes
 writes and sends if the tool implements them; MCP annotations are not trusted as
 proof of safety. Only connect trusted servers and enable understood tools.
 
+Choose **Enable all tools** on a connection to approve its entire currently loaded
+catalog with one confirmation, including tools hidden by Search tools. The confirmation
+shows the server and tool count and discloses ongoing read/write/send access. It is
+disabled for empty or fully enabled catalogs and OAuth connections awaiting authorization.
+This grants permissions only; it does not execute tools. New or changed tools still
+require approval after discovery or reauthorization.
+
+Both clients send one `PATCH /contacts/:contactID/mcp/:connectionID` with
+`{ fingerprints: string[], allowed: true }`. The API requires the exact complete set
+of current catalog fingerprints (1–256 unique SHA-256 values), checks account/contact
+ownership and OAuth authorization, and saves all permissions in one conditional update.
+A stale catalog or concurrent mutation returns 409 without partial approval; refresh
+connections and review again. Single-tool PATCH remains supported. Management request
+bodies are bounded to 20,000 bytes to accommodate 256 fingerprints.
+
 A participant of a shared contact can connect their own server. Another
 participant cannot list or use that connection. Connections are attached to the
 user's private contact record, not to the shared agent. Existing sharing consent
@@ -162,7 +177,9 @@ Account/session reset removes pending web flow identifiers too.
 
 Loaded entries render immediately while entry/explicit refresh revalidates saved
 metadata. iOS also refreshes when the screen becomes active. Requests deduplicate;
-mutation invalidates earlier reads and refreshes the authoritative snapshot.
+mutation invalidates earlier reads and refreshes the authoritative snapshot. Bulk
+approval uses the same mutation path, retains content while saving, and reloads
+server permissions once; it adds no cache or automatic retry.
 Transient failures retain usable content. Access loss, account changes, contact
 removal and eviction invalidate entries; late responses cannot restore them.
 Cache state never grants backend permission. Remote discovery follows opaque
@@ -175,6 +192,13 @@ Search tools. Search is transient view state and makes no request; it does not a
 permissions. The model's list_mcp_tools supports optional query/offset and returns
 nextOffset when its 24 KB page is full, so later authorized tools remain reachable. No mutation is automatically retried after leaving the page; after
 a network failure, refresh metadata before repeating a management action.
+
+For device/browser verification, check empty, partially enabled and fully enabled
+catalogs, cancellation/confirmation with search active, a 256-tool catalog, stale
+catalog rejection, offline recovery, reopen/back navigation, authorization loss and
+account switching. Confirm all counts update together after success and no external
+tool is executed by granting permission. Bulk approval UI/runtime verification remains
+pending; static checks do not establish these behaviors on device.
 
 ## Compatibility and pending verification
 

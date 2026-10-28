@@ -262,3 +262,11 @@ Failed refreshes keep the prior snapshot. No permissions are enabled by discover
 Both clients show loaded/enabled counts and a local Search tools field; query state
 is transient and does not enter the catalog cache. The model can search/page its
 24 KB authorized-tool listing. See [limits and safety](connectors.md#execution-retries-and-limits).
+
+Both clients provide **Enable all tools** per connection with a single confirmation
+covering the full loaded catalog, including search-hidden tools. One atomic PATCH
+approves the exact reviewed fingerprint set; stale catalogs/concurrent changes fail
+without partial approval. OAuth authorization is required before enabling. Empty or
+fully enabled catalogs disable the action. Existing mutation invalidation and one
+metadata reload update the session snapshot; no tools execute during approval and
+future/changed tools stay disabled. See [bulk approval and verification](connectors.md#connect-and-authorize).

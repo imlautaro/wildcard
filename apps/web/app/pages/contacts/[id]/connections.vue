@@ -48,6 +48,10 @@ async function permission(connection: string, tool: { name: string; fingerprint:
   if (!tool.allowed && !window.confirm(`Allow ${tool.name} without asking again? It may read, change, or send external data. Only enable tools you understand and trust.`)) return;
   await mutate(`/${connection}`, 'PATCH', { fingerprint: tool.fingerprint, allowed: !tool.allowed });
 }
+async function enableAll(connection: McpConnection) {
+  if (!window.confirm(`Enable all ${connection.tools.length} tools for ${connection.name} without asking again? This includes tools hidden by search. These tools may read, change, or send external data. Only enable tools you understand and trust.`)) return;
+  await mutate(`/${connection.id}`, 'PATCH', { fingerprints: connection.tools.map(tool => tool.fingerprint), allowed: true });
+}
 async function disconnect(connection: string) {
   if (window.confirm('Disconnect this server? Future calls will be blocked. Actions already started may finish. Historical messages remain private.')) await mutate(`/${connection}`, 'DELETE');
 }
@@ -72,6 +76,7 @@ useHead({ title: 'Connections' });
       <p v-if="connection.authType === 'oauth'" class="text-block">Reauthorizing clears existing tool permissions. Review and enable them again afterward.</p>
       <button v-if="connection.authType === 'oauth' && connection.oauthConfigured" type="button" class="button-row" :disabled="busy" @click="authorize(connection.id)">Authorize / Reauthorize</button>
       <button v-if="connection.authType === 'oauth'" type="button" class="button-row" :disabled="busy" @click="configure(connection)">Configure OAuth</button>
+      <button v-if="connection.tools.length" type="button" class="button-row" :disabled="busy || connection.tools.every(tool => tool.allowed) || (connection.authType === 'oauth' && !connection.authenticated)" @click="enableAll(connection)">Enable all tools</button>
       <div v-for="tool in visibleTools(connection)" :key="tool.fingerprint" class="text-block">
         <strong>{{ tool.name }}</strong><p>{{ tool.description }}</p>
         <details><summary>Input schema</summary><pre style="white-space: pre-wrap; overflow-wrap: anywhere">{{ JSON.stringify(tool.inputSchema, null, 2) }}</pre></details>
