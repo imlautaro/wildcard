@@ -22,23 +22,44 @@ export async function draftAttachment(file: File): Promise<DraftAttachment> {
   return { name, mimeType: file.type, size: file.size, data, previewURL };
 }
 
-// Profile photos must be square JPEGs between 64 and 1024 pixels and under 512 KB.
-// Center-crop to 512 px; browsers encode baseline JPEG, which the API accepts.
-export async function squareJPEG(file: File): Promise<Blob> {
+// Apply EXIF orientation and bound the in-memory editor source, as on iOS.
+export async function photoCropSource(file: File): Promise<ImageBitmap> {
   if (!file.type.startsWith('image/')) throw new Error('Choose an image.');
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => {
     throw new Error('This image could not be read. Choose a JPEG, PNG, or WebP photo.');
   });
-  const side = Math.min(bitmap.width, bitmap.height);
-  if (side < 64) throw new Error('Choose a photo at least 64 pixels wide.');
-  const size = Math.min(512, side);
+  if (Math.min(bitmap.width, bitmap.height) < 64) {
+    bitmap.close();
+    throw new Error('Choose a photo at least 64 pixels wide and tall.');
+  }
+  const factor = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
+  if (factor === 1) return bitmap;
+  try {
+    return await createImageBitmap(bitmap, {
+      resizeWidth: Math.max(1, Math.round(bitmap.width * factor)),
+      resizeHeight: Math.max(1, Math.round(bitmap.height * factor)),
+      resizeQuality: 'high',
+    });
+  } finally { bitmap.close(); }
+}
+
+// Re-encode only the confirmed square, without copying source metadata.
+export async function croppedJPEG(bitmap: ImageBitmap, x: number, y: number, side: number): Promise<Blob> {
+  const tolerance = 1e-6;
+  if (![x, y, side].every(Number.isFinite) || side <= 0 || x < -tolerance || y < -tolerance
+    || x + side > bitmap.width + tolerance || y + side > bitmap.height + tolerance) throw new Error('Adjust the photo crop and try again.');
+  // Clamp floating-point drift at the source edges.
+  x = Math.max(0, Math.min(bitmap.width - side, x));
+  y = Math.max(0, Math.min(bitmap.height - side, y));
+  const size = 512;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Photo editing is unavailable in this browser.');
-  context.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, size, size);
-  bitmap.close();
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, size, size);
+  context.drawImage(bitmap, x, y, side, side, 0, 0, size, size);
   for (const quality of [0.88, 0.8, 0.7, 0.6, 0.5]) {
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
     if (blob && blob.size <= photoLimit) return blob;

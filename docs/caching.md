@@ -410,6 +410,14 @@ caches.
   synchronously on entry, with shared in-flight reads, a five-second refresh while
   the editor is visible, and a reset that invalidates earlier reads. A 404 drops the
   snapshot. Contact deletion and session reset clear it.
+- **Photo crop drafts.** Account/contact web editors keep the selected, oriented
+  bitmap only while the local crop dialog is open (bounded to 2048 pixels).
+  Cancel, confirmation, navigation, loss of editability and account changes release
+  it; generation guards discard late decoding and unmounted encoding results.
+  Cropping sends no request until **Use Photo**. Accepted uploads keep the existing
+  versioned avatar cache behavior, with no persistent source-image storage. Verify
+  cancel/reopen, upload failure, navigation and account switching in a browser;
+  these interactions have not been established by static checks.
 - **Not cached.** Sharing details, group member management, and account data are
   always loaded on open, because they gate permissions.
 

@@ -50,7 +50,7 @@ Matching iOS:
   [caching](caching.md#transient-failures-during-background-revalidation)). Your own last
   message shows its receipt (and **You:** in groups), projected from the open
   conversation when that is newer than the server summary.
-- Contacts directory with search, create, rename, photo (centered square JPEG,
+- Contacts directory with search, create, rename, photo (manually cropped square JPEG,
   512 px, under 512 KB), delete, and leaving a shared contact.
 - Private chats with persisted history, earlier pages, optimistic sends with
   idempotent UUIDs, reply retry, receipts (clock while sending, two checks once
@@ -85,6 +85,14 @@ Matching iOS:
   that turns orange at five or fewer points, the next recharge time, and **Reset Energy
   to 50**. See [energy](energy.md).
 
+Account and existing owned contact photos open **Crop Photo** before upload.
+Drag to reposition, pinch or use the 1–4× zoom slider, and confirm with **Use Photo**.
+The circular guide matches the avatar; arrow keys also reposition the image.
+**Cancel** or Escape preserves the existing photo without a request. Sources stay
+in memory only and are discarded on close, navigation or account change. See
+[web photo editing](profile-photos.md#web-editing) for encoding and pending browser
+checks. iOS retains its existing native cropper; this change is scoped to the web.
+
 Not in the web app yet:
 
 - **Voice dictation.** The API accepts only mono 16-bit 16 kHz WAV. `MediaRecorder`
@@ -96,7 +104,6 @@ Not in the web app yet:
   and VAPID keys.
 - **Scheduled messages** (list/cancel), private-to-group requests, group photo
   editing, and the group "Confirm consent for future messages" action.
-- **Interactive photo cropping.** Photos are center-cropped.
 
 Polling replaces push while the tab is visible, with the same cadence as the iOS
 session synchronizer: chat lists and the open conversation every second, energy every

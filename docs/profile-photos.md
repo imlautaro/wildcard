@@ -28,6 +28,32 @@ photo fails after saving the name, the editor retains the contact ID and selecte
 photo and offers Save to retry without creating another contact. A new contact
 can therefore remain without a photo after a network failure.
 
+## Web editing
+
+Account and existing owned contacts share a manual **Crop Photo** dialog. Selecting
+a file opens a local preview; drag with a mouse or touch to reposition, pinch or
+use the **Photo zoom** slider (1–4×), and choose **Use Photo** to confirm. Arrow
+keys move the image when the preview is focused; Shift increases the step. The
+circular guide previews the avatar inside the square upload. **Cancel** or Escape
+keeps the previous photo and sends no request. The modal traps focus using the
+native dialog element and restores focus on close.
+
+The browser applies image orientation, bounds the editor source to 2048 pixels,
+and renders the confirmed crop to a 512 × 512 JPEG on white. Re-encoding strips
+source metadata and reduces JPEG quality if needed to stay below 500 KiB. The
+selected source is memory-only and released on cancel, confirmation, navigation,
+loss of editability, or account change. Late decode/encode completions cannot
+apply a canceled selection. Existing session-owned upload and versioned avatar
+cache behavior is unchanged; no request starts before confirmation.
+
+This web-only change brings these editors in line with the existing iOS cropper.
+Web contact creation and group photo editing remain unavailable as described in
+[web limitations](web.md). Static checks do not verify browser interactions.
+Pending manual checks with fictional images: portrait/landscape and EXIF rotation,
+mouse/touch dragging, pinch/slider zoom at image edges, keyboard/focus/Escape,
+cancel and reselect the same file, transparent images, unreadable/small files,
+upload failure recovery, navigation during decode/encode, and account switching.
+
 ## API and storage
 
 The existing contact responses add nullable `photoVersion` (an opaque UUID).
