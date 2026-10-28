@@ -46,6 +46,11 @@ function shown(stat: Stat | Tile) {
   const value = saved === undefined ? stat.value : typeof saved === 'boolean' ? String(saved) : Array.isArray(saved) ? saved.length : saved;
   return miniAppValue(value, stat.format, stat.currency);
 }
+type Lesson = Extract<MiniAppComponent, { type: 'lesson' }>;
+// Finishing a lesson adds its correct answers to its XP state, shown at once like any tap.
+function finishLesson(lesson: Lesson, correct: number) {
+  if (lesson.xp && correct > 0) emit('edit', { state: lesson.xp, op: 'increment', value: correct });
+}
 function openTile(tile: Tile) {
   if (tile.tab) emit('selectTab', tile.tab);
   else if (tile.action) press(tile.action);
@@ -202,6 +207,7 @@ function submit(id: string) {
       </label>
     </div>
     <MiniAppTimer v-else-if="block.item.type === 'timer'" :label="block.item.label" :seconds="block.item.seconds" />
+    <MiniAppLesson v-else-if="block.item.type === 'lesson'" :lesson="block.item" @complete="correct => finishLesson(block.item as Lesson, correct)" />
     <div v-else-if="block.item.type === 'list'" class="group">
       <div v-if="!block.item.items.length" class="text-block">{{ block.item.empty }}</div>
       <div v-for="(row, index) in block.item.items" :key="index" class="mini-row">

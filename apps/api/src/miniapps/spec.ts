@@ -11,7 +11,7 @@ const comparisons = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'after',
 const aggregates = ['sum', 'avg', 'min', 'max', 'count'] as const;
 const arithmetic = ['$add', '$sub', '$mul', '$div', '$min', '$max'] as const;
 const chartKinds = ['bar', 'line', 'area', 'pie'] as const;
-const stateOps = ['increment', 'decrement', 'set', 'toggle', 'append', 'clear', 'pick', 'set_items', 'toggle_item', 'remove_item'] as const;
+const stateOps = ['increment', 'decrement', 'set', 'toggle', 'append', 'clear', 'pick', 'set_items', 'remove_where', 'toggle_item', 'remove_item'] as const;
 type Format = typeof formats[number];
 type Aggregate = typeof aggregates[number];
 type Condition = { field: string; op: typeof comparisons[number]; value: unknown };
@@ -54,10 +54,20 @@ export type Component =
   // Layout: a grid of cards, a tappable tile (opens a tab or runs an action) and a text bar pinned to the bottom.
   | { type: 'grid'; columns: 2 | 3; children: Component[] }
   | ({ type: 'tile'; title: string; caption?: string; icon?: typeof symbolIcons[number]; step?: string; path?: string; tab?: string; action?: string } & Value)
-  | { type: 'composer'; action: string; placeholder?: string };
+  | { type: 'composer'; action: string; placeholder?: string }
+  // A Duolingo-style lesson: one question at a time with feedback and hearts. Finishing
+  // adds the number of correct answers to `xp` (a number state), if set.
+  | { type: 'lesson'; title: string; questions: Question[]; hearts: number; xp?: string };
+// A multiple-choice question has options and the index of the correct one; a typed
+// question has the accepted answers (compared ignoring case, accents and punctuation).
+export type Question = { prompt: string; options?: string[]; answer: number | string; accept?: string[]; explain?: string };
 export type Tab = { id: string; title: string; icon: typeof symbolIcons[number]; view: Component[] };
+// Tests are scenarios the contact writes with the app; the server runs them before saving it.
+export type TestStep = { tap: string; fields: Record<string, unknown> } | { edit: Record<string, unknown> } | { input: Record<string, string> };
+export type Expectation = { state: string; equals?: unknown; count?: number; includes?: Item } | { step: string; equals: unknown } | { text: string };
+export type Test = { name: string; steps: TestStep[]; expect: Expectation[] };
 // An app has either one `view` or 2–5 `tabs` (a native tab bar); `menu` lists field-less actions in the top bar.
-export type Spec = { title: string; subtitle?: string; icon: typeof miniAppIcons[number]; state: StateVar[]; inputs: Input[]; data: Step[]; view?: Component[]; tabs?: Tab[]; menu: string[]; actions: Action[] };
+export type Spec = { title: string; subtitle?: string; icon: typeof symbolIcons[number]; state: StateVar[]; inputs: Input[]; data: Step[]; view?: Component[]; tabs?: Tab[]; menu: string[]; actions: Action[]; tests: Test[] };
 export type ToolUse = { connectionID: string; toolName: string; role: 'read' | 'write' };
 
 export class SpecError extends Error {}
@@ -149,17 +159,25 @@ function template(raw: unknown, name: string, scope: Scope, depth = 0): unknown 
 export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
   // Models sometimes send the spec as a JSON string; accept it when it parses to an object.
   if (typeof raw === 'string') {
-    // Models that stringify long specs often add stray closing brackets at the end; trim only those.
+    // Models that stringify long specs often add stray closing brackets at the end, or a
+    // stray bare word between tokens ("…} mais]"). Outside strings neither can be data, so
+    // trim the brackets and drop the word at the reported position; anything else fails.
     let source = raw.trim(), parsed: unknown = undefined;
-    for (let attempt = 0; attempt < 6 && parsed === undefined; attempt++) {
-      try { parsed = JSON.parse(source); } catch { if (!/[}\]]$/.test(source)) break; source = source.slice(0, -1).trimEnd(); }
+    for (let attempt = 0; attempt < 8 && parsed === undefined; attempt++) {
+      try { parsed = JSON.parse(source); } catch (error) {
+        const at = Number(/position (\d+)/.exec(error instanceof Error ? error.message : '')?.[1] ?? NaN);
+        const stray = Number.isInteger(at) ? /^\s*[\p{L}\p{N}_]+\s*(?=[,\]}])/u.exec(source.slice(at)) : null;
+        if (stray && /[}\]"\d]\s*$/.test(source.slice(0, at))) source = source.slice(0, at) + source.slice(at + stray[0].length);
+        else if (/[}\]]$/.test(source)) source = source.slice(0, -1).trimEnd();
+        else break;
+      }
     }
     raw = parsed ?? fail('spec must be a JSON object, not text. Send spec as an object and check that brackets balance.');
   }
   if (!isRecord(raw)) fail('spec must be an object.');
   const value = raw as Record<string, unknown>;
   if (JSON.stringify(value).length > 24000) fail('spec must be at most 24 KB.');
-  only(value, ['title', 'subtitle', 'icon', 'state', 'inputs', 'data', 'view', 'tabs', 'menu', 'actions'], 'spec');
+  only(value, ['title', 'subtitle', 'icon', 'state', 'inputs', 'data', 'view', 'tabs', 'menu', 'actions', 'tests'], 'spec');
   // State and data steps share one namespace because the view reads both by id.
   const valueIDs = new Set<string>(), inputIDs = new Set<string>(), actionIDs = new Set<string>();
   const unique = (ids: Set<string>, id: unknown, name: string) => {
@@ -282,15 +300,16 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     only(raw, ['state', 'op', 'value', 'field'], where);
     const target = stateOf(raw.state) ?? fail(`${where}.state must name a declared state value.`);
     const op = choice(raw.op, stateOps.filter(o => o !== 'toggle_item' && o !== 'remove_item'), `${where}.op`);
-    const needs = { increment: 'number', decrement: 'number', toggle: 'boolean', append: 'list', clear: 'list', set_items: 'list' } as Record<string, string>;
+    const needs = { increment: 'number', decrement: 'number', toggle: 'boolean', append: 'list', clear: 'list', set_items: 'list', remove_where: 'list' } as Record<string, string>;
     if (needs[op] && target.type !== needs[op]) fail(`${where}: ${op} needs a ${needs[op]} state.`);
     if (op === 'set' && target.type === 'list') fail(`${where}: use append, clear or set_items for lists.`);
-    if (['set', 'append', 'pick', 'set_items'].includes(op) && raw.value === undefined) fail(`${where}.value is required for ${op}.`);
+    if (['set', 'append', 'pick', 'set_items', 'remove_where'].includes(op) && raw.value === undefined) fail(`${where}.value is required for ${op}.`);
     if (op === 'pick' && (target.type === 'list' || target.type === 'boolean' || !Array.isArray(raw.value) || raw.value.length < 2 || raw.value.length > 50
       || raw.value.some(v => typeof v !== 'string' && typeof v !== 'number'))) fail(`${where}: pick needs a text or number state and a value array of 2–50 options.`);
-    if (op === 'set_items' && (typeof raw.field !== 'string' || !identifier.test(raw.field))) fail(`${where}.field must name the item field to set, e.g. "done".`);
-    if (raw.field !== undefined && op !== 'set_items') fail(`${where}.field is only used with set_items.`);
-    return { state: target.id, op, ...(raw.value === undefined ? {} : { value: template(raw.value, `${where}.value`, actionScope) }), ...(op === 'set_items' ? { field: raw.field as string } : {}) };
+    const byField = op === 'set_items' || op === 'remove_where';
+    if (byField && (typeof raw.field !== 'string' || !identifier.test(raw.field))) fail(`${where}.field must name the item field, e.g. "done".`);
+    if (raw.field !== undefined && !byField) fail(`${where}.field is only used with set_items and remove_where.`);
+    return { state: target.id, op, ...(raw.value === undefined ? {} : { value: template(raw.value, `${where}.value`, actionScope) }), ...(byField ? { field: raw.field as string } : {}) };
   };
   const actions: Action[] = list(value.actions, 'actions', 16).map((item, index) => {
     const name = `actions[${index}]`;
@@ -333,7 +352,7 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
   // Models often omit `type` or add stray keys. The type is inferred from distinctive
   // keys and unknown keys are dropped, since the normalized component is rebuilt anyway.
   const infer = (item: Record<string, unknown>) => item.type !== undefined ? item.type
-    : 'columns' in item ? 'grid' : 'children' in item ? 'section' : 'placeholder' in item && 'action' in item ? 'composer' : 'tab' in item || 'icon' in item ? 'tile'
+    : 'questions' in item ? 'lesson' : 'columns' in item ? 'grid' : 'children' in item ? 'section' : 'placeholder' in item && 'action' in item ? 'composer' : 'tab' in item || 'icon' in item ? 'tile'
     : 'action' in item ? 'action' : 'minutes' in item ? 'timer' : 'goal' in item ? 'progress'
     : 'step' in item ? 'stat' : 'x' in item || 'y' in item ? 'chart' : 'source' in item ? 'list' : 'options' in item ? 'choice'
     : 'done' in item ? 'checklist' : 'text' in item ? 'text' : undefined;
@@ -343,6 +362,7 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     chart: ['source', 'kind', 'x', 'y', 'title', 'format', 'currency'], text: ['text', 'style'], toggle: ['label', 'state'], choice: ['label', 'state', 'options'],
     input: ['label', 'state', 'placeholder'], timer: ['label', 'minutes'], action: ['action'], grid: ['columns', 'children'],
     tile: ['title', 'caption', 'icon', 'step', 'path', 'tab', 'action', 'format', 'currency'], composer: ['action', 'placeholder'],
+    lesson: ['title', 'questions', 'hearts', 'xp'],
   };
   // Cards in a grid are self-contained; lists, forms and bound controls need full-width rows.
   const gridChildren = ['stat', 'progress', 'chart', 'text', 'action', 'tile'];
@@ -420,7 +440,33 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
         if (action.fields.length !== 1 || !['text', 'number'].includes(action.fields[0].kind)) fail(`${name}: the composer's action must have exactly one text or number field, e.g. fields:[{"id":"item","label":"Item","kind":"text","required":true}].`);
         return { type: 'composer', action: action.id, placeholder: text(item.placeholder, `${name}.placeholder`, 60, true) };
       }
-      default: return fail(`${name}.type must be section, grid, stat, progress, list, checklist, chart, text, toggle, choice, input, timer, action, tile or composer.`);
+      case 'lesson': {
+        only(item, ['type', 'title', 'questions', 'hearts', 'xp'], name);
+        if (place === 'grid') fail(`${name}: a lesson cannot be a grid card.`);
+        if (item.hearts !== undefined && (!Number.isInteger(item.hearts) || Number(item.hearts) < 1 || Number(item.hearts) > 5)) fail(`${name}.hearts must be 1–5.`);
+        const questions = list(item.questions, `${name}.questions`, 20, true).map((raw, at): Question => {
+          const where = `${name}.questions[${at}]`;
+          if (!isRecord(raw)) return fail(`${where} must be an object.`);
+          only(raw, ['prompt', 'options', 'answer', 'accept', 'explain'], where);
+          const prompt = text(raw.prompt, `${where}.prompt`, 200, false, true)!, explain = text(raw.explain, `${where}.explain`, 200, true);
+          if (raw.options !== undefined) {
+            if (!Array.isArray(raw.options) || raw.options.length < 2 || raw.options.length > 4) fail(`${where}.options needs 2–4 choices.`);
+            const options = (raw.options as unknown[]).map((o, i) => text(typeof o === 'number' ? String(o) : o, `${where}.options[${i}]`, 80)!);
+            if (new Set(options.map(o => o.toLowerCase())).size !== options.length) fail(`${where}.options must be distinct.`);
+            // The correct option may be given by index or by its text.
+            const answer = typeof raw.answer === 'string' ? options.findIndex(o => o.toLowerCase() === String(raw.answer).trim().toLowerCase()) : raw.answer;
+            if (!Number.isInteger(answer) || Number(answer) < 0 || Number(answer) >= options.length) fail(`${where}.answer must be the index (0-based) or text of the correct option.`);
+            return { prompt, options, answer: Number(answer), ...(explain ? { explain } : {}) };
+          }
+          const answer = text(typeof raw.answer === 'number' ? String(raw.answer) : raw.answer, `${where}.answer`, 80)!;
+          if (raw.accept !== undefined && (!Array.isArray(raw.accept) || raw.accept.length > 5)) fail(`${where}.accept must list up to 5 other accepted answers.`);
+          const accept = (raw.accept as unknown[] | undefined)?.map((a, i) => text(a, `${where}.accept[${i}]`, 80)!);
+          return { prompt, answer, ...(accept?.length ? { accept } : {}), ...(explain ? { explain } : {}) };
+        });
+        return { type: 'lesson', title: text(item.title, `${name}.title`, 60)!, questions, hearts: Number(item.hearts ?? 3),
+          ...(item.xp === undefined ? {} : { xp: bound(item.xp, `${name}.xp`, ['number']) }) };
+      }
+      default: return fail(`${name}.type must be section, grid, stat, progress, list, checklist, chart, text, toggle, choice, input, timer, action, tile, composer or lesson.`);
     }
   };
   const viewOf = (raw: unknown, name: string) => {
@@ -443,7 +489,60 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     return action.id;
   });
   if (new Set(menu).size !== menu.length) fail('menu lists an action twice.');
-  return { spec: { title: text(value.title, 'title', 60)!, subtitle: text(value.subtitle, 'subtitle', 120, true), icon: choice(value.icon, miniAppIcons, 'icon', 'chart'), state, inputs, data, ...(tabs ? { tabs } : { view }), menu, actions }, tools };
+  const literal = (raw: unknown, name: string): unknown => {
+    if (raw === null || typeof raw === 'boolean' || typeof raw === 'string' || (typeof raw === 'number' && Number.isFinite(raw))) return raw;
+    if (Array.isArray(raw) && raw.length <= 50) return raw.map((item, at) => literal(item, `${name}[${at}]`));
+    if (isRecord(raw) && Object.keys(raw).length <= 20 && !Object.keys(raw).some(key => key.startsWith('$'))) return Object.fromEntries(Object.entries(raw).map(([key, v]) => [key, literal(v, `${name}.${key}`)]));
+    return fail(`${name} must be a plain JSON value.`);
+  };
+  const tests: Test[] = list(value.tests, 'tests', 8).map((raw, index) => {
+    const name = `tests[${index}]`;
+    if (!isRecord(raw)) return fail(`${name} must be an object.`);
+    only(raw, ['name', 'steps', 'expect'], name);
+    const steps = list(raw.steps, `${name}.steps`, 12).map((step, at): TestStep => {
+      const where = `${name}.steps[${at}]`;
+      if (!isRecord(step)) return fail(`${where} must be an object.`);
+      if ('tap' in step) {
+        only(step, ['tap', 'fields'], where);
+        const action = actions.find(a => a.id === declaredAction(step.tap, `${where}.tap`))!;
+        if (action.kind === 'remote') fail(`${where}: ${action.id} calls an external tool, which tests cannot run; test only local behavior.`);
+        const fields = step.fields === undefined ? {} : isRecord(step.fields) ? step.fields : fail(`${where}.fields must be an object of field values.`);
+        const unknown = Object.keys(fields).find(key => !action.fields.some(f => f.id === key));
+        if (unknown) fail(`${where}.fields.${unknown} is not a field of ${action.id}.`);
+        return { tap: action.id, fields: literal(fields, `${where}.fields`) as Record<string, unknown> };
+      }
+      if ('edit' in step) {
+        only(step, ['edit'], where);
+        if (!isRecord(step.edit)) fail(`${where}.edit must be {state, op, value?, index?}, as a bound component sends it.`);
+        return { edit: literal(step.edit, `${where}.edit`) as Record<string, unknown> };
+      }
+      if ('input' in step) {
+        only(step, ['input'], where);
+        if (!isRecord(step.input) || Object.entries(step.input).some(([key, v]) => !inputIDs.has(key) || (typeof v !== 'string' && typeof v !== 'number'))) fail(`${where}.input must map declared input ids to values.`);
+        return { input: Object.fromEntries(Object.entries(step.input as Record<string, unknown>).map(([key, v]) => [key, String(v)])) };
+      }
+      return fail(`${where} must be {tap, fields?}, {edit} or {input}.`);
+    });
+    const expect = list(raw.expect, `${name}.expect`, 8, true).map((check, at): Expectation => {
+      const where = `${name}.expect[${at}]`;
+      if (!isRecord(check)) return fail(`${where} must be an object.`);
+      if ('text' in check) { only(check, ['text'], where); return { text: text(check.text, `${where}.text`, 120)! }; }
+      if ('step' in check) {
+        only(check, ['step', 'equals'], where);
+        if (typeof check.step !== 'string' || !stepIDs.has(check.step)) fail(`${where}.step must name a data step.`);
+        return { step: check.step as string, equals: literal(check.equals ?? null, `${where}.equals`) };
+      }
+      only(check, ['state', 'equals', 'count', 'includes'], where);
+      const target = stateOf(check.state) ?? fail(`${where} needs state (a state id), step (a data step id) or text.`);
+      if (check.count !== undefined && (target.type !== 'list' || !Number.isInteger(check.count) || Number(check.count) < 0)) fail(`${where}.count needs a list state and a whole number.`);
+      if (check.includes !== undefined && (target.type !== 'list' || !isItem(check.includes))) fail(`${where}.includes needs a list state and a flat object such as {"name":"Milk"}.`);
+      if (check.equals === undefined && check.count === undefined && check.includes === undefined) fail(`${where} needs equals, count or includes.`);
+      return { state: target.id, ...(check.equals !== undefined ? { equals: literal(check.equals, `${where}.equals`) } : {}),
+        ...(check.count !== undefined ? { count: Number(check.count) } : {}), ...(check.includes !== undefined ? { includes: check.includes as Item } : {}) };
+    });
+    return { name: text(raw.name, `${name}.name`, 80)!, steps, expect };
+  });
+  return { spec: { title: text(value.title, 'title', 60)!, subtitle: text(value.subtitle, 'subtitle', 120, true), icon: choice(value.icon, symbolIcons, 'icon', 'chart'), state, inputs, data, ...(tabs ? { tabs } : { view }), menu, actions, tests }, tools };
 }
 
 // Every component of the app, in tabs, sections and grids.
@@ -598,6 +697,8 @@ export type ResolvedComponent =
   | { type: 'tile'; title: string; caption: string | null; icon: string | null; value: number | string | null; format: Format; currency: string | null; state: string | null; tab: string | null; action: ResolvedAction | null }
   // `append` lets clients show a submitted row at once: `item` plus the typed text under `key`.
   | { type: 'composer'; action: string; field: string; kind: 'text' | 'number'; placeholder: string | null; label: string; confirm: string | null; remote: boolean; append: { state: string; key: string; item: Item } | null }
+  // Answers travel with the questions: the lesson is checked on the device for instant feedback.
+  | { type: 'lesson'; title: string; hearts: number; xp: string | null; questions: { prompt: string; options: string[] | null; correct: number | null; answers: string[] | null; explain: string | null }[] }
   | { type: 'notice'; code: string };
 export type ResolvedAction = { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: Field[]; updates: StateUpdate[] | null };
 export type ResolvedTab = { id: string; title: string; icon: string; view: ResolvedComponent[] };
@@ -633,6 +734,8 @@ export function present(view: Component[], spec: Spec, outputs: Map<string, unkn
     switch (component.type) {
       case 'section': return { type: 'section', title: component.title ?? null, children: present(component.children, spec, outputs, errors) };
       case 'grid': return { type: 'grid', columns: component.columns, children: present(component.children, spec, outputs, errors) };
+      case 'lesson': return { type: 'lesson', title: component.title, hearts: component.hearts, xp: component.xp ?? null, questions: component.questions.map(q => ({
+        prompt: q.prompt, options: q.options ?? null, correct: q.options ? Number(q.answer) : null, answers: q.options ? null : [String(q.answer), ...(q.accept ?? [])], explain: q.explain ?? null })) };
       case 'composer': {
         const action = spec.actions.find(a => a.id === component.action)!, field = action.fields[0];
         return { type: 'composer', action: action.id, field: field.id, kind: field.kind === 'number' ? 'number' : 'text', placeholder: component.placeholder ?? field.label, label: action.label,
@@ -702,6 +805,8 @@ export function directUpdate(spec: Spec, raw: unknown): StateUpdate | null {
     if (c.type === 'toggle' && c.state === raw.state && raw.op === 'toggle') return { state: c.state, op: 'toggle' };
     if (c.type === 'choice' && c.state === raw.state && raw.op === 'set' && c.options.some(o => o.value === raw.value)) return { state: c.state, op: 'set', value: raw.value };
     if (c.type === 'input' && c.state === raw.state && raw.op === 'set' && (typeof raw.value === 'string' || typeof raw.value === 'number')) return { state: c.state, op: 'set', value: raw.value };
+    // Finishing a lesson adds its correct answers, at most one per question.
+    if (c.type === 'lesson' && c.xp === raw.state && raw.op === 'increment' && Number.isInteger(raw.value) && Number(raw.value) >= 0 && Number(raw.value) <= c.questions.length) return { state: c.xp!, op: 'increment', value: raw.value };
     if (c.type === 'checklist' && c.state === raw.state && Number.isInteger(raw.index) && Number(raw.index) >= 0) {
       if (raw.op === 'toggle_item' && c.done) return { state: c.state, op: 'toggle_item', index: Number(raw.index), field: c.done };
       if (raw.op === 'remove_item' && c.removable) return { state: c.state, op: 'remove_item', index: Number(raw.index) };
@@ -736,6 +841,11 @@ export function applyUpdates(spec: Spec, updates: StateUpdate[], current: Record
         const item = isRecord(value) ? Object.fromEntries(Object.entries(value).filter(([, v]) => v !== null && v !== undefined && v !== '')) : value === null || value === undefined || value === '' ? null : { value };
         if (!item || !isItem(item) || !Object.keys(item).length || items.length >= maxItems) return null;
         next[variable.id] = [...items, item as Item];
+        break;
+      }
+      case 'remove_where': {
+        // Removes the items whose field equals the value, e.g. completed tasks.
+        next[variable.id] = items.filter(item => item[update.field!] !== value);
         break;
       }
       case 'toggle_item': case 'remove_item': {

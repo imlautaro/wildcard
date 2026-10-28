@@ -607,8 +607,175 @@ struct MiniAppRenderer: View {
             }
         case .timer(let label, let seconds):
             MiniAppTimer(label: label, duration: seconds)
+        case .lesson(let lesson):
+            MiniAppLessonRow(lesson: lesson) { score in
+                if let xp = lesson.xp, score > 0 { onEdit(MiniAppUpdate(state: xp, op: "increment", value: .number(Double(score)))) }
+            }
         case .stat, .section, .grid, .composer, .unsupported: EmptyView()
         }
+    }
+}
+
+/// A lesson card; Start opens the lesson full screen.
+private struct MiniAppLessonRow: View {
+    let lesson: MiniAppLesson
+    let complete: (Int) -> Void
+    @State private var playing = false
+
+    var body: some View {
+        Button { playing = true } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "graduationcap.fill").font(.title3.weight(.semibold)).foregroundStyle(.white)
+                    .frame(width: 46, height: 46).background(Color.green.gradient, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(lesson.title).manrope(.body, weight: .bold).foregroundStyle(.primary)
+                    Text("\(lesson.questions.count) questions").manrope(.footnote).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                Text("Start").manrope(.subheadline, weight: .bold).foregroundStyle(.white)
+                    .padding(.horizontal, 16).padding(.vertical, 8).background(Color.green, in: Capsule())
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .fullScreenCover(isPresented: $playing) { MiniAppLessonView(lesson: lesson, complete: complete) }
+    }
+}
+
+/// One question at a time: choose or type, Check, then feedback and Continue. A wrong
+/// answer costs a heart; running out ends the lesson without a score.
+struct MiniAppLessonView: View {
+    let lesson: MiniAppLesson
+    let complete: (Int) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var index = 0
+    @State private var selected: Int?
+    @State private var typed = ""
+    @State private var result: Bool?
+    @State private var hearts: Int
+    @State private var correct = 0
+    @State private var finished = false
+    @State private var failed = false
+    @FocusState private var typing: Bool
+
+    init(lesson: MiniAppLesson, complete: @escaping (Int) -> Void) {
+        self.lesson = lesson
+        self.complete = complete
+        _hearts = State(initialValue: lesson.hearts)
+    }
+
+    private var question: MiniAppLesson.Question { lesson.questions[index] }
+    private var ready: Bool { question.options == nil ? !typed.trimmingCharacters(in: .whitespaces).isEmpty : selected != nil }
+    /// Typed answers ignore case, accents, punctuation and extra spaces.
+    static func normalized(_ text: String) -> String {
+        let folded = text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        let kept = String(String.UnicodeScalarView(folded.unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) && !CharacterSet.symbols.contains($0) }))
+        return kept.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                Button { dismiss() } label: { Image(systemName: "xmark").font(.title3.weight(.semibold)) }
+                    .foregroundStyle(.secondary).accessibilityLabel("Close")
+                ProgressView(value: Double(index + (result == nil ? 0 : 1)), total: Double(lesson.questions.count))
+                    .tint(.green).animation(.snappy, value: index)
+                Label("\(hearts)", systemImage: "heart.fill").labelStyle(.titleAndIcon).font(.headline).monospacedDigit().foregroundStyle(.red)
+                    .contentTransition(.numericText()).animation(.snappy, value: hearts)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 12)
+            if finished || failed { summary } else { quiz }
+        }
+        .sensoryFeedback(trigger: result) { _, value in value == true ? .success : value == false ? .error : nil }
+    }
+
+    private var quiz: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text(question.prompt).manrope(.title2, weight: .bold).fixedSize(horizontal: false, vertical: true)
+                    if let options = question.options {
+                        VStack(spacing: 10) {
+                            ForEach(Array(options.enumerated()), id: \.offset) { offset, option in
+                                let chosen = selected == offset, right = result != nil && offset == question.correct
+                                Button { selected = offset } label: {
+                                    Text(option).manrope(.body, weight: .semibold).foregroundStyle(.primary)
+                                        .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                                        .background((right ? Color.green : chosen ? Color.accentColor : Color.clear).opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .strokeBorder(right ? Color.green : chosen ? (result == false ? Color.red : Color.accentColor) : Color.secondary.opacity(0.3), lineWidth: 2))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(result != nil)
+                            }
+                        }
+                    } else {
+                        TextField("Type your answer", text: $typed, axis: .vertical)
+                            .manrope(.body).lineLimit(1...3).focused($typing)
+                            .padding(16).background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .disabled(result != nil)
+                            .onAppear { typing = true }
+                    }
+                }
+                .padding(20)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            VStack(alignment: .leading, spacing: 12) {
+                if let result {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: result ? "checkmark.circle.fill" : "xmark.circle.fill").font(.title2)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(result ? "Correct!" : "Correct answer:").manrope(.headline, weight: .bold)
+                            if !result { Text(question.options.map { $0[question.correct ?? 0] } ?? question.answers?.first ?? "").manrope(.body) }
+                            if let explain = question.explain { Text(explain).manrope(.subheadline).foregroundStyle(.secondary) }
+                        }
+                    }
+                    .foregroundStyle(result ? Color.green : Color.red)
+                }
+                Button { if result == nil { check() } else { advance() } } label: {
+                    Text(result == nil ? "Check" : "Continue").manrope(.headline, weight: .bold).frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.glassProminent).tint(result == false ? .red : .green)
+                .disabled(result == nil && !ready)
+            }
+            .padding(20)
+            .background((result == true ? Color.green : result == false ? Color.red : Color.clear).opacity(0.1))
+            .animation(.snappy, value: result)
+        }
+    }
+
+    private var summary: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: failed ? "heart.slash.fill" : "trophy.fill").font(.system(size: 76)).foregroundStyle(failed ? Color.red : Color.yellow)
+                .symbolEffect(.bounce, value: finished)
+            Text(failed ? "Out of hearts" : "Lesson complete!").manrope(.title, weight: .extraBold)
+            Text("\(correct) of \(lesson.questions.count) correct").manrope(.title3).foregroundStyle(.secondary)
+            if !failed, lesson.xp != nil, correct > 0 { Text("+\(correct) XP").manrope(.title2, weight: .bold).foregroundStyle(.green) }
+            Spacer()
+            Button {
+                if failed { restart() } else { complete(correct); dismiss() }
+            } label: { Text(failed ? "Try again" : "Done").manrope(.headline, weight: .bold).frame(maxWidth: .infinity, minHeight: 50) }
+            .buttonStyle(.glassProminent).tint(.green)
+            if failed { Button("Close") { dismiss() }.manrope(.body, weight: .semibold) }
+        }
+        .padding(24)
+    }
+
+    private func check() {
+        let right = question.options == nil
+            ? (question.answers ?? []).contains { Self.normalized($0) == Self.normalized(typed) }
+            : selected == question.correct
+        result = right
+        if right { correct += 1 } else { hearts = max(0, hearts - 1) }
+    }
+    private func advance() {
+        if hearts == 0 { failed = true; return }
+        if index + 1 < lesson.questions.count { index += 1; selected = nil; typed = ""; result = nil } else { finished = true }
+    }
+    private func restart() {
+        index = 0; selected = nil; typed = ""; result = nil; hearts = lesson.hearts; correct = 0; finished = false; failed = false
     }
 }
 

@@ -143,6 +143,7 @@ export type MiniAppComponent =
   | { type: 'grid'; columns: 2 | 3; children: MiniAppComponent[] }
   | { type: 'tile'; title: string; caption: string | null; icon: string | null; value: number | string | null; format: MiniAppFormat; currency: string | null; state: string | null; tab: string | null; action: MiniAppAction | null }
   | MiniAppComposer
+  | { type: 'lesson'; title: string; hearts: number; xp: string | null; questions: { prompt: string; options: string[] | null; correct: number | null; answers: string[] | null; explain: string | null }[] }
   | { type: 'notice'; code: string };
 export type MiniAppAction = { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: MiniAppField[]; updates: MiniAppUpdate[] | null };
 // A text bar pinned to the bottom of its screen; `append` lets a submitted row show at once.
@@ -151,7 +152,7 @@ export type MiniAppComposer = { type: 'composer'; action: string; field: string;
 export type MiniAppRow = { title: string; subtitle: string | null; value: number | string | null };
 export type MiniAppItem = Record<string, number | string | boolean>;
 export type MiniAppStateValue = number | string | boolean | MiniAppItem[];
-export type MiniAppUpdate = { state: string; op: 'increment' | 'decrement' | 'set' | 'toggle' | 'append' | 'clear' | 'pick' | 'set_items' | 'toggle_item' | 'remove_item'; value?: MiniAppStateValue | null; index?: number; field?: string };
+export type MiniAppUpdate = { state: string; op: 'increment' | 'decrement' | 'set' | 'toggle' | 'append' | 'clear' | 'pick' | 'set_items' | 'remove_where' | 'toggle_item' | 'remove_item'; value?: MiniAppStateValue | null; index?: number; field?: string };
 export type MiniAppResolution = { revision: number; inputs: Record<string, string>; resolvedAt: number; view: MiniAppComponent[];
   tabs?: { id: string; title: string; icon: string; view: MiniAppComponent[] }[]; menu?: MiniAppAction[]; issues: { step: string; code: string }[];
   state?: Record<string, MiniAppStateValue>; remote?: boolean };

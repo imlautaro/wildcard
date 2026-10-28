@@ -135,6 +135,9 @@ struct MiniAppUpdate: Codable, Hashable, Sendable {
             case ("set_items", .list(let items)):
                 guard let field = update.field, let value = update.value else { continue }
                 next[update.state] = .list(items.map { item in var item = item; item[field] = value; return item })
+            case ("remove_where", .list(let items)):
+                guard let field = update.field, let value = update.value else { continue }
+                next[update.state] = .list(items.filter { $0[field] != value })
             case ("toggle_item", .list(var items)):
                 guard let index = update.index, let field = update.field, items.indices.contains(index) else { continue }
                 items[index][field] = .bool(items[index][field] != .bool(true))
@@ -200,6 +203,23 @@ struct MiniAppComposer: Decodable, Hashable, Sendable {
     let append: Append?
 }
 
+/// A Duolingo-style lesson checked on the device; finishing adds the correct answers to `xp`.
+struct MiniAppLesson: Decodable, Hashable, Sendable {
+    struct Question: Decodable, Hashable, Sendable {
+        let prompt: String
+        /// Multiple choice: the options and the index of the correct one.
+        let options: [String]?
+        let correct: Int?
+        /// Typed: the accepted answers.
+        let answers: [String]?
+        let explain: String?
+    }
+    let title: String
+    let hearts: Int
+    let xp: String?
+    let questions: [Question]
+}
+
 /// The server-resolved component tree; the renderer never evaluates app logic.
 indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
     case section(title: String?, children: [MiniAppComponent])
@@ -217,6 +237,7 @@ indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
     case grid(columns: Int, children: [MiniAppComponent])
     case tile(MiniAppTile)
     case composer(MiniAppComposer)
+    case lesson(MiniAppLesson)
     case notice(code: String)
     case unsupported
 
@@ -250,6 +271,7 @@ indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
         case "grid": self = .grid(columns: try c.decode(Int.self, forKey: .columns), children: try c.decode([MiniAppComponent].self, forKey: .children))
         case "tile": self = .tile(try MiniAppTile(from: decoder))
         case "composer": self = .composer(try MiniAppComposer(from: decoder))
+        case "lesson": self = .lesson(try MiniAppLesson(from: decoder))
         case "notice": self = .notice(code: try c.decode(String.self, forKey: .code))
         default: self = .unsupported
         }

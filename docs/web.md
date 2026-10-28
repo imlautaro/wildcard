@@ -450,7 +450,9 @@ with a ⋯ menu (the app's menu actions, then Refresh, Disable and Delete), the
 current tab, a composer pinned to the bottom and a bottom tab bar for tabbed apps.
 `MiniAppView.vue` renders the server-resolved tree: stat grids, card grids, tiles,
 grouped lists, SVG bar/line/area/donut charts, progress bars and rings, text,
-notices and action forms that confirm with the action's text. Values are formatted with
+notices and action forms that confirm with the action's text. `MiniAppLesson.vue`
+shows a lesson card and opens the lesson flow in a full-window overlay with the same
+rules as iOS. Values are formatted with
 `Intl` in the viewer's locale. Behavior, copy and limits match iOS; see
 [mini apps](mini-apps.md) and [caching](caching.md#mini-apps). Browser layout and live
 loads have not been verified.

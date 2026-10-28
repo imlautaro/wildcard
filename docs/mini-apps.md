@@ -78,6 +78,7 @@ show the first screen.
 | `append` | list | Adds an object (scalars become `{ "value": … }`) |
 | `clear` | list | Removes every item |
 | `set_items` | list | Sets `field` to `value` on every item, for example to restart a checklist |
+| `remove_where` | list | Removes the items whose `field` equals `value`, for example completed tasks |
 | `pick` | text, number | Picks one of the `value` options at random, on the server |
 
 A local action needs no confirmation unless it declares `confirm`, for example for a
@@ -133,6 +134,17 @@ View components:
 - `action`: consecutive buttons without fields share one row. Short symbols such as
   `+` and `−` sit side by side. The adding action (`+`, increment or append) is
   prominent. Actions with fields render as a form.
+- `lesson`: a Duolingo-style quiz card. **Start** opens a full-screen flow with one
+  question at a time, a progress bar and hearts (1–5, default 3). Questions are
+  multiple choice (2–4 options and the index or text of the correct one) or typed
+  (the expected answer plus up to five accepted spellings, compared ignoring case,
+  accents, punctuation and extra spaces). **Check** shows the result and an optional
+  explanation, and a wrong answer costs a heart. Running out of hearts ends the
+  lesson with no score and offers **Try again**. Finishing adds the number of correct
+  answers to the optional `xp` number state through the direct-edit route. That
+  route accepts only `increment` by a whole number from 0 up to the lesson's question
+  count. Up to 20 questions per lesson. Answers travel to the client with the
+  questions, so they are not secret from the person playing.
 
 Values carry a format (`number`, `currency` with an ISO code, `percent`, `date`,
 `datetime`, `text`), which each client formats with the viewer's locale. Date-only
@@ -150,6 +162,47 @@ spending a retry:
 - `$round` with a sibling `digits`.
 
 Anything ambiguous is still rejected.
+
+## Verification before delivery
+
+`create_mini_app` saves an app only if it passes an offline verification
+(`apps/api/src/miniapps/verify.ts`). The contact receives every problem, the app is
+**not** saved, and the contact must fix it or tell the person plainly what could not
+be built. Nothing remote runs during verification.
+
+**Automatic checks**, independent of the contact's tests:
+- No data step fails on first open (`PATH_NOT_FOUND`, `NOT_A_LIST`, …).
+- Each `mcp` read step is checked against a result of that tool inspected with
+  `call_mcp_tool` in the same turn, read from `mcp_execution`. A read with no
+  inspected result is rejected.
+- Every action is reachable from a button, tile, menu or composer, and every local
+  action runs from the initial state with sample field values.
+- A list shown on screen that starts empty has a reachable action that appends to it.
+- After using every everyday action twice, the verifier warns about actions that
+  change nothing, state that is never used, charts with no points and stats with no
+  value. These are warnings, not errors.
+
+**Tests** (`tests` in the spec, up to eight, stored with it) are required when an
+app has local actions or editable components. Each test starts from the initial
+state and runs its steps:
+- `{tap, fields?}` runs a local action. Remote actions cannot be tested.
+- `{edit}` sends what a bound component sends, and is accepted only if a component
+  on screen allows it.
+- `{input}` sets an input.
+
+It then checks expectations:
+- `{state, equals | count | includes}`.
+- `{step, equals}` for a computed data step.
+- `{text}`, something the screen must show, matched against raw values rather than
+  formatted ones.
+
+A failing step or expectation is reported with the actual value, for example
+`Test "clear" failed: expected items to have 0 items, got 1`.
+
+On success, the tool result includes `verified: { testsPassed, warnings }`. These
+checks prove that the app behaves as its tests declare. They do not prove that the
+tests capture what the person wanted; the automatic checks narrow that gap without
+closing it. The evaluation script uses the same verifier.
 
 Tool results are parsed as JSON from text blocks first, because that is the shape the
 contact inspected. `structuredContent` is the fallback. A tool that returns prose
@@ -213,7 +266,14 @@ All routes require the bearer session and an owned contact:
 
 All direct private chats expose `create_mini_app` and `list_mini_apps`, and get
 three tool-enabled rounds (scheduled turns keep two) with up to 8,192 completion
-tokens, within the six-execution budget. `museCompletion` accepts `create_mini_app`
+tokens, within the six-execution budget. If `create_mini_app` fails in the last
+round (for example, after `list_mcp_tools` and `call_mcp_tool`), the turn gets one
+more round to repair it. The system prompt (`miniAppInstruction`) and the tool
+description tell the contact to mention an app only when the tool returned its
+`miniAppID`. When the request needs something mini apps cannot do (camera, live AI
+replies, multiplayer, notifications, arbitrary code, data without a connector),
+or when verification keeps failing, the contact must say which part cannot be built
+and offer the closest version. `museCompletion` accepts `create_mini_app`
 arguments up to 30 KB; the earlier 1 KB limit for most tools rejected nearly every
 spec. Risk: a turn can now make four model calls (up to 45 seconds each) plus MCP
 calls inside the existing three-minute `prepare-reply` step. Slow turns can time out
@@ -253,8 +313,10 @@ that are not literal (form values, `pick`, computed values) wait for the server.
 `scripts/checks/mini-app-eval.mjs` generates mini apps from a list of prompts with
 the real `museCompletion`, tool definitions and spec interpreter. It reads
 `META_API_KEY` from the environment or the ignored `apps/api/.dev.vars` and never
-prints it. It simulates local taps and writes resolved fixtures
-(`app-NN.json`) plus `results.json` with attempts, rejected arguments and latency.
+prints it. It runs the same parsing and offline verification as production
+(`prepareMiniApp`), including the extra repair round, and writes the verifier's
+populated preview as fixtures (`app-NN.json`, with `tabs` and `menu`) plus
+`results.json` with attempts, verification problems, replies and latency.
 Debug iOS builds launched with `MINIAPP_FIXTURE=<path>` (for example
 `SIMCTL_CHILD_MINIAPP_FIXTURE=… xcrun simctl launch …`) render a fixture with the real
 renderer and no network, for Simulator screenshots.
@@ -271,7 +333,26 @@ On October 28, 2026, with `muse-spark-1.3-contributor`:
   time was about 14 seconds, almost all model time.
 - iOS Simulator and a static web preview rendered every built fixture.
 
-These runs did not use connectors, a real chat turn, or a physical device.
+Later on October 28, 2026, with full-screen layouts, verification and lessons:
+- Ten layout prompts (to-do with composer and menu, habits with two tabs and a
+  two-column home, expense dashboard with a donut, water ring, tip calculator,
+  reading tracker with tabs, mood journal with composer, padel scoreboard, gym tracker
+  with tabs and trip savings with a ring) built 9/10 verified apps, each with 2–3
+  passing tests. Only two built on the first attempt. Most retries were specs sent as
+  JSON text with stray tokens or unbalanced brackets. In the gym case, verification
+  kept failing, and the contact told the person it could not build the tracker
+  instead of presenting it. It had first created a placeholder app, which led to the
+  "no placeholder apps" rule and to tolerant removal of stray bare words.
+- A second run built two Duolingo-style courses (English with three six-question
+  lessons, XP and a progress tab; South American capitals mixing multiple choice
+  and typed answers), a to-do list using `remove_where`, and the gym and padel apps.
+  Requests for a chatbot with AI replies and for camera ticket scanning were
+  declined with an explanation and the closest alternative, as intended.
+  Median time was about 30 seconds because of retries.
+
+These runs did not use connectors, a real chat turn, or a physical device. The new
+layouts were typechecked on iOS (Simulator SDK) and web (`vue-tsc`) but not rendered
+in the Simulator or a browser.
 
 ## Setup and verification
 

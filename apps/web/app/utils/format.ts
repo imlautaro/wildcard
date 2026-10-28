@@ -97,6 +97,10 @@ export function applyMiniAppUpdates(updates: MiniAppUpdate[], values: Record<str
         const field = update.field, value = update.value;
         next[update.state] = current.map(item => ({ ...item, [field]: value }));
       }
+      else if (update.op === 'remove_where' && update.field && update.value !== undefined && !Array.isArray(update.value)) {
+        const field = update.field, value = update.value;
+        next[update.state] = current.filter(item => item[field] !== value);
+      }
       else if (update.index !== undefined && update.index < current.length && update.op === 'remove_item') next[update.state] = current.filter((_, index) => index !== update.index);
       else if (update.index !== undefined && update.index < current.length && update.op === 'toggle_item' && update.field) {
         const field = update.field;

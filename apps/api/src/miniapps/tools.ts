@@ -2,8 +2,9 @@ import type { ModelTool } from '../chat/meta';
 import type { StoredTurn } from '../chat/data';
 import { parseSpec, SpecError } from './spec';
 import { bindTools, contactConnectors, miniAppColumns, type MiniAppRow } from './runtime';
+import { turnSamples, verifySpec, type Verification } from './verify';
 
-const specGuide = 'spec (a JSON object, not a string) = {title, subtitle?, icon: chart|list|money|calendar|cart|check|clock|star|bolt|folder, state?, inputs?, data?, view | tabs, menu?, actions?}. '
+const specGuide = 'spec (a JSON object, not a string) = {title, subtitle?, icon (same catalog as tab icons), state?, inputs?, data?, view | tabs, menu?, actions?}. '
   + 'The app opens full screen like a native app. Use view (array of components) for one screen, or tabs for 2–5 screens with a native bottom tab bar: tabs:[{id,title,icon,view}] '
   + '(icon: home|list|chart|check|star|calendar|clock|money|cart|bolt|folder|person|chat|book|trophy|heart|gear|grid). '
   + 'menu: up to 6 action ids without fields, shown in the top bar ⋯ menu (e.g. clear list, reset, shuffle); put secondary or destructive actions there instead of big buttons. '
@@ -23,6 +24,9 @@ const specGuide = 'spec (a JSON object, not a string) = {title, subtitle?, icon:
   + '{type:"progress",label,step,goal,caption?,style?:bar|ring} (value toward a goal; goal is a number or a number state id; ring suits grids); '
   + '{type:"tile",title,caption?,icon?,step?,path?,format?,tab?|action?} (a card: tab opens that tab, action runs a field-less action, step shows a value); '
   + '{type:"composer",action,placeholder?} (a text bar pinned to the bottom of its screen with a send/add button, like a messaging app; its action has exactly one text or number field; at most one per screen, top level); '
+  + '{type:"lesson",title,hearts?:1-5,xp?,questions:[{prompt,options?:[2-4 texts],answer,accept?,explain?}]} (a Duolingo-style quiz card: one question at a time with Check, feedback, hearts and a final score; '
+  + 'answer is the 0-based index of the correct option, or for typed questions without options the expected text (accept lists other valid spellings); xp is a number state that grows by the correct answers when a lesson ends; '
+  + 'write 5–10 real questions per lesson in the person\'s language, several lessons for a course; test it with {edit:{state:"xp",op:"increment",value:3}}); '
   + '{type:"toggle",label,state} (boolean state, tap to flip); '
   + '{type:"choice",label,state,options:[{value,label}]} (text state, pick one); {type:"input",label,state,placeholder?} (text/number state, edited in place); '
   + '{type:"checklist",state,title,done?,subtitle?,value?,removable?,empty?} (list state; rows tap to toggle the boolean "done" field and swipe to delete); '
@@ -31,15 +35,26 @@ const specGuide = 'spec (a JSON object, not a string) = {title, subtitle?, icon:
   + '{type:"text",text,style:body|caption|headline}; {type:"action",action} (consecutive buttons share one row). '
   + 'format: number|currency|percent|date|datetime|text; currency needs an ISO code. '
   + 'actions (ids separate from state ids): local {id,label,set:[{state,op,value?}],confirm?,style?,fields?} updates saved state instantly. ops: increment/decrement (number, default 1), set (number/text/boolean), toggle (boolean), '
-  + 'append (list; value is an object, often from fields, e.g. {"name":{"$field":"item"},"done":false}), clear (list), set_items (list; {field:"done",value:false} sets that field on every item, e.g. to restart a checklist), '
+  + 'append (list; value is an object, often from fields, e.g. {"name":{"$field":"item"},"done":false}), clear (list), set_items (list; {field:"done",value:false} sets that field on every item, e.g. to restart a checklist), remove_where (list; {field:"done",value:true} removes matching items, e.g. clear completed), '
   + 'pick (text/number; value is an array of options, one chosen at random, e.g. a dinner roulette). Omit confirm unless the action is destructive. '
   + 'remote {id,label,confirm,style?:default|destructive,connectionID,tool,arguments,fields?} runs an external write only after the person taps and confirms. '
   + 'fields: [{id,label,kind:text|number|date|toggle,required?}] render a form with the button. '
   + 'Prefer the bound components (toggle, choice, input, checklist) over many buttons. Keep labels short (use "+" and "−" for counters) and write all text in the person\'s language. '
   + 'Example counter: {title:"Counter",icon:"bolt",state:[{id:"count",type:"number",initial:0}],view:[{type:"stat",label:"Count",step:"count"},{type:"action",action:"sub"},{type:"action",action:"add"}],actions:[{id:"sub",label:"−",set:[{state:"count",op:"decrement"}]},{id:"add",label:"+",set:[{state:"count",op:"increment"}]}]}. '
+  + 'tests (required for apps with local actions or editable components): up to 8 scenarios run on the server before the app is saved, each from the initial state: '
+  + '{name,steps:[{tap:actionId,fields?:{fieldId:value}} | {edit:{state,op,value?,index?}} (what a toggle/choice/input/checklist row sends: op toggle, set, toggle_item or remove_item) | {input:{inputId:value}}],'
+  + 'expect:[{state,equals?|count?|includes?:{field:value}} | {step,equals} | {text}]} (text: something the screen must show). Test the main flow and edge cases, e.g. add two items then check one, or a calculation with known inputs. '
   + 'Example to-do list with an input bar and a menu: {title:"To-do",icon:"check",state:[{id:"items",type:"list",initial:[]}],menu:["clearDone","clearAll"],view:[{type:"checklist",state:"items",title:"name",done:"done",empty:"Nothing to do"},{type:"composer",action:"add",placeholder:"New task"}],'
-  + 'actions:[{id:"add",label:"Add",fields:[{id:"item",label:"Task",kind:"text",required:true}],set:[{state:"items",op:"append",value:{"name":{"$field":"item"},"done":false}}]},{id:"clearDone",label:"Uncheck all",set:[{state:"items",op:"set_items",field:"done",value:false}]},{id:"clearAll",label:"Clear list",style:"destructive",confirm:"Delete every task?",set:[{state:"items",op:"clear"}]}]}. '
+  + 'actions:[{id:"add",label:"Add",fields:[{id:"item",label:"Task",kind:"text",required:true}],set:[{state:"items",op:"append",value:{"name":{"$field":"item"},"done":false}}]},{id:"clearDone",label:"Uncheck all",set:[{state:"items",op:"set_items",field:"done",value:false}]},{id:"clearAll",label:"Clear list",style:"destructive",confirm:"Delete every task?",set:[{state:"items",op:"clear"}]}],'
+  + 'tests:[{name:"add and check",steps:[{tap:"add",fields:{item:"Milk"}},{tap:"add",fields:{item:"Eggs"}},{edit:{state:"items",op:"toggle_item",index:0}}],expect:[{state:"items",count:2},{state:"items",includes:{name:"Milk",done:true}}]},'
+  + '{name:"clear",steps:[{tap:"add",fields:{item:"Milk"}},{tap:"clearAll"}],expect:[{state:"items",count:0}]}]}. '
   + 'Example tabs: tabs:[{id:"home",title:"Home",icon:"home",view:[{type:"grid",children:[{type:"stat",label:"Total",step:"total"},{type:"progress",label:"Goal",step:"total",goal:10,style:"ring"},{type:"tile",title:"History",icon:"list",tab:"history"}]}]},{id:"history",title:"History",icon:"list",view:[{type:"list",source:"log",title:"name"}]}].';
+
+// System guidance for direct private chats; the evaluation script uses the same text.
+export const miniAppInstruction = 'When the person asks for an app, tool, counter, tracker, checklist or reusable view, build a native mini app with create_mini_app instead of describing one or writing code. '
+  + 'Use saved state and local actions for things that only need to remember values. create_mini_app verifies each app (automatic checks plus your tests) and saves it only if it passes. '
+  + 'Mention a mini app only when create_mini_app returned its miniAppID. If it keeps failing, or the request needs something mini apps cannot do, tell the person plainly which part could not be built and why, '
+  + 'and offer the closest version instead of handing over something broken.';
 
 export const miniAppTools: ModelTool[] = [{ type: 'function', function: {
   name: 'create_mini_app',
@@ -47,7 +62,9 @@ export const miniAppTools: ModelTool[] = [{ type: 'function', function: {
     + 'Apps without external tools (only state, inputs, const data and local actions) open immediately. '
     + 'For connected data, first use list_mcp_tools and call_mcp_tool once to inspect the real result shape; design paths from that result. Never invent connectionIDs, tools or fields. '
     + 'Apps using external tools start disabled: the person must review its tools and enable it from the card in this chat; each later open re-runs its read steps under that grant. '
-    + 'Pass miniAppID to replace an existing app (it then needs review again). ' + specGuide,
+    + 'Pass miniAppID to replace an existing app (it then needs review again). '
+    + 'Before saving, the server verifies the app: automatic checks (every action reachable and runnable, lists that can grow, no data step failing on first open, connector paths checked against the result you inspected) and your tests. '
+    + 'A failing app is NOT saved; you get the problems to fix. Never create placeholder, probe or test apps: every call must be the app the person asked for. Only promise what the catalog below can do: if part of the request is impossible (camera, live AI replies, multiplayer, notifications, arbitrary code, data without a connector) say so and offer the closest app. ' + specGuide,
   parameters: { type: 'object', additionalProperties: false, required: ['spec'], properties: {
     miniAppID: { type: 'string', maxLength: 64 }, spec: { type: 'object' },
   } },
@@ -74,9 +91,9 @@ export async function executeMiniAppTool(env: Env, turn: StoredTurn, name: strin
     return JSON.stringify({ miniApps, specsOmitted: miniApps.some(app => !('spec' in app)) ? 'Some specs were omitted for size; pass their miniAppID with a complete new spec to change them.' : undefined });
   }
   if (Object.keys(args).some(key => !['miniAppID', 'spec'].includes(key)) || (args.miniAppID !== undefined && typeof args.miniAppID !== 'string')) return JSON.stringify({ error: 'Provide spec and optionally miniAppID.' });
-  let parsed: ReturnType<typeof parseSpec>;
-  try { parsed = parseSpec(args.spec); }
-  catch (error) { return JSON.stringify({ error: error instanceof SpecError ? `Invalid spec: ${error.message}` : 'Invalid spec.' }); }
+  const prepared = prepareMiniApp(args.spec, turn.timeZone ?? 'UTC', await turnSamples(env.DB, turn.id));
+  if ('response' in prepared) return JSON.stringify(prepared.response);
+  const { parsed, verification } = prepared;
   const tools = bindTools(parsed.tools, await contactConnectors(env.DB, turn.contactID, turn.userID));
   if (typeof tools === 'string') return JSON.stringify({ error: `${tools} Use list_mcp_tools for exact IDs.` });
   // Without external tools there is nothing to review: the revision is enabled as created.
@@ -102,6 +119,21 @@ export async function executeMiniAppTool(env: Env, turn: StoredTurn, name: strin
     if (!row) return JSON.stringify({ error: 'Could not create the mini app. Each chat supports 20; replace one with miniAppID.' });
   }
   return JSON.stringify({ miniAppID: row.id, revision: row.revision, enabled: !!enabled, tools: tools.map(t => ({ toolName: t.toolName, role: t.role })),
+    verified: { testsPassed: verification.testsPassed, warnings: verification.warnings.slice(0, 8) },
     nextStep: enabled ? 'Tell the person the mini app card is in this chat and opens immediately. Saved values are kept across revisions when ids and types match.'
       : 'Tell the person the mini app card is in this chat: they must review the listed tools and tap Enable before it loads. Do not claim it shows data yet.' });
+}
+
+// Parsing plus offline verification, shared with scripts/checks/mini-app-eval.mjs.
+// A spec that fails either is never saved; the model gets the problems to fix.
+export function prepareMiniApp(raw: unknown, timeZone: string, samples: Map<string, unknown>, now = Date.now()):
+  { parsed: ReturnType<typeof parseSpec>; verification: Verification } | { response: Record<string, unknown> } {
+  let parsed: ReturnType<typeof parseSpec>;
+  try { parsed = parseSpec(raw); }
+  catch (error) { return { response: { error: error instanceof SpecError ? `Invalid spec: ${error.message}` : 'Invalid spec.' } }; }
+  const verification = verifySpec(parsed.spec, samples, timeZone, now);
+  if (verification.errors.length) return { response: {
+    error: 'The mini app failed verification and was NOT saved. Fix every problem and call create_mini_app again with the complete spec. If you cannot make it work, tell the person plainly which part cannot be built; never say the app exists.',
+    problems: verification.errors.slice(0, 12), testsPassed: verification.testsPassed, warnings: verification.warnings.slice(0, 6) } };
+  return { parsed, verification };
 }
