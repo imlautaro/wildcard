@@ -159,7 +159,9 @@ shared-memory permissions remain independent; MCP chats always use Standard.
 [Model settings and AI Gateway](docs/model-settings.md) describes durable selection,
 privacy, and estimated Spark spending in the Cloudflare dashboard. Provision the
 optional gateway before enabling `AI_GATEWAY_ID`; all Spark calls then use the AI
-binding and existing `META_API_KEY`.
+binding and existing `META_API_KEY`. Gateway routing is temporarily disabled in the
+checked-in configuration after production HTTP 502 failures; direct Meta requests
+preserve account model selection but do not appear in gateway spending metrics.
 Wrangler configures the Workflow and recovery Cron Trigger in the same release. Commit and push to
 release; do not deploy manually. Preview builds are disabled.
 The web Worker `wildcard-web` needs a second Workers Builds project on the same

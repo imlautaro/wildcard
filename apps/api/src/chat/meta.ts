@@ -60,6 +60,8 @@ export async function museCompletion(env: Env, messages: ModelMessage[], configu
     redirect: 'manual',
   });
   if (!response.ok) {
+    console.error(JSON.stringify({ event: 'model_request_failed',
+      transport: env.AI_GATEWAY_ID ? 'gateway' : 'direct', status: response.status }));
     await response.body?.cancel();
     if (response.status === 429 || response.status >= 500) throw new Error('MODEL_TEMPORARILY_UNAVAILABLE');
     throw new NonRetryableError('MODEL_REQUEST_REJECTED');

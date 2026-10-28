@@ -245,6 +245,11 @@ Both clients now sign in existing accounts only. Account offers Muse Spark 1.3 S
 
 See [model settings](model-settings.md) for the API, shared consent, cache behavior,
 AI Gateway spending and pending runtime/device verification.
+The shared API configuration temporarily bypasses AI Gateway after production
+HTTP 502 failures. Both web and iOS keep their selected model, consent checks,
+cached messages and retry behavior; direct Meta calls do not appear in gateway
+spending metrics. Release through the automatic pipeline and retry a failed turn
+to verify generation; no client update is required for this server configuration.
 
 ## Large MCP tool catalogs
 

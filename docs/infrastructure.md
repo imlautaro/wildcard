@@ -375,17 +375,31 @@ shared consent remains independent. MCP private chats always use Standard.
 ## Optional AI Gateway for Spark spending
 
 Provision a dedicated authenticated `wildcard` gateway and account custom provider
-`meta` with base URL `https://api.meta.ai` before releasing the configured API.
+`meta` with base URL `https://api.meta.ai` before enabling gateway routing.
 The checked-in AI binding is `AI`; `AI_GATEWAY_ID=wildcard` enables routing for all
 Spark calls, including memory extraction, tools, schedules and groups. The
 provider key remains the existing runtime/build `META_API_KEY`; the Worker binding
 authenticates Cloudflare requests automatically. No gateway token is required at
 runtime and no provider key is stored through the dashboard.
 
+The checked-in production configuration currently sets `AI_GATEWAY_ID=""` to
+restore direct Meta calls after production gateway HTTP 502 failures on October
+27, 2026. This affects both clients through the shared API, requires no migration
+or new secret, and preserves model preferences and consent checks. Direct calls
+are absent from gateway spending metrics. Keep the provisioned gateway/logs;
+restore routing only after verifying it separately and publishing the config
+through commit/push and automatic deployment. Existing Workflows retain their
+original version. See the [diagnostic evidence](model-settings.md#gateway-provisioning)
+and retry a failed turn after release to verify actual generation. Failed model
+requests emit only the transport and HTTP status in Worker logs.
+
 For an independent account, replace `account_id`, the existing D1/R2/Worker
 identifiers and origins as described above, provision those required resources,
-then run `npm run infra:ai-gateway -- --create`. The script uses existing Wrangler
-credentials in memory or an explicitly supplied `CLOUDFLARE_API_TOKEN`; management
+then run `npm run infra:ai-gateway -- --create`. The script targets `wildcard`
+when the routing variable is empty, allowing
+provisioning/verification while routing remains disabled. It otherwise uses
+the configured gateway ID. It uses existing Wrangler credentials in memory or an
+explicitly supplied `CLOUDFLARE_API_TOKEN`; management
 requires AI Gateway Read and Edit/Write permissions. It never displays tokens,
 overwrites an existing provider or deploys. Without `--create`, it only verifies.
 A 403 means insufficient management permissions; use the dashboard instructions

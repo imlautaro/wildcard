@@ -67,7 +67,28 @@ MCP access permits Contributor processing or public/group disclosure.
 
 Follow [infrastructure setup](infrastructure.md#optional-ai-gateway-for-spark-spending)
 for bindings, account replacements and automatic releases. The gateway is optional
-for independent installations; the checked-in production configuration enables it.
+for independent installations. The checked-in production configuration temporarily
+disables it with `AI_GATEWAY_ID=""` after gateway failures on October 27, 2026.
+Spark requests use the existing direct Meta path; account selection, MCP Standard,
+consent checks and client caches are unchanged. Gateway spending metrics do not
+cover direct calls. Preserve the gateway and its existing logs.
+
+Production Workflows exhausted generation retries with
+`MODEL_TEMPORARILY_UNAVAILABLE`; gateway metadata showed HTTP 502, zero tokens,
+and 4–10 ms duration. A diagnostic through the remote AI binding with fictional
+text and an invalid provider key reproduced gateway error 2006, while a direct
+Meta request with the same invalid key returned the expected HTTP 401. Changing
+the gateway endpoint to either relative-path form did not resolve the error.
+These checks locate the failing gateway route; they do not establish its internal
+cause or verify authenticated inference. No real provider key or chat content was
+used in the diagnostic. Failed model requests now log only transport and HTTP
+status, never request/response bodies or credentials.
+
+Release the bypass through the normal commit/push and automatic deployment flow.
+Then retry a failed turn from either client and check its Workflow generation step.
+Re-enable `AI_GATEWAY_ID=wildcard` only after separately verifying the gateway
+route, both selected models, tool responses and payload-free metrics. Re-enabling
+also requires a normal versioned automatic release; no schema migration is needed.
 
 In Cloudflare's target account, open **AI → AI Gateway → Create a custom gateway**.
 Use ID `wildcard`, require authentication, disable Collect Logs by default, disable
@@ -81,7 +102,8 @@ request uses provider `custom-meta` and that fixed official endpoint.
 Alternatively run `npm run infra:ai-gateway -- --create` with an existing credential
 having AI Gateway Read/Edit permissions in your account. Without `--create`, the
 script only verifies; it does not modify existing gateways/providers. It refuses
-provider URL drift and reports permission errors without printing credentials.
+provider URL drift and targets `wildcard` when routing is disabled, otherwise the
+configured gateway ID. It reports permission errors without printing credentials.
 An insufficient Wrangler OAuth scope does not mean the account is logged out;
 the dashboard can provision without creating any runtime token.
 

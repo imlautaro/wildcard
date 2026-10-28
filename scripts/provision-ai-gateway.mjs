@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const config = JSON.parse(readFileSync(new URL('../apps/api/wrangler.jsonc', import.meta.url), 'utf8'));
-const id = config.vars?.AI_GATEWAY_ID;
+const id = config.vars?.AI_GATEWAY_ID || 'wildcard';
 if (!/^[a-f0-9]{32}$/.test(config.account_id) || !/^[a-z0-9-]{1,64}$/.test(id ?? '')) {
   throw new Error('Configure account_id and AI_GATEWAY_ID first.');
 }
