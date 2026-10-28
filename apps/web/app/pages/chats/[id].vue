@@ -124,6 +124,7 @@ async function earlier() {
 
 async function onSend(text: string, attachment: DraftAttachment | null) {
   scrollToBottom();
+  activity.sent();
   await send(text, attachment);
   scrollToBottom();
 }
@@ -272,7 +273,7 @@ onBeforeUnmount(() => {
       </template>
     </div>
     <ChatComposer
-      ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded" :reply="replyTarget"
+      ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable" :sending="!!state.pending" :reply="replyTarget"
       @send="onSend" @typing="activity.typing()" @cancel-reply="state.replyTo = null"
     />
   </template>

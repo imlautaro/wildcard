@@ -171,7 +171,7 @@ final class ChatStore {
     }
 
     func send(text: String, attachment: DraftAttachment? = nil, replyTo: MessageReplyQuote? = nil, contactID: String, using auth: AuthStore) async -> Bool {
-        guard !isSending, !hasPendingReply, !invalidated, !isUnavailable else { return false }
+        guard !isSending, !invalidated, !isUnavailable else { return false }
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (!text.isEmpty || attachment != nil), text.unicodeScalars.count <= 4000 else { return false }
         // Keep the identifier across an uncertain network result to prevent duplicate sends.

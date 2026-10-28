@@ -67,7 +67,7 @@ chats.post('/activity', bodyLimit({ maxSize: 1024,
       ON CONFLICT(id) DO NOTHING`)
       .bind(id, contactID, owner, now + 3000, now + 33000, now).run();
   } else if (body.kind === 'typing') {
-    await c.env.DB.prepare(`UPDATE chat_visit SET expires_at = MAX(expires_at, ?1), updated_at = ?2
+    await c.env.DB.prepare(`UPDATE chat_visit SET expires_at = MAX(expires_at, ?1), updated_at = ?2, typing_at = ?2
       WHERE id = ?3 AND contact_id = ?4 AND user_id = ?5 AND closed = 0 AND expires_at > ?2`)
       .bind(now + 30000, now, id, contactID, owner).run();
   } else {
@@ -75,7 +75,7 @@ chats.post('/activity', bodyLimit({ maxSize: 1024,
     await c.env.DB.prepare(`INSERT INTO chat_visit
       (id, contact_id, user_id, ready_at, expires_at, updated_at, closed)
       SELECT ?1, ?2, ?3, ?4, ?4, ?4, 1 WHERE EXISTS (SELECT 1 FROM contact WHERE id = ?2 AND user_id = ?3)
-      ON CONFLICT(id) DO UPDATE SET closed = 1,
+      ON CONFLICT(id) DO UPDATE SET closed = 1, typing_at = NULL,
         expires_at = CASE WHEN chat_visit.connected = 0 THEN MIN(chat_visit.expires_at, ?4) ELSE chat_visit.expires_at END
       WHERE chat_visit.contact_id = ?2 AND chat_visit.user_id = ?3`)
       .bind(id, contactID, owner, now).run();
@@ -183,7 +183,6 @@ chats.post('/turns', attachmentBody, async (c) => {
     (id, contact_id, user_id, user_text, status, workflow_id, created_at, updated_at, time_zone, attachment_json, reply_to_id, reply_to_side, native_context_json)
     SELECT ?1, ?2, ?3, ?4, 'queued', ?5, ?6, ?6, ?7, ?8, ?9, ?10, ?11
     WHERE EXISTS (SELECT 1 FROM contact WHERE id = ?2 AND user_id = ?3) AND ${replyTarget}
-      AND NOT EXISTS (SELECT 1 FROM chat_turn WHERE contact_id = ?2 AND status IN ('queued','running'))
       AND (SELECT COUNT(*) FROM chat_turn WHERE user_id = ?3 AND status IN ('queued','running')) < 10
     ON CONFLICT(id) DO NOTHING RETURNING ${storedColumns}`)
     .bind(id, c.get('contactID'), c.get('owner'), text, `chat-${id}-a1`, now, body.timeZone ?? null, attachmentJSON,
@@ -191,8 +190,11 @@ chats.post('/turns', attachmentBody, async (c) => {
   if (!turn) {
     const duplicate = await findTurn(c.env.DB, id, c.get('contactID'), c.get('owner'));
     if (duplicate?.userText === text && sameAttachment(duplicate, attachment?.metadata) && sameReply(duplicate, reply)) return c.json({ turn: await quotedTurn(c.env.DB, duplicate), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
-    return c.json({ error: 'A reply is already in progress or the conversation changed' }, 409);
+    return c.json({ error: 'Too many pending messages or the conversation changed' }, 409);
   }
+  await c.env.DB.prepare(`UPDATE chat_visit SET typing_at = NULL
+    WHERE contact_id = ? AND user_id = ? AND typing_at <= ?`)
+    .bind(c.get('contactID'), c.get('owner'), now).run();
   c.executionCtx.waitUntil(dispatchChat(c.env, turn));
   return c.json({ turn: await quotedTurn(c.env.DB, turn), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) }, 202);
 });
@@ -211,6 +213,7 @@ chats.get('/turns/:turnID/attachment', async (c) => {
 chats.post('/turns/:turnID/retry', messageBody, async (c) => {
   const previous = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
   if (!previous) return c.json({ error: 'Message not found' }, 404);
+  if (previous.errorCode === 'MESSAGE_BATCHED') return c.json({ error: 'This message is included in the next reply' }, 409);
   if (previous.scheduleID) return c.json({ error: 'Scheduled messages cannot be manually retried' }, 409);
   if (previous.groupRequestID) return c.json({ error: 'Automatic group results cannot be manually retried. Ask a new question instead.' }, 409);
   if (previous.status !== 'failed') return c.json({ turn: await quotedTurn(c.env.DB, previous), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });

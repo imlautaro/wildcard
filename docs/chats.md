@@ -34,7 +34,7 @@ and millisecond `createdAt`/`updatedAt`, plus nullable `readAt` when the model s
 and nullable `groupRequestID` for automatic group results, plus nullable [`replyTo`](replies.md#api) quotes. Sequence gaps are normal and disclose no
 message content. Internal workflow IDs, owners, and provider errors are omitted.
 Repeated sends with the same UUID and trimmed text return the existing turn.
-A reused UUID with different text returns 409. Only one active turn per participant conversation is allowed, enforced atomically in D1. Different participants can queue concurrently; one agent-wide attention claim admits exactly one to processing. Each user has at most ten active turns and
+A reused UUID with different text returns 409. Multiple human turns can queue in the same conversation, enforced atomically within the account-wide limit. Different participants can queue concurrently; one agent-wide attention claim admits exactly one to processing. Each user has at most ten active turns and
 20 new send/retry admission attempts per minute. Messages allow 1–4,000 Unicode
 code points after trimming, exclude NUL, and use a 32 KiB body limit. Missing
 model configuration returns 503 before persisting a new send. Replies are capped
@@ -47,7 +47,7 @@ at 4,096 completion tokens, 256 KiB of provider JSON, and 20,000 code points.
    for this turn/attempt. It performs no inference in the HTTP request lifetime.
 3. `ChatWorkflow` waits three seconds before connecting the agent and marking the
    turn running, then calls Meta's Chat Completions endpoint
-   with the configured Muse Spark variant (`META_CHAT_MODEL`), and saves the reply to D1 before completing the step.
+   with the configured Muse Spark variant (`META_CHAT_MODEL`), and journals the prepared reply before a separate publication step. See composer pacing below.
 4. A Cron Trigger runs every minute, checks up to 50 pending turns, and recovers
    queued dispatch gaps. It checks five instances concurrently, rotating by last
    check time. Terminal instances with an unfinished row become failed and can
@@ -59,7 +59,7 @@ forwarding the credential to another URL.
 
 Generation has a 45-second timeout per model request and a three-minute step
 timeout. It retries transient generation failures twice with exponential delay,
-then persists failure. An attempt includes up to eight completed prior turns
+then persists failure. An attempt includes up to twelve completed or batched prior turns
 within a 12,000-byte UTF-8 history budget, plus selected D1 memories. Long latest
 turns are explicitly clipped. Older completed messages remain searchable through
 bounded, private read tools; failed turns are excluded. See [contact memory](memory.md)
@@ -538,3 +538,58 @@ turns receive neither tool. See [native experiments](native-experiments.md).
 [Conversation initiative](initiative.md) adds bounded assistant-only follow-ups after direct human replies, with read/activity context, AI-selected waits, quiet hours and a per-participant switch in contact details on iOS and web. New human input cancels outstanding plans; explicit schedules remain separate. Existing history, polling, previews and notifications deliver these messages.
 
 The shared server cadence now starts reviews after 30 seconds, with minimum subsequent gaps of two and ten minutes. The planner treats greetings as openings and favors a short natural continuation; later silence gets progressively more space. Cron runs once a minute, so sends are approximate. The same behavior applies to iOS and web without client or cache changes. Three-message, six-evaluation, daily-budget, quiet-hour and cancellation limits remain in place. See [initiative](initiative.md#faster-cadence-validation) for migration 0033 and local versus live validation.
+
+
+## Consecutive messages and composer pacing
+
+Both iOS and web allow another send once the preceding HTTP submission is accepted,
+without waiting for the agent reply. Typing the next draft stays available during
+submission; sends remain serialized while a client UUID has an uncertain result.
+The existing per-account ten-active-turn and twenty-per-minute limits still apply.
+Agent attention remains exclusive across private conversations and groups.
+
+Actual field edits report activity (at most once per two seconds on web; iOS checks
+new edits every three seconds). Focus, keyboard visibility and retained draft text
+are not typing. `chat_visit.typing_at` expires for pacing after six seconds, separate
+from the thirty-second online lease. Accepted input clears older activity, and
+leaving closes the visit. Expired visits renew only after new input. No draft text
+is uploaded by activity reporting, and activity failures never block sends.
+
+After the existing three-second connection delay, a turn allows up to twelve
+seconds of additional composer pauses, checked every two seconds. Before inference,
+consecutive ordinary messages of at most 1,000 UTF-8 bytes each can fold into the
+next queued message, with at most seven preceding messages per burst. Quoted
+messages, attachments, native contexts, scheduled messages and automatic results
+keep their own execution. Each original message retains its UUID, text and order.
+The model and tool authorization receive the bounded burst as the current request,
+including later corrections. Existing tool budgets apply per burst, including the
+one-publication limit for group requests.
+
+For compatibility with the existing complete-requires-text constraint, a folded
+row uses internal terminal `failed`/`MESSAGE_BATCHED`, exposed as `complete` with
+null reply/error by the API. This is not a generation failure or a retryable turn.
+It produces no assistant bubble, unread reply, push or initiative episode. Its read
+receipt is recorded only after the model processes the burst; processed batch
+messages also remain eligible for grounded memory extraction and history search.
+
+If editing is still recent after generation, a response-only model decision chooses
+whether the prepared reply should wait briefly or publish immediately (for example,
+an urgent answer or action receipt). It sees only submitted text and the prepared
+reply, using current model/consent and connector isolation rules. A positive decision
+allows up to six additional seconds, never an indefinite wait. The decision has no
+tools; invalid output/provider failure falls back to publication. Model latency is
+additional to these pause limits. Generation recovery retains its existing bounded
+response-only fallback and may publish immediately. Already generated replies are
+not regenerated because of typing, and messages arriving during generation keep
+subsequent queued turns. This first policy does not cancel or rewind actions already
+started by a preceding message. Group reply-round policy is unchanged.
+
+Migration `0035_chat_message_queue.sql` is required before using the new API; it
+replaces the single-active-turn index with a queue index and adds the typing timestamp.
+See [infrastructure](infrastructure.md#consecutive-message-queue).
+
+Static validation covers TypeScript, Swift syntax and SQL compilation. No runtime
+or device verification is implied. Verify rapid sends, edits during generation,
+keyboard-only focus, abandoned drafts, resumed editing after idle, navigation,
+background/foreground, offline retry, attachments/device actions, shared-contact
+attention, access revocation and account switching using fictional conversations.

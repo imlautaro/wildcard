@@ -625,3 +625,27 @@ possibly scheduled alarm IDs remain available for same-account reconciliation.
 The main app imports confirmed IDs into the existing protected alarm ledger and
 prunes non-active expired handoffs on authorized refresh. See the feature guide for
 retention, device cases and the pending client-identity verification.
+
+
+## Consecutive private sends and typing activity
+
+Private conversations retain their existing session-owned stores, pagination,
+UUID-based send recovery, revision checks, polling, eviction budgets and account
+invalidation. Accepted turns merge immediately, allowing the next send independently
+of reply completion. One unresolved HTTP submission remains protected per client;
+typing a different next draft does not replace that submission. Server-folded burst
+messages normalize to completed user-only turns and merge through existing status
+ordering; their text remains visible, without manufactured assistant receipts.
+
+Typing is deliberately not cached or persisted on clients: it is an ephemeral
+six-second server timestamp on the existing visit, containing no draft. Focus alone
+does not refresh it. Opening a cached draft does not recreate typing. Activity
+requests do not fetch conversation snapshots or change permission authority. The
+web rejects activity renewal for a superseded visit/contact and closes visits when
+hidden; iOS renews on subsequent actual edits. Existing server visit cleanup removes
+expired visit rows after one day. No new private disk retention is introduced.
+
+Verify cached reopen/back, multiple sends, empty chat, explicit refresh, delayed
+submission/response, offline recovery, access loss and account switching, plus
+leaving a keyboard or unfinished draft idle. These runtime/device checks remain
+pending; static checks do not establish UI behavior.

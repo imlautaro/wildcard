@@ -1652,3 +1652,30 @@ scheduling permission check. Main-app AlarmKit authorization and per-contact
 remote grants remain required; never replay a prior cancelled action. The extension
 logs only bounded stage/authorization/error codes, without tickets or private
 payloads. Real-device validation remains necessary.
+
+
+## Consecutive message queue
+
+Migration `0035_chat_message_queue.sql` adds nullable `chat_visit.typing_at`, drops
+`chat_one_active_turn_idx`, and creates nonunique partial `chat_active_turn_idx` on
+contact/sequence. Existing transcripts, credentials, permissions, attention claims,
+Workflows and visit cleanup remain in place. No resources, bindings, secrets or
+account-specific settings are added. Provision the existing D1/Workflow stack first;
+apply all migrations through the documented local setup for an independent account.
+Production migration and publication run only through the automatic committed/pushed
+release pipeline. Release the API before relying on consecutive sends in clients.
+
+The API enforces the existing account queue bound atomically and still requires
+agent attention before processing. Completed user-only bursts use an internal
+terminal marker rather than rebuilding the transcript table and its foreign keys;
+see [chat pacing](chats.md#consecutive-messages-and-composer-pacing). Verify queue
+order, idle/typing expiration, burst history/read receipts and action isolation with
+fictional accounts. Static SQLite compilation passed; remote migration and runtime
+verification have not been performed for this change.
+
+Keep migration 0035 when rolling back application code. Restore a previous API/client
+commit via a new commit/push and its automatic release, after draining queued work
+with the new code. Restoring the old unique index requires no conversation to have
+multiple queued/running rows; do not recreate it while the queue is populated.
+Historical internal batch markers require the new normalization/history behavior;
+prefer a forward fix rather than running an older reader against those rows.

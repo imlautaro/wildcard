@@ -410,3 +410,21 @@ auth and contains only public Team/App ID metadata. See [infrastructure](infrast
 Private contacts use the same server-side [initiative planner](initiative.md) as iOS, including while the browser is closed. Contact details provides the same Conversation initiative switch and copy for owners and shared-contact participants. The existing session-owned contact cache supplies the initial setting; background refresh and mutation responses update it, and generation guards reject late reads and session changes. Messages appear through ordinary conversation/list polling and unread updates; browser push is still unavailable. Migrations 0032–0033 and the API release are required. Verify reopen, refresh, offline/failure recovery, shared access revocation and account switching with fictional accounts; visual/runtime checks remain pending.
 
 The faster cadence is shared by the API with iOS: a first review is due after 30 seconds, followed by minimum gaps of two and ten minutes. One-minute Cron scheduling adds jitter; no browser timer or extra requests are introduced. The planner encourages one short greeting continuation and increases space after unanswered messages, preserving all existing limits. No web bundle change is needed for these server timings; histories, polling and cache invalidation are unchanged. New prompt quality remains pending live verification; see [initiative](initiative.md#faster-cadence-validation).
+
+
+### Consecutive private messages
+
+The private composer permits typing during the HTTP submission and another send
+as soon as it is accepted, while agent replies remain pending. A pending UUID still
+owns its uncertain submission; the next draft stays in the session conversation
+cache. Actual input events report typing at most every two seconds, with no draft
+payload; leaving/visibility changes close the visit, and fresh input can renew an
+expired visit. Contact changes retain the original visit's contact for its leave
+request and late activity responses cannot reopen that visit.
+
+Both clients use the same bounded server pauses, burst grouping and response-only
+wait/send decision described in [chats](chats.md#consecutive-messages-and-composer-pacing).
+Migration 0035 and an automatic API release are prerequisites. Messages arriving
+after generation starts remain queued; tools are not rerun merely due to typing.
+Type checking passed; browser/device verification of rapid sends, idle drafts,
+resumed typing, failures, navigation, revocation and account switching is pending.

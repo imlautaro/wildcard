@@ -85,7 +85,7 @@ export async function maintainMemories(bindings: Env, scope: MemoryScope): Promi
   if (!state) return;
   const { results } = await env.DB.prepare(`SELECT id, sequence, user_text AS text, created_at AS createdAt
     FROM chat_turn WHERE contact_id = ?1 AND user_id = ?2 AND sequence > ?3 AND sequence < ?4
-    AND status = 'complete' AND schedule_id IS NULL AND group_request_id IS NULL ORDER BY sequence ASC LIMIT 6`)
+    AND (status = 'complete' OR (error_code = 'MESSAGE_BATCHED' AND read_at IS NOT NULL)) AND schedule_id IS NULL AND group_request_id IS NULL ORDER BY sequence ASC LIMIT 6`)
     .bind(scope.contactID, scope.userID, state.sequence, scope.beforeSequence)
     .all<{ id: string; sequence: number; text: string; createdAt: number }>();
   const turns: typeof results = [];

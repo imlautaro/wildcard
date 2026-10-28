@@ -1,3 +1,4 @@
+import { batchIntoNext, shouldHoldReply, waitForComposer } from './pacing';
 import { runInitiative, type InitiativeJob } from './initiative';
 import { jobAccountID, jobModel } from '../lib/model-preference';
 import { maintainAgentMemories } from './agent-memory';
@@ -33,6 +34,12 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
     try {
       // Keep the queued agent disconnected until it actually starts handling the message.
       await step.sleep('connect-delay', '3 seconds');
+      await waitForComposer(env, job, step, 'before-reply', 6);
+      const batched = await step.do('batch-consecutive-messages', () => batchIntoNext(env, job));
+      if (batched) {
+        await step.do('release-batched-attention', () => releaseAttention(env, job));
+        return;
+      }
       await step.do('mark-running', async () => {
         await env.DB.prepare(`UPDATE chat_turn SET status = 'running', updated_at = ?1
           WHERE id = ?2 AND attempt = ?3 AND status = 'queued'`)
@@ -41,20 +48,26 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       });
       await this.refreshMemory(env, job, step, 'refresh-prior-memory', false);
       await this.refreshAgentMemory(env, job, step, 'refresh-agent-self-memory');
-      await step.do('generate-and-save', {
+      const prepared = await step.do('prepare-reply', {
         retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' },
         timeout: '3 minutes',
       }, async () => {
         const turn = await activeTurn(env.DB, job);
-        if (!turn || turn.status === 'complete' || turn.status === 'failed') return false;
+        if (!turn || turn.status === 'complete' || turn.status === 'failed') return null;
         const contact = await env.DB.prepare('SELECT name FROM contact WHERE id = ?1 AND user_id = ?2')
           .bind(turn.contactID, turn.userID).first<{ name: string }>();
-        if (!contact) return false;
+        if (!contact) return null;
         await markTyping(env.DB, job);
         const reply = await contactReply(env, turn, contact.name);
-        await this.saveReply(env, job, reply);
-        return true;
+        return { reply };
       });
+      if (prepared) {
+        const hold = await step.do('reply-timing-decision', {
+          retries: { limit: 0, delay: '1 second' }, timeout: '1 minute',
+        }, () => shouldHoldReply(env, job, prepared.reply)).catch(() => false);
+        if (hold) await waitForComposer(env, job, step, 'before-publish', 3);
+        await step.do('save-prepared-reply', () => this.saveReply(env, job, prepared.reply));
+      }
     } catch (error) {
       const code = safeErrorCode(error);
       console.error(JSON.stringify({ event: 'chat_reply_failed', code }));

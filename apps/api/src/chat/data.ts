@@ -28,7 +28,7 @@ export const storedColumns = `${turnColumns}, attachment_json AS attachmentJSON,
 
 export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }, replyTo: ReplyQuote | null): PublicTurn {
   const { sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode } = turn;
-  return { attachment: publicAttachment(turn), sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode, replyTo };
+  return { attachment: publicAttachment(turn), sequence, id, readAt, userText, assistantText, status: errorCode === 'MESSAGE_BATCHED' ? 'complete' : status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode: errorCode === 'MESSAGE_BATCHED' ? null : errorCode, replyTo };
 }
 
 export function findTurn(db: D1Database, id: string, contactID: string, userID: string) {

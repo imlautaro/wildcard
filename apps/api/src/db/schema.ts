@@ -146,7 +146,7 @@ export const chatTurn = sqliteTable('chat_turn', {
   check('chat_attempt', sql`${table.attempt} > 0`),
   check('chat_completed_reply', sql`${table.status} != 'complete' OR ${table.assistantText} IS NOT NULL`),
   check('chat_reply_side', sql`${table.replyToSide} IN ('user', 'assistant')`),
-  uniqueIndex('chat_one_active_turn_idx').on(table.contactId).where(sql`${table.status} IN ('queued', 'running')`),
+  index('chat_active_turn_idx').on(table.contactId, table.sequence).where(sql`${table.status} IN ('queued', 'running')`),
   index('chat_contact_sequence_idx').on(table.contactId, desc(table.sequence)),
   uniqueIndex('chat_schedule_occurrence_idx').on(table.scheduleId, table.scheduleRevision, table.scheduledAt).where(sql`${table.scheduleId} IS NOT NULL`),
   index('chat_schedule_idx').on(table.scheduleId),
@@ -231,6 +231,7 @@ export const contactPresence = sqliteTable('contact_presence', {
 
 // Activity triggers are maintained by the SQL migrations.
 export const chatVisit = sqliteTable('chat_visit', {
+  typingAt: date('typing_at'),
   id: text('id').primaryKey(),
   contactId: text('contact_id').notNull(),
   userId: text('user_id').notNull(),

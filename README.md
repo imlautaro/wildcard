@@ -84,7 +84,8 @@ messages in both private chats and groups, [quoted replies](docs/replies.md) to 
 earlier message (swipe or hold on iOS, reply button on the web) that agents read as context, persisted messages, reply status, earlier history, contextual failure notices, and bounded response-only recovery before manual retries. The chat title shows
 D1-backed Online/Typing/Last seen presence maintained by the server Workflow and Cron,
 with a brief durable wait before the agent connects. Opening a chat also connects
-the agent briefly; actual composer activity extends its server-side idle lease. Accepted replies
+the agent briefly; actual composer activity extends its server-side idle lease. Private chats allow consecutive messages while replies are pending, with bounded
+pauses for actual typing and grouping of short messages before inference. Accepted replies
 continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
 limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1 (including conversation-local memory for MCP chats/groups), selects bounded recent context, and provides shared attributed memories with private history search tools. Each agent also keeps its own stated persona/preferences across chats and can discover common group members and retrieve their attributed group statements through bounded, permission-checked search. An empty draft offers a microphone for
 [Muse Voice Transcribe dictation](docs/voice.md); the transcript is editable before

@@ -4,7 +4,7 @@ import type { ReplyPreview } from '~/utils/replies';
 
 // Text plus one optional image/PDF attachment, matching the API's 4,000 character limit.
 // The parent owns the reply target so it survives navigation with the draft.
-const props = defineProps<{ disabled?: boolean; placeholder?: string; reply?: ReplyPreview | null }>();
+const props = defineProps<{ disabled?: boolean; sending?: boolean; placeholder?: string; reply?: ReplyPreview | null }>();
 const draft = defineModel<string>({ required: true });
 const emit = defineEmits<{ send: [text: string, attachment: DraftAttachment | null]; typing: []; cancelReply: [] }>();
 
@@ -14,7 +14,7 @@ const problem = ref<string | null>(null);
 const textarea = ref<HTMLTextAreaElement>();
 const picker = ref<HTMLInputElement>();
 const length = computed(() => [...draft.value.trim()].length);
-const canSend = computed(() => !props.disabled && !preparing.value && length.value <= 4000 && (length.value > 0 || !!attachment.value));
+const canSend = computed(() => !props.disabled && !props.sending && !preparing.value && length.value <= 4000 && (length.value > 0 || !!attachment.value));
 
 function resize() {
   const element = textarea.value;

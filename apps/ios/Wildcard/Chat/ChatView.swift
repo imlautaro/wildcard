@@ -39,7 +39,7 @@ struct ChatView: View {
 
     private var canSend: Bool {
         (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachment != nil) && draft.unicodeScalars.count <= 4000
-            && chat.hasLoaded && !chat.hasPendingReply && !chat.isSending && !chat.isUnavailable
+            && chat.hasLoaded && !chat.isSending && !chat.isUnavailable
             && !voice.isBusy && !voice.hasRecording && !isLoadingAttachment
     }
 
@@ -237,7 +237,7 @@ struct ChatView: View {
             if phase == .ready { transcribeRecording() }
         }
         .onChange(of: composerFocused) { _, focused in
-            lastComposerActivity = focused ? .now : .distantPast
+            if !focused { lastComposerActivity = .distantPast }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { noteVisibleRepliesRead() }
@@ -488,6 +488,7 @@ struct ChatView: View {
                         let submittedReply = replyTarget
                         let submitted = draft
                         let submittedRevision = draftRevision
+                        lastComposerActivity = .distantPast
                         draft = ""
                         attachment = nil
                         replyTarget = nil

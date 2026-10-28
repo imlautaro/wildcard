@@ -224,28 +224,41 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
 // Presence activity for one visible chat visit. Contains no draft text.
 export function useChatActivity(contactID: MaybeRefOrGetter<string>) {
   let visitID: string | null = null;
+  let visitContactID = toValue(contactID);
   let lastTyping = 0;
 
-  function post(kind: 'open' | 'typing' | 'leave', keepalive = false) {
+  function post(kind: 'open' | 'typing' | 'leave', keepalive = false, renew = true): Promise<void> | undefined {
     if (!visitID) return;
-    const body = JSON.stringify({ visitID, kind });
+    const sentVisit = visitID;
+    const body = JSON.stringify({ visitID: sentVisit, kind });
     // keepalive lets "leave" complete while the tab is closing.
-    void fetch(`/api/v1/contacts/${toValue(contactID)}/chat/activity`, {
+    return fetch(`/api/v1/contacts/${visitContactID}/chat/activity`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive, credentials: 'same-origin',
+    }).then(async (response) => {
+      if (!response.ok || kind !== 'typing') return;
+      const result = await response.json();
+      if (renew && Date.now() - lastTyping < 6000 && result.active === false && visitID === sentVisit && document.visibilityState === 'visible') {
+        visitID = null;
+        const registered = open();
+        const renewedVisit = visitID;
+        await registered;
+        if (visitID === renewedVisit && visitID) post('typing', false, false);
+      }
     }).catch(() => {});
   }
-  function open() {
+  function open(): Promise<void> | undefined {
     if (visitID || document.visibilityState !== 'visible') return;
+    visitContactID = toValue(contactID);
     visitID = crypto.randomUUID();
     lastTyping = 0;
-    post('open');
+    return post('open');
   }
   function leave() {
     post('leave', true);
     visitID = null;
   }
   function typing() {
-    if (Date.now() - lastTyping < 10_000) return;
+    if (Date.now() - lastTyping < 2000) return;
     lastTyping = Date.now();
     post('typing');
   }
@@ -265,5 +278,5 @@ export function useChatActivity(contactID: MaybeRefOrGetter<string>) {
     window.removeEventListener('pagehide', leave);
   });
   watch(() => toValue(contactID), () => { leave(); open(); });
-  return { typing };
+  return { typing, sent: () => { lastTyping = 0; } };
 }
