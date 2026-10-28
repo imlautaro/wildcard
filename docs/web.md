@@ -227,6 +227,18 @@ request-scoped and uncached; connection snapshots and pending OAuth navigation k
 their existing behavior. See [DNS safety](connectors.md#dns-safety-and-runtime-compatibility)
 for provider disclosure, safe diagnostics and production/device verification.
 
+The provider callback now returns a no-store HTTP 200 document before opening
+the web completion route or native custom scheme. A nonce-bound script removes
+the callback code/state query from history and replaces the document with the
+fixed return destination; an escaped **Continue to Wildcard** link covers blocked
+automatic navigation. This ends the provider's form redirect chain, preventing
+its `form-action` policy from blocking the separate web origin or iOS scheme.
+The page carries only the one-use proof and flow ID. Session-owned pending flow
+state, fragment stripping, account/generation validation, tool permissions and
+isolation remain unchanged. Start a new authorization after a previously blocked
+return; the old callback already consumed its browser binding. Both clients use
+this shared API fix. See [OAuth lifecycle](connectors.md#oauth-setup-and-lifecycle).
+
 ## Account model and closed registration
 
 Both clients now sign in existing accounts only. Account offers Muse Spark 1.3 Standard/Contributor, with the same explicit Contributor acceptance and disclosure on iOS/web. The existing session profile caches the preference and web revalidates it in the background on Account mount. Model saves update cached profile/list/group flags and fence older reads without clearing drafts or pending sends.

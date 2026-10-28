@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { html } from 'hono/html';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { discoverAuthorizationServerMetadata, discoverOAuthProtectedResourceMetadata, exchangeAuthorization,
   extractWWWAuthenticateParams, buildDiscoveryUrls, refreshAuthorization, registerClient, startAuthorization } from '@modelcontextprotocol/sdk/client/auth.js';
@@ -211,7 +212,18 @@ oauthPublic.get('/callback', async c => {
   // A short-lived completion proof, never a provider token or authorization code.
   if (payload.platform === 'ios') { target.searchParams.set('flow', flow.id); target.searchParams.set('proof', proof); }
   else target.hash = new URLSearchParams({ flow: flow.id, proof }).toString();
-  return c.redirect(target.href, 302);
+  // End the provider form navigation here. A 302 to the web/app destination can
+  // be blocked by the provider's form-action policy across the redirect chain.
+  const nonce = secret();
+  c.header('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'`);
+  c.header('X-Content-Type-Options', 'nosniff');
+  return c.html(html`<!doctype html><html lang="en"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1"><title>Return to Wildcard</title>
+    <style nonce="${nonce}">body{font:16px system-ui;max-width:28rem;margin:4rem auto;padding:0 1.5rem;line-height:1.5}a{display:inline-block;padding:.75rem 1rem;border-radius:.75rem;background:#20212a;color:white;text-decoration:none}a:focus-visible{outline:3px solid #647cff;outline-offset:4px}</style></head>
+    <body><h1>Return to Wildcard</h1><p>Continue in Wildcard to finish this authorization request.</p>
+    <a id="mcp-return" href="${target.href}" rel="noreferrer">Continue to Wildcard</a>
+    <script nonce="${nonce}">history.replaceState(null,'',location.pathname);location.replace(document.getElementById('mcp-return').href);</script>
+    </body></html>`);
 });
 function expires(tokens: OAuthTokens) {
   if (size(tokens) > 40000 || !tokens.access_token || tokens.access_token.length > 16000 || tokens.token_type.toLowerCase() !== 'bearer' || (tokens.refresh_token?.length ?? 0) > 16000) throw new Error('MCP_OAUTH_TOKENS');

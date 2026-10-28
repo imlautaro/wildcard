@@ -271,7 +271,25 @@ different signed-in user or finish a flow in another app/session. Provider denia
 returns through the same completion path without storing tokens. Missing/wrong
 cookie, invalid state, replay and expiry fail closed.
 
-On web, the HTTPS API redirects to the fixed configured web completion route with
+The HTTPS API callback finishes the provider's form navigation with HTTP 200 and
+a small return page. A fresh CSP nonce allows only its fixed script and styles;
+all other sources, forms, framing and base changes are blocked. The page removes
+the provider code/state query from browser history before replacing itself with
+the fixed app/web destination. An escaped **Continue to Wildcard** link is available
+when automatic navigation is unavailable, including custom-scheme user-gesture
+restrictions on iOS. No code, verifier, access token or refresh token enters the
+page; only the existing short-lived completion proof is passed to the client.
+Responses retain no-store/no-referrer and add nosniff. The page is not cached.
+
+This document boundary avoids inheriting a provider's `form-action` restriction
+across a callback-to-web/custom-scheme HTTP redirect. Centralita permits the
+registered API callback origin, but its form policy does not include the separate
+Wildcard web origin or native scheme. The API must not return a 302 from this
+callback to either destination. Do not fix this by weakening provider CSP or
+registering the web completion route as the provider callback. Browser-cookie,
+state, issuer, proof, session and generation checks remain unchanged.
+
+On web, the return page navigates to the fixed configured web completion route with
 a fragment containing only flow ID and proof. The initiating tab must have matching
 sessionStorage identifiers and a matching signed-in user; it strips the fragment,
 finishes through the existing same-origin authenticated proxy, then discovers tools

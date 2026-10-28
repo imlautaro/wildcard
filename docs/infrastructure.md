@@ -1256,6 +1256,16 @@ the bounded diagnostics if it fails; successful deployment alone does not prove 
 
 ### MCP OAuth extension
 
+OAuth callback navigation must end with the API's HTTP 200 return document before
+opening the fixed web origin/native scheme. The document uses a fresh CSP nonce
+for its fixed inline script/styles, no-store, no-referrer, nosniff and no framing,
+forms or external resources. Keep query redaction enabled; the script strips the
+provider callback query from browser history. Do not restore a cross-origin 302
+here or widen provider `form-action` policies to include downstream app URLs.
+This shared iOS/web change needs no registration, schema, binding or secret change.
+Verify a fresh provider login returns through HTTP 200 and finishes in each client;
+previously blocked callback requests cannot be replayed to recover their proof.
+
 Apply migration 0027 after 0026 through the automatic release pipeline. OAuth uses
 existing D1, the existing encryption derivation and existing Cron cleanup; no new
 Cloudflare resource/binding or runtime secret. `MCP_WEB_ORIGIN` is a versioned
