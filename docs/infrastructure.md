@@ -1564,3 +1564,18 @@ Migration `0032_conversation_initiative.sql` must follow 0001–0031. It adds pe
 For production, commit and push the intended source to the configured release branch and let Workers Builds run the existing migration-before-publish release pipeline. Never deploy manually. Verify the automatic API/web deployment source SHA, no pending migrations and the existing Cron/Workflow bindings. Use fictional conversations to verify one new episode, a persisted next review, finite evaluations, stale-draft cancellation and normal history/outbox delivery. Logs contain only bounded event/error codes, never messages or intent. No live inference, remote migration or production verification was performed for this implementation.
 
 Rollback is additive: deploy a previously pushed compatible Worker through the automatic pipeline and keep migration 0032/data in place. Older code ignores the new fields/table and does not dispatch initiative jobs. Already-running initiative Workflows should be allowed to finish or explicitly terminated as part of an authorized rollback; restoring old code does not recall published messages. To suspend initiative before rollback, disable the affected participant settings using the authenticated endpoint; do not remove columns or erase conversation history. Re-enabling waits for a new human reply. Model-dependent judgments and runtime/device behavior require separate verification.
+
+Migration `0033_faster_conversation_initiative.sql` follows 0032. It replaces the
+completion trigger to seed a review at reply time + 30 seconds, and advances only
+untouched initial reviews. No new tables, bindings, secrets, permissions or cloud
+resources are required; the schema declaration is unchanged. Apply it with the
+existing local migration command for development and through the automatic
+migration-before-publish pipeline in production. Keep 0032 and 0033 applied on
+rollback; old API code still enforces its own longer publication gaps, although
+the trigger may cause an earlier review. Do not reverse the migration or restart
+stopped episodes to emulate old timing. Verify the source SHA, applied 0033,
+30-second due time, normal Cron dispatch and retained limits using fictional data.
+`node scripts/checks/initiative.cjs` covers the isolated cadence and upgrade with
+simulated model/time. No remote migration or new live-model evaluation was run
+for this adjustment; release and live prompt validation remain pending. iOS/web
+receive the same server behavior with their existing caches and API contract.

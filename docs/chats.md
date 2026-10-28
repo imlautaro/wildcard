@@ -526,3 +526,5 @@ turns receive neither tool. See [native experiments](native-experiments.md).
 ## Conversation initiative
 
 [Conversation initiative](initiative.md) adds bounded assistant-only follow-ups after direct human replies, with read/activity context, AI-selected waits, quiet hours and a per-participant switch in contact details on iOS and web. New human input cancels outstanding plans; explicit schedules remain separate. Existing history, polling, previews and notifications deliver these messages.
+
+The shared server cadence now starts reviews after 30 seconds, with minimum subsequent gaps of two and ten minutes. The planner treats greetings as openings and favors a short natural continuation; later silence gets progressively more space. Cron runs once a minute, so sends are approximate. The same behavior applies to iOS and web without client or cache changes. Three-message, six-evaluation, daily-budget, quiet-hour and cancellation limits remain in place. See [initiative](initiative.md#faster-cadence-validation) for migration 0033 and local versus live validation.
