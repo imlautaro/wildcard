@@ -690,3 +690,21 @@ already merge this terminal state. Only an unpublished, tool-free draft is disca
 existing replies and tool receipts remain. Reopen/back, refresh, earlier-page merges,
 optimistic sends, equal timestamps, quoted navigation, read receipts, revocation and
 account switching require runtime verification; static type/SQL checks passed.
+
+## Mini apps
+
+[Mini apps](mini-apps.md) use one session-owned list per contact (bounded to 20
+contacts, five-second freshness, revalidated by visible chat polling and contact
+details) and one resolved view per app (bounded to 16, oldest-load eviction) on iOS
+(`MiniAppStore` inside `ContactsStore`) and web (`useMiniApps`). A view is reused for
+60 seconds because each load runs the app's remote reads. Explicit refresh, pull to
+refresh, a changed input or a completed action bypass that window. In-flight loads are
+deduplicated; a newer input selection, invalidation or account change rejects late
+responses. Transient failures keep the loaded view visible; a first-load failure
+shows a retry. Approval, disabling and deletion replace the list entry and drop the
+view. A 404 or `REVIEW_REQUIRED` clears the view and revalidates the list. Contact
+removal, confirmed access loss and sign-out clear both caches. Resolved connector
+data stays in memory only, with no disk cache. A pending action keeps its execution
+UUID only in its screen's state; leaving the screen drops it, and an unknown
+outcome is never resubmitted. Device checks for reopen, back navigation, refresh,
+offline recovery, revocation and account switching are pending.

@@ -7,6 +7,7 @@ const chats = useChats();
 const { state, load, loadEarlier, send, submit, discardPending, retryReply, markRead } = useConversation(contactID);
 const activity = useChatActivity(contactID);
 const remote = useRemoteNative(contactID);
+const miniApps = useMiniApps(contactID);
 const remoteError = ref<string | null>(null);
 function remoteStatus(status: string) {
   return ({ completed: 'Scheduled on iPhone', pending: 'Sent · waiting for iPhone', running: 'Claimed · outcome not yet confirmed', expired: 'Expired without confirmation', failed: 'Could not schedule', cancelled: 'Cancelled', unknown: 'Outcome unknown · check iPhone' } as Record<string, string>)[status] ?? status;
@@ -125,7 +126,7 @@ function scrollToBottom() {
 
 async function refresh() {
   const stick = nearBottom();
-  await Promise.all([load(), remote.refresh()]);
+  await Promise.all([load(), remote.refresh(), miniApps.refresh()]);
   if (remote.state.value.loaded && state.value.remoteDeviceID && !remote.state.value.devices.some(d => d.id === state.value.remoteDeviceID)) state.value.remoteDeviceID = null;
   if (stick) scrollToBottom();
   if (document.visibilityState === 'visible') markRead();
@@ -278,6 +279,7 @@ onBeforeUnmount(() => {
               class="link-button" :disabled="state.retrying || replying || !!state.pending" @click="retryReply(item.turn)"
             >Retry reply</button>
           </div>
+          <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => item.kind === 'assistant' && a.turnID === item.turn.id)" :key="app.id" :app="app" :contact-id="contactID" />
           <div v-for="action in remote.state.value.actions.filter(a => item.kind === 'user' && a.turnID === item.turn.id)" :key="action.id" class="native-receipt" :class="remoteTone(action.status)">
             <span class="native-glyph" :data-kind="action.kind"><AppIcon :name="action.kind === 'alarm' ? 'alarm' : 'timer'" /></span>
             <div>

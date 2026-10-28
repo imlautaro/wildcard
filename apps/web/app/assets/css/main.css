@@ -287,3 +287,34 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
 .native-receipt.waiting { --tone: var(--accent); }
 .native-receipt.attention { --tone: var(--warning); }
 .native-receipt.failed { --tone: var(--danger); }
+
+/* Mini apps: native-styled entry card and grouped, inset content like iOS lists. */
+.mini-app-card { align-self: flex-start; display: flex; align-items: center; gap: 12px; width: min(340px, 85%); margin: 2px 0 6px 0; padding: 10px 12px; border-radius: 16px; background: var(--incoming); color: inherit; }
+.mini-app-card:hover { background: color-mix(in srgb, var(--incoming) 90%, var(--text) 10%); }
+.mini-app-card .copy { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mini-app-card strong { font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-app-card .copy span { font-size: 13px; color: var(--secondary); }
+.mini-app-card.review .copy span { color: var(--warning); font-weight: 600; }
+.mini-app-card .chevron { width: 16px; height: 16px; color: var(--tertiary); flex: none; }
+.mini-app-glyph { width: 40px; height: 40px; border-radius: 11px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 80%, #fff 20%), var(--accent)); }
+.mini-app-glyph svg { width: 21px; height: 21px; stroke-width: 2.2; }
+.mini-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.mini-stat { background: var(--surface); border-radius: var(--radius); padding: 12px 16px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mini-stat .label { font-size: 13px; font-weight: 600; color: var(--secondary); }
+.mini-stat .value { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.mini-stat .caption { font-size: 12px; color: var(--secondary); }
+.mini-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; }
+.mini-row .copy { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mini-row .copy span { font-size: 13px; color: var(--secondary); }
+.mini-row .value { font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
+.mini-chart { padding: 12px 16px 10px; }
+.mini-chart svg { display: block; width: 100%; height: 180px; overflow: visible; }
+.mini-chart .axis { display: flex; justify-content: space-between; gap: 4px; font-size: 11px; color: var(--secondary); margin-top: 6px; }
+.mini-chart .axis span { flex: 1; min-width: 0; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-segmented { display: flex; padding: 2px; border-radius: 9px; background: color-mix(in srgb, var(--text) 8%, transparent); margin-bottom: 12px; }
+.mini-segmented button { flex: 1; border: 0; padding: 6px 8px; border-radius: 7px; background: transparent; font-size: 13px; font-weight: 600; }
+.mini-segmented button[aria-pressed='true'] { background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.mini-text.headline { font-size: 17px; font-weight: 700; padding: 8px 4px; }
+.mini-text.body { font-size: 15px; padding: 4px 4px 8px; }
+.mini-text.caption { font-size: 13px; color: var(--secondary); padding: 0 4px 8px; }
+.mini-field input { flex: 1; min-width: 0; border: 0; background: transparent; text-align: right; outline: none; }

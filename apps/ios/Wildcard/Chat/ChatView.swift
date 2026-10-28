@@ -127,6 +127,9 @@ struct ChatView: View {
                                         replyIsVisible: true
                                     )
                                 }
+                            ForEach(contacts.miniApps.apps(contactID: contactID, turnID: turn.id)) { app in
+                                MiniAppCardView(app: app, contactID: contactID)
+                            }
                         } else if item.kind == .status && turn.status == .running && chat.presence?.status == .typing {
                             ReplyTypingIndicator()
                         } else if item.kind == .status && turn.status == .failed && !chat.turns.contains(where: { $0.sequence > turn.sequence && $0.assistantText != nil }) {
@@ -197,6 +200,7 @@ struct ChatView: View {
         }
         .task(id: chat.turns.map(\.updatedAt).max()) {
             await native.refresh(contactID: contactID, using: auth)
+            await contacts.miniApps.refresh(contactID: contactID, using: auth)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection, matching: .images, preferredItemEncoding: .compatible)
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: DraftAttachment.types) { result in

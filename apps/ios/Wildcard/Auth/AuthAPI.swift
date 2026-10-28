@@ -18,6 +18,7 @@ struct AuthAPI: Sendable {
         case rejected(String)
         case invalidResponse
         case temporarilyUnavailable
+        case reviewRequired
 
         var errorDescription: String? {
             switch self {
@@ -28,6 +29,7 @@ struct AuthAPI: Sendable {
             case .rejected(let message): message
             case .invalidResponse: "The server returned an unexpected response. Please try again."
             case .temporarilyUnavailable: "Groups are temporarily unavailable. Please try again."
+            case .reviewRequired: "Review and enable this mini app first."
             }
         }
     }
@@ -146,6 +148,13 @@ struct AuthAPI: Sendable {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
                 throw Failure.rejected(message ?? "Native requests are temporarily unavailable.")
+            }
+            if path.contains("/mini-apps") {
+                if [403, 404].contains(response.statusCode) { throw Failure.notFound }
+                if response.statusCode >= 500 { throw Failure.temporarilyUnavailable }
+                let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                if response.statusCode == 409, body?["code"] as? String == "REVIEW_REQUIRED" { throw Failure.reviewRequired }
+                throw Failure.rejected(body?["error"] as? String ?? "Mini apps are temporarily unavailable. Please try again.")
             }
             if path.contains("/mcp") {
                 if response.statusCode == 404 { throw Failure.notFound }

@@ -27,6 +27,7 @@ docs/
   infrastructure.md          # Reproducible provisioning and automatic releases
   authentication.md          # Auth contract, session behavior, and limitations
   web.md                     # Web app architecture, features, and limitations
+  mini-apps.md               # Contact-built native mini apps over MCP tools
 ```
 
 ## API development
@@ -216,5 +217,10 @@ transports, deployment prerequisites and pending verification. Streamable HTTP s
 public/Bearer access and OAuth authorization-code with PKCE, registered or dynamic
 clients, encrypted credentials and refresh tokens. Gmail setup requires your own
 Google OAuth client and preview access; live provider/device validation is pending.
+
+In connector chats a contact can build [mini apps](docs/mini-apps.md): declarative
+dashboards and small tools (stats, lists, charts, confirmed actions) rendered with
+native SwiftUI and web components. Each one stays disabled until you review its
+tools; enabled apps re-run their read tools when opened. Migration 0037 is required.
 
 Private contacts also support [conversation initiative](docs/initiative.md): durable AI reviews choose whether to wait, send a useful follow-up or stop after silence. Each participant can disable it in contact details on iOS or web. It reuses D1, Cron and Workflows; migrations 0032–0033 are required. Initial reviews become due after 30 seconds, with progressively longer gaps for unanswered follow-ups.

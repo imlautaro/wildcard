@@ -578,6 +578,24 @@ export const nativeAction = sqliteTable('native_action', {
 }, t => [uniqueIndex('native_action_kind').on(t.turnId, t.kind), index('native_action_turn').on(t.turnId, t.createdAt),
   index('native_action_remote_pending').on(t.status, t.pushNextAt).where(sql`${t.remoteDeviceId} IS NOT NULL`)]);
 
+// Mini app specs and grants; resolved connector data is never stored (migration 0037).
+export const miniApp = sqliteTable('mini_app', {
+  id: text('id').primaryKey(),
+  contactId: text('contact_id').notNull().references(() => contact.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  turnId: text('turn_id').references(() => chatTurn.id, { onDelete: 'set null' }),
+  revision: integer('revision').notNull().default(1), title: text('title').notNull(),
+  specJson: text('spec_json').notNull(), toolsJson: text('tools_json').notNull(),
+  approvedRevision: integer('approved_revision'), lastError: text('last_error'),
+  createdAt: date('created_at').notNull(), updatedAt: date('updated_at').notNull(),
+}, t => [check('mini_app_revision', sql`${t.revision} >= 1`), index('mini_app_contact').on(t.contactId, t.userId, t.updatedAt)]);
+export const miniAppAction = sqliteTable('mini_app_action', {
+  id: text('id').primaryKey(),
+  appId: text('app_id').notNull().references(() => miniApp.id, { onDelete: 'cascade' }),
+  revision: integer('revision').notNull(), actionId: text('action_id').notNull(), argumentsJson: text('arguments_json').notNull(),
+  status: text('status').notNull(), createdAt: date('created_at').notNull(), updatedAt: date('updated_at').notNull(),
+}, t => [check('mini_app_action_status', sql`${t.status} IN ('running', 'completed', 'failed', 'unknown')`), index('mini_app_action_app').on(t.appId, t.createdAt)]);
+
 // Episode creation/invalidation triggers live in migration 0032.
 export const conversationInitiative = sqliteTable('conversation_initiative', {
   contactId: text('contact_id').primaryKey().references(() => contact.id, { onDelete: 'cascade' }),

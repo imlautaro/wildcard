@@ -97,10 +97,13 @@ export async function executeMcp(env: Env, turn: McpTurn, name: string, args: Re
     let uncertain = true;
     try {
       const response = await remote(env, connection, (client, signal) => client.callTool({ name: approved.name, arguments: args.arguments as Record<string, unknown> }, undefined, { signal, timeout: 20000 }));
-      // Keep only text; resource links, binary data and callbacks are never followed.
+      // Keep only text and structured JSON; resource links, binary data and callbacks are never followed.
       const content = Array.isArray(response.content) ? response.content.filter(v => isRecord(v) && v.type === 'text' && typeof v.text === 'string') : [];
       uncertain = response.isError === true;
-      const packed = { isError: response.isError === true, content };
+      const textOnly = { isError: response.isError === true, content };
+      // Structured JSON is added only when it fits; it never displaces a fitting text result.
+      const packed = isRecord(response.structuredContent) && size({ ...textOnly, structuredContent: response.structuredContent }) <= 24000
+        ? { ...textOnly, structuredContent: response.structuredContent } : textOnly;
       result = size(packed) <= 24000 ? JSON.stringify(packed) : error('Tool executed but the result exceeds the limit. Do not repeat the action.');
     } catch { result = error('External execution outcome unknown. Check the service before taking further action. Do not retry.'); }
     await env.DB.prepare(`UPDATE ${ledger} SET result_json = ?, uncertain = ? WHERE turn_id = ? AND slot = ?`).bind(result, uncertain ? 1 : 0, turn.id, slot).run();

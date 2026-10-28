@@ -66,6 +66,7 @@ const remove = () => run(async () => {
   chats.removeContact(id.value);
   forgetContactEnergy(id.value);
   forgetMcpConnections(id.value);
+  forgetMiniApps(id.value);
   forgetRead(`contact:${id.value}`);
   await navigateTo('/', { replace: true });
 });
@@ -107,6 +108,7 @@ onMounted(() => run(async () => {
 
       <div class="group" style="margin-top: 20px">
         <NuxtLink :to="`/contacts/${id}/connections`" class="button-row">Connections</NuxtLink>
+        <NuxtLink :to="`/contacts/${id}/mini-apps`" class="button-row">Mini apps</NuxtLink>
         <NuxtLink :to="`/chats/${id}`" class="button-row">Open chat</NuxtLink>
         <NuxtLink v-if="canManage" :to="`/contacts/${id}/sharing`" class="button-row">Share contact</NuxtLink>
       </div>

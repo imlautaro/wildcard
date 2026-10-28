@@ -93,7 +93,10 @@ Tool catalogs and results are untrusted evidence. The backend filters available
 functions and rechecks permissions; the model cannot enable a tool. This does not
 make arbitrary remote tools safe: trusted-server selection and explicit ongoing
 permission are essential. Servers can change behavior without changing schemas.
-Only textual result blocks enter model context. Resources, binary content,
+Only textual result blocks and a tool's `structuredContent` JSON object (only when it
+fits in the 24 KB result limit together with the text, so it never displaces a text
+result that fits) enter model context, so a
+contact can design [mini apps](mini-apps.md) from the real result shape. Resources, binary content,
 embedded resource links, sampling, elicitation, roots and prompts are not exposed.
 Data intentionally passed to an authorized tool leaves Wildcard for that server.
 
@@ -111,8 +114,10 @@ jobs do not gain MCP tools; their existing consent filters still apply.
 ## Execution, retries and limits
 
 Private and authorized direct-human group model loops expose `list_mcp_tools` and
-`call_mcp_tool`, with at most six internal/external executions. Private replies keep
-two tool-enabled rounds and a final answer. Group replies allow up to six
+`call_mcp_tool`, with at most six internal/external executions. Private connector
+chats also expose `create_mini_app`/`list_mini_apps` and allow three tool-enabled
+rounds (list tools, inspect a result, build a mini app) and a final answer; other
+private replies keep two. Group replies allow up to six
 research rounds within a three-minute admission window, followed by a separate
 tool-free strict-JSON decision. An internal `finish_group_research` control ends
 research without consuming an execution or publishing anything. Group model/tool

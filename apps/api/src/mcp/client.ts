@@ -58,31 +58,33 @@ export async function remote<T>(env: Env, connection: Connection, action: (clien
 }
 
 export async function discover(env: Env, connection: Connection): Promise<RemoteTool[]> {
-  return remote(env, connection, async (client, signal) => {
-    const catalog: Awaited<ReturnType<Client['listTools']>>['tools'] = [];
-    const cursors = new Set<string>();
-    let cursor: string | undefined;
-    for (let index = 0; index < 8; index++) {
-      const page = await client.listTools(cursor === undefined ? {} : { cursor }, { signal, timeout: 20_000 });
-      catalog.push(...page.tools);
-      if (catalog.length > 256) throw new Error('MCP_TOO_MANY_TOOLS');
-      if (page.nextCursor === undefined) break;
-      if (index === 7 || page.nextCursor.length > 2048 || cursors.has(page.nextCursor)) throw new Error('MCP_TOO_MANY_TOOLS');
-      cursors.add(page.nextCursor); cursor = page.nextCursor;
-    }
-    const names = new Set<string>();
-    const tools = await Promise.all(catalog.map(async tool => {
-      if (!tool.name || tool.name.length > 128 || names.has(tool.name)) throw new Error('MCP_TOOL');
-      names.add(tool.name);
-      validator(tool.inputSchema);
-      if (tool.outputSchema) validator(tool.outputSchema);
-      const description = (tool.description ?? '').slice(0, 2000);
-      const fingerprint = await digest(JSON.stringify([tool.name, tool.description ?? '', tool.inputSchema, tool.outputSchema ?? null, tool.annotations ?? null]));
-      return { name: tool.name, description, inputSchema: tool.inputSchema, fingerprint, allowed: false };
-    }));
-    if (size(tools) > 256000) throw new Error('MCP_CATALOG_SIZE');
-    return tools;
-  });
+  return remote(env, connection, catalog);
+}
+// Lists and fingerprints the complete catalog on an open session.
+export async function catalog(client: Client, signal: AbortSignal): Promise<RemoteTool[]> {
+  const catalog: Awaited<ReturnType<Client['listTools']>>['tools'] = [];
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  for (let index = 0; index < 8; index++) {
+    const page = await client.listTools(cursor === undefined ? {} : { cursor }, { signal, timeout: 20_000 });
+    catalog.push(...page.tools);
+    if (catalog.length > 256) throw new Error('MCP_TOO_MANY_TOOLS');
+    if (page.nextCursor === undefined) break;
+    if (index === 7 || page.nextCursor.length > 2048 || cursors.has(page.nextCursor)) throw new Error('MCP_TOO_MANY_TOOLS');
+    cursors.add(page.nextCursor); cursor = page.nextCursor;
+  }
+  const names = new Set<string>();
+  const tools = await Promise.all(catalog.map(async tool => {
+    if (!tool.name || tool.name.length > 128 || names.has(tool.name)) throw new Error('MCP_TOOL');
+    names.add(tool.name);
+    validator(tool.inputSchema);
+    if (tool.outputSchema) validator(tool.outputSchema);
+    const description = (tool.description ?? '').slice(0, 2000);
+    const fingerprint = await digest(JSON.stringify([tool.name, tool.description ?? '', tool.inputSchema, tool.outputSchema ?? null, tool.annotations ?? null]));
+    return { name: tool.name, description, inputSchema: tool.inputSchema, fingerprint, allowed: false };
+  }));
+  if (size(tools) > 256000) throw new Error('MCP_CATALOG_SIZE');
+  return tools;
 }
 export async function privateContact(db: D1Database, contactID: string) {
   return !!await db.prepare('SELECT contact_id FROM mcp_private_contact WHERE contact_id = ?').bind(contactID).first();

@@ -28,6 +28,7 @@ function serverMessage(body: unknown): string | null {
 function failureMessage(path: string, method: string, status: number, body: unknown): string {
   const code = body && typeof body === 'object' && 'code' in body ? (body as { code: unknown }).code : null;
   if (path.includes('/mcp')) return serverMessage(body) ?? 'Connections are temporarily unavailable. Please try again.';
+  if (path.includes('/mini-apps')) return serverMessage(body) ?? 'Mini apps are temporarily unavailable. Please try again.';
   if (path.endsWith('/reactions')) return serverMessage(body) ?? 'Reactions are temporarily unavailable. Please try again.';
   if (path.startsWith('groups')) {
     if (path.endsWith('/transcriptions') && status === 422) {

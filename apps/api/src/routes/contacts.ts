@@ -1,5 +1,6 @@
 import { remoteSettings } from '../native/remote-routes';
 import nativeActions from '../native/routes';
+import miniApps from '../miniapps/routes';
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 import { accountEnvironment } from '../lib/model-preference';
 import { readEnergy } from '../groups/energy';
@@ -236,6 +237,7 @@ contacts.delete('/:id', async (c) => {
 });
 
 contacts.route('/:id/native-actions', nativeActions);
+contacts.route('/:id/mini-apps', miniApps);
 contacts.route('/:id/native-remote', remoteSettings);
 contacts.route('/sharing', sharing);
 

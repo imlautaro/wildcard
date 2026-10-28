@@ -115,3 +115,23 @@ export type ContactSharing = {
 export type ContactInvitation = { code: string | null; recipientEmail: string | null; expiresAt: number };
 export type InvitationPreview = { name: string; expiresAt: number; contributorModel: boolean };
 export type ReceivedContactInvitation = { id: string; contactName: string; senderName: string; expiresAt: number };
+
+export type MiniAppFormat = 'number' | 'currency' | 'percent' | 'date' | 'datetime' | 'text';
+export type MiniAppInput = { id: string; type: 'segmented'; label: string; options: { value: string; label: string }[]; default: string }
+  | { id: string; type: 'text'; label: string; default: string };
+export type MiniAppField = { id: string; label: string; kind: 'text' | 'number' | 'date' | 'toggle'; required: boolean };
+export type MiniApp = {
+  id: string; turnID: string | null; revision: number; title: string; subtitle: string | null; icon: string;
+  status: 'needs_review' | 'enabled' | 'needs_reapproval'; inputs: MiniAppInput[];
+  tools: { connectionID: string; connectionName: string; toolName: string; role: 'read' | 'write' }[];
+  issues: { step: string; code: string }[]; createdAt: number; updatedAt: number;
+};
+export type MiniAppComponent =
+  | { type: 'section'; title: string | null; children: MiniAppComponent[] }
+  | { type: 'stat'; label: string; value: number | string | null; format: MiniAppFormat; currency: string | null; caption: string | null }
+  | { type: 'list'; items: { title: string; subtitle: string | null; value: number | string | null }[]; format: MiniAppFormat; currency: string | null; empty: string }
+  | { type: 'chart'; kind: 'bar' | 'line'; title: string | null; points: { x: string; y: number }[]; format: MiniAppFormat; currency: string | null }
+  | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
+  | { type: 'action'; id: string; label: string; confirm: string; style: 'default' | 'destructive'; fields: MiniAppField[] }
+  | { type: 'notice'; code: string };
+export type MiniAppResolution = { revision: number; inputs: Record<string, string>; resolvedAt: number; view: MiniAppComponent[]; issues: { step: string; code: string }[] };

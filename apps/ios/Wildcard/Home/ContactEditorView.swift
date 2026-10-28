@@ -60,7 +60,10 @@ struct ContactEditorView: View {
                 } footer: {
                     Text("Allow thoughtful follow-ups when you have not replied. Stops after a few unanswered messages. Applies only to your private chat.")
                 }
-                Section { NavigationLink("Connections") { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) } }
+                Section {
+                    NavigationLink("Connections") { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) }
+                    NavigationLink("Mini apps") { MiniAppListView(contactID: contactID) }
+                }
                 Section {
                     NavigationLink(value: HomeDestination.nativeTools(contactID)) {
                         Label { Text("Native experiments") } icon: { NativeGlyph(kind: "default", size: 28, symbol: "iphone") }

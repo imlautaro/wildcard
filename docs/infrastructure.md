@@ -1701,3 +1701,19 @@ but loses the publication guard. Prefer a forward fix and drain running workflow
 before changing execution policy. Empty-schema SQLite migration/SQL compilation,
 API/web TypeScript and full iOS Simulator Swift typechecking passed. Remote migration,
 UI, tool-replay and concurrent-message runtime verification remain pending.
+
+
+### Mini apps (migration 0037)
+
+Apply additive `0037_mini_apps.sql` after 0036. It creates `mini_app` (spec, tool
+fingerprints, per-revision approval and last step error codes) and `mini_app_action`
+(the write execution ledger). Both cascade with their contact and app; deleting a
+chat turn only clears `mini_app.turn_id`. No connector data is stored. No new
+services, bindings, secrets or account settings are required. MCP connectors are
+configured as described in [MCP connections](connectors.md). Independent
+installations apply all versioned migrations with normal local setup
+(`npm run db:migrate:local`); production uses only the automatic commit/push
+pipeline, which applies migrations before publishing. Publish the API before relying
+on the clients: older APIs return 404 for mini app routes, which clients show as an
+empty list. Rollback is another automatic release. Keep the additive tables; older
+code ignores them. Remote migration and live verification remain pending.

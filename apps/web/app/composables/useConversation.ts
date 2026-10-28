@@ -42,6 +42,7 @@ export function forgetConversation(id: string) {
   if (entry) clearReactionCache(entry.reactions);
   conversations.delete(id);
   forgetRemoteNative(id);
+  forgetMiniApps(id);
   forgetRead(`contact:${id}`);
 }
 

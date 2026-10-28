@@ -19,6 +19,7 @@ final class ContactsStore {
     let mcpSnapshots = NavigationSnapshotCache<[McpConnection]>()
     let energySnapshots = NavigationSnapshotCache<ContactEnergy>()
     let sharingSnapshots = NavigationSnapshotCache<ContactSharing>()
+    let miniApps = MiniAppStore()
     private var refreshRequest: (id: UUID, task: Task<Void, Never>)?
     private var warmingTask: Task<Void, Never>?
     private var queuedWarmContacts: [Contact]?
@@ -162,6 +163,7 @@ final class ContactsStore {
                 sharingSnapshots.remove(id: contact.id)
                 energySnapshots.remove(id: contact.id)
                 mcpAccessSnapshots.remove(id: "contact:\(contact.id)")
+                miniApps.forget(contactID: contact.id)
                 knownContacts.removeValue(forKey: contact.id)
                 contactRefreshedAt.removeValue(forKey: contact.id)
                 messageTimestamps.removeValue(forKey: contact.id)
@@ -322,6 +324,7 @@ final class ContactsStore {
             sharingSnapshots.remove(id: contact.id)
             energySnapshots.remove(id: contact.id)
             mcpAccessSnapshots.remove(id: "contact:\(contact.id)")
+            miniApps.forget(contactID: contact.id)
             readAcknowledgements.remove(id: contact.id)
             conversations.remove(contactID: contact.id)
             messageTimestamps.removeValue(forKey: contact.id)
@@ -362,6 +365,7 @@ final class ContactsStore {
                 sharingSnapshots.remove(id: id)
                 energySnapshots.remove(id: id)
                 mcpAccessSnapshots.remove(id: "contact:\(id)")
+                miniApps.forget(contactID: id)
                 readAcknowledgements.remove(id: id)
                 conversations.remove(contactID: id)
                 messageTimestamps.removeValue(forKey: id)

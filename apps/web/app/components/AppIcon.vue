@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Minimal inline icon set; stroke icons inherit currentColor.
-defineProps<{ name: 'compose' | 'back' | 'chevron' | 'send' | 'attach' | 'person' | 'people' | 'plus' | 'mail' | 'key' | 'file' | 'close' | 'gear' | 'share' | 'group-add' | 'reply' | 'image' | 'timer' | 'alarm' | 'iphone' | 'calendar' | 'speaker' | 'target' | 'nfc' | 'check' | 'clock' | 'alert' | 'x-circle' | 'minus' | 'refresh' }>();
+defineProps<{ name: 'compose' | 'back' | 'chevron' | 'send' | 'attach' | 'person' | 'people' | 'plus' | 'mail' | 'key' | 'file' | 'close' | 'gear' | 'share' | 'group-add' | 'reply' | 'image' | 'timer' | 'alarm' | 'iphone' | 'calendar' | 'speaker' | 'target' | 'nfc' | 'check' | 'clock' | 'alert' | 'x-circle' | 'minus' | 'refresh' | 'chart' | 'list' | 'money' | 'cart' | 'star' | 'bolt' | 'folder' | 'grid' }>();
 </script>
 
 <template>
@@ -34,6 +34,14 @@ defineProps<{ name: 'compose' | 'back' | 'chevron' | 'send' | 'attach' | 'person
     <template v-else-if="name === 'alert'"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></template>
     <template v-else-if="name === 'x-circle'"><circle cx="12" cy="12" r="9" /><path d="m15 9-6 6" /><path d="m9 9 6 6" /></template>
     <template v-else-if="name === 'minus'"><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></template>
+    <template v-else-if="name === 'chart'"><path d="M3 3v18h18" /><path d="M8 17v-5" /><path d="M13 17V8" /><path d="M18 17v-8" /></template>
+    <template v-else-if="name === 'list'"><path d="M9 6h12" /><path d="M9 12h12" /><path d="M9 18h12" /><path d="M4 6h.01" /><path d="M4 12h.01" /><path d="M4 18h.01" /></template>
+    <template v-else-if="name === 'money'"><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01" /><path d="M18 12h.01" /></template>
+    <template v-else-if="name === 'cart'"><circle cx="9" cy="20" r="1.5" /><circle cx="18" cy="20" r="1.5" /><path d="M2 3h3l2.7 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6" /></template>
+    <path v-else-if="name === 'star'" d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9Z" />
+    <path v-else-if="name === 'bolt'" d="M13 2 4 14h7l-1 8 9-12h-7Z" />
+    <path v-else-if="name === 'folder'" d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+    <template v-else-if="name === 'grid'"><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /><rect x="14" y="14" width="7" height="7" rx="2" /></template>
     <template v-else-if="name === 'refresh'"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" /><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" /><path d="M21 3v5h-5" /><path d="M3 21v-5h5" /></template>
   </svg>
 </template>
