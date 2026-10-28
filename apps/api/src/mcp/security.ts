@@ -21,8 +21,8 @@ async function key(env: Env) {
   const material = await crypto.subtle.importKey('raw', encoder.encode(env.BETTER_AUTH_SECRET), 'HKDF', false, ['deriveKey']);
   return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: encoder.encode('wildcard/mcp/v1'), info: encoder.encode('credentials') }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
-export async function credential(env: Env, connection: Pick<Connection, 'id' | 'userID' | 'contactID'>, value: string, decrypt = false): Promise<string> {
-  const aad = encoder.encode(JSON.stringify([connection.id, connection.userID, connection.contactID]));
+export async function credential(env: Env, connection: Pick<Connection, 'id' | 'userID' | 'credentialScope'>, value: string, decrypt = false): Promise<string> {
+  const aad = encoder.encode(JSON.stringify([connection.id, connection.userID, connection.credentialScope]));
   if (decrypt) {
     const bytes = Uint8Array.from(atob(value), c => c.charCodeAt(0));
     return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(0, 12), additionalData: aad }, await key(env), bytes.slice(12)));

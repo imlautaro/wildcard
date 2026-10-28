@@ -4,6 +4,7 @@ struct AccountView: View {
     @Environment(PushNotifications.self) private var push
     @Environment(\.openURL) private var openURL
     @Environment(AuthStore.self) private var auth
+    @Environment(ContactsStore.self) private var contacts
 
     @State private var chatModel = "muse-spark-1.3"
     @State private var contributorConsent = false
@@ -59,6 +60,9 @@ struct AccountView: View {
                 Text("Contributor allows Meta to use submitted messages, files, context and responses to train models. Standard does not. Applies to new chat jobs, schedules and group exchanges you start; jobs already started keep their model. Shared data may still use Contributor when you separately consent. MCP chats always use Standard.")
             }
             .disabled(savingModel || refreshingProfile || auth.isBusy)
+            Section {
+                NavigationLink("Connections") { McpConnectionsView(contactID: "account", cache: contacts.mcpSnapshots.store(for: "account")) }
+            }
             Section("Notifications") {
                 LabeledContent("Push notifications", value: push.status)
                 LabeledContent("App icon badge", value: push.badgeStatus)

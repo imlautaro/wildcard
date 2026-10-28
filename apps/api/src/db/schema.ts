@@ -468,14 +468,14 @@ export const messageReaction = sqliteTable('message_reaction', {
 export const mcpPrivateContact = sqliteTable('mcp_private_contact', {
   contactId: text('contact_id').primaryKey().references(() => contact.id, { onDelete: 'cascade' }),
 });
-export const mcpConnection = sqliteTable('mcp_connection', {
+export const mcpConnector = sqliteTable('mcp_connector', {
   id: text('id').primaryKey(),
-  contactId: text('contact_id').notNull().references(() => contact.id, { onDelete: 'cascade' }),
+  credentialScope: text('credential_scope').notNull(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   name: text('name').notNull(), url: text('url').notNull(), credential: text('credential'),
   authType: text('auth_type').notNull().default('none'),
   toolsJson: text('tools_json').notNull().default('[]'), createdAt: integer('created_at').notNull(),
-}, t => [index('mcp_connection_contact').on(t.contactId, t.userId)]);
+}, t => [index('mcp_connector_owner').on(t.userId, t.createdAt)]);
 export const mcpExecution = sqliteTable('mcp_execution', {
   turnId: text('turn_id').notNull().references(() => chatTurn.id, { onDelete: 'cascade' }),
   slot: integer('slot').notNull(), connectionId: text('connection_id').notNull(),
@@ -484,13 +484,34 @@ export const mcpExecution = sqliteTable('mcp_execution', {
 }, t => [primaryKey({ columns: [t.turnId, t.slot] }), uniqueIndex('mcp_execution_action').on(t.turnId, t.connectionId, t.toolName, t.argumentsJson)]);
 
 export const mcpOAuth = sqliteTable('mcp_oauth', {
-  connectionId: text('connection_id').primaryKey().references(() => mcpConnection.id, { onDelete: 'cascade' }),
+  connectionId: text('connection_id').primaryKey().references(() => mcpConnector.id, { onDelete: 'cascade' }),
   configJson: text('config_json').notNull(), tokensJson: text('tokens_json'), expiresAt: integer('expires_at'),
   generation: text('generation').notNull(), refreshLock: text('refresh_lock'), lockedUntil: integer('locked_until'),
 });
 export const mcpOAuthFlow = sqliteTable('mcp_oauth_flow', {
-  id: text('id').primaryKey(), connectionId: text('connection_id').notNull().unique().references(() => mcpConnection.id, { onDelete: 'cascade' }),
+  id: text('id').primaryKey(), connectionId: text('connection_id').notNull().unique().references(() => mcpConnector.id, { onDelete: 'cascade' }),
   sessionId: text('session_id').notNull().references(() => session.id, { onDelete: 'cascade' }),
   generation: text('generation').notNull(), launchHash: text('launch_hash').unique(), stateHash: text('state_hash').notNull().unique(),
   browserHash: text('browser_hash'), proofHash: text('proof_hash'), payloadJson: text('payload_json').notNull(), expiresAt: integer('expires_at').notNull(),
 }, t => [index('mcp_oauth_flow_expiry').on(t.expiresAt)]);
+
+export const mcpContactAccess = sqliteTable('mcp_contact_access', {
+  contactId: text('contact_id').notNull().references(() => contact.id, { onDelete: 'cascade' }),
+  connectionId: text('connection_id').notNull().references(() => mcpConnector.id, { onDelete: 'cascade' }),
+  generation: text('generation').notNull(),
+}, t => [primaryKey({ columns: [t.contactId, t.connectionId] })]);
+export const mcpGroupAccess = sqliteTable('mcp_group_access', {
+  groupId: text('group_id').notNull(), agentId: text('agent_id').notNull(),
+  connectionId: text('connection_id').notNull().references(() => mcpConnector.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }), generation: text('generation').notNull(),
+}, t => [primaryKey({ columns: [t.groupId, t.agentId, t.connectionId] }),
+  foreignKey({ columns: [t.groupId, t.agentId], foreignColumns: [groupAgent.groupId, groupAgent.agentId] }).onDelete('cascade')]);
+export const mcpPrivateGroup = sqliteTable('mcp_private_group', {
+  groupId: text('group_id').primaryKey().references(() => chatGroup.id, { onDelete: 'cascade' }),
+});
+export const mcpGroupExecution = sqliteTable('mcp_group_execution', {
+  turnId: text('turn_id').notNull().references(() => groupReply.id, { onDelete: 'cascade' }),
+  slot: integer('slot').notNull(), connectionId: text('connection_id').notNull(), toolName: text('tool_name').notNull(),
+  argumentsJson: text('arguments_json').notNull(), resultJson: text('result_json'), uncertain: integer('uncertain').notNull().default(1),
+  authGeneration: text('auth_generation'), accessGeneration: text('access_generation').notNull(),
+}, t => [primaryKey({ columns: [t.turnId, t.slot] }), uniqueIndex('mcp_group_execution_action').on(t.turnId, t.connectionId, t.toolName, t.argumentsJson)]);

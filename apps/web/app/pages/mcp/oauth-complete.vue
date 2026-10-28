@@ -11,12 +11,12 @@ onMounted(async () => {
   try {
     const pending = saved ? JSON.parse(saved) as { flowID: string; connectionID: string; contactID: string; userID: string } : null;
     if (!pending || pending.flowID !== flowID || !proof || pending.userID !== useSession().user.value?.id ||
-      !/^[a-f0-9-]{36}$/.test(pending.connectionID) || !/^[a-f0-9-]{36}$/.test(pending.contactID)) throw new Error('Authorization does not match this signed-in session. Return to Connections and try again.');
-    destination.value = `/contacts/${pending.contactID}/connections`;
-    await api(`contacts/${pending.contactID}/mcp/${pending.connectionID}/oauth/finish`, { json: { flowID, proof } });
-    forgetMcpConnections(pending.contactID);
+      !/^[a-f0-9-]{36}$/.test(pending.connectionID) || (pending.contactID !== 'account' && !/^[a-f0-9-]{36}$/.test(pending.contactID))) throw new Error('Authorization does not match this signed-in session. Return to Connections and try again.');
+    destination.value = '/account/connections';
+    await api(`me/mcp/${pending.connectionID}/oauth/finish`, { json: { flowID, proof } });
+    forgetMcpConnections('account');
     // Catalog discovery is separate; new permissions always start disabled.
-    try { await api(`contacts/${pending.contactID}/mcp/${pending.connectionID}/refresh`, { json: {} }); }
+    try { await api(`me/mcp/${pending.connectionID}/refresh`, { json: {} }); }
     catch { message.value = 'Account authorized. Open Connections and refresh tools to review permissions.'; return; }
     await navigateTo(destination.value, { replace: true });
   } catch (failure) { message.value = errorMessage(failure); }

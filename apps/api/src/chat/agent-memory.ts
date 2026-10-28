@@ -13,8 +13,8 @@ const eligibleEvent = (requester: string) => `FROM agent_memory_event e
   LEFT JOIN contact c ON c.id = t.contact_id AND c.agent_id = e.agent_id
   LEFT JOIN group_message gm ON gm.id = e.group_message_id AND gm.agent_id = e.agent_id
   WHERE e.agent_id = ?1 AND (
-    (t.status = 'complete' AND c.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = c.id) AND (?2 = 0 OR c.user_id = ${requester} OR c.contributor_consent = 1))
-    OR (gm.id IS NOT NULL AND EXISTS (SELECT 1 FROM group_agent ga WHERE ga.group_id = gm.group_id AND ga.agent_id = e.agent_id)
+    (t.status = 'complete' AND t.group_request_id IS NULL AND c.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = c.id) AND (?2 = 0 OR c.user_id = ${requester} OR c.contributor_consent = 1))
+    OR (gm.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM mcp_private_group p WHERE p.group_id = gm.group_id) AND EXISTS (SELECT 1 FROM group_agent ga WHERE ga.group_id = gm.group_id AND ga.agent_id = e.agent_id)
       AND (?2 = 0 OR (gm.contributor_consent = 1 AND NOT EXISTS (
         SELECT 1 FROM group_member member WHERE member.group_id = gm.group_id AND member.contributor_consent = 0))))
   )`;

@@ -7,7 +7,7 @@ export async function groupMemories(db: D1Database, agentID: string, contributor
     0 AS sourceSequence, m.updated_at AS updatedAt FROM group_memory m JOIN user u ON u.id = m.user_id
     JOIN group_message gm ON gm.id = m.source_id
     JOIN group_member member ON member.group_id = gm.group_id AND member.user_id = m.user_id
-    WHERE m.agent_id = ?1 AND member.share_memory = 1
+    WHERE m.agent_id = ?1 AND member.share_memory = 1 AND NOT EXISTS (SELECT 1 FROM mcp_private_group p WHERE p.group_id = gm.group_id)
     AND EXISTS (SELECT 1 FROM group_agent ga WHERE ga.group_id = gm.group_id AND ga.agent_id = m.agent_id) AND (?2 = 0 OR (member.contributor_consent = 1 AND gm.contributor_consent = 1))
     ORDER BY m.updated_at DESC LIMIT 128`).bind(agentID, contributor ? 1 : 0).all<Memory>();
   return results;
@@ -18,7 +18,7 @@ export async function rememberGroupMessage(env: Env, jobID: string, attempt: num
     gm.group_id AS groupID, u.name FROM group_reply r JOIN group_message gm ON gm.id = r.source_id
     JOIN user u ON u.id = gm.user_id JOIN group_member member ON member.group_id = gm.group_id AND member.user_id = gm.user_id
     JOIN agent_attention a ON a.turn_id = r.id AND a.attempt = r.attempt
-    WHERE r.id = ? AND r.attempt = ? AND r.status = 'complete' AND member.share_memory = 1
+    WHERE r.id = ? AND r.attempt = ? AND r.status = 'complete' AND member.share_memory = 1 AND NOT EXISTS (SELECT 1 FROM mcp_private_group p WHERE p.group_id = gm.group_id)
       AND (? = 0 OR (member.contributor_consent = 1 AND gm.contributor_consent = 1))`)
     .bind(jobID, attempt, env.META_CHAT_MODEL.includes('contributor') ? 1 : 0)
     .first<{ agentID: string; id: string; userID: string; groupID: string; name: string; text: string }>();

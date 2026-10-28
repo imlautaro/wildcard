@@ -8,8 +8,8 @@ import { validator } from './schema';
 export { validator } from './schema';
 
 export type RemoteTool = { name: string; description: string; inputSchema: Record<string, unknown>; fingerprint: string; allowed: boolean };
-export type Connection = { id: string; contactID: string; userID: string; name: string; url: string; credential: string | null; toolsJSON: string; authType: 'none' | 'bearer' | 'oauth'; oauthGeneration?: string };
-export const connectionColumns = 'id, contact_id AS contactID, user_id AS userID, name, url, credential, tools_json AS toolsJSON, auth_type AS authType';
+export type Connection = { id: string; credentialScope: string; userID: string; name: string; url: string; credential: string | null; toolsJSON: string; authType: 'none' | 'bearer' | 'oauth'; oauthGeneration?: string };
+export const connectionColumns = 'id, credential_scope AS credentialScope, user_id AS userID, name, url, credential, tools_json AS toolsJSON, auth_type AS authType';
 
 export async function remote<T>(env: Env, connection: Connection, action: (client: Client, signal: AbortSignal) => Promise<T>): Promise<T> {
   const url = endpoint(connection.url);

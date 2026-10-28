@@ -30,5 +30,6 @@ export async function jobAccountID(env: Env, turnID: string, group: boolean): Pr
 }
 
 export async function jobModel(env: Env, turnID: string, group: boolean): Promise<ChatModel> {
+  if (group && await env.DB.prepare(`SELECT p.group_id FROM mcp_private_group p JOIN group_reply r ON r.group_id = p.group_id WHERE r.id = ?`).bind(turnID).first()) return standardModel;
   return accountModel(env, await jobAccountID(env, turnID, group));
 }

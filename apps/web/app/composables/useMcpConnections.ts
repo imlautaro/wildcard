@@ -21,7 +21,7 @@ export function useMcpConnections(contactID: MaybeRefOrGetter<string>) {
     const current = entry, revision = current.revision;
     current.request = (async () => {
       try {
-        const result = await api<{ connections: McpConnection[]; callbackURL: string | null }>(`contacts/${id}/mcp`);
+        const result = await api<{ connections: McpConnection[]; callbackURL: string | null }>(`me/mcp`);
         if (snapshots.get(id) === current && current.revision === revision) { current.value = result.connections; current.callbackURL = result.callbackURL; error.value = null; }
       } catch (failure) {
         if (snapshots.get(id) !== current || current.revision !== revision) return;
@@ -36,7 +36,7 @@ export function useMcpConnections(contactID: MaybeRefOrGetter<string>) {
     const id = toValue(contactID), current = snapshots.get(id);
     if (current) { current.revision++; current.request = null; }
     busy.value = true; error.value = null;
-    try { const result = await api<T>(`contacts/${id}/mcp${suffix}`, { method, json }); await refresh(); return result ?? true; }
+    try { const result = await api<T>(`me/mcp${suffix}`, { method, json }); invalidateMcpAccess(); await refresh(); return result ?? true; }
     catch (failure) {
       if (current && snapshots.get(id) !== current) return false;
       if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) forgetMcpConnections(id);

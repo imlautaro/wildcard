@@ -54,27 +54,28 @@ struct McpOAuthLaunch: Decodable { let flowID: String; let launchURL: URL }
 private struct McpCreated: Decodable { let id: String }
 extension AuthAPI {
     func mcpConnections(contactID: String, token: String) async throws -> [McpConnection] {
-        let (data, _) = try await send(path: "contacts/\(contactID)/mcp", token: token)
+        let (data, _) = try await send(path: "me/mcp", token: token)
         return try JSONDecoder().decode(McpEnvelope.self, from: data).connections
     }
     func mcpCallbackURL(contactID: String, token: String) async throws -> String? {
-        let (data, _) = try await send(path: "contacts/\(contactID)/mcp", token: token)
+        let (data, _) = try await send(path: "me/mcp", token: token)
         return try JSONDecoder().decode(McpEnvelope.self, from: data).callbackURL
     }
     func createMcp(contactID: String, body: Data, token: String) async throws -> String {
-        let (data, _) = try await send(path: "contacts/\(contactID)/mcp", method: "POST", body: body, token: token, timeout: 60)
+        let (data, _) = try await send(path: "me/mcp", method: "POST", body: body, token: token, timeout: 60)
         return try JSONDecoder().decode(McpCreated.self, from: data).id
     }
     func beginMcpOAuth(contactID: String, connectionID: String, body: Data, token: String) async throws -> McpOAuthLaunch {
-        let (data, _) = try await send(path: "contacts/\(contactID)/mcp/\(connectionID)/oauth/start", method: "POST", body: body, token: token, timeout: 90)
+        let (data, _) = try await send(path: "me/mcp/\(connectionID)/oauth/start", method: "POST", body: body, token: token, timeout: 90)
         return try JSONDecoder().decode(McpOAuthLaunch.self, from: data)
     }
     func changeMcp(contactID: String, suffix: String, method: String, body: Data?, token: String) async throws {
-        _ = try await send(path: "contacts/\(contactID)/mcp\(suffix)", method: method, body: body, token: token, timeout: 60)
+        _ = try await send(path: "me/mcp\(suffix)", method: method, body: body, token: token, timeout: 60)
     }
 }
 
 struct McpConnectionsView: View {
+    @Environment(ContactsStore.self) private var contacts
     let contactID: String
     let cache: NavigationSnapshot<[McpConnection]>
     @Environment(AuthStore.self) private var auth
@@ -99,7 +100,7 @@ struct McpConnectionsView: View {
     @State private var pendingPermission: (String, McpTool)?
     @State private var pendingEnableAll: McpConnection?
     @State private var pendingDisconnect: String?
-    private let notice = "Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard. This private chat stays excluded from shared memory, even after disconnecting. Group posting and schedule creation/editing from this chat will be disabled."
+    private let notice = "Configure a connector once, then grant contacts access from their Connections screen. Tool approvals apply to every contact and group you authorize. Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard."
 
     var body: some View {
         Form {
@@ -215,7 +216,7 @@ struct McpConnectionsView: View {
     }
     @discardableResult private func mutate(_ suffix: String, _ method: String, _ body: [String: Any]? = nil) async -> Bool {
         guard !busy else { return false }
-        busy = true; error = nil; cache.invalidate()
+        busy = true; error = nil; cache.invalidate(); contacts.mcpAccessSnapshots.invalidateAll()
         defer { busy = false }
         do {
             let data = try body.map { try JSONSerialization.data(withJSONObject: $0) }
@@ -245,7 +246,7 @@ struct McpConnectionsView: View {
     }
     private func connect() async {
         guard !busy else { return }
-        busy = true; error = nil; cache.invalidate()
+        busy = true; error = nil; cache.invalidate(); contacts.mcpAccessSnapshots.invalidateAll()
         defer { busy = false }
         do {
             var id = configureID
@@ -271,7 +272,7 @@ struct McpConnectionsView: View {
     }
     private func authorize(_ id: String) async {
         guard !busy else { return }
-        busy = true; error = nil; cache.invalidate()
+        busy = true; error = nil; cache.invalidate(); contacts.mcpAccessSnapshots.invalidateAll()
         defer { busy = false }
         do { try await runAuthorization(id); cache.invalidate(); await refresh() }
         catch is CancellationError { cache.invalidate(); await refresh() }
@@ -305,5 +306,92 @@ struct McpConnectionsView: View {
     private func permission(_ connection: String, _ tool: McpTool, _ allowed: Bool) async {
         await mutate("/\(connection)", "PATCH", ["fingerprint": tool.fingerprint, "allowed": allowed])
         pendingPermission = nil
+    }
+}
+
+struct McpAccess: Decodable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    let granted: Int
+    let agentID: String?
+    let agentName: String?
+    var identity: String { "\(agentID ?? ""):\(id)" }
+}
+private struct McpAccessEnvelope: Decodable { let connections: [McpAccess] }
+
+struct McpAccessView: View {
+    let path: String
+    let group: Bool
+    let cache: NavigationSnapshot<[McpAccess]>
+    @Environment(AuthStore.self) private var auth
+    @Environment(ContactsStore.self) private var contacts
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var busy = false
+    @State private var error: String?
+    @State private var pending: McpAccess?
+    var body: some View {
+        Form {
+            Section {
+                Text(group
+                     ? "Grant your bots access to their assigned connectors in this group. Other members can request tools; responses are visible to everyone. Only the bot owner who added it can grant access."
+                     : "Configure connectors once in Account, then grant this contact access. Tool approvals are managed in Account.").font(.footnote)
+                NavigationLink("Manage account connections") { McpConnectionsView(contactID: "account", cache: contacts.mcpSnapshots.store(for: "account")) }
+                Button("Refresh connections") { Task { await refresh() } }
+                if let error { Text(error).foregroundStyle(.red) }
+                if cache.value == nil { ProgressView("Loading connections…") }
+                else if cache.value?.isEmpty == true {
+                    Text(group ? "Assign a connector to one of your bots in its contact details first." : "No account connections yet.")
+                }
+            }
+            ForEach(cache.value ?? [], id: \.identity) { item in
+                Toggle(item.agentName.map { "\($0) · \(item.name)" } ?? item.name,
+                       isOn: Binding(get: { item.granted != 0 }, set: { _ in
+                    if item.granted == 0 { pending = item }
+                    else { Task { await save(item) } }
+                }))
+            }
+        }
+        .disabled(busy)
+        .navigationTitle("Connections")
+        .task(id: scenePhase) { if scenePhase == .active { await refresh() } }
+        .alert("Grant connector access?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } })) {
+            Button("Allow") { if let item = pending { Task { await save(item) } }; pending = nil }
+            Button("Cancel", role: .cancel) { pending = nil }
+        } message: {
+            if let item = pending {
+                Text(group
+                     ? "Allow \(item.agentName ?? "this bot") to use \(item.name) in this group? Any human member can request enabled tools, including reads, changes and sends. Responses may expose external data to everyone in the group. This group will always use Standard and stay excluded from shared memory, even after revocation."
+                     : "Allow this contact to use \(item.name)? It can use all tools enabled in Account without asking again. This private chat will always use Standard and stay excluded from shared memory, even after revocation. Group posting and schedule creation/editing from this private chat will be disabled.")
+            }
+        }
+    }
+    private func refresh() async {
+        do {
+            try await cache.refresh {
+                try await auth.withSession { api, token in
+                    let (data, _) = try await api.send(path: path, token: token)
+                    return try JSONDecoder().decode(McpAccessEnvelope.self, from: data).connections
+                }
+            }
+            error = nil
+        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = "This resource is no longer available." }
+        catch is CancellationError { }
+        catch { self.error = error.localizedDescription }
+    }
+    private func save(_ item: McpAccess) async {
+        guard !busy else { return }
+        busy = true; error = nil; contacts.mcpAccessSnapshots.invalidateAll()
+        defer { busy = false }
+        do {
+            var body: [String: Any] = ["allowed": item.granted == 0]
+            if let agentID = item.agentID { body["agentID"] = agentID }
+            let data = try JSONSerialization.data(withJSONObject: body)
+            _ = try await auth.withSession { api, token in
+                try await api.send(path: "\(path)/\(item.id)", method: "PATCH", body: data, token: token)
+            }
+            await refresh()
+        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = "This resource is no longer available." }
+        catch is CancellationError { }
+        catch { self.error = error.localizedDescription }
     }
 }

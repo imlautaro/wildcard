@@ -478,7 +478,28 @@ request type, store or notification.
 
 ## Model selection by requester
 
-Group reply Workflows select the human source author/requester’s account model at job startup, including later bot turns in that exchange. They do not select the responding agent owner’s model. Existing shared-memory and Contributor consent checks remain; switching one account to Contributor cannot grant consent for anyone else. Background group-result dispatch and push checks resolve the corresponding account rather than using another workflow’s model.
+Except for groups permanently isolated by connector access (Standard), group reply Workflows select the human source author/requester’s account model at job startup, including later bot turns in that exchange. They do not select the responding agent owner’s model. Existing shared-memory and Contributor consent checks remain; switching one account to Contributor cannot grant consent for anyone else. Background group-result dispatch and push checks resolve the corresponding account rather than using another workflow’s model.
 
 See [model settings](model-settings.md) for the API, shared consent, cache behavior,
 AI Gateway spending and pending runtime/device verification.
+
+## Explicit connector access
+
+On iOS and web, Group details → Connections lists connectors already assigned to
+your own bots that you added to this group. Grant each bot/connector pair once;
+confirmation explains ongoing read/change/send permissions and exposure to every
+current and future human member. Group owners cannot grant another bot owner's
+connectors. Any human member may request an enabled external tool from that bot.
+Bot continuations, private delegations, scheduled turns and draft reviews cannot
+initiate external actions. Private assignment, ownership/adder, group membership,
+OAuth and current tool approvals remain required at execution. Revocation blocks
+future admissions; actions already admitted may finish. Contact revocation removes
+associated group grants; account disconnection removes every grant.
+
+The first group grant permanently selects Standard and excludes the whole group
+from cross-chat memory and retrieval, even after revocation. Group members retain
+normal access to history within that group. An independent reply-owned execution
+ledger prevents automatic retries of uncertain actions; draft reviews cannot rerun
+tools. No grants are enabled by migration. Both clients cache schema-free access
+lists and revalidate on entry; see [caching](caching.md#mcp-connection-metadata) and
+[connector migration/verification](connectors.md#account-connector-migration-and-verification).

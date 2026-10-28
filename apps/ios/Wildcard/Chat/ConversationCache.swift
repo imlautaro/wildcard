@@ -94,6 +94,10 @@ final class NavigationSnapshotCache<Value: Sendable> {
         return store
     }
 
+    func invalidateAll() {
+        for entry in entries.values { entry.invalidate() }
+    }
+
     func removeAll() {
         for entry in entries.values { entry.invalidate(remove: true) }
         entries.removeAll()

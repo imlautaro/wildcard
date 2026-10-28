@@ -1,5 +1,6 @@
 import { oauthPublic } from './mcp/oauth';
 import mcp from './mcp/routes';
+import { contactAccess, groupAccess } from './mcp/access';
 import groups from './groups/routes';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -41,7 +42,9 @@ app.route('/api/v1/mcp/oauth', oauthPublic);
 app.route('/api/v1/me', me);
 app.route('/api/v1/groups', groups);
 
-app.route('/api/v1/contacts/:contactID/mcp', mcp);
+app.route('/api/v1/me/mcp', mcp);
+app.route('/api/v1/contacts/:contactID/mcp', contactAccess);
+app.route('/api/v1/groups/:groupID/mcp', groupAccess);
 app.route('/api/v1/contacts', contacts);
 app.route('/api/v1/push', push);
 app.route('/api/v1/push-photos', pushPhotos);

@@ -86,6 +86,7 @@ onMounted(() => run(async () => {
   <PageBar :title="snapshot?.group.name ?? 'Group'" :back="`/groups/${id}`" always-back />
   <div class="page">
     <div class="page-inner">
+      <NuxtLink class="button" :to="`/groups/${id}/connections`">Connections</NuxtLink>
       <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
       <p v-if="notice" class="group-footer" role="status" style="padding-top: 8px">{{ notice }}</p>
       <div v-if="!snapshot && busy" class="center"><span class="spinner" /> Loading…</div>

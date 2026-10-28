@@ -13,9 +13,6 @@ routes.use('*', async (c, next) => {
   if (!session) return c.json({ error: 'Unauthorized' }, 401);
   c.set('owner', session.user.id);
   c.set('sessionID', session.session.id);
-  const contact = await c.env.DB.prepare('SELECT id FROM contact WHERE id = ? AND user_id = ?')
-    .bind(c.req.param('contactID'), session.user.id).first();
-  if (!contact) return c.json({ error: 'Contact not found' }, 404);
   if (!(await admitAuthRequest(c.env.DB, session.user.id, 'mcp-management', 30)).allowed) return c.json({ error: 'Too many attempts. Please wait a minute.' }, 429);
   await next();
 });
@@ -46,13 +43,13 @@ routes.onError((failure, c) => {
   return c.json({ error: `${message} Reference: ${reference}`, code, stage, reference }, 422);
 });
 routes.get('/', async c => {
-  const { results } = await c.env.DB.prepare(`SELECT ${connectionColumns} FROM mcp_connection WHERE contact_id = ? AND user_id = ? ORDER BY created_at, id`)
-    .bind(c.req.param('contactID'), c.get('owner')).all<Connection>();
-  const connections = await Promise.all(results.map(async ({ id, name, url, credential: token, toolsJSON, authType, contactID, userID }) => {
+  const { results } = await c.env.DB.prepare(`SELECT ${connectionColumns} FROM mcp_connector WHERE user_id = ? ORDER BY created_at, id`)
+    .bind(c.get('owner')).all<Connection>();
+  const connections = await Promise.all(results.map(async ({ id, name, url, credential: token, toolsJSON, authType, credentialScope, userID }) => {
     const oauth = authType === 'oauth' ? await c.env.DB.prepare('SELECT tokens_json IS NOT NULL AS connected, expires_at AS expiresAt, config_json AS config FROM mcp_oauth WHERE connection_id = ?').bind(id).first<{ connected: number; expiresAt: number | null; config: string }>() : null;
     let oauthIssuer: string | null = null, oauthScope: string | null = null;
     if (oauth) {
-      try { const config = JSON.parse(await credential(c.env, { id, userID, contactID }, oauth.config, true)); oauthIssuer = config.issuer; oauthScope = config.scope; } catch { /* A rotated encryption key requires reconfiguration. Keep disconnect available. */ }
+      try { const config = JSON.parse(await credential(c.env, { id, userID, credentialScope }, oauth.config, true)); oauthIssuer = config.issuer; oauthScope = config.scope; } catch { /* A rotated encryption key requires reconfiguration. Keep disconnect available. */ }
     }
     return { id, name, url, authType, oauthIssuer, oauthScope, oauthConfigured: !!oauthIssuer, authenticated: authType === 'oauth' ? !!oauth?.connected && !!oauthIssuer : !!token, oauthStatus: authType === 'oauth' ? (oauth?.connected && oauthIssuer ? 'connected' : 'authorization_required') : null, tools: JSON.parse(toolsJSON) as RemoteTool[] };
   }));
@@ -67,35 +64,31 @@ routes.post('/', async c => {
     (data.token !== undefined && (typeof data.token !== 'string' || data.token.length > 4096 || /[\s\u0000-\u001f\u007f]/.test(data.token)))) {
     return c.json({ error: 'Provide a name, HTTPS endpoint, optional Bearer token, and consent.' }, 400);
   }
-  const contactID = c.req.param('contactID')!;
+  const credentialScope = crypto.randomUUID();
   const userID = c.get('owner');
-  const connection: Connection = { id: crypto.randomUUID(), contactID, userID, name: data.name.trim(), url: endpoint(data.url.trim()).href, credential: null, toolsJSON: '[]', authType: data.authType === 'oauth' ? 'oauth' : data.token ? 'bearer' : 'none' };
+  const connection: Connection = { id: crypto.randomUUID(), credentialScope, userID, name: data.name.trim(), url: endpoint(data.url.trim()).href, credential: null, toolsJSON: '[]', authType: data.authType === 'oauth' ? 'oauth' : data.token ? 'bearer' : 'none' };
   if (data.token) connection.credential = await credential(c.env, connection, data.token as string);
   const tools = connection.authType === 'oauth' ? [] : await discover(c.env, connection);
-  const result = await c.env.DB.batch([
-    c.env.DB.prepare(`INSERT INTO mcp_connection (id, contact_id, user_id, name, url, credential, tools_json, created_at, auth_type)
-      SELECT ?1, c.id, c.user_id, ?4, ?5, ?6, ?7, ?8, ?9 FROM contact c WHERE c.id = ?2 AND c.user_id = ?3
-      AND (SELECT COUNT(*) FROM mcp_connection WHERE contact_id = ?2) < 4
-      AND NOT EXISTS (SELECT 1 FROM chat_turn WHERE contact_id = ?2 AND status IN ('queued', 'running'))`)
-      .bind(connection.id, contactID, userID, connection.name, connection.url, connection.credential, JSON.stringify(tools), Date.now(), connection.authType),
-    c.env.DB.prepare(`INSERT OR IGNORE INTO mcp_private_contact (contact_id) SELECT contact_id FROM mcp_connection WHERE id = ?`).bind(connection.id),
-  ]);
-  if (!result[0].meta.changes) return c.json({ error: 'Wait for the current reply to finish. Each contact supports up to four connections.' }, 409);
+  const result = await c.env.DB.prepare(`INSERT INTO mcp_connector (id, credential_scope, user_id, name, url, credential, tools_json, created_at, auth_type)
+    SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
+    WHERE (SELECT COUNT(*) FROM mcp_connector WHERE user_id = ?3) < 16`)
+    .bind(connection.id, credentialScope, userID, connection.name, connection.url, connection.credential, JSON.stringify(tools), Date.now(), connection.authType).run();
+  if (!result.meta.changes) return c.json({ error: 'Each account supports up to sixteen connectors.' }, 409);
   return c.json({ id: connection.id }, 201);
 });
-async function owned(db: D1Database, contactID: string, userID: string, id: string) {
-  return db.prepare(`SELECT ${connectionColumns} FROM mcp_connection WHERE id = ? AND contact_id = ? AND user_id = ?`)
-    .bind(id, contactID, userID).first<Connection>();
+async function owned(db: D1Database, userID: string, id: string) {
+  return db.prepare(`SELECT ${connectionColumns} FROM mcp_connector WHERE id = ? AND user_id = ?`)
+    .bind(id, userID).first<Connection>();
 }
 routes.post('/:connectionID/oauth/start', async c => {
-  const connection = await owned(c.env.DB, c.req.param('contactID')!, c.get('owner'), c.req.param('connectionID'));
+  const connection = await owned(c.env.DB, c.get('owner'), c.req.param('connectionID'));
   if (!connection) return c.json({ error: 'Connection not found' }, 404);
   const body: unknown = await c.req.json();
   if (!isRecord(body) || Object.keys(body).some(k => !['platform', 'issuer', 'scope', 'clientID', 'clientSecret', 'rediscover'].includes(k))) return c.json({ error: 'Invalid OAuth configuration.' }, 400);
   return c.json(await beginOAuth(c.env, connection, c.get('sessionID'), body));
 });
 routes.post('/:connectionID/oauth/finish', async c => {
-  const connection = await owned(c.env.DB, c.req.param('contactID')!, c.get('owner'), c.req.param('connectionID'));
+  const connection = await owned(c.env.DB, c.get('owner'), c.req.param('connectionID'));
   if (!connection || connection.authType !== 'oauth') return c.json({ error: 'Connection not found' }, 404);
   const body: unknown = await c.req.json();
   if (!isRecord(body) || Object.keys(body).sort().join(',') !== 'flowID,proof' || typeof body.flowID !== 'string' || typeof body.proof !== 'string') return c.json({ error: 'Invalid OAuth completion.' }, 400);
@@ -104,17 +97,17 @@ routes.post('/:connectionID/oauth/finish', async c => {
   return c.json({ authorized: true });
 });
 routes.post('/:connectionID/refresh', async c => {
-  const connection = await owned(c.env.DB, c.req.param('contactID')!, c.get('owner'), c.req.param('connectionID'));
+  const connection = await owned(c.env.DB, c.get('owner'), c.req.param('connectionID'));
   if (!connection) return c.json({ error: 'Connection not found' }, 404);
   const tools = await discover(c.env, connection);
   const old = JSON.parse(connection.toolsJSON) as RemoteTool[];
   for (const tool of tools) tool.allowed = old.some(t => t.fingerprint === tool.fingerprint && t.allowed);
-  const result = await c.env.DB.prepare('UPDATE mcp_connection SET tools_json = ? WHERE id = ? AND tools_json = ?')
+  const result = await c.env.DB.prepare('UPDATE mcp_connector SET tools_json = ? WHERE id = ? AND tools_json = ?')
     .bind(JSON.stringify(tools), connection.id, connection.toolsJSON).run();
   return result.meta.changes ? c.json({ ok: true }) : c.json({ error: 'Permissions changed. Refresh and try again.' }, 409);
 });
 routes.patch('/:connectionID', async c => {
-  const connection = await owned(c.env.DB, c.req.param('contactID')!, c.get('owner'), c.req.param('connectionID'));
+  const connection = await owned(c.env.DB, c.get('owner'), c.req.param('connectionID'));
   if (!connection) return c.json({ error: 'Connection not found' }, 404);
   const body: unknown = await c.req.json();
   if (!isRecord(body) || typeof body.allowed !== 'boolean') return c.json({ error: 'Provide tool fingerprints and permission.' }, 400);
@@ -132,13 +125,13 @@ routes.patch('/:connectionID', async c => {
   }
   if (body.allowed && connection.authType === 'oauth' && !await c.env.DB.prepare('SELECT connection_id FROM mcp_oauth WHERE connection_id = ? AND tokens_json IS NOT NULL').bind(connection.id).first()) return c.json({ error: 'Authorize this connection before enabling tools.' }, 409);
   for (const tool of tools) if (fingerprints.has(tool.fingerprint)) tool.allowed = body.allowed;
-  const result = await c.env.DB.prepare('UPDATE mcp_connection SET tools_json = ? WHERE id = ? AND tools_json = ?')
+  const result = await c.env.DB.prepare('UPDATE mcp_connector SET tools_json = ? WHERE id = ? AND tools_json = ?')
     .bind(JSON.stringify(tools), connection.id, connection.toolsJSON).run();
   return result.meta.changes ? c.json({ ok: true }) : c.json({ error: 'Permissions changed. Refresh and try again.' }, 409);
 });
 routes.delete('/:connectionID', async c => {
-  await c.env.DB.prepare('DELETE FROM mcp_connection WHERE id = ? AND contact_id = ? AND user_id = ?')
-    .bind(c.req.param('connectionID'), c.req.param('contactID'), c.get('owner')).run();
+  await c.env.DB.prepare('DELETE FROM mcp_connector WHERE id = ? AND user_id = ?')
+    .bind(c.req.param('connectionID'), c.get('owner')).run();
   return c.body(null, 204);
 });
 export default routes;

@@ -1,19 +1,20 @@
 # MCP connections
 
-Wildcard can consume tools from remote MCP servers in private, human-initiated
-contact chats. This is a first implementation, not universal MCP compatibility.
+Wildcard can consume tools from remote MCP servers in human-initiated private
+contact chats and explicitly authorized groups. This is a first implementation, not universal MCP compatibility.
 It uses the official TypeScript MCP SDK 1.32.2 on the existing Worker, D1 and
 Workflows; it does not migrate contacts to Agents SDK or add Durable Objects.
 
 ## Connect and authorize
 
-On iOS or web, open an existing contact's details, then **Connections**. Supply a
+On iOS or web, open **Account → Connections**. Supply a
 name, public HTTPS Streamable HTTP endpoint and authentication mode (public,
 Bearer token, or OAuth). Accept the
 privacy disclosure, then connect. Public/Bearer discovery initializes the remote server and
 lists tools; it does not call a tool. All tools start disabled. Review each tool's
 description and input schema, then choose **Allow without asking again** to grant
-ongoing execution permission to this user/contact pair. This permission includes
+ongoing execution permission for this account connector. Tool approvals apply to
+every contact and group to which you grant access. This permission includes
 writes and sends if the tool implements them; MCP annotations are not trusted as
 proof of safety. Only connect trusted servers and enable understood tools.
 
@@ -24,19 +25,40 @@ disabled for empty or fully enabled catalogs and OAuth connections awaiting auth
 This grants permissions only; it does not execute tools. New or changed tools still
 require approval after discovery or reauthorization.
 
-Both clients send one `PATCH /contacts/:contactID/mcp/:connectionID` with
+Both clients send one `PATCH /me/mcp/:connectionID` with
 `{ fingerprints: string[], allowed: true }`. The API requires the exact complete set
-of current catalog fingerprints (1–256 unique SHA-256 values), checks account/contact
+of current catalog fingerprints (1–256 unique SHA-256 values), checks account
 ownership and OAuth authorization, and saves all permissions in one conditional update.
 A stale catalog or concurrent mutation returns 409 without partial approval; refresh
 connections and review again. Single-tool PATCH remains supported. Management request
 bodies are bounded to 20,000 bytes to accommodate 256 fingerprints.
 
-A participant of a shared contact can connect their own server. Another
-participant cannot list or use that connection. Connections are attached to the
-user's private contact record, not to the shared agent. Existing sharing consent
-does not authorize external account access. External calls require a direct human
-turn: group conversations, group deliveries and scheduled turns cannot use MCP.
+Then open a contact's **Connections** and switch on the account connector. Each
+contact supports four assigned connectors; there is no repeated login or copied
+credential. The contact receives access to tools enabled on that account connector.
+Another participant's private contact cannot list or use your connector. Configuring
+an account connector alone does not isolate a chat or grant any contact access.
+Removing a contact preserves its account connectors; disconnecting an account
+connector revokes every contact/group assignment and deletes encrypted credentials.
+
+In **Group details → Connections**, the bot owner who added it can explicitly grant
+its assigned connectors to that bot in that one group. The confirmation explains
+that every human member may request reads, changes or sends and that responses may
+expose external data to everyone in the group, including later joiners. Group
+owners cannot grant another person's connectors. No group access is enabled by
+migration or by assigning a connector to a private contact. Private contact access
+is required throughout group use; revoking it also removes the associated group
+grants. Removing the bot/member or disconnecting the connector blocks future calls.
+Already admitted actions may finish. Previous messages and receipts remain.
+
+Only a direct human message in that group can initiate external execution. Bot
+continuations, private-to-group delegations, scheduled turns and draft reviews do
+not get external tools. The bot uses the connector owner's account, even if another
+member requests the action. Membership, bot ownership/adder, private assignment,
+explicit group grant, authorization generation and unchanged tool schema are checked
+again before execution. A later human message blocks new external admissions for
+the older trigger. Group owners should grant only connectors they intend to
+share with all current and future human members.
 
 Refresh connections reloads saved configuration without contacting the server.
 Refresh tools performs discovery again. A tool retains authorization only if its
@@ -49,7 +71,7 @@ replace a token. Revoking the token at its provider also prevents future access.
 
 ## Privacy and model behavior
 
-Connecting permanently marks this private conversation as isolated, including
+Granting a contact access permanently marks its private conversation as isolated, including
 its existing history. Private replies use `muse-spark-1.3` Standard regardless of
 the deployment's Contributor setting. External results and replies stay in the
 user's private chat. Human memory extraction stops for this contact; its human
@@ -75,15 +97,28 @@ Only textual result blocks enter model context. Resources, binary content,
 embedded resource links, sampling, elicitation, roots and prompts are not exposed.
 Data intentionally passed to an authorized tool leaves Wildcard for that server.
 
+Once group access is granted, `mcp_private_group` permanently marks the whole group.
+New jobs and HTTP group processing use Standard, even after grants are revoked.
+The entire group's history and memories are excluded from cross-group/private group
+search, human shared-memory retrieval and agent self-memory extraction/retrieval.
+Its own members can still read that history in the group. Existing private-source
+isolation remains independent. Private result turns from group delegations do not
+become agent self memories. These conservative boundaries avoid carrying connector
+output to another audience through later conversation. Existing in-flight Contributor
+jobs do not gain MCP tools; their existing consent filters still apply.
+
 ## Execution, retries and limits
 
-The private model loop exposes `list_mcp_tools` and `call_mcp_tool`, with at most
+Private and authorized direct-human group model loops expose `list_mcp_tools` and `call_mcp_tool`, with at most
 six internal/external tool executions across two tool-enabled model rounds, then
 a final answer. Arguments are checked against the approved JSON Schema. A D1
 reservation is committed before each remote call. A turn's execution slot cannot
 be reused for another action; canonical identical arguments for the same tool and
 connection also cannot be submitted twice within that turn. Completed receipts
-are reused on Workflow replay. The ledger survives changes of attempt number.
+are reused on Workflow replay. The ledger survives changes of attempt number. Group execution uses a separate
+reply-owned ledger, binds receipts to the explicit group grant generation and OAuth
+generation, and rejects reused slots/uncertain actions across Workflow replay.
+Draft reviews have no external tools, so they cannot repeat side effects.
 
 If the process stops after reservation or an external action times out, the
 outcome is unknown and is not automatically replayed. An uncertain reservation
@@ -95,7 +130,8 @@ arguments can also represent semantically equivalent operations; the ledger
 cannot infer provider semantics. Check the external service before retrying an
 uncertain write. Connection permission is checked before receipt replay too.
 
-Up to four connections per contact, 256 tools per server, eight catalog pages,
+Up to sixteen account connectors, four assigned connectors per contact, 256 tools
+per server, eight catalog pages,
 16 KB per schema, 1,000 schema nodes, depth 16, 16 KB call arguments, 24 KB catalog
 context or textual result, 256 KB per saved catalog, 1 MiB aggregate transport bytes per session and a
 20-second session deadline. The deadline includes DNS, initialization and the
@@ -127,24 +163,30 @@ private egress needs an enforcing outbound proxy before enabling arbitrary URLs.
 ## Infrastructure and retention
 
 Required: existing Worker, D1, Better Auth secret and Meta API access to Standard.
-Apply migration `0026_mcp_connections.sql` after prior migrations. Apply `0027_mcp_oauth.sql` afterward for OAuth state and credentials. No new
+Apply migration `0026_mcp_connections.sql` after prior migrations. Apply `0027_mcp_oauth.sql` afterward for OAuth state and credentials, then all
+subsequent migrations including `0029_account_connectors.sql` for account ownership
+and explicit contact/group grants. No new
 Cloudflare resource or runtime secret is required. OAuth can require a provider
 project, enabled APIs, developer preview access and a registered OAuth client.
 Configure `MCP_WEB_ORIGIN` as the exact public web origin; OAuth callbacks use the
 public HTTPS `BETTER_AUTH_URL`. The
-catalog and permissions are in `mcp_connection`; the sticky isolation marker is
+catalog and account tool approvals are in `mcp_connector`; the sticky isolation marker is
 in `mcp_private_contact`. Bearer tokens are AES-256-GCM encrypted with random IVs,
 a HKDF-derived key from `BETTER_AUTH_SECRET`, and authenticated connection/user/
-contact identifiers. Tokens are never returned by the API, placed in URLs,
+immutable credential-scope identifiers. Migration preserves the former contact ID
+as an opaque credential scope without a contact foreign key, keeping ciphertext
+and active OAuth flows valid after contact deletion. New connectors use a random
+credential scope. Tokens are never returned by the API, placed in URLs,
 passed to the model or logged. Protect D1 backups and the auth secret separately.
 Rotating the auth secret requires reconnecting Bearer/OAuth connections unless an
 explicit credential re-encryption migration is performed. Do not rotate it casually.
 
 Execution arguments and bounded text results are private D1 records in
-`mcp_execution`, retained with the source chat turn to support durable replay.
+`mcp_execution` (private) and `mcp_group_execution` (group), retained with the source
+chat turn/reply to support durable replay.
 They may contain sensitive external data. Disconnect does not delete historical
-receipts or chat messages. Contact/account deletion cascades through these
-records. The ledger connection ID deliberately has no connection foreign key so
+receipts or chat messages. Deleting their source contact/group/account cascades through these records. Account
+connectors survive contact deletion; account deletion removes them. The ledger connection ID deliberately has no connection foreign key so
 disconnect cannot erase duplicate-prevention receipts. Logs use fixed failure
 messages; no remote exception bodies, token values or tool arguments are logged.
 
@@ -163,21 +205,33 @@ and these restrictions are part of the feature's deployment contract.
 
 ## Client caching
 
-Both clients keep session-only snapshots of connection metadata, including empty
-lists, for up to eight contacts. User-entered Bearer tokens and OAuth client secrets are form-only and cleared on
-leaving the screen and after submitting authorization; they never enter snapshot caches. iOS uses
-`ContactsStore.mcpSnapshots` / `NavigationSnapshotCache`; web uses the bounded
-session-reset-aware `useMcpConnections` map. The snapshot budget is approximately
-8 MB of catalog JSON before framework overhead (four bounded catalogs/contact).
+New account configuration is limited to sixteen connectors. Migration preserves
+legacy accounts with more connectors rather than dropping permissions or credentials;
+those accounts cannot add more until below sixteen, and their complete metadata
+snapshot can exceed the normal 4 MB budget. Review legacy counts in staging and
+remove redundant connectors explicitly; no automatic merge or deletion is safe.
+
+Both clients keep one session-only account catalog snapshot, including an empty
+list, with up to sixteen 256 KB catalogs (approximately 4 MB JSON before framework
+overhead). User-entered Bearer tokens and OAuth client secrets are form-only and
+cleared on leaving the screen and after submitting authorization. iOS uses
+`ContactsStore.mcpSnapshots` / `NavigationSnapshotCache`; web uses
+`useMcpConnections` keyed by `account`. Contact/group access lists use the existing
+iOS snapshot mechanism (`mcpAccessSnapshots`) and web `useMcpAccess`, each bounded
+to eight lists. A contact list has at most sixteen connector names/IDs; a group
+list has at most 32 bot/connector pairs (eight bots, four assignments each), without
+tool schemas, tokens or private history.
 No disk cache of provider tokens, client secrets or catalog output is introduced.
 Web sessionStorage temporarily retains only initiating flow/contact/connection/user
-IDs across the browser round trip, never the code, verifier, token or client secret.
+IDs across the browser round trip (`account` replaces the contact ID for new flows), never the code, verifier, token or client secret.
 Completion removes that entry and strips the one-use proof from browser history.
 Account/session reset removes pending web flow identifiers too.
 
 Loaded entries render immediately while entry/explicit refresh revalidates saved
 metadata. iOS also refreshes when the screen becomes active. Requests deduplicate;
-mutation invalidates earlier reads and refreshes the authoritative snapshot. Bulk
+mutation invalidates earlier reads and refreshes the authoritative snapshot. Account
+mutations invalidate access lists too; contact revocation invalidates group lists.
+Reentry displays cached metadata immediately while revalidating in the background. Bulk
 approval uses the same mutation path, retains content while saving, and reloads
 server permissions once; it adds no cache or automatic retry.
 Transient failures retain usable content. Access loss, account changes, contact
@@ -228,7 +282,7 @@ implementation. Before release, validate with synthetic services and data:
   Workflow replay, changed call IDs/order, identical arguments with reordered keys,
   unknown outcomes and source deletion. No duplicate external write should occur.
 - Privacy: connector text never reaches Contributor, shared memory/self-memory,
-  group creator-contact retrieval, schedules or group-post tools, including after
+  group creator-contact retrieval, schedules or private group-post tools, including after
   disconnect and account switching. Old data must remain isolated after rollback.
 - UI: navigation reuse, empty/offline states, mutations, old responses arriving
   after refresh/removal, device gestures, accessibility and physical iOS navigation.
@@ -349,7 +403,7 @@ new token and pending state expires. Reauthorization replaces the pending genera
 Reauthorization deliberately clears old tool approvals and local tokens before
 launching the browser. After completion, refresh tools and explicitly approve each
 one again, including after changing the connected external account. OAuth and tool
-permissions never override the permanent Standard/private-memory isolation marker.
+permissions never override permanent private-contact/group Standard and memory isolation markers.
 The execution ledger records the OAuth generation: a turn cannot replay results or
 start more actions for that connection under a different authorization generation.
 Already admitted calls may finish; provider code does not participate in D1's
@@ -513,6 +567,31 @@ and [Workers redirect-mode implementation](https://github.com/cloudflare/workerd
 ## Account model override
 
 Account now selects Standard/Contributor for ordinary chat jobs. MCP-isolated
-private chats continue to force Standard and omit shared memory regardless of
+isolated private chats and groups continue to force Standard and omit shared memory regardless of
 that preference. See [model settings](model-settings.md); no new MCP permission
 is granted by changing the model.
+
+## Account connector migration and verification
+
+Migration 0029 copies each existing connection to an account connector with the
+same ID, ciphertext, catalog, approvals and authentication mode, and grants only
+its original contact access. It does not merge same-named/endpoints automatically,
+create new group grants or call the provider. OAuth config, tokens, generation,
+refresh locks and active flows are preserved when their foreign keys are rebound.
+Legacy web OAuth return IDs are accepted only as return-state compatibility;
+completion now uses the authenticated account endpoint and returns to Account.
+Old native clients must be updated: contact endpoints now manage grants, not OAuth
+or schemas. Coordinate the API/web/iOS rollout; migration-before-Worker publication
+can briefly make old connector endpoints unavailable. No table rollback to 0028:
+use a forward fix retaining isolation/grants/ledgers, or restore an authorized backup
+and its matching code as a coordinated recovery. Do not deploy old privacy filters.
+
+Static API/web/complete iOS Simulator typechecks and SQL compilation are validation
+only. Verify migration with protected staging backups before production, including
+active OAuth/refresh state and ciphertext preservation; no production migration or
+real connector action was performed for this change. Runtime/browser/device checks
+remain pending: configure once, assign to two contacts, authorize group sharing,
+request from another member, reject non-owner grants and bot-triggered calls,
+revoke contact/group/tool/OAuth access during calls, retry uncertain writes, change
+accounts offline, delete contacts without losing account connectors, and confirm
+Standard/isolation survives revocation. Use fictional tools and data for these checks.

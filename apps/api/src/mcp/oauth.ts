@@ -146,19 +146,19 @@ export async function beginOAuth(env: Env, connection: Connection, sessionID: st
   await oauthStage('flow_storage', async () => env.DB.batch([
     env.DB.prepare('DELETE FROM mcp_oauth_flow WHERE expires_at <= ?').bind(Date.now()),
     env.DB.prepare('DELETE FROM mcp_oauth_flow WHERE connection_id = ?').bind(connection.id),
-    env.DB.prepare(`INSERT INTO mcp_oauth (connection_id, config_json, generation) SELECT id, ?2, ?3 FROM mcp_connection WHERE id = ?1
+    env.DB.prepare(`INSERT INTO mcp_oauth (connection_id, config_json, generation) SELECT id, ?2, ?3 FROM mcp_connector WHERE id = ?1
       ON CONFLICT(connection_id) DO UPDATE SET config_json = excluded.config_json, generation = excluded.generation, tokens_json = NULL, expires_at = NULL, refresh_lock = NULL, locked_until = NULL`)
       .bind(connection.id, await credential(env, connection, JSON.stringify(config)), generation),
-    env.DB.prepare('UPDATE mcp_connection SET tools_json = ? WHERE id = ?').bind('[]', connection.id),
+    env.DB.prepare('UPDATE mcp_connector SET tools_json = ? WHERE id = ?').bind('[]', connection.id),
     env.DB.prepare(`INSERT INTO mcp_oauth_flow (id, connection_id, session_id, generation, launch_hash, state_hash, payload_json, expires_at)
-      SELECT ?1, id, ?3, ?4, ?5, ?6, ?7, ?8 FROM mcp_connection WHERE id = ?2`)
+      SELECT ?1, id, ?3, ?4, ?5, ?6, ?7, ?8 FROM mcp_connector WHERE id = ?2`)
       .bind(id, connection.id, sessionID, generation, await digest(ticket), await digest(state), await credential(env, connection, JSON.stringify(payload)), Date.now() + 10 * 60_000),
   ]));
   return { flowID: id, launchURL: launchURL(env, ticket), callbackURL: callbackURL(env) };
 }
 async function flowConnection(env: Env, id: string) {
-  return env.DB.prepare(`SELECT id, contact_id AS contactID, user_id AS userID, name, url, credential, tools_json AS toolsJSON, auth_type AS authType
-    FROM mcp_connection WHERE id = ? AND auth_type = 'oauth'`).bind(id).first<Connection>();
+  return env.DB.prepare(`SELECT id, credential_scope AS credentialScope, user_id AS userID, name, url, credential, tools_json AS toolsJSON, auth_type AS authType
+    FROM mcp_connector WHERE id = ? AND auth_type = 'oauth'`).bind(id).first<Connection>();
 }
 export const oauthPublic = new Hono<{ Bindings: Env }>();
 oauthPublic.use('*', async (c, next) => {

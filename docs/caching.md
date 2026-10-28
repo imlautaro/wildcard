@@ -426,16 +426,22 @@ through the existing **Load earlier** path, bounded to 20 pages.
 
 ## MCP connection metadata
 
-Both clients cache up to eight private contact catalogs in session memory, including empty
-results. Each contact has at most four 256 KB connection catalogs (approximately 8 MB
-of JSON total before framework overhead), with up to 256 tools per connection. Remote
-pagination is aggregated/validated before a snapshot is saved; clients do not cache
-partial network pages. Failed catalog refresh preserves the prior complete snapshot.
-Search tools filters the existing snapshot in memory; query text is transient view
-state and never changes backend authorization. They revalidate on entry and explicit refresh, deduplicate reads, reject responses
-invalidated by mutations and clear on access loss/account change. iOS uses the existing
-NavigationSnapshotCache; web uses useMcpConnections. Tokens are never cached. See
-[the full cache and verification contract](connectors.md#client-caching).
+Both clients cache one session-owned account catalog with at most sixteen 256 KB
+connector catalogs (approximately 4 MB JSON before overhead), including an empty
+result. Legacy accounts exceeding sixteen retain all migrated connectors; their
+snapshot can exceed this normal budget until redundant connectors are explicitly
+removed. The migration never silently deletes authorization state. Schemas are cached once per connector, independently of assignments. iOS
+uses NavigationSnapshotCache and web uses useMcpConnections (`account` key).
+Contact/group access lists use separate schema-free snapshots through the existing
+iOS cache and useMcpAccess, bounded to eight lists (up to sixteen account choices
+per contact or 32 bot/connector pairs per group). Complete catalog discovery remains
+bounded/paginated; failed refresh preserves the prior complete snapshot. Search is
+local transient state. No credentials or provider results enter these caches.
+Entry/explicit refresh revalidates in the background and deduplicates reads. Mutation
+invalidates earlier responses; account mutations invalidate access lists and contact
+revocation invalidates group lists. Access loss, deletion and account changes reject
+late reads and clear relevant entries. Stale snapshots never authorize execution.
+See [the full cache and verification contract](connectors.md#client-caching).
 
 Enable all tools uses the existing permission mutation path: invalidate pending reads,
 send one complete catalog fingerprint set, then revalidate saved permissions once.

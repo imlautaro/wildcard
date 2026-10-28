@@ -1,3 +1,4 @@
+import { executeMcp, mcpTools } from '../mcp/tools';
 import { reactionTool } from '../reactions/data';
 import { groupReaction } from '../reactions/tools';
 import { acknowledgeGroupResults } from './receipts';
@@ -5,7 +6,7 @@ import { readAgentMemories, selectAgentMemories } from '../chat/agent-memory';
 import { byteLength, clipText, keywords } from '../chat/memory';
 import { isRecord, museCompletion, type ModelMessage, type ModelTool, type ToolCall } from '../chat/meta';
 
-export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; beforeSequence?: number; reactionJob?: { turnID: string; attempt: number } };
+export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; beforeSequence?: number; reactionJob?: { turnID: string; attempt: number }; mcp?: { id: string; attempt: number; contactID: string; userID: string; groupID: string; agentID: string } };
 export const groupRetrievalTools: ModelTool[] = [
   { type: 'function', function: { name: 'search_self_memories',
     description: 'Retrieve your own persistent preferences and persona across private and group chats, attributed to your agent ID. Never retrieves another agent’s private preferences.',
@@ -31,7 +32,8 @@ export const groupRetrievalTools: ModelTool[] = [
 // group. In group replies the scope is restricted to that one audience's group.
 const access = `EXISTS (SELECT 1 FROM group_agent ga JOIN group_member member ON member.group_id = ga.group_id
   WHERE ga.group_id = g.id AND ga.agent_id = ?1 AND member.user_id = ?2 AND member.share_memory = 1
-    AND (?3 = 0 OR member.contributor_consent = 1)) AND (?4 IS NULL OR g.id = ?4)`;
+    AND (?3 = 0 OR member.contributor_consent = 1)) AND (?4 IS NULL OR g.id = ?4)
+  AND (g.id = ?4 OR NOT EXISTS (SELECT 1 FROM mcp_private_group p WHERE p.group_id = g.id))`;
 
 const messageAccess = `${access} AND gm.sequence < ?6
     AND (?3 = 0 OR gm.contributor_consent = 1)
@@ -178,7 +180,7 @@ export async function groupCompletion(env: Env, messages: ModelMessage[], scope:
   const processedResults: unknown[] = [];
   for (let round = 0; round < 3; round++) {
     const answer = await museCompletion(env, messages, env.META_CHAT_MODEL,
-      { maxTokens: 1200, responseFormat, ...(round < 2 ? { tools: [...groupRetrievalTools, reactionTool] } : {}) });
+      { maxTokens: 1200, responseFormat, ...(round < 2 ? { tools: [...groupRetrievalTools, reactionTool, ...(scope.mcp ? mcpTools : [])] } : {}) });
     await acknowledgeGroupResults(env.DB, scope.agentID, processedResults);
     processedResults.length = 0;
     if (!answer.tool_calls?.length) return answer.content!;
@@ -187,7 +189,9 @@ export async function groupCompletion(env: Env, messages: ModelMessage[], scope:
       let content = JSON.stringify({ error: 'Tool budget exhausted.' });
       if (executions++ < 6) {
         try {
-          content = call.function.name === reactionTool.function.name
+          content = scope.mcp && mcpTools.some(t => t.function.name === call.function.name)
+            ? await executeMcp(env, scope.mcp, call.function.name, JSON.parse(call.function.arguments), executions - 1)
+            : call.function.name === reactionTool.function.name
             ? await groupReaction(env, scope, JSON.parse(call.function.arguments))
             : await executeGroupRetrieval(env.DB, scope, call);
           const result = JSON.parse(content);

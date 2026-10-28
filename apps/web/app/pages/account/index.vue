@@ -72,6 +72,7 @@ onMounted(async () => {
       </div>
       <p class="group-footer">Contributor allows Meta to use submitted messages, files, context and responses to train models. Standard does not. Applies to new chat jobs, schedules and group exchanges you start; jobs already started keep their model. Shared data may still use Contributor when you separately consent. MCP chats always use Standard.</p>
       <button type="button" class="button block" :disabled="busy || !modelChanged || (chatModel === 'muse-spark-1.3-contributor' && !contributorConsent)" @click="saveChatModel">Save model</button>
+      <div class="group" style="margin-top: 24px"><NuxtLink class="button-row" to="/account/connections">Connections</NuxtLink></div>
       <div class="group" style="margin-top: 24px">
         <button type="button" class="button-row danger" :disabled="busy" @click="leave">Sign out</button>
       </div>

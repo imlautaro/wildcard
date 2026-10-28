@@ -186,12 +186,15 @@ request type, store or notification.
 
 ## MCP Connections
 
-Contact details links to Connections for public/Bearer remote Streamable HTTP servers,
-matching iOS. Review schemas and explicitly authorize each tool. Connecting isolates
-the private chat from shared memory permanently and selects Standard for private replies;
-group posting and schedule creation/editing from that chat are disabled. See
-[connections](connectors.md) for security, session caching, OAuth setup and
-pending functional/device verification.
+**Account → Connections** configures public/Bearer/OAuth Streamable HTTP connectors
+once and manages schemas and tool approvals. Contact details → Connections is a
+simple assignment list for that account's connectors. Group details → Connections
+lets each bot owner/adder explicitly grant its assigned connectors to that bot in
+that group. Any human member can then request enabled tools; resulting responses
+are visible to everyone. No group access is inferred from a private assignment.
+Granting access permanently isolates the private chat or whole group from shared
+memory and forces Standard. Private posting/schedule creation restrictions remain.
+See [connections](connectors.md) for consent, permissions and pending verification.
 
 OAuth connections use the same permissions and isolation as iOS, with a full-page
 provider round trip and `/mcp/oauth-complete` return route. The tab stores only flow/
@@ -270,3 +273,16 @@ without partial approval. OAuth authorization is required before enabling. Empty
 fully enabled catalogs disable the action. Existing mutation invalidation and one
 metadata reload update the session snapshot; no tools execute during approval and
 future/changed tools stay disabled. See [bulk approval and verification](connectors.md#connect-and-authorize).
+
+Account connection operations use `/me/mcp`; contacts and groups expose explicit
+assignment endpoints. Account catalog cache is at most sixteen 256 KB catalogs;
+access lists cache at most eight contact/group lists without schemas. All mutations
+invalidate earlier reads; account changes and contact revocation invalidate affected
+access metadata. Cached content stays visible during revalidation/failures. New
+OAuth launches store `account` as return scope; legacy contact return state is
+accepted but finishes only through the authenticated account route. Both platforms
+require updates for migration 0029; runtime/device and staging migration verification
+remain pending. See [migration and verification](connectors.md#account-connector-migration-and-verification).
+
+Account uses `pages/account/index.vue` beside `account/connections.vue`, so the
+Connections route renders as its own page without requiring a nested page outlet.

@@ -44,7 +44,7 @@ struct ContactEditorView: View {
                 ContactEnergySection(contactID: contactID, cache: contacts.energySnapshots.store(for: contactID))
             }
             if let contactID {
-                Section { NavigationLink("Connections") { McpConnectionsView(contactID: contactID, cache: contacts.mcpSnapshots.store(for: contactID)) } }
+                Section { NavigationLink("Connections") { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) } }
             }
             if !canEdit {
                 Text("This is a shared contact. Its creator manages its name, photo, and participants.")

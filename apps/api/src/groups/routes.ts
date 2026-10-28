@@ -39,6 +39,8 @@ groups.use('*', async (c, next) => {
   if (!session) return c.json({ error: 'Unauthorized' }, 401);
   c.set('owner', session.user.id);
   c.env = await accountEnvironment(c.env, session.user.id);
+  const groupID = c.req.path.split('/')[4];
+  if (groupID && await c.env.DB.prepare('SELECT group_id FROM mcp_private_group WHERE group_id = ?').bind(groupID).first()) c.env = { ...c.env, META_CHAT_MODEL: 'muse-spark-1.3' };
   await next();
 });
 groups.use('*', async (c, next) => {

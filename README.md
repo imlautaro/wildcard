@@ -173,8 +173,11 @@ and reproducible infrastructure documentation.
 
 ## MCP connections
 
-Private contact chats can use authorized remote MCP tools through the existing Worker.
-Open contact details → **Connections** on iOS or web. See [MCP connections](docs/connectors.md)
+Configure remote MCP connectors once in **Account → Connections** on iOS or web.
+Grant each contact access from contact details → **Connections**. Bot owners can
+explicitly enable assigned connectors in **Group details → Connections**; human
+members can request tools and responses are visible to everyone. Authorized private
+chats and groups permanently use Standard and stay excluded from cross-chat memory. See [MCP connections](docs/connectors.md)
 for permissions, permanent private-chat isolation, Standard processing, supported
 transports, deployment prerequisites and pending verification. Streamable HTTP supports
 public/Bearer access and OAuth authorization-code with PKCE, registered or dynamic

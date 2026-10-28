@@ -1329,3 +1329,33 @@ full discovery/validation, so refresh failure cannot replace an approved catalog
 with a partial one. After automatic publication, refresh tools from both clients
 and confirm loaded counts and permissions; do not execute external actions merely
 to verify discovery. See [connector limits](connectors.md#execution-retries-and-limits).
+
+### Account connectors and group grants (migration 0029)
+
+Apply all migrations in order through `0029_account_connectors.sql` using the existing
+automatic committed/pushed release pipeline. No new Cloudflare resource, binding,
+secret, provider account or OAuth redirect is required. Fresh independent installs
+use the existing Worker/D1/Standard/OAuth prerequisites. Production and staging
+must keep separate databases/auth secrets/provider credentials. Preserve
+BETTER_AUTH_SECRET: the migration copies encrypted bytes and their original immutable
+AAD scope without decrypting them, retains IDs/catalog approvals/OAuth state, and
+creates only the original contact assignments. It creates no group grants. Account
+connectors survive contact deletion. Private executions retain their chat FK; group
+executions retain a reply FK and explicit grant generation. Account deletion removes
+connectors/grants; disconnection preserves historical ledgers for duplicate protection.
+
+Both clients now manage connectors through `/me/mcp` and grants through contact/group
+MCP endpoints. Update iOS alongside API/web. Migration runs before publishing Worker
+code, so old management endpoints may briefly be unavailable; old native clients need
+the update. Verify migration against protected staging backups before production,
+including active OAuth flows/refresh locks and credential preservation. Static SQL
+compilation does not establish migration behavior with real records. No production
+migration, new deployment or external action was performed for this local change.
+
+Groups become permanently Standard and excluded from cross-chat memory/retrieval on
+the first explicit connector grant. Retain these markers after revocation. Rollback
+to 0028/code predating account grants is incompatible with the new table ownership
+and privacy semantics. Prefer a forward fix preserving connector records, grants,
+isolation and both ledgers; restoring a backup needs its matching code and explicit
+recovery authorization. Never drop markers to regain compatibility. See
+[setup, retention and verification](connectors.md#account-connector-migration-and-verification).

@@ -4,6 +4,7 @@ struct GroupMembersView: View {
     let groupID: String
     @Environment(AuthStore.self) private var auth
     @Environment(GroupsStore.self) private var groups
+    @Environment(ContactsStore.self) private var contacts
     @Environment(\.dismiss) private var dismiss
     let store: GroupChatStore
     private var snapshot: GroupSnapshot? { store.snapshot }
@@ -34,6 +35,9 @@ struct GroupMembersView: View {
                         try await refreshIdentity()
                     }) { GroupPhotoAvatar(group: self.snapshot?.group, size: 96) }
                     .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                }
+                Section {
+                    NavigationLink("Connections") { McpAccessView(path: "groups/\(groupID)/mcp", group: true, cache: contacts.mcpAccessSnapshots.store(for: "group:\(groupID)")) }
                 }
                 Section("Members") {
                     ForEach(snapshot.members, id: \.identity) { member in
