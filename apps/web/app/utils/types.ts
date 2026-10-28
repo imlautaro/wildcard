@@ -11,6 +11,7 @@ export type AuthUser = {
 export type Contact = {
   id: string;
   name: string;
+  initiativeEnabled?: number;
   agentID?: string | null;
   role?: string | null;
   photoVersion?: string | null;

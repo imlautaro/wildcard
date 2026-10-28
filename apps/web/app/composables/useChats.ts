@@ -205,6 +205,15 @@ async function loadAllContacts() {
   allContactsLoaded.value = !nextCursor.value;
 }
 
+async function setInitiative(id: string, enabled: boolean): Promise<Contact | null> {
+  const started = ++generation;
+  const result = await api<{ contact: Contact }>(`contacts/${id}/initiative`, { method: 'PUT', json: { enabled } });
+  if (started !== generation) return null;
+  generation += 1; // Reject reads started while the mutation was pending.
+  upsertContact(result.contact);
+  return result.contact;
+}
+
 function upsertContact(contact: Contact) {
   const index = contacts.value.findIndex((item) => item.id === contact.id);
   if (index === -1) contacts.value = [contact, ...contacts.value];
@@ -317,6 +326,6 @@ export function useChats() {
   return {
     contacts, groups, rows, directory, totalUnread, nextCursor, loaded, contactsLoaded, groupsLoaded, allContactsLoaded, error,
     contactInvitations, groupInvitations, invitationCount, contributorModel,
-    refresh, refreshLists, refreshInvitations, loadMore, loadAllContacts, upsertContact, removeContact, updateGroup, removeGroup, applyRead,
+    refresh, refreshLists, refreshInvitations, loadMore, loadAllContacts, setInitiative, upsertContact, removeContact, updateGroup, removeGroup, applyRead,
   };
 }

@@ -362,3 +362,7 @@ deduplication and account reset apply; no parallel native link cache is added.
 A link does not grant access or accept an invitation. Signed-out visitors sign in
 and reopen the link. The public, server-side Apple association route bypasses SPA
 auth and contains only public Team/App ID metadata. See [infrastructure](infrastructure.md#native-ios-experiments).
+
+## Conversation initiative
+
+Private contacts use the same server-side [initiative planner](initiative.md) as iOS, including while the browser is closed. Contact details provides the same Conversation initiative switch and copy for owners and shared-contact participants. The existing session-owned contact cache supplies the initial setting; background refresh and mutation responses update it, and generation guards reject late reads and session changes. Messages appear through ordinary conversation/list polling and unread updates; browser push is still unavailable. Migration 0032 and the API release are required. Verify reopen, refresh, offline/failure recovery, shared access revocation and account switching with fictional accounts; visual/runtime checks remain pending.

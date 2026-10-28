@@ -13,8 +13,8 @@ import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readBearerSession } from '../lib/session';
 import sharing from './sharing';
 
-type Contact = { id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
-const columns = `id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
+type Contact = { initiativeEnabled: number; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
+const columns = `initiative_enabled AS initiativeEnabled, id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
   CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
 const managesAgent = `EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = contact.user_id)`;
 const selection = `${columns},
@@ -127,6 +127,19 @@ contacts.post('/:id/energy/reset', async (c) => {
     RETURNING id`).bind(Date.now(), agent.id, c.get('owner'), c.req.param('id'), c.get('owner')).first();
   if (!updated) return c.json({ error: 'Contact no longer available' }, 404);
   return c.json({ energy: await readEnergy(c.env.DB, agent.id) });
+});
+
+contacts.put('/:id/initiative', contactBody, async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!body || Object.keys(body).join(',') !== 'enabled' || typeof body.enabled !== 'boolean') {
+    return c.json({ error: 'Provide only enabled as a boolean' }, 400);
+  }
+  await c.env.DB.prepare('UPDATE contact SET initiative_enabled = ? WHERE id = ? AND user_id = ?')
+    .bind(body.enabled ? 1 : 0, c.req.param('id'), c.get('owner')).run();
+  const contact = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param('id'), c.get('owner')).first<Contact>();
+  return contact ? c.json({ contact: contactPreview(contact) }) : c.json({ error: 'Contact not found' }, 404);
 });
 
 contacts.patch('/:id', contactBody, async (c) => {

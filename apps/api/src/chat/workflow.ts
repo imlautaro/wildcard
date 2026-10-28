@@ -1,3 +1,4 @@
+import { runInitiative, type InitiativeJob } from './initiative';
 import { jobAccountID, jobModel } from '../lib/model-preference';
 import { maintainAgentMemories } from './agent-memory';
 import { dispatchGroupRequests } from '../groups/request-results';
@@ -14,10 +15,11 @@ import { contactReply } from './context';
 import { maintainMemories } from './memory';
 import { releaseAttention } from './dispatch';
 
-export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob> {
-  async run(event: WorkflowEvent<ChatJob | VisitJob | GroupJob>, step: WorkflowStep) {
+export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob | InitiativeJob> {
+  async run(event: WorkflowEvent<ChatJob | VisitJob | GroupJob | InitiativeJob>, step: WorkflowStep) {
     if ('kind' in event.payload) {
-      if (event.payload.kind === 'group') await runGroup(this.env, event.payload, step);
+      if (event.payload.kind === 'initiative') await runInitiative(this.env, event.payload, step);
+      else if (event.payload.kind === 'group') await runGroup(this.env, event.payload, step);
       else await runVisit(this.env, event.payload, step);
       return;
     }

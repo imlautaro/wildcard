@@ -44,6 +44,22 @@ struct ContactEditorView: View {
                 ContactEnergySection(contactID: contactID, cache: contacts.energySnapshots.store(for: contactID))
             }
             if let contactID {
+                Section {
+                    Toggle("Conversation initiative", isOn: Binding(
+                        get: { contacts.contact(id: contactID)?.initiativeEnabled != 0 },
+                        set: { enabled in
+                            guard !contacts.isMutating else { return }
+                            Task {
+                                do { try await contacts.setInitiative(contactID: contactID, enabled: enabled, using: auth) }
+                                catch is CancellationError { }
+                                catch { self.error = error.localizedDescription }
+                            }
+                        }
+                    ))
+                    .disabled(saving || contacts.isMutating)
+                } footer: {
+                    Text("Allow thoughtful follow-ups when you have not replied. Stops after a few unanswered messages. Applies only to your private chat.")
+                }
                 Section { NavigationLink("Connections") { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) } }
                 Section {
                     NavigationLink(value: HomeDestination.nativeTools(contactID)) {
@@ -59,6 +75,12 @@ struct ContactEditorView: View {
                 Text(error).manrope(.footnote).foregroundStyle(.red)
             }
             if saving { ProgressView("Saving…") }
+        }
+        .task(id: contactID) {
+            guard let contactID else { return }
+            do { try await contacts.refreshContact(id: contactID, using: auth, force: false) }
+            catch is CancellationError { }
+            catch { self.error = error.localizedDescription }
         }
         .navigationTitle(contactID == nil ? "Add Contact" : (canEdit ? "Edit Contact" : "Contact"))
         .navigationBarTitleDisplayMode(.inline)

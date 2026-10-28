@@ -200,3 +200,5 @@ transports, deployment prerequisites and pending verification. Streamable HTTP s
 public/Bearer access and OAuth authorization-code with PKCE, registered or dynamic
 clients, encrypted credentials and refresh tokens. Gmail setup requires your own
 Google OAuth client and preview access; live provider/device validation is pending.
+
+Private contacts also support [conversation initiative](docs/initiative.md): durable AI reviews choose whether to wait, send a useful follow-up or stop after silence. Each participant can disable it in contact details on iOS or web. It reuses D1, Cron and Workflows; migration 0032 is required.

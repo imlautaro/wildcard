@@ -3,6 +3,7 @@ import Foundation
 struct Contact: Codable, Hashable, Identifiable, Sendable {
     let id: String
     let name: String
+    var initiativeEnabled: Int? = nil
     var agentID: String? = nil
     var role: String? = nil
     var photoVersion: String? = nil
@@ -51,6 +52,12 @@ extension AuthAPI {
         let body = try JSONEncoder().encode(ContactInput(name: name))
         let path = id.map { "contacts/\($0)" } ?? "contacts"
         let (data, _) = try await send(path: path, method: id == nil ? "POST" : "PATCH", body: body, token: token)
+        return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
+    }
+
+    func setContactInitiative(id: String, enabled: Bool, token: String) async throws -> Contact {
+        let body = try JSONEncoder().encode(["enabled": enabled])
+        let (data, _) = try await send(path: "contacts/\(id)/initiative", method: "PUT", body: body, token: token)
         return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
     }
 

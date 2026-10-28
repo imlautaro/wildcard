@@ -429,3 +429,7 @@ badge, receipt, photo fetch, consent or storage policy changes. Already delivere
 alerts are not rewritten. The API change requires the normal automatic release.
 Static API/web/Swift checks passed; actual APNs and foreground device presentation
 have not been reverified.
+
+## Initiative replies
+
+Private [initiative](initiative.md) messages reuse completed assistant turns and the transactional APNs outbox, including Markdown-clean previews, contact identity and unread badges. Read acknowledgements suppress queued notifications normally. Disabling initiative prevents future publication and preserves already-published messages and their usual delivery semantics. Browser push remains unavailable; device delivery has not been newly verified.

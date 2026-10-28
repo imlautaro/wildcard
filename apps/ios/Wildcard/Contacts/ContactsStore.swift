@@ -274,6 +274,21 @@ final class ContactsStore {
         }
     }
 
+    func setInitiative(contactID: String, enabled: Bool, using auth: AuthStore) async throws {
+        try beginMutation()
+        let request = generation
+        defer { if request == generation { isMutating = false } }
+        let saved = try await auth.withSession { api, token in
+            try await api.setContactInitiative(id: contactID, enabled: enabled, token: token)
+        }
+        guard request == generation, !Task.isCancelled else { return }
+        knownContacts[contactID] = saved
+        if let index = contacts.firstIndex(where: { $0.id == contactID }) { contacts[index] = saved }
+        sortContacts()
+        contactRefreshedAt[contactID] = .now
+        refreshedAt = nil
+    }
+
     func savePhoto(contactID: String, data: Data?, using auth: AuthStore) async throws {
         try beginMutation()
         defer { isMutating = false }
@@ -321,6 +336,7 @@ final class ContactsStore {
     }
 
     func refreshContact(id: String, using auth: AuthStore, force: Bool = true) async throws {
+        guard !isMutating else { return }
         if !force, let date = contactRefreshedAt[id], Date().timeIntervalSince(date) < freshness { return }
         guard refreshingContacts.insert(id).inserted else { return }
         defer { refreshingContacts.remove(id) }

@@ -66,6 +66,8 @@ export const contactAgent = sqliteTable('contact_agent', {
 }, (table) => [check('agent_energy_range', sql`${table.energy} BETWEEN 0 AND 50`), check('agent_memory_shared', sql`${table.memoryShared} IN (0, 1)`)]);
 
 export const contact = sqliteTable('contact', {
+  initiativeEnabled: integer('initiative_enabled', { mode: 'boolean' }).notNull().default(true),
+  lastReplyReadAt: date('last_reply_read_at'),
   agentId: text('agent_id').references(() => contactAgent.id, { onDelete: 'cascade' }),
   contributorConsent: integer('contributor_consent', { mode: 'boolean' }).notNull().default(false),
   photoVersion: text('photo_version'),
@@ -114,6 +116,7 @@ export const agentPresence = sqliteTable('agent_presence', {
   check('agent_presence_status', sql`${table.status} IN ('offline', 'online', 'typing')`)]);
 
 export const chatTurn = sqliteTable('chat_turn', {
+  initiativeSourceId: text('initiative_source_id').references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'set null' }),
   readAt: date('read_at'),
   timeZone: text('time_zone'),
   scheduleId: text('schedule_id').references((): AnySQLiteColumn => contactSchedule.id),
@@ -150,6 +153,7 @@ export const chatTurn = sqliteTable('chat_turn', {
   uniqueIndex('chat_group_request_idx').on(table.groupRequestId).where(sql`${table.groupRequestId} IS NOT NULL`),
   index('chat_recovery_idx').on(table.status, table.checkedAt),
   index('chat_user_status_idx').on(table.userId, table.status),
+  index('initiative_budget_idx').on(table.userId, table.updatedAt).where(sql`${table.initiativeSourceId} IS NOT NULL`),
   uniqueIndex('chat_turn_source_idx').on(table.id, table.contactId, table.userId),
 ]);
 
@@ -556,3 +560,20 @@ export const nativeAction = sqliteTable('native_action', {
   status: text('status').notNull().default('pending'), executionId: text('execution_id'),
   createdAt: date('created_at').notNull(), updatedAt: date('updated_at').notNull(), expiresAt: date('expires_at').notNull(),
 }, t => [uniqueIndex('native_action_kind').on(t.turnId, t.kind), index('native_action_turn').on(t.turnId, t.createdAt)]);
+
+// Episode creation/invalidation triggers live in migration 0032.
+export const conversationInitiative = sqliteTable('conversation_initiative', {
+  contactId: text('contact_id').primaryKey().references(() => contact.id, { onDelete: 'cascade' }),
+  sourceId: text('source_id').notNull().references(() => chatTurn.id, { onDelete: 'cascade' }),
+  anchorId: text('anchor_id').notNull().references(() => chatTurn.id, { onDelete: 'cascade' }),
+  revision: integer('revision').notNull().default(0),
+  evaluations: integer('evaluations').notNull().default(0),
+  sent: integer('sent').notNull().default(0),
+  nextAt: date('next_at'),
+  expiresAt: date('expires_at').notNull(),
+  intent: text('intent').notNull().default(''),
+}, table => [
+  check('initiative_evaluations', sql`${table.evaluations} BETWEEN 0 AND 6`),
+  check('initiative_sent', sql`${table.sent} BETWEEN 0 AND 3`),
+  index('initiative_due_idx').on(table.nextAt).where(sql`${table.nextAt} IS NOT NULL`),
+]);

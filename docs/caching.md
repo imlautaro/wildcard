@@ -577,3 +577,7 @@ of at most 200 IDs/titles and account/contact identities, including across sign-
 to manage alarms that continue in iOS. The account view filters to its own records;
 authorized refresh prunes system-removed alarms. This local ledger is not a network
 cache or agent memory and is not exposed through the App Group or model tools.
+
+## Conversation initiative
+
+The per-participant `initiativeEnabled` field uses the existing contact cache and its session isolation, freshness, pagination and eviction budgets. No new client cache or private disk retention is introduced. iOS contact details uses the existing 30-second contact freshness and deduplicated refresh; web details refreshes in the background on entry. Both reuse loaded contacts synchronously and keep content visible on errors. A confirmed mutation replaces the cached contact and rejects older in-flight reads; controls serialize mutations and retain the confirmed setting on failure. Deletion/access loss and account changes use existing contact/conversation invalidation, with generation checks rejecting late responses. Follow-ups are completed assistant-only turns and use ordinary conversation/list revalidation, pagination and read acknowledgements. Plans have no client snapshot or polling endpoint. See [initiative](initiative.md) for server retention and the pending cross-client verification matrix.

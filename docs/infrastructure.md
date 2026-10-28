@@ -1554,3 +1554,13 @@ entitlements register developer resources themselves. No agreement was accepted,
 no signing key was created/exported, and no device permission was granted during
 this configuration check. A signed device Run is still needed to validate embedding,
 App Intent metadata, system prompts and actual native interactions.
+
+## Conversation initiative
+
+[Conversation initiative](initiative.md) reuses required D1 `DB`, `CHAT_WORKFLOW`/`ChatWorkflow`, the existing one-minute Cron Trigger and `META_API_KEY`. No additional resources, bindings, secrets, provider permissions or Wrangler changes are needed. Optional APNs configuration delivers iOS alerts through the existing outbox; web has no browser push. Independent accounts must first follow the D1/auth, model and Workflow provisioning steps above with their own identifiers and secrets.
+
+Migration `0032_conversation_initiative.sql` must follow 0001–0031. It adds per-participant initiative/read-time columns, an assistant-turn source marker, a due-plan table/indexes, and human-input/completion/setting triggers. There is no backfill of existing conversations. New replies seed episodes only after the migration; disabling initiative deletes the pending plan. The schema declaration in `apps/api/src/db/schema.ts` mirrors these additions. Local setup uses `npm ci` and `npm run db:migrate:local`; run the existing API/web development commands.
+
+For production, commit and push the intended source to the configured release branch and let Workers Builds run the existing migration-before-publish release pipeline. Never deploy manually. Verify the automatic API/web deployment source SHA, no pending migrations and the existing Cron/Workflow bindings. Use fictional conversations to verify one new episode, a persisted next review, finite evaluations, stale-draft cancellation and normal history/outbox delivery. Logs contain only bounded event/error codes, never messages or intent. No live inference, remote migration or production verification was performed for this implementation.
+
+Rollback is additive: deploy a previously pushed compatible Worker through the automatic pipeline and keep migration 0032/data in place. Older code ignores the new fields/table and does not dispatch initiative jobs. Already-running initiative Workflows should be allowed to finish or explicitly terminated as part of an authorized rollback; restoring old code does not recall published messages. To suspend initiative before rollback, disable the affected participant settings using the authenticated endpoint; do not remove columns or erase conversation history. Re-enabling waits for a new human reply. Model-dependent judgments and runtime/device behavior require separate verification.

@@ -1,4 +1,5 @@
 import './lib/schema-runtime';
+import { dispatchInitiatives } from './chat/initiative';
 import { cleanOAuthFlows } from './mcp/oauth';
 import { deliverGroupPush } from './groups/push';
 import { dispatchGroupRequests } from './groups/request-results';
@@ -19,6 +20,7 @@ export default {
     ctx.waitUntil(cleanOAuthFlows(env));
     ctx.waitUntil(cleanAttachments(env));
     ctx.waitUntil(dispatchSchedules(env));
+    ctx.waitUntil(dispatchInitiatives(env));
     ctx.waitUntil(recoverChats(env));
     ctx.waitUntil(recoverGroups(env));
     ctx.waitUntil(dispatchGroupRequests(env));

@@ -112,11 +112,14 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
       || typeof body.sequence !== 'number' || !Number.isSafeInteger(body.sequence) || body.sequence < 1) {
     return c.json({ error: 'Provide the last displayed reply sequence' }, 400);
   }
-  const state = await c.env.DB.prepare(`UPDATE contact SET last_read_sequence = MAX(last_read_sequence,
+  const state = await c.env.DB.prepare(`UPDATE contact SET last_reply_read_at = CASE WHEN EXISTS (
+      SELECT 1 FROM chat_turn WHERE contact_id = ?1 AND user_id = ?2 AND status = 'complete'
+        AND assistant_text IS NOT NULL AND sequence > last_read_sequence AND sequence <= ?3
+    ) THEN ?4 ELSE last_reply_read_at END, last_read_sequence = MAX(last_read_sequence,
     COALESCE((SELECT MAX(sequence) FROM chat_turn WHERE contact_id = ?1 AND user_id = ?2
       AND status = 'complete' AND assistant_text IS NOT NULL AND sequence <= ?3), 0))
     WHERE id = ?1 AND user_id = ?2 RETURNING last_read_sequence AS lastReadSequence`)
-    .bind(c.get('contactID'), c.get('owner'), body.sequence).first<{ lastReadSequence: number }>();
+    .bind(c.get('contactID'), c.get('owner'), body.sequence, Date.now()).first<{ lastReadSequence: number }>();
   if (!state) return c.json({ error: 'Contact not found' }, 404);
   await c.env.DB.prepare(`DELETE FROM push_delivery WHERE turn_id IN
     (SELECT id FROM chat_turn WHERE contact_id = ? AND user_id = ? AND sequence <= ?)`)

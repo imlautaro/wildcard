@@ -522,3 +522,7 @@ native device capabilities. `request_native_action` stores a reviewable proposal
 Neither tool reads system data or performs phone actions in the cloud. Pending
 must never be described as executed. Groups, schedules and automatic group-result
 turns receive neither tool. See [native experiments](native-experiments.md).
+
+## Conversation initiative
+
+[Conversation initiative](initiative.md) adds bounded assistant-only follow-ups after direct human replies, with read/activity context, AI-selected waits, quiet hours and a per-participant switch in contact details on iOS and web. New human input cancels outstanding plans; explicit schedules remain separate. Existing history, polling, previews and notifications deliver these messages.
