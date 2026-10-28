@@ -38,10 +38,6 @@ struct ContactDetailView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(value: HomeDestination.nativeTools(contactID)) { Image(systemName: "iphone") }
-                        .tint(Color(uiColor: .label)).accessibilityLabel("Native experiments")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(value: HomeDestination.schedules(contactID)) {
                         Image(systemName: "clock")
                     }

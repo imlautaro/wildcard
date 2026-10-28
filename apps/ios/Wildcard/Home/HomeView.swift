@@ -2,6 +2,7 @@ import SwiftUI
 
 enum HomeDestination: Hashable {
     case contacts
+    case nativeExperiments
     case nativeTools(String)
     case createGroup
     case group(String)
@@ -74,6 +75,8 @@ struct HomeView: View {
             // Destinations replace the complete tab layout, sharing one back stack.
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
+                case .nativeExperiments:
+                    NativeExperimentsDirectoryView()
                 case .nativeTools(let id):
                     NativeToolsView(contactID: id)
                 case .createGroup:

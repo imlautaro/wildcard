@@ -344,6 +344,17 @@ and does not execute or cache another device's requests. ActivityKit, AlarmKit,
 EventKit, Core NFC, App Intents and the iOS Share extension have no matching browser
 implementation in this change. Native UI and tool settings remain device-specific.
 
+The iOS Account entry and native contact directory share the root navigation path,
+including contact-tool pushes and Back navigation. This fixes an iOS-only issue
+where a contact's tools could open behind a directly presented directory. The web
+guide has no native contact-tools stack and needs no corresponding route change;
+its existing session caches and browser navigation are unchanged.
+
+On iOS, the per-contact entry is in **Contact details → Native experiments**, opened
+by tapping the contact name/avatar in chat. It is available for existing owned and
+shared contacts; there is no separate native-tools button in the chat toolbar.
+This device-specific entry does not add executable native tools to the web client.
+
 `/native/contact?agentID=<uuid>` is the browser fallback for contact Universal Links.
 It uses the existing session-owned contact directory and accepted memberships to
 resolve the agent, never the sender's contact ID. Existing cache refresh, request

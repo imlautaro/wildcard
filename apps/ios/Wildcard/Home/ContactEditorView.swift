@@ -45,6 +45,11 @@ struct ContactEditorView: View {
             }
             if let contactID {
                 Section { NavigationLink("Connections") { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) } }
+                Section {
+                    NavigationLink(value: HomeDestination.nativeTools(contactID)) {
+                        Text("Native experiments")
+                    }
+                }
             }
             if !canEdit {
                 Text("This is a shared contact. Its creator manages its name, photo, and participants.")

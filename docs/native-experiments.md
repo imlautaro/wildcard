@@ -7,12 +7,23 @@ participant's phone, Calendar, Reminders, files, location or private requests.
 
 ## Start here
 
-Open a private contact and tap **Native experiments** in its toolbar, or use
+Open a private chat, tap the contact name/avatar, then choose **Native experiments**
+in the contact details, or use
 **Account → Native experiments**. Enable the contact and choose allowed tools.
 This explicitly exposes its name to Siri/Shortcuts queries, the contact widget,
 and the Share extension on this device. Live Activities may expose titles and
 recipe instructions on the Lock Screen; system privacy/display settings apply.
 No system permission is requested merely by enabling the experiment.
+
+The iOS Account entry, native contact directory and contact tools all use the
+root `HomeDestination` navigation path. The directory is a value-based destination,
+so tapping a contact pushes its tools above the visible directory; Back returns
+to the directory, then Account. Contact details use the same tools destination;
+the chat toolbar has no separate native-experiments button. The details entry is
+available for existing owned and shared contacts, including view-only profiles.
+This navigation change reuses existing stores and does not alter cache freshness
+or device permissions. Verify both entry points and repeated forward/back navigation
+on a device after installing the updated app.
 
 Ask in the private chat, then open **Native experiments → Requests on this iPhone**
 to review the full proposal and tap **Review and run**. Calendar presents the system

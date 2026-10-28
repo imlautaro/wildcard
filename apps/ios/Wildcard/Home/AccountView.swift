@@ -64,7 +64,9 @@ struct AccountView: View {
                 NavigationLink("Connections") { McpConnectionsView(contactID: "account", cache: contacts.mcpSnapshots.store(for: "account")) }
             }
             Section {
-                NavigationLink("Native experiments") { NativeExperimentsDirectoryView() }
+                NavigationLink(value: HomeDestination.nativeExperiments) {
+                    Text("Native experiments")
+                }
             }
             Section("Notifications") {
                 LabeledContent("Push notifications", value: push.status)

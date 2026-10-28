@@ -104,7 +104,7 @@ appear on chat rows, the Chats tab, and the app icon; returning to the app refre
 Optional [native experiments](docs/native-experiments.md) let a private contact
 prepare device-specific requests for focus/recipe Live Activities, system timers
 and alarms, Calendar, Reminders (including location reminders), and spoken text.
-Enable a contact from its native-tools toolbar button or **Account → Native
+Enable a contact from **Contact details → Native experiments** or **Account → Native
 experiments**, then review and run proposals on the requesting iPhone. The app also
 includes Siri/Shortcuts actions, Action button shortcuts, a contact widget, shared
 input drafts and NFC contact links. Actions and permissions remain per person and
