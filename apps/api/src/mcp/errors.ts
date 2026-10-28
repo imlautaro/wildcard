@@ -10,7 +10,7 @@ const setupMessages = {
 } as const;
 type SetupStage = keyof typeof setupMessages;
 type DnsDiagnostic = {
-  resolver: 'cloudflare' | 'google';
+  resolver: 'cloudflare';
   type?: 'A' | 'AAAA';
   reason: 'network' | 'timeout' | 'http' | 'invalid_response' | 'resolver_failure' | 'private_address' | 'no_addresses' | 'not_found';
   httpStatus?: number;
@@ -18,7 +18,7 @@ type DnsDiagnostic = {
 export class DnsFailure extends Error {
   constructor(code: 'MCP_DNS' | 'MCP_DNS_UNAVAILABLE', readonly diagnostics: DnsDiagnostic[]) { super(code); }
 }
-const knownCodes = new Set(['MCP_DNS', 'MCP_DNS_UNAVAILABLE', 'MCP_ENDPOINT', 'MCP_OAUTH_DESTINATION',
+const knownCodes = new Set(['MCP_DNS', 'MCP_DNS_UNAVAILABLE', 'MCP_ENDPOINT', 'MCP_REDIRECT', 'MCP_OAUTH_DESTINATION',
   'MCP_OAUTH_SIZE', 'MCP_OAUTH_RESOURCE', 'MCP_OAUTH_ISSUER', 'MCP_OAUTH_METADATA',
   'MCP_OAUTH_PKCE', 'MCP_OAUTH_SCOPE', 'MCP_OAUTH_CLIENT', 'MCP_OAUTH_STATIC_ISSUER',
   'MCP_OAUTH_ISSUER_REQUIRED', 'MCP_OAUTH_NETWORK']);

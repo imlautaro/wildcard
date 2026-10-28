@@ -6,7 +6,7 @@ import type { AuthorizationServerMetadata, OAuthClientInformationMixed, OAuthTok
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { isRecord } from '../chat/meta';
 import type { Connection } from './client';
-import { credential, digest, endpoint, checkPublicDNS, size } from './security';
+import { credential, digest, endpoint, checkPublicDNS, size, rejectRedirect } from './security';
 import { oauthStage } from './errors';
 
 export type OAuthConfig = { issuer: string; metadata: AuthorizationServerMetadata; client: OAuthClientInformationMixed; resource: string; scope: string };
@@ -31,8 +31,9 @@ export function oauthFetch(allowed: string[], method: 'GET' | 'POST', headersOnl
     const signal = AbortSignal.timeout(10_000);
     await checkPublicDNS(url.hostname, signal);
     let response: Response;
-    try { response = await fetch(url, { ...init, redirect: 'error', signal }); }
+    try { response = await fetch(url, { ...init, redirect: 'manual', signal }); }
     catch { throw new Error('MCP_OAUTH_NETWORK'); }
+    await rejectRedirect(response);
     if (headersOnly) { await response.body?.cancel(); return new Response(null, { status: response.status, headers: response.headers }); }
     if (!response.body) return response;
     const reader = response.body.getReader(); let text = ''; let bytes = 0; const decoder = new TextDecoder();

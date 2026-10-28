@@ -1209,15 +1209,18 @@ opens. A successful local type check or public metadata read does not validate
 Worker-to-Worker routing or the complete OAuth flow. Keep this flag in forward fixes
 and rollback configurations so arbitrary URLs cannot bypass public ingress controls.
 
-MCP DNS preflight uses `https://cloudflare-dns.com/dns-query` and the fixed
-`https://dns.google/resolve` fallback for availability failures. Both destinations
-must be reachable over HTTPS. No provider account, resource, key or migration is
-needed. Google sees only the public hostname/type and an explicit zero-length
-client subnet; no MCP URL path or credentials are sent. Three seconds per resolver
-and 16 KB per response bound this dependency. Negative/private answers never trigger
-fallback, and failure of both resolvers blocks the request. Diagnostics log only
-fixed resolver/family/reason labels and optional HTTP status, without hostnames or
-addresses. See [resolver behavior and verification](connectors.md#dns-availability-and-fallback).
+MCP DNS preflight requires `https://cloudflare-dns.com/dns-query` over HTTPS. No
+provider account, new resource, key or migration is needed. It sees only the public
+hostname/type; no MCP path or credentials are sent. Both address families must
+complete within the caller's existing deadline, with at most 16 KB per response.
+Failures block the request. Diagnostics contain only fixed resolver/family/reason
+labels and optional HTTP status, without hostnames or addresses.
+
+Workers rejects the browser-standard `redirect: 'error'` mode before I/O. All MCP
+fetch paths use `manual` and explicitly reject 3xx responses before the SDK sees
+them, preserving the redirect/credential boundary. The temporary Google fallback
+was removed after identifying this runtime defect. See
+[DNS safety and runtime compatibility](connectors.md#dns-safety-and-runtime-compatibility).
 After automatic release, verify OAuth reaches the provider sign-in page and inspect
 the bounded diagnostics if it fails; successful deployment alone does not prove that.
 

@@ -46,19 +46,21 @@ function publicAddress(address: string): boolean {
     !(a === 192 && (b === 168 || b === 0 || b === 2)) && !(a === 100 && b! >= 64 && b! <= 127) &&
     !(a === 198 && (b === 18 || b === 19 || b === 51)) && !(a === 203 && b === 0);
 }
-const dnsResolvers = [
-  { name: 'cloudflare', url: 'https://cloudflare-dns.com/dns-query' },
-  { name: 'google', url: 'https://dns.google/resolve' },
-] as const;
-async function dnsQuery(host: string, type: 'A' | 'AAAA', resolver: typeof dnsResolvers[number], signal: AbortSignal): Promise<string[]> {
+// Workers supports manual redirect handling, but rejects redirect: 'error' before I/O.
+export async function rejectRedirect(response: Response): Promise<void> {
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error('MCP_REDIRECT');
+  }
+}
+async function dnsQuery(host: string, type: 'A' | 'AAAA', signal: AbortSignal): Promise<string[]> {
   const fail = (reason: DnsFailure['diagnostics'][number]['reason'], httpStatus?: number) => new DnsFailure(
     ['private_address', 'no_addresses', 'not_found'].includes(reason) ? 'MCP_DNS' : 'MCP_DNS_UNAVAILABLE',
-    [{ resolver: resolver.name, type, reason, ...(httpStatus ? { httpStatus } : {}) }]);
+    [{ resolver: 'cloudflare', type, reason, ...(httpStatus ? { httpStatus } : {}) }]);
   try {
-    const url = new URL(resolver.url);
+    const url = new URL('https://cloudflare-dns.com/dns-query');
     url.searchParams.set('name', host); url.searchParams.set('type', type);
-    if (resolver.name === 'google') url.searchParams.set('edns_client_subnet', '0.0.0.0/0');
-    const response = await fetch(url, { headers: { Accept: resolver.name === 'cloudflare' ? 'application/dns-json' : 'application/json' }, redirect: 'error', signal });
+    const response = await fetch(url, { headers: { Accept: 'application/dns-json' }, redirect: 'manual', signal });
     if (!response.ok || !response.body) { await response.body?.cancel().catch(() => undefined); throw fail('http', response.status); }
     const reader = response.body.getReader();
     let bytes = 0, text = '';
@@ -88,22 +90,14 @@ async function dnsQuery(host: string, type: 'A' | 'AAAA', resolver: typeof dnsRe
   }
 }
 export async function checkPublicDNS(host: string, signal: AbortSignal) {
-  const diagnostics: DnsFailure['diagnostics'] = [];
-  for (const resolver of dnsResolvers) {
-    if (signal.aborted) break;
-    const deadline = AbortSignal.any([signal, AbortSignal.timeout(3000)]);
-    // Wait for both families so an availability failure cannot mask a private address.
-    const results = await Promise.allSettled([dnsQuery(host, 'A', resolver, deadline), dnsQuery(host, 'AAAA', resolver, deadline)]);
-    const failures = results.filter(result => result.status === 'rejected').map(result => result.reason as DnsFailure);
-    diagnostics.push(...failures.flatMap(failure => failure.diagnostics));
-    // Never retry a negative/safety result with another resolver to obtain an approval.
-    if (failures.some(failure => failure.message === 'MCP_DNS')) throw new DnsFailure('MCP_DNS', diagnostics);
-    if (!failures.length) {
-      if (!results.some(result => result.status === 'fulfilled' && result.value.length)) {
-        throw new DnsFailure('MCP_DNS', [...diagnostics, { resolver: resolver.name, reason: 'no_addresses' }]);
-      }
-      return;
-    }
+  // Wait for both families so an availability failure cannot mask a private address.
+  const results = await Promise.allSettled([dnsQuery(host, 'A', signal), dnsQuery(host, 'AAAA', signal)]);
+  const failures = results.filter(result => result.status === 'rejected').map(result => result.reason as DnsFailure);
+  if (failures.length) {
+    throw new DnsFailure(failures.some(failure => failure.message === 'MCP_DNS') ? 'MCP_DNS' : 'MCP_DNS_UNAVAILABLE',
+      failures.flatMap(failure => failure.diagnostics));
   }
-  throw new DnsFailure('MCP_DNS_UNAVAILABLE', diagnostics);
+  if (!results.some(result => result.status === 'fulfilled' && result.value.length)) {
+    throw new DnsFailure('MCP_DNS', [{ resolver: 'cloudflare', reason: 'no_addresses' }]);
+  }
 }

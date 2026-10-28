@@ -219,10 +219,10 @@ After automatic publication, verify opening provider authorization and returning
 on both platforms; a static check does not establish a complete OAuth run. See
 [connection troubleshooting](connectors.md#troubleshooting-connection-setup).
 
-Both clients share the API's DNS availability fallback: Cloudflare first, Google
-Public DNS once on availability failure, with bounded deadlines and complete
-IPv4/IPv6 validation. Private or negative answers still block connection without
-fallback. DNS checks stay request-scoped and uncached; connection snapshots and
-pending OAuth navigation keep their existing behavior. See
-[DNS availability](connectors.md#dns-availability-and-fallback) for provider disclosure,
-safe diagnostics and remaining production/device verification.
+Both clients share the API's Cloudflare DNS safety check and redirect rejection.
+The API uses Workers-compatible manual redirect mode and rejects 3xx responses
+before the SDK can follow them. The temporary alternate resolver was removed after
+identifying the unsupported redirect mode as the runtime defect. Checks remain
+request-scoped and uncached; connection snapshots and pending OAuth navigation keep
+their existing behavior. See [DNS safety](connectors.md#dns-safety-and-runtime-compatibility)
+for provider disclosure, safe diagnostics and production/device verification.

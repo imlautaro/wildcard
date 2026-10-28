@@ -29,6 +29,7 @@ routes.onError((failure, c) => {
     MCP_DNS_UNAVAILABLE: 'Wildcard could not complete its DNS safety check. Please try again shortly.',
     MCP_DNS: 'The server hostname must resolve to public internet addresses.',
     MCP_ENDPOINT: 'Enter a public HTTPS endpoint with no query, fragment, credentials, or custom port.',
+    MCP_REDIRECT: 'This endpoint redirects to another URL. Use the final public HTTPS endpoint; redirects are not allowed.',
   };
   const reference = crypto.randomUUID();
   const stage = failure instanceof OAuthSetupFailure ? failure.stage : 'connection';

@@ -3,7 +3,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { Validator } from '@cfworker/json-schema';
 import type { jsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/types.js';
 import { isRecord } from '../chat/meta';
-import { credential, endpoint, checkPublicDNS, digest, size } from './security';
+import { credential, endpoint, checkPublicDNS, digest, size, rejectRedirect } from './security';
 import { accessToken, authenticationFailed } from './oauth';
 export { credential, endpoint, digest, size, encoder } from './security';
 
@@ -42,7 +42,8 @@ export async function remote<T>(env: Env, connection: Connection, action: (clien
     if (token) headers.set('Authorization', `Bearer ${token}`);
     const inherited = init?.signal ?? (typeof input === 'object' && !(input instanceof URL) ? input.signal : null);
     const requestSignal = inherited ? AbortSignal.any([signal, inherited]) : signal;
-    const response = await fetch(target, { ...init, headers, redirect: 'error', signal: requestSignal });
+    const response = await fetch(target, { ...init, headers, redirect: 'manual', signal: requestSignal });
+    await rejectRedirect(response);
     if (response.status === 401 || response.status === 403) { await response.body?.cancel(); if (connection.authType === 'oauth' && response.status === 401) await authenticationFailed(env, connection, token); throw new Error('MCP_AUTH'); }
     if (!response.body) return response;
     const reader = response.body.getReader();

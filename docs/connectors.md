@@ -93,7 +93,7 @@ works without eval/new Function in Workers. References, regex keywords,
 unsupported schema dialects and excessive catalogs fail closed. Even a single incompatible tool can prevent catalog discovery. HTTPS
 must use a public DNS hostname, default port, no credentials, query or fragment.
 Redirects and off-endpoint transport requests are rejected. Public DNS addresses
-are checked through Cloudflare DoH with Google Public DNS as an availability fallback; local, reserved and IP-literal endpoints are
+are checked through Cloudflare DoH; local, reserved and IP-literal endpoints are
 rejected. DNS preflight is not a pinned resolution: production must retain the
 Workers public egress boundary and no VPC/private-network bindings. Do not expose
 local Wrangler development to untrusted users or endpoints. A deployment adding
@@ -417,40 +417,36 @@ flow. Validate the corrected route after automatic publication before declaring 
 reported failure resolved. No client was registered or external account accessed
 during this investigation.
 
-### DNS availability and fallback
+### DNS safety and runtime compatibility
 
-DNS safety checks query A and AAAA concurrently through Cloudflare's fixed HTTPS
-JSON endpoint. If that resolver cannot complete the check because of a transport,
-HTTP, malformed/truncated response or resolver failure, a single fallback queries
-Google Public DNS at `https://dns.google/resolve`. Each provider has a three-second
-deadline, bounded by the caller's existing deadline; each response is limited to
-16 KB. The six-second worst-case resolver budget stays inside the existing ten-second
-OAuth request and twenty-second MCP session deadlines. Only DNS queries are retried;
-MCP actions, registration and token requests retain their existing retry rules.
+Workers rejects `redirect: 'error'` while constructing the request, before network
+I/O. MCP uses `redirect: 'manual'` and rejects every 3xx response before returning
+it to the SDK, so the SDK cannot follow even a same-origin redirect. DNS requests
+also use manual mode and reject non-success HTTP responses. This applies to the
+endpoint probe, discovery, registration, token exchange/refresh and ordinary MCP
+requests; credentials are never forwarded to a redirect destination.
 
-Fallback never overrides NXDOMAIN, a complete empty address set or any private,
-reserved or invalid IP address. Both families must complete successfully at one
-provider before proceeding. One absent family is allowed if the other has public
-addresses. A failed AAAA request cannot hide a private A answer, or vice versa:
-both results settle before the fallback decision. Responses must identify the
-requested question and record type. IP literals are validated before classification.
-Both resolvers failing still blocks the connection; there is no fail-open path.
+The October 27 production reattempt failed on both resolvers before I/O because
+both used the unsupported redirect mode. The temporary Google fallback was removed
+once that runtime defect was identified; no Google DNS dependency remains. The
+required public routing flag remains enabled as a separate deployment requirement.
 
-Resolvers receive only the public server hostname and record type. Google is used
-only on availability failure and receives `edns_client_subnet=0.0.0.0/0` to avoid
-sending a client subnet to authoritative servers. Neither resolver receives the
-MCP path, user identifiers, credentials, authorization codes or token contents.
-Checks remain request-scoped and uncached in both clients and the backend; stored
-permissions and connection snapshots never bypass a new check. No new account,
-binding, secret or migration is required. Keep both fixed resolver destinations
-reachable from production and independent deployments. Do not replace them with
-user-supplied URLs or remove `global_fetch_strictly_public`.
+DNS checks query A and AAAA concurrently at the fixed Cloudflare HTTPS endpoint,
+within the caller's existing ten-second OAuth or twenty-second MCP deadline.
+Each response is limited to 16 KB and must identify the requested question and
+record type. IP literals are validated before classification. Both families must
+complete successfully; an absent family is allowed when the other returns public
+addresses. Both results settle so an unavailable AAAA query cannot hide a private A
+answer, or vice versa. NXDOMAIN, a complete empty address set, invalid/private IPs,
+malformed/truncated responses and resolver/transport failures block the connection.
+There is no alternate resolver retry or fail-open path.
 
-The reported reference `eaf11068-e933-4b48-97ae-1d0afa0031b6` identified a DNS
-availability failure during the endpoint probe. Its older log did not preserve the
-underlying transport/HTTP reason. The fallback and diagnostic changes pass API
-TypeScript checking; production resolver recovery and a complete OAuth flow remain
-unverified until this change is published and authorization is retried.
+Cloudflare receives only the public hostname and record type, without the MCP path,
+user identifiers, credentials, authorization codes or token contents. Diagnostics
+contain only fixed resolver/family/reason labels and optional HTTP status. Checks
+are request-scoped and uncached in the API and both clients; stored permissions
+and snapshots never bypass a new check. No new account, binding, secret or migration
+is required. Keep Cloudflare DoH reachable and `global_fetch_strictly_public` enabled.
 
 References: [Cloudflare DNS JSON API](https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/)
-and [Google Public DNS JSON API](https://developers.google.com/speed/public-dns/docs/doh/json).
+and [Workers redirect-mode implementation](https://github.com/cloudflare/workerd/blob/main/src/workerd/api/http.c%2B%2B).
