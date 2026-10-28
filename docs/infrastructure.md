@@ -1637,3 +1637,10 @@ for a complete shutdown. Rollback/revocation does not cancel already scheduled
 system alarms. Device/session deletion removes grants; historical action receipts
 retain remote provenance and follow source conversation deletion. No manual deploy
 or production migration command is part of this workflow.
+
+The API entry point must keep `import './lib/schema-runtime'` before imports of
+remote delivery, auth or MCP consumers. The initializer eagerly loads shared Zod
+constructors and disables JIT. Moving a consumer ahead of it can pass TypeScript
+but fail Worker upload validation with `Class2 is not a constructor` in the MCP
+schema graph. A failed upload can follow successful migrations; preserve additive
+migrations and fix the entry order through another commit/push automatic release.

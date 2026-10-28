@@ -1,5 +1,6 @@
-import { deliverRemoteNative } from './native/remote';
+// Initialize schema constructors before imports that transitively load auth or MCP.
 import './lib/schema-runtime';
+import { deliverRemoteNative } from './native/remote';
 import { dispatchInitiatives } from './chat/initiative';
 import { cleanOAuthFlows } from './mcp/oauth';
 import { deliverGroupPush } from './groups/push';
