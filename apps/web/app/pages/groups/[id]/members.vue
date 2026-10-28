@@ -135,7 +135,7 @@ onMounted(() => run(async () => {
               :contributor-model="snapshot.contributorModel"
               :disclosure="['Adding this contact shares its existing and future memories with everyone in the group. It remains the same contact in your other chats.']"
               memory-label="I accept shared memory"
-              contributor-note="This installation uses Meta's Contributor model. Messages and memories sent to Meta may be used for model training."
+              contributor-note="Your selected model is Contributor. Messages and memories sent to Meta may be used for model training."
             />
             <button type="button" class="button block" style="margin: 8px 0 12px" :disabled="!contactID || !consented || busy" @click="addContact">Add Contact</button>
           </template>

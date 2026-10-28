@@ -5,6 +5,7 @@ struct AuthUser: Codable, Sendable {
     let name: String
     let email: String
     let emailVerified: Bool
+    var chatModel: String? = nil
     var photoVersion: String? = nil
 }
 
@@ -60,6 +61,13 @@ struct AuthAPI: Sendable {
             throw Failure.invalidResponse
         }
         return (try JSONDecoder().decode(UserResponse.self, from: data).user, token)
+    }
+
+    func saveModel(_ model: String, contributorConsent: Bool, token: String) async throws -> AuthUser {
+        struct Input: Encodable { let chatModel: String; let contributorConsent: Bool }
+        let body = try JSONEncoder().encode(Input(chatModel: model, contributorConsent: contributorConsent))
+        let (data, _) = try await send(path: "me/model", method: "PUT", body: body, token: token)
+        return try JSONDecoder().decode(UserResponse.self, from: data).user
     }
 
     func currentUser(token: String) async throws -> AuthUser {
@@ -150,6 +158,12 @@ struct AuthAPI: Sendable {
                     throw Failure.rejected(message)
                 }
                 throw Failure.temporarilyUnavailable
+            }
+            if path == "me/model", response.statusCode == 422 {
+                throw Failure.rejected("Choose a supported model and agree to Meta's Contributor data use before enabling Contributor.")
+            }
+            if path.hasPrefix("auth/sign-up"), response.statusCode == 403 {
+                throw Failure.rejected("New account registration is closed.")
             }
             if path == "me", [400, 422].contains(response.statusCode) {
                 throw Failure.rejected("Use a name with 1–100 characters and no control characters.")

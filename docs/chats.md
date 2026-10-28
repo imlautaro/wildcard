@@ -434,3 +434,10 @@ authorized MCP tools. These chats use Standard, exclude shared-memory export and
 group posting/delegation and schedule creation/editing. Durable reservations prevent
 automatic replay of uncertain external writes. See [connections](connectors.md) for
 limits, permissions, supported transports and pending verification.
+
+## Per-account model selection
+
+Private reply Workflows checkpoint the conversation account’s Standard/Contributor preference at startup; schedules and group-result deliveries use that account too. Contact-memory extraction reads its source account’s selection. MCP chats still force Standard. Preferences apply to new jobs; completed replies and already-started jobs keep their result/model.
+
+See [model settings](model-settings.md) for the API, shared consent, cache behavior,
+AI Gateway spending and pending runtime/device verification.

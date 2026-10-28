@@ -5,13 +5,22 @@ import type { AuthUser } from '~/utils/types';
 const user = ref<AuthUser | null>(null);
 const status = ref<'unknown' | 'signed-in' | 'signed-out' | 'unreachable'>('unknown');
 const resetters = new Set<() => void>();
+const modelListeners = new Set<(contributor: boolean) => void>();
+
+export function registerModelChange(listener: (contributor: boolean) => void) {
+  modelListeners.add(listener);
+}
 let restoring: Promise<void> | null = null;
+let profileRequest: Promise<void> | null = null;
+let profileRevision = 0;
 
 export function registerSessionReset(reset: () => void) {
   resetters.add(reset);
 }
 
 function resetCaches() {
+  profileRevision += 1;
+  profileRequest = null;
   for (const reset of resetters) reset();
 }
 
@@ -67,6 +76,29 @@ async function savePhoto(photo: Blob | null) {
   user.value = result.user;
 }
 
+async function refreshProfile() {
+  if (status.value !== 'signed-in') return;
+  const owner = user.value?.id;
+  const revision = profileRevision;
+  profileRequest ??= api<{ user: AuthUser }>('me').then((result) => {
+    if (revision !== profileRevision || status.value !== 'signed-in' || user.value?.id !== owner) return;
+    const changed = user.value?.chatModel !== result.user.chatModel;
+    user.value = result.user;
+    if (changed) for (const listener of modelListeners) listener(result.user.chatModel === 'muse-spark-1.3-contributor');
+  }).finally(() => { if (revision === profileRevision) profileRequest = null; });
+  await profileRequest;
+}
+
+async function saveModel(chatModel: string, contributorConsent: boolean) {
+  const owner = user.value?.id;
+  const revision = ++profileRevision;
+  profileRequest = null;
+  const result = await api<{ user: AuthUser }>('me/model', { method: 'PUT', json: { chatModel, contributorConsent } });
+  if (revision !== profileRevision || status.value !== 'signed-in' || user.value?.id !== owner) return;
+  user.value = result.user;
+  for (const listener of modelListeners) listener(result.user.chatModel === 'muse-spark-1.3-contributor');
+}
+
 export function useSession() {
-  return { user: readonly(user), status: readonly(status), restore, authenticate, signOut, saveName, savePhoto };
+  return { user: readonly(user), status: readonly(status), restore, authenticate, signOut, saveName, savePhoto, saveModel, refreshProfile };
 }

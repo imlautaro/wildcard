@@ -1,10 +1,18 @@
 <script setup lang="ts">
 useHead({ title: 'Account' });
-const { user, saveName, savePhoto, signOut } = useSession();
+const { user, saveName, savePhoto, saveModel, refreshProfile, signOut } = useSession();
 const name = ref(user.value?.name ?? '');
 const busy = ref(false);
 const error = ref<string | null>(null);
 const saved = ref(false);
+const chatModel = ref(user.value?.chatModel ?? 'muse-spark-1.3');
+const contributorConsent = ref(false);
+const modelChanged = computed(() => chatModel.value !== (user.value?.chatModel ?? 'muse-spark-1.3'));
+const saveChatModel = () => run(async () => {
+  await saveModel(chatModel.value, contributorConsent.value);
+  contributorConsent.value = false;
+  saved.value = true;
+});
 const photoPath = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
 const changed = computed(() => name.value.trim() !== user.value?.name);
 const valid = computed(() => name.value.trim().length > 0 && [...name.value.trim()].length <= 100);
@@ -27,6 +35,15 @@ const save = () => run(async () => {
 });
 const changePhoto = (photo: Blob | null) => run(() => savePhoto(photo));
 const leave = () => run(signOut);
+onMounted(async () => {
+  const initialModel = chatModel.value;
+  const initialName = name.value;
+  try {
+    await refreshProfile();
+    if (!busy.value && chatModel.value === initialModel) chatModel.value = user.value?.chatModel ?? 'muse-spark-1.3';
+    if (!busy.value && name.value === initialName) name.value = user.value?.name ?? '';
+  } catch { /* Retain the session-owned profile through a transient failure. */ }
+});
 </script>
 
 <template>
@@ -42,6 +59,19 @@ const leave = () => run(signOut);
       <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
       <p v-if="saved" class="group-footer" role="status">Saved.</p>
       <button type="submit" class="button block" :disabled="!changed || !valid || busy">Save</button>
+      <div class="group" style="margin-top: 24px">
+        <div class="field"><label for="chat-model">Chat model</label>
+          <select id="chat-model" v-model="chatModel" :disabled="busy" @change="contributorConsent = false">
+            <option value="muse-spark-1.3">Muse Spark 1.3 · Standard</option>
+            <option value="muse-spark-1.3-contributor">Muse Spark 1.3 · Contributor</option>
+          </select>
+        </div>
+        <label v-if="chatModel === 'muse-spark-1.3-contributor' && modelChanged" class="toggle">
+          <span>I agree to Meta's Contributor data use</span><input v-model="contributorConsent" type="checkbox" role="switch" :disabled="busy">
+        </label>
+      </div>
+      <p class="group-footer">Contributor allows Meta to use submitted messages, files, context and responses to train models. Standard does not. Applies to new chat jobs, schedules and group exchanges you start; jobs already started keep their model. Shared data may still use Contributor when you separately consent. MCP chats always use Standard.</p>
+      <button type="button" class="button block" :disabled="busy || !modelChanged || (chatModel === 'muse-spark-1.3-contributor' && !contributorConsent)" @click="saveChatModel">Save model</button>
       <div class="group" style="margin-top: 24px">
         <button type="button" class="button-row danger" :disabled="busy" @click="leave">Sign out</button>
       </div>

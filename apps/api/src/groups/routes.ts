@@ -1,3 +1,4 @@
+import { accountEnvironment } from '../lib/model-preference';
 import { reactionRoutes } from '../reactions/routes';
 import { groupQuotes, parseGroupReply } from '../replies/data';
 import { receiptState } from './receipts';
@@ -37,6 +38,7 @@ groups.use('*', async (c, next) => {
   const session = await readBearerSession(c.env, c.req.raw.headers);
   if (!session) return c.json({ error: 'Unauthorized' }, 401);
   c.set('owner', session.user.id);
+  c.env = await accountEnvironment(c.env, session.user.id);
   await next();
 });
 groups.use('*', async (c, next) => {

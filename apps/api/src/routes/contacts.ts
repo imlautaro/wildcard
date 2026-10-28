@@ -1,3 +1,4 @@
+import { accountEnvironment } from '../lib/model-preference';
 import { readEnergy } from '../groups/energy';
 import { photoKey, photoResponse, removePhoto, validPhoto, readPhoto } from '../photos/storage';
 import { totalUnreadReplies } from '../lib/unread';
@@ -31,6 +32,7 @@ contacts.use('*', async (c, next) => {
   const session = await readBearerSession(c.env, c.req.raw.headers);
   if (!session) return c.json({ error: 'Unauthorized' }, 401);
   c.set('owner', session.user.id);
+  c.env = await accountEnvironment(c.env, session.user.id);
   await next();
 });
 const contactBody = bodyLimit({ maxSize: 4096, onError: (c) => c.json({ error: 'Request body too large' }, 413) });

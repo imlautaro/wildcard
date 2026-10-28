@@ -24,21 +24,37 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export async function museCompletion(key: string | undefined, messages: ModelMessage[], configuredModel?: string,
+export async function museCompletion(env: Env, messages: ModelMessage[], configuredModel?: string,
   options: ModelOptions = {}): Promise<Extract<ModelMessage, { role: 'assistant' }>> {
+  const key = env.META_API_KEY;
   if (!key?.trim()) throw new NonRetryableError('MODEL_NOT_CONFIGURED');
   const model = configuredModel ?? 'muse-spark-1.3';
   if (model !== 'muse-spark-1.3' && model !== 'muse-spark-1.3-contributor') {
     throw new NonRetryableError('MODEL_NOT_CONFIGURED');
   }
-  const response = await fetch('https://api.meta.ai/v1/chat/completions', {
+  const query = { model, messages, max_completion_tokens: options.maxTokens ?? 4096,
+    reasoning_effort: 'low', stream: false,
+    ...(options.tools?.length ? { tools: options.tools, tool_choice: 'auto' } : {}),
+    ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
+  };
+  const headers = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+  // Meta public USD rates, checked October 27, 2026. Costs are estimates,
+  // including provider cache reads, not Cloudflare's own cached responses.
+  const rates = model.endsWith('-contributor')
+    ? { per_token_in: 0.10 / 1e6, per_token_out: 0.20 / 1e6, per_cache_read_token: 0.002 / 1e6 }
+    : { per_token_in: 1.25 / 1e6, per_token_out: 4.25 / 1e6, per_cache_read_token: 0.15 / 1e6 };
+  const response = env.AI_GATEWAY_ID
+    ? await env.AI.gateway(env.AI_GATEWAY_ID).run({
+      provider: 'custom-meta', endpoint: 'https://api.meta.ai/v1/chat/completions', headers, query,
+    }, {
+      gateway: { id: env.AI_GATEWAY_ID, skipCache: true, collectLog: true, retries: { maxAttempts: 1 }, requestTimeoutMs: 45_000 },
+      extraHeaders: { 'cf-aig-collect-log-payload': 'false', 'cf-aig-custom-cost': JSON.stringify(rates) },
+      signal: AbortSignal.timeout(45_000),
+    })
+    : await fetch('https://api.meta.ai/v1/chat/completions', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, max_completion_tokens: options.maxTokens ?? 4096,
-      reasoning_effort: 'low', stream: false,
-      ...(options.tools?.length ? { tools: options.tools, tool_choice: 'auto' } : {}),
-      ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
-    }),
+    headers,
+    body: JSON.stringify(query),
     signal: AbortSignal.timeout(45_000),
     // Workers supports manual redirects; never forward the provider credential.
     redirect: 'manual',

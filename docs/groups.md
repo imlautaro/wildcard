@@ -475,3 +475,10 @@ See [message replies](replies.md) for the shared iOS/web Reply actions, quote
 payloads, target validation, agent context, cache behavior and verification steps.
 Replies are ordinary messages that carry a quoted earlier message; they add no new
 request type, store or notification.
+
+## Model selection by requester
+
+Group reply Workflows select the human source author/requester’s account model at job startup, including later bot turns in that exchange. They do not select the responding agent owner’s model. Existing shared-memory and Contributor consent checks remain; switching one account to Contributor cannot grant consent for anyone else. Background group-result dispatch and push checks resolve the corresponding account rather than using another workflow’s model.
+
+See [model settings](model-settings.md) for the API, shared consent, cache behavior,
+AI Gateway spending and pending runtime/device verification.

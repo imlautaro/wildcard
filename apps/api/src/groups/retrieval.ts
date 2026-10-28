@@ -177,7 +177,7 @@ export async function groupCompletion(env: Env, messages: ModelMessage[], scope:
   let executions = 0;
   const processedResults: unknown[] = [];
   for (let round = 0; round < 3; round++) {
-    const answer = await museCompletion(env.META_API_KEY, messages, env.META_CHAT_MODEL,
+    const answer = await museCompletion(env, messages, env.META_CHAT_MODEL,
       { maxTokens: 1200, responseFormat, ...(round < 2 ? { tools: [...groupRetrievalTools, reactionTool] } : {}) });
     await acknowledgeGroupResults(env.DB, scope.agentID, processedResults);
     processedResults.length = 0;

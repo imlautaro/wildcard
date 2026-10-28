@@ -128,6 +128,17 @@ struct HomeView: View {
             }
             sync.request(sync.visible)
         }
+        .onChange(of: auth.user?.chatModel) { _, _ in
+            contacts.sharingSnapshots.removeAll()
+            for group in groups.groups {
+                groups.conversations.cachedStore(for: group.id)?.invalidateDetails()
+            }
+            sync.request()
+            Task {
+                await groups.refresh(using: auth)
+                await invitations.refresh(using: auth, force: true)
+            }
+        }
         .onChange(of: push.incomingEvent) { _, event in
             guard let event, event.userID == auth.user?.id else { return }
             sync.request(event.conversation)

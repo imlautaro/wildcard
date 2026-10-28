@@ -69,6 +69,12 @@ final class AuthStore {
         }
     }
 
+    func saveModel(_ model: String, contributorConsent: Bool) async throws {
+        user = try await withSession { api, token in
+            try await api.saveModel(model, contributorConsent: contributorConsent, token: token)
+        }
+    }
+
     func saveProfile(name: String) async throws {
         user = try await withSession { api, token in
             try await api.saveProfile(name: name, token: token)

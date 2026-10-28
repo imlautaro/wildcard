@@ -277,7 +277,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string): Pr
   const processedGroupResults: unknown[] = [...groupMessages.results];
   for (let round = 0; round < 3; round++) {
     if (round === 2) messages.push({ role: 'system', content: 'Tool budget exhausted. Answer using the available evidence; acknowledge any missing detail.' });
-    const answer = await museCompletion(env.META_API_KEY, messages, model,
+    const answer = await museCompletion(env, messages, model,
       round < 2 ? { tools: turn.scheduleID ? turnTools.filter((tool) => !['create_schedule', 'update_schedule', 'cancel_schedule', 'send_group_message', 'ask_agent_in_group'].includes(tool.function.name)) : turnTools } : {});
     await acknowledgeGroupResults(env.DB, agent.id, processedGroupResults);
     processedGroupResults.length = 0;

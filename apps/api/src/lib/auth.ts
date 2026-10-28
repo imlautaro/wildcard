@@ -16,6 +16,7 @@ export function createAuth(env: Env) {
     database: drizzleAdapter(drizzle(env.DB), { provider: 'sqlite', schema, transaction: false }),
     emailAndPassword: {
       enabled: true,
+      disableSignUp: true,
       minPasswordLength: 8,
       maxPasswordLength: 128,
       requireEmailVerification: false,

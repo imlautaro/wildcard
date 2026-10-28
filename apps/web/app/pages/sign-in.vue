@@ -3,22 +3,19 @@ definePageMeta({ layout: false });
 useHead({ title: 'Sign in · Wildcard' });
 
 const { authenticate } = useSession();
-const mode = ref<'sign-in' | 'sign-up'>('sign-in');
-const name = ref('');
 const email = ref('');
 const password = ref('');
 const busy = ref(false);
 const error = ref<string | null>(null);
 
-const valid = computed(() => /^\S+@\S+\.\S+$/.test(email.value.trim()) && password.value.length >= 8 && password.value.length <= 128
-  && (mode.value === 'sign-in' || (name.value.trim().length > 0 && [...name.value.trim()].length <= 100)));
+const valid = computed(() => /^\S+@\S+\.\S+$/.test(email.value.trim()) && password.value.length >= 8 && password.value.length <= 128);
 
 async function submit() {
   if (!valid.value || busy.value) return;
   busy.value = true;
   error.value = null;
   try {
-    await authenticate(email.value.trim(), password.value, mode.value === 'sign-up' ? name.value.trim() : null);
+    await authenticate(email.value.trim(), password.value, null);
     password.value = '';
     await navigateTo('/');
   } catch (failure) {
@@ -36,28 +33,21 @@ async function submit() {
         <svg viewBox="0 0 37 40"><path fill="#fff" d="M13.2185 20.0246L2.68963 15.449C0 14.3009 -0.672407 12.5625 0.672407 10.2337L0.96761 9.7417C2.31242 7.44567 4.14924 7.16687 6.47807 8.90529L15.6786 15.7442L14.3501 4.32964C14.0221 1.44321 15.1866 0 17.8434 0H18.4338C21.0906 0 22.255 1.44321 21.927 4.32964L20.5986 15.7442L29.7991 8.90529C32.1279 7.16687 33.9647 7.44567 35.3096 9.7417L35.6048 10.2337C36.9496 12.5625 36.2772 14.3009 33.5875 15.449L23.0586 20.0246L33.5875 24.551C36.2772 25.6991 36.9496 27.4375 35.6048 29.7663L35.3096 30.2583C33.9647 32.5543 32.1279 32.8495 29.7991 31.1439L20.5986 24.2558L21.927 35.6704C22.255 38.5568 21.0906 40 18.4338 40H17.8434C15.1866 40 14.0221 38.5568 14.3501 35.6704L15.6786 24.2558L6.47807 31.1439C4.14924 32.8495 2.31242 32.5543 0.96761 30.2583L0.672407 29.7663C-0.672407 27.4375 0 25.6991 2.68963 24.551L13.2185 20.0246Z" /></svg>
       </div>
       <h1>Wildcard</h1>
-      <p class="lead">{{ mode === 'sign-in' ? 'Sign in to continue your conversations.' : 'Create an account to get started.' }}</p>
-      <div class="segmented" role="group" aria-label="Account">
-        <button type="button" :aria-pressed="mode === 'sign-in'" @click="mode = 'sign-in'; error = null">Sign In</button>
-        <button type="button" :aria-pressed="mode === 'sign-up'" @click="mode = 'sign-up'; error = null">Create Account</button>
-      </div>
+      <p class="lead">Sign in to continue your conversations.</p>
+      <p class="group-footer">New account registration is closed.</p>
       <div class="group">
-        <div v-if="mode === 'sign-up'" class="field">
-          <input v-model="name" type="text" autocomplete="name" placeholder="Name" aria-label="Name" maxlength="100" required>
-        </div>
         <div class="field">
           <input v-model="email" type="email" autocomplete="email" placeholder="Email" aria-label="Email" required>
         </div>
         <div class="field">
-          <input v-model="password" type="password" :autocomplete="mode === 'sign-in' ? 'current-password' : 'new-password'"
+          <input v-model="password" type="password" autocomplete="current-password"
                  placeholder="Password" aria-label="Password" minlength="8" maxlength="128" required>
         </div>
       </div>
-      <p v-if="mode === 'sign-up'" class="group-footer">Use at least 8 characters. Email verification and password recovery are not available yet.</p>
       <p v-if="error" class="notice" role="alert" style="margin: 8px 0 12px">{{ error }}</p>
       <button type="submit" class="button block" :disabled="!valid || busy">
         <span v-if="busy" class="spinner" style="border-top-color: #fff" />
-        {{ mode === 'sign-in' ? 'Sign In' : 'Create Account' }}
+        Sign In
       </button>
     </form>
   </div>

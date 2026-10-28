@@ -14,7 +14,7 @@ struct GroupConsentFields: View {
                 .manrope(.footnote).foregroundStyle(.secondary)
             Toggle("I accept shared memory", isOn: $shareMemory)
             if contributor {
-                Text("This installation uses Meta's Contributor model. Group messages and shared memories sent to Meta may be used for model training.")
+                Text("Your selected model is Contributor. Group messages and shared memories sent to Meta may be used for model training.")
                     .manrope(.footnote).foregroundStyle(.secondary)
                 Toggle("I accept Contributor data use", isOn: $contributorConsent)
             }

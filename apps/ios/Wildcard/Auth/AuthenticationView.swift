@@ -6,7 +6,7 @@ struct AuthenticationView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .largeTitle) private var headingSize = 46
     @FocusState private var selection: Input?
-    @State private var registration = false
+    private let registration = false
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
@@ -51,15 +51,7 @@ struct AuthenticationView: View {
             .background(colors.canvas.ignoresSafeArea())
             .navigationTitle("Wildcard")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(registration ? "Sign in" : "Sign up", action: changeMode)
-                        .manrope(.body, weight: .semibold)
-                        .tint(colors.foreground)
-                        .disabled(auth.isBusy)
-                        .accessibilityIdentifier("auth.switchMode")
-                }
-            }
+
         }
         .tint(Color("AccentColor"))
     }
@@ -78,7 +70,7 @@ struct AuthenticationView: View {
             .accessibilityLabel(heading.joined(separator: " "))
             .accessibilityAddTraits(.isHeader)
 
-            Text(registration ? "Create an account. See where it takes you." : "Sign in to pick up where you left off.")
+            Text("Sign in to pick up where you left off. New account registration is closed.")
                 .manrope(.subheadline)
                 .foregroundStyle(colors.secondary)
         }
@@ -189,18 +181,6 @@ struct AuthenticationView: View {
         case .password:
             if password.isEmpty { return "Enter your password." }
             return registration && !(8...128).contains(password.utf16.count) ? "Use 8–128 characters." : nil
-        }
-    }
-
-    private func changeMode() {
-        guard !auth.isBusy else { return }
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-            registration.toggle()
-            password = ""
-            passwordVisible = false
-            attempted = false
-            selection = nil
-            auth.error = nil
         }
     }
 

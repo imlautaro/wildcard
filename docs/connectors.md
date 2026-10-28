@@ -450,3 +450,10 @@ is required. Keep Cloudflare DoH reachable and `global_fetch_strictly_public` en
 
 References: [Cloudflare DNS JSON API](https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/)
 and [Workers redirect-mode implementation](https://github.com/cloudflare/workerd/blob/main/src/workerd/api/http.c%2B%2B).
+
+## Account model override
+
+Account now selects Standard/Contributor for ordinary chat jobs. MCP-isolated
+private chats continue to force Standard and omit shared memory regardless of
+that preference. See [model settings](model-settings.md); no new MCP permission
+is granted by changing the model.

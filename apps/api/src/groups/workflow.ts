@@ -1,3 +1,4 @@
+import { jobModel } from '../lib/model-preference';
 import { groupEnergyAvailable } from './energy';
 import { maintainAgentMemories } from '../chat/agent-memory';
 import { groupSourceAccess } from './request-access';
@@ -61,7 +62,9 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft): Pr
   throw new Error('GROUP_UNAVAILABLE_OR_CONSENT_REQUIRED');
 }
 
-export async function runGroup(env: Env, job: GroupJob, step: WorkflowStep) {
+export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep) {
+  const model = await step.do('group-select-account-model', () => jobModel(bindings, job.turnID, true));
+  const env: Env = { ...bindings, META_CHAT_MODEL: model };
   const admitted = await step.do('group-check-attention', async () => !!await env.DB.prepare(
     'SELECT turn_id FROM agent_attention WHERE turn_id = ? AND attempt = ?').bind(job.turnID, job.attempt).first());
   if (!admitted) return;

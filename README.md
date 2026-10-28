@@ -38,8 +38,8 @@ npm run dev
 ```
 
 Wrangler serves the API locally at `http://localhost:8787`. Local setup creates an
-ignored auth secret and applies D1 migrations. Register/sign in through
-`/api/v1/auth/sign-up/email` and `/api/v1/auth/sign-in/email`; `/api/v1/me` requires
+ignored auth secret and applies D1 migrations. Sign in through `/api/v1/auth/sign-in/email`; new account registration is closed.
+Existing accounts are preserved; `/api/v1/me` requires
 a signed bearer session. Unrelated paths return HTTP 404 JSON. See
 [authentication](docs/authentication.md) for the contract and limitations.
 Email ownership verification and password recovery are not configured yet.
@@ -59,7 +59,7 @@ Open `apps/ios/Wildcard.xcodeproj`, or run `npm run ios` on macOS. Select the
 `Wildcard` scheme in Xcode 27.1 or later. The current minimum deployment target is
 iOS 27.0. For a physical device, select your own signing team and bundle identifier.
 
-The app includes sign-up/sign-in, native Chats and Account tabs, Keychain session
+The app includes sign-in for existing accounts, native Chats and Account tabs, Keychain session
 storage, restoration on launch, and logout. Account supports editing your name and
 choosing, cropping, replacing, or removing your own private [profile photo](docs/profile-photos.md#account-profile)
 directly through the centered avatar/name menus shared with contact editing. It preserves the Wildcard Icon Composer
@@ -153,11 +153,13 @@ and a matching source commit, then tags the Worker version with that commit.
 Releases apply D1 migrations before publishing and initialize the runtime auth
 secret on the first auth release, preserving it afterward. Chats also require the
 encrypted `META_API_KEY` build secret, copied securely to runtime by the release.
-`META_CHAT_MODEL` selects Muse Spark Standard or Contributor. This owner's
-single-user development backend currently uses `muse-spark-1.3-contributor` with
-explicit consent for Meta's training use of the existing test chats. Independent
-or public installations should select Standard unless separately authorized; see
-[model configuration](docs/infrastructure.md#development-contributor-model).
+Each account selects Muse Spark 1.3 Standard or Contributor in **Account**, with
+explicit Contributor acceptance and Standard as the database default. Existing
+shared-memory permissions remain independent; MCP chats always use Standard.
+[Model settings and AI Gateway](docs/model-settings.md) describes durable selection,
+privacy, and estimated Spark spending in the Cloudflare dashboard. Provision the
+optional gateway before enabling `AI_GATEWAY_ID`; all Spark calls then use the AI
+binding and existing `META_API_KEY`.
 Wrangler configures the Workflow and recovery Cron Trigger in the same release. Commit and push to
 release; do not deploy manually. Preview builds are disabled.
 The web Worker `wildcard-web` needs a second Workers Builds project on the same

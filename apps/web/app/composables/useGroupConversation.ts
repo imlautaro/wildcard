@@ -38,6 +38,13 @@ registerSessionReset(() => {
   receipts.clear();
 });
 
+registerModelChange((contributor) => {
+  for (const entry of groups.values()) {
+    entry.revision += 1;
+    if (entry.snapshot) entry.snapshot = { ...entry.snapshot, contributorModel: contributor };
+  }
+});
+
 export function peekGroupConversation(id: string): GroupConversation | undefined {
   return groups.get(id);
 }

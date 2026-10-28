@@ -226,3 +226,10 @@ identifying the unsupported redirect mode as the runtime defect. Checks remain
 request-scoped and uncached; connection snapshots and pending OAuth navigation keep
 their existing behavior. See [DNS safety](connectors.md#dns-safety-and-runtime-compatibility)
 for provider disclosure, safe diagnostics and production/device verification.
+
+## Account model and closed registration
+
+Both clients now sign in existing accounts only. Account offers Muse Spark 1.3 Standard/Contributor, with the same explicit Contributor acceptance and disclosure on iOS/web. The existing session profile caches the preference and web revalidates it in the background on Account mount. Model saves update cached profile/list/group flags and fence older reads without clearing drafts or pending sends.
+
+See [model settings](model-settings.md) for the API, shared consent, cache behavior,
+AI Gateway spending and pending runtime/device verification.

@@ -60,6 +60,11 @@ registerSessionReset(() => {
   refreshingInvitations = null;
 });
 
+registerModelChange((contributor) => {
+  generation += 1;
+  contributorModel.value = contributor;
+});
+
 export function contactPhotoPath(contact: Pick<Contact, 'id' | 'photoVersion'>) {
   return contact.photoVersion ? `contacts/${contact.id}/photo?version=${encodeURIComponent(contact.photoVersion)}` : null;
 }

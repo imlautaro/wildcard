@@ -3,9 +3,10 @@ import { bodyLimit } from 'hono/body-limit';
 import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readPhoto, validPhoto, removePhoto } from '../photos/storage';
+import { contributorModel, validChatModel } from '../lib/model-preference';
 
-type Profile = { id: string; name: string; email: string; emailVerified: number; photoVersion: string | null };
-const columns = 'id, name, email, email_verified AS emailVerified, photo_version AS photoVersion';
+type Profile = { id: string; name: string; email: string; emailVerified: number; photoVersion: string | null; chatModel: string };
+const columns = 'id, name, email, email_verified AS emailVerified, photo_version AS photoVersion, chat_model AS chatModel';
 const key = (owner: string, version: string) => `users/${owner}/${version}.jpg`;
 const responseUser = (row: Profile) => ({ ...row, emailVerified: Boolean(row.emailVerified) });
 const me = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
@@ -34,6 +35,20 @@ me.patch('/', bodyLimit({ maxSize: 4096 }), async (c) => {
   }
   const row = await c.env.DB.prepare(`UPDATE user SET name = ?, updated_at = ? WHERE id = ? RETURNING ${columns}`)
     .bind(name, Date.now(), c.get('owner')).first<Profile>();
+  if (!row) return c.json({ error: 'Unauthorized' }, 401);
+  return c.json({ user: responseUser(row) });
+});
+
+me.put('/model', bodyLimit({ maxSize: 1024 }), async (c) => {
+  const input = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!input || !validChatModel(input.chatModel) || Object.keys(input).some((key) => !['chatModel', 'contributorConsent'].includes(key))) {
+    return c.json({ error: 'Choose a supported chat model.' }, 422);
+  }
+  if (input.chatModel === contributorModel && input.contributorConsent !== true) {
+    return c.json({ error: "Agree to Meta's Contributor data use before enabling Contributor." }, 422);
+  }
+  const row = await c.env.DB.prepare(`UPDATE user SET chat_model = ?, updated_at = ? WHERE id = ? RETURNING ${columns}`)
+    .bind(input.chatModel, Date.now(), c.get('owner')).first<Profile>();
   if (!row) return c.json({ error: 'Unauthorized' }, 401);
   return c.json({ user: responseUser(row) });
 });

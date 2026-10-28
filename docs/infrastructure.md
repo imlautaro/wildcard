@@ -364,42 +364,72 @@ retention, rollback, and the unverified physical-device checks.
 
 ## Development Contributor model
 
-On October 26, 2026, the owner explicitly approved Contributor mode for this
-single-user development installation, including its existing test conversations,
-after learning that Meta may use submitted prompts, history, and responses to
-train future models. This approval does not extend to a future public or multi-user
-installation. The deployed Worker uses the production pipeline/branch but is
-currently the owner's development backend; there is no separate staging Worker.
+The October 26 owner-only global Contributor configuration is superseded by
+[per-account model settings](model-settings.md), requested October 27, 2026.
+Migration `0028_account_model.sql` defaults every account to Standard, including
+existing accounts. Users can explicitly enable Contributor in Account on iOS/web.
+`META_CHAT_MODEL` stays Standard as the unscoped environment default; account
+preferences in D1 select inference, not dashboard-only variable changes. Existing
+shared consent remains independent. MCP private chats always use Standard.
 
-`vars.META_CHAT_MODEL` in `apps/api/wrangler.jsonc` selects
-`muse-spark-1.3-contributor`. The Workflow passes that value to the existing Meta
-Chat Completions call with reasoning effort `low`. Only `muse-spark-1.3` (Standard)
-and `muse-spark-1.3-contributor` (Contributor) are accepted; an absent value defaults
-to Standard, and an invalid value stops generation. There is no automatic model
-fallback or change to existing messages. Future requests include the existing
-bounded conversation history as before. Completed replies are not regenerated.
-In-flight Workflow instances can finish on their original code/version.
+## Optional AI Gateway for Spark spending
 
-The model selector is public configuration, not a secret. Reuse the existing
-`META_API_KEY` with access to the selected model; no new credential, Cloudflare
-resource, permission, schema, or migration is required. No existing conversations
-were read or exported to configure this change. No paid inference was triggered
-for verification; actual Contributor request success remains unverified.
+Provision a dedicated authenticated `wildcard` gateway and account custom provider
+`meta` with base URL `https://api.meta.ai` before releasing the configured API.
+The checked-in AI binding is `AI`; `AI_GATEWAY_ID=wildcard` enables routing for all
+Spark calls, including memory extraction, tools, schedules and groups. The
+provider key remains the existing runtime/build `META_API_KEY`; the Worker binding
+authenticates Cloudflare requests automatically. No gateway token is required at
+runtime and no provider key is stored through the dashboard.
 
-For an independent installation, set `META_CHAT_MODEL` to `muse-spark-1.3` unless
-its operator has explicitly chosen Contributor's data use. For local development,
-Wrangler reads the configured variable; an explicit `META_CHAT_MODEL` in ignored
-`.dev.vars` overrides it. The example documents both choices. Before using real
-private data or opening the app to other users, prefer Standard through the versioned configuration and an authorized automatic commit/push release. If retaining Contributor, the sharing flow requires explicit agreement from creator and recipient; the original single-user approval never supplies recipient consent.
+For an independent account, replace `account_id`, the existing D1/R2/Worker
+identifiers and origins as described above, provision those required resources,
+then run `npm run infra:ai-gateway -- --create`. The script uses existing Wrangler
+credentials in memory or an explicitly supplied `CLOUDFLARE_API_TOKEN`; management
+requires AI Gateway Read and Edit/Write permissions. It never displays tokens,
+overwrites an existing provider or deploys. Without `--create`, it only verifies.
+A 403 means insufficient management permissions; use the dashboard instructions
+in [model settings](model-settings.md#gateway-provisioning) or an appropriately
+scoped provisioning credential. Do not add management credentials to runtime.
 
-To return to Standard, set the Wrangler variable to `muse-spark-1.3`, update any
-local override, commit/push, and verify the live version's source tag and
-`META_CHAT_MODEL` binding. No manual deploy or dashboard-only variable update is
-needed. A code/config rollback changes future generation only and does not undo
-content already submitted to a provider. Keep existing D1/R2 data when changing
-models. Voice transcription remains on `muse-voice-transcribe-1.0`.
+Default gateway payload logs, response cache, retries and rate limits are off;
+authentication is on. Per-request headers enable metadata logs without storing
+raw prompt/response bodies, bypass response caching, supply custom rates including
+Meta cache reads, and allow only one gateway attempt. This is observability only:
+no model fallback, route splitting, prompt logging, guardrails, search or unified
+billing is configured. Runtime errors do not silently fall back to direct Meta.
+Costs are estimates using the public USD rates checked October 27, 2026; update
+`chat/meta.ts` when rates change. Voice ASR stays direct and is excluded.
 
-Reference: [Meta models and Contributor data use](https://dev.meta.ai/docs/models).
+Local `.dev.vars.example` sets `AI_GATEWAY_ID=` to disable the remote gateway.
+No separate staging resources exist; provision a separate gateway/provider/account
+and replace bindings for staging rather than using production unintentionally.
+Types are generated with `--strict-vars false` because each request/job copies the
+generated Env and selects a validated model dynamically; bindings remain generated.
+
+Release only through authorized commit/push and Workers Builds. The existing
+release script applies additive migration 0028 before publishing; no secret or
+manual deployment command is needed. Verify the pushed source tag, signup 403,
+account persistence and permissions, both model variants, and payload-free gateway
+logs/costs with fictional data under authorized runtime validation. Already-running
+jobs keep their checkpointed model/version. Rollback code only through the automatic
+pipeline: keep the additive column and account values, do not reverse migrations
+or delete D1/R2 data. To bypass the optional gateway, clear `AI_GATEWAY_ID` in
+versioned config and commit/push; preserve the gateway for existing logs. Returning
+to direct Meta does not remove previously submitted data. Reverting to a release
+with global Contributor can ignore account preferences; review that behavior
+before rollback.
+
+On October 27, the gateway and provider were created and viewed in the dashboard.
+The existing Wrangler credential returned 403 for gateway management, so the
+verification script could not independently read them. End-to-end binding routing,
+provider enablement via API, usage parsing, costs and payload suppression remain
+unverified until an authorized automatic release and fictional-data request.
+
+References: [custom providers](https://developers.cloudflare.com/ai-gateway/configuration/custom-providers/),
+[logging](https://developers.cloudflare.com/ai-gateway/observability/logging/),
+[custom costs](https://developers.cloudflare.com/ai-gateway/configuration/custom-costs/),
+[Meta pricing](https://dev.meta.ai/docs/pricing-rate-limits).
 
 ## Contact memory and history search
 

@@ -257,3 +257,10 @@ A contact chat marked by MCP connection setup remains excluded from shared human
 memories and agent self-memory, including group retrieval through the creator contact.
 It uses Standard for private replies and stops human memory extraction. Disconnect does
 not remove this marker. Existing source history is retained. See [connections](connectors.md).
+
+## Account-selected extraction model
+
+Contact-memory extraction resolves the source account’s preference, even when another participant’s job refreshes it. Group and agent-self-memory work uses the reply job’s selected model. Existing Contributor eligibility filters and MCP memory isolation remain. Account Standard does not revoke separate shared-data Contributor consent.
+
+See [model settings](model-settings.md) for the API, shared consent, cache behavior,
+AI Gateway spending and pending runtime/device verification.

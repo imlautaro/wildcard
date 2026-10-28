@@ -1,3 +1,4 @@
+import { accountModel } from '../lib/model-preference';
 import { scheduleAllowed } from '../schedules/data';
 import { groupRequestTurnAllowed } from '../groups/request-access';
 import { totalUnreadMessages } from '../lib/unread';
@@ -76,18 +77,19 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
         RETURNING turn_id`)
         .bind(now + 120_000, item.turnID, item.deviceID, item.sessionID, now).first();
       if (!claim) return;
+      const contributor = (await accountModel(env, item.userID)).includes('contributor');
       const alert = await env.DB.prepare(`SELECT c.name AS contactName, c.photo_version AS photoVersion, t.assistant_text AS reply
         FROM chat_turn t JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
         WHERE t.id = ? AND t.user_id = ? AND t.status = 'complete' AND t.assistant_text IS NOT NULL
           AND t.sequence > c.last_read_sequence AND ${scheduleAllowed('t')}
-          AND ${groupRequestTurnAllowed('t', env.META_CHAT_MODEL.includes('contributor'))}`)
+          AND ${groupRequestTurnAllowed('t', contributor)}`)
         .bind(item.turnID, item.userID).first<{ contactName: string; photoVersion: string | null; reply: string }>();
       if (!alert) return;
       const photoURL = alert.photoVersion
         ? await pushPhotoURL(env, item.contactID, alert.photoVersion, item.sessionID, item.expiresAt) : undefined;
       const unreadCount = await totalUnreadMessages(env.DB, item.userID);
       if (!await env.DB.prepare(`SELECT id FROM chat_turn t WHERE id = ? AND ${scheduleAllowed('t')}
-        AND ${groupRequestTurnAllowed('t', env.META_CHAT_MODEL.includes('contributor'))}`)
+        AND ${groupRequestTurnAllowed('t', contributor)}`)
         .bind(item.turnID).first()) return;
       const response = await sendAPNS(env, jwt, { ...item, collapseID: item.turnID },
         replyPayload({ ...alert, turnID: item.turnID, photoURL, unreadCount, contactID: item.contactID, userID: item.userID }));

@@ -76,7 +76,7 @@ onMounted(load);
             'The contact can recall facts learned from anyone here, including saved memories from before sharing. Chat transcripts and attachments stay private.',
           ]"
           memory-label="Share existing and future memories"
-          contributor-note="This installation uses a Contributor model. Messages and shared memories sent to Meta may be used to train its models."
+          contributor-note="Your selected model is Contributor. Messages and shared memories sent to Meta may be used to train its models."
         />
 
         <div class="group-title">Invite by email</div>

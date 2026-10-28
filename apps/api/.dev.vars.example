@@ -4,10 +4,12 @@ BETTER_AUTH_SECRET=replace-with-a-random-secret-of-at-least-32-characters
 # Optional locally; required for generating replies. Never commit a real key.
 META_API_KEY=
 
-# Contributor is enabled for this owner-only development installation.
-# Meta may use submitted prompts/history/responses to train models.
-# Independent installations can use muse-spark-1.3 for Standard mode.
-META_CHAT_MODEL=muse-spark-1.3-contributor
+# Each account selects its model in Account. New/existing accounts default to Standard.
+META_CHAT_MODEL=muse-spark-1.3
+
+# Disable the optional remote AI Gateway for local emulation/direct Meta requests.
+# To use it, provision wildcard and custom-meta in your own account first.
+AI_GATEWAY_ID=
 
 # Optional APNs setup; use your own Apple key and identifiers. Never commit values.
 # Local macOS workerd may not support the HTTP/2 connection APNs requires.

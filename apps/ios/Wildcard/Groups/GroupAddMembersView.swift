@@ -163,7 +163,7 @@ struct AddGroupContactConsentView: View {
                     .manrope(.footnote).foregroundStyle(.secondary)
                 Toggle("I accept shared memory", isOn: $shareMemory)
                 if snapshot?.contributorModel == true {
-                    Text("This installation uses Meta's Contributor model. Messages and memories sent to Meta may be used for model training.")
+                    Text("Your selected model is Contributor. Messages and memories sent to Meta may be used for model training.")
                         .manrope(.footnote).foregroundStyle(.secondary)
                     Toggle("I accept Contributor data use", isOn: $contributorConsent)
                 }

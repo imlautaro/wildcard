@@ -43,7 +43,7 @@ onMounted(() => { if (!chats.loaded.value) void chats.refresh(); });
         :contributor-model="chats.contributorModel.value"
         :disclosure="['Group members can see your name and profile photo. Everyone in this group can read its full history, including messages sent before they joined. Contacts use shared memories from their other conversations. What you say here can become a shared memory and be recalled in other chats with these contacts. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.']"
         memory-label="I accept shared memory"
-        contributor-note="This installation uses Meta's Contributor model. Group messages and shared memories sent to Meta may be used for model training."
+        contributor-note="Your selected model is Contributor. Group messages and shared memories sent to Meta may be used for model training."
       />
       <p v-if="error" class="notice" style="margin: 12px 0">{{ error }}</p>
       <button type="submit" class="button block" style="margin-top: 12px" :disabled="!valid || busy">Create Group</button>

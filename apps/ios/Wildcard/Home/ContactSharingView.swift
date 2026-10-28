@@ -26,7 +26,7 @@ struct ContactSharingView: View {
                 Toggle("Share existing and future memories", isOn: $shareMemory)
                 if sharing?.contributorModel == true {
                     Toggle("I agree to Meta's Contributor data use", isOn: $contributorConsent)
-                    Text("This installation uses a Contributor model. Messages and shared memories sent to Meta may be used to train its models.")
+                    Text("Your selected model is Contributor. Messages and shared memories sent to Meta may be used to train its models.")
                         .manrope(.footnote).foregroundStyle(.secondary)
                 }
                 TextField("Existing user's email", text: $recipientEmail)
