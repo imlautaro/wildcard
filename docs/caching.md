@@ -556,10 +556,20 @@ text comparisons are based on the cleaned preview.
 
 The session-owned `NativeExperiments` store retains up to 20 contact action lists
 of 50 records. Empty results are cached; five-second freshness and shared in-flight
-requests avoid repeated navigation loads. The active requests screen revalidates;
+requests avoid repeated navigation loads. The active requests screen and a
+foreground automatic runner share this cache and revalidate every five seconds;
 chat reply changes and explicit refresh also update it. Transient failures preserve
 lists, and account change/confirmed access loss rejects late results and clears
-applicable native state. Operation claims are never automatically replayed. See
+applicable native state. Automatic per-kind activation timestamps live in account-
+scoped local settings and exclude older proposals. Disabled tools remove their
+activation timestamp; re-enabling starts a new cutoff. Settings are not cloud-synced
+or shared through the App Group. The session tracks attempted automatic action IDs
+to avoid retrying uncertain execution; account reset clears this transient set.
+Errors retain manual recovery in the request list and appear in a dismissible banner.
+The old-API capabilities fallback retries a rejected message once with the same
+submission ID and original content, omitting only the optional automatic-kind hint.
+It does not reset the cached submission or retry action claims.
+Operation claims are never automatically replayed. See
 [native experiments](native-experiments.md#cloud-action-contract-and-failure-handling).
 
 The App Group holds only explicitly enabled contact identities and bounded,
@@ -583,3 +593,16 @@ cache or agent memory and is not exposed through the App Group or model tools.
 The per-participant `initiativeEnabled` field uses the existing contact cache and its session isolation, freshness, pagination and eviction budgets. No new client cache or private disk retention is introduced. iOS contact details uses the existing 30-second contact freshness and deduplicated refresh; web details refreshes in the background on entry. Both reuse loaded contacts synchronously and keep content visible on errors. A confirmed mutation replaces the cached contact and rejects older in-flight reads; controls serialize mutations and retain the confirmed setting on failure. Deletion/access loss and account changes use existing contact/conversation invalidation, with generation checks rejecting late responses. Follow-ups are completed assistant-only turns and use ordinary conversation/list revalidation, pagination and read acknowledgements. Plans have no client snapshot or polling endpoint. See [initiative](initiative.md) for server retention and the pending cross-client verification matrix.
 
 The faster initiative cadence (migration 0033) changes server scheduling and prompt guidance only. iOS and web retain the same contact/conversation caches, polling intervals, freshness, empty-state reuse, session isolation and late-response rejection. No client-side countdown, extra settings cache, pagination change or disk retention is added. Messages still enter the normal history/read/preview paths.
+
+Native in-app status reuses the same bounded action list for per-message receipts.
+It adds an account-filtered, in-memory AlarmKit snapshot for at most the existing
+200 locally tracked alarm IDs; the alarm ledger and retention are unchanged.
+The `alarmUpdates` sequence and foreground refresh reconcile system removals,
+pauses/resumes and alerting without network traffic. One-second timelines read
+local ActivityKit state, never poll the API or persist presentation snapshots.
+Account clearing drops system snapshots. Transient system-store failure preserves
+last known IDs; an unavailable status is shown until a successful refresh.
+Live focus/recipe/speech cards use existing system activities and the session
+speaker. This system state needs no independent network cache. Model receipt
+reads are bounded to ten terminal outcomes and scoped to contact/person/device;
+they do not cache or expose another participant's state.

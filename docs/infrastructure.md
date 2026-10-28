@@ -1487,6 +1487,16 @@ new clients submit `nativeContext`. Existing clients omit it. Use the normal
 versioned local migration setup; production migrations run only through an
 authorized commit/push and the existing automatic release. Do not publish manually.
 The native bridge uses the existing authenticated API Worker and D1 binding.
+Automatic action receipt awareness and in-app status add no service, binding,
+secret, migration or Apple capability. Release the optional `automaticKinds` API
+support and revised prompt through the existing commit/push pipeline, then install
+the updated iOS app. Older app clients remain compatible. New apps fall back to the
+old capabilities format if explicitly rejected, but an old backend still tells
+the model to request manual review. Rollback preserves all action/alarm records;
+never replay running or completed claims. The existing three-minute reply step
+includes a bounded ten-second wait per automatic tool call for device receipts,
+with six calls at most. Verify the timer case on a signed device after release;
+publication alone does not verify AlarmKit UI or semantic model behavior.
 
 An independent installation needs:
 

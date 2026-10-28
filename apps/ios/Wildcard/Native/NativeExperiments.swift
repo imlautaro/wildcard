@@ -13,6 +13,9 @@ import AppIntents
 final class NativeExperiments {
     static let shared = NativeExperiments()
     static let kinds = ["focus", "recipe", "timer", "alarm", "calendar", "reminder", "location_reminder", "speech"]
+    static let automaticKinds: Set<String> = ["timer", "alarm", "focus", "recipe", "reminder", "speech"]
+    private(set) var automaticSince: [String: [String: Double]] = [:]
+    private var automaticAttempts: Set<String> = []
     static let labels = ["focus": "Focus sessions", "recipe": "Guided recipes", "timer": "Timers", "alarm": "Alarms", "calendar": "Calendar events", "reminder": "Reminders", "location_reminder": "Location reminders", "speech": "Spoken responses"]
     private(set) var userID: String?
     private(set) var enabled: [String: Set<String>] = [:]
@@ -30,7 +33,11 @@ final class NativeExperiments {
     private var generation = UUID()
     private let speaker = NativeSpeaker()
     private(set) var speaking = false
+    private(set) var speakingContactID: String?
+    private(set) var schedulingAlarms: Set<String> = []
+    var alarmStateAvailable = false
     var localAlarms: [NativeLocalAlarm] = []
+    var systemAlarms: [String: Alarm] = [:]
     private var eventStore = EKEventStore()
     private var device: String?
     struct CalendarRequest: Identifiable { let id = UUID(); let event: EKEvent; let store: EKEventStore; let complete: (String) -> Void }
@@ -44,6 +51,15 @@ final class NativeExperiments {
             self.userID = userID
             let values = UserDefaults.standard.dictionary(forKey: settingsKey(userID)) as? [String: [String]] ?? [:]
             enabled = values.mapValues { Set($0).intersection(Self.kinds) }
+            if let saved = UserDefaults.standard.dictionary(forKey: "automatic-" + settingsKey(userID)) as? [String: [String: Double]] {
+                automaticSince = saved
+            } else {
+                let now = Date.now.timeIntervalSince1970 * 1000
+                automaticSince = enabled.mapValues { kinds in
+                    Dictionary(uniqueKeysWithValues: kinds.intersection(["timer", "alarm"]).map { ($0, now) })
+                }
+                saveAutomaticSettings()
+            }
         }
         knownContacts = contacts
         localAlarms = Self.alarmRecords().filter { $0.userID == userID }
@@ -53,11 +69,12 @@ final class NativeExperiments {
     func clear(preservingInboxFor owner: String? = nil) {
         generation = UUID()
         requests.values.forEach { $0.cancel() }; requests = [:]
+        automaticSince = [:]; automaticAttempts = []
         actions = [:]; loaded = [:]; enabled = [:]; knownContacts = []; drafts = []; selectedDraft = nil
         calendarRequest?.complete("cancelled"); calendarRequest = nil
         locationRequest?.complete(.nan, .nan); locationRequest = nil
-        speaker.stop(); speaking = false
-        busy = []; localAlarms = []; userID = nil; error = nil
+        speaker.stop(); speaking = false; speakingContactID = nil
+        busy = []; schedulingAlarms = []; alarmStateAvailable = false; localAlarms = []; systemAlarms = [:]; userID = nil; error = nil
         if owner == nil || NativeShared.directory?.userID != owner { NativeShared.clear() }
         WidgetCenter.shared.reloadAllTimelines()
         let oldActivities = Activity<ContactSessionAttributes>.activities.filter { $0.attributes.userID != owner }
@@ -68,6 +85,7 @@ final class NativeExperiments {
         }
     }
     func forget(contactID: String) {
+        automaticSince.removeValue(forKey: contactID); saveAutomaticSettings()
         enabled.removeValue(forKey: contactID); actions.removeValue(forKey: contactID); loaded.removeValue(forKey: contactID)
         requests.removeValue(forKey: contactID)?.cancel()
         knownContacts.removeAll { $0.id == contactID }
@@ -83,7 +101,14 @@ final class NativeExperiments {
     }
     func setKinds(_ kinds: Set<String>, contactID: String) {
         guard let userID else { return }
+        let previous = enabled[contactID] ?? []
         enabled[contactID] = kinds.intersection(Self.kinds)
+        var automatic = (automaticSince[contactID] ?? [:]).filter { kinds.contains($0.key) }
+        for kind in kinds.subtracting(previous).intersection(["timer", "alarm"]) {
+            automatic[kind] = Date.now.timeIntervalSince1970 * 1000
+        }
+        automaticSince[contactID] = automatic
+        saveAutomaticSettings()
         UserDefaults.standard.set(enabled.mapValues { Array($0).sorted() }, forKey: settingsKey(userID))
         publish()
         if kinds.isEmpty {
@@ -91,6 +116,32 @@ final class NativeExperiments {
                 for activity in Activity<ContactSessionAttributes>.activities where activity.attributes.contactID == contactID {
                     await activity.end(nil, dismissalPolicy: .immediate)
                 }
+            }
+        }
+    }
+    private func saveAutomaticSettings() {
+        guard let userID else { return }
+        UserDefaults.standard.set(automaticSince, forKey: "automatic-" + settingsKey(userID))
+    }
+    func setAutomatic(_ on: Bool, kind: String, contactID: String) {
+        guard userID != nil, Self.automaticKinds.contains(kind), enabled[contactID]?.contains(kind) == true else { return }
+        if on { automaticSince[contactID, default: [:]][kind] = Date.now.timeIntervalSince1970 * 1000 }
+        else { automaticSince[contactID]?.removeValue(forKey: kind) }
+        saveAutomaticSettings()
+    }
+    func runAutomatically(using auth: AuthStore) async {
+        let current = generation
+        for contactID in enabled.keys.sorted() where !(automaticSince[contactID] ?? [:]).isEmpty {
+            guard !Task.isCancelled, generation == current, UIApplication.shared.applicationState == .active else { return }
+            await refresh(contactID: contactID, using: auth)
+            for action in (actions[contactID] ?? []).sorted(by: { $0.createdAt < $1.createdAt }) {
+                guard !Task.isCancelled, generation == current, UIApplication.shared.applicationState == .active else { return }
+                guard busy.isEmpty, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000,
+                      let since = automaticSince[contactID]?[action.kind], action.createdAt >= since,
+                      !automaticAttempts.contains(action.id) else { continue }
+                // An uncertain claim or acknowledgement must never trigger another automatic attempt.
+                automaticAttempts.insert(action.id)
+                await run(action, contactID: contactID, using: auth, automatically: true)
             }
         }
     }
@@ -124,7 +175,7 @@ final class NativeExperiments {
     func context(contactID: String) throws -> NativeContext? {
         let kinds = enabled[contactID] ?? []
         guard !kinds.isEmpty else { return nil }
-        return NativeContext(deviceID: try deviceID(), kinds: kinds.sorted())
+        return NativeContext(deviceID: try deviceID(), kinds: kinds.sorted(), automaticKinds: kinds.intersection(Set((automaticSince[contactID] ?? [:]).keys)).sorted())
     }
     func refresh(contactID: String, using auth: AuthStore, force: Bool = false) async {
         guard let owner = userID, owner == auth.user?.id, !(enabled[contactID] ?? []).isEmpty else { return }
@@ -155,23 +206,35 @@ final class NativeExperiments {
     private func update(_ action: NativeAction, contactID: String) {
         if let index = actions[contactID]?.firstIndex(where: { $0.id == action.id }) { actions[contactID]?[index] = action }
     }
-    func run(_ action: NativeAction, contactID: String, using auth: AuthStore) async {
+    private func allowsAutomatic(_ action: NativeAction, contactID: String) -> Bool {
+        guard let since = automaticSince[contactID]?[action.kind] else { return false }
+        return action.createdAt >= since
+    }
+    func run(_ action: NativeAction, contactID: String, using auth: AuthStore, automatically: Bool = false) async {
         guard let payload = action.payload, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000,
-              auth.user?.id == userID, enabled[contactID]?.contains(action.kind) == true, busy.isEmpty else { return }
+              auth.user?.id == userID, UIApplication.shared.applicationState == .active, enabled[contactID]?.contains(action.kind) == true, busy.isEmpty else { return }
         let owner = userID; let current = generation; let execution = UUID().uuidString.lowercased()
         busy.insert(action.id); error = nil
         defer { busy.remove(action.id) }
         do {
             // Revalidate access immediately before claiming. A successful claim is never replayed.
             _ = try await auth.withSession { api, token in try await api.contact(id: contactID, token: token) }
+            guard generation == current, owner == userID, !Task.isCancelled,
+                  UIApplication.shared.applicationState == .active, enabled[contactID]?.contains(action.kind) == true,
+                  !automatically || allowsAutomatic(action, contactID: contactID) else { return }
             let device = try deviceID()
             let claimed = try await auth.withSession { api, token in
                 try await api.nativeAction(contactID: contactID, actionID: action.id, deviceID: device, executionID: execution, status: "running", token: token)
             }
-            guard generation == current, owner == userID, enabled[contactID]?.contains(action.kind) == true else { return }
+            guard generation == current, owner == userID else { return }
             update(claimed, contactID: contactID)
             let result: String
-            do { result = try await execute(payload, actionID: action.id, executionID: execution, contactID: contactID) }
+            do {
+                if Task.isCancelled || UIApplication.shared.applicationState != .active
+                    || enabled[contactID]?.contains(action.kind) != true
+                    || (automatically && !allowsAutomatic(action, contactID: contactID)) { result = "cancelled" }
+                else { result = try await execute(payload, actionID: action.id, executionID: execution, contactID: contactID, automatically: automatically) }
+            }
             catch {
                 self.error = error.localizedDescription
                 if case AuthAPI.Failure.rejected = error { result = "failed" } else { result = "unknown" }
@@ -206,7 +269,7 @@ final class NativeExperiments {
         guard let date, date > .now else { throw AuthAPI.Failure.rejected("This date has passed. Ask for a new proposal.") }
         return date
     }
-    private func execute(_ p: NativePayload, actionID: String, executionID: String, contactID: String) async throws -> String {
+    private func execute(_ p: NativePayload, actionID: String, executionID: String, contactID: String, automatically: Bool) async throws -> String {
         guard let owner = userID else { return "cancelled" }
         switch p.kind {
         case "focus", "recipe":
@@ -221,7 +284,8 @@ final class NativeExperiments {
             return "completed"
         case "timer", "alarm":
             guard try await AlarmManager.shared.requestAuthorization() == .authorized else { throw AuthAPI.Failure.rejected("Alarm permission was denied. Enable it in Settings.") }
-            guard userID == owner, enabled[contactID]?.contains(p.kind) == true else { return "cancelled" }
+            guard userID == owner, enabled[contactID]?.contains(p.kind) == true,
+                  !automatically || (UIApplication.shared.applicationState == .active && automaticSince[contactID]?[p.kind] != nil) else { return "cancelled" }
             let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: p.title))
             let presentation = AlarmPresentation(alert: alert,
                 countdown: p.kind == "timer" ? AlarmPresentation.Countdown(title: LocalizedStringResource(stringLiteral: p.title), pauseButton: AlarmButton(text: "Pause", textColor: .white, systemImageName: "pause.fill")) : nil,
@@ -230,8 +294,14 @@ final class NativeExperiments {
             let configuration: AlarmManager.AlarmConfiguration<WildcardAlarmMetadata>
             if p.kind == "timer" { configuration = .timer(duration: Double(p.durationSeconds ?? 60), attributes: attributes) }
             else { configuration = .alarm(schedule: .fixed(try date(p.date)), attributes: attributes) }
+            schedulingAlarms.insert(executionID)
+            defer { schedulingAlarms.remove(executionID) }
             try rememberAlarm(NativeLocalAlarm(id: executionID, userID: owner, contactID: contactID, title: p.title))
-            _ = try await AlarmManager.shared.schedule(id: UUID(uuidString: executionID)!, configuration: configuration)
+            let scheduled = try await AlarmManager.shared.schedule(id: UUID(uuidString: executionID)!, configuration: configuration)
+            if userID == owner {
+                systemAlarms[executionID] = scheduled
+                alarmStateAvailable = true
+            }
             return "completed"
         case "calendar":
             let event = EKEvent(eventStore: eventStore)
@@ -241,7 +311,8 @@ final class NativeExperiments {
             }
         case "reminder", "location_reminder":
             guard try await eventStore.requestFullAccessToReminders() else { throw AuthAPI.Failure.rejected("Allow Reminders access in Settings to save this reminder.") }
-            guard userID == owner, enabled[contactID]?.contains(p.kind) == true else { return "cancelled" }
+            guard userID == owner, enabled[contactID]?.contains(p.kind) == true,
+                  !automatically || (UIApplication.shared.applicationState == .active && automaticSince[contactID]?[p.kind] != nil) else { return "cancelled" }
             let reminder = EKReminder(eventStore: eventStore)
             reminder.title = p.title; reminder.notes = p.body
             guard let calendar = eventStore.defaultCalendarForNewReminders() else { throw AuthAPI.Failure.rejected("Create a reminder list in Reminders first.") }
@@ -270,8 +341,8 @@ final class NativeExperiments {
             try eventStore.save(reminder, commit: true)
             return "completed"
         case "speech":
-            speaking = true
-            defer { speaking = false }
+            speaking = true; speakingContactID = contactID
+            defer { speaking = false; speakingContactID = nil }
             return await speaker.speak(p.body ?? p.title)
         default: throw AuthAPI.Failure.rejected("This native action is not supported.")
         }

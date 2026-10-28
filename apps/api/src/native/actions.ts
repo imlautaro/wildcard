@@ -2,19 +2,23 @@ import { isRecord, type ModelTool } from '../chat/meta';
 import type { StoredTurn } from '../chat/data';
 
 export const nativeKinds = ['focus', 'recipe', 'timer', 'alarm', 'calendar', 'reminder', 'location_reminder', 'speech'] as const;
-export type NativeContext = { deviceID: string; kinds: string[] };
+export type NativeContext = { deviceID: string; kinds: string[]; automaticKinds?: string[] };
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export function parseNativeContext(value: unknown): NativeContext | null {
-  if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'deviceID,kinds'
+  if (!isRecord(value) || Object.keys(value).some(key => !['deviceID', 'kinds', 'automaticKinds'].includes(key))
     || typeof value.deviceID !== 'string' || !uuid.test(value.deviceID) || !Array.isArray(value.kinds)
     || !value.kinds.length || value.kinds.length > nativeKinds.length
     || value.kinds.some(k => typeof k !== 'string' || !nativeKinds.includes(k as typeof nativeKinds[number]))
     || new Set(value.kinds).size !== value.kinds.length) return null;
-  return { deviceID: value.deviceID.toLowerCase(), kinds: [...value.kinds].sort() };
+  const kinds = value.kinds;
+  if (value.automaticKinds !== undefined && (!Array.isArray(value.automaticKinds)
+    || value.automaticKinds.some(k => typeof k !== 'string' || !['timer', 'alarm', 'focus', 'recipe', 'reminder', 'speech'].includes(k) || !kinds.includes(k))
+    || new Set(value.automaticKinds).size !== value.automaticKinds.length)) return null;
+  return { ...(Array.isArray(value.automaticKinds) ? { automaticKinds: [...value.automaticKinds].sort() } : {}), deviceID: value.deviceID.toLowerCase(), kinds: [...value.kinds].sort() };
 }
 export const nativeTools: ModelTool[] = [{ type: 'function', function: {
   name: 'request_native_action',
-  description: 'Prepare an iOS action ONLY for this direct human request and enabled device capabilities. This queues a proposal for the person to review and run on their phone; it does NOT execute it. Never claim it ran, rang, was saved or spoken. One proposal per kind per human message; replays return the original. Date must be explicit-offset ISO 8601. Never invent coordinates. Omit both coordinates to let the person choose the location on the phone map. Focus/recipe use Live Activities; timer/alarm use AlarmKit; calendar opens an editor; reminder saves to Reminders; location_reminder creates an arrival/departure reminder in Reminders; speech reads text on request.',
+  description: 'Prepare an iOS action ONLY for this direct human request and enabled device capabilities. This queues a device request; it does NOT execute it on the server. The phone may run enabled automatic kinds while the app is open; other requests need review. Follow the returned nextStep and never ask for extra confirmation for automatic kinds. Only a device-reported completed receipt confirms the requested operation; scheduling success does not mean an alarm rang. One proposal per kind per human message; replays return the original. Date must be explicit-offset ISO 8601. Never invent coordinates. Omit both coordinates to let the person choose the location on the phone map. Focus/recipe use Live Activities; timer/alarm use AlarmKit; calendar opens an editor; reminder saves to Reminders; location_reminder creates an arrival/departure reminder in Reminders; speech reads text on request.',
   parameters: { type: 'object', additionalProperties: false, required: ['kind', 'title'], properties: {
     kind: { type: 'string', enum: [...nativeKinds] }, title: { type: 'string', maxLength: 100 },
     body: { type: 'string', maxLength: 2000 }, durationSeconds: { type: 'integer', minimum: 1, maximum: 28800 },
@@ -72,7 +76,22 @@ export async function executeNativeTool(db: D1Database, turn: StoredTurn, name: 
     AND t.schedule_id IS NULL AND t.group_request_id IS NULL AND t.native_context_json = ?10
     ON CONFLICT(turn_id, kind) DO NOTHING`).bind(id, args.kind, JSON.stringify(args), now, now + 86400000,
       turn.id, turn.contactID, turn.userID, turn.attempt, turn.nativeContextJSON).run();
-  const action = await db.prepare(`SELECT id, kind, CASE WHEN status = 'pending' AND expires_at <= ?3 THEN 'expired' ELSE status END AS status, payload_json AS payloadJSON FROM native_action WHERE id = ?1 AND turn_id = ?2`)
+  let action = await db.prepare(`SELECT id, kind, CASE WHEN status = 'pending' AND expires_at <= ?3 THEN 'expired' ELSE status END AS status, payload_json AS payloadJSON FROM native_action WHERE id = ?1 AND turn_id = ?2`)
     .bind(id, turn.id, now).first<{ id: string; kind: string; status: string; payloadJSON: string }>();
-  return JSON.stringify(action ? { id: action.id, kind: action.kind, status: action.status, proposal: JSON.parse(action.payloadJSON), executionConfirmed: action.status === 'completed', nextStep: 'Review and run in the iOS chat Native tools screen. Never report pending as completed.' } : { error: 'The request is no longer active.' });
+  // This bounded wait is awaited inside the existing reply Workflow step. It never executes the action.
+  if (action && context.automaticKinds?.includes(action.kind)) {
+    for (let poll = 0; poll < 10 && ['pending', 'running'].includes(action.status); poll++) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const receipt = await db.prepare(`SELECT a.id, a.kind, a.status, a.payload_json AS payloadJSON
+        FROM native_action a JOIN chat_turn t ON t.id = a.turn_id
+        JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
+        WHERE a.id = ?1 AND t.id = ?2 AND t.contact_id = ?3 AND t.user_id = ?4
+        AND t.attempt = ?5 AND t.status = 'running' AND t.native_context_json = ?6`)
+        .bind(id, turn.id, turn.contactID, turn.userID, turn.attempt, turn.nativeContextJSON)
+        .first<{ id: string; kind: string; status: string; payloadJSON: string }>();
+      if (!receipt) return JSON.stringify({ error: 'The request is no longer active. Do not execute it again.' });
+      action = receipt;
+    }
+  }
+  return JSON.stringify(action ? { id: action.id, kind: action.kind, status: action.status, proposal: JSON.parse(action.payloadJSON), executionConfirmed: action.status === 'completed', nextStep: action.status === 'completed' ? 'The requesting iPhone confirmed completion of this operation. Confirm it naturally; do not ask the person to activate it. For timers/alarms, this means scheduled, not that it rang or is still running.' : ['failed', 'cancelled', 'unknown', 'expired'].includes(action.status) ? 'Report this device outcome accurately. Do not claim success or repeat the action. Unknown requires checking the system app.' : context.automaticKinds?.includes(action.kind) ? 'The requesting iPhone is configured to run new requests of this kind automatically while Wildcard is open, subject to current device settings and iOS permissions. No extra app confirmation is needed. Pending is not completed; only a completed device receipt confirms execution.' : 'Review and run in the iOS Native experiments screen. Never report pending as completed.' } : { error: 'The request is no longer active.' });
 }

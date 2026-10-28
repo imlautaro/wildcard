@@ -105,7 +105,13 @@ Optional [native experiments](docs/native-experiments.md) let a private contact
 prepare device-specific requests for focus/recipe Live Activities, system timers
 and alarms, Calendar, Reminders (including location reminders), and spoken text.
 Enable a contact from **Contact details → Native experiments** or **Account → Native
-experiments**, then review and run proposals on the requesting iPhone. The app also
+experiments**. New timers and alarms run automatically while the requesting iPhone
+app is open; choose other automatic tools in **Run without confirmation**. Calendar,
+location reminders and older requests retain manual review. iOS permissions still apply.
+Active timers, alarms, Live Activities and speech are visible inside the app, with
+system controls and per-message operation receipts. The backend briefly waits for
+automatic device receipts before replying and includes recent outcomes in later
+native-enabled turns. The app also
 includes Siri/Shortcuts actions, Action button shortcuts, a contact widget, shared
 input drafts and NFC contact links. Actions and permissions remain per person and
 device. Apple App Group/Associated Domains/NFC signing setup and migration 0031 are

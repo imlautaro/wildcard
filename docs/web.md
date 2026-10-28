@@ -336,6 +336,22 @@ Install dependencies with the existing root `npm ci` workflow.
 
 ## Native iOS experiments
 
+The web guide explains iOS automatic execution: timers/alarms default to running
+without app confirmation while the requesting iPhone app is open. Other supported
+tools are opt-in per contact; Calendar/location reminders and older requests keep
+review. iOS permission prompts still apply. Browser turns cannot request or execute
+Apple system actions, so there is no browser execution toggle or extra cache.
+The guide also explains iOS in-app active cards, system countdown controls and
+per-message operation receipts. Live AlarmKit/ActivityKit/speech state is confined
+to the iPhone; browser chats do not import device IDs or display a fabricated live
+timer. The shared backend now briefly waits for automatic device receipts and
+supplies recent terminal outcomes only to native-enabled turns. Deploy that API
+change before expecting revised bot confirmations; new UI alone cannot change the
+old server's instructions. No new browser cache or network polling is added.
+The iOS client can retry an explicit old-API capabilities rejection once without
+the optional automatic-kind hint, preserving its message ID and content. Browser
+messages omit native context and need no compatibility retry.
+
 [Native experiments](native-experiments.md) are explicitly scoped to Apple system
 frameworks and device execution. **Account → Native experiments** explains the
 available iPhone capabilities and their permission/retention behavior. The web app

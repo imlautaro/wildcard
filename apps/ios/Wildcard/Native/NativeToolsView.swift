@@ -21,7 +21,7 @@ struct NativeToolsView: View {
                     native.setKinds($0 ? Set(NativeExperiments.kinds) : [], contactID: contactID)
                 }))
             } footer: {
-                Text("Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Actions requested in this private chat wait here for you to review and run. Lock Screen activities may show their titles. Other people sharing this contact receive no device access.")
+                Text("Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms run automatically when requested in this private chat while Wildcard is open. Choose other automatic tools below. Lock Screen activities may show their titles. Other people sharing this contact receive no device access.")
             }
             if !kinds.isEmpty {
                 Section("Allowed tools") {
@@ -32,6 +32,16 @@ struct NativeToolsView: View {
                             native.setKinds(value, contactID: contactID)
                         }))
                     }
+                }
+                Section {
+                    ForEach(NativeExperiments.kinds.filter { kinds.contains($0) && NativeExperiments.automaticKinds.contains($0) }, id: \.self) { kind in
+                        Toggle(NativeExperiments.labels[kind] ?? kind, isOn: Binding(
+                            get: { native.automaticSince[contactID]?[kind] != nil },
+                            set: { native.setAutomatic($0, kind: kind, contactID: contactID) }
+                        ))
+                    }
+                } header: { Text("Run without confirmation") } footer: {
+                    Text("Applies to new requests on this iPhone while Wildcard is open. iOS may ask for permission the first time. Calendar and location reminders still require review. Older requests remain manual.")
                 }
                 Section {
                     Text("Ask in chat: “Help me focus for 25 minutes”, “Guide me through a recipe”, “Set a timer for 12 minutes”, “Add an event tomorrow at 3 PM”, or “Read this aloud”.")

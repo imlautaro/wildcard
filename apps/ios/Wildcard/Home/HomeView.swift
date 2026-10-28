@@ -135,6 +135,18 @@ struct HomeView: View {
         .task {
             if let userID = auth.user?.id { native.activate(userID: userID, contacts: contacts.nativeDirectoryContacts) }
         }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                await native.runAutomatically(using: auth)
+                native.refreshLocalAlarms()
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            }
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await native.observeAlarmChanges()
+        }
         .task(id: native.route?.id) {
             guard let route = native.route else { return }
             do {
@@ -167,6 +179,15 @@ struct HomeView: View {
             Button("OK") { nativeRouteError = nil }
         } message: { Text(nativeRouteError ?? "") }
         .safeAreaInset(edge: .top, spacing: 0) {
+            if case .contact = destinations.last {} else {
+                NativeActiveStatusView(contactID: nil)
+            }
+            if let error = native.error {
+                HStack {
+                    Text(error).font(.footnote)
+                    Button("Dismiss") { native.error = nil }
+                }.padding(8).frame(maxWidth: .infinity).background(.bar)
+            }
             if !native.drafts.isEmpty {
                 Button { showNativeInbox = true } label: {
                     Label("Review shared drafts (\(native.drafts.count))", systemImage: "tray.and.arrow.down")

@@ -116,9 +116,21 @@ extension AuthAPI {
     func sendMessage(contactID: String, id: String, text: String, attachment: DraftAttachment? = nil, replyTo: MessageReplyQuote? = nil, nativeContext: NativeContext? = nil, token: String) async throws -> ChatSubmission {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .withoutEscapingSlashes
-        let body = try encoder.encode(MessageInput(id: id, text: text, timeZone: TimeZone.current.identifier, attachment: attachment,
-                                                   replyTo: replyTo.map { ReplyInput(messageID: $0.messageID, side: $0.side) }, nativeContext: nativeContext))
-        let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: body, token: token, timeout: 90)
+        let timeZone = TimeZone.current.identifier
+        let reply = replyTo.map { ReplyInput(messageID: $0.messageID, side: $0.side) }
+        let body = try encoder.encode(MessageInput(id: id, text: text, timeZone: timeZone, attachment: attachment,
+                                                   replyTo: reply, nativeContext: nativeContext))
+        let data: Data
+        do {
+            data = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: body, token: token, timeout: 90).0
+        } catch Failure.rejected(let message) where message == "Invalid native device capabilities" && nativeContext?.automaticKinds != nil {
+            // Older APIs reject the optional field before accepting a turn. Preserve the submission ID and all other fields.
+            var legacyContext = nativeContext
+            legacyContext?.automaticKinds = nil
+            let legacyBody = try encoder.encode(MessageInput(id: id, text: text, timeZone: timeZone, attachment: attachment,
+                                                             replyTo: reply, nativeContext: legacyContext))
+            data = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: legacyBody, token: token, timeout: 90).0
+        }
         return try JSONDecoder().decode(ChatSubmission.self, from: data)
     }
 

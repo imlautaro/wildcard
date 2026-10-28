@@ -3,6 +3,7 @@ import Foundation
 struct NativeContext: Encodable, Sendable {
     let deviceID: String
     let kinds: [String]
+    var automaticKinds: [String]? = nil
 }
 struct NativePayload: Codable, Sendable {
     let kind: String

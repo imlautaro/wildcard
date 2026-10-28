@@ -137,6 +137,9 @@ struct ChatView: View {
                                 }
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        ForEach((native.actions[contactID] ?? []).filter { $0.turnID == turn.id }) { action in
+                            NativeActionReceiptView(action: action, contactID: contactID)
+                        }
                     }
                     Color.clear.frame(height: 1).id("latest")
                 }
@@ -177,6 +180,7 @@ struct ChatView: View {
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isAwayFromBottom)
             .refreshable { await chat.refresh(contactID: contactID, using: auth) }
         }
+        .safeAreaInset(edge: .top, spacing: 0) { NativeActiveStatusView(contactID: contactID) }
         .task(id: native.selectedDraft?.id) {
             guard let item = native.selectedDraft, item.contactID == contactID, item.userID == auth.user?.id else { return }
             guard draftIsEmpty else { attachmentError = "Finish or clear your current draft, then import the shared draft from the inbox."; return }

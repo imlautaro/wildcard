@@ -25,12 +25,70 @@ This navigation change reuses existing stores and does not alter cache freshness
 or device permissions. Verify both entry points and repeated forward/back navigation
 on a device after installing the updated app.
 
-Ask in the private chat, then open **Native experiments → Requests on this iPhone**
+Ask in the private chat: new timers and alarms execute without another app
+confirmation while Wildcard is in the foreground, including after leaving the chat.
+The session-owned runner checks enabled contacts every five seconds and uses the
+existing shared request cache. The initial AlarmKit permission prompt still applies.
+Once scheduled, system alarms/timers continue independently of the app. Requests
+received while the app is closed wait until it returns to the foreground; this is
+not background execution or an exact scheduling guarantee.
+
+**Run without confirmation** controls each supported kind per contact, account and
+installation. Timers and alarms default on; focus, recipes, reminders and speech
+are optional. Calendar and location reminders keep manual review. Automatic settings
+store a per-kind activation timestamp: older proposals stay manual, including on
+upgrade, re-enabling a kind, or re-enabling automatic execution. Changing settings
+does not undo already executed system actions. Automatic attempts are serialized,
+recheck live access and current local settings, and use the same atomic claim and
+receipt flow as manual execution. An uncertain automatic attempt is not retried in
+the session; running claims are never replayed after restart. Failures appear in the
+app banner and the requests list. The app must be open to start an action.
+
+For manual requests, open **Native experiments → Requests on this iPhone**
 to review the full proposal and tap **Review and run**. Calendar presents the system
 editor; an unspecified reminder location presents a map for explicit selection.
 A pending request has not been executed. **Completed** means the phone reported
 finishing the operation (for example, scheduling an alarm), not that an alarm
 fired, a recipe was cooked, or the person completed a task.
+
+### In-app status and agent awareness
+
+A pinned horizontal panel in the private chat shows this account/contact's active
+system alarms/timers, focus/recipe sessions and speech. Other screens show the same
+account's active panel with links to the relevant chats. Timers expose Pause/Resume
+and Cancel/Stop controls; focus/recipe cards expose their existing session controls.
+Each message also shows its native operation receipts, including pending, running,
+completed, failed, cancelled and uncertain outcomes. Manual requests can be run
+from their chat card. A receipt is historical: a timer can have been successfully
+scheduled and subsequently cancelled without changing that operation receipt.
+
+AlarmKit `alarmUpdates` refreshes account-filtered system snapshots while the app
+is active; the foreground runner also refreshes them, including on return. The
+one-second UI timeline reads local system/ActivityKit snapshots only. Exact timer
+countdowns use `AlarmPresentationState.Mode.Countdown.fireDate`, including system
+pause/resume changes; when that presentation is unavailable, show Timer running
+rather than inventing a deadline. Alarm states distinguish scheduled, countdown,
+paused and alerting. Calendar/Reminders cards confirm saving, not ongoing task
+completion. The app does not read their contents. Existing alarm ID retention is
+unchanged and no extra private data is written to disk.
+
+For automatic kinds, `request_native_action` awaits up to ten one-second receipt
+checks inside the existing reply Workflow step before returning its result to the
+model. The awaited read loop never executes or replays a system action. Each read
+rechecks source turn/attempt/account/contact access. A completed receipt tells the
+model to confirm the operation without asking for activation. Pending after this
+bounded wait is described as sent to the iPhone, with status visible in the app;
+failed/cancelled/unknown outcomes never become success claims. Up to six automatic
+tool calls can add at most 60 seconds of waiting within the existing three-minute
+reply step; actual latency and model quality remain unverified. Current native-
+enabled turns also receive the ten most recent terminal operation receipts for
+this participant, contact and requesting device. These receipts carry no current
+alarm countdown or Calendar/Reminders contents and do not authorize new actions.
+
+The API/prompt changes require automatic publication from an authorized commit/push.
+Installing only the iOS change shows cards and preserves the old-API fallback, but
+cannot change the old server model's manual-review instructions. Existing bot
+messages are preserved. Verify new replies after updating both backend and app.
 
 | Capability | Example | Implementation |
 | --- | --- | --- |
@@ -115,7 +173,15 @@ sign-in. No native actions are requested/executed by the browser. See [web](web.
 
 Migration `0031_native_actions.sql` adds nullable `chat_turn.native_context_json`
 and the `native_action` ledger. An iOS submission may include `nativeContext` with
-an installation UUID and an allowlist of supported kinds. It is snapshotted with
+an installation UUID, an allowlist of supported kinds, and optional `automaticKinds`
+(a unique subset of allowed timer/alarm/focus/recipe/reminder/speech kinds). Older
+clients omit the optional field and retain manual review. If an older API explicitly
+rejects capabilities, the new iOS client retries once with only `automaticKinds`
+omitted, preserving device ID, allowed kinds, submission ID, text, time zone,
+attachment and quoted reply. Other errors do not trigger this fallback. Local
+automatic execution remains enabled; until the API is updated, the model may still
+describe manual review. This compatibility retry does not execute a device action. The model receives guidance
+for automatic requests without treating a pending proposal as execution success. It is snapshotted with
 the pending message ID across uncertain submissions. Other clients omit it.
 The UUID lives in a When-Unlocked, This-Device-Only Keychain item, separate from
 the session credential. Device affinity is a routing constraint, not hardware
@@ -172,7 +238,8 @@ contact tools ends its focus/recipe activities. Permissions remain controlled by
 ## Cache and retention
 
 Native action lists are session-owned, reused on return including empty results,
-and revalidated after five seconds while the request screen is active. Explicit
+and revalidated after five seconds while the request screen or foreground automatic
+runner is active. Both share in-flight requests and the same freshness window. Explicit
 pull-to-refresh bypasses freshness; in-flight requests are deduplicated. Chat reply
 updates also revalidate so newly created proposals are available on navigation.
 Transient errors retain usable content; confirmed access loss clears the relevant
@@ -227,3 +294,21 @@ The main app privacy manifest declares own-app UserDefaults preferences and loca
 user-selected file metadata reasons; Share declares user-selected file metadata.
 These declarations describe API usage, not a completed App Store privacy review.
 [Apple required-reason API documentation](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype).
+
+### Automatic execution device verification
+
+Verify new timers/alarms run from chat without opening Native experiments. Toggle
+automatic execution off/on and confirm older requests stay manual. Leave the chat
+while waiting, background/foreground the app, deny permission, switch accounts and
+revoke contact access. Confirm interrupted claims/acknowledgements do not duplicate
+execution. Verify optional automatic tools and Calendar/location manual review.
+These checks require a signed device and remain pending.
+
+Verify the two-minute timer case with both the new backend and app: the bot should
+confirm the device receipt without manual activation instructions, and the timer
+must remain visible while chatting and browsing Account/Chats. Pause/resume/cancel
+from both system surfaces and the in-app card; confirm the exact countdown tracks
+system presentation and falls back honestly if unavailable. Exercise expiry,
+permission denial, missing acknowledgement, app restart, disabled tools, account
+switch and simultaneous focus/recipe/speech sessions. These device/model checks
+remain pending; static typechecks do not establish runtime correctness.
