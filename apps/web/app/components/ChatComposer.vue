@@ -57,7 +57,15 @@ function onKey(event: KeyboardEvent) {
     submit();
   }
 }
-onBeforeUnmount(clearAttachment);
+function dismissKeyboardOutside(event: PointerEvent) {
+  if (document.activeElement !== textarea.value || !(event.target instanceof Node)) return;
+  if (!textarea.value?.contains(event.target)) textarea.value?.blur();
+}
+onMounted(() => document.addEventListener('pointerdown', dismissKeyboardOutside, { passive: true }));
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', dismissKeyboardOutside);
+  clearAttachment();
+});
 defineExpose({ focus: () => textarea.value?.focus() });
 </script>
 

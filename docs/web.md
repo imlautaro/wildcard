@@ -55,6 +55,10 @@ Matching iOS:
   accepted, colored when the agent read it), Online/Typing/Last seen presence,
   activity leases (`open`/`typing`/`leave`, with no draft text), and image/PDF
   attachments up to 5 MB.
+- In private chats and groups, tapping outside the message field blurs it and lets
+  the mobile keyboard close. Drafts, attachments, reply targets, and cached history
+  are retained without a network request. iOS dismisses the keyboard on a history
+  tap and keeps interactive scroll dismissal. Mobile/device verification is pending.
 - [Quoted replies](replies.md) in private chats and groups, from a hover/touch reply
   button or **Reply** in the hold/right-click selector. Quotes scroll to and highlight
   the original, and the reply target is kept with the draft in the session cache.

@@ -148,6 +148,8 @@ struct ChatView: View {
                            value: chat.displayedTurns.last)
             }
             .scrollDismissesKeyboard(.interactively)
+            .contentShape(Rectangle())
+            .simultaneousGesture(TapGesture().onEnded { composerFocused = false })
             .defaultScrollAnchor(.bottom)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
             .onScrollGeometryChange(for: Bool.self) { geometry in

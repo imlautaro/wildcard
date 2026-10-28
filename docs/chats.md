@@ -75,6 +75,16 @@ lifetime, limits, invalidation, and manual refresh behavior. It offers earlier h
 retry action for the latest failed reply. The Chats list shows the last reply or
 user message, with a 500-code-point preview.
 
+In private chats and groups, tapping the message history (including empty space)
+dismisses the iOS composer keyboard. Interactive dismissal while scrolling remains
+available. The tap gesture runs alongside message interactions. On the web,
+tapping outside the focused message field blurs it so the mobile keyboard can
+close; pointer events retain their normal behavior. Dismissing the keyboard keeps
+the draft, attachments, reply target, and session-owned history cache intact and
+makes no network request. Verify on a device with empty and populated histories,
+after reopening a cached chat, and with message links, image previews, quoted
+replies, long-press reactions, and swipe-to-reply. Device verification is pending.
+
 Scrolling more than 80 points away from the bottom reveals a floating circular
 chevron-down button above the composer's voice/send side. Tap it to return to the
 latest message; it disappears near the bottom. The overlay reserves no history

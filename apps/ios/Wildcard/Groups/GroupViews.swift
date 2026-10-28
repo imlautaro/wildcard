@@ -317,6 +317,8 @@ struct GroupChatView: View {
             .defaultScrollAnchor(.bottom)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
             .scrollDismissesKeyboard(.interactively)
+            .contentShape(Rectangle())
+            .simultaneousGesture(TapGesture().onEnded { composerFocused = false })
             .onScrollGeometryChange(for: Bool.self) { geometry in
                 geometry.contentSize.height - geometry.visibleRect.maxY < 80
             } action: { _, value in nearBottom = value }
