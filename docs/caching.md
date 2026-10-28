@@ -529,3 +529,25 @@ reload/back with an old failure, subsequent responses by a different versus the
 same bot, a private failure followed by success, failed retry/refresh, offline
 reopen, access removal and account switching. View/device checks remain pending;
 static checking does not establish scrolling or accessibility behavior.
+
+## Markdown presentation
+
+Bot message formatting and plain compact previews derive synchronously from the source text in existing
+session-owned private/group conversation snapshots. It adds no network fetch,
+disk persistence, alternate conversation cache or retained cross-account parser
+results. Web keeps computed HTML only in each mounted message and invalidates it
+when the text changes; iOS derives attributed blocks from the current text when
+laying out content. Existing pagination, memory budgets, stale-response rejection,
+access-loss invalidation and logout/account-switch eviction remain authoritative.
+Reopening cached history formats it without waiting for revalidation, including
+offline. Pending human submissions keep their literal text and idempotency IDs.
+Static client checks passed; visual/offline/account-switch verification remains
+pending. See the [formatting and verification contract](chats.md#bot-message-markdown).
+
+Optional `lastMessagePreview` and quote/activity `previewText` fields share existing
+snapshots and their existing lifetime/invalidation; they are not a separate cache.
+Cached conversation projections refresh the plain summary together with its raw
+text and sender metadata, including optimistic human messages, so a prior bot's
+summary cannot survive a newer message. Server summaries parse full bot source
+before clipping; older snapshots use the client fallback. No timestamps or source
+text comparisons are based on the cleaned preview.

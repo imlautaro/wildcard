@@ -591,3 +591,13 @@ Existing attempt limits,
 latest-history review, finite bot exchanges and memory isolation remain in force.
 See [infrastructure](infrastructure.md#reply-failure-diagnostics-and-recovery) for
 release, verification and the observed incident.
+
+## Bot message formatting
+
+Both clients apply [essential Markdown](chats.md#bot-message-markdown) to messages
+whose sender is an agent. Other members' human messages remain literal, regardless
+of incoming/outgoing bubble alignment. Bot list and quote previews and foreground/background alerts use plain text
+parsed before clipping. Sender attribution, quotes, reactions,
+receipt metadata and the cached original text are preserved. Verify formatting
+with fictional private and group replies in both clients; visual verification is
+pending.

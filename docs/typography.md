@@ -23,3 +23,17 @@ when Dynamic Type changes. No font is installed globally on the device.
 
 During implementation the font metadata, plist registration, and Swift types were
 checked statically. No iOS build, simulator, or visual/device test was run.
+
+## Markdown emphasis in chat
+
+Bot message runs explicitly map Foundation's inline presentation intents to the
+Manrope weight axis. Strong emphasis uses weight 700. Emphasis uses a font
+descriptor matrix to create an oblique face because the bundled Manrope asset
+has no italic face; combined emphasis preserves both. Inline code uses the
+monospaced system font. Sizes come from SwiftUI ScaledMetric values so attributed
+fonts follow Dynamic Type. Do not rely on automatic bold/italic synthesis of the
+regular custom font. Web Markdown explicitly applies strong weight and italic
+style with browser style synthesis. Visual device confirmation remains pending.
+
+References: [Foundation inline presentation intents](https://developer.apple.com/documentation/foundation/inlinepresentationintent),
+[UIFontDescriptor transforms](https://developer.apple.com/documentation/uikit/uifontdescriptor).

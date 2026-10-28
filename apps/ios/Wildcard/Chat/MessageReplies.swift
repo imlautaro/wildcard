@@ -14,8 +14,11 @@ extension MessageReplyQuote {
                       userID: String? = nil, agentID: String? = nil, senderName: String? = nil) -> MessageReplyQuote {
         let scalars = text.unicodeScalars
         let clipped = scalars.count > 200 ? String(String.UnicodeScalarView(scalars.prefix(200))) + "…" : text
+        let previewSource = side == "assistant" || agentID != nil ? MessageMarkdown.plainText(text) : text
+        let previewScalars = previewSource.unicodeScalars
+        let previewText = previewScalars.count > 200 ? String(String.UnicodeScalarView(previewScalars.prefix(200))) + "…" : previewSource
         return MessageReplyQuote(messageID: messageID, side: side, available: true, userID: userID, agentID: agentID,
-                                 senderName: senderName, text: clipped, attachment: attachment)
+                                 senderName: senderName, text: clipped, previewText: previewText, attachment: attachment)
     }
 }
 
@@ -66,7 +69,7 @@ private struct MessageReplySummary: View {
 
     static func description(_ quote: MessageReplyQuote) -> String {
         guard quote.available else { return "Original message unavailable" }
-        if !quote.text.isEmpty { return quote.text }
+        if !quote.text.isEmpty { return quote.previewText ?? (quote.side == "assistant" || quote.agentID != nil ? MessageMarkdown.plainText(quote.text) : quote.text) }
         guard let attachment = quote.attachment else { return "" }
         return attachment.isImage ? "Photo" : attachment.name
     }

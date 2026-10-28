@@ -317,3 +317,19 @@ clients together; old API snapshots without source IDs are not assigned guessed
 anchors. See [group recovery](groups.md#failed-replies-and-response-recovery) and
 [private recovery](chats.md#failed-replies-and-response-recovery). No new client
 endpoint, persistent store or permission is introduced.
+
+## Markdown in bot replies
+
+Private assistant replies and group messages with an agent sender use the shared
+`MessageMarkdown` component. Its markdown-it renderer disables raw HTML, does not
+load Markdown images, and permits only HTTP/HTTPS/mailto links. It memoizes HTML
+for the current mounted message text; it does not store rendered output in the
+conversation cache. Human text remains literal; bot list/quoted previews use plain text from parsed
+Markdown, matching iOS. API and web import the same renderer/token walker from
+`shared/messageMarkdown.ts`; computed output stays local to the mounted view.
+The essential formatting contract, native iOS behavior, cache rules and pending
+visual verification are documented in [bot message Markdown](chats.md#bot-message-markdown).
+The API adds optional plain preview fields and cleans bot push bodies before
+truncation; original message text and cache freshness remain unchanged. No new
+service or infrastructure is required.
+Install dependencies with the existing root `npm ci` workflow.

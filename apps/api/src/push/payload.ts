@@ -1,3 +1,4 @@
+import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 type ReplyAlert = {
   contactName: string;
   reply: string;
@@ -16,12 +17,12 @@ export function replyPayload(alert: ReplyAlert): string {
     },
     contactID: alert.contactID, userID: alert.userID, turnID: alert.turnID, photoURL: alert.photoURL,
   });
-  return boundedPayload(alert.reply, serialize);
+  return boundedPayload(plainMessageMarkdown(alert.reply), serialize);
 }
 
 export function groupMessagePayload(alert: { groupID: string; groupName: string; userID: string;
-  messageID: string; senderName: string; text: string; sentAt: number; sequence: number; unreadCount: number }): string {
-  return boundedPayload(alert.text, (body) => JSON.stringify({
+  messageID: string; senderName: string; text: string; agentID?: string | null; sentAt: number; sequence: number; unreadCount: number }): string {
+  return boundedPayload(alert.agentID ? plainMessageMarkdown(alert.text) : alert.text, (body) => JSON.stringify({
     aps: { alert: { title: Array.from(alert.groupName).slice(0, 100).join(''), subtitle: Array.from(alert.senderName).slice(0, 100).join(''), body },
       sound: 'mixkit-flute-mobile-phone-notification-alert-2316.wav', badge: alert.unreadCount,
       'thread-id': `group-${alert.groupID}` },

@@ -1461,3 +1461,20 @@ active Workflow support. Saved recovered messages remain ordinary history; a cod
 rollback does not erase them. Prefer draining active runs or a forward fix when
 changing the step graph. Device recovery/scrolling and real provider behavior still
 need authorized functional verification with fictional data.
+
+## Markdown message presentation and push summaries
+
+API and web share the pure Markdown renderer/token walker in
+`shared/messageMarkdown.ts`. Both workspaces pin markdown-it and its TypeScript
+types in the root lockfile. The existing root `npm ci` installs these dependencies
+for an independent account; no new binding, secret, migration, service, account
+permission or provisioning step is required. Existing automatic build/release
+commands include the shared source through application imports.
+
+Release the API and web changes through the normal committed/pushed automatic
+workflow; install the iOS update through Xcode. Optional plain preview fields are
+backward compatible, and raw stored messages are unchanged. Rolling code back
+needs no data migration but can restore raw Markdown in alerts/previews. Verify
+with fictional private/group bot messages in chat list rows, quotes and APNs alerts
+with the app backgrounded/terminated; real delivery and release remain unverified
+for this local change.

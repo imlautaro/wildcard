@@ -161,7 +161,7 @@ final class PushNotifications {
         let content = UNMutableNotificationContent()
         content.title = activity.groupName
         content.subtitle = activity.senderName
-        content.body = activity.text
+        content.body = activity.previewText ?? (activity.agentID != nil ? MessageMarkdown.plainText(activity.text) : activity.text)
         content.threadIdentifier = "group-\(activity.groupID)"
         content.userInfo = ["groupID": activity.groupID, "userID": userID, "messageID": activity.messageID,
                             "sequence": activity.sequence, "sentAt": activity.sentAt]

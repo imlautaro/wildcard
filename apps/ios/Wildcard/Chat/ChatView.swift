@@ -104,7 +104,7 @@ struct ChatView: View {
                             .id("\(turn.id)/user")
                         }
                         if let reply = turn.assistantText {
-                            MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false)
+                            MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false, formatsMarkdown: true)
                                 .swipeToReply(enabled: canReply) { self.reply(to: turn, side: "assistant") }
                                 .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "assistant", fromUser: false,
                                                   onReply: canReply ? { self.reply(to: turn, side: "assistant") } : nil)

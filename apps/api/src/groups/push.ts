@@ -32,7 +32,7 @@ export async function deliverGroupPush(env: PushEnvironment, messageID?: string)
         WHERE message_id = ?2 AND device_id = ?3 AND session_id = ?4 AND next_at <= ?5 RETURNING message_id`)
         .bind(now + 120_000, item.messageID, item.deviceID, item.sessionID, now).first();
       if (!claim) return;
-      const alert = await env.DB.prepare(`SELECT g.name AS groupName, gm.sender_name AS senderName,
+      const alert = await env.DB.prepare(`SELECT g.name AS groupName, gm.sender_name AS senderName, gm.agent_id AS agentID,
         CASE WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END AS text,
         gm.sequence, gm.created_at AS sentAt FROM group_message gm JOIN chat_group g ON g.id = gm.group_id
         JOIN group_member m ON m.group_id = gm.group_id AND m.user_id = ?2
@@ -40,7 +40,7 @@ export async function deliverGroupPush(env: PushEnvironment, messageID?: string)
         JOIN push_device d ON d.id = ?5 AND d.session_id = s.id
         WHERE gm.id = ?1 AND gm.group_id = ?6 AND gm.user_id IS NOT m.user_id AND gm.sequence > m.last_read_sequence`)
         .bind(item.messageID, item.userID, item.sessionID, Date.now(), item.deviceID, item.groupID)
-        .first<{ groupName: string; senderName: string; text: string; sentAt: number; sequence: number }>();
+        .first<{ groupName: string; senderName: string; agentID: string | null; text: string; sentAt: number; sequence: number }>();
       if (!alert) return;
       const unreadCount = await totalUnreadMessages(env.DB, item.userID);
       // Bot message IDs exceed APNs' 64-byte collapse-ID limit; use a stable digest.

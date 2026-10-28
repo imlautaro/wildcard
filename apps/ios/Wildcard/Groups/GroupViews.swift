@@ -652,12 +652,12 @@ private struct GroupMessageRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let file = message.attachment {
                     ChatAttachmentView(attachment: file, contactID: groupID, turnID: message.id, groupID: groupID,
-                                       sentAt: message.createdAt, caption: file.isImage ? message.text : "", receiptState: message.receiptState ?? "sent", fromUser: own, showsReceipt: own,
+                                       sentAt: message.createdAt, caption: file.isImage ? message.text : "", receiptState: message.receiptState ?? "sent", fromUser: own, showsReceipt: own, formatsMarkdown: message.agentID != nil,
                                        senderName: own ? nil : (sender?.name ?? message.senderName),
                                       senderColor: senderColor, replyQuote: replyQuote, onQuoteTap: onQuoteTap)
                 }
                 if !message.text.isEmpty && message.attachment?.isImage != true {
-                    MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, receiptState: message.receiptState ?? "sent", showsReceipt: own,
+                    MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, receiptState: message.receiptState ?? "sent", showsReceipt: own, formatsMarkdown: message.agentID != nil,
                                       senderName: own ? nil : (sender?.name ?? message.senderName),
                                       senderColor: senderColor, replyQuote: message.attachment == nil ? replyQuote : nil, onQuoteTap: onQuoteTap)
                 }

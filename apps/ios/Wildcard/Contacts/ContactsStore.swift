@@ -51,6 +51,7 @@ final class ContactsStore {
         guard chat.isSubmitting(turn.id) || timestamp >= (contact.lastMessageAt ?? 0) else { return contact }
         var result = contact
         result.lastMessageText = messagePreview(for: turn)
+        result.lastMessagePreview = turn.assistantText.map { String(MessageMarkdown.plainText($0).prefix(500)) } ?? result.lastMessageText
         result.lastMessageAt = timestamp
         result.lastMessageFromUser = turn.assistantText == nil && turn.scheduleID == nil && turn.groupRequestID == nil ? 1 : 0
         result.lastMessageReadAt = [turn.readAt, timestamp == contact.lastMessageAt ? contact.lastMessageReadAt : nil].compactMap { $0 }.max()

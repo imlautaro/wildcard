@@ -8,6 +8,7 @@ struct MessageBubbleView: View {
     var readAt: Double? = nil
     var isSending = false
     var showsReceipt = true
+    var formatsMarkdown = false
     var senderName: String? = nil
     var senderColor: Color? = nil
     var replyQuote: MessageReplyPreview? = nil
@@ -22,12 +23,12 @@ struct MessageBubbleView: View {
                     MessageBubbleStack(spacing: 6) {
                         if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
                         MessageReplyQuoteView(preview: replyQuote, action: onQuoteTap)
-                        MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true)
+                        MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true, formatsMarkdown: formatsMarkdown)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
                         if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
-                        MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
+                        MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, formatsMarkdown: formatsMarkdown)
                     }
                 }
             }
@@ -63,27 +64,37 @@ struct MessageTextContentView: View {
     var isSending = false
     var showsReceipt = true
     var fillsWidth = false
+    var formatsMarkdown = false
+    @ScaledMetric(relativeTo: .body) private var markdownSize: CGFloat = 17
 
     var body: some View {
+        let markdown = formatsMarkdown ? MessageMarkdown(text) : nil
+        let inline = markdown?.inlineText
         ViewThatFits(in: .horizontal) {
-            if !text.contains(where: \.isNewline) {
+            if !text.contains(where: \.isNewline) && (!formatsMarkdown || inline != nil) {
                 HStack(alignment: .lastTextBaseline, spacing: 8) {
-                    messageText.fixedSize(horizontal: true, vertical: true)
+                    messageText(markdown).fixedSize(horizontal: true, vertical: true)
                     if fillsWidth { Spacer(minLength: 0) }
                     MessageMetadataView(sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
                 }
                 .fixedSize(horizontal: !fillsWidth, vertical: false)
             }
             VStack(alignment: .trailing, spacing: 4) {
-                messageText.fixedSize(horizontal: false, vertical: true)
+                messageText(markdown).fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
                 MessageMetadataView(sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
             }
         }
     }
 
-    private var messageText: some View {
-        Text(text).manrope().multilineTextAlignment(.leading).textSelection(.enabled)
+    @ViewBuilder private func messageText(_ markdown: MessageMarkdown?) -> some View {
+        if let inline = markdown?.inlineText {
+            Text(MessageMarkdown.styled(inline, size: markdownSize)).multilineTextAlignment(.leading).textSelection(.enabled)
+        } else if let markdown {
+            MessageMarkdownView(markdown: markdown)
+        } else {
+            Text(text).manrope().multilineTextAlignment(.leading).textSelection(.enabled)
+        }
     }
 }
 

@@ -1,3 +1,4 @@
+import { plainMessageMarkdown } from '~/utils/messageMarkdown';
 import type { ChatGroup, Contact, ContactsPage, GroupInvitation, ReceivedContactInvitation } from '~/utils/types';
 
 // Session cache for the chat list, the contact directory, and both invitation
@@ -255,17 +256,17 @@ function contactRow(contact: Contact): ChatRow | null {
   if (latest && turnTimestamp(latest) >= (contact.lastMessageAt ?? 0)) {
     const at = turnTimestamp(latest);
     const reads = [latest.readAt, at === contact.lastMessageAt ? contact.lastMessageReadAt : null].filter((value): value is number => value != null);
-    return { ...base, preview: turnPreview(latest), at, own: turnFromUser(latest), sending: false,
+    return { ...base, preview: latest.assistantText != null ? [...plainMessageMarkdown(latest.assistantText)].slice(0, 500).join('') : turnPreview(latest), at, own: turnFromUser(latest), sending: false,
       readAt: reads.length ? Math.max(...reads) : null };
   }
   if (contact.lastMessageAt === null) return null;
-  return { ...base, preview: contact.lastMessageText ?? '', at: contact.lastMessageAt, own: contact.lastMessageFromUser === 1,
+  return { ...base, preview: contact.lastMessagePreview ?? (contact.lastMessageFromUser === 0 ? plainMessageMarkdown(contact.lastMessageText ?? '') : contact.lastMessageText ?? ''), at: contact.lastMessageAt, own: contact.lastMessageFromUser === 1,
     sending: false, readAt: contact.lastMessageReadAt ?? null };
 }
 
 function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   const cached = peekGroupConversation(group.id);
-  let preview = group.lastMessageText ?? 'No messages yet';
+  let preview = group.lastMessagePreview ?? (group.lastMessageUserID == null ? plainMessageMarkdown(group.lastMessageText ?? 'No messages yet') : group.lastMessageText ?? 'No messages yet');
   let at = group.lastMessageAt ?? group.createdAt;
   let sender = group.lastMessageSenderName;
   let userID = group.lastMessageUserID ?? null;
@@ -273,7 +274,7 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   let sending = false;
   const last = cached?.messages.at(-1);
   if (last && (last.id === group.lastMessageID || last.createdAt >= (group.lastMessageAt ?? 0))) {
-    preview = last.text ? [...last.text].slice(0, 500).join('') : last.attachment ? `Attachment: ${last.attachment.name}` : '';
+    preview = last.text ? [...(last.agentID ? plainMessageMarkdown(last.text) : last.text)].slice(0, 500).join('') : last.attachment ? `Attachment: ${last.attachment.name}` : '';
     at = last.createdAt;
     sender = last.senderName;
     userID = last.userID;

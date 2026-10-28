@@ -1,3 +1,4 @@
+import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 import { accountEnvironment } from '../lib/model-preference';
 import { readEnergy } from '../groups/energy';
 import { photoKey, photoResponse, removePhoto, validPhoto, readPhoto } from '../photos/storage';
@@ -11,14 +12,14 @@ import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readBearerSession } from '../lib/session';
 import sharing from './sharing';
 
-type Contact = { id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
+type Contact = { id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
 const columns = `id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
   CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
 const managesAgent = `EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = contact.user_id)`;
 const selection = `${columns},
   (SELECT CASE WHEN t.assistant_text IS NULL AND t.schedule_id IS NULL AND t.group_request_id IS NULL THEN 1 ELSE 0 END
     FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageFromUser,
-  (SELECT t.read_at FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageReadAt, (SELECT substr(COALESCE(t.assistant_text, CASE WHEN t.schedule_id IS NOT NULL THEN 'Scheduled message' WHEN t.group_request_id IS NOT NULL THEN 'Group response' WHEN t.user_text = '' AND t.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(t.attachment_json, '$.name') ELSE t.user_text END), 1, 500)
+  (SELECT t.read_at FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageReadAt, (SELECT COALESCE(t.assistant_text, CASE WHEN t.schedule_id IS NOT NULL THEN 'Scheduled message' WHEN t.group_request_id IS NOT NULL THEN 'Group response' WHEN t.user_text = '' AND t.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(t.attachment_json, '$.name') ELSE t.user_text END)
   FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
   ORDER BY t.sequence DESC LIMIT 1) AS lastMessageText,
   (SELECT CASE WHEN t.assistant_text IS NOT NULL THEN t.updated_at ELSE t.created_at END
@@ -26,6 +27,12 @@ const selection = `${columns},
     ORDER BY t.sequence DESC LIMIT 1) AS lastMessageAt,
   (SELECT COUNT(*) FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
     AND t.status = 'complete' AND t.assistant_text IS NOT NULL AND t.sequence > contact.last_read_sequence) AS unreadCount`;
+// Parse the complete source before clipping, keeping the legacy raw summary intact.
+function contactPreview(row: Contact) {
+  const source = row.lastMessageText;
+  return { ...row, lastMessageText: source == null ? source : [...source].slice(0, 500).join(''),
+    lastMessagePreview: source == null ? null : [...(row.lastMessageFromUser === 0 ? plainMessageMarkdown(source) : source)].slice(0, 500).join('') };
+}
 const contacts = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 
 contacts.use('*', async (c, next) => {
@@ -71,7 +78,7 @@ contacts.get('/', async (c) => {
   const page = results.slice(0, 50);
   const last = page.at(-1);
   const totalUnreadCount = await totalUnreadReplies(c.env.DB, c.get('owner'));
-  return c.json({ contacts: page, totalUnreadCount, nextCursor: results.length > 50 && last ? `${last.lastMessageAt ?? last.createdAt}:${last.id}` : null });
+  return c.json({ contacts: page.map(contactPreview), totalUnreadCount, nextCursor: results.length > 50 && last ? `${last.lastMessageAt ?? last.createdAt}:${last.id}` : null });
 });
 
 contacts.post('/', contactBody, async (c) => {
@@ -90,7 +97,7 @@ contacts.post('/', contactBody, async (c) => {
 contacts.get('/:id', async (c) => {
   const result = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ?1 AND user_id = ?2`)
     .bind(c.req.param('id'), c.get('owner')).first<Contact>();
-  return result ? c.json({ contact: result }) : c.json({ error: 'Contact not found' }, 404);
+  return result ? c.json({ contact: contactPreview(result) }) : c.json({ error: 'Contact not found' }, 404);
 });
 
 async function energyOwner(db: D1Database, id: string, userID: string) {

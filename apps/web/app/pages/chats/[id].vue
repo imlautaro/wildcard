@@ -191,7 +191,7 @@ onBeforeUnmount(() => {
             v-if="item.turn.assistantText" :id="`message-${item.turn.id}-assistant`"
             class="bubble-row incoming" :class="{ highlighted: highlighted === `${item.turn.id}-assistant` }"
           >
-            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply" @reply="startReply(item.turn, 'assistant')"><div class="bubble">{{ item.turn.assistantText }}<div class="meta">{{ messageTime(item.turn.updatedAt) }}</div></div></MessageReactions>
+            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply" @reply="startReply(item.turn, 'assistant')"><div class="bubble"><MessageMarkdown :text="item.turn.assistantText" /><div class="meta">{{ messageTime(item.turn.updatedAt) }}</div></div></MessageReactions>
           </div>
           <div v-else-if="item.turn.status === 'running' && state.presence?.status === 'typing'" class="bubble-row incoming">
             <div class="typing" aria-label="Typing"><span /><span /><span /></div>

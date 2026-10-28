@@ -9,6 +9,7 @@ struct MessageReplyQuote: Codable, Equatable, Sendable {
     let agentID: String?
     let senderName: String?
     let text: String
+    var previewText: String? = nil
     let attachment: ChatAttachment?
 }
 

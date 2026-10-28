@@ -471,3 +471,45 @@ Sanitized `chat_reply_failed`, `chat_reply_recovered` and
 `chat_reply_recovery_failed` events identify the branch without chat content;
 failed turns retain the sanitized code rather than a generic generation error.
 See [caching](caching.md#reply-failure-presentation) for cache/device verification.
+
+## Bot message Markdown
+
+Both iOS and web format bot replies in private chats and groups, including replies
+already in loaded history. Essential Markdown supports paragraphs, emphasis,
+strong emphasis, strikethrough, headings, ordered/unordered and nested lists,
+quotes, explicit links, inline code, fenced/indented code, and basic tables.
+iOS uses Foundation's Markdown parser with native SwiftUI block layout; web uses
+markdown-it with raw HTML disabled. Standard Markdown paragraph rules apply:
+soft line breaks can join within a paragraph; blank lines separate paragraphs.
+Human messages remain literal. Bot text in quoted previews, notifications and the
+chat list is converted to plain text without Markdown delimiters. Code contents
+and link/image labels remain readable. Parsing failures fall back to readable source on iOS. Extended Markdown
+attributes, embedded HTML, syntax highlighting and remote Markdown image loading
+are not supported. Images in Markdown do not replace private attachment handling.
+Only HTTP, HTTPS and mailto links are actionable. No Markdown-driven fetch occurs.
+iOS explicitly maps inline strong/emphasis to Manrope variable weights and an
+oblique font descriptor, including combined emphasis and Dynamic Type. It does not
+rely on automatic synthetic emphasis of the custom font.
+
+Text remains selectable. Short inline replies keep the existing compact iOS
+metadata layout; block replies place metadata below the content. Code wraps inside
+bubbles; wide tables scroll horizontally. Native type remains Dynamic Type aware.
+
+This is presentation derived from the existing session-owned conversation snapshots;
+source text, pending IDs, freshness, pagination, eviction and account invalidation
+do not change. Additive API `lastMessagePreview` and quote/activity `previewText`
+fields carry bot summaries parsed before clipping (500/200 code points). Clients
+prefer those fields and derive summaries from full cached source where available;
+older snapshots fall back to parsing their existing summary. Legacy raw summary
+and quote fields remain available for history identity and model context. There is no new network request, persisted HTML or
+shared cache of parsed private text. Web memoizes derived HTML per mounted message
+and recomputes when its text changes; native layout derives from the current text.
+See [caching](caching.md#markdown-presentation).
+
+Static web and iOS type checking passed during implementation. Builds, tests and
+visual device/browser verification were not run. With fictional messages, verify
+short/long replies, nested emphasis/lists, code containing markup, basic tables,
+links with permitted and rejected schemes, malformed syntax, large text sizes,
+light/dark appearance, quotes/reactions/receipts and scrolling in both clients.
+Reopen cached history offline and switch accounts to confirm that formatted history
+follows the existing session cache and that human text remains literal.

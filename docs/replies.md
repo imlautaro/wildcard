@@ -135,3 +135,15 @@ Before release verification, use fictional accounts:
 - iOS: swipe while scrolling vertically, combine swipe with long-press reactions and
   text selection, and check VoiceOver, Dynamic Type and Reduce Motion.
 - Web: keyboard access to the reply button, touch layouts and dark mode.
+
+## Plain bot quote previews
+
+Both clients show plain text for bot quotes in bubbles and the composer. The API
+adds optional `previewText`, generated from full bot source before the 200-code-point
+quote bound; local optimistic quotes do the same. Raw `text` and message identity
+remain unchanged for agent context and navigation. Human quotes remain literal,
+and previews of links/images retain their labels while code retains its contents.
+Older snapshots fall back to local parsing. Preview fields use the same conversation
+cache and invalidation as their quote; no additional fetch or persisted cache exists.
+Static client/API checks passed; long quote, cache reopen and device verification
+remain pending.

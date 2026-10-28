@@ -16,6 +16,7 @@ export type Contact = {
   photoVersion?: string | null;
   createdAt: number;
   updatedAt: number;
+  lastMessagePreview?: string | null;
   lastMessageText: string | null;
   lastMessageAt: number | null;
   // 1 when the latest turn is the user's own message (no reply, schedule, or group request).
@@ -42,6 +43,7 @@ export type ReplyQuote = {
   agentID: string | null;
   senderName: string | null;
   text: string;
+  previewText?: string;
   attachment: Attachment | null;
 };
 
@@ -74,6 +76,7 @@ export type ChatGroup = {
   ownerID: string;
   createdAt: number;
   updatedAt: number;
+  lastMessagePreview?: string | null;
   lastMessageText: string | null;
   lastMessageAt: number | null;
   lastMessageSenderName: string | null;

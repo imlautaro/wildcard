@@ -8,11 +8,13 @@
     "typecheck": "nuxt prepare && node scripts/typecheck.mjs"
   },
   "dependencies": {
+    "markdown-it": "15.0.3",
     "nuxt": "4.6.2",
     "vue": "3.5.44",
     "vue-router": "5.4.0"
   },
   "devDependencies": {
+    "@types/markdown-it": "14.2.0",
     "typescript6": "npm:typescript@6.0.3",
     "vue-tsc": "3.3.13"
   }

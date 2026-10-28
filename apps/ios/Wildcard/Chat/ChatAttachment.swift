@@ -68,6 +68,7 @@ struct ChatAttachmentView: View {
     var localData: Data? = nil
     var fromUser = true
     var showsReceipt = true
+    var formatsMarkdown = false
     var senderName: String? = nil
     var senderColor: Color? = nil
     var replyQuote: MessageReplyPreview? = nil
@@ -110,7 +111,7 @@ struct ChatAttachmentView: View {
                             }
                             imageButton
                             if !caption.isEmpty {
-                                MessageTextContentView(text: caption, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true)
+                                MessageTextContentView(text: caption, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true, formatsMarkdown: formatsMarkdown)
                                     .padding(.horizontal, 16).padding(.vertical, 12)
                             }
                         }

@@ -232,7 +232,7 @@ private struct ChatListRow: View {
 
     private var messagePreview: String {
         guard let text = contact.lastMessageText else { return "No messages yet" }
-        return text.components(separatedBy: .newlines)
+        return (contact.lastMessagePreview ?? (contact.lastMessageFromUser == 0 ? MessageMarkdown.plainText(text) : text)).components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
@@ -305,7 +305,9 @@ private struct GroupChatListRow: View {
     @ScaledMetric(relativeTo: .subheadline) private var previewSize: CGFloat = 15
 
     private var messagePreview: AttributedString {
-        let message = group.lastMessageText?.components(separatedBy: .newlines)
+        let source = group.lastMessageText
+        let cleaned = group.lastMessagePreview ?? source.map { group.lastMessageUserID == nil ? MessageMarkdown.plainText($0) : $0 }
+        let message = cleaned?.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ") ?? "No messages yet"
         guard let sender = own ? "You" : group.lastMessageSenderName, !sender.isEmpty else { return AttributedString(message) }
         var preview = AttributedString(sender + ": ")

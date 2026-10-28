@@ -414,3 +414,18 @@ retries failures independently of list requests, and updates row/tab/icon counts
 after server acknowledgement. These intents do not acknowledge unseen Home
 previews. See [read acknowledgement lifetime](caching.md#read-acknowledgement-lifetime)
 for retention, stale-response protection and pending device verification.
+
+## Markdown-free bot alerts
+
+The API turns bot Markdown into plain text before building private/group APNs
+payloads and before applying the existing serialized UTF-8 size bound. This also
+covers OS fallback when the iOS notification extension cannot finish: the original
+push body is already plain text. Human group alerts stay literal. Link and image
+labels are retained; markup delimiters are removed, and code content stays literal.
+Group activity includes optional `previewText` plus sender `agentID`; iOS uses the
+plain summary for locally scheduled foreground notifications. It falls back to
+parsing known bot source for older snapshots. No notification registration, routing,
+badge, receipt, photo fetch, consent or storage policy changes. Already delivered
+alerts are not rewritten. The API change requires the normal automatic release.
+Static API/web/Swift checks passed; actual APNs and foreground device presentation
+have not been reverified.

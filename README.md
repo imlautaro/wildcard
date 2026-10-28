@@ -21,6 +21,8 @@ apps/
     Wildcard.xcodeproj/       # Xcode project
     WildcardTests/
     WildcardUITests/
+shared/
+  messageMarkdown.ts         # Shared web/API Markdown rendering and plain summaries
 docs/
   infrastructure.md          # Reproducible provisioning and automatic releases
   authentication.md          # Auth contract, session behavior, and limitations
@@ -75,7 +77,8 @@ all contacts in alphabetical order. Tap a contact to open its conversation. Swip
 tap a contact to open its conversation and its title to edit it. Editors
 push over the full tab layout, preserving the selected tab on return. Chats supports
 pull to refresh and paginated loading. Choose, crop, replace, or remove a [profile photo](docs/profile-photos.md) in the
-contact editor. Private photo bytes use R2. Contact identities are saved in D1; each participant has an isolated private conversation. See [contacts](docs/contacts.md). Conversations support
+contact editor. Private photo bytes use R2. Contact identities are saved in D1; each participant has an isolated private conversation. See [contacts](docs/contacts.md). Conversations format bot replies with essential Markdown and show plain bot text in
+chat list previews, quoted replies and notifications. Conversations support
 [emoji reactions](docs/reactions.md) from humans and bots on their own or others’
 messages in both private chats and groups, [quoted replies](docs/replies.md) to any
 earlier message (swipe or hold on iOS, reply button on the web) that agents read as context, persisted messages, reply status, earlier history, contextual failure notices, and bounded response-only recovery before manual retries. The chat title shows

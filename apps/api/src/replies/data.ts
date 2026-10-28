@@ -1,3 +1,4 @@
+import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 import { publicAttachment, type PublicAttachment } from '../chat/attachments';
 import { isRecord } from '../chat/meta';
 
@@ -6,7 +7,7 @@ export type ReplyTarget = { messageID: string; side: ReplySide };
 // Display data for a quoted message, resolved from current conversation history on
 // every read. Private quotes omit sender identity: the side determines the author.
 export type ReplyQuote = ReplyTarget & { available: boolean; userID: string | null; agentID: string | null;
-  senderName: string | null; text: string; attachment: PublicAttachment | null };
+  senderName: string | null; text: string; previewText?: string; attachment: PublicAttachment | null };
 type QuoteRow = { id: string; userID: string | null; agentID: string | null; senderName: string | null;
   userText: string; assistantText: string | null; attachmentJSON: string | null };
 
@@ -35,8 +36,9 @@ export function parseGroupReply(value: unknown): string | null | undefined {
 function quote(target: ReplyTarget, row: QuoteRow | undefined): ReplyQuote {
   if (!row) return { ...target, available: false, userID: null, agentID: null, senderName: null, text: '', attachment: null };
   const assistant = target.side === 'assistant';
+  const source = assistant ? row.assistantText ?? '' : row.userText;
   return { ...target, available: true, userID: row.userID, agentID: row.agentID, senderName: row.senderName,
-    text: quoteText(assistant ? row.assistantText ?? '' : row.userText), attachment: assistant ? null : publicAttachment(row) };
+    text: quoteText(source), previewText: quoteText(assistant || row.agentID ? plainMessageMarkdown(source) : source), attachment: assistant ? null : publicAttachment(row) };
 }
 
 export async function privateQuotes(db: D1Database, contactID: string, userID: string,

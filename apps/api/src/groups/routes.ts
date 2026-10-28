@@ -1,3 +1,4 @@
+import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 import { accountEnvironment } from '../lib/model-preference';
 import { reactionRoutes } from '../reactions/routes';
 import { groupQuotes, parseGroupReply } from '../replies/data';
@@ -23,6 +24,12 @@ const membership = (db: D1Database, id: string, user: string) => db.prepare(`SEL
   WHERE m.group_id = ? AND m.user_id = ?`).bind(id, user).first<{ canInvite: number; ownerID: string }>();
 const mayInvite = `EXISTS (SELECT 1 FROM group_member m JOIN chat_group g ON g.id = m.group_id
   WHERE m.group_id = ?1 AND m.user_id = ?2 AND (m.can_invite = 1 OR g.owner_id = ?2))`;
+type GroupSummary = Record<string, unknown> & { lastMessageText: string | null; lastMessageUserID: string | null };
+function groupPreview(row: GroupSummary) {
+  const source = row.lastMessageText;
+  return { ...row,
+    lastMessagePreview: source == null ? null : [...(row.lastMessageUserID == null ? plainMessageMarkdown(source) : source)].slice(0, 500).join('') };
+}
 const summary = `m.last_read_sequence AS lastReadSequence,
   (SELECT COUNT(*) FROM group_message gm WHERE gm.group_id = g.id AND gm.sequence > m.last_read_sequence
     AND gm.user_id IS NOT m.user_id) AS unreadCount, g.id, g.name, g.owner_id AS ownerID,
@@ -59,14 +66,15 @@ groups.use('*', async (c, next) => {
 
 groups.get('/', async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT ${summary} FROM chat_group g JOIN group_member m ON m.group_id = g.id
-    WHERE m.user_id = ? ORDER BY updatedAt DESC, g.id LIMIT 100`).bind(c.get('owner')).all();
+    WHERE m.user_id = ? ORDER BY updatedAt DESC, g.id LIMIT 100`).bind(c.get('owner')).all<GroupSummary>();
   const { results: activity } = await c.env.DB.prepare(`SELECT gm.id AS messageID, gm.sequence, gm.group_id AS groupID,
-    g.name AS groupName, gm.sender_name AS senderName, gm.created_at AS sentAt,
-    substr(CASE WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END, 1, 500) AS text
+    g.name AS groupName, gm.sender_name AS senderName, gm.agent_id AS agentID, gm.created_at AS sentAt,
+    CASE WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END AS text
     FROM group_message gm JOIN group_member m ON m.group_id = gm.group_id JOIN chat_group g ON g.id = gm.group_id
     WHERE m.user_id = ? AND gm.sequence > m.last_read_sequence AND gm.user_id IS NOT m.user_id
-    ORDER BY gm.sequence DESC LIMIT 50`).bind(c.get('owner')).all();
-  return c.json({ groups: results, activity, contributorModel: contributor(c.env) });
+    ORDER BY gm.sequence DESC LIMIT 50`).bind(c.get('owner')).all<Record<string, unknown> & { text: string; agentID: string | null }>();
+  return c.json({ groups: results.map(groupPreview), activity: activity.map((item) => ({ ...item,
+    text: [...item.text].slice(0, 500).join(''), previewText: [...(item.agentID ? plainMessageMarkdown(item.text) : item.text)].slice(0, 500).join('') })), contributorModel: contributor(c.env) });
 });
 groups.post('/', async (c) => {
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
@@ -144,7 +152,7 @@ groups.get('/:id', async (c) => {
   const member = await membership(c.env.DB, id, owner);
   if (!member) return c.json({ error: 'Group unavailable' }, 404);
   const group = await c.env.DB.prepare(`SELECT ${summary} FROM chat_group g JOIN group_member m ON m.group_id = g.id
-    WHERE g.id = ? AND m.user_id = ?`).bind(id, owner).first();
+    WHERE g.id = ? AND m.user_id = ?`).bind(id, owner).first<GroupSummary>();
   const { results: members } = await c.env.DB.prepare(`SELECT u.id, 'user' AS kind, u.name, u.photo_version AS photoVersion,
     m.can_invite AS canInvite, NULL AS addedBy FROM group_member m JOIN user u ON u.id = m.user_id WHERE m.group_id = ?
     UNION ALL SELECT a.id, 'agent', a.name, a.photo_version, 0, ga.added_by FROM group_agent ga
@@ -156,7 +164,7 @@ groups.get('/:id', async (c) => {
     AND (r.status != 'failed' OR NOT EXISTS (SELECT 1 FROM group_message later
       WHERE later.group_id = r.group_id AND later.agent_id = r.agent_id AND later.sequence > source.sequence))
     ORDER BY (r.status = 'failed'), r.sequence DESC LIMIT 80`).bind(id).all();
-  return c.json({ group, members, replies, canInvite: member.canInvite === 1 || member.ownerID === owner, contributorModel: contributor(c.env) });
+  return c.json({ group: group ? groupPreview(group) : group, members, replies, canInvite: member.canInvite === 1 || member.ownerID === owner, contributorModel: contributor(c.env) });
 });
 groups.patch('/:id', async (c) => {
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);

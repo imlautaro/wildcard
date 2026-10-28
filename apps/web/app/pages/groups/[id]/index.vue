@@ -213,7 +213,7 @@ onBeforeUnmount(() => {
             >{{ senderOf(item.message)?.name ?? item.message.senderName }}</span>
             <MessageReplyQuote v-if="item.message.replyTo" :preview="replyPreview(item.message.replyTo)" interactive @open="showQuoted(item.message.replyTo)" />
             <MessageAttachment v-if="item.message.attachment" :attachment="item.message.attachment" :path="attachmentPath(item.message)" />
-            <div v-if="item.message.text" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }">{{ item.message.text }}</div>
+            <div v-if="item.message.text" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }"><MessageMarkdown v-if="item.message.agentID" :text="item.message.text" /><template v-else>{{ item.message.text }}</template></div>
             <div class="meta" :style="item.message.attachment?.mimeType.startsWith('image/') ? 'padding: 0 6px 2px' : ''">
               {{ messageTime(item.message.createdAt) }}<MessageReceipt v-if="isMine(item.message)" :receipt-state="item.message.receiptState ?? 'sent'" />
             </div>

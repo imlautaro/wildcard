@@ -7,6 +7,7 @@ struct ChatGroup: Decodable, Hashable, Identifiable {
     let ownerID: String
     let createdAt: Double
     let updatedAt: Double
+    var lastMessagePreview: String? = nil
     var lastMessageText: String?
     var lastMessageAt: Double?
     var lastMessageSenderName: String?
@@ -25,6 +26,8 @@ struct GroupActivity: Decodable {
     let senderName: String
     let sentAt: Double
     let text: String
+    var previewText: String? = nil
+    var agentID: String? = nil
 }
 struct GroupReadState: Decodable { let lastReadSequence: Int; let unreadCount: Int }
 struct GroupMember: Decodable, Hashable, Identifiable {
@@ -403,6 +406,7 @@ final class GroupChatStore {
            message.id == group.lastMessageID || message.createdAt >= (group.lastMessageAt ?? 0) {
             result.lastMessageID = message.id
             result.lastMessageText = message.text.isEmpty ? message.attachment.map { "Attachment: " + $0.name } ?? "" : String(message.text.prefix(500))
+            result.lastMessagePreview = message.agentID != nil && !message.text.isEmpty ? String(MessageMarkdown.plainText(message.text).prefix(500)) : result.lastMessageText
             result.lastMessageAt = message.createdAt
             result.lastMessageSenderName = message.senderName
             result.lastMessageUserID = message.userID
@@ -412,6 +416,7 @@ final class GroupChatStore {
         if let pending, !messages.contains(where: { $0.id == pending.id }) {
             result.lastMessageID = pending.id
             result.lastMessageText = pending.text.isEmpty ? pending.attachment.map { "Attachment: " + $0.name } ?? "" : pending.text
+            result.lastMessagePreview = result.lastMessageText
             result.lastMessageAt = pending.sentAt
             result.lastMessageUserID = pendingSender?.id
             result.lastMessageSenderName = pendingSender?.name
