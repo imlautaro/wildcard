@@ -80,17 +80,27 @@ arguments can also represent semantically equivalent operations; the ledger
 cannot infer provider semantics. Check the external service before retrying an
 uncertain write. Connection permission is checked before receipt replay too.
 
-Up to four connections per contact, 64 tools per server, one catalog page,
+Up to four connections per contact, 256 tools per server, eight catalog pages,
 16 KB per schema, 1,000 schema nodes, depth 16, 16 KB call arguments, 24 KB catalog
-context or textual result, 256 KB aggregate transport bytes per session and a
+context or textual result, 256 KB per saved catalog, 1 MiB aggregate transport bytes per session and a
 20-second session deadline. The deadline includes DNS, initialization and the
 operation. Management requests are limited to 30 per account per minute. Calls
 also inherit existing chat admission and Workflow time budgets. No automatic
 remote action retries or transport reconnections are enabled.
 
 Schemas use @cfworker/json-schema (2020-12), an interpreting validator that
-works without eval/new Function in Workers. References, regex keywords,
-unsupported schema dialects and excessive catalogs fail closed. Even a single incompatible tool can prevent catalog discovery. HTTPS
+works without eval/new Function in Workers. References, patternProperties,
+unsupported schema dialects and excessive catalogs fail closed. Anchored finite
+patterns up to 256 characters are admitted only after static preflight limits their
+maximum match width to 256 and alternative combinations to 64. Literal characters,
+character classes, simple character escapes, groups/alternation and exact repeats
+on individual characters are supported. Variable/unbounded repetition, quantified
+groups, lookarounds, backreferences and Unicode property escapes remain rejected.
+Date/month and UUID patterns can therefore be enforced without admitting arbitrary
+backtracking complexity. Preflight visits actual subschemas, so properties named
+pattern or literal enum/const data are not mistaken for schema keywords. Even a
+single incompatible tool still prevents catalog replacement; precise schema errors
+explain the rejected feature without exposing tokens or remote exception bodies. HTTPS
 must use a public DNS hostname, default port, no credentials, query or fragment.
 Redirects and off-endpoint transport requests are rejected. Public DNS addresses
 are checked through Cloudflare DoH; local, reserved and IP-literal endpoints are
@@ -155,8 +165,15 @@ metadata. iOS also refreshes when the screen becomes active. Requests deduplicat
 mutation invalidates earlier reads and refreshes the authoritative snapshot.
 Transient failures retain usable content. Access loss, account changes, contact
 removal and eviction invalidate entries; late responses cannot restore them.
-Cache state never grants backend permission. There is no catalog pagination in
-this version. No mutation is automatically retried after leaving the page; after
+Cache state never grants backend permission. Remote discovery follows opaque
+nextCursor values for up to eight pages under the same session deadline/byte budget,
+rejecting repeated cursors, duplicate names, oversized cursors and incomplete catalogs.
+Only a complete validated snapshot is saved; failed refresh retains the previous
+snapshot and permissions. Clients receive that complete snapshot, not UI network pages.
+Both clients show loaded/enabled counts and filter names/descriptions locally using
+Search tools. Search is transient view state and makes no request; it does not alter
+permissions. The model's list_mcp_tools supports optional query/offset and returns
+nextOffset when its 24 KB page is full, so later authorized tools remain reachable. No mutation is automatically retried after leaving the page; after
 a network failure, refresh metadata before repeating a management action.
 
 ## Compatibility and pending verification
@@ -165,7 +182,7 @@ OAuth authorization-code with S256 PKCE, public/confidential pre-registered clie
 automatic issuer/scope discovery, Client ID Metadata Documents, Dynamic Client
 Registration where supported, and refresh tokens are implemented.
 Implicit grants, device-code grants, client-credentials grants, provider endpoints containing query parameters, legacy SSE-only
-servers, stdio commands, custom headers, large paginated catalogs and non-text
+servers, stdio commands, custom headers, catalogs exceeding the bounded limits and non-text
 results remain unsupported. Full interoperability with a particular live server
 is not established by static checks or by this feature's Gmail preset.
 

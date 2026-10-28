@@ -95,6 +95,7 @@ struct McpConnectionsView: View {
     @State private var isVisible = false
     @State private var busy = false
     @State private var error: String?
+    @State private var toolQuery = ""
     @State private var pendingPermission: (String, McpTool)?
     @State private var pendingDisconnect: String?
     private let notice = "Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard. This private chat stays excluded from shared memory, even after disconnecting. Group posting and schedule creation/editing from this chat will be disabled."
@@ -109,10 +110,15 @@ struct McpConnectionsView: View {
                 if cache.value == nil { ProgressView("Loading connections…") }
                 else if cache.value?.isEmpty == true { Text("No connections yet.") }
             }
+            if (cache.value ?? []).contains(where: { !$0.tools.isEmpty }) {
+                Section { TextField("Search tools", text: $toolQuery).textInputAutocapitalization(.never).autocorrectionDisabled() }
+            }
             ForEach(cache.value ?? []) { connection in
                 Section(connection.name) {
                     Text(connection.url).font(.footnote).textSelection(.enabled)
                     Text(connection.authType == "oauth" ? (connection.authenticated ? "OAuth connected" : "Authorization required") : connection.authenticated ? "Bearer token" : "Public access").foregroundStyle(.secondary)
+                    Text("\(connection.tools.count) tools loaded · \(connection.tools.filter(\.allowed).count) enabled").font(.footnote)
+                    if !toolQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { Text("\(visibleTools(connection).count) matching").font(.footnote) }
                     if let issuer = connection.oauthIssuer { Text("Issuer: \(issuer)\nRequested scopes: \(connection.oauthScope ?? "")").font(.footnote).textSelection(.enabled) }
                     if connection.authType == "oauth" {
                         Text("Reauthorizing clears existing tool permissions. Review and enable them again afterward.").font(.footnote)
@@ -121,7 +127,7 @@ struct McpConnectionsView: View {
                         }
                         Button("Configure OAuth") { configure(connection) }.disabled(busy)
                     }
-                    ForEach(connection.tools) { tool in
+                    ForEach(visibleTools(connection)) { tool in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(tool.name).font(.headline)
                             Text(tool.description).font(.footnote)
@@ -175,6 +181,10 @@ struct McpConnectionsView: View {
         .task(id: scenePhase) { if scenePhase == .active { await refresh() } }
         .onAppear { isVisible = true }
         .onDisappear { isVisible = false; token = ""; clientSecret = ""; browser.cancel() }
+    }
+    private func visibleTools(_ connection: McpConnection) -> [McpTool] {
+        let query = toolQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return connection.tools.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) || $0.description.localizedCaseInsensitiveContains(query) }
     }
     private func refresh() async {
         do {

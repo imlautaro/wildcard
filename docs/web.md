@@ -245,3 +245,15 @@ Both clients now sign in existing accounts only. Account offers Muse Spark 1.3 S
 
 See [model settings](model-settings.md) for the API, shared consent, cache behavior,
 AI Gateway spending and pending runtime/device verification.
+
+## Large MCP tool catalogs
+
+Web and iOS share discovery of up to 256 tools across eight remote pages, with a
+256 KB saved-catalog budget and 1 MiB transport budget per twenty-second session.
+Common bounded date/month/UUID patterns are validated by a restricted finite regex
+preflight; unsafe regexes and references remain blocked. Complete validated refreshes
+replace the session snapshot and retain only unchanged fingerprint approvals.
+Failed refreshes keep the prior snapshot. No permissions are enabled by discovery.
+Both clients show loaded/enabled counts and a local Search tools field; query state
+is transient and does not enter the catalog cache. The model can search/page its
+24 KB authorized-tool listing. See [limits and safety](connectors.md#execution-retries-and-limits).

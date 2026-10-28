@@ -1300,3 +1300,18 @@ is the exact public metadata URL; its redirect_uris contain only the existing AP
 OAuth callback. Retain public-only egress and query redaction. See
 [automatic OAuth setup](connectors.md#automatic-setup-and-centralita) for provider
 selection, advanced credential boundaries and unverified end-to-end cases.
+
+### MCP catalog capacity and schema preflight
+
+The existing Worker/D1 stores at most 256 KB per connection catalog (four connections
+per contact, eight cached contacts: approximately 8 MB of JSON before framework
+memory overhead). Discovery follows at most eight pages/256 tools, bounded by the
+same twenty-second session and 1 MiB transport limit. No new dependency, resource,
+binding, secret or migration is needed. Schema interpretation remains eval-free;
+finite regex preflight caps pattern length/match width/branch combinations and
+rejects unbounded constructs and references. Preserve these bounds in independent
+deployments and rollback configurations. Catalogs are saved atomically only after
+full discovery/validation, so refresh failure cannot replace an approved catalog
+with a partial one. After automatic publication, refresh tools from both clients
+and confirm loaded counts and permissions; do not execute external actions merely
+to verify discovery. See [connector limits](connectors.md#execution-retries-and-limits).

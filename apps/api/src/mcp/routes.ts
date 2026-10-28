@@ -30,6 +30,12 @@ routes.onError((failure, c) => {
     MCP_DNS: 'The server hostname must resolve to public internet addresses.',
     MCP_ENDPOINT: 'Enter a public HTTPS endpoint with no query, fragment, credentials, or custom port.',
     MCP_REDIRECT: 'This endpoint redirects to another URL. Use the final public HTTPS endpoint; redirects are not allowed.',
+    MCP_TOO_MANY_TOOLS: 'This catalog exceeds the supported limit of 256 tools or eight pages, or repeats a page cursor.',
+    MCP_CATALOG_SIZE: 'This tool catalog exceeds the supported 256 KB snapshot size.',
+    MCP_SCHEMA: 'This server returned an unsupported or oversized tool schema. References and patternProperties are not supported.',
+    MCP_SCHEMA_PATTERN: 'A tool schema uses a pattern outside the supported bounded regex subset.',
+    MCP_SIZE: 'This server exceeded the 1 MiB response budget for one MCP session.',
+    MCP_TOOL: 'This server returned invalid or duplicate tool names.',
   };
   const reference = crypto.randomUUID();
   const stage = failure instanceof OAuthSetupFailure ? failure.stage : 'connection';

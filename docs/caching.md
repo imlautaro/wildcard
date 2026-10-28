@@ -427,7 +427,12 @@ through the existing **Load earlier** path, bounded to 20 pages.
 ## MCP connection metadata
 
 Both clients cache up to eight private contact catalogs in session memory, including empty
-results. They revalidate on entry and explicit refresh, deduplicate reads, reject responses
+results. Each contact has at most four 256 KB connection catalogs (approximately 8 MB
+of JSON total before framework overhead), with up to 256 tools per connection. Remote
+pagination is aggregated/validated before a snapshot is saved; clients do not cache
+partial network pages. Failed catalog refresh preserves the prior complete snapshot.
+Search tools filters the existing snapshot in memory; query text is transient view
+state and never changes backend authorization. They revalidate on entry and explicit refresh, deduplicate reads, reject responses
 invalidated by mutations and clear on access loss/account change. iOS uses the existing
 NavigationSnapshotCache; web uses useMcpConnections. Tokens are never cached. See
 [the full cache and verification contract](connectors.md#client-caching).

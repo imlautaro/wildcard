@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { McpConnection } from '~/composables/useMcpConnections';
 const route = useRoute();
 const id = computed(() => String(route.params.id));
 const { connections, callbackURL, busy, error, refresh, mutate } = useMcpConnections(id);
@@ -13,6 +14,11 @@ const clientID = ref('');
 const clientSecret = ref('');
 const advancedOAuth = ref(false);
 const configureID = ref<string | null>(null);
+const toolQuery = ref('');
+function visibleTools(connection: McpConnection) {
+  const query = toolQuery.value.trim().toLowerCase();
+  return connection.tools.filter(tool => !query || `${tool.name} ${tool.description}`.toLowerCase().includes(query));
+}
 type OAuthLaunch = { flowID: string; launchURL: string };
 function gmail() { advancedOAuth.value = true; clientID.value = ''; clientSecret.value = ''; name.value = 'Gmail'; url.value = 'https://gmailmcp.googleapis.com/mcp/v1'; authType.value = 'oauth'; issuer.value = 'https://accounts.google.com'; scope.value = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose'; }
 function configure(connection: { id: string; name: string; url: string }) { advancedOAuth.value = false; clientID.value = ''; clientSecret.value = ''; issuer.value = ''; scope.value = ''; configureID.value = connection.id; name.value = connection.name; url.value = connection.url; authType.value = 'oauth'; if (connection.url === 'https://gmailmcp.googleapis.com/mcp/v1') { advancedOAuth.value = true; issuer.value = 'https://accounts.google.com'; scope.value = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose'; } }
@@ -58,13 +64,15 @@ useHead({ title: 'Connections' });
     <button type="button" class="button" :disabled="busy" @click="refresh()">Refresh connections</button>
     <p v-if="connections === null" class="group-footer">Loading connections…</p>
     <p v-else-if="!connections.length" class="group-footer">No connections yet.</p>
+    <div v-if="connections?.some(connection => connection.tools.length)" class="field"><input v-model="toolQuery" type="search" maxlength="200" placeholder="Search tools" aria-label="Search tools"></div>
     <section v-for="connection in connections ?? []" :key="connection.id" class="group" style="margin-top: 20px">
       <div class="text-block"><strong>{{ connection.name }}</strong><p style="overflow-wrap: anywhere">{{ connection.url }}</p><p>{{ connection.authType === 'oauth' ? (connection.authenticated ? 'OAuth connected' : 'Authorization required') : connection.authenticated ? 'Bearer token' : 'Public access' }}</p></div>
       <p v-if="connection.oauthIssuer" class="text-block" style="overflow-wrap: anywhere">Issuer: {{ connection.oauthIssuer }}<br>Requested scopes: {{ connection.oauthScope }}</p>
+      <p class="text-block">{{ connection.tools.length }} tools loaded · {{ connection.tools.filter(tool => tool.allowed).length }} enabled<span v-if="toolQuery.trim()"> · {{ visibleTools(connection).length }} matching</span></p>
       <p v-if="connection.authType === 'oauth'" class="text-block">Reauthorizing clears existing tool permissions. Review and enable them again afterward.</p>
       <button v-if="connection.authType === 'oauth' && connection.oauthConfigured" type="button" class="button-row" :disabled="busy" @click="authorize(connection.id)">Authorize / Reauthorize</button>
       <button v-if="connection.authType === 'oauth'" type="button" class="button-row" :disabled="busy" @click="configure(connection)">Configure OAuth</button>
-      <div v-for="tool in connection.tools" :key="tool.fingerprint" class="text-block">
+      <div v-for="tool in visibleTools(connection)" :key="tool.fingerprint" class="text-block">
         <strong>{{ tool.name }}</strong><p>{{ tool.description }}</p>
         <details><summary>Input schema</summary><pre style="white-space: pre-wrap; overflow-wrap: anywhere">{{ JSON.stringify(tool.inputSchema, null, 2) }}</pre></details>
         <button type="button" class="button" :disabled="busy" @click="permission(connection.id, tool)">{{ tool.allowed ? 'Disable tool' : 'Allow without asking again' }}</button>
