@@ -24,6 +24,7 @@ async function check(name, run) {
       VALUES ('group','sender','connector','human','group-grant');`);
     const state = { model: [], tools: [], logs: [], checkpoints: new Map(), reads: [] };
     const c = vm.createContext({ Error, SyntaxError, Date, JSON, TextEncoder, NonRetryableError: class extends Error {},
+      personalityContext:async()=>'',
       console: { error: v => state.logs.push(v), log: v => state.logs.push(v) },
       groupSourceAccess: f.context.groupSourceAccess,
       isRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),

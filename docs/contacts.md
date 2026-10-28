@@ -195,3 +195,17 @@ bold sender prefix. Existing private-contact swipe/context-menu actions and the
 alphabetical Contacts directory remain available. Groups older than the current
 private-chat pagination boundary appear only as Load more reaches that timestamp.
 See [groups](groups.md).
+
+## Personality
+
+After creating a contact, open **Contact details → Personality** on iOS or web.
+The creator edits the shared fictional identity, optional birth date and time
+zone, and fifteen integer temperament controls; other participants can inspect
+these read-only. Age is derived from the current date. The experiment starts
+disabled and settings use a separate versioned endpoint, leaving the existing
+name-only creation/rename contracts unchanged. Saving personality changes clears
+its emotional observations across conversations while preserving transcripts and
+factual memories. Relationships follow each person across eligible chats and
+groups through per-recipient acting direction; private causes stay private and
+connector conversations remain isolated. See [personality](personality.md) for the complete API, behavior,
+privacy, cache, and pending device/model verification.

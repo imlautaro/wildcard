@@ -18,6 +18,38 @@ final class ContactsStore {
     let mcpAccessSnapshots = NavigationSnapshotCache<[McpAccess]>()
     let mcpSnapshots = NavigationSnapshotCache<[McpConnection]>()
     let energySnapshots = NavigationSnapshotCache<ContactEnergy>()
+    let personalitySnapshots = NavigationSnapshotCache<ContactPersonalitySnapshot>()
+    @ObservationIgnored private var personalityDrafts: [String: PersonalityDraft] = [:]
+    @ObservationIgnored private var personalityDraftOrder: [String] = []
+
+    func personalitySnapshot(id: String) -> NavigationSnapshot<ContactPersonalitySnapshot> {
+        personalitySnapshots.store(for: id, preserving: Set(personalityDrafts.filter { $0.value.saving }.map(\.key)))
+    }
+
+    func personalityDraft(id: String) -> PersonalityDraft {
+        personalityDraftOrder.removeAll { $0 == id }
+        personalityDraftOrder.append(id)
+        if let value = personalityDrafts[id] { return value }
+        if personalityDrafts.count >= 8, let oldest = personalityDraftOrder.first(where: { personalityDrafts[$0]?.saving != true }) {
+            personalityDrafts.removeValue(forKey: oldest)
+            personalityDraftOrder.removeAll { $0 == oldest }
+        }
+        let value = PersonalityDraft()
+        personalityDrafts[id] = value
+        return value
+    }
+
+    func forgetPersonality(id: String) {
+        personalitySnapshots.remove(id: id)
+        if let draft = personalityDrafts[id] {
+            draft.profile = ContactPersonality()
+            draft.baseline = draft.profile
+            draft.loaded = false
+            draft.revision = 0
+        }
+        personalityDrafts.removeValue(forKey: id)
+        personalityDraftOrder.removeAll { $0 == id }
+    }
     let sharingSnapshots = NavigationSnapshotCache<ContactSharing>()
     let miniApps = MiniAppStore()
     private var refreshRequest: (id: UUID, task: Task<Void, Never>)?
@@ -162,6 +194,7 @@ final class ContactsStore {
                 scheduleSnapshots.remove(id: contact.id)
                 sharingSnapshots.remove(id: contact.id)
                 energySnapshots.remove(id: contact.id)
+                forgetPersonality(id: contact.id)
                 mcpAccessSnapshots.remove(id: "contact:\(contact.id)")
                 miniApps.forget(contactID: contact.id)
                 knownContacts.removeValue(forKey: contact.id)
@@ -323,6 +356,7 @@ final class ContactsStore {
             scheduleSnapshots.remove(id: contact.id)
             sharingSnapshots.remove(id: contact.id)
             energySnapshots.remove(id: contact.id)
+            forgetPersonality(id: contact.id)
             mcpAccessSnapshots.remove(id: "contact:\(contact.id)")
             miniApps.forget(contactID: contact.id)
             readAcknowledgements.remove(id: contact.id)
@@ -364,6 +398,7 @@ final class ContactsStore {
                 scheduleSnapshots.remove(id: id)
                 sharingSnapshots.remove(id: id)
                 energySnapshots.remove(id: id)
+                forgetPersonality(id: id)
                 mcpAccessSnapshots.remove(id: "contact:\(id)")
                 miniApps.forget(contactID: id)
                 readAcknowledgements.remove(id: id)

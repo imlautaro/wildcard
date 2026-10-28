@@ -1,4 +1,5 @@
 import { localGroupMemories } from './memory';
+import { personalityContext } from '../personality/engine';
 import { reactionColumns, reactionJoins, type Reaction } from '../reactions/data';
 import { readEnergy } from './energy';
 import { agentMemoryContext, readAgentMemories } from '../chat/agent-memory';
@@ -126,7 +127,14 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
       AND member.user_id = r.user_id AND member.share_memory = 1 AND (?3 = 0 OR member.contributor_consent = 1)))
     AND (r.agent_id IS NULL OR EXISTS (SELECT 1 FROM group_agent member WHERE member.group_id = ?2 AND member.agent_id = r.agent_id))
     ORDER BY r.group_message_id, actorID`).bind(JSON.stringify([...new Set([row.sourceID, ...history.map((m) => m.id), ...roundReplies.map((m) => m.id)])]), row.groupID, contributor).all<Reaction>();
+  const character = await personalityContext(env, { agentID: row.agentID, groupID: row.groupID,
+      processingUserID: row.userID,
+      speakerID: row.sourceAgentID ? `agent:${row.sourceAgentID}` : `user:${row.userID}`,
+      sourceID: job.turnID, attempt: job.attempt, text: row.text,
+      context: JSON.stringify({ name: row.name, speaker: row.senderName, replyTo: replyContext(row.replyToID, quoted),
+        recent: history.slice(0, 3).map(m => ({ speaker: m.name, text: clipText(m.text, 400) })) }) });
   const messages: ModelMessage[] = [
+    ...(character ? [{ role: 'system' as const, content: character }] : []),
     { role: 'system', content: `You are ${JSON.stringify(row.name)}, agent ID ${JSON.stringify(row.agentID)}, participating in a group chat named ${JSON.stringify(row.groupName)}.
 Speak only as yourself, never impersonate other members. Continue the conversation at your turn, taking account of earlierRepliesInRound and recentGroupMessages. Do not independently restart the original exchange as if nobody else had spoken.
 Answer in the humans' language. Keep ordinary conversation brief; give data analysis enough detail to explain the evidence, calculations and limitations. Avoid repetitive formulas and automatic closing questions. A fresh opening greeting deserves a warm response; you may introduce a topic or ask the speaking bot a relevant question to begin a conversation. Do not automatically ask the human the same question back, especially if another member already did. A short direct answer can be enough. Refer to another member only when it adds something; do not force agreement, name-dropping, banter or different preferences. When everyone is asked, normally give your own answer even if another bot has the same preference.

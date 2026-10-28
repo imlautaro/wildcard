@@ -222,6 +222,7 @@ function upsertContact(contact: Contact) {
 }
 
 function removeContact(id: string) {
+  forgetPersonality(id);
   forgetConversation(id);
   contacts.value = contacts.value.filter((contact) => contact.id !== id);
   readGuards.delete(`contact:${id}`);

@@ -64,6 +64,10 @@ function fixture() {
     byteLength: text => Buffer.byteLength(text), clipText: text => text,
     dispatchGroup: async () => { state.dispatches++; }, deliverGroupPush: async () => { state.pushes++; },
     scheduleTools: [], groupRetrievalTools: [],
+    reactionTool: {function:{name:'react_to_message'}}, nativeTools: [], mcpTools: [], miniAppTools: [], miniAppInstruction: '',
+    personalityContext: async () => '',
+    nativeActions: {}, remoteSettings: {}, miniApps: {}, personality: {},
+    jobModel: async env => env.META_CHAT_MODEL, jobAccountID: async () => 'human', maintainAgentMemories: async () => {},
     fetch: async (url, request) => {
       assert.equal(url, 'https://api.meta.ai/v1/chat/completions');
       const body = JSON.parse(request.body);

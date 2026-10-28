@@ -81,12 +81,12 @@ final class NavigationSnapshotCache<Value: Sendable> {
     private var entries: [String: NavigationSnapshot<Value>] = [:]
     private var order: [String] = []
 
-    func store(for id: String) -> NavigationSnapshot<Value> {
+    func store(for id: String, preserving: Set<String> = []) -> NavigationSnapshot<Value> {
         order.removeAll { $0 == id }
         order.append(id)
         if let cached = entries[id] { return cached }
-        while entries.count >= 8, let oldest = order.first {
-            order.removeFirst()
+        while entries.count >= 8, let oldest = order.first(where: { $0 != id && !preserving.contains($0) }) {
+            order.removeAll { $0 == oldest }
             entries.removeValue(forKey: oldest)?.invalidate(remove: true)
         }
         let store = NavigationSnapshot<Value>()

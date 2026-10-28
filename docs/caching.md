@@ -718,3 +718,34 @@ with a `resolution` replaces the cached view; the display is that view plus the 
 still pending. A transient failure retries the same UUID twice, then drops the queue
 and reloads. Leaving the screen keeps the queue running in the session store. Account
 changes and view invalidation discard it, and late responses are rejected.
+
+## Personality snapshots and drafts
+
+The [personality editor](personality.md) uses `NavigationSnapshotCache` plus
+session-owned `PersonalityDraft` objects in `ContactsStore` on iOS, and
+`usePersonality` on web. Each budgets eight entries in memory. Active saves are
+protected from ordinary eviction and may temporarily exceed the budget. No
+profile, dirty draft, or derived relationship state is persisted to client disk.
+
+The last snapshot (including the disabled/empty default) is immediately reusable.
+Opening/reopening revalidates in the background; iOS also refreshes on foreground.
+Explicit refresh asks before discarding a dirty draft. The server revision used
+for a dirty draft never silently advances during revalidation. Requests deduplicate,
+saves invalidate earlier reads, and successful mutations update snapshot and draft.
+Errors retain usable data and input; confirmed deletion/access loss and account
+changes clear state and reject late responses. There is no pagination or new image
+cache. Age/birthday display is refreshed on navigation or explicit refresh, while
+server reply context always derives the current date.
+
+Verify reopen/back, empty defaults, refresh/discard, offline reads and failed saves,
+concurrent edits/409, pending saves across navigation, eviction, deletion/revocation,
+and account switching on both clients. These checks remain pending on devices and
+in a browser; static type checking cannot establish UI behavior.
+
+Relationship projections and acting plans are server-only and are never cached or
+persisted on either client. They are rebuilt from current eligible sources for
+each preparation/review, with model consent and connector isolation rechecked.
+The editor copy on both platforms explains continuity without private causes and
+the connector exception. Its existing snapshot/draft API and retention are
+unchanged by relationship continuity; no additional network-backed UI state is
+introduced.

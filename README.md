@@ -227,3 +227,14 @@ composers and lessons, and are verified offline (automatic checks plus the
 contact's tests) before they are saved. Migrations 0037–0038 are required.
 
 Private contacts also support [conversation initiative](docs/initiative.md): durable AI reviews choose whether to wait, send a useful follow-up or stop after silence. Each participant can disable it in contact details on iOS or web. It reuses D1, Cron and Workflows; migrations 0032–0033 are required. Initial reviews become due after 30 seconds, with progressively longer gaps for unanswered follow-ups.
+
+## Contact personality experiment
+
+Creators can configure [Personality](docs/personality.md) in contact details on
+both iOS and web: stable fictional identity, birthday/time zone with computed age,
+and fifteen temperament sliders. The contact receives behavioral direction rather
+than scores. Relationships continue across eligible chats/groups through a
+server-side acting director that produces per-recipient direction without private
+causes. Connector conversations retain their local isolation. Initiative adapts within existing delivery limits. Existing contacts
+remain disabled until explicitly enabled. Migrations 0039–0040 are required; see
+[infrastructure](docs/infrastructure.md#contact-personality) for release and rollback.

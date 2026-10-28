@@ -14,6 +14,7 @@ import { terminateChats } from '../chat/dispatch';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readBearerSession } from '../lib/session';
 import sharing from './sharing';
+import personality from '../personality/routes';
 
 type Contact = { initiativeEnabled: number; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
 const columns = `initiative_enabled AS initiativeEnabled, id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
@@ -237,6 +238,7 @@ contacts.delete('/:id', async (c) => {
 });
 
 contacts.route('/:id/native-actions', nativeActions);
+contacts.route('/:id/personality', personality);
 contacts.route('/:id/mini-apps', miniApps);
 contacts.route('/:id/native-remote', remoteSettings);
 contacts.route('/sharing', sharing);

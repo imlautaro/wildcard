@@ -155,7 +155,8 @@ nothing useful to add. Exhausted/capped turns complete without inference or a bu
 Draft/review preparation, each inference, each tool result, read acknowledgements
 and guarded publication use separate durable Workflow steps. A successful result
 is reused on replay; a final-format failure never restarts completed research.
-Preparation retains two retries and a one-minute timeout. Model steps have one
+Preparation retains two retries and a two-minute timeout, allowing the optional
+personality classifier plus context reads. Model steps have one
 transient retry and a one-minute timeout; provider requests retain their
 45-second timeout. Tool steps have no automatic retry and a one-minute timeout;
 the MCP reservation/receipt ledger still protects interruptions before checkpoint.
@@ -601,3 +602,24 @@ parsed before clipping. Sender attribution, quotes, reactions,
 receipt metadata and the cached original text are preserved. Verify formatting
 with fictional private and group replies in both clients; visual verification is
 pending.
+
+## Personality and relationship continuity
+
+[Personality](personality.md) is one shared creator-owned profile. Its server-side
+acting director compiles the current topic, temperament, local atmosphere and
+persistent relationship with each current human/agent member into individual
+speech directions. Alice can receive restrained phrasing while Bob receives
+warmth within the same reply; neither ambiguous names nor another member's
+apology can merge their relationships. Private conflict does not become a cold
+default for everyone. Care/practical topics override grievances and irony.
+
+Relationships can continue from an eligible private chat or another group, but
+the performing model receives no source quotes, private IDs, event categories,
+read timestamps or explanation of the cause. The classifier sees only local
+message evidence and current audience. Current source membership, model consent,
+publication and deletion rules filter every projection. Pending/skipped drafts
+have no lasting effect, reviews reuse their one appraisal, and removal/revocation
+removes a source's influence. Connector groups/chats stay local and neither import
+nor export relationships. Factual memory, tool permissions, energy and round
+limits are independent. See the feature guide for bounded retention and privacy
+limitations and the opt-in fictional-data regression checks.

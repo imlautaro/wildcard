@@ -62,6 +62,10 @@ struct ContactEditorView: View {
                 }
                 Section {
                     NavigationLink("Connections") { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) }
+                    NavigationLink("Personality") {
+                        ContactPersonalityView(contactID: contactID, cache: contacts.personalitySnapshot(id: contactID),
+                                               draft: contacts.personalityDraft(id: contactID))
+                    }
                     NavigationLink("Mini apps") { MiniAppListView(contactID: contactID) }
                 }
                 Section {

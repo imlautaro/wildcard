@@ -97,7 +97,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
       for (let review = 0; review <= 2; review++) {
         const previous = draft;
         const preparation = await step.do(`group-prepare-input-${review}`, {
-          retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' }, timeout: '1 minute',
+          retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' }, timeout: '2 minutes',
         }, async () => {
           const task = await env.DB.prepare('SELECT status FROM group_reply WHERE id = ? AND attempt = ?')
             .bind(job.turnID, job.attempt).first<{ status: string }>();

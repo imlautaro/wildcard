@@ -612,3 +612,19 @@ or device verification is implied. Verify rapid sends, edits during generation,
 keyboard-only focus, abandoned drafts, resumed editing after idle, navigation,
 background/foreground, offline retry, attachments/device actions, shared-contact
 attention, access revocation and account switching using fictional conversations.
+
+## Personality direction
+
+An enabled [contact personality](personality.md) adds shared stable character
+information, authoritative calendar facts and behavioral prose to reply context.
+A separate bounded classifier creates an idempotent pending observation of the
+current source, using the same permitted model and no tools. Relationship projection includes only eligible published text replies, with
+continuity across eligible private/group contexts. Source causes remain server-side;
+the contact gets one categorical acting plan per current recipient. Connector
+conversations neither import nor export relationship state. A discarded burst, failed
+attempt, skipped turn or reaction-only response cannot build up resentment.
+Recovery and scheduled deliveries read existing state without appraising a new
+human message. Group-result deliveries keep the contact's style while retaining
+attribution and their existing action restrictions. A seen-gap reaction requires
+actual read receipts, remains mild and decays without lowering durable rapport.
+Existing consent, tool, batching, publication and delivery rules continue to apply.

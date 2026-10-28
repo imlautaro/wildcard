@@ -1723,3 +1723,51 @@ saved values for local actions, with a version for compare-and-swap and the last
 execution ID so that the action ledger commits in the same transaction. It cascades
 with its app. There are no new services or secrets. Keep the table on rollback; older
 code ignores it, but specs with `state` would then fail validation in older code.
+
+## Contact personality
+
+[Contact personality](personality.md) reuses the required D1 `DB`, Meta key/model,
+`CHAT_WORKFLOW`, and existing minute Cron. No account, service, binding, permission,
+secret, bucket, gateway, or extra scheduled trigger is required. Resource creation
+order remains the existing independent-account setup above: provision D1, configure
+bindings and runtime/build secrets without committing values, configure automatic
+API/web Workers Builds, and apply the versioned migrations. Provisioning of the
+existing app and credentials remains required before enabling the experiment.
+
+Migration `0039_contact_personality.sql` creates `agent_personality` and
+`personality_event`, lookup/expiry indexes, and privacy cleanup triggers. The
+Drizzle declarations are versioned in `src/db/schema.ts`. Migration `0040_personality_relationships.sql` adds the composite agent/person/time
+index for relationship projections; it does not backfill or reclassify old sources.
+The director and live-receipt checks use existing tables with source permission,
+model-consent and connector-isolation filters. No global free-form summaries or
+second relationship ledger are created. All existing agents
+start disabled without a profile row; migration does not rewrite chats or legacy
+identities. The existing Cron prunes at most 500 expired observations per minute;
+active conversations also prune their own bounded history. Logs contain only a
+bounded `personality_appraisal_deferred` event, never profile text or evidence.
+
+For local development, after `npm ci` and the existing auth setup, run
+`npm run db:migrate:local`; then run the API and web development commands. Use
+fictional profiles and dates. Production releases require a commit and successful
+push to the configured production branch, then verification of both automatic
+Worker builds and the deployed source SHA. The existing API release applies all
+D1 migrations before publishing. Do not run a manual deployment or migrate a
+production database outside an explicitly authorized release task.
+
+Verification: inspect the disabled default, creator-only updates and 409 handling,
+computed calendar facts, relationship continuity and source scoping, consent filters,
+profile-change cleanup,
+expiry pruning, and both client editors. Type checks and SQL compilation do not
+establish model quality, live permissions, UI behavior or remote migration status.
+Local fictional-data regression checks are authorized and documented in the
+feature guide. No production migration/release or live-model evaluation was
+performed for this implementation.
+
+Rollback: disable affected profiles or roll back Worker source through a committed
+and pushed automatic release. Keep the additive tables/indexes/triggers; older
+code can ignore them, and existing chats remain compatible. Dropping the tables
+would erase observations/profiles and break the new clients. Keep migration 0040
+and its additive index when rolling back the director; v1 code can ignore v2
+observation fields and keeps its older conversation-local behavior. Restore a matching
+API before reenabling the experiment. Profiles can be recreated, but cleared
+emotional observations are intentionally not recoverable from this feature.

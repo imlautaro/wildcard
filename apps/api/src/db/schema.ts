@@ -619,3 +619,34 @@ export const conversationInitiative = sqliteTable('conversation_initiative', {
   check('initiative_sent', sql`${table.sent} BETWEEN 0 AND 3`),
   index('initiative_due_idx').on(table.nextAt).where(sql`${table.nextAt} IS NOT NULL`),
 ]);
+
+export const agentPersonality = sqliteTable('agent_personality', {
+  agentId: text('agent_id').primaryKey().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  profileJson: text('profile_json').notNull(),
+  revision: integer('revision').notNull().default(1),
+  updatedAt: date('updated_at').notNull(),
+}, table => [check('personality_profile_json', sql`json_valid(${table.profileJson})`),
+  check('personality_revision', sql`${table.revision} > 0`)]);
+
+export const personalityEvent = sqliteTable('personality_event', {
+  agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  sourceId: text('source_id').notNull(),
+  contactId: text('contact_id').references(() => contact.id, { onDelete: 'cascade' }),
+  groupId: text('group_id').references(() => chatGroup.id, { onDelete: 'cascade' }),
+  privateTurnId: text('private_turn_id').references(() => chatTurn.id, { onDelete: 'cascade' }),
+  groupReplyId: text('group_reply_id').references(() => groupReply.id, { onDelete: 'cascade' }),
+  speakerId: text('speaker_id').notNull(),
+  profileRevision: integer('profile_revision').notNull(),
+  appraisalJson: text('appraisal_json').notNull(),
+  createdAt: date('created_at').notNull(),
+  contributor: integer('contributor', { mode: 'boolean' }).notNull(),
+}, table => [primaryKey({ columns: [table.agentId, table.sourceId] }),
+  index('personality_private_idx').on(table.agentId, table.contactId, desc(table.createdAt)),
+  index('personality_group_idx').on(table.agentId, table.groupId, desc(table.createdAt)),
+  index('personality_expiry_idx').on(table.createdAt),
+  index('personality_relationship_idx').on(table.agentId, table.speakerId, desc(table.createdAt), table.sourceId),
+  check('personality_event_json', sql`json_valid(${table.appraisalJson})`),
+  check('personality_event_contributor', sql`${table.contributor} IN (0, 1)`),
+  check('personality_event_scope', sql`(${table.contactId} IS NOT NULL AND ${table.privateTurnId} IS NOT NULL AND ${table.groupId} IS NULL AND ${table.groupReplyId} IS NULL)
+    OR (${table.groupId} IS NOT NULL AND ${table.groupReplyId} IS NOT NULL AND ${table.contactId} IS NULL AND ${table.privateTurnId} IS NULL)`),
+]);

@@ -145,3 +145,15 @@ is available only to explicit direct human requests. This planner still receives
 native tools and does not schedule autonomous alarms/timers. Future reuse requires
 separate device/contact autonomy grants and policy; conversation initiative alone
 does not grant remote execution permission.
+
+## Personality timing
+
+When the [personality experiment](personality.md) is enabled, initiative receives
+the same per-recipient acting director and eligible relationship continuity as
+replies, without source causes or relationship counters. Patience and initiative set a
+30–480 second initial minimum, scaled for later follow-ups and combined with the
+existing backoff. The model can still wait longer or stop. Existing opt-out,
+quiet hours, daily/episode/evaluation caps, consent, current activity and exclusive
+attention are authoritative. Disabling the experiment preserves the original
+cadence. No new proactive action tools, annual birthday job or group initiative
+are introduced. Real-model timing and quality calibration remain pending.

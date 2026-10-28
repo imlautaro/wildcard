@@ -462,3 +462,24 @@ loads have not been verified.
 Saved state, checklists, toggles, choices, inputs, progress bars, timers and button
 rows render with the same rules as iOS (`MiniAppView.vue`, `MiniAppTimer.vue`). Taps
 apply instantly and are reconciled with the server (`useMiniApps`).
+
+## Contact personality
+
+**Contact details → Personality** (`/contacts/:id/personality`) matches the native
+iOS experiment: stable identity, optional date of birth, birthday time zone,
+computed age and fifteen labeled 1–10 sliders. Only the creator can save; other
+participants have a read-only view. Existing contacts start disabled. Both clients
+use the same server director for private/group replies and initiative. Relationships
+follow stable person IDs across eligible contexts; only categorical acting direction
+reaches the model. Private causes stay private and connector chats/groups keep local
+isolation. No relationship scores or source events are downloaded into the UI.
+There is no platform exception for this feature.
+
+`usePersonality` owns session-only snapshots and dirty drafts with a budget of
+eight entries, retaining active saves until they settle. Reopen uses cached data
+immediately and revalidates; a refresh never overwrites unsaved edits. Explicit
+refresh asks before discarding changes. Mutations invalidate older reads and
+use the draft's original server revision, so a 409 preserves the input for review.
+Deletion/access loss and account changes remove state. There is no disk retention.
+See [personality](personality.md) and [caching](caching.md). Functional visual,
+offline, multi-account, race, and real-model verification remain pending.

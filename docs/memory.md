@@ -339,3 +339,17 @@ Static verification: API/web TypeScript, Swift parsing, migration/SQL preparatio
 whitespace checks. The opt-in `node scripts/checks/conversation-memory.cjs` uses
 fictional data and simulated inference; it was authored, not executed. Tests,
 builds, real inference, remote migration and device behavior remain unverified.
+
+## Personality observations
+
+The [personality experiment](personality.md) stores transient categorical events
+with source references in a separate relation. Relationship continuity projects
+those observations across eligible contexts into per-recipient acting directions,
+without exporting private causes or adding a shared narrative. Connector
+conversations retain their local isolation. Shared self-memory extraction excludes
+mood, anger at someone, perceived rejection, trust/relationship assessments,
+missed greetings, current age and birthday-today status. These are not durable
+identity facts and must not be exported to another audience. Configured identity
+and current calendar facts take precedence over inconsistent historical self
+statements. User factual memory and conversation transcripts retain their existing
+rules; saving personality settings only clears personality observations.

@@ -47,6 +47,8 @@ async function check(name, run, version = 33) {
   Object.assign(f.context, {
     Date: class extends Date { static now() { return now; } },
     privateContact: async () => false,
+    readPersonality: async () => ({personality:{enabled:false}}),
+    personalityContext: async () => '', initiativeDelay: () => 30,
     readMemories: async () => [], selectMemories: () => [], readAgentMemories: async () => [],
     scheduleAllowed: () => '1',
   });

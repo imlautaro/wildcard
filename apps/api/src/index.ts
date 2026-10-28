@@ -13,6 +13,7 @@ import { expirePresence } from './chat/presence';
 import { deliverPush } from './push/delivery';
 import app from './app';
 import { recoverChats } from './chat/dispatch';
+import { prunePersonalityEvents } from './personality/engine';
 
 export { ChatWorkflow } from './chat/workflow';
 
@@ -20,6 +21,7 @@ export default {
   fetch: app.fetch,
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil(cleanOAuthFlows(env));
+    ctx.waitUntil(prunePersonalityEvents(env.DB));
     ctx.waitUntil(cleanAttachments(env));
     ctx.waitUntil(dispatchSchedules(env));
     ctx.waitUntil(dispatchInitiatives(env));

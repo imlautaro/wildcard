@@ -144,6 +144,11 @@ struct AuthAPI: Sendable {
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if path.hasSuffix("/personality") {
+                if [403, 404].contains(response.statusCode) { throw Failure.notFound }
+                let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
+                throw Failure.rejected(message ?? "Personality is temporarily unavailable. Please try again.")
+            }
             if path.contains("/native-actions") || path.contains("/native-remote") {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error

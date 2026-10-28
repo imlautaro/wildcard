@@ -27,7 +27,8 @@ const DB = { prepare(query) { return { args: [], bind(...args) {this.args=args;r
  async all(){const [s,p]=this.exec();return {results:s.all(...p)};}};}};
 class Router { constructor(){this.handlers=new Map();} use(){return this;} route(){return this;} }
 for(const method of ['get','post','put','delete','patch']) Router.prototype[method]=function(p,f){this.handlers.set(method+' '+p,f);return this;};
-const context=vm.createContext({Hono:Router, media:{}, Date, JSON, Number, Array, String, Set,
+const context=vm.createContext({Hono:Router, media:{}, reactionRoutes:()=>({}), Date, JSON, Number, Array, String, Set,
+ groupQuotes:async()=>()=>null,
  publicAttachment:()=>null, admitAuthRequest:async()=>({allowed:true})});
 vm.runInContext(source('groups/receipts.ts'),context);
 vm.runInContext(source('groups/retrieval.ts'),context);
@@ -41,6 +42,7 @@ async function ack(user,ids,read=false,group='g') {
 }
 // Receipt-focused runner fixture: authorization is covered by completion checks.
 const runner=vm.createContext({console,Date,JSON,Error,NonRetryableError:Error,
+ isRecord:value=>value!==null&&typeof value==='object'&&!Array.isArray(value),
  mcpTools:[],reactionTool:{function:{name:'react_to_message'}},
  groupRetrievalTools:vm.runInContext('groupRetrievalTools',context),
  acknowledgeAgentContext:context.acknowledgeAgentContext,acknowledgeGroupResults:context.acknowledgeGroupResults,
@@ -152,6 +154,7 @@ async function check(name,fn){await fn(); count++; console.log('PASS '+name);}
    INSERT INTO chat_turn(id,contact_id,user_id,user_text,status,workflow_id,created_at,updated_at) VALUES ('pt','p','a','Hello','running','pw',0,0);
    INSERT INTO agent_attention(agent_id,turn_id,attempt,workflow_id,acquired_at) VALUES ('bot','pt',1,'pw',0);`);
   const priv=vm.createContext({Date,JSON,Intl,Set,Map,console,
+   personalityContext:async()=>'',miniAppTools:[],miniAppInstruction:'',
    scheduleTools:[],groupRetrievalTools:[],groupRequestTool:{},groupQuestionTool:{},
    privateContact:async()=>false, privateQuotes:async()=>()=>null,
    contactModelAllowed:async()=>true, readMemories:async()=>[],selectMemories:()=>[],
@@ -163,6 +166,7 @@ async function check(name,fn){await fn(); count++; console.log('PASS '+name);}
    acknowledgeGroupResults:async()=>{},
    museCompletion:async()=>{throw Error('SIMULATED_PROVIDER_FAILURE');},
   });
+  vm.runInContext(source('reactions/data.ts'),priv);
   vm.runInContext(source('chat/context.ts'),priv);
   const turn={id:'pt',contactID:'p',userID:'a',attempt:1,sequence:1,userText:'Hello'};
   const env={DB,META_CHAT_MODEL:'muse-spark-1.3'};
@@ -202,6 +206,8 @@ async function check(name,fn){await fn(); count++; console.log('PASS '+name);}
  });
  await check('private Home receipt fields follow the same latest turn as the preview',async()=>{
   const priv=vm.createContext({Hono:Router,bodyLimit:()=>()=>{},chats:{},schedules:{},sharing:{},
+   nativeActions:{},remoteSettings:{},miniApps:{},personality:{},
+   plainMessageMarkdown:text=>text,
    totalUnreadReplies:async()=>0});
   vm.runInContext(source('routes/contacts.ts')+'\nglobalThis.routes=contacts;',priv);
   const c={env:{DB},get:()=> 'a',req:{query:()=>undefined},json:data=>data};
