@@ -469,3 +469,30 @@ The existing session-owned profile holds chatModel. iOS revalidates on Account e
 
 See [model settings](model-settings.md) for the API, shared consent, cache behavior,
 AI Gateway spending and pending runtime/device verification.
+
+## Group generation checkpoints
+
+Group research and finalization reuse server-side Workflow checkpoints scoped to
+one reply, attempt, draft/review and step name. These are durable computation
+results, not a new client cache. Successful inference/tool results are reused on
+replay; a decision-format recovery cannot invalidate them or grant additional
+executions. MCP still uses its reply-owned reservation/receipt ledger and current
+permissions before new inference/execution. The publication watermark guard and
+both clients' session-owned conversation caches remain authoritative for visible
+history and late-response rejection. No extra client persistence is introduced.
+
+Context snapshots include bounded history and references to attachments; bytes
+are loaded from private R2 within inference steps, never persisted in step output.
+Model responses retain the 256 KiB transport and 20,000-code-point text limits;
+research admits at most six rounds and six bounded tool results (24 KB each for
+MCP), then a separate final decision. Private operational checkpoint retention is
+managed by the existing Workflow service; it is not a navigation LRU or public log.
+The snapshot does not become shared/self memory. Grant revocation and account
+changes continue to invalidate client permissions and reject late UI responses.
+Server inference checks current group access and authorization of saved external
+receipts; publication still checks current group membership/consent and history.
+
+Static checks cannot verify reopen/back, empty history, refresh, offline recovery,
+mutations, grant revocation or account switching on device. Verify those scenarios
+on both clients after authorized release using fictional MCP data, including
+closing the app during research and returning after the final response.

@@ -44,10 +44,16 @@ function groupContext(f, decision = {action:'reply',text:'A freely generated hel
     readMemories:async()=>[],selectMemories:()=>[],readAgentMemories:async()=>[],
     agentMemoryContext:()=>'{}',clipText:s=>s,acknowledgeAgentContext:async()=>{},
     isRecord:x=>x&&typeof x==='object'&&!Array.isArray(x),
-    groupCompletion:async(env,messages,scope,format)=>{
-      c.calls=(c.calls||0)+1;c.evidence=JSON.parse(messages[1].content);c.system=messages[0].content;
-      c.actions=format.json_schema.schema.properties.action.enum;return JSON.stringify(c.decision);
-    }});
+  });
+  c.completeGroupDraft=async(env,input)=>{
+    c.calls=(c.calls||0)+1;c.evidence=JSON.parse(input.messages[1].content);c.system=input.messages[0].content;
+    c.actions=c.groupDecisionFormat(input).json_schema.schema.properties.action.enum;
+    return c.parseGroupDecision(JSON.stringify(c.decision),input);
+  };
+  c.prepareGroupDraft=async(env,job,previous)=>{
+    const prepared=await c.prepareGroupInput(env,job,previous);
+    return prepared.draft || c.completeGroupDraft(env,prepared.input);
+  };
   c.decision=decision;
   vm.runInContext(source('groups/context.ts'),c);
   return c;
@@ -159,7 +165,7 @@ function groupContext(f, decision = {action:'reply',text:'A freely generated hel
  await check('depleted Workflow skips inference and releases attention',async f=>{
    human(f);const job=claim(f,'sender');f.sqlite.exec("UPDATE contact_agent SET energy=0,energy_updated_at=unixepoch()*1000 WHERE id='sender'");
    let modelCalls=0;let releases=0;
-   f.context.prepareGroupDraft=async()=>{modelCalls++;throw Error('NO_INFERENCE_EXPECTED');};
+   f.context.prepareGroupInput=async()=>{modelCalls++;throw Error('NO_INFERENCE_EXPECTED');};
    f.context.maintainAgentMemories=async()=>{throw Error('NO_MEMORY_EXPECTED');};
    f.context.releaseAttention=async()=>{releases++;f.sqlite.exec('DELETE FROM agent_attention');};
    f.context.dispatchAgent=async()=>{};f.context.dispatchGroupRequests=async()=>{};
@@ -205,7 +211,8 @@ function groupContext(f, decision = {action:'reply',text:'A freely generated hel
  });
  await check('the opening Workflow publishes model text, charges once and offers a continuation',async f=>{
    await f.call(f.turn());const job=claim(f,'target');const c=groupContext(f);
-   f.context.prepareGroupDraft=c.prepareGroupDraft;
+   f.context.prepareGroupInput=c.prepareGroupInput;
+   f.context.completeGroupDraft=c.completeGroupDraft;
    f.context.maintainAgentMemories=async()=>{};f.context.rememberGroupMessage=async()=>{};
    f.context.dispatchAgent=async()=>{};f.context.dispatchGroupRequests=async()=>{};
    f.context.releaseAttention=async()=>{f.sqlite.exec('DELETE FROM agent_attention');};

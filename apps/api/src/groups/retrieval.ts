@@ -1,10 +1,6 @@
-import { executeMcp, mcpTools } from '../mcp/tools';
-import { reactionTool } from '../reactions/data';
-import { groupReaction } from '../reactions/tools';
-import { acknowledgeGroupResults } from './receipts';
 import { readAgentMemories, selectAgentMemories } from '../chat/agent-memory';
 import { byteLength, clipText, keywords } from '../chat/memory';
-import { isRecord, museCompletion, type ModelMessage, type ModelTool, type ToolCall } from '../chat/meta';
+import { isRecord, type ModelTool, type ToolCall } from '../chat/meta';
 
 export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; beforeSequence?: number; reactionJob?: { turnID: string; attempt: number }; mcp?: { id: string; attempt: number; contactID: string; userID: string; groupID: string; agentID: string } };
 export const groupRetrievalTools: ModelTool[] = [
@@ -172,40 +168,4 @@ export async function executeGroupRetrieval(db: D1Database, scope: GroupRetrieva
       args.groupID as string | undefined, args.before as number | undefined));
   }
   return JSON.stringify({ error: 'Unknown group retrieval tool.' });
-}
-
-export async function groupCompletion(env: Env, messages: ModelMessage[], scope: GroupRetrievalScope,
-  responseFormat?: Record<string, unknown>): Promise<string> {
-  let executions = 0;
-  const processedResults: unknown[] = [];
-  for (let round = 0; round < 3; round++) {
-    const answer = await museCompletion(env, messages, env.META_CHAT_MODEL,
-      { maxTokens: 1200, responseFormat, ...(round < 2 ? { tools: [...groupRetrievalTools, reactionTool, ...(scope.mcp ? mcpTools : [])] } : {}) });
-    await acknowledgeGroupResults(env.DB, scope.agentID, processedResults);
-    processedResults.length = 0;
-    if (!answer.tool_calls?.length) return answer.content!;
-    messages.push(answer);
-    for (const call of answer.tool_calls) {
-      let content = JSON.stringify({ error: 'Tool budget exhausted.' });
-      if (executions++ < 6) {
-        try {
-          content = scope.mcp && mcpTools.some(t => t.function.name === call.function.name)
-            ? await executeMcp(env, scope.mcp, call.function.name, JSON.parse(call.function.arguments), executions - 1)
-            : call.function.name === reactionTool.function.name
-            ? await groupReaction(env, scope, JSON.parse(call.function.arguments))
-            : await executeGroupRetrieval(env.DB, scope, call);
-          const result = JSON.parse(content);
-          if (['get_group_excerpt', 'search_group_messages'].includes(call.function.name) && Array.isArray(result.results)) {
-            processedResults.push(...result.results);
-          }
-        }
-        catch {
-          console.error(JSON.stringify({ event: 'group_retrieval_failed' }));
-          content = JSON.stringify({ error: 'Group retrieval unavailable. Do not infer absence or invent an answer.' });
-        }
-      }
-      messages.push({ role: 'tool', tool_call_id: call.id, content });
-    }
-  }
-  throw new Error('GROUP_TOOL_BUDGET_EXCEEDED');
 }

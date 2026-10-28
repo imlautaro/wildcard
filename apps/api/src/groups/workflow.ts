@@ -1,9 +1,11 @@
+import { safeErrorCode } from '../chat/meta';
 import { jobAccountID, jobModel } from '../lib/model-preference';
 import { groupEnergyAvailable } from './energy';
 import { maintainAgentMemories } from '../chat/agent-memory';
 import { groupSourceAccess } from './request-access';
 import { dispatchGroupRequests } from './request-results';
-import { prepareGroupDraft, type GroupDraft } from './context';
+import { prepareGroupInput, type GroupDraft } from './context';
+import { completeGroupDraft } from './completion';
 import { deliverGroupPush } from './push';
 import type { WorkflowStep } from 'cloudflare:workers';
 import { dispatchAgent, releaseAttention } from '../chat/dispatch';
@@ -94,15 +96,17 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
       // not repeated when a later publish step retries or the Workflow resumes.
       for (let review = 0; review <= 2; review++) {
         const previous = draft;
-        draft = await step.do(`group-prepare-draft-${review}`, {
-          retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' }, timeout: '3 minutes',
+        const preparation = await step.do(`group-prepare-input-${review}`, {
+          retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' }, timeout: '1 minute',
         }, async () => {
           const task = await env.DB.prepare('SELECT status FROM group_reply WHERE id = ? AND attempt = ?')
             .bind(job.turnID, job.attempt).first<{ status: string }>();
           if (!task || task.status !== 'running') return null;
-          return prepareGroupDraft(env, job, previous);
-        }) ?? undefined;
-        if (!draft) { outcome = 'inactive'; break; }
+          return prepareGroupInput(env, job, previous);
+        });
+        if (!preparation) { outcome = 'inactive'; break; }
+        draft = 'draft' in preparation ? preparation.draft
+          : await completeGroupDraft(env, preparation.input, step, `group-draft-${review}`);
         const prepared = draft;
         outcome = await step.do(`group-publish-draft-${review}`, async () => publishGroupDraft(env, job, prepared));
         if (outcome !== 'changed') break;
@@ -129,8 +133,9 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
         });
       } catch { console.error(JSON.stringify({ event: 'group_memory_deferred' })); }
     }
-  } catch {
+  } catch (error) {
     await step.do('group-save-failure', async () => {
+      console.error(JSON.stringify({ event: 'group_reply_failed', code: safeErrorCode(error) }));
       await env.DB.prepare(`UPDATE group_reply SET status = 'failed' WHERE id = ? AND attempt = ? AND status IN ('queued','running')`)
         .bind(job.turnID, job.attempt).run();
     });

@@ -811,11 +811,29 @@ without a message. Canceled or superseded requests may also complete silently.
 Current membership, sharing and model consent are checked again at publication.
 See [group reply limits and checks](groups.md#reply-rounds-and-exclusive-attention).
 
-The durable Workflow stores each draft/review decision and publish result in its
-own step. Preparation steps retain two retries and a three-minute timeout; each
-has the existing two-tool-round/six-execution budget. No new inference is needed
-when the history guard succeeds immediately. Busy chats can take longer and cost
-more; neither model quality nor live latency has been measured for this change.
+The durable Workflow checkpoints bounded group context, individual model replies,
+tool results, final decisions and publish results separately. Group preparation
+uses a one-minute step with two retries. Research admits at most six model rounds
+and six executions during a three-minute window; it is followed by a tool-free
+strict-JSON decision with one final-only recovery attempt. Model steps use one
+transient retry and a one-minute timeout; tool steps have no automatic retry.
+Provider requests remain capped at 45 seconds and MCP sessions at 20 seconds.
+See [group generation limits](groups.md#reply-rounds-and-exclusive-attention).
+A later decision failure reuses completed research; uncertain MCP actions continue
+to be protected by the existing D1 ledger. Context snapshots, generated tool
+arguments and textual results are private operational Workflow state, not public
+logs or cross-chat memory. Attachment bytes stay in R2 and are loaded within
+inference; only their references are checkpointed. Operator access and platform
+Workflow retention apply to these snapshots as to other execution state.
+
+This correction adds no resource, binding, secret, migration, client API or setup
+step. Existing provisioning, local setup and automatic release commands apply.
+No iOS reinstall is required. Both clients display the same server-validated
+response. New jobs use the new step graph; existing jobs remain bound to their
+Worker version. Do not terminate/restart jobs to adopt the graph. Prefer a forward
+fix; never replay incomplete jobs against a different graph or remove the MCP
+ledger/isolation tables. Busy chats can take longer and cost more; no live
+inference or latency measurements were performed for this correction.
 
 Release only from committed/pushed source through the existing automatic pipeline,
 then verify the active version's source tag and run the fictional group scenarios.

@@ -39,6 +39,20 @@ async function ack(user,ids,read=false,group='g') {
  return handler({env:{DB},get:()=>user,req:{json:async()=>({messageIDs:ids,state:read?'read':'received'}),param:()=>group},
  json:(data,status=200)=>({data,status}),body:(_,status)=>({status})});
 }
+// Receipt-focused runner fixture: authorization is covered by completion checks.
+const runner=vm.createContext({console,Date,JSON,Error,NonRetryableError:Error,
+ mcpTools:[],reactionTool:{function:{name:'react_to_message'}},
+ groupRetrievalTools:vm.runInContext('groupRetrievalTools',context),
+ acknowledgeAgentContext:context.acknowledgeAgentContext,acknowledgeGroupResults:context.acknowledgeGroupResults,
+ executeGroupRetrieval:(...args)=>context.executeGroupRetrieval(...args),
+ groupDecisionFormat:()=>({type:'json_schema'}),
+ parseGroupDecision:answer=>({text:JSON.parse(answer).text,throughSequence:3}),
+ safeErrorCode:error=>error.message});
+vm.runInContext(source('groups/completion.ts'),runner);
+runner.assertCurrentAccess=async()=>{};
+const completionInput={messages:[],scope:{agentID:'bot',userID:'a',groupID:'g',reactionJob:{turnID:'fictional',attempt:1}},
+ attachment:null,contextMessageIDs:[],allowedActions:['reply']};
+const completionStep={do:async(name,...args)=>args.at(-1)()};
 let count=0;
 async function check(name,fn){await fn(); count++; console.log('PASS '+name);}
 (async()=>{
@@ -72,20 +86,21 @@ async function check(name,fn){await fn(); count++; console.log('PASS '+name);}
  });
  await check('failed model consumption does not acknowledge tool results',async()=>{
   let calls=0;
-  context.museCompletion=async()=>{
+  runner.museCompletion=async()=>{
    if(calls++===0) return {tool_calls:[{id:'lookup',function:{name:'search_group_messages',arguments:'{}'}}]};
    throw Error('SIMULATED_PROVIDER_FAILURE');
   };
   vm.runInContext(`executeGroupRetrieval = async () => JSON.stringify({results:[{messageID:'m2',groupID:'g'}]});`,context);
-  await assert.rejects(()=>context.groupCompletion({DB},[],{agentID:'bot',userID:'a',groupID:'g'}));
+  await assert.rejects(()=>runner.completeGroupDraft({DB},completionInput,completionStep,'receipt'));
   assert.equal(sql.prepare("SELECT read_at FROM group_message_receipt WHERE message_id='m2' AND recipient_id='bot'").get().read_at,null);
  });
  await check('successful model consumption acknowledges only supplied tool results',async()=>{
   let calls=0;
-  context.museCompletion=async()=>calls++===0
-   ? {tool_calls:[{id:'lookup',function:{name:'search_group_messages',arguments:'{}'}}]}
-   : {content:'Processed'};
-  assert.equal(await context.groupCompletion({DB},[],{agentID:'bot',userID:'a',groupID:'g'}),'Processed');
+  runner.museCompletion=async(env,messages,model,options)=>options.responseFormat
+   ? {content:JSON.stringify({action:'reply',text:'Processed'})}
+   : calls++===0 ? {tool_calls:[{id:'lookup',function:{name:'search_group_messages',arguments:'{}'}}]}
+   : {tool_calls:[{id:'finish',function:{name:'finish_group_research',arguments:'{}'}}]};
+  assert.equal((await runner.completeGroupDraft({DB},completionInput,completionStep,'receipt')).text,'Processed');
   assert.ok(sql.prepare("SELECT read_at FROM group_message_receipt WHERE message_id='m2' AND recipient_id='bot'").get().read_at);
   assert.equal(state('m2'),'sent');
  });

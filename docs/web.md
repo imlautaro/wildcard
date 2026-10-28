@@ -286,3 +286,16 @@ remain pending. See [migration and verification](connectors.md#account-connector
 
 Account uses `pages/account/index.vue` beside `account/connections.vue`, so the
 Connections route renders as its own page without requiring a nested page outlet.
+
+## Group analysis completion
+
+Both web and iOS use the API's two-phase group reply pipeline: bounded tool
+research followed by a separately validated, tool-free JSON decision. Formatting
+recovery reuses saved research instead of repeating external actions. No new UI,
+route, payload, polling or cache behavior is required; both clients keep existing
+pending-turn IDs and display the final server reply or existing failure state.
+See [generation limits and validation status](groups.md#reply-rounds-and-exclusive-attention)
+and [cache behavior](caching.md#group-generation-checkpoints).
+After an authorized automatic release, verify a fictional multi-step MCP analysis,
+reopening/back navigation during generation, offline recovery, grant revocation
+and account switching in both clients. Live/browser/device validation is pending.

@@ -13,7 +13,7 @@ type ModelOptions = { tools?: ModelTool[]; responseFormat?: Record<string, unkno
 // SQL parameters or conversation content. Unknown errors stay deliberately vague.
 export function safeErrorCode(error: unknown): string {
   if (!(error instanceof Error)) return 'UNEXPECTED_ERROR';
-  if (/^MODEL_[A-Z_]{1,80}$/.test(error.message)) return error.message;
+  if (/^(MODEL|GROUP)_[A-Z_]{1,80}$/.test(error.message)) return error.message;
   if (error instanceof SyntaxError) return 'INVALID_JSON';
   if (error.name === 'TimeoutError' || error.name === 'AbortError') return 'REQUEST_TIMEOUT';
   if (error.message.startsWith('D1_')) return 'DATABASE_ERROR';

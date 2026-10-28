@@ -109,9 +109,15 @@ jobs do not gain MCP tools; their existing consent filters still apply.
 
 ## Execution, retries and limits
 
-Private and authorized direct-human group model loops expose `list_mcp_tools` and `call_mcp_tool`, with at most
-six internal/external tool executions across two tool-enabled model rounds, then
-a final answer. Arguments are checked against the approved JSON Schema. A D1
+Private and authorized direct-human group model loops expose `list_mcp_tools` and
+`call_mcp_tool`, with at most six internal/external executions. Private replies keep
+two tool-enabled rounds and a final answer. Group replies allow up to six
+research rounds within a three-minute admission window, followed by a separate
+tool-free strict-JSON decision. An internal `finish_group_research` control ends
+research without consuming an execution or publishing anything. Group model/tool
+steps checkpoint independently, and invalid/truncated decisions get one final-only
+recovery attempt. No tool is re-executed to repair decision formatting; exhausted
+research must disclose missing evidence. See [group generation limits](groups.md#reply-rounds-and-exclusive-attention). Arguments are checked against the approved JSON Schema. A D1
 reservation is committed before each remote call. A turn's execution slot cannot
 be reused for another action; canonical identical arguments for the same tool and
 connection also cannot be submitted twice within that turn. Completed receipts

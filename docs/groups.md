@@ -152,14 +152,55 @@ new human traffic permits cancellation/supersession; older similar greetings do 
 suppress a new opening. Agents can skip later ordinary bot turns when there is
 nothing useful to add. Exhausted/capped turns complete without inference or a bubble.
 
-Draft/review calls and guarded publication use separate durable Workflow steps.
-Successful step results are reused on replay; transient failures retain the
-existing two retries per preparation step. Each preparation has the existing
-three-minute timeout and two tool rounds/six tool executions (up to three model
-requests), so active conversations can incur extra latency and inference cost.
-Snapshots are bounded, may omit older changes and expose tools for retrieval;
-there is no unlimited catch-up or parallel draft generation. No extra model
-review runs on the normal path when the publication watermark is unchanged.
+Draft/review preparation, each inference, each tool result, read acknowledgements
+and guarded publication use separate durable Workflow steps. A successful result
+is reused on replay; a final-format failure never restarts completed research.
+Preparation retains two retries and a one-minute timeout. Model steps have one
+transient retry and a one-minute timeout; provider requests retain their
+45-second timeout. Tool steps have no automatic retry and a one-minute timeout;
+the MCP reservation/receipt ledger still protects interruptions before checkpoint.
+
+Each draft/review has two explicit phases. Evidence gathering exposes retrieval,
+reactions and, only for authorized direct human triggers, MCP. It does not request
+structured output. The model ends this phase with the internal, side-effect-free
+`finish_group_research` control tool, called alone. Plain prose cannot end research
+or be published as a decision. Gathering admits at most six model rounds and six
+internal/external executions within a three-minute admission window. Already
+started requests may finish after that window. Exhaustion moves to finalization
+with the available evidence; it never grants more tool executions.
+
+Finalization exposes no tools and requests strict JSON with the current allowed
+actions. The server also validates action, text, extra fields, the 20,000-code-point
+limit and opening/review rules. Invalid/truncated output gets one new finalization
+attempt using the same evidence. Generation budgets are 4,096 tokens for research
+and the first finalization, then 8,192 for the recovery attempt, including reasoning.
+Intermediate prose and truncated output are never treated as successful tool
+execution or a final decision. Analysis may be longer than ordinary group banter.
+Failures log bounded codes without provider text. No fallback silently publishes
+unvalidated prose or converts an invalid response to skip.
+
+Current group/source/attention access is checked before each new inference and
+tool execution. Cached external receipts also require current connector ownership,
+contact/group grants, grant/OAuth generations and tool approval before subsequent
+inference. MCP execution keeps its existing stricter admission checks, including
+rejection after a later human trigger. Reviews still have no external tools.
+Snapshots remain bounded and preserve their history watermark. Attachments are
+checkpointed only as object references and loaded inside inference steps; their
+bytes are not written into Workflow step output. There is no unlimited catch-up
+or parallel draft generation. Up to two reviews still run only after the atomic
+publication guard detects newer messages. The additional phases can increase
+latency/cost, including ordinary group replies; live measurements remain pending.
+
+Opt-in fictional regressions: `node scripts/checks/group-completion.cjs`,
+`node scripts/checks/group-energy.cjs` and `node scripts/checks/group-receipts.cjs`.
+These cover orchestration/replay, malformed/truncated decisions, permission loss,
+limits, opening/review rules and read acknowledgement timing using simulated
+providers. They do not prove real provider or device behavior. For this change,
+only static checks were run; these regressions have not been executed.
+
+Implementation references: [Meta structured output](https://dev.meta.ai/docs/structured-output),
+[Meta Chat Completions](https://dev.meta.ai/docs/protocols/chat-completions), and
+[Cloudflare Workflow rules](https://developers.cloudflare.com/workflows/build/rules-of-workflows/).
 
 `agent_attention` remains the single unique lock per agent. Dispatch chooses the
 oldest eligible job across private chats and group rounds. A group agent waits for
