@@ -59,7 +59,7 @@ export type ChatTurn = {
   id: string;
   userText: string;
   assistantText: string | null;
-  assistantMessages?: { id: string; text: string; createdAt: number }[];
+  assistantMessages?: { id: string; text: string; createdAt: number; replyTo?: ReplyQuote | null }[];
   status: TurnStatus;
   attempt: number;
   createdAt: number;

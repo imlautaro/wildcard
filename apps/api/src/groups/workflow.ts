@@ -5,7 +5,7 @@ import { groupEnergyAvailable } from './energy';
 import { maintainAgentMemories } from '../chat/agent-memory';
 import { groupSourceAccess } from './request-access';
 import { dispatchGroupRequests } from './request-results';
-import { prepareGroupInput, type GroupDraft } from './context';
+import { prepareGroupInput, visibleMessage, type GroupDraft } from './context';
 import { completeGroupDraft } from './completion';
 import { deliverGroupPush } from './push';
 import type { WorkflowStep } from 'cloudflare:workers';
@@ -46,11 +46,13 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
   // The watermark guard and insert run in the same transaction. If a message
   // arrived after review, neither publication nor a skip can complete this slot.
   const results = await env.DB.batch([
-    env.DB.prepare(`INSERT INTO group_message (id, group_id, agent_id, sender_name, text, created_at, contributor_consent, exchange_id, requester_id)
-      SELECT r.id, r.group_id, r.agent_id, a.name, ?3, ?4, ?5, source.exchange_id, source.requester_id
+    env.DB.prepare(`INSERT INTO group_message (id, group_id, agent_id, sender_name, text, created_at, contributor_consent, exchange_id, requester_id, reply_to_id)
+      SELECT r.id, r.group_id, r.agent_id, a.name, ?3, ?4, ?5, source.exchange_id, source.requester_id,
+        (SELECT gm.id FROM group_message gm WHERE gm.id = ?7 AND gm.group_id = r.group_id
+          AND gm.sequence <= ?6 AND ${visibleMessage.replaceAll('?3', '?5')})
       FROM group_reply r JOIN contact_agent a ON a.id = r.agent_id JOIN group_message source ON source.id = r.source_id
       WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND ?3 IS NOT NULL
-      AND ${access} AND ${unchangedHistory} AND ${groupEnergyAvailable('r')} ON CONFLICT(id) DO NOTHING`).bind(...bindings),
+      AND ${access} AND ${unchangedHistory} AND ${groupEnergyAvailable('r')} ON CONFLICT(id) DO NOTHING`).bind(...bindings, draft.replyToID ?? null),
     env.DB.prepare(`UPDATE group_reply AS r SET status = CASE WHEN ?7 = 0 AND EXISTS (SELECT 1 FROM group_message saved WHERE saved.id = r.id) THEN 'running' ELSE 'complete' END WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
       AND (EXISTS (SELECT 1 FROM group_message saved WHERE saved.id = r.id)
         OR (NOT (${groupEnergyAvailable('r')}))

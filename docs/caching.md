@@ -859,3 +859,13 @@ this adds no fetch or cache. Eager layout costs grow with explicitly loaded page
 Verify cold/cached reopen and back navigation, long last messages, older pages,
 quotes, keyboard resizing, offline refresh, deletion/revocation and account switching
 on a device. Static checks do not establish smoothness or large-history performance.
+
+## Contact-authored quotes
+
+Private assistant quotes travel in delivered `assistantMessages` and group quotes in
+ordinary messages. The existing session conversation caches retain these payloads;
+no new fetch, disk store, image cache or timer is added. History revalidation resolves
+quotes from current authorized history; attempt/update-time guards, pagination,
+eviction, access-loss invalidation and account isolation are unchanged. Verify
+quoted replies after reopen, offline recovery, pagination and account switching on
+both clients. A cached quote never grants access to the original.

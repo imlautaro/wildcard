@@ -98,9 +98,29 @@ Agents see replies as context, so "no, that one" refers to the quoted message:
   not, only its `messageID` is disclosed with `unavailable: true`. Quoted text is
   clipped to 400 bytes.
 
-Agents do not author quoted replies. A private reply is already paired with the
-human turn that triggered it. Quoted bot replies in groups would require changes to
-the review and publication workflow and are not implemented.
+Contacts can optionally author a quoted reply when overlapping messages or a return
+to an older topic would otherwise make their answer ambiguous. Obvious replies,
+including individual answers to a shared question about lunch, default to no quote.
+The model chooses a target ID, never the displayed quote text. A burst quotes only
+its first message. Private targets must exist in the same participant conversation,
+with an eligible human/assistant side no later than the current turn. References
+are stored in the delivered `assistant_messages_json` entry and resolved from
+current history on reads; no migration is needed. Both clients render the same
+quote and use their existing navigation to the original message.
+
+Group drafts carry optional `replyToID` through review: keep preserves it, revise
+can change it, and skip publishes nothing. The parser accepts only message IDs
+supplied in the visible current context. Publication resolves the target inside
+the insert with the same group, watermark and author/consent filters as history;
+a removed or no-longer-authorized target drops the quote. Only the first message
+of a burst quotes the target. Existing group quote rendering works on both clients.
+Old private Workflow checkpoints with string arrays or prose remain deliverable.
+
+This is a contextual model choice, not a guarantee of perfect quoting. Verify
+multiple interleaved questions, returning to an old message, obvious answers with
+no quote, review after intervening traffic, retries, inaccessible targets and
+quote navigation on both clients using fictional data. Model and device behavior
+remain unverified by static checks.
 
 ## Cache
 

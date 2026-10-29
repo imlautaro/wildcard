@@ -1,7 +1,7 @@
 import { publicAttachment, type PublicAttachment } from './attachments';
-import type { ReplyQuote } from '../replies/data';
+import type { ReplyQuote, ReplyTarget } from '../replies/data';
 export type ChatState = 'queued' | 'running' | 'complete' | 'failed';
-export type AssistantMessage = { id: string; text: string; createdAt: number };
+export type AssistantMessage = { id: string; text: string; createdAt: number; replyTo?: ReplyQuote | ReplyTarget | null };
 export type ChatTurn = {
   assistantMessagesJSON?: string | null;
   readAt: number | null;
@@ -28,9 +28,9 @@ export const turnColumns = `assistant_messages_json AS assistantMessagesJSON, se
   reply_to_id AS replyToID, reply_to_side AS replyToSide`;
 export const storedColumns = `${turnColumns}, attachment_json AS attachmentJSON, contact_id AS contactID, user_id AS userID, workflow_id AS workflowID, time_zone AS timeZone, schedule_instruction AS scheduleInstruction, native_context_json AS nativeContextJSON`;
 
-export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }, replyTo: ReplyQuote | null): PublicTurn {
+export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }, replyTo: ReplyQuote | null, resolveQuote?: (target: { replyToID: string | null; replyToSide: string | null }) => ReplyQuote | null): PublicTurn {
   const { sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode } = turn;
-  return { assistantMessages: turn.assistantMessagesJSON ? JSON.parse(turn.assistantMessagesJSON) as AssistantMessage[] : [], attachment: publicAttachment(turn), sequence, id, readAt, userText, assistantText, status: errorCode === 'MESSAGE_BATCHED' ? 'complete' : status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode: errorCode === 'MESSAGE_BATCHED' ? null : errorCode, replyTo };
+  return { assistantMessages: turn.assistantMessagesJSON ? (JSON.parse(turn.assistantMessagesJSON) as AssistantMessage[]).map(message => ({ ...message, replyTo: message.replyTo && resolveQuote ? resolveQuote({ replyToID: message.replyTo.messageID, replyToSide: message.replyTo.side }) : null })) : [], attachment: publicAttachment(turn), sequence, id, readAt, userText, assistantText, status: errorCode === 'MESSAGE_BATCHED' ? 'complete' : status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode: errorCode === 'MESSAGE_BATCHED' ? null : errorCode, replyTo };
 }
 
 export function findTurn(db: D1Database, id: string, contactID: string, userID: string) {

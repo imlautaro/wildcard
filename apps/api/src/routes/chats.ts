@@ -20,7 +20,8 @@ const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const attachmentBody = bodyLimit({ maxSize: 7 * 1024 * 1024 + 32768, onError: (c) => c.json({ error: 'Attachment must be 5 MB or smaller' }, 413) });
 const messageBody = bodyLimit({ maxSize: 32768, onError: (c) => c.json({ error: 'Request body too large' }, 413) });
 async function quotedTurn(db: D1Database, turn: StoredTurn) {
-  return publicTurn(turn, (await privateQuotes(db, turn.contactID, turn.userID, [turn]))(turn));
+  const quotes = await privateQuotes(db, turn.contactID, turn.userID, [turn]);
+  return publicTurn(turn, quotes(turn), quotes);
 }
 const sameReply = (turn: StoredTurn, reply: { messageID: string; side: string } | undefined) =>
   turn.replyToID === (reply?.messageID ?? null) && turn.replyToSide === (reply?.side ?? null);
@@ -104,7 +105,7 @@ chats.get('/turns', async (c) => {
     .bind(c.get('contactID'), c.get('owner'), before ? Number(before) : Number.MAX_SAFE_INTEGER).all<ChatTurn & { attachmentJSON: string | null }>();
   const page = results.slice(0, 50);
   const quotes = await privateQuotes(c.env.DB, c.get('contactID'), c.get('owner'), page);
-  return c.json({ presence, turns: page.reverse().map((turn) => publicTurn(turn, quotes(turn))), nextBefore: results.length > 50 ? page[0].sequence : null });
+  return c.json({ presence, turns: page.reverse().map((turn) => publicTurn(turn, quotes(turn), quotes)), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 // Acknowledge only completed replies actually presented by the client. Never move backwards.
 chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }), async (c) => {

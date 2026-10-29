@@ -42,8 +42,12 @@ function quote(target: ReplyTarget, row: QuoteRow | undefined): ReplyQuote {
 }
 
 export async function privateQuotes(db: D1Database, contactID: string, userID: string,
-  turns: { replyToID: string | null; replyToSide: string | null }[]): Promise<(turn: { replyToID: string | null; replyToSide: string | null }) => ReplyQuote | null> {
-  const ids = [...new Set(turns.flatMap((turn) => turn.replyToID ? [turn.replyToID] : []))];
+  turns: { replyToID: string | null; replyToSide: string | null; assistantMessagesJSON?: string | null }[]): Promise<(turn: { replyToID: string | null; replyToSide: string | null }) => ReplyQuote | null> {
+  const ids = [...new Set(turns.flatMap((turn) => [
+    ...(turn.replyToID ? [turn.replyToID] : []),
+    ...(turn.assistantMessagesJSON ? (JSON.parse(turn.assistantMessagesJSON) as { replyTo?: ReplyTarget | null }[])
+      .flatMap(message => message.replyTo ? [message.replyTo.messageID] : []) : []),
+  ]))];
   const { results } = ids.length ? await db.prepare(`SELECT id, NULL AS userID, NULL AS agentID, NULL AS senderName,
     user_text AS userText, assistant_text AS assistantText, attachment_json AS attachmentJSON
     FROM chat_turn WHERE contact_id = ?1 AND user_id = ?2 AND id IN (SELECT value FROM json_each(?3))`)

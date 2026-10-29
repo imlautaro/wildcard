@@ -733,3 +733,11 @@ late-response guards remain in place. Live checks are pending on both clients:
 address one of three fictional contacts, verify the others skip silently, verify
 multiple actual replies appear in turn, successive messages, interrupted reviews,
 failures, navigation/reopen, offline recovery, removal and account switching.
+
+## Optional contact quotes
+
+Contacts may choose a visible message to quote when its identity clarifies an
+ambiguous reply. Clear answers normally omit quotes. Draft review preserves or
+revises the target and publication rechecks group visibility; only the first
+message of a burst quotes it. iOS and web reuse their existing quote presentation
+and navigation. See [replies](replies.md).

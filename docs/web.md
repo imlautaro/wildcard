@@ -634,3 +634,11 @@ Missing typing flags are treated as inactive. Existing session snapshots, one-se
 visible polling, invalidation and stale-response guards remain unchanged; no draft
 text or extra client cache is introduced. See [groups](groups.md#group-typing-state)
 for remaining fictional-account and device/browser verification.
+
+## Contact-authored quotes
+
+Contacts may quote a message when overlapping topics would make their reply unclear,
+and default to no quote for obvious answers. Private delivered messages carry their
+own optional `replyTo`; group messages use the existing quote payload. Both use the
+existing quote component and original-message pagination/navigation, matching iOS.
+See [replies](replies.md) for validation and pending verification.

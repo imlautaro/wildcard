@@ -1,5 +1,5 @@
 import { contactModelAllowed } from './consent';
-import { messageDelay } from './messages';
+import { messageDelay, type ContactResponse } from './messages';
 import { batchStatement, batchIntoNext, shouldHoldReply, waitForComposer } from './pacing';
 import { runInitiative, type InitiativeJob } from './initiative';
 import { jobAccountID, jobModel } from '../lib/model-preference';
@@ -67,7 +67,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       if (prepared) {
         const hold = await step.do('reply-timing-decision', {
           retries: { limit: 0, delay: '1 second' }, timeout: '1 minute',
-        }, () => shouldHoldReply(env, job, typeof prepared.reply === 'string' ? prepared.reply : prepared.reply?.join('\n\n') ?? null)).catch(() => false);
+        }, () => shouldHoldReply(env, job, typeof prepared.reply === 'string' ? prepared.reply : (Array.isArray(prepared.reply) ? prepared.reply : prepared.reply?.messages)?.join('\n\n') ?? null)).catch(() => false);
         if (hold) await waitForComposer(env, job, step, 'before-publish', 3);
         await this.publishMessages(env, job, step, prepared.reply);
       }
@@ -130,9 +130,10 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
     }
   }
 
-  private async publishMessages(env: Env, job: ChatJob, step: WorkflowStep, reply: string[] | string | null, prefix = 'reply') {
+  private async publishMessages(env: Env, job: ChatJob, step: WorkflowStep, reply: ContactResponse | string[] | string | null, prefix = 'reply') {
     // Null is an intentional reaction-only turn. Old checkpoints contain prose.
-    const messages = typeof reply === 'string' ? [reply] : reply ?? [];
+    const response = reply && typeof reply === 'object' && !Array.isArray(reply) ? reply : null;
+    const messages = response ? response.messages : typeof reply === 'string' ? [reply] : Array.isArray(reply) ? reply : [];
     for (let index = 0; index < Math.max(1, messages.length); index++) {
       if (index) await step.sleep(`${prefix}-message-pause-${index}`, messageDelay(messages[index]));
       const more = await step.do(`${prefix}-publish-message-${index}`, async () => {
@@ -144,7 +145,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         const previous: AssistantMessage[] = delivered.assistantMessagesJSON ? JSON.parse(delivered.assistantMessagesJSON) : [];
         // A crash after the transaction but before its checkpoint must not append twice.
         if (previous.length > index) return true;
-        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${index}`, text: messages[index], createdAt: now }] : previous;
+        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${index}`, text: messages[index], createdAt: now, ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
         const interrupted = `EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = chat_turn.contact_id
           AND newer.user_id = chat_turn.user_id AND newer.sequence > chat_turn.sequence)`;
         const text = next.length ? next.map(message => message.text).join('\n\n') : null;

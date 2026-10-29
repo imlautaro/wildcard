@@ -112,7 +112,9 @@ struct ChatView: View {
                             .id("\(turn.id)/user")
                         }
                         if item.kind == .assistant, let reply = item.message?.text ?? turn.assistantText {
-                            MessageBubbleView(text: reply, sentAt: item.timestamp, fromUser: false, formatsMarkdown: true)
+                            MessageBubbleView(text: reply, sentAt: item.timestamp, fromUser: false, formatsMarkdown: true,
+                                              replyQuote: item.message?.replyTo.map(replyPreview),
+                                              onQuoteTap: { if let quote = item.message?.replyTo { showQuoted(quote, proxy: proxy) } })
                                 .swipeToReply(enabled: canReply) { self.reply(to: turn, side: "assistant") }
                                 .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "assistant", fromUser: false,
                                                   onReply: canReply ? { self.reply(to: turn, side: "assistant") } : nil)

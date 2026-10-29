@@ -21,6 +21,11 @@ for (const file of ['groups/request-access.ts', 'groups/energy.ts', 'schedules/d
     if (ts.isVariableStatement(node) && node.declarationList.declarations.some(d => d.name.getText(tree) === 'energyPoints')) helpers.push(node.getText(tree).replace(/^export /, ''));
   });
 }
+const groupContext = read('groups/context.ts');
+const groupTree = ts.createSourceFile('context.ts', groupContext, ts.ScriptTarget.Latest, true);
+groupTree.forEachChild(node => {
+  if (ts.isVariableStatement(node) && node.declarationList.declarations.some(d => d.name.getText(groupTree) === 'visibleMessage')) helpers.push(node.getText(groupTree).replace(/^export /, ''));
+});
 const queries = new Map();
 for (const contributor of [false, true]) for (const index of [0, 1]) {
   const context = vm.createContext({ index, contributor, env: { META_CHAT_MODEL: contributor ? 'muse-spark-1.3-contributor' : 'muse-spark-1.3' } });

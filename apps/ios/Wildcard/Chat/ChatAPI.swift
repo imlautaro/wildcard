@@ -17,6 +17,7 @@ struct AssistantMessage: Decodable, Equatable, Sendable, Identifiable {
     let id: String
     let text: String
     let createdAt: Double
+    var replyTo: MessageReplyQuote? = nil
 }
 
 struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {

@@ -76,3 +76,7 @@ offline refresh, old history, quotes/reactions, mini apps, unread/push behavior,
 access revocation and account switching on both clients. In groups also verify
 intervening speakers, low energy, the exchange ceiling and complete directed
 private returns. Model quality and actual scheduling latency require live checks.
+
+A contact may choose one optional quote for the first message in its burst; later
+messages do not repeat it. Private delivered entries store references, resolved
+from current history in API responses. See [replies](replies.md).
