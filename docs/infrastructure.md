@@ -1894,6 +1894,70 @@ returning to it removes research availability for tasks and must not refund usag
 Avoid rolling back before 0054's pause/generation controls without following its
 settling procedure above. A provider request already sent may still be charged.
 
+### Page monitors (migration 0056)
+
+Apply additive `0056_task_monitors.sql` after 0055. It adds nullable monitor URL,
+keywords, interval (default 360 minutes), grantor, due/pending times and a lifetime
+change-turn counter to `task`, plus `task_monitor_state` (latest extracted text and
+hashes) and `task_monitor_check` (bounded log), both cascading with the task. Existing
+tasks have no monitor. No new service, binding, secret, resource identifier or account
+permission is required: checks run in the existing `* * * * *` Cron (`dispatchMonitors`),
+change turns use `CHAT_WORKFLOW` and `META_API_KEY`. The existing
+`global_fetch_strictly_public` compatibility flag must stay enabled in
+`apps/api/wrangler.jsonc`; it keeps monitor fetches off private networks. Independent
+accounts and staging need nothing beyond the required resources above.
+
+Local setup uses `npm run db:migrate:local`; release through committed/pushed automatic
+publication, then install/open the new clients. Older clients ignore the added board
+fields and cannot add monitors. Static validation: API/web types, full Swift typecheck,
+`node scripts/checks/persistent-task-sql.cjs` (SQLite, depth 100; set `SQL_OUT` to
+capture statements and prepare them with `EXPLAIN` on local workerd D1). Authorized
+functional verification must confirm 0056 applied once, default absence, human-only
+grants, baseline/unchanged/changed outcomes on a page you control, redirect and type
+failures, keyword filtering, one fetch per due check under concurrent Cron runs,
+3/day and 20/lifetime change turns, revocation/reassignment during a fetch and both
+clients' UI. Those live checks remain unverified. See [page monitors](monitors.md).
+
+Rollback uses another automatic release. To stop checks without code changes, remove
+monitors in the task editors (or pause the tasks). Keep the additive columns/tables;
+pre-0056 code ignores them, so returning to it silently stops all checks and change
+turns. Change turns already admitted can still finish and incur inference cost.
+
+### Task collaboration (migration 0058)
+
+Apply additive `0058_task_collaboration.sql` after 0057: nullable `task.document_id`
+(set null when the document is deleted), `review_rounds` (0–2) and `review_feedback`.
+No service, binding, secret or permission changes. Release through the automatic
+pipeline; older clients ignore the new board fields. Static validation:
+`node scripts/checks/persistent-task-sql.cjs` (70 statements) plus workerd D1
+`EXPLAIN`. Functional checks (multi-contact draft/review, third-round rejection,
+document deletion, both UIs) are unverified. Rollback: pre-0058 code ignores the
+columns; tasks reopened by reviews remain ordinary open tasks.
+
+### Semantic memory ranking (migration 0057)
+
+Apply additive `0057_semantic_memory.sql` after 0056. It adds nullable `embedding`
+BLOB columns to `contact_memory` and `group_memory` and two triggers that clear a
+vector when its content changes. No new resource: it uses the existing required
+Workers AI binding `AI` (`"ai": { "binding": "AI" }`), whose account must allow
+Workers AI. Model `@cf/baai/bge-m3`; quota is the account's Workers AI neuron
+allocation (10,000/day free, checked October 29, 2026). Vectorize is not used.
+Versioned flag `SEMANTIC_MEMORY_ENABLED` in `apps/api/wrangler.jsonc` vars, shipped
+`"false"`; set `"true"` and release to enable (staging can enable independently).
+Run `npm run types` in `apps/api` after changing vars.
+
+Local: `npm run db:migrate:local`; local `wrangler dev` calls remote Workers AI with
+your account. Release through committed/pushed automatic publication; clients are
+unchanged. Authorized verification: 0057 applied once, flag on in staging, a
+cross-language fictional memory recalled without shared words, vectors written once
+and cleared after an edit, deletion cascades, isolated chats never embedded, and
+lexical fallback when the AI binding errors. Unverified so far.
+
+Rollback: set the flag to `"false"` (lexical only, immediately on the next release).
+Pre-0057 code ignores the columns. To drop stored vectors, run
+`UPDATE contact_memory SET embedding = NULL; UPDATE group_memory SET embedding = NULL;`
+through the normal migration process.
+
 ## Contact personality
 
 [Contact personality](personality.md) reuses the required D1 `DB`, Meta key/model,

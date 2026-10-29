@@ -9,6 +9,8 @@ export type Memory = {
   sourceUserID: string; sourceUserName: string;
   key: string; kind: string; content: string; sourceTurnID: string;
   sourceQuote: string; sourceSequence: number; updatedAt: number;
+  // `table:rowid` of a memory eligible for semantic ranking; absent for connector-isolated sources.
+  embedRef?: string | null;
 };
 export const memoryColumns = `memory_key AS key, kind, content, source_turn_id AS sourceTurnID,
   source_quote AS sourceQuote, source_sequence AS sourceSequence, updated_at AS updatedAt`;
@@ -29,7 +31,9 @@ export function keywords(query: string): string[] {
 
 export async function readMemories(db: D1Database, scope: MemoryScope, ownOnly = false): Promise<Memory[]> {
   const { results } = await db.prepare(`SELECT ${memoryColumns.split(',').map((s) => `m.${s.trim()}`).join(',')},
-    m.user_id AS sourceUserID, u.name AS sourceUserName FROM contact_memory m
+    m.user_id AS sourceUserID, u.name AS sourceUserName,
+    CASE WHEN NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = source.id) THEN 'contact_memory:' || m.id END AS embedRef
+    FROM contact_memory m
     JOIN contact source ON source.id = m.contact_id AND source.user_id = m.user_id
     JOIN user u ON u.id = m.user_id
     JOIN contact current ON current.id = ?1 AND current.user_id = ?2
@@ -54,7 +58,7 @@ export function selectMemories(memories: Memory[], query: string, includePrefere
     const score = terms.reduce((total, term) => total + (text.includes(term) ? 1 : 0), 0);
     return { memory, score, index };
   }).filter(({ memory, score }) => score > 0 || (includePreferences && memory.kind === 'preference'))
-    .sort((a, b) => b.score - a.score || a.index - b.index).slice(0, 8).map(({ memory }) => memory);
+    .sort((a, b) => b.score - a.score || a.index - b.index).slice(0, 8).map(({ memory: { embedRef: _ref, ...memory } }) => memory);
 }
 
 const changeProperties = {

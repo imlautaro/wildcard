@@ -1,5 +1,5 @@
 import { desc, sql } from 'drizzle-orm';
-import { type AnySQLiteColumn, check, foreignKey, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { type AnySQLiteColumn, blob, check, foreignKey, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const date = (name: string) => integer(name, { mode: 'timestamp_ms' });
 
@@ -185,6 +185,7 @@ export const contactMemory = sqliteTable('contact_memory', {
   sourceQuote: text('source_quote').notNull(),
   sourceSequence: integer('source_sequence').notNull(),
   updatedAt: date('updated_at').notNull(),
+  embedding: blob('embedding', { mode: 'buffer' }),
 }, (table) => [
   foreignKey({ columns: [table.contactId, table.userId], foreignColumns: [contact.id, contact.userId] }).onDelete('cascade'),
   foreignKey({ columns: [table.sourceTurnId, table.contactId, table.userId],
@@ -406,6 +407,7 @@ export const groupMemory = sqliteTable('group_memory', {
   sourceId: text('source_id').notNull().references(() => groupMessage.id, { onDelete: 'cascade' }),
   sourceQuote: text('source_quote').notNull(),
   updatedAt: date('updated_at').notNull(),
+  embedding: blob('embedding', { mode: 'buffer' }),
 }, (t) => [primaryKey({ columns: [t.agentId, t.userId, t.memoryKey] }),
   check('group_memory_kind', sql`${t.kind} IN ('fact', 'preference', 'decision', 'pending')`),
   check('group_memory_content_length', sql`length(${t.content}) BETWEEN 1 AND 300`),
@@ -703,6 +705,11 @@ export const task = sqliteTable('task', {
   workGeneration: integer('work_generation').notNull().default(0), mutationToken: text('mutation_token'),
   researchQuery: text('research_query'), researchUserId: text('research_user_id').references(() => user.id, { onDelete: 'set null' }),
   researchCount: integer('research_count').notNull().default(0),
+  monitorUrl: text('monitor_url'), monitorKeywords: text('monitor_keywords'), monitorInterval: integer('monitor_interval').notNull().default(360),
+  monitorUserId: text('monitor_user_id').references(() => user.id, { onDelete: 'set null' }),
+  monitorDueAt: date('monitor_due_at'), monitorPendingAt: date('monitor_pending_at'), monitorTurns: integer('monitor_turns').notNull().default(0),
+  documentId: text('document_id').references((): AnySQLiteColumn => chatDocument.id, { onDelete: 'set null' }),
+  reviewRounds: integer('review_rounds').notNull().default(0), reviewFeedback: text('review_feedback'),
 }, t => [check('task_title', sql`length(${t.title}) BETWEEN 1 AND 300`), check('task_notes', sql`${t.notes} IS NULL OR length(${t.notes}) <= 2000`),
   check('task_status', sql`${t.status} IN ('open', 'in_progress', 'done', 'canceled')`),
   check('task_assignee_kind', sql`${t.assigneeKind} IN ('user', 'agent')`), check('task_result', sql`${t.result} IS NULL OR length(${t.result}) <= 2000`),
@@ -710,13 +717,36 @@ export const task = sqliteTable('task', {
   check('task_work_reason', sql`${t.workReason} IS NULL OR ${t.workReason} IN ('assigned', 'unblocked', 'review')`),
   check('task_research_query', sql`${t.researchQuery} IS NULL OR length(${t.researchQuery}) BETWEEN 1 AND 600`),
   check('task_research_count', sql`${t.researchCount} BETWEEN 0 AND 1`),
+  check('task_monitor_url', sql`${t.monitorUrl} IS NULL OR length(${t.monitorUrl}) BETWEEN 1 AND 2048`),
+  check('task_monitor_keywords', sql`${t.monitorKeywords} IS NULL OR length(${t.monitorKeywords}) BETWEEN 1 AND 300`),
+  check('task_monitor_interval', sql`${t.monitorInterval} IN (60, 360, 1440)`),
+  check('task_review_rounds', sql`${t.reviewRounds} BETWEEN 0 AND 2`),
+  check('task_review_feedback', sql`${t.reviewFeedback} IS NULL OR length(${t.reviewFeedback}) <= 2000`),
   check('task_work_state', sql`${t.workState} IN ('active', 'paused', 'blocked')`),
   check('task_next_step', sql`${t.nextStep} IS NULL OR length(${t.nextStep}) <= 2000`),
   check('task_evidence', sql`${t.evidence} IS NULL OR length(${t.evidence}) <= 2000`),
   check('task_blocked_reason', sql`${t.blockedReason} IS NULL OR length(${t.blockedReason}) <= 2000`),
   check('task_assignee', sql`(${t.assigneeKind} IS NULL) = (${t.assigneeId} IS NULL)`),
   index('task_list_position').on(t.listId, t.position), index('task_work_due').on(t.workDueAt).where(sql`${t.workDueAt} IS NOT NULL`),
-  index('task_assignee').on(t.assigneeKind, t.assigneeId, t.status)]);
+  index('task_assignee').on(t.assigneeKind, t.assigneeId, t.status),
+  index('task_monitor_due').on(t.monitorDueAt).where(sql`${t.monitorDueAt} IS NOT NULL`),
+  index('task_monitor_pending').on(t.monitorPendingAt).where(sql`${t.monitorPendingAt} IS NOT NULL`),
+  index('task_monitor_user').on(t.monitorUserId).where(sql`${t.monitorUrl} IS NOT NULL`),
+  index('task_document').on(t.documentId).where(sql`${t.documentId} IS NOT NULL`)]);
+export const taskMonitorState = sqliteTable('task_monitor_state', {
+  taskId: text('task_id').primaryKey().references(() => task.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(), hash: text('hash').notNull(), recentHashes: text('recent_hashes').notNull().default('[]'),
+  snapshot: text('snapshot').notNull(), checkedAt: date('checked_at').notNull(), changedAt: date('changed_at'),
+}, t => [check('task_monitor_state_hashes', sql`json_valid(${t.recentHashes})`), check('task_monitor_state_snapshot', sql`length(${t.snapshot}) <= 65536`)]);
+export const taskMonitorCheck = sqliteTable('task_monitor_check', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').notNull().references(() => task.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(), generation: integer('generation').notNull(), outcome: text('outcome').notNull(),
+  httpStatus: integer('http_status'), errorCode: text('error_code'), excerpt: text('excerpt'), checkedAt: date('checked_at').notNull(),
+}, t => [check('task_monitor_check_outcome', sql`${t.outcome} IN ('baseline', 'unchanged', 'repeated', 'ignored', 'changed', 'failed')`),
+  check('task_monitor_check_error', sql`${t.errorCode} IS NULL OR length(${t.errorCode}) <= 64`),
+  check('task_monitor_check_excerpt', sql`${t.excerpt} IS NULL OR length(${t.excerpt}) <= 3000`),
+  index('task_monitor_check_task').on(t.taskId, t.checkedAt)]);
 export const taskDependency = sqliteTable('task_dependency', {
   taskId: text('task_id').notNull().references(() => task.id, { onDelete: 'cascade' }),
   blockedById: text('blocked_by_id').notNull().references(() => task.id, { onDelete: 'cascade' }),

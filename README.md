@@ -32,6 +32,7 @@ docs/
   persistent-work.md         # Task progress, retained budgets and pause/resume
   documents.md               # Collaborative Markdown documents in chats
   web-research.md            # Bounded Meta web research with sourced reports
+  monitors.md                # Code-checked page monitors that wake task contacts
 ```
 
 ## API development
@@ -228,6 +229,8 @@ task in its own turn, again when its blockers finish, and in periodic reviews.
 [Persistent work](docs/persistent-work.md) records next steps/evidence and exposes
 pause/resume/cancel and retained work-turn budgets on iOS and web (migration 0054). Chats also hold [Markdown documents](docs/documents.md) that
 contacts and people write together, opened full screen with a viewer and editor.
+Tasks can link a deliverable document and reviewers can send work back at most twice
+([collaboration](docs/tasks.md#collaboration-deliverables-and-bounded-reviews-0058), migration 0058).
 
 Human requests can use [web research](docs/web-research.md) through Meta Responses
 and `web_search`, saving a report with sources and original provenance in those
@@ -236,6 +239,10 @@ Requests have durable replay receipts and rolling account/installation limits.
 Assigned tasks may run one human-saved exact public query with the app closed
 (migration 0055), with grant/revoke and receipt status on both clients. Schedules,
 ordinary bot triggers and connector-isolated chats cannot research.
+A person can also attach a [page monitor](docs/monitors.md) to a contact's task
+(migration 0056): code checks the public page and wakes the contact only for new,
+relevant changes. Memory selection can optionally add
+[semantic ranking](docs/memory.md#semantic-ranking-migration-0057) with Workers AI embeddings stored in D1 (migration 0057, off by default).
 See [agentic execution limits](docs/agentic-limits.md) for current work budgets and
 the controls required before extending persistent autonomous work.
 

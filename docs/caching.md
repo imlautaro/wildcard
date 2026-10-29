@@ -1042,3 +1042,14 @@ Revocation/access loss/account reset and late-response rejection follow those sa
 board/document rules. Device/browser verification remains pending for reopening,
 empty results, offline recovery, in-flight revoke, failed/uncertain receipts and
 account switching with fictional queries.
+
+Page monitors (0056): URL, keywords, interval, change turns used, pending state and
+the latest five check outcomes travel in the same task-board snapshot and follow the
+same refresh, versioned-edit, conflict, access-loss and account-reset rules. Check
+excerpts and stored page text stay on the server. No new cache, polling or disk
+store. Device/browser verification of the monitor section, check list refresh,
+revocation and reassignment remains pending. See [page monitors](monitors.md).
+
+Task collaboration (0058): deliverable title, revision rounds and feedback travel in
+the same board snapshot; document titles follow the board's refresh, not the document
+cache. No new cache or polling.

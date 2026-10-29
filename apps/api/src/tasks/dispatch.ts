@@ -1,9 +1,10 @@
 import { dispatchChat } from '../chat/dispatch';
 import { storedColumns, type StoredTurn } from '../chat/data';
 import { dispatchGroup } from '../groups/workflow';
+import { monitorActive, monitorLimits } from '../monitors/check';
 import { taskLimits } from './data';
 
-const reasons: Record<string, string> = { assigned: 'assigned to', unblocked: 'unblocked for', review: 'still open for' };
+const reasons: Record<string, string> = { assigned: 'assigned to', unblocked: 'unblocked for', review: 'still open for', monitor: 'page change for' };
 
 /**
  * Starts contact work turns for due tasks. Runs from the minute Cron and right after
@@ -11,47 +12,67 @@ const reasons: Record<string, string> = { assigned: 'assigned to', unblocked: 'u
  * gets a proactive turn at most every `reviewDelay`, up to `workPerTask` turns
  * in total, and each contact at most `agentDaily` per 24 hours.
  * Blocked tasks wait without turns until their last blocker is done or canceled.
+ * A relevant page-monitor change gets its own turn from a separate budget
+ * (`monitorLimits`): it never spends or needs the six work turns.
  */
 export async function dispatchTasks(env: Env) {
   if (!env.META_API_KEY?.trim()) return;
   const now = Date.now();
-  const { results } = await env.DB.prepare(`SELECT t.id, t.title, t.assignee_id AS agentID, t.work_reason AS reason, t.work_count AS count, t.work_generation AS generation,
+  // Two indexed selections: pending monitor changes first, then ordinary work. A task
+  // in both gets its monitor turn now; its review stays due for a later run.
+  const select = (reason: string, filter: string, order: string, limit: number) => env.DB.prepare(`SELECT t.id, t.title, t.assignee_id AS agentID, ${reason} AS reason,
+      t.work_count AS count, t.monitor_turns AS monitorCount, t.work_generation AS generation,
       l.group_id AS groupID, l.contact_id AS contactID, l.user_id AS userID, t.created_by_kind AS creatorKind, t.created_by_id AS creatorID,
       l.created_by_kind AS listCreatorKind, l.created_by_id AS listCreatorID
     FROM task t JOIN task_list l ON l.id = t.list_id
-    WHERE t.work_due_at <= ?1 AND t.status IN ('open', 'in_progress') AND t.assignee_kind = 'agent' AND l.status = 'active' AND t.work_state = 'active'
+    WHERE ${filter} AND t.status IN ('open', 'in_progress') AND t.assignee_kind = 'agent' AND l.status = 'active' AND t.work_state = 'active'
       AND NOT EXISTS (SELECT 1 FROM task_dependency d JOIN task blocker ON blocker.id = d.blocked_by_id
         WHERE d.task_id = t.id AND blocker.status IN ('open', 'in_progress'))
-    ORDER BY t.work_due_at LIMIT 10`).bind(now)
-    .all<{ id: string; title: string; agentID: string; reason: string | null; count: number; generation: number; groupID: string | null; contactID: string | null;
+    ORDER BY ${order} LIMIT ${limit}`).bind(now)
+    .all<{ id: string; title: string; agentID: string; reason: string | null; count: number; monitorCount: number; generation: number; groupID: string | null; contactID: string | null;
       userID: string | null; creatorKind: string; creatorID: string; listCreatorKind: string; listCreatorID: string }>();
+  // Change turns also require a current grant: URL, grantor access and no connector isolation.
+  const monitored = (await select(`'monitor'`, `t.monitor_pending_at <= ?1 AND ${monitorActive}`, 't.monitor_pending_at', 5)).results;
+  const results = [...monitored, ...(await select('t.work_reason', 't.work_due_at <= ?1', 't.work_due_at', 10)).results
+    .filter(task => !monitored.some(item => item.id === task.id))];
   for (const task of results) {
     try {
+      const monitor = task.reason === 'monitor';
       // Only defers the snapshot this run saw, so a concurrent run's scheduled review survives.
-      const defer = (delay: number, stop = false) => env.DB.prepare(`UPDATE task SET work_due_at = ?2 WHERE id = ?1 AND work_count = ?3 AND work_generation = ?4 AND work_state = 'active'`)
-        .bind(task.id, stop ? null : now + delay, task.count, task.generation).run();
-      if (task.count >= taskLimits.workPerTask) { await defer(0, true); continue; }
-      const daily = await env.DB.prepare('SELECT COUNT(*) AS count FROM task_work WHERE agent_id = ? AND created_at > ?')
-        .bind(task.agentID, now - 86_400_000).first<{ count: number }>();
-      if ((daily?.count ?? 0) >= taskLimits.agentDaily) { await defer(taskLimits.reviewDelay); continue; }
+      const defer = (delay: number, stop = false) => (monitor
+        ? env.DB.prepare(`UPDATE task SET monitor_pending_at = ?2 WHERE id = ?1 AND monitor_turns = ?3 AND work_generation = ?4 AND monitor_pending_at IS NOT NULL`)
+          .bind(task.id, now + delay, task.monitorCount, task.generation)
+        : env.DB.prepare(`UPDATE task SET work_due_at = ?2 WHERE id = ?1 AND work_count = ?3 AND work_generation = ?4 AND work_state = 'active'`)
+          .bind(task.id, stop ? null : now + delay, task.count, task.generation)).run();
+      if (!monitor && task.count >= taskLimits.workPerTask) { await defer(0, true); continue; }
+      const daily = await env.DB.prepare(`SELECT COUNT(*) AS count, SUM(task_id = ? AND reason = 'monitor') AS monitor FROM task_work WHERE agent_id = ? AND created_at > ?`)
+        .bind(task.id, task.agentID, now - 86_400_000).first<{ count: number; monitor: number | null }>();
+      if ((daily?.count ?? 0) >= taskLimits.agentDaily || (monitor && (daily?.monitor ?? 0) >= monitorLimits.turnsDaily)) { await defer(taskLimits.reviewDelay); continue; }
       // Unique per execution generation; ordinary progress edits keep the same authority.
-      const workID = `task-${task.id}-g${task.generation}-${task.count + 1}`;
+      const workID = monitor ? `task-${task.id}-g${task.generation}-m${task.monitorCount + 1}` : `task-${task.id}-g${task.generation}-${task.count + 1}`;
       // Budget and next review are recorded in the same batch as the turn, only if it was created.
       const recorded = (source: string) => [
         env.DB.prepare(`INSERT INTO task_work (id, task_id, agent_id, reason, created_at, generation) SELECT ?1, ?2, ?3, ?4, ?5, ?6
           WHERE EXISTS (SELECT 1 FROM ${source} WHERE id = ?1) ON CONFLICT(id) DO NOTHING`)
           .bind(workID, task.id, task.agentID, task.reason ?? 'review', now, task.generation),
-        env.DB.prepare(`UPDATE task SET work_count = work_count + 1, work_due_at = ?2, work_reason = 'review'
-          WHERE id = ?1 AND work_count = ?3 AND work_generation = ?5 AND work_state = 'active' AND EXISTS (SELECT 1 FROM ${source} WHERE id = ?4)`)
-          .bind(task.id, now + taskLimits.reviewDelay, task.count, workID, task.generation),
+        monitor
+          ? env.DB.prepare(`UPDATE task SET monitor_turns = monitor_turns + 1, monitor_pending_at = NULL
+            WHERE id = ?1 AND monitor_turns = ?2 AND work_generation = ?4 AND work_state = 'active' AND EXISTS (SELECT 1 FROM ${source} WHERE id = ?3)`)
+            .bind(task.id, task.monitorCount, workID, task.generation)
+          : env.DB.prepare(`UPDATE task SET work_count = work_count + 1, work_due_at = ?2, work_reason = 'review'
+            WHERE id = ?1 AND work_count = ?3 AND work_generation = ?5 AND work_state = 'active' AND EXISTS (SELECT 1 FROM ${source} WHERE id = ?4)`)
+            .bind(task.id, now + taskLimits.reviewDelay, task.count, workID, task.generation),
       ];
+      const budget = monitor
+        ? `current_task.monitor_turns = ${task.monitorCount} AND current_task.monitor_turns < ${monitorLimits.turnsPerTask} AND current_task.monitor_pending_at IS NOT NULL
+          AND (SELECT COUNT(*) FROM task_work WHERE task_id = current_task.id AND reason = 'monitor' AND created_at > ${now - 86_400_000}) < ${monitorLimits.turnsDaily}`
+        : `current_task.work_count = ${task.count} AND current_task.work_count < ${taskLimits.workPerTask}`;
       // Admission is rechecked inside the insertion transaction, including the daily
       // ledger, so simultaneous dispatchers cannot overspend from stale snapshots.
       const admission = `EXISTS (SELECT 1 FROM task current_task JOIN task_list current_list ON current_list.id = current_task.list_id
-        WHERE current_task.id = ?4 AND current_task.work_count = ${task.count} AND current_task.work_generation = ${task.generation}
+        WHERE current_task.id = ?4 AND ${budget} AND current_task.work_generation = ${task.generation}
           AND current_task.work_state = 'active' AND current_task.status IN ('open', 'in_progress')
           AND current_task.assignee_kind = 'agent' AND current_task.assignee_id = ?7 AND current_list.status = 'active'
-          AND current_task.work_count < ${taskLimits.workPerTask}
           AND NOT EXISTS (SELECT 1 FROM task_dependency d JOIN task blocker ON blocker.id = d.blocked_by_id
             WHERE d.task_id = current_task.id AND blocker.status IN ('open', 'in_progress')))
         AND (SELECT COUNT(*) FROM task_work WHERE agent_id = ?7 AND created_at > ${now - 86_400_000}) < ${taskLimits.agentDaily}`;

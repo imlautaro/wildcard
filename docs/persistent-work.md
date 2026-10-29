@@ -129,6 +129,13 @@ could have stopped after reservation. **Report saved** describes original
 publication even if later deleted.
 The report appears in the existing Docs list, with its original provenance.
 
+## Page monitors (0056)
+
+A person can save a public URL on a contact's task; code checks it and starts a
+change turn from a separate budget only for new relevant content. Monitors follow
+the same human-only grant, assignment-clearing and generation rules as research.
+See [page monitors](monitors.md).
+
 ## Provisioning, cache and verification
 
 Apply 0054 after 0053, then 0055, through the existing migration/release process; see

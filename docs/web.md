@@ -783,3 +783,25 @@ Close/reopen after a conflict to edit fresh data. See [persistent work](persiste
 Functional/visual verification remains pending: default denial, editing/revocation,
 assignment changes, uncertain outcomes, stale edit conflicts, offline/back navigation,
 access loss and account switching using fictional tasks on both clients.
+
+### Task collaboration
+
+Both boards show **Deliverable: <document title>** and **Revision round n/2** with the
+reviewer's feedback while the task is open (migration 0058). Contacts set these through
+tools; there are no new controls. Unverified in browser and device.
+See [tasks](tasks.md#collaboration-deliverables-and-bounded-reviews-0058).
+
+### Semantic memory ranking
+
+Server-only (migration 0057, flag `SEMANTIC_MEMORY_ENABLED`, off by default): memory
+selection may add Workers AI embedding similarity. No client UI, cache or API change on
+iOS or web. See [memory](memory.md#semantic-ranking-migration-0057).
+
+### Page monitors
+
+Both task editors offer **Page monitor** after saving a contact assignment: a public
+URL, **Every hour / Every 6 hours / Every day**, optional comma-separated keywords, the
+latest five checks and change turns used; the board row shows the same summary. The
+server checks the page with code and starts a contact turn only for a relevant change.
+Same versioned PATCH, board cache and polling as other task fields; no new cache.
+Browser and device presentation remain unverified. See [page monitors](monitors.md).

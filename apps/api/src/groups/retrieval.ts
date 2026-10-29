@@ -2,6 +2,7 @@ import { privateSharingTools, searchAuthorizedPrivateMessages } from './private-
 import { readAgentMemories, selectAgentMemories } from '../chat/agent-memory';
 import { groupMemories, localGroupMemories } from './memory';
 import { byteLength, clipText, keywords, selectMemories } from '../chat/memory';
+import { rankMemories } from '../chat/semantic-memory';
 import { isRecord, type ModelTool, type ToolCall } from '../chat/meta';
 
 export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; contactID?: string; beforeSequence?: number; reactionJob?: { turnID: string; attempt: number }; mcp?: { id: string; attempt: number; contactID: string; userID: string; groupID: string; agentID: string } };
@@ -140,7 +141,7 @@ async function groupExcerpt(db: D1Database, scope: GroupRetrievalScope, messageI
   }));
 }
 
-export async function executeGroupRetrieval(db: D1Database, scope: GroupRetrievalScope, call: ToolCall): Promise<string> {
+export async function executeGroupRetrieval(db: D1Database, scope: GroupRetrievalScope, call: ToolCall, env?: Env): Promise<string> {
   const args: unknown = JSON.parse(call.function.arguments);
   if (!isRecord(args) || (args.query !== undefined && (typeof args.query !== 'string' || byteLength(args.query) > 256))) {
     return JSON.stringify({ error: 'Provide an optional query of at most 256 UTF-8 bytes.' });
@@ -169,7 +170,9 @@ export async function executeGroupRetrieval(db: D1Database, scope: GroupRetrieva
     const local = scope.groupID && !scope.contributor
       ? await localGroupMemories(db, scope.agentID, scope.groupID, scope.userID, scope.beforeSequence) : [];
     const shared = await groupMemories(db, scope.agentID, scope.contributor);
-    return JSON.stringify(pack(selectMemories([...local, ...shared], args.query)));
+    // Semantic ranking only for non-isolated groups; private callers rank their own tool separately.
+    const isolated = !scope.groupID || !!await db.prepare('SELECT 1 FROM mcp_private_group WHERE group_id = ?').bind(scope.groupID).first();
+    return JSON.stringify(pack(env ? await rankMemories(env, [...local, ...shared], args.query, false, !isolated) : selectMemories([...local, ...shared], args.query)));
   }
   if (call.function.name === 'search_groups') {
     if (Object.keys(args).some((k) => !['query', 'after'].includes(k))

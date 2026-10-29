@@ -1,6 +1,7 @@
 // Initialize schema constructors before imports that transitively load auth or MCP.
 import './lib/schema-runtime';
 import { dispatchTasks } from './tasks/dispatch';
+import { dispatchMonitors } from './monitors/dispatch';
 import { recoverContactGeneration } from './contacts/generation';
 import { recoverOnboarding } from './onboarding/routes';
 import { deliverRemoteNative } from './native/remote';
@@ -31,6 +32,7 @@ export default {
     ctx.waitUntil(cleanAttachments(env));
     ctx.waitUntil(dispatchSchedules(env));
     ctx.waitUntil(dispatchTasks(env));
+    ctx.waitUntil(dispatchMonitors(env));
     ctx.waitUntil(dispatchInitiatives(env));
     ctx.waitUntil(recoverChats(env));
     ctx.waitUntil(recoverGroups(env));

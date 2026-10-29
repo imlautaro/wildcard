@@ -48,9 +48,11 @@ ambiguous is rejected with a message to reload. A full rewrite (`markdown` plus
 ## Proactive work
 
 Documents have no loop of their own. Ongoing writing goes through
-[task lists](tasks.md): contacts are told to put the `documentID` in each task's
-notes, so whoever is assigned edits that document in its task work turns, again when
-its blockers finish, and in periodic reviews. For example, "Leo: outline" blocks
+[task lists](tasks.md): tasks link the document with `documentID` (migration 0058;
+earlier tasks may still carry it in notes), so whoever is assigned edits that document
+in its task work turns, again when its blockers finish, and in periodic reviews.
+Reviewers can send a task back with `request_changes`, at most twice per task; see
+[collaboration](tasks.md#collaboration-deliverables-and-bounded-reviews-0058). For example, "Leo: outline" blocks
 "Ana: write the draft", which blocks "Leo: review".
 
 ## Model tools

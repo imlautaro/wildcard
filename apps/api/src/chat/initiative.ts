@@ -6,7 +6,8 @@ import { accountModel, standardModel } from '../lib/model-preference';
 import { privateContact } from '../mcp/client';
 import { enqueueReply, deliverPush } from '../push/delivery';
 import { contactModelAllowed } from './consent';
-import { clipText, readMemories, selectMemories } from './memory';
+import { clipText, readMemories } from './memory';
+import { rankMemories } from './semantic-memory';
 import { readAgentMemories } from './agent-memory';
 import { isRecord, museCompletion, safeErrorCode } from './meta';
 import { messageDelay } from './messages';
@@ -126,7 +127,7 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
         }, messages: rows.reverse().map(row => ({ ...row,
         userText: clipText(row.userText, 1000), assistantText: row.assistantText === null ? null : clipText(row.assistantText, 1500),
         seen: row.sequence <= state.lastReadSequence })),
-        memories: clipText(JSON.stringify(selectMemories(memories, rows.at(-1)?.userText ?? '', true)), 3000),
+        memories: clipText(JSON.stringify(await rankMemories(env, memories, rows.at(-1)?.userText ?? '', true, !isolated)), 3000),
         persona: clipText(JSON.stringify(self), 2500), now };
     });
     if (!evidence) return;

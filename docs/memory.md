@@ -35,8 +35,8 @@ Automatic retrieval compares up to 12 normalized query words from the current
 message and latest user message with source names, stored keys, content, and source quotes.
 Matching memories and preferences are ranked by lexical matches and then recency;
 up to eight candidates are packed into less than 3,800 UTF-8 bytes. Preferences
-can be included without a keyword match. This is lexical retrieval, not semantic
-or embedding search, and it may miss synonyms or language changes. The budgets
+can be included without a keyword match. This is lexical retrieval; optional [semantic ranking](#semantic-ranking-migration-0057)
+adds embedding similarity and may recover synonyms or language changes. The budgets
 are byte limits, not claims about the provider's exact tokenizer or an 8,000-token
 context. JSON escaping, instructions, current input, and tool schemas add overhead.
 
@@ -67,6 +67,53 @@ limits. Each result fits approximately 4,000 UTF-8 bytes including metadata.
 Invalid arguments and unavailable retrieval return sanitized tool errors; an
 unavailable search is not represented as an empty successful search. Exceeded
 budgets or incomplete provider responses cannot produce an unbounded loop.
+
+## Semantic ranking (migration 0057)
+
+Lexical retrieval misses synonyms and language changes ("allergic to nuts" vs.
+"¿qué no puede comer?"). With `SEMANTIC_MEMORY_ENABLED` set to `"true"`, human
+memories are also ranked by embedding similarity using Workers AI
+`@cf/baai/bge-m3` (multilingual, 1,024 dimensions) through the existing `AI` binding.
+The flag ships as `"false"`: the code is in place, but live ranking quality has not
+been verified.
+
+- **Scope.** Only private human memories (`contact_memory`) from non-isolated chats
+  and shared group memories (`group_memory`). Connector-isolated chats/groups, their
+  local memories, agent self memories, message history and documents stay lexical.
+  Semantic ranking runs for reply context (private and group), initiative context,
+  private `search_memories` and `search_group_memories` during group turns (from a
+  private chat that tool stays lexical).
+- **Authorization is unchanged.** Candidates are exactly the memories the existing
+  queries already returned under membership, shared-memory, isolation and Contributor
+  rules. Similarity only reorders and filters that set; it never reads another row.
+- **Storage and deletion.** Each eligible row stores its own unit vector, quantized to
+  1 KiB of signed bytes, in a nullable `embedding` column. Deleting a memory or its
+  contact/group/account deletes the vector with the row. A trigger clears the vector
+  whenever the content changes, and a vector is stored only if the content it was
+  computed from is still current. There is no separate index or service.
+- **Ranking.** The current message (as for lexical retrieval) is embedded once per
+  ranking. Score = share of query words found + cosine similarity. A memory is
+  eligible with any lexical match or cosine ≥ 0.5; preferences remain eligible in
+  reply context. Top eight, then the existing byte packing.
+- **Backfill.** Missing vectors are computed lazily during ranking, at most 32 per
+  call, in the same Workers AI request as the query; larger backlogs fill over later
+  turns. Existing memories need no migration-time inference.
+- **Failure.** A Workers AI error, malformed output or a five-second timeout logs
+  `semantic_memory_unavailable` and falls back to lexical selection for that call.
+- **Privacy.** Memory text and the current message are sent to Workers AI (Cloudflare)
+  for embedding; Meta receives nothing new. Review Cloudflare's Workers AI data
+  terms before enabling; they were not reviewed in this change. Isolated conversations
+  are never sent.
+
+Cost: bge-m3 is listed at 1,075 neurons per million input tokens; the free allocation
+is 10,000 neurons per day (checked October 29, 2026). Memories are at most 300
+characters, so typical use is far below it, but Workers AI quotas are account-wide.
+
+Static verification only: API TypeScript, the content-change trigger on SQLite, and the
+new/changed statements prepared on local workerd D1. Not verified: Workers AI output
+shape at runtime, blob round-trip through D1, ranking quality, the 0.5 threshold,
+latency, backfill under concurrency and fallback in production. Enable the flag only
+after checking fictional cross-language recall and revocation.
 
 ## Learning and provenance
 

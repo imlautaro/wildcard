@@ -13,6 +13,8 @@ defaults, not guarantees of model quality or a financial spending cap.
 | Group reviews / ordinary bot triggers | Existing constrained review/reply rules | No new research capability |
 | Task dispatch | Six work turns per task lifetime, 30 per contact per rolling day; 30-minute reviews | Persistent controls retain consumption and expose pause/block states |
 | Initiative | Existing bounded model review and silence cadence | No research tools |
+| Review loop (`request_changes`) | Reopens a finished blocker at most twice per task; reopened work spends the owner's normal work turns | No new capability |
+| Page monitor change turn | Task turn tools; 20 per task lifetime, 3 per task per day, inside the 30 daily contact task turns | No new research; checks themselves call no model |
 
 The group evidence deadline controls admission of new steps; a step already
 admitted can finish after it. Private inference preparation still has its existing
@@ -41,6 +43,14 @@ Task public research now has an exact-query human grant, a lifetime counter and
 a consumption receipt before admission. Broader background tools still require
 separate per-job permission and receipts.
 Task work must not inherit arbitrary human chat permissions. Account/installation research limits do not replace those controls.
+
+[Page monitors](monitors.md) (0056) are the first background outbound read the Worker
+performs on a person's behalf: one `GET` of a human-saved public URL, at most five per
+Cron run, without redirects, cookies or account data. They grant no write or other
+external action.
+
+[Semantic memory ranking](memory.md#semantic-ranking-migration-0057) (0057, off by
+default) reorders already-authorized memories; it grants no new access or tools.
 
 Verification remains static until authorized live checks: TypeScript, Swift and
 SQL preparation cannot prove replay behavior, live consent revocation, cost,

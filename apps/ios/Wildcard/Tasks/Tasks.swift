@@ -36,6 +36,31 @@ struct TaskItem: Decodable, Hashable, Sendable, Identifiable {
         let status = researchStatus.map { " · \(labels[$0] ?? $0)" } ?? ""
         return "\(researchUsed ?? 0)/\(researchLimit ?? 1) web research attempts used\(status)"
     }
+    let monitorURL: String?
+    let monitorKeywords: String?
+    let monitorInterval: Int?
+    let monitorTurnsUsed: Int?
+    let monitorTurnLimit: Int?
+    let monitorPending: Bool?
+    let monitorChecks: [TaskMonitorCheck]?
+    let documentID: String?
+    let documentTitle: String?
+    let reviewRounds: Int?
+    let reviewRoundLimit: Int?
+    let reviewFeedback: String?
+    var reviewDetail: String? {
+        guard let rounds = reviewRounds, rounds > 0 else { return nil }
+        let feedback = !isFinished ? reviewFeedback.map { ": \($0)" } ?? "" : ""
+        return "Revision round \(rounds)/\(reviewRoundLimit ?? 2)\(feedback)"
+    }
+    static let monitorIntervals = [(60, "Every hour"), (360, "Every 6 hours"), (1440, "Every day")]
+    var monitorDetail: String {
+        let interval = Self.monitorIntervals.first { $0.0 == (monitorInterval ?? 360) }?.1.lowercased() ?? ""
+        let last = monitorChecks?.first.map { "Last: \($0.label)" } ?? (monitorURL == nil ? "" : "Not checked yet")
+        return [monitorURL == nil ? "Page monitor removed" : "Page monitor · \(interval)",
+                "\(monitorTurnsUsed ?? 0)/\(monitorTurnLimit ?? 20) change turns used",
+                monitorPending == true ? "Change waiting for a turn" : "", last].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
     var workLabel: String? {
         if workState == "paused" { return "Paused" }
         if workState == "blocked" { return "Blocked" }
@@ -44,6 +69,19 @@ struct TaskItem: Decodable, Hashable, Sendable, Identifiable {
     }
     var assigneeKey: String { assigneeKind.map { "\($0):\(assigneeID ?? "")" } ?? "" }
     var isFinished: Bool { status == "done" || status == "canceled" }
+}
+
+struct TaskMonitorCheck: Decodable, Hashable, Sendable {
+    let checkedAt: Double
+    let outcome: String
+    let errorCode: String?
+    let httpStatus: Int?
+    var label: String {
+        let labels = ["baseline": "First check saved", "unchanged": "Unchanged", "repeated": "Earlier version again", "ignored": "Changed, no keyword match", "changed": "Relevant change", "failed": "Check failed"]
+        let error = errorCode.map { " (\($0)\(httpStatus.map { " \($0)" } ?? ""))" } ?? ""
+        let date = Date(timeIntervalSince1970: checkedAt / 1000).formatted(date: .numeric, time: .shortened)
+        return "\(labels[outcome] ?? outcome)\(error) · \(date)"
+    }
 }
 
 struct TaskListValue: Decodable, Hashable, Sendable, Identifiable {
@@ -190,6 +228,9 @@ struct TasksView: View {
                     Text(detail(task, in: list)).manrope(.caption).foregroundStyle(.secondary)
                     if let next = task.nextStep { Text("Next step: \(next)").manrope(.caption) }
                     if task.researchQuery != nil || (task.researchUsed ?? 0) > 0 { Text(task.researchDetail).manrope(.caption) }
+                    if task.monitorURL != nil || (task.monitorTurnsUsed ?? 0) > 0 { Text(task.monitorDetail).manrope(.caption) }
+                    if task.documentID != nil { Text("Deliverable: \(task.documentTitle ?? "a document")").manrope(.caption) }
+                    if let review = task.reviewDetail { Text(review).manrope(.caption) }
                     if let reason = task.blockedReason { Text("Blocked: \(reason)").manrope(.caption) }
                     if let result = task.result { Text(result).manrope(.footnote) }
                 }
@@ -287,6 +328,9 @@ private struct TaskEditorView: View {
     @State private var evidence: String
     @State private var blockedReason: String
     @State private var researchQuery: String
+    @State private var monitorURL: String
+    @State private var monitorKeywords: String
+    @State private var monitorInterval: Int
     @State private var status: TaskStatusOption
     @State private var assignee: String
     @State private var blockers: Set<String>
@@ -300,6 +344,9 @@ private struct TaskEditorView: View {
         _evidence = State(initialValue: task.evidence ?? "")
         _blockedReason = State(initialValue: task.blockedReason ?? "")
         _researchQuery = State(initialValue: task.researchQuery ?? "")
+        _monitorURL = State(initialValue: task.monitorURL ?? "")
+        _monitorKeywords = State(initialValue: task.monitorKeywords ?? "")
+        _monitorInterval = State(initialValue: task.monitorInterval ?? 360)
         _status = State(initialValue: TaskStatusOption(rawValue: task.status) ?? .open)
         _assignee = State(initialValue: task.assigneeKey)
         _blockers = State(initialValue: Set(task.blockedBy))
@@ -336,6 +383,22 @@ private struct TaskEditorView: View {
                         Text(task.researchDetail).font(.caption)
                     } header: { Text("Public web research") } footer: {
                         Text("Saving this query authorizes one public search with the app closed. Only this exact query is sent; use public information. Leave empty to revoke. Failed or uncertain attempts count. Daily limits also apply. Changing assignee clears permission; save the assignment first. Reports appear in Docs.")
+                    }
+                }
+                if task.assigneeKind == "agent" || task.monitorURL != nil || (task.monitorTurnsUsed ?? 0) > 0 {
+                    Section {
+                        let locked = assignee != task.assigneeKey || task.assigneeKind != "agent"
+                        TextField("https://example.com/page", text: $monitorURL)
+                            .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().disabled(locked)
+                        Picker("Check frequency", selection: $monitorInterval) {
+                            ForEach(TaskItem.monitorIntervals, id: \.0) { Text($0.1).tag($0.0) }
+                        }
+                        .disabled(locked)
+                        TextField("Keywords, comma-separated (optional)", text: $monitorKeywords).disabled(locked)
+                        Text(task.monitorDetail).font(.caption)
+                        ForEach(task.monitorChecks ?? [], id: \.self) { Text($0.label).font(.caption).foregroundStyle(.secondary) }
+                    } header: { Text("Page monitor") } footer: {
+                        Text("Saving a public page lets the server check it with the app closed, without the model. The contact gets a turn only when the page text changes (and matches a keyword, if set), up to 3 per day and 20 in total. Redirects are not followed; save the final address. Leave empty to remove. Changing assignee removes the monitor; save the assignment first. Pausing or finishing the task stops checks.")
                     }
                 }
                 if task.workState == "blocked" {
@@ -385,12 +448,20 @@ private struct TaskEditorView: View {
                         if assignee == task.assigneeKey && query != (task.researchQuery ?? "") {
                             patch["researchQuery"] = query.isEmpty ? NSNull() : query
                         }
+                        let url = monitorURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let keywords = monitorKeywords.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if assignee == task.assigneeKey {
+                            if url != (task.monitorURL ?? "") { patch["monitorURL"] = url.isEmpty ? NSNull() : url }
+                            if keywords != (task.monitorKeywords ?? "") { patch["monitorKeywords"] = keywords.isEmpty ? NSNull() : keywords }
+                            if monitorInterval != (task.monitorInterval ?? 360) { patch["monitorInterval"] = monitorInterval }
+                        }
                         Task {
                             if await save(patch) { dismiss() }
                             saving = false
                         }
                     }
-                    .disabled(saving || title.trimmingCharacters(in: .whitespaces).isEmpty || researchQuery.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count > 600)
+                    .disabled(saving || title.trimmingCharacters(in: .whitespaces).isEmpty || researchQuery.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count > 600
+                        || monitorKeywords.trimmingCharacters(in: .whitespacesAndNewlines).count > 300)
                 }
             }
         }

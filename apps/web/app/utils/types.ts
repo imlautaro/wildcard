@@ -177,7 +177,10 @@ export type TaskItem = { id: string; listID: string; position: number; title: st
   assigneeKind: 'user' | 'agent' | null; assigneeID: string | null; assigneeName: string | null; result: string | null;
   createdByKind: 'user' | 'agent'; createdByID: string; createdByName: string; version: number; createdAt: number; updatedAt: number;
   completedAt: number | null; blockedBy: string[]; blocked: boolean; workScheduled: boolean;
-  workState: 'active' | 'paused' | 'blocked'; nextStep: string | null; evidence: string | null; blockedReason: string | null; workUsed: number; workLimit: number; researchQuery: string | null; researchUsed: number; researchLimit: number; researchStatus: 'pending' | 'ready' | 'complete' | 'failed' | 'stopped' | null };
+  workState: 'active' | 'paused' | 'blocked'; nextStep: string | null; evidence: string | null; blockedReason: string | null; workUsed: number; workLimit: number; researchQuery: string | null; researchUsed: number; researchLimit: number; researchStatus: 'pending' | 'ready' | 'complete' | 'failed' | 'stopped' | null;
+  monitorURL: string | null; monitorKeywords: string | null; monitorInterval: 60 | 360 | 1440; monitorTurnsUsed: number; monitorTurnLimit: number; monitorPending: boolean;
+  monitorChecks: { checkedAt: number; outcome: 'baseline' | 'unchanged' | 'repeated' | 'ignored' | 'changed' | 'failed'; errorCode: string | null; httpStatus: number | null }[];
+  documentID: string | null; documentTitle: string | null; reviewRounds: number; reviewRoundLimit: number; reviewFeedback: string | null };
 export type TaskList = { id: string; title: string; status: 'active' | 'canceled'; createdByKind: 'user' | 'agent'; createdByID: string;
   createdAt: number; updatedAt: number; tasks: TaskItem[] };
 export type TaskBoard = { lists: TaskList[]; members: TaskMember[] };

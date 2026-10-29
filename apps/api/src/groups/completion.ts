@@ -121,7 +121,7 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
       return await executeGroupMiniAppTool(env, { groupID: input.scope.groupID, agentID: input.scope.agentID,
         turnID: input.scope.reactionJob.turnID, attempt: input.scope.reactionJob.attempt }, call.function.name, args);
     }
-    return await executeGroupRetrieval(env.DB, input.scope, call);
+    return await executeGroupRetrieval(env.DB, input.scope, call, env);
   } catch (error) {
     console.error(JSON.stringify({ event: 'group_tool_failed', code: safeErrorCode(error), tool: call.function.name }));
     return toolError('Tool unavailable or outcome unknown. Do not retry the action or claim success or absence.');

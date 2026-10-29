@@ -27,7 +27,8 @@
     "BETTER_AUTH_URL": "https://wildcard-api.imlautaro.workers.dev",
     "META_CHAT_MODEL": "muse-spark-1.3",
     "AI_GATEWAY_ID": "",
-    "WEB_RESEARCH_ENABLED": "true"
+    "WEB_RESEARCH_ENABLED": "true",
+    "SEMANTIC_MEMORY_ENABLED": "false"
   },
   "d1_databases": [
     {

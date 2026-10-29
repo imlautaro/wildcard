@@ -221,3 +221,41 @@ and reassignment; both boards show usage and receipt state. The task-specific
 research tool receives only a title and the server sends the stored query. See
 [persistent work](persistent-work.md#public-research-permission-0055) for grant
 authority, daily budgets, generation guards, retention and cache verification.
+
+## Collaboration: deliverables and bounded reviews (0058)
+
+Several contacts can produce one attributed deliverable with existing tasks and
+[documents](documents.md):
+
+- **Deliverable link.** `create_task_list`, `add_task` and `update_task` accept
+  `documentID`, which must be a document of the same private chat or group (`null`
+  removes it; deleting the document clears it). Boards show **Deliverable: <title>**
+  and contacts receive the link in their work context, replacing the earlier
+  "document ID in notes" convention. Document revisions keep per-author attribution.
+- **Review loop.** A review is a task blocked by the task it reviews. When the review
+  task runs, its assignee either marks it done (approval) or calls
+  `request_changes(taskID, feedback)` on the reviewed task. That reopens the reviewed
+  task as In progress with `reviewFeedback`, increments `reviewRounds`, changes its
+  execution generation and gives its contact owner a work turn now; the review task
+  waits again and gets an `unblocked` turn when the fix is done.
+- **Termination.** At most two revision rounds per task (`taskLimits.reviewRounds`);
+  the third request is rejected and the reviewer is told to finish with the current
+  version or block its task for a person. Reopened work still spends the owner's
+  six lifetime work turns and daily budget, so no draft/review loop is unbounded.
+- **Authority.** Only the assignee of an open task in the same list that waits for the
+  reviewed task can request changes (contacts through the tool; people can still
+  reopen tasks directly). The review must be done when requested. Contacts are told
+  never to copy private chats into shared documents; group context still excludes
+  other members' private conversations except the existing explicit grants.
+
+Both boards show **Revision round n/2** and, while the task is open, the feedback.
+No new client controls: people reopen, reassign or cancel with the existing editor.
+`request_changes` uses the existing replay receipts (`task_mutation`). Static checks
+only; multi-contact runs, model review quality and UI remain unverified.
+
+## Page monitors
+
+Migration 0056 lets a person attach a public URL to a contact's task. Code checks it
+on a fixed interval and gives the contact a separate change turn (3 per day, 20 per
+task) only when the text changes and matches optional keywords. See
+[page monitors](monitors.md).

@@ -13,10 +13,19 @@ const editing = ref<string | null>(null);
 // Polls replace the board while the form stays open. Submit the version and
 // permission snapshot the person actually edited, even if newer data arrived.
 const editingTask = shallowRef<TaskItem | null>(null);
-const form = reactive({ title: '', notes: '', status: 'open' as TaskStatus, assignee: '', blockedBy: [] as string[], nextStep: '', evidence: '', blockedReason: '', researchQuery: '' });
+const form = reactive({ title: '', notes: '', status: 'open' as TaskStatus, assignee: '', blockedBy: [] as string[], nextStep: '', evidence: '', blockedReason: '', researchQuery: '', monitorURL: '', monitorKeywords: '', monitorInterval: 360 });
 
 const researchLabels: Record<string, string> = { pending: 'Pending or uncertain', ready: 'Draft saved', stopped: 'Stopped before publication', complete: 'Report saved', failed: 'Failed' };
 const researchDetail = (task: TaskItem) => `${task.researchUsed ?? 0}/${task.researchLimit ?? 1} web research attempts used${task.researchStatus ? ` · ${researchLabels[task.researchStatus] ?? task.researchStatus}` : ''}`;
+const monitorIntervals = [{ value: 60, label: 'Every hour' }, { value: 360, label: 'Every 6 hours' }, { value: 1440, label: 'Every day' }];
+const monitorLabels: Record<string, string> = { baseline: 'First check saved', unchanged: 'Unchanged', repeated: 'Earlier version again', ignored: 'Changed, no keyword match', changed: 'Relevant change', failed: 'Check failed' };
+const checkLabel = (check: TaskItem['monitorChecks'][number]) => `${monitorLabels[check.outcome] ?? check.outcome}${check.errorCode ? ` (${check.errorCode}${check.httpStatus ? ` ${check.httpStatus}` : ''})` : ''} · ${new Date(check.checkedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`;
+const monitorDetail = (task: TaskItem) => {
+  const last = task.monitorChecks?.[0];
+  return [task.monitorURL ? `Page monitor · ${monitorIntervals.find(option => option.value === task.monitorInterval)?.label.toLowerCase() ?? ''}` : 'Page monitor removed',
+    `${task.monitorTurnsUsed ?? 0}/${task.monitorTurnLimit ?? 20} change turns used`, task.monitorPending ? 'Change waiting for a turn' : '',
+    last ? `Last: ${checkLabel(last)}` : task.monitorURL ? 'Not checked yet' : ''].filter(Boolean).join(' · ');
+};
 const originalTask = (task: TaskItem) => editingTask.value?.id === task.id ? editingTask.value : task;
 const assignmentChanged = (task: TaskItem) => {
   const original = originalTask(task);
@@ -65,6 +74,7 @@ function edit(task: TaskItem) {
   editing.value = task.id;
   editingTask.value = task;
   Object.assign(form, { title: task.title, notes: task.notes ?? '', status: task.status, nextStep: task.nextStep ?? '', evidence: task.evidence ?? '', blockedReason: task.blockedReason ?? '', researchQuery: task.researchQuery ?? '',
+    monitorURL: task.monitorURL ?? '', monitorKeywords: task.monitorKeywords ?? '', monitorInterval: task.monitorInterval ?? 360,
     assignee: task.assigneeKind ? `${task.assigneeKind}:${task.assigneeID}` : '', blockedBy: [...task.blockedBy] });
 }
 const toggle = (task: TaskItem) => run(() => tasks.updateTask(task.id, task.version, { status: task.status === 'done' ? 'open' : 'done' }));
@@ -73,7 +83,10 @@ const save = (task: TaskItem) => run(async () => {
   await tasks.updateTask(task.id, original.version, { title: form.title.trim(), notes: form.notes.trim() || null, status: form.status,
     assignee: assignee(form.assignee), blockedBy: form.blockedBy, nextStep: form.nextStep.trim() || null,
     evidence: form.evidence.trim() || null, blockedReason: form.blockedReason.trim() || null,
-    ...(!assignmentChanged(task) && form.researchQuery.trim() !== (original.researchQuery ?? '') ? { researchQuery: form.researchQuery.trim() || null } : {}) });
+    ...(!assignmentChanged(task) && form.researchQuery.trim() !== (original.researchQuery ?? '') ? { researchQuery: form.researchQuery.trim() || null } : {}),
+    ...(!assignmentChanged(task) && form.monitorURL.trim() !== (original.monitorURL ?? '') ? { monitorURL: form.monitorURL.trim() || null } : {}),
+    ...(!assignmentChanged(task) && form.monitorKeywords.trim() !== (original.monitorKeywords ?? '') ? { monitorKeywords: form.monitorKeywords.trim() || null } : {}),
+    ...(!assignmentChanged(task) && form.monitorInterval !== (original.monitorInterval ?? 360) ? { monitorInterval: form.monitorInterval } : {}) });
   editing.value = null;
 });
 const createList = () => run(async () => {
@@ -125,6 +138,9 @@ const cancelList = (list: TaskList) => run(async () => {
                 <span v-if="task.nextStep" class="small">Next step: {{ task.nextStep }}</span>
                 <span v-if="task.blockedReason" class="small">Blocked: {{ task.blockedReason }}</span>
                 <span v-if="task.researchQuery || task.researchUsed" class="small">{{ researchDetail(task) }}</span>
+                <span v-if="task.monitorURL || task.monitorTurnsUsed" class="small">{{ monitorDetail(task) }}</span>
+                <span v-if="task.documentID" class="small">Deliverable: {{ task.documentTitle ?? 'a document' }}</span>
+                <span v-if="task.reviewRounds" class="small">Revision round {{ task.reviewRounds }}/{{ task.reviewRoundLimit ?? 2 }}<template v-if="task.reviewFeedback && !['done', 'canceled'].includes(task.status)">: {{ task.reviewFeedback }}</template></span>
                 <span v-if="task.result" class="small task-result">{{ task.result }}</span>
               </button>
             </div>
@@ -142,6 +158,15 @@ const cancelList = (list: TaskList) => run(async () => {
                 <p class="small">{{ researchDetail(task) }}</p>
                 <p class="group-footer">Saving this query authorizes one public search with the app closed. Only this exact query is sent; use public information. Leave empty to revoke. Failed or uncertain attempts count. Daily limits also apply. Changing assignee clears permission; save the assignment first. Reports appear in Docs.</p>
               </div>
+              <div v-if="task.assigneeKind === 'agent' || task.monitorURL || task.monitorTurnsUsed" class="field">
+                <label :for="`monitor-${task.id}`">Page monitor</label>
+                <input :id="`monitor-${task.id}`" v-model="form.monitorURL" type="url" maxlength="2048" placeholder="https://example.com/page" :disabled="assignmentChanged(task) || task.assigneeKind !== 'agent'">
+                <AppSelect v-model="form.monitorInterval" variant="plain" aria-label="Check frequency" :options="monitorIntervals" :disabled="assignmentChanged(task) || task.assigneeKind !== 'agent'" />
+                <input v-model="form.monitorKeywords" type="text" maxlength="300" placeholder="Keywords, comma-separated (optional)" aria-label="Monitor keywords" :disabled="assignmentChanged(task) || task.assigneeKind !== 'agent'">
+                <p class="small">{{ monitorDetail(task) }}</p>
+                <ul v-if="task.monitorChecks?.length" class="small task-monitor-checks"><li v-for="check in task.monitorChecks" :key="check.checkedAt">{{ checkLabel(check) }}</li></ul>
+                <p class="group-footer">Saving a public page lets the server check it with the app closed, without the model. The contact gets a turn only when the page text changes (and matches a keyword, if set), up to 3 per day and 20 in total. Redirects are not followed; save the final address. Leave empty to remove. Changing assignee removes the monitor; save the assignment first. Pausing or finishing the task stops checks.</p>
+              </div>
               <p v-if="task.assigneeKind === 'agent'" class="group-footer">Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget.</p>
               <div v-if="task.assigneeKind === 'agent' && task.workState && !['done', 'canceled'].includes(task.status)" class="task-actions">
                 <button v-if="task.workState === 'active'" type="button" class="button secondary" :disabled="busy" @click="controlWork(task, 'paused')">Pause work</button>
@@ -156,7 +181,7 @@ const cancelList = (list: TaskList) => run(async () => {
               </fieldset>
               <div class="task-actions">
                 <button type="button" class="button secondary" :disabled="busy" @click="editing = null">Close</button>
-                <button type="submit" class="button" :disabled="busy || !form.title.trim()">Save</button>
+                <button type="submit" class="button" :disabled="busy || !form.title.trim() || form.monitorKeywords.trim().length > 300">Save</button>
               </div>
             </form>
           </div>

@@ -5,7 +5,7 @@ import type { Memory } from '../chat/memory';
 export async function groupMemories(db: D1Database, agentID: string, contributor: boolean): Promise<Memory[]> {
   const { results } = await db.prepare(`SELECT m.user_id AS sourceUserID, u.name AS sourceUserName,
     m.memory_key AS key, m.kind, m.content, m.source_id AS sourceTurnID, m.source_quote AS sourceQuote,
-    0 AS sourceSequence, m.updated_at AS updatedAt FROM group_memory m JOIN user u ON u.id = m.user_id
+    0 AS sourceSequence, m.updated_at AS updatedAt, 'group_memory:' || m.rowid AS embedRef FROM group_memory m JOIN user u ON u.id = m.user_id
     JOIN group_message gm ON gm.id = m.source_id
     JOIN group_member member ON member.group_id = gm.group_id AND member.user_id = m.user_id
     WHERE m.agent_id = ?1 AND member.share_memory = 1 AND NOT EXISTS (SELECT 1 FROM mcp_private_group p WHERE p.group_id = gm.group_id)

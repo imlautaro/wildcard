@@ -823,6 +823,7 @@ details pre {
 .task-editor { padding: 4px 4px 12px 44px; display: flex; flex-direction: column; gap: 4px; }
 .task-editor textarea { width: 100%; resize: vertical; font: inherit; }
 .task-blockers { border: 0; padding: 4px 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.task-monitor-checks { margin: 0; padding-left: 18px; color: var(--md-on-surface-variant); }
 .task-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .task-cancel { display: block; margin: 6px 0 4px auto; }
 
