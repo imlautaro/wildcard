@@ -36,15 +36,21 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
     static let minimumDuration: TimeInterval = 0.5
     static let shortHint = "Hold to record, release to send."
 
-    func start() async {
+    /// Enters `.requestingPermission` synchronously, so a release that arrives before the
+    /// microphone is ready (a quick tap) sees the pending start and can cancel it.
+    func start() {
         guard !isBusy else { return }
         cancel()
         let current = operation
         phase = .requestingPermission
+        Task { await begin(current) }
+    }
+
+    private func begin(_ current: UUID) async {
         // The press that shows the system prompt only grants access; the next press records.
         let prompted = AVAudioApplication.shared.recordPermission == .undetermined
         let allowed = await AVAudioApplication.requestRecordPermission()
-        guard current == operation, !Task.isCancelled else { return }
+        guard current == operation else { return }
         guard allowed else {
             phase = .failed
             error = "Microphone access is disabled. Enable it for Wildcard in Settings to record audio."

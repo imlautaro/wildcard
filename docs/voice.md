@@ -21,7 +21,10 @@ When the draft is empty and has no attachment, the composer shows a microphone.
   keeps recording hands-free. The locked bar shows **Delete** (discard) and **Stop**,
   which stops and sends at once.
 - Recording stops automatically and sends at 60 seconds. Clips shorter than half a
-  second are discarded with the hint "Hold to record, release to send."
+  second are discarded with the hint "Hold to record, release to send." A quick tap
+  that releases before the microphone is ready cancels the pending start and shows the
+  same hint; both clients enter the "waiting for the microphone" state synchronously on
+  press so the release always sees it.
 - A timer and a pulsing red dot show while recording. Leaving the chat, backgrounding
   the app (iOS) or hiding the tab (web) discards an active recording.
 

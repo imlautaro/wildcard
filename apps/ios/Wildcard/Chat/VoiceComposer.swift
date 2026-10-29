@@ -71,7 +71,7 @@ struct VoiceRecordButton: View {
                 else if isEnabled {
                     onBegin()
                     locked = true
-                    Task { await recorder.start() }
+                    recorder.start()
                 }
             }
             .disabled(!isEnabled)
@@ -84,7 +84,7 @@ struct VoiceRecordButton: View {
             pressStartedLocked = locked
             guard !locked, isEnabled, !recorder.isBusy else { cancelled = !locked; return }
             onBegin()
-            Task { await recorder.start() }
+            recorder.start()
         }
         guard !cancelled, !pressStartedLocked, !locked else { return }
         dragOffset = min(0, value.translation.width)
