@@ -45,7 +45,7 @@ export default defineNuxtConfig({
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'same-origin',
         'X-Frame-Options': 'DENY',
-        'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+        'Permissions-Policy': 'camera=(), microphone=(self), geolocation=()',
       } },
     },
   },

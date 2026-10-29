@@ -72,6 +72,12 @@ A contact replies with a voice message only when **all** of these hold:
    first eligible message is spoken; very short ("ok!") and long answers stay text.
 6. The message has no generated image.
 
+The model is told whether voice is on (`voiceInstruction` in
+`apps/api/src/voice/catalog.ts`): with the opt-in on, it knows suitable messages are
+spoken and writes requested voice messages as plain prose of that length; with the
+opt-in off, it says the person can turn on Voice messages in contact details.
+Without this, contacts denied sending audio in a message that was then spoken.
+
 Thresholds live in `apps/api/src/voice/speech.ts` (`voiceSuitable`). Synthesis failure
 never fails the reply: the message is published as text.
 
@@ -288,6 +294,11 @@ relaunch and offline, retry after a failed send or download, the transcript shee
 update, account switching, and the contact voice picker samples.
 
 ## Web
+
+The web Worker's `Permissions-Policy` header allows the microphone for the app's own
+origin (`microphone=(self)` in `apps/web/nuxt.config.ts`). It was `microphone=()`
+until October 29, 2026, which made browsers reject recording without asking for
+permission, even when the site was allowed manually.
 
 The web app (`apps/web`) implements the same behavior in private chats and groups.
 

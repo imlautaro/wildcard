@@ -10,6 +10,7 @@ import { readEnergy } from './energy';
 import { agentMemoryContext, readAgentMemories } from '../chat/agent-memory';
 import { storedAttachment } from '../chat/attachments';
 import { isVoice } from '../voice/speech';
+import { voiceInstruction } from '../voice/catalog';
 import { clipText, readMemories } from '../chat/memory';
 import { rankMemories } from '../chat/semantic-memory';
 import { isRecord, type ModelMessage } from '../chat/meta';
@@ -105,9 +106,11 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
       SELECT 1 FROM group_member WHERE group_id = r.group_id AND (?3 = 1 AND contributor_consent = 0))`)
     .bind(job.turnID, job.attempt, contributor).first<GroupContextRow>();
   if (!row) throw new Error('GROUP_UNAVAILABLE_OR_CONSENT_REQUIRED');
-  const contact = await env.DB.prepare(`SELECT c.id, c.user_id AS userID FROM contact c JOIN contact_agent a ON a.id = c.agent_id
-    WHERE a.id = ? AND c.user_id = a.owner_id AND a.memory_shared = 1`).bind(row.agentID).first<{ id: string; userID: string }>();
+  const contact = await env.DB.prepare(`SELECT c.id, c.user_id AS userID, c.voice_messages_enabled AS voice FROM contact c JOIN contact_agent a ON a.id = c.agent_id
+    WHERE a.id = ? AND c.user_id = a.owner_id AND a.memory_shared = 1`).bind(row.agentID).first<{ id: string; userID: string; voice: number }>();
   if (!contact) throw new Error('SHARED_MEMORY_CONSENT_REQUIRED');
+  // Groups speak only single-message replies (docs/voice.md).
+  const spoken = (await voiceInstruction(env, !!contact.voice)).replace('one message per reply', 'a reply that is a single message');
   const connectorAccess = !contributor && !row.taskID && !row.sourceAgentID && !previous && !!await env.DB.prepare(`SELECT ga.connection_id FROM mcp_group_access ga
     JOIN group_agent member ON member.group_id = ga.group_id AND member.agent_id = ga.agent_id
     WHERE ga.group_id = ? AND ga.agent_id = ? AND ga.user_id = member.added_by LIMIT 1`).bind(row.groupID, row.agentID).first();
@@ -188,6 +191,7 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
         reacted: reactions.filter(r => r.actorID === `agent/${row.agentID}` && r.messageID !== row.sourceID).length } }) },
     { role: 'system', content: `You are ${JSON.stringify(row.name)}, agent ID ${JSON.stringify(row.agentID)}, participating in a group chat named ${JSON.stringify(row.groupName)}.
 ${profilePhotoInstruction}
+${spoken}
 ${imageInstruction}
 Speak only as yourself, never impersonate other members. Continue the conversation at your turn, taking account of earlierRepliesInRound and recentGroupMessages. Do not independently restart the original exchange as if nobody else had spoken.
 Answer in the humans' language. Keep ordinary conversation brief; give data analysis enough detail to explain the evidence, calculations and limitations. Avoid repetitive formulas and automatic closing questions. A fresh opening greeting deserves a warm response; you may introduce a topic or ask the speaking bot a relevant question to begin a conversation. Do not automatically ask the human the same question back, especially if another member already did. A short direct answer can be enough. Refer to another member only when it adds something; do not force agreement, name-dropping, banter or different preferences. Distinguish an invitation for each person's own experience or preference from an open factual question that anyone can answer. When the human asks what everyone ate, each member's own answer can add value even if meals coincide. When the human asks whether anyone knows what Python is, one sufficient explanation can settle the question; skip if earlier replies already cover your answer and you have no useful correction, missing detail, different relevant experience or requested perspective. Do not invent a difference just to participate. Addressing the group is an opportunity to contribute, not an obligation for every member to speak. A question directed to another member normally calls for silence unless you have a necessary correction or are explicitly included.

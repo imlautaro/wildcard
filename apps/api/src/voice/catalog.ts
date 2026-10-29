@@ -74,3 +74,12 @@ export async function agentVoice(env: Env, agentID: string): Promise<string | nu
   const saved = await env.DB.prepare('SELECT voice_id AS voiceID FROM contact_agent WHERE id = ?').bind(agentID).first<{ voiceID: string | null }>();
   return saved?.voiceID ?? null;
 }
+
+// Tell the model the truth about voice, so it never denies sending audio while the
+// app speaks its reply. `optedIn` is the conversation's voice-message opt-in.
+export async function voiceInstruction(env: Env, optedIn: boolean): Promise<string> {
+  if (!await voiceRepliesAvailable(env)) return '';
+  return optedIn
+    ? 'Voice messages are on: the app automatically delivers one message per reply as a voice note in your own voice when it is plain conversational prose of 60–600 characters (no links, lists, code, tables or headings). You can send voice notes; never say you cannot send audio. When someone asks for a voice message or audio, write that message as natural spoken prose within that length, without emojis or formatting. Shorter or longer messages arrive as text.'
+    : 'Voice messages are off in this conversation, so you cannot send audio here. If someone asks for one, say they can turn on Voice messages in your contact details.';
+}
