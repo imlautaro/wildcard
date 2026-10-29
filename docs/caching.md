@@ -840,3 +840,22 @@ can retain the last observed state until a successful refresh. Deletion, access
 loss and account changes use existing conversation invalidation. Verify reopen,
 back navigation, refresh, offline recovery, revocation and account switching
 with fictional accounts on both clients; runtime/visual checks remain pending.
+
+### iOS history positioning
+
+Private and group chats measure all currently loaded rows using a regular `VStack`
+so bottom positioning does not depend on lazy height estimates for long messages.
+Cached navigation retains the default bottom anchor; the first asynchronous history
+load positions without animation. Receipt-only private-chat updates do not request
+another scroll. Native `ScrollPosition` targets the bottom edge including scroll
+insets. While following latest, idle content/viewport/inset changes re-align that
+edge without animation; offset changes alone do not trigger alignment. User scroll
+interaction, earlier-page loading and quoted navigation disable alignment until
+an explicit latest-message scroll. The latest-message button's fade is confined
+to its overlay.
+Store ownership, freshness, deduplication, stale-response rejection, pagination,
+compaction, LRU limits, pending submissions, invalidation and persistence are unchanged;
+this adds no fetch or cache. Eager layout costs grow with explicitly loaded pages.
+Verify cold/cached reopen and back navigation, long last messages, older pages,
+quotes, keyboard resizing, offline refresh, deletion/revocation and account switching
+on a device. Static checks do not establish smoothness or large-history performance.

@@ -347,7 +347,19 @@ Both chats share the glass capsule composer field, circular tinted action button
 and floating scroll-to-latest control from `ChatControls.swift`. Groups use the
 same 16-point history spacing/padding, soft bottom scroll edge, native bottom safe
 area bar, loading/empty presentation and Reduce Motion-aware insertion/scroll
-animations. The group header aligns its 38-point identity and compact title/member
+animations. As in private chats, iOS measures loaded rows in a regular `VStack`
+before positioning, opens cached history with a bottom anchor and disables the
+first-load scroll animation. The shared native `ScrollPosition` targets the bottom
+content edge including scroll insets and maintains alignment through idle content,
+viewport and inset changes while following latest. User scroll interaction,
+earlier-page loading and quoted navigation stop that alignment. Returning to latest
+re-enables it. The latest-message button animates only its overlay.
+This avoids lazy height corrections and history-wide animations around long final
+messages. Pagination and session caching are unchanged. Device checks must cover
+cold/cached entry, very tall text/Markdown, images, keyboard resizing, pending sends,
+new replies, older-page loading and quoted navigation; large loaded histories also
+need performance verification. See [chat positioning](chats.md) for the tradeoff.
+The group header aligns its 38-point identity and compact title/member
 subtitle beside the back button, matching the individual chat header layout.
 
 Groups support text, image/PDF attachments, voice dictation and foreground polling.

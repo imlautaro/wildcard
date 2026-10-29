@@ -27,6 +27,7 @@ struct ChatView: View {
     @State private var animateNewMessages = false
     @State private var isAwayFromBottom = false
     @State private var composerBarHeight: CGFloat = 0
+    @State private var historyPosition = ChatHistoryPosition()
     @State private var replyTarget: MessageReplyQuote?
     @State private var highlightedMessage: String?
     @State private var quoteTask: Task<Void, Never>?
@@ -71,9 +72,13 @@ struct ChatView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 16) {
+                // Measure loaded history before positioning; lazy height estimates can move long replies.
+                VStack(spacing: 16) {
                     if chat.nextBefore != nil {
-                        Button("Load earlier messages") { Task { await chat.loadMore(contactID: contactID, using: auth) } }
+                        Button("Load earlier messages") {
+                            historyPosition.followsLatest = false
+                            Task { await chat.loadMore(contactID: contactID, using: auth) }
+                        }
                             .disabled(chat.isLoadingMore)
                     }
                     if !chat.hasLoaded && chat.error == nil { ProgressView("Loading messages…") }
@@ -147,25 +152,26 @@ struct ChatView: View {
                             }
                         }
                     }
-                    Color.clear.frame(height: 1).id("latest")
+                    Color.clear.frame(height: 1)
                 }
                 .padding()
                 .animation(animateNewMessages ? .easeOut(duration: reduceMotion ? 0.15 : 0.22) : nil,
-                           value: chat.timelineItems.last)
+                           value: chat.timelineItems.last?.id)
             }
             .scrollDismissesKeyboard(.interactively)
             .contentShape(Rectangle())
             .simultaneousGesture(TapGesture().onEnded { composerFocused = false })
-            .defaultScrollAnchor(.bottom)
+            .chatHistoryPosition($historyPosition)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
             .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentSize.height - geometry.visibleRect.maxY > 80
+                geometry.contentSize.height + geometry.contentInsets.bottom - geometry.visibleRect.maxY > 80
             } action: { _, isAway in
                 isAwayFromBottom = isAway
             }
             .onChange(of: chat.timelineItems.last) { previous, latest in
-                if !isAwayFromBottom || previous == nil || latest.map({ chat.isSubmitting($0.turn.id) }) == true {
-                    scrollToLatest(using: proxy)
+                if previous?.id != latest?.id,
+                   !isAwayFromBottom || previous == nil || latest.map({ chat.isSubmitting($0.turn.id) }) == true {
+                    scrollToLatest(animated: previous != nil && animateNewMessages)
                 }
                 sync.request(.contact(contactID))
             }
@@ -178,14 +184,16 @@ struct ChatView: View {
                     }
             }
             .overlay(alignment: .bottomTrailing) {
-                if isAwayFromBottom && !chat.displayedTurns.isEmpty {
-                    ChatScrollToLatestButton { scrollToLatest(using: proxy) }
-                    .padding(.trailing, 16)
-                    .padding(.bottom, composerBarHeight + 8)
-                    .transition(.opacity)
+                Group {
+                    if isAwayFromBottom && !chat.displayedTurns.isEmpty {
+                        ChatScrollToLatestButton { scrollToLatest() }
+                            .padding(.trailing, 16)
+                            .padding(.bottom, composerBarHeight + 8)
+                            .transition(.opacity)
+                    }
                 }
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isAwayFromBottom)
             }
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isAwayFromBottom)
             .refreshable { await chat.refresh(contactID: contactID, using: auth) }
         }
         .safeAreaInset(edge: .top, spacing: 0) { NativeActiveStatusView(contactID: contactID) }
@@ -323,6 +331,7 @@ struct ChatView: View {
     /// Scroll to a quoted message, paging earlier history within a bound when needed.
     private func showQuoted(_ quote: MessageReplyQuote, proxy: ScrollViewProxy) {
         guard quote.available else { return }
+        historyPosition.followsLatest = false
         let key = "\(quote.messageID)/\(quote.side)"
         quoteTask?.cancel()
         quoteTask = Task {
@@ -341,9 +350,11 @@ struct ChatView: View {
         }
     }
 
-    private func scrollToLatest(using proxy: ScrollViewProxy) {
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
-            proxy.scrollTo("latest", anchor: .bottom)
+    private func scrollToLatest(animated: Bool = true) {
+        var transaction = Transaction(animation: animated && !reduceMotion ? .easeOut(duration: 0.22) : nil)
+        transaction.disablesAnimations = !animated || reduceMotion
+        withTransaction(transaction) {
+            historyPosition.scrollToLatest()
         }
     }
 

@@ -175,6 +175,7 @@ struct GroupChatView: View {
     @State private var voiceTask: Task<Void, Never>?
     @State private var nearBottom = true
     @State private var composerBarHeight: CGFloat = 0
+    @State private var historyPosition = ChatHistoryPosition()
     @State private var animateNewMessages = false
     @State private var replyTarget: MessageReplyQuote?
     @State private var highlightedMessage: String?
@@ -223,6 +224,7 @@ struct GroupChatView: View {
     /// Scroll to a quoted message, paging earlier history within a bound when needed.
     private func showQuoted(_ quote: MessageReplyQuote, proxy: ScrollViewProxy) {
         guard quote.available else { return }
+        historyPosition.followsLatest = false
         quoteTask?.cancel()
         quoteTask = Task {
             for _ in 0..<20 where !store.messages.contains(where: { $0.id == quote.messageID }) {
@@ -242,9 +244,13 @@ struct GroupChatView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 16) {
+                // Measure loaded history before positioning; lazy height estimates can move long replies.
+                VStack(spacing: 16) {
                     if store.nextBefore != nil {
-                        Button("Load earlier messages") { Task { await store.loadMore(id: groupID, auth: auth) } }
+                        Button("Load earlier messages") {
+                            historyPosition.followsLatest = false
+                            Task { await store.loadMore(id: groupID, auth: auth) }
+                        }
                             .disabled(store.isLoadingMore)
                     }
                     if !store.hasLoadedMessages && store.messages.isEmpty && store.pendingText == nil && store.error == nil {
@@ -306,7 +312,7 @@ struct GroupChatView: View {
                             ReplyTypingIndicator()
                         }
                     }
-                    Color.clear.frame(height: 1).id("latest")
+                    Color.clear.frame(height: 1)
                 }
                 .padding()
                 .animation(animateNewMessages ? .easeOut(duration: reduceMotion ? 0.15 : 0.22) : nil,
@@ -314,33 +320,37 @@ struct GroupChatView: View {
                 .animation(animateNewMessages ? .easeOut(duration: reduceMotion ? 0.15 : 0.22) : nil,
                            value: store.pendingID)
             }
-            .defaultScrollAnchor(.bottom)
+            .chatHistoryPosition($historyPosition)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
             .scrollDismissesKeyboard(.interactively)
             .contentShape(Rectangle())
             .simultaneousGesture(TapGesture().onEnded { composerFocused = false })
             .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentSize.height - geometry.visibleRect.maxY < 80
+                geometry.contentSize.height + geometry.contentInsets.bottom - geometry.visibleRect.maxY < 80
             } action: { _, value in nearBottom = value }
             .onChange(of: store.messages.last?.id) { previous, _ in
-                if nearBottom || previous == nil { scrollToLatest(using: proxy) }
+                if nearBottom || previous == nil {
+                    scrollToLatest(animated: previous != nil && animateNewMessages)
+                }
             }
             .onChange(of: store.pendingID) { _, id in
-                if id != nil { scrollToLatest(using: proxy) }
+                if id != nil { scrollToLatest() }
             }
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 composer(proxy: proxy)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerBarHeight = $0 }
             }
             .overlay(alignment: .bottomTrailing) {
-                if !nearBottom && !store.messages.isEmpty {
-                    ChatScrollToLatestButton { scrollToLatest(using: proxy) }
-                        .padding(.trailing, 16)
-                        .padding(.bottom, composerBarHeight + 8)
-                        .transition(.opacity)
+                Group {
+                    if !nearBottom && !store.messages.isEmpty {
+                        ChatScrollToLatestButton { scrollToLatest() }
+                            .padding(.trailing, 16)
+                            .padding(.bottom, composerBarHeight + 8)
+                            .transition(.opacity)
+                    }
                 }
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: nearBottom)
             }
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: nearBottom)
             .refreshable { await store.refresh(id: groupID, auth: auth) }
         }
         .navigationTitle("")
@@ -578,9 +588,11 @@ struct GroupChatView: View {
         .padding(.horizontal).padding(.vertical, 10)
     }
 
-    private func scrollToLatest(using proxy: ScrollViewProxy) {
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
-            proxy.scrollTo("latest", anchor: .bottom)
+    private func scrollToLatest(animated: Bool = true) {
+        var transaction = Transaction(animation: animated && !reduceMotion ? .easeOut(duration: 0.22) : nil)
+        transaction.disablesAnimations = !animated || reduceMotion
+        withTransaction(transaction) {
+            historyPosition.scrollToLatest()
         }
     }
 
@@ -620,7 +632,7 @@ struct GroupChatView: View {
                 if attachment == nil { attachment = file }
                 if replyTarget == nil { replyTarget = reply }
             }
-            scrollToLatest(using: proxy)
+            scrollToLatest()
         }
     }
 

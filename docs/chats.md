@@ -89,8 +89,32 @@ Scrolling more than 80 points away from the bottom reveals a floating circular
 chevron-down button above the composer's voice/send side. Tap it to return to the
 latest message; it disappears near the bottom. The overlay reserves no history
 space. New replies and receipt updates preserve the scroll position while reading
-older messages; initial history and a new optimistic outgoing message still scroll
-to the bottom. Scrolling and button transitions respect Reduce Motion.
+older messages. On iOS, cached history opens at the bottom using the default
+scroll anchor; first-load positioning disables animations. Native `ScrollPosition`
+targets the bottom content edge, including scroll insets, rather than a marker row.
+While following the latest message, content size, viewport and inset changes
+realign that edge without animation once scrolling is idle. Offset-only updates
+cannot trigger a corrective loop. Touching/dragging the history, loading earlier
+messages or following a quote disables this alignment; an explicit latest-message
+scroll enables it again. Bottom-distance observation includes the bottom scroll
+inset reserved for the composer. Loaded message rows
+use a regular `VStack` so long text has a measured height before positioning,
+instead of correcting lazy height estimates while entering the chat. New messages
+can scroll to the bottom, including an optimistic outgoing message; receipt-only
+updates do not trigger a private-chat scroll or insertion animation. The chevron's
+fade is scoped to its overlay so crossing the 80-point threshold does not animate
+the history layout. Scrolling and button transitions respect Reduce Motion.
+
+This iOS presentation change preserves the session-owned stores, pagination and
+cache rules; it adds no requests or persistence. Measuring all loaded rows trades
+lazy rendering for stable positioning, so opening very large histories or explicitly
+loading many earlier pages needs device performance verification. Verify cold and
+cached entry with a final message taller than the viewport, long Markdown, images,
+keyboard dismissal, incoming/outgoing messages, receipt polling, older-history
+reading/pagination, quoted navigation and Reduce Motion. On October 29, 2026,
+the user confirmed that the affected chat now opens correctly after the native-edge
+alignment change. The broader device matrix and large-history performance remain
+unverified; static validation cannot establish the absence of visual flicker.
 
 Each message bubble shows its send time with hours and minutes in the device's
 local time zone and preferred time format. User messages use the turn's
