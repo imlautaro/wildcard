@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A voice message bubble: play/pause, progress, elapsed time while playing (duration
+/// A voice message bubble: sender avatar, plain play/pause, waveform progress, elapsed time while playing (duration
 /// otherwise), send time and receipts. Outgoing bubbles show a microphone that turns the
 /// read-check color once a contact has listened. Audio comes from `localData` (an outgoing
 /// clip) or the account's protected voice cache.
@@ -14,6 +14,7 @@ struct VoiceMessageView: View {
     var isSending = false
     var showsReceipt = true
     var localData: Data? = nil
+    var senderAvatar: AnyView? = nil
     var senderName: String? = nil
     var senderColor: Color? = nil
     var replyQuote: MessageReplyPreview? = nil
@@ -38,13 +39,12 @@ struct VoiceMessageView: View {
                 if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
                 if let replyQuote { MessageReplyQuoteView(preview: replyQuote, action: onQuoteTap) }
                 HStack(alignment: .center, spacing: 10) {
+                    if fromUser { avatar }
                     playButton
                     TimelineView(.animation(minimumInterval: 0.1, paused: !isPlaying)) { _ in
                         let elapsed = player.currentTime(for: key)
                         VStack(alignment: .leading, spacing: 6) {
-                            ProgressView(value: duration > 0 ? min(1, elapsed / duration) : 0)
-                                .tint(fromUser ? Color.accentColor : Color.secondary)
-                                .accessibilityHidden(true)
+                            waveform(progress: duration > 0 ? min(1, elapsed / duration) : 0)
                             HStack(alignment: .lastTextBaseline, spacing: 4) {
                                 if fromUser {
                                     Image(systemName: "mic.fill")
@@ -61,8 +61,9 @@ struct VoiceMessageView: View {
                             }
                         }
                     }
+                    if !fromUser { avatar }
                 }
-                .frame(width: 220)
+                .frame(maxWidth: 250)
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
             .foregroundStyle(Color.primary)
@@ -72,6 +73,32 @@ struct VoiceMessageView: View {
         }
         .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(x: fromUser ? 8 : -8, y: 4)))
         .onDisappear { loadTask?.cancel() }
+    }
+
+    @ViewBuilder private var avatar: some View {
+        if fromUser { AccountAvatar(user: auth.user, size: 40) }
+        else if let senderAvatar { senderAvatar }
+        else { ContactAvatar(contact: nil, size: 40) }
+    }
+
+    // Stable decorative bars, not decoded recording amplitudes. Progress follows playback.
+    private func waveform(progress: Double) -> some View {
+        GeometryReader { geometry in
+            let count = 27
+            let gap: CGFloat = 2
+            let width = max(1, (geometry.size.width - CGFloat(count - 1) * gap) / CGFloat(count))
+            HStack(spacing: gap) {
+                ForEach(0..<count, id: \.self) { index in
+                    Capsule()
+                        .fill(Double(index) / Double(count) < progress ? Color.accentColor : Color.secondary.opacity(0.4))
+                        .frame(width: width, height: CGFloat(5 + (index * 17 + voice.durationMs % 23) % 24))
+                }
+            }
+            .frame(height: 32)
+        }
+        .frame(height: 32)
+        .accessibilityLabel("Playback progress")
+        .accessibilityValue("\(Int(progress * 100)) percent")
     }
 
     private var playButton: some View {
@@ -84,8 +111,7 @@ struct VoiceMessageView: View {
                 }
             }
             .frame(width: buttonSize, height: buttonSize)
-            .background(Color.primary.opacity(0.08), in: Circle())
-            .contentShape(Circle())
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(loading)

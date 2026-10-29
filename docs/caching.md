@@ -1095,3 +1095,13 @@ responses, invalidation after account deletion and setting changes, and a full r
 on sign-out or session expiry. Nothing is persisted in the browser. The API reads
 runtime settings from D1 on every use, with no isolate cache. Details:
 [admin panel caching](admin.md#panel-caching). Not verified in a browser.
+
+### Voice bubble avatars and waveform
+
+Both clients reuse the existing versioned account, contact and group-member photo
+caches for avatars inside voice bubbles. Bars are derived synchronously from
+duration as a decorative waveform and colored by local playback position; no new
+network request, audio decoding or cache is needed for them. Audio cache budgets,
+account isolation and invalidation remain unchanged. Verify photo refresh, missing
+photos, reopen/back navigation, offline playback, access revocation and account
+switching on device/browser; this presentation change has not yet been checked there.

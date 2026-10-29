@@ -248,8 +248,10 @@ The native app (`apps/ios`) implements the same behavior in private chats and gr
   rejected moves to the same **Retry**/**Delete** row and retries with a new UUID.
   Conversation stores holding a failed clip are not evicted from the session LRU.
 - **Bubbles.** `VoiceMessageView` (`VoiceMessageView.swift`) shows play/pause, a
-  progress bar, the elapsed time while playing (the duration otherwise), the send
-  time and the usual receipts. Outgoing bubbles add the microphone in
+  waveform of rounded bars, the elapsed time while playing (the duration otherwise), the send
+  time and the usual receipts. The play button has no circular background. The sender's
+  avatar sits inside the bubble: left for your clips, right for incoming clips,
+  including groups and pending sends. Outgoing bubbles add the microphone in
   `MessageReceiptView.readColor` once `voice.listenedAt` is set. `VoicePlayer.shared`
   (`VoicePlayback.swift`) plays one clip at a time with `AVAudioPlayer`; scrolling does
   not stop it. Reply quotes of voice messages read "Voice message".
@@ -322,7 +324,9 @@ The web app (`apps/web`) implements the same behavior in private chats and group
   pending send, show the outgoing voice bubble with the clock, and offer **Retry**
   (same UUID) or **Delete** after a failure. The composer stays disabled while a send
   is pending, as for text.
-- **Bubbles.** `VoiceMessage.vue` renders play/pause, a seekable range input and the
+- **Bubbles.** `VoiceMessage.vue` renders a plain play/pause button, rounded waveform bars over a
+  keyboard-accessible seekable range input, sender avatars (yours on the left,
+  incoming senders on the right, including groups and pending sends) and the
   elapsed time or duration; outgoing bubbles add the microphone, grey until
   `voice.listenedAt` and then `--read` (the read-check color). One shared `<audio>`
   element plays at a time; leaving a chat, group or contact page stops it. A failed
@@ -365,3 +369,16 @@ playback and seeking, and the contact voice picker. `MediaRecorder` formats and
 that starts after an uncached download (autoplay policy); the bubble then shows its
 retry button and the next tap plays from the cache. Browsers without
 `MediaRecorder` or `getUserMedia` (or pages served without HTTPS) show no microphone.
+
+### Voice bubble presentation and verification
+
+The waveform in both clients is a stable decorative pattern based on the message
+duration, not measured audio amplitude. Played bars follow the actual playback
+position. Rendering bars requires no audio download, new persisted metadata or
+cache. Sender photos reuse the existing versioned account/contact/group-member
+image caches and placeholders; audio loading, retry and cache lifetimes are unchanged.
+
+Device/browser verification remains pending: compare incoming, outgoing and pending
+clips in private chats and groups, missing/updated photos, light/dark mode, narrow
+screens and large text; check playback, pause/resume, retry, web seeking with pointer
+and keyboard, receipts, reopening offline, access loss and account switching.

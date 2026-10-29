@@ -232,7 +232,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
           :class="[isMine(item.message) ? 'outgoing' : 'incoming', { highlighted: highlighted === item.message.id }]" :style="{ marginTop: item.first ? '6px' : '0' }"
           :data-read-id="isMine(item.message) ? undefined : item.message.id"
         >
-          <div v-if="!isMine(item.message)" class="avatar-slot">
+          <div v-if="!isMine(item.message) && !item.message.voice" class="avatar-slot">
             <AppAvatar v-if="item.last" :name="item.message.senderName" :path="senderPhoto(item.message)" :size="28" />
           </div>
           <MessageReactions :cache="state.reactions" :path="`groups/${groupID}/reactions`" :message-i-d="item.message.id" side="group" :replyable="canReply"
@@ -243,7 +243,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
               :style="[senderStyle(item.message), item.message.attachment?.mimeType.startsWith('image/') ? { padding: '4px 8px 0' } : {}]"
             >{{ senderOf(item.message)?.name ?? item.message.senderName }}</span>
             <MessageReplyQuote v-if="item.message.replyTo" :preview="replyPreview(item.message.replyTo)" interactive @open="showQuoted(item.message.replyTo)" />
-            <VoiceMessage v-if="item.message.voice" :voice="item.message.voice" :path="attachmentPath(item.message)" :outgoing="isMine(item.message)" />
+            <VoiceMessage v-if="item.message.voice" :voice="item.message.voice" :path="attachmentPath(item.message)" :outgoing="isMine(item.message)" :sender-name="item.message.senderName" :sender-photo="senderPhoto(item.message)" />
             <MessageAttachment v-else-if="item.message.attachment" :attachment="item.message.attachment" :path="attachmentPath(item.message)" />
             <div v-if="item.message.text && !item.message.voice" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }"><MessageMarkdown v-if="item.message.agentID" :text="item.message.text" /><template v-else>{{ item.message.text }}</template></div>
             <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => a.replyID === item.message.id)" :key="app.id" :app="app" :base="`groups/${groupID}`" />

@@ -130,6 +130,7 @@ struct ChatView: View {
                                     VoiceMessageView(resource: .contactVoice(contactID: contactID, turnID: turn.id,
                                                                              part: turn.assistantMessages?.firstIndex(where: { $0.id == message.id }) ?? 0),
                                                      voice: voiceMessage, sentAt: item.timestamp, fromUser: false, showsReceipt: false,
+                                                     senderAvatar: AnyView(ContactAvatar(contact: contacts.contact(id: contactID), size: 40)),
                                                      replyQuote: message.replyTo.map(replyPreview),
                                                      onQuoteTap: { if let quote = message.replyTo { showQuoted(quote, proxy: proxy) } })
                                 } else if let attachment = item.message?.attachment {

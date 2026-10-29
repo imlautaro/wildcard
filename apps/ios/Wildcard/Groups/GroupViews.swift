@@ -705,11 +705,12 @@ private struct GroupMessageRow: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            if !own { GroupAvatar(member: sender, groupID: groupID, size: 30) }
+            if !own && message.voice == nil { GroupAvatar(member: sender, groupID: groupID, size: 30) }
             VStack(alignment: .leading, spacing: 4) {
                 if let voice = message.voice {
                     VoiceMessageView(resource: .groupVoice(groupID: groupID, messageID: message.id), voice: voice, sentAt: message.createdAt,
                                      fromUser: own, receiptState: message.receiptState ?? "sent", showsReceipt: own,
+                                     senderAvatar: AnyView(GroupAvatar(member: sender, groupID: groupID, size: 40)),
                                      senderName: own ? nil : (sender?.name ?? message.senderName),
                                      senderColor: senderColor, replyQuote: replyQuote, onQuoteTap: onQuoteTap)
                 } else if let file = message.attachment {
