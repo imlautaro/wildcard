@@ -517,3 +517,15 @@ membership, model consent and version checks; absent or revoked images are not
 guessed. Existing session-owned avatar caches remain unchanged; the inference
 path does not use client caches. See [profile image access](profile-photos.md#profile-images-available-to-contacts)
 for limits, privacy, retention and pending functional checks.
+
+### Age and realistic contact photos
+
+Onboarding also requires an integer age (1–120), matching iOS. New realistic
+contacts have validated ages within ±2 years, with explicit per-contact gender.
+The realistic prompt uses `N years old female|male social media natural photo
+taken with phone`, followed only by Appearance and Personality cues. Other styles
+retain their portrait prompt. Age uses the existing session draft/cache and D1
+input, with no extra local persistence. Legacy saved setups still resume without
+requiring or inventing age; completed photos are preserved. See [onboarding](onboarding.md).
+Pending browser/device checks include numeric input, invalid ages, lower/upper
+bounds, draft restoration, legacy retry and actual model adherence.

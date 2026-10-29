@@ -3,6 +3,7 @@ import Observation
 
 struct OnboardingInput: Codable, Sendable {
     var name = ""
+    var age: Int? = nil
     var gender = "male"
     var language = "en"
     var country = ""
@@ -113,6 +114,9 @@ struct OnboardingView: View {
                     Section {
                         TextField("Your name", text: $store.draft.name)
                             .textContentType(.givenName)
+                        TextField("Your age", value: $store.draft.age, format: .number.grouping(.never))
+                            .keyboardType(.numberPad)
+                            .accessibilityLabel("Your age in years")
                         Picker("Gender", selection: $store.draft.gender) {
                             Text("Male").tag("male")
                             Text("Female").tag("female")
@@ -127,7 +131,7 @@ struct OnboardingView: View {
                     } header: {
                         Text("About you")
                     } footer: {
-                        Text("Your contacts will have names common in your country and speak your preferred language. Gender does not determine your contacts’ personalities.")
+                        Text("Your contacts will have names common in your country and speak your preferred language. Realistic contacts will be within two years of your age. Gender does not determine your contacts’ personalities.")
                     }
                     .disabled(store.locked || store.busy)
                     Section("Agent appearance") {
@@ -159,7 +163,8 @@ struct OnboardingView: View {
                                 Task { await store.submit(auth: auth) }
                             }
                             .disabled(store.busy || store.draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                      || store.draft.name.count > 100 || store.draft.country.isEmpty || !store.draft.sharedMemoryConsent)
+                                      || store.draft.name.count > 100 || store.draft.country.isEmpty || !store.draft.sharedMemoryConsent
+                                      || (!store.locked && !(1...120).contains(store.draft.age ?? 0)))
                         }
                     }
                 } else {

@@ -51,8 +51,16 @@ onboarding.post('/', bodyLimit({ maxSize: 4096 }), async c => {
   if (!admission.allowed) return c.json({ error: 'Too many attempts. Please try again later.' }, 429);
   const required = await c.env.DB.prepare('SELECT onboarding_required AS required FROM user WHERE id = ?').bind(owner).first<{ required: number }>();
   if (!required?.required) return c.json({ error: 'Onboarding is already complete or unavailable for this account.' }, 409);
-  const input = parseOnboarding(await c.req.json().catch(() => null));
-  if (!input) return c.json({ error: 'Complete every field and accept shared memory to create your circle.' }, 422);
+  const body: unknown = await c.req.json().catch(() => null);
+  // Existing submissions are immutable, including legacy setups without age.
+  const existing = await c.env.DB.prepare('SELECT user_id FROM account_onboarding WHERE user_id = ?').bind(owner).first();
+  if (existing) {
+    try { await dispatchOnboarding(c.env, owner, true); }
+    catch { /* Cron recovers dispatch outages. */ }
+    return c.json(await onboardingStatus(c.env, owner), 202);
+  }
+  const input = parseOnboarding(body);
+  if (!input) return c.json({ error: 'Enter an age from 1 to 120, complete every field and accept shared memory to create your circle.' }, 422);
   // First submission freezes preferences; retries always reuse the original plan.
   await c.env.DB.prepare(`INSERT INTO account_onboarding (user_id, input_json, status, updated_at)
     VALUES (?, ?, 'queued', ?) ON CONFLICT(user_id) DO NOTHING`).bind(owner, JSON.stringify(input), Date.now()).run();

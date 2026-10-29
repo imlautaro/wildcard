@@ -6,7 +6,7 @@ const { options, snapshot, draft, busy, refresh, submit } = useOnboarding();
 const error = ref<string | null>(null);
 const locked = computed(() => !!snapshot.value?.input);
 const running = computed(() => snapshot.value?.status === 'queued' || snapshot.value?.status === 'generating');
-const ready = computed(() => !!draft.name.trim() && !!draft.country && draft.sharedMemoryConsent);
+const ready = computed(() => !!draft.name.trim() && !!draft.country && draft.sharedMemoryConsent && (locked.value || (typeof draft.age === 'number' && Number.isInteger(draft.age) && draft.age >= 1 && draft.age <= 120)));
 let disposed = false;
 let updating = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -46,6 +46,7 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
       <template v-if="options">
         <fieldset :disabled="locked || busy" style="border: 0; padding: 0; margin: 24px 0" class="group">
           <label class="field">Your name <input v-model="draft.name" autocomplete="given-name" maxlength="100" required></label>
+          <label class="field">Your age <input v-model.number="draft.age" type="number" min="1" max="120" step="1" placeholder="Age in years" :required="!locked"></label>
           <label class="field">Gender
             <select v-model="draft.gender"><option value="male">Male</option><option value="female">Female</option></select>
           </label>
@@ -59,7 +60,7 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
             <select v-model="draft.style"><option v-for="option in options.styles" :key="option.code" :value="option.code">{{ option.name }}</option></select>
           </label>
         </fieldset>
-        <p class="group-footer">Your contacts will have names common in your country and speak your preferred language. Gender does not determine your contacts’ personalities.</p>
+        <p class="group-footer">Your contacts will have names common in your country and speak your preferred language. Realistic contacts will be within two years of your age. Gender does not determine your contacts’ personalities.</p>
         <label style="display: flex; align-items: start; gap: 10px; margin: 20px 0">
           <input v-model="draft.sharedMemoryConsent" type="checkbox" :disabled="locked || busy">
           <span>I agree to create a group with my five AI contacts and enable shared memory for them. Group members can read the full group history. Facts shared in private or group chats may become shared memories recalled by these contacts in other chats; private transcripts remain access controlled. Setup uses Meta Standard processing.</span>

@@ -786,3 +786,9 @@ This prevents a checkpoint or cached image from granting later access. Client
 invalidation; no network-backed client state or navigation loader is added.
 See [profile photos](profile-photos.md#profile-images-available-to-contacts) for
 fictional-data validation cases; device and live-model behavior remains unverified.
+
+Onboarding age follows the same session-owned draft and snapshot lifecycle. New
+input requires a whole age from 1–120; legacy input missing age decodes as empty,
+retains its immutable saved setup and can retry. Mutations/account changes reject
+late snapshots, and neither client adds local disk retention of age. Saved plans
+and portraits are reused rather than regenerated after an age-prompt update.

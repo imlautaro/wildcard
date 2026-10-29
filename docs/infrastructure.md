@@ -1816,3 +1816,12 @@ code ignores the new flag; rolling back client gating alone lets pending account
 into the old shell. Stop pending Workflows before retiring their class/binding.
 Failed setups retain private staged R2 images and D1 plans for retry; account-data
 maintenance must include these keys and rows because no automatic TTL is added.
+
+The age-aware onboarding update adds `age` inside existing `input_json` and
+per-contact age/gender inside `plan_json`; no new migration, binding or secret is
+required. New submissions require a whole age (1–120); update both clients with
+the API. Already-saved submissions/plans without these fields remain retryable.
+Rollback can retain these additive JSON fields and existing photos; an older API
+rejects new client requests containing age, so client/API versions must match.
+Use the same commit/push/automatic release process; no remote changes or live
+model calls were performed for the age update.
