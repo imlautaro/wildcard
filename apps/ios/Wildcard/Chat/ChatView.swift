@@ -147,12 +147,16 @@ struct ChatView: View {
                             ForEach(item.message == nil || item.message?.id == "\(turn.id)/assistant/0" ? contacts.miniApps.apps(contactID: contactID, turnID: turn.id) : []) { app in
                                 MiniAppCardView(app: app, contactID: contactID)
                             }
+                            ForEach(item.message == nil || item.message?.id == "\(turn.id)/assistant/0"
+                                    ? (contacts.documentCaches.list("contacts/\(contactID)").value ?? []).filter { $0.sourceID == turn.id } : []) { document in
+                                DocumentCardView(document: document, base: "contacts/\(contactID)", caches: contacts.documentCaches)
+                            }
                         } else if item.kind == .status && turn.status == .running && chat.presence?.status == .typing {
                             ReplyTypingIndicator()
                         } else if item.kind == .status && turn.status == .failed && !chat.turns.contains(where: { $0.sequence > turn.sequence && $0.assistantText != nil }) {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(turn.errorCode == "SCHEDULE_CANCELLED" ? "Scheduled message cancelled." : turn.errorCode == "GROUP_REQUEST_CANCELLED" ? "Group request cancelled." : "The reply to this message couldn't be completed.").manrope(.footnote).foregroundStyle(.secondary)
-                                if turn.scheduleID == nil && turn.groupRequestID == nil && turn.id == chat.turns.last?.id {
+                                if turn.scheduleID == nil && turn.groupRequestID == nil && turn.taskID == nil && turn.id == chat.turns.last?.id {
                                     Button("Retry reply") { Task { await chat.retry(turn, contactID: contactID, using: auth) } }
                                         .disabled(chat.isSending || chat.hasPendingReply)
                                 }
@@ -221,6 +225,7 @@ struct ChatView: View {
         .task(id: chat.turns.map(\.updatedAt).max()) {
             await native.refresh(contactID: contactID, using: auth)
             await contacts.miniApps.refresh(contactID: contactID, using: auth)
+            await contacts.documentCaches.refresh("contacts/\(contactID)", auth: auth)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection, matching: .images, preferredItemEncoding: .compatible)
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: DraftAttachment.types) { result in

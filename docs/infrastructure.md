@@ -1727,6 +1727,33 @@ execution ID so that the action ledger commits in the same transaction. It casca
 with its app. There are no new services or secrets. Keep the table on rollback; older
 code ignores it, but specs with `state` would then fail validation in older code.
 
+### Chat documents (migration 0047)
+
+Apply additive `0047_documents.sql` after 0046. It creates `chat_document` (current
+Markdown, revision, last editor, `source_id` of the creating turn or group reply),
+`chat_document_revision` (the last 50 attributed revisions) and `document_mutation`
+(contact tool receipts). Documents cascade with their contact, user or group. No new
+service, binding, secret or trigger is needed. Apply it like every migration (local
+`npm run db:migrate:local`; production only through the automatic commit/push
+release), and publish the API before relying on the clients; older APIs return 404,
+which clients show as no documents. Rollback: older code ignores the tables, and the
+group body limit returns to 24 KB. See [documents](documents.md).
+
+### Shared task lists (migration 0046)
+
+Apply additive `0046_tasks.sql` after 0045. It creates `task_list`, `task`,
+`task_dependency`, `task_mutation` (tool receipts) and `task_work` (work-turn
+budget), and adds nullable `task_id` columns to `chat_turn` and `group_message`
+(`SET NULL` on delete). Lists cascade with their contact, user or group. No new
+service, binding, secret or Cron trigger is needed: work turns reuse the existing
+minute Cron, `CHAT_WORKFLOW`, `agent_attention` and group energy. Apply it like every
+migration: `npm run db:migrate:local` locally, and only the automatic commit/push
+release in production. Publish the API before relying on the clients; older APIs
+return 404 for task routes, which clients show as unavailable. Rollback is another
+automatic release: older code ignores the tables and columns, does not dispatch work
+turns, and leaves already queued task turns to run as ordinary turns with empty text,
+so drain or cancel open task lists before rolling back. See [tasks](tasks.md).
+
 ## Contact personality
 
 [Contact personality](personality.md) reuses the required D1 `DB`, Meta key/model,

@@ -55,6 +55,9 @@ export const appIcons = {
   copy: ['material-symbols:content-copy-outline-rounded', 'material-symbols:content-copy-rounded'],
   link: ['material-symbols:link-rounded', 'material-symbols:link-rounded'],
   'add-reaction': ['material-symbols:add-reaction-outline-rounded', 'material-symbols:add-reaction-rounded'],
+  tasks: ['material-symbols:checklist-rounded', 'material-symbols:checklist-rounded'],
+  circle: ['material-symbols:radio-button-unchecked', 'material-symbols:radio-button-unchecked'],
+  block: ['material-symbols:block', 'material-symbols:block'],
 } as const satisfies Record<string, readonly [outline: string, filled: string]>;
 
 export type AppIconName = keyof typeof appIcons;

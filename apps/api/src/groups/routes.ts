@@ -5,6 +5,8 @@ import { groupQuotes, parseGroupReply } from '../replies/data';
 import { receiptState } from './receipts';
 import { deliverGroupPush } from './push';
 import media, { groupPhotoKey } from './media';
+import { taskRoutes } from '../tasks/routes';
+import { documentRoutes } from '../documents/routes';
 import { removePhoto } from '../photos/storage';
 import { parseAttachment, sameAttachment, publicAttachment } from '../chat/attachments';
 import { Hono } from 'hono';
@@ -53,7 +55,7 @@ groups.use('*', async (c, next) => {
 groups.use('*', async (c, next) => {
   const maxSize = c.req.method === 'POST' && c.req.path.endsWith('/messages') ? 7 * 1024 * 1024 + 32768
     : c.req.path.endsWith('/transcriptions') ? 2 * 1024 * 1024
-    : c.req.path.endsWith('/photo') ? 512 * 1024 : 24 * 1024;
+    : c.req.path.endsWith('/photo') ? 512 * 1024 : c.req.path.includes('/documents') ? 256 * 1024 : 24 * 1024;
   return bodyLimit({ maxSize, onError: (c) => c.json({ error: 'File or request is too large' }, 413) })(c, next);
 });
 groups.use('*', async (c, next) => {
@@ -430,5 +432,7 @@ groups.get('/:id/photos/:kind/:memberID', async (c) => {
   const photo = await c.env.CONTACT_PHOTOS.get(`users/${memberID}/${row.version}.jpg`);
   return photo ? new Response(photo.body, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } }) : c.body(null, 404);
 });
+groups.route('/:id/tasks', taskRoutes('group'));
+groups.route('/:id/documents', documentRoutes('group'));
 groups.route('/:id', media);
 export default groups;

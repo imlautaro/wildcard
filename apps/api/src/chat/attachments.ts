@@ -3,6 +3,8 @@ import { isRecord, type ModelMessage } from './meta';
 import type { StoredTurn } from './data';
 
 export const attachmentLimit = 5 * 1024 * 1024;
+// Chat details media pages: fewer messages for images, whose grid loads full-size bytes.
+export const mediaPage = (kind: string) => kind === 'image' ? 30 : 60;
 export type Attachment = { name: string; mimeType: string; size: number; digest: string; key: string };
 export type PublicAttachment = Pick<Attachment, 'name' | 'mimeType' | 'size'>;
 

@@ -58,6 +58,14 @@ Matching iOS:
   the server's delivered → online → read → typing order, activity leases
   (`open`/`typing`/`leave`, with no draft text, which never connect the contact), and image/PDF
   attachments up to 5 MB.
+- **Documents** (`/contacts/:id/documents/:documentID`, `/groups/:id/documents/:documentID`,
+  `DocumentScreen`): viewer, Write/Preview editor, revisions, conflicts and delete;
+  cards under replies and the Docs tab in details, matching iOS. See [documents](documents.md).
+- **Tasks** (`/contacts/:id/tasks`, `/groups/:id/tasks`, `TaskBoard`), opened from the
+  chat bar or details, matching iOS. See [tasks](tasks.md).
+- **Shared in this chat** on contact details (`/contacts/:id/edit`) and group details
+  (`/groups/:id/members`): Media and Docs tabs (`ChatMediaTabs`). See
+  [attachments](attachments.md#shared-in-this-chat).
 - In private chats and groups, tapping outside the message field blurs it and lets
   the mobile keyboard close. Drafts, attachments, reply targets, and cached history
   are retained without a network request. iOS dismisses the keyboard on a history

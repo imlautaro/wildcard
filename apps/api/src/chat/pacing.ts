@@ -42,7 +42,7 @@ export function batchStatement(env: Env, job: ChatJob) {
     WHERE id = ?1 AND attempt = ?2 AND status IN ('queued', 'running') AND tools_started = 0
     AND assistant_text IS NULL
     AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)
-    AND schedule_id IS NULL AND group_request_id IS NULL AND initiative_source_id IS NULL
+    AND schedule_id IS NULL AND group_request_id IS NULL AND initiative_source_id IS NULL AND task_id IS NULL
     AND attachment_json IS NULL AND reply_to_id IS NULL
     AND NOT EXISTS (SELECT 1 FROM native_action WHERE turn_id = ?1)
     AND NOT EXISTS (SELECT 1 FROM group_post WHERE source_turn_id = ?1)

@@ -8,6 +8,8 @@ export type ChatTurn = {
   attachment?: PublicAttachment | null;
   scheduleID: string | null;
   groupRequestID: string | null;
+  // Set on contact work turns for a task; they have no human text and no manual retry.
+  taskID?: string | null;
   errorCode: string | null;
   sequence: number;
   id: string;
@@ -25,11 +27,11 @@ export type StoredTurn = ChatTurn & { nativeContextJSON?: string | null; attachm
 export type ChatJob = { turnID: string; attempt: number };
 export const turnColumns = `assistant_messages_json AS assistantMessagesJSON, sequence, id, read_at AS readAt, user_text AS userText, assistant_text AS assistantText,
   status, attempt, created_at AS createdAt, updated_at AS updatedAt, schedule_id AS scheduleID, group_request_id AS groupRequestID, error_code AS errorCode,
-  reply_to_id AS replyToID, reply_to_side AS replyToSide`;
+  reply_to_id AS replyToID, reply_to_side AS replyToSide, task_id AS taskID`;
 export const storedColumns = `${turnColumns}, attachment_json AS attachmentJSON, contact_id AS contactID, user_id AS userID, workflow_id AS workflowID, time_zone AS timeZone, schedule_instruction AS scheduleInstruction, native_context_json AS nativeContextJSON`;
 
 export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }, replyTo: ReplyQuote | null, resolveQuote?: (target: { replyToID: string | null; replyToSide: string | null }) => ReplyQuote | null): PublicTurn {
-  const { sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode } = turn;
+  const { sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode, taskID } = turn;
   const assistantMessages = turn.assistantMessagesJSON
     ? (JSON.parse(turn.assistantMessagesJSON) as AssistantMessage[]).map(message => ({
       ...message,
@@ -41,7 +43,7 @@ export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }, r
     })) : [];
   return { assistantMessages, attachment: publicAttachment(turn), sequence, id, readAt, userText, assistantText,
     status: errorCode === 'MESSAGE_BATCHED' ? 'complete' : status, attempt, createdAt, updatedAt, scheduleID,
-    groupRequestID, errorCode: errorCode === 'MESSAGE_BATCHED' ? null : errorCode, replyTo };
+    groupRequestID, taskID: taskID ?? null, errorCode: errorCode === 'MESSAGE_BATCHED' ? null : errorCode, replyTo };
 }
 
 export function findTurn(db: D1Database, id: string, contactID: string, userID: string) {

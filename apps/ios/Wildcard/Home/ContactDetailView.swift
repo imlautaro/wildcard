@@ -38,6 +38,15 @@ struct ContactDetailView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        TasksView(base: "contacts/\(contactID)", snapshot: contacts.taskSnapshots.store(for: "contacts/\(contactID)"))
+                    } label: {
+                        Image(systemName: "checklist")
+                    }
+                    .tint(Color(uiColor: .label))
+                    .accessibilityLabel("Tasks")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(value: HomeDestination.schedules(contactID)) {
                         Image(systemName: "clock")
                     }

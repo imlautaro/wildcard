@@ -20,6 +20,8 @@ struct AuthAPI: Sendable {
         case invalidResponse
         case temporarilyUnavailable
         case reviewRequired
+        /// A document save based on an older revision; the message explains the conflict.
+        case conflict(String)
 
         var errorDescription: String? {
             switch self {
@@ -31,6 +33,7 @@ struct AuthAPI: Sendable {
             case .invalidResponse: "The server returned an unexpected response. Please try again."
             case .temporarilyUnavailable: "Groups are temporarily unavailable. Please try again."
             case .reviewRequired: "Review and enable this mini app first."
+            case .conflict(let message): message
             }
         }
     }
@@ -162,6 +165,13 @@ struct AuthAPI: Sendable {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
                 throw Failure.rejected(message ?? "Native requests are temporarily unavailable.")
+            }
+            if path.contains("/tasks") || path.contains("/documents") {
+                if [403, 404].contains(response.statusCode) { throw Failure.notFound }
+                if response.statusCode == 429 || response.statusCode >= 500 { throw Failure.temporarilyUnavailable }
+                let message = (try? JSONDecoder().decode(ErrorResponse.self, from: data).error) ?? "Please try again."
+                if response.statusCode == 409 && path.contains("/documents") { throw Failure.conflict(message) }
+                throw Failure.rejected(message)
             }
             if path.contains("/mini-apps") {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }

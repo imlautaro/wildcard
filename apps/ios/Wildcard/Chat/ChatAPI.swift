@@ -25,6 +25,8 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     enum Status: String, Decodable, Sendable { case queued, running, complete, failed }
     let attachment: ChatAttachment?
     let scheduleID: String?
+    /// Set on contact work turns for a task; they cannot be retried manually.
+    var taskID: String? = nil
     let groupRequestID: String?
     let errorCode: String?
     let sequence: Int

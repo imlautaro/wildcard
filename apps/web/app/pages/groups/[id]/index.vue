@@ -165,6 +165,9 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisibility);
   window.removeEventListener('focus', markRead);
 });
+const documents = useDocuments(() => `groups/${groupID.value}`);
+// Cards appear under the reply that created a document; refresh when messages arrive.
+watch(() => state.value.messages.at(-1)?.id, () => documents.refresh(), { immediate: true });
 </script>
 
 <template>
@@ -178,6 +181,7 @@ onBeforeUnmount(() => {
         </div>
       </NuxtLink>
     </template>
+    <NuxtLink :to="`/groups/${groupID}/tasks`" class="icon-button" aria-label="Tasks" title="Tasks"><AppIcon name="tasks" /></NuxtLink>
   </PageBar>
 
   <div v-if="state.unavailable" class="empty">
@@ -227,6 +231,7 @@ onBeforeUnmount(() => {
           </MessageReactions>
         </div>
         <template v-if="item.kind === 'message'">
+          <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.message.id)" :key="doc.id" :document="doc" :to="`/groups/${groupID}/documents/${doc.id}`" />
           <div v-for="reply in failedRepliesFor(item.message)" :key="reply.id" class="status-line" role="status">
             {{ reply.name }} couldn't finish replying to this message.
             <button class="link-button" :disabled="activeReplies.length > 0" @click="retryReply(reply.id)">Retry reply</button>

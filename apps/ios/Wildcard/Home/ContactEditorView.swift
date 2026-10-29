@@ -67,7 +67,9 @@ struct ContactEditorView: View {
                                                draft: contacts.personalityDraft(id: contactID))
                     }
                     NavigationLink("Mini apps") { MiniAppListView(contactID: contactID) }
+                    NavigationLink("Tasks") { TasksView(base: "contacts/\(contactID)", snapshot: contacts.taskSnapshots.store(for: "contacts/\(contactID)")) }
                 }
+                ChatMediaSection(scope: .contact(contactID), cache: contacts.mediaSnapshots, documents: contacts.documentCaches)
                 Section {
                     NavigationLink(value: HomeDestination.nativeTools(contactID)) {
                         Label { Text("Native experiments") } icon: { NativeGlyph(kind: "default", size: 28, symbol: "iphone") }

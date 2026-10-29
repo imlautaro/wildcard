@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readPhoto, validPhoto, removePhoto } from '../photos/storage';
-import { storedAttachment, attachmentLimit } from '../chat/attachments';
+import { storedAttachment, attachmentLimit, mediaPage } from '../chat/attachments';
 import { normalizedRecording, transcribeRecording, TranscriptionFailure } from '../chat/transcription';
 
 const media = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
@@ -49,6 +49,24 @@ media.on(['PUT', 'DELETE'], '/photo', async (c) => {
   }
   if (previous.version) c.executionCtx.waitUntil(removePhoto(c.env, groupPhotoKey(id, previous.version)));
   return c.json({ photoVersion: version });
+});
+// Shared media for group details, newest first; membership is checked by the parent router.
+media.get('/media', async (c) => {
+  const kind = c.req.query('kind'), before = Number(c.req.query('before') ?? Number.MAX_SAFE_INTEGER);
+  if ((kind !== 'image' && kind !== 'file') || !Number.isSafeInteger(before) || before < 1) {
+    return c.json({ error: 'Choose image or file media with a valid cursor' }, 400);
+  }
+  const { results } = await c.env.DB.prepare(`SELECT sequence, id AS messageID, user_id AS userID, agent_id AS agentID,
+    sender_name AS senderName, created_at AS createdAt, attachment_json AS attachmentJSON FROM group_message
+    WHERE group_id = ?1 AND sequence < ?2 AND attachment_json IS NOT NULL
+    AND (json_extract(attachment_json, '$.mimeType') LIKE 'image/%') = (?3 = 'image')
+    ORDER BY sequence DESC LIMIT ?4`).bind(c.req.param('id'), before, kind, mediaPage(kind) + 1)
+    .all<{ sequence: number; messageID: string; userID: string | null; agentID: string | null; senderName: string; createdAt: number; attachmentJSON: string }>();
+  const page = results.slice(0, mediaPage(kind));
+  return c.json({ items: page.map(({ attachmentJSON, ...message }) => {
+    const { name, mimeType, size } = storedAttachment({ attachmentJSON })!;
+    return { ...message, name, mimeType, size };
+  }), nextBefore: results.length > page.length ? page[page.length - 1].sequence : null });
 });
 media.get('/messages/:messageID/attachment', async (c) => {
   const row = await c.env.DB.prepare(`SELECT attachment_json AS attachmentJSON FROM group_message

@@ -8,6 +8,9 @@ const { state, load, loadEarlier, send, submit, discardPending, retryReply, mark
 const activity = useChatActivity(contactID);
 const remote = useRemoteNative(contactID);
 const miniApps = useMiniApps(contactID);
+const documents = useDocuments(() => `contacts/${contactID.value}`);
+// Cards appear under the reply that created a document; refresh when new replies arrive.
+watch(() => state.value.turns.at(-1)?.assistantMessages?.length, () => documents.refresh(), { immediate: true });
 const remoteError = ref<string | null>(null);
 function remoteStatus(status: string) {
   return ({ completed: 'Scheduled on iPhone', pending: 'Sent · waiting for iPhone', running: 'Claimed · outcome not yet confirmed', expired: 'Expired without confirmation', failed: 'Could not schedule', cancelled: 'Cancelled', unknown: 'Outcome unknown · check iPhone' } as Record<string, string>)[status] ?? status;
@@ -190,6 +193,7 @@ onBeforeUnmount(() => {
         </div>
       </NuxtLink>
     </template>
+    <NuxtLink :to="`/contacts/${contactID}/tasks`" class="icon-button" aria-label="Tasks" title="Tasks"><AppIcon name="tasks" /></NuxtLink>
   </PageBar>
 
   <div v-if="state.unavailable" class="empty">
@@ -286,11 +290,12 @@ onBeforeUnmount(() => {
           <div v-else-if="item.kind === 'status' && item.turn.status === 'failed' && !state.turns.some((later) => later.sequence > item.turn.sequence && later.assistantText !== null)" class="status-line">
             {{ failureText(item.turn) }}
             <button
-              v-if="item.turn.scheduleID === null && item.turn.groupRequestID === null && item.turn.id === lastTurnID"
+              v-if="item.turn.scheduleID === null && item.turn.groupRequestID === null && !item.turn.taskID && item.turn.id === lastTurnID"
               class="link-button" :disabled="state.retrying || replying || !!state.pending" @click="retryReply(item.turn)"
             >Retry reply</button>
           </div>
           <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => item.kind === 'assistant' && item.first && a.turnID === item.turn.id)" :key="app.id" :app="app" :contact-id="contactID" />
+          <DocumentCard v-for="doc in documents.state.value.items.filter(d => item.kind === 'assistant' && item.first && d.sourceID === item.turn.id)" :key="doc.id" :document="doc" :to="`/contacts/${contactID}/documents/${doc.id}`" />
           <div v-for="action in remote.state.value.actions.filter(a => item.kind === 'user' && a.turnID === item.turn.id)" :key="action.id" class="native-receipt" :class="remoteTone(action.status)">
             <span class="native-glyph" :data-kind="action.kind"><AppIcon :name="action.kind === 'alarm' ? 'alarm' : 'timer'" /></span>
             <div>

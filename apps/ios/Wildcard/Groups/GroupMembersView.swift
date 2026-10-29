@@ -39,7 +39,9 @@ struct GroupMembersView: View {
                 }
                 Section {
                     NavigationLink("Connections") { McpAccessView(path: "groups/\(groupID)/mcp", group: true, cache: contacts.mcpAccessSnapshots.store(for: "group:\(groupID)")) }
+                    NavigationLink("Tasks") { TasksView(base: "groups/\(groupID)", snapshot: groups.conversations.tasks.store(for: "groups/\(groupID)")) }
                 }
+                ChatMediaSection(scope: .group(groupID), cache: groups.conversations.media, documents: groups.conversations.documents)
                 Section {
                     ForEach(snapshot.privateSharing ?? []) { permission in
                         let name = snapshot.members.first { $0.kind == "agent" && $0.id == permission.agentID }?.name ?? "Contact"

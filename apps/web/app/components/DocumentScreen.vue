@@ -1,0 +1,102 @@
+<script setup lang="ts">
+import { DocumentConflict } from '~/composables/useDocuments';
+
+// A document opens as its own screen: the rendered Markdown, an editor with preview,
+// recent revisions, and delete. `base` is `contacts/:id` or `groups/:id`.
+const props = defineProps<{ base: string; documentId: string; back: string }>();
+const documents = useDocuments(() => props.base);
+const entry = computed(() => documents.document(props.documentId));
+const doc = computed(() => entry.value.value);
+const editing = ref(false);
+const preview = ref(false);
+const showHistory = ref(false);
+const busy = ref(false);
+const error = ref<string | null>(null);
+const conflict = ref<string | null>(null);
+const draft = reactive({ title: '', body: '', baseRevision: 0, summary: '' });
+useHead({ title: computed(() => doc.value?.title ?? 'Document') });
+
+let timer: ReturnType<typeof setInterval> | undefined;
+onMounted(() => {
+  documents.load(props.documentId, true);
+  // Contacts may be editing; keep the viewer current, but never replace an open draft.
+  timer = setInterval(() => { if (!editing.value && document.visibilityState === 'visible') documents.load(props.documentId); }, 5000);
+});
+onBeforeUnmount(() => clearInterval(timer));
+onBeforeRouteLeave(() => !editing.value || !changed.value || window.confirm('Discard your unsaved changes?'));
+const changed = computed(() => !!doc.value && (draft.title !== doc.value.title || draft.body !== doc.value.body));
+
+function startEditing() {
+  if (!doc.value) return;
+  Object.assign(draft, { title: doc.value.title, body: doc.value.body, baseRevision: doc.value.revision, summary: '' });
+  conflict.value = null; preview.value = false; editing.value = true;
+}
+async function save() {
+  if (busy.value || !draft.title.trim()) return;
+  busy.value = true; error.value = null;
+  try {
+    await documents.save(props.documentId, draft.baseRevision, draft.title.trim(), draft.body, draft.summary.trim() || undefined);
+    editing.value = false; conflict.value = null;
+  } catch (failure) {
+    if (failure instanceof DocumentConflict) {
+      conflict.value = `${failure.current?.updatedByName ?? 'Someone'} saved a newer version (revision ${failure.current?.revision ?? '?'}) while you were editing.`;
+    } else error.value = errorMessage(failure);
+  } finally { busy.value = false; }
+}
+// Keep my text and save it over the newer revision.
+function keepMine() { if (doc.value) draft.baseRevision = doc.value.revision; conflict.value = null; }
+function useTheirs() { editing.value = false; conflict.value = null; }
+async function remove() {
+  if (!doc.value || !window.confirm(`Delete “${doc.value.title}” for everyone in this chat? Its revisions are deleted too.`)) return;
+  busy.value = true;
+  try { await documents.remove(props.documentId); await navigateTo(props.back, { replace: true }); }
+  catch (failure) { error.value = errorMessage(failure); }
+  finally { busy.value = false; }
+}
+</script>
+
+<template>
+  <PageBar :title="editing ? 'Edit document' : (doc?.title ?? 'Document')" :back="back" always-back>
+    <template v-if="doc && !editing">
+      <button type="button" class="icon-button" aria-label="Revisions" title="Revisions" @click="showHistory = !showHistory"><AppIcon name="clock" /></button>
+      <button type="button" class="icon-button" aria-label="Edit" title="Edit" @click="startEditing"><AppIcon name="compose" /></button>
+    </template>
+    <template v-else-if="editing">
+      <button type="button" class="link-button" :disabled="busy" @click="editing = false">Cancel</button>
+      <button type="button" class="button" :disabled="busy || !draft.title.trim() || !changed" @click="save">Save</button>
+    </template>
+  </PageBar>
+  <div class="page">
+    <div class="page-inner document-page">
+      <p v-if="error ?? entry.error" class="notice" style="margin: 0 0 12px">{{ error ?? entry.error }}</p>
+      <div v-if="!doc && !entry.error" class="center"><span class="spinner" /> Loading…</div>
+      <template v-else-if="doc && editing">
+        <div v-if="conflict" class="notice document-conflict">
+          <span>{{ conflict }}</span>
+          <span><button type="button" class="link-button" @click="useTheirs">Use their version</button> · <button type="button" class="link-button" @click="keepMine">Keep mine and save over it</button></span>
+        </div>
+        <input v-model="draft.title" class="document-title-input" type="text" maxlength="200" aria-label="Title">
+        <div class="segmented" role="group" aria-label="Editor mode">
+          <button type="button" :aria-pressed="!preview" @click="preview = false">Write</button>
+          <button type="button" :aria-pressed="preview" @click="preview = true">Preview</button>
+        </div>
+        <textarea v-if="!preview" v-model="draft.body" class="document-editor" maxlength="100000" aria-label="Markdown" placeholder="Write in Markdown…" />
+        <MessageMarkdown v-else class="document-body" :text="draft.body || '*Nothing to preview.*'" />
+        <input v-model="draft.summary" class="document-summary" type="text" maxlength="300" placeholder="What changed? (optional)" aria-label="Change summary">
+      </template>
+      <template v-else-if="doc">
+        <p class="small muted document-meta">Revision {{ doc.revision }} · Updated by {{ doc.updatedByName }} · {{ fullDate(doc.updatedAt) }}</p>
+        <div v-if="showHistory" class="group">
+          <div v-for="revision in doc.revisions" :key="revision.revision" class="text-block">
+            <strong>{{ revision.revision }}</strong> · {{ revision.authorName }} · {{ fullDate(revision.createdAt) }}<br>
+            <span class="small muted">{{ revision.summary ?? 'No summary' }}</span>
+          </div>
+        </div>
+        <MessageMarkdown v-if="doc.body.trim()" class="document-body" :text="doc.body" />
+        <div v-else class="empty"><p>This document is empty. Edit it, or ask a contact in the chat to write it.</p></div>
+        <button type="button" class="link-button danger small task-cancel" :disabled="busy" @click="remove">Delete document</button>
+      </template>
+      <div v-else class="empty"><h2>Document unavailable</h2><p>It was deleted or you no longer have access.</p></div>
+    </div>
+  </div>
+</template>

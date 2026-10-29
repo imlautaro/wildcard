@@ -34,6 +34,9 @@ export type ContactsPage = { contacts: Contact[]; totalUnreadCount?: number | nu
 
 export type Attachment = { name: string; mimeType: string; size: number };
 export type DraftAttachment = Attachment & { data: string; previewURL: string | null };
+// A chat attachment listed in chat details. Private chats set `side`; groups set the sender.
+export type ChatMediaItem = Attachment & { messageID: string; sequence: number; createdAt: number; side?: 'user' | 'assistant';
+  senderName?: string; userID?: string | null; agentID?: string | null };
 
 // An earlier message quoted by a reply, resolved by the server from current history.
 // Private quotes omit sender identity: `side` tells whether the user or contact wrote it.
@@ -53,6 +56,7 @@ export type TurnStatus = 'queued' | 'running' | 'complete' | 'failed';
 export type ChatTurn = {
   attachment?: Attachment | null;
   scheduleID: string | null;
+  taskID?: string | null;
   groupRequestID: string | null;
   errorCode: string | null;
   sequence: number;
@@ -159,3 +163,21 @@ export type MiniAppUpdate = { state: string; op: 'increment' | 'decrement' | 'se
 export type MiniAppResolution = { revision: number; inputs: Record<string, string>; resolvedAt: number; view: MiniAppComponent[];
   tabs?: { id: string; title: string; icon: string; view: MiniAppComponent[] }[]; menu?: MiniAppAction[]; issues: { step: string; code: string }[];
   state?: Record<string, MiniAppStateValue>; remote?: boolean };
+
+// Shared to-do lists in a private chat or group (see docs/tasks.md).
+export type TaskStatus = 'open' | 'in_progress' | 'done' | 'canceled';
+export type TaskMember = { kind: 'user' | 'agent'; id: string; name: string };
+export type TaskItem = { id: string; listID: string; position: number; title: string; notes: string | null; status: TaskStatus;
+  assigneeKind: 'user' | 'agent' | null; assigneeID: string | null; assigneeName: string | null; result: string | null;
+  createdByKind: 'user' | 'agent'; createdByID: string; createdByName: string; version: number; createdAt: number; updatedAt: number;
+  completedAt: number | null; blockedBy: string[]; blocked: boolean; workScheduled: boolean };
+export type TaskList = { id: string; title: string; status: 'active' | 'canceled'; createdByKind: 'user' | 'agent'; createdByID: string;
+  createdAt: number; updatedAt: number; tasks: TaskItem[] };
+export type TaskBoard = { lists: TaskList[]; members: TaskMember[] };
+
+// Markdown documents in a private chat or group (see docs/documents.md).
+export type ChatDocumentSummary = { id: string; title: string; revision: number; sourceID: string | null; length: number; preview: string;
+  createdByKind: 'user' | 'agent'; createdByID: string; createdByName: string; updatedByKind: 'user' | 'agent'; updatedByID: string; updatedByName: string;
+  createdAt: number; updatedAt: number };
+export type ChatDocumentRevision = { revision: number; summary: string | null; authorKind: 'user' | 'agent'; authorID: string; authorName: string; createdAt: number };
+export type ChatDocument = Omit<ChatDocumentSummary, 'length' | 'preview'> & { body: string; revisions: ChatDocumentRevision[] };

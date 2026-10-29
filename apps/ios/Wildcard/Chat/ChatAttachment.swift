@@ -275,7 +275,7 @@ struct ChatAttachmentView: View {
     }
 }
 
-private struct AttachmentImageViewer: View {
+struct AttachmentImageViewer: View {
     let attachment: ChatAttachment
     let contactID: String
     let turnID: String

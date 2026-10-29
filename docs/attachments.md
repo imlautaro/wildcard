@@ -150,3 +150,41 @@ limit. Group images are ordinary messages; private assistant attachments are in
 delivered message metadata and use the ownership-checked attachment endpoint with
 `?side=assistant`. Incoming image/caption UI, quotes and shared image caches match
 on iOS and web. See [generated images](generated-images.md).
+
+## Shared in this chat
+
+Chat details show a WhatsApp-style **Shared in this chat** section with two tabs:
+**Media** (a three-column grid of square image thumbnails) and **Docs** (a list of
+files with name, size, sender in groups, and date). On iOS it is a section of
+contact details (**Edit Contact**/**Contact**) and group details, with a segmented
+picker; on web it is the same section on `/contacts/:id/edit` and
+`/groups/:id/members`. Tapping a thumbnail opens the existing full-screen image
+viewer; tapping a file opens it the same way as in the chat (Quick Look on iOS, a
+temporary blob tab on web). Private chats list both your attachments and contact
+images (generated images), but only from your own private chat with that contact.
+Groups list every member's attachments in the group history. The Docs tab lists the chat's
+[Markdown documents](documents.md) first, with **New document**, then shared files.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/api/v1/contacts/:id/chat/media?kind=image\|file&before=` | Newest first, from both sides; `side` is `user` or `assistant` |
+| GET | `/api/v1/groups/:id/media?kind=image\|file&before=` | Newest first, with `senderName`, `userID`, `agentID`; requires membership |
+
+A page covers up to 30 messages for images and 60 for files.
+Each item has `messageID`, `sequence`, `createdAt`, `name`, `mimeType` and `size`.
+`nextBefore` is the sequence cursor for the next page, or `null`. Items reuse the
+existing attachment download routes, so thumbnails share the chat's image cache
+keys and no bytes are downloaded twice. No migration is needed; the queries use the
+existing `(contact_id, sequence)` and `(group_id, sequence)` history indexes and
+filter by the stored attachment MIME type. See [caching](caching.md#chat-details-media).
+
+Bandwidth and memory: there is no thumbnail endpoint, so the grid downloads the
+original image bytes (up to 5 MB each) for every visible page, which is why image
+pages are limited to 30 messages. Web loads each page's images on render; iOS loads
+them as cells appear inside one form row, so a page may load at once. The bytes go
+to the existing bounded image caches (see [recent chat images](caching.md#recent-chat-images-and-avatars)).
+A server-side thumbnail would reduce this and is not implemented.
+
+Validation: API and web TypeScript and a full iOS Simulator Swift typecheck. Not yet
+checked in a browser or on a device: grid layout on narrow screens, pagination,
+opening images/files from details, and invalidation after leaving a group.

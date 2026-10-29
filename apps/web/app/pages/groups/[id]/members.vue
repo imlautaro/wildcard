@@ -110,7 +110,12 @@ onMounted(() => run(async () => {
 
         <div class="group" style="margin-top: 24px">
           <NuxtLink :to="`/groups/${id}/connections`" class="button-row"><AppIcon name="link" />Connections</NuxtLink>
+          <NuxtLink :to="`/groups/${id}/tasks`" class="button-row"><AppIcon name="tasks" />Tasks</NuxtLink>
         </div>
+
+        <ChatMediaTabs :base="`groups/${id}`" :attachment-path="item => `groups/${id}/messages/${item.messageID}/attachment`"
+          :documents-base="`groups/${id}`" :document-route="`/groups/${id}/documents`"
+        />
 
         <div class="group-title">Discuss my private chats</div>
         <div class="group">

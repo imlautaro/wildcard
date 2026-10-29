@@ -908,3 +908,48 @@ and cancellation. Groups reuse message attachment keys. No polling or download
 is added to a view. Verify cache reopen/back, refresh, offline recovery, image
 publication, deletion, revocation and account switching on both clients. See
 [generated images](generated-images.md) for byte retention and cleanup.
+
+## Chat details media
+
+Both clients keep one session-owned page list per chat and kind (`image` or
+`file`): `NavigationSnapshotCache<ChatMediaPage>` on iOS (in `ContactsStore` for
+private chats and `GroupConversationCache` for groups, eight entries LRU) and
+`useChatMedia` on web (24 entries). Lists hold metadata only; thumbnails load
+through `PrivateImageCache`/`usePrivateImage` with the same resource keys as chat
+bubbles (`contact/:id/attachment/:turn`, `contact/:id/assistant-attachment/:turn`,
+`group/:id/attachment/:message`).
+
+- Reopening details shows the cached page immediately, including empty results,
+  and revalidates the first page in the background (iOS on every visit, web after
+  15 seconds). A refresh replaces the list with the first page and drops later pages.
+- **Load more** appends the next page; first-page requests are deduplicated.
+- Transient failures keep the cached list visible; a 403/404 clears it.
+- Contact removal, leaving or losing a group, and sign-out drop the lists
+  (`forgetConversation`/`forgetGroup` on web; the store removal paths on iOS).
+- Nothing is written to disk besides the existing protected image cache.
+
+Device verification pending: reopen details after sending a new image, switch tabs
+while loading, pull more pages, leave a group with details open, and switch accounts.
+
+## Chat documents
+
+Per chat, a document list (summaries only) and up to eight (iOS,
+`NavigationSnapshotCache`) or 16 (web, `useDocuments`) open documents, kept in memory
+and never on disk. Chat screens refresh the list when new replies arrive, to show
+cards; an open viewer revalidates every five seconds, but never replaces an open
+draft. A save replaces the cached document and invalidates the list; a 409 reloads
+the document and keeps the draft for the person to decide. A 404 clears the entry.
+Contact removal, leaving a group and sign-out drop the lists. Device verification
+pending.
+
+## Task boards
+
+One board (`{ lists, members }`) per chat: `NavigationSnapshotCache<TaskBoard>` on
+iOS (`ContactsStore.taskSnapshots`, `GroupConversationCache.tasks`) and `useTasks`
+on web (16 entries). Reopening Tasks shows the cached board at once and revalidates;
+while the screen is visible it revalidates every five seconds, because contacts
+change tasks during their own turns. Every edit returns the full board, which
+replaces the cache; on web a pending edit blocks polling from overwriting it. A
+failed edit shows its error and reloads. Transient failures keep the board visible;
+404 shows that the tasks are unavailable. Contact removal, leaving a group and
+sign-out drop the boards. Nothing is written to disk. Device verification pending.

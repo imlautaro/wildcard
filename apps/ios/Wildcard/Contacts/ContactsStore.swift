@@ -51,6 +51,9 @@ final class ContactsStore {
         personalityDraftOrder.removeAll { $0 == id }
     }
     let sharingSnapshots = NavigationSnapshotCache<ContactSharing>()
+    let mediaSnapshots = NavigationSnapshotCache<ChatMediaPage>()
+    let taskSnapshots = NavigationSnapshotCache<TaskBoard>()
+    let documentCaches = DocumentCaches()
     let miniApps = MiniAppStore()
     private var refreshRequest: (id: UUID, task: Task<Void, Never>)?
     private var warmingTask: Task<Void, Never>?
@@ -197,6 +200,9 @@ final class ContactsStore {
                 forgetPersonality(id: contact.id)
                 mcpAccessSnapshots.remove(id: "contact:\(contact.id)")
                 miniApps.forget(contactID: contact.id)
+                mediaSnapshots.forget(.contact(contact.id))
+                taskSnapshots.remove(id: "contacts/\(contact.id)")
+                documentCaches.forget("contacts/\(contact.id)")
                 knownContacts.removeValue(forKey: contact.id)
                 contactRefreshedAt.removeValue(forKey: contact.id)
                 messageTimestamps.removeValue(forKey: contact.id)
@@ -359,6 +365,9 @@ final class ContactsStore {
             forgetPersonality(id: contact.id)
             mcpAccessSnapshots.remove(id: "contact:\(contact.id)")
             miniApps.forget(contactID: contact.id)
+            mediaSnapshots.forget(.contact(contact.id))
+            taskSnapshots.remove(id: "contacts/\(contact.id)")
+            documentCaches.forget("contacts/\(contact.id)")
             readAcknowledgements.remove(id: contact.id)
             conversations.remove(contactID: contact.id)
             messageTimestamps.removeValue(forKey: contact.id)
@@ -401,6 +410,9 @@ final class ContactsStore {
                 forgetPersonality(id: id)
                 mcpAccessSnapshots.remove(id: "contact:\(id)")
                 miniApps.forget(contactID: id)
+                mediaSnapshots.forget(.contact(id))
+                taskSnapshots.remove(id: "contacts/\(id)")
+                documentCaches.forget("contacts/\(id)")
                 readAcknowledgements.remove(id: id)
                 conversations.remove(contactID: id)
                 messageTimestamps.removeValue(forKey: id)

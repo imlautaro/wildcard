@@ -28,6 +28,8 @@ docs/
   authentication.md          # Auth contract, session behavior, and limitations
   web.md                     # Web app architecture, features, and limitations
   mini-apps.md               # Contact-built native mini apps over MCP tools
+  tasks.md                   # Shared to-do lists and contact work turns
+  documents.md               # Collaborative Markdown documents in chats
 ```
 
 ## API development
@@ -217,6 +219,11 @@ transports, deployment prerequisites and pending verification. Streamable HTTP s
 public/Bearer access and OAuth authorization-code with PKCE, registered or dynamic
 clients, encrypted credentials and refresh tokens. Gmail setup requires your own
 Google OAuth client and preview access; live provider/device validation is pending.
+
+Private chats and groups can keep [shared task lists](docs/tasks.md): contacts and
+people create, assign, block and cancel tasks, and an assigned contact works on its
+task in its own turn, again when its blockers finish, and in periodic reviews. Chats also hold [Markdown documents](docs/documents.md) that
+contacts and people write together, opened full screen with a viewer and editor.
 
 In private chats a contact can build [mini apps](docs/mini-apps.md): declarative
 small tools and dashboards (saved state such as counters, stats, lists, charts and

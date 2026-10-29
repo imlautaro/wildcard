@@ -196,6 +196,12 @@ alphabetical Contacts directory remain available. Groups older than the current
 private-chat pagination boundary appear only as Load more reaches that timestamp.
 See [groups](groups.md).
 
+## Shared in this chat
+
+Contact details on iOS and web show the photos and files of your private chat with
+that contact in Media and Docs tabs. See [attachments](attachments.md#shared-in-this-chat).
+Private chats can also keep [task lists](tasks.md) that the contact works on.
+
 ## Personality
 
 After creating a contact, open **Contact details → Personality** on iOS or web.

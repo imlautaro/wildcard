@@ -105,7 +105,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         try {
           const recovery = await step.do('recover-response', { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' }, async () => {
             const turn = await activeTurn(env.DB, job);
-            if (!turn || turn.status !== 'running' || turn.assistantText || turn.scheduleID || turn.groupRequestID) return null;
+            if (!turn || turn.status !== 'running' || turn.assistantText || turn.scheduleID || turn.groupRequestID || turn.taskID) return null;
             const contact = await env.DB.prepare('SELECT name FROM contact WHERE id = ? AND user_id = ?')
               .bind(turn.contactID, turn.userID).first<{ name: string }>();
             if (!contact) return null;

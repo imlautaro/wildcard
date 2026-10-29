@@ -88,6 +88,9 @@ export function forgetGroup(id: string) {
   groups.delete(id);
   receipts.delete(id);
   detailsRequests.delete(id);
+  forgetChatMedia(`groups/${id}`);
+  forgetTasks(`groups/${id}`);
+  forgetDocuments(`groups/${id}`);
   forgetRead(`group:${id}`);
 }
 

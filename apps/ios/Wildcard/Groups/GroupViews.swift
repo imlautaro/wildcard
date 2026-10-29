@@ -273,6 +273,10 @@ struct GroupChatView: View {
                                         onReply: { reply(to: message) })
                             .messageHighlight(highlightedMessage == message.id)
                             .id(message.id)
+                        ForEach((groups.conversations.documents.list("groups/\(groupID)").value ?? []).filter { $0.sourceID == message.id }) { document in
+                            DocumentCardView(document: document, base: "groups/\(groupID)", caches: groups.conversations.documents)
+                                .padding(.leading, 8)
+                        }
                         ForEach(failedReplies(for: message)) { reply in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("\(reply.name) couldn't finish replying to this message.")
@@ -356,6 +360,15 @@ struct GroupChatView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    TasksView(base: "groups/\(groupID)", snapshot: groups.conversations.tasks.store(for: "groups/\(groupID)"))
+                } label: {
+                    Image(systemName: "checklist")
+                }
+                .tint(Color(uiColor: .label))
+                .accessibilityLabel("Tasks")
+            }
             ToolbarItem(placement: .topBarLeading) {
                 NavigationLink(value: HomeDestination.groupDetails(groupID)) {
                     HStack(spacing: 6) {
@@ -456,6 +469,8 @@ struct GroupChatView: View {
             attachmentTask?.cancel()
             quoteTask?.cancel()
         }
+        // Document cards appear under the reply that created them; refresh when messages arrive.
+        .task(id: store.messages.last?.id) { await groups.conversations.documents.refresh("groups/\(groupID)", auth: auth) }
         .task(id: "\(groupID)-\(isVisible)-\(scenePhase)-\(store.messages.last?.id ?? "")") {
             guard isVisible, scenePhase == .active else { return }
             sync.request(.group(groupID))

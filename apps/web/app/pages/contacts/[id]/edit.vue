@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Contact } from '~/utils/types';
+import type { ChatMediaItem, Contact } from '~/utils/types';
 
 const route = useRoute();
 const id = computed(() => String(route.params.id));
@@ -48,6 +48,11 @@ const setInitiative = (event: Event) => run(async () => {
     input.checked = contact.value?.initiativeEnabled !== 0;
   }
 });
+
+// Media paths match the chat bubbles, so thumbnails share the private image cache.
+function mediaPath(item: ChatMediaItem) {
+  return `contacts/${id.value}/chat/turns/${item.messageID}/attachment${item.side === 'assistant' ? '?side=assistant' : ''}`;
+}
 
 const savePhoto = (photo: Blob | null) => run(async () => {
   const path = `contacts/${id.value}/photo`;
@@ -108,10 +113,13 @@ onMounted(() => run(async () => {
 
       <ContactEnergySection v-if="contact.role === 'owner'" :contact-id="id" />
 
+      <ChatMediaTabs :base="`contacts/${id}/chat`" :attachment-path="mediaPath" :documents-base="`contacts/${id}`" :document-route="`/contacts/${id}/documents`" />
+
       <div class="group" style="margin-top: 20px">
         <NuxtLink :to="`/contacts/${id}/connections`" class="button-row"><AppIcon name="link" />Connections</NuxtLink>
         <NuxtLink :to="`/contacts/${id}/personality`" class="button-row"><AppIcon name="person" />Personality</NuxtLink>
         <NuxtLink :to="`/contacts/${id}/mini-apps`" class="button-row"><AppIcon name="grid" />Mini apps</NuxtLink>
+        <NuxtLink :to="`/contacts/${id}/tasks`" class="button-row"><AppIcon name="tasks" />Tasks</NuxtLink>
         <NuxtLink :to="`/chats/${id}`" class="button-row"><AppIcon name="chat" />Open chat</NuxtLink>
         <NuxtLink v-if="canManage" :to="`/contacts/${id}/sharing`" class="button-row"><AppIcon name="share" />Share contact</NuxtLink>
       </div>

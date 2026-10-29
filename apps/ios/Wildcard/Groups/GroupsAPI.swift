@@ -618,6 +618,11 @@ final class GroupChatStore {
 @MainActor @Observable
 final class GroupConversationCache {
     private var entries: [String: GroupChatStore] = [:]
+    /// Chat details media pages; dropped with the group's conversation.
+    @ObservationIgnored let media = NavigationSnapshotCache<ChatMediaPage>()
+    /// Shared task boards; dropped with the group's conversation.
+    @ObservationIgnored let tasks = NavigationSnapshotCache<TaskBoard>()
+    @ObservationIgnored let documents = DocumentCaches()
     @ObservationIgnored private var access: UInt64 = 0
     @ObservationIgnored private var lastAccess: [String: UInt64] = [:]
 
@@ -642,5 +647,8 @@ final class GroupConversationCache {
     func remove(id: String) {
         lastAccess.removeValue(forKey: id)
         entries.removeValue(forKey: id)?.invalidate()
+        media.forget(.group(id))
+        tasks.remove(id: "groups/\(id)")
+        documents.forget("groups/\(id)")
     }
 }

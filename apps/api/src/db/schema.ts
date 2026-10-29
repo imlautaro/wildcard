@@ -127,6 +127,7 @@ export const chatTurn = sqliteTable('chat_turn', {
   scheduleInstruction: text('schedule_instruction'),
   nativeContextJson: text('native_context_json'),
   groupRequestId: text('group_request_id').references((): AnySQLiteColumn => groupRequest.id, { onDelete: 'cascade' }),
+  taskId: text('task_id').references((): AnySQLiteColumn => task.id, { onDelete: 'set null' }),
   replyToId: text('reply_to_id').references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'set null' }),
   replyToSide: text('reply_to_side'),
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
@@ -325,6 +326,7 @@ export const groupMessage = sqliteTable('group_message', {
   receiptsTracked: integer('receipts_tracked').notNull().default(0),
   attachmentJSON: text('attachment_json'),
   requestId: text('request_id').references((): AnySQLiteColumn => groupRequest.id, { onDelete: 'set null' }),
+  taskId: text('task_id').references((): AnySQLiteColumn => task.id, { onDelete: 'set null' }),
   replyToId: text('reply_to_id').references((): AnySQLiteColumn => groupMessage.id, { onDelete: 'set null' }),
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
   id: text('id').notNull().unique(),
@@ -666,3 +668,69 @@ export const generatedChatImage = sqliteTable('generated_chat_image', {
   check('generated_image_status', sql`${table.status} IN ('pending', 'complete', 'failed')`),
   check('generated_image_complete', sql`${table.status} != 'complete' OR ${table.attachmentJson} IS NOT NULL`),
 ]);
+
+export const taskList = sqliteTable('task_list', {
+  id: text('id').primaryKey(),
+  groupId: text('group_id').references(() => chatGroup.id, { onDelete: 'cascade' }),
+  contactId: text('contact_id').references(() => contact.id, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(), status: text('status').notNull().default('active'),
+  createdByKind: text('created_by_kind').notNull(), createdById: text('created_by_id').notNull(),
+  createdAt: date('created_at').notNull(), updatedAt: date('updated_at').notNull(),
+}, t => [check('task_list_title', sql`length(${t.title}) BETWEEN 1 AND 200`), check('task_list_status', sql`${t.status} IN ('active', 'canceled')`),
+  check('task_list_creator', sql`${t.createdByKind} IN ('user', 'agent')`),
+  check('task_list_scope', sql`(${t.groupId} IS NULL) = (${t.contactId} IS NOT NULL) AND (${t.contactId} IS NULL) = (${t.userId} IS NULL)`),
+  index('task_list_contact').on(t.contactId, t.userId, t.updatedAt), index('task_list_group').on(t.groupId, t.updatedAt)]);
+export const task = sqliteTable('task', {
+  id: text('id').primaryKey(),
+  listId: text('list_id').notNull().references(() => taskList.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull(), title: text('title').notNull(), notes: text('notes'),
+  status: text('status').notNull().default('open'), assigneeKind: text('assignee_kind'), assigneeId: text('assignee_id'), result: text('result'),
+  createdByKind: text('created_by_kind').notNull(), createdById: text('created_by_id').notNull(), version: integer('version').notNull().default(1),
+  createdAt: date('created_at').notNull(), updatedAt: date('updated_at').notNull(), completedAt: date('completed_at'),
+  workDueAt: date('work_due_at'), workReason: text('work_reason'), workCount: integer('work_count').notNull().default(0),
+}, t => [check('task_title', sql`length(${t.title}) BETWEEN 1 AND 300`), check('task_notes', sql`${t.notes} IS NULL OR length(${t.notes}) <= 2000`),
+  check('task_status', sql`${t.status} IN ('open', 'in_progress', 'done', 'canceled')`),
+  check('task_assignee_kind', sql`${t.assigneeKind} IN ('user', 'agent')`), check('task_result', sql`${t.result} IS NULL OR length(${t.result}) <= 2000`),
+  check('task_creator', sql`${t.createdByKind} IN ('user', 'agent')`),
+  check('task_work_reason', sql`${t.workReason} IS NULL OR ${t.workReason} IN ('assigned', 'unblocked', 'review')`),
+  check('task_assignee', sql`(${t.assigneeKind} IS NULL) = (${t.assigneeId} IS NULL)`),
+  index('task_list_position').on(t.listId, t.position), index('task_work_due').on(t.workDueAt).where(sql`${t.workDueAt} IS NOT NULL`),
+  index('task_assignee').on(t.assigneeKind, t.assigneeId, t.status)]);
+export const taskDependency = sqliteTable('task_dependency', {
+  taskId: text('task_id').notNull().references(() => task.id, { onDelete: 'cascade' }),
+  blockedById: text('blocked_by_id').notNull().references(() => task.id, { onDelete: 'cascade' }),
+}, t => [primaryKey({ columns: [t.taskId, t.blockedById] }), check('task_dependency_self', sql`${t.taskId} != ${t.blockedById}`),
+  index('task_dependency_blocker').on(t.blockedById)]);
+export const taskMutation = sqliteTable('task_mutation', {
+  id: text('id').primaryKey(), resultJson: text('result_json').notNull(), createdAt: date('created_at').notNull(),
+});
+export const taskWork = sqliteTable('task_work', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').notNull().references(() => task.id, { onDelete: 'cascade' }),
+  agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  reason: text('reason').notNull(), createdAt: date('created_at').notNull(),
+}, t => [index('task_work_agent').on(t.agentId, t.createdAt)]);
+export const chatDocument = sqliteTable('chat_document', {
+  id: text('id').primaryKey(),
+  groupId: text('group_id').references(() => chatGroup.id, { onDelete: 'cascade' }),
+  contactId: text('contact_id').references(() => contact.id, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(), body: text('body').notNull(), revision: integer('revision').notNull().default(1), sourceId: text('source_id'),
+  createdByKind: text('created_by_kind').notNull(), createdById: text('created_by_id').notNull(),
+  updatedByKind: text('updated_by_kind').notNull(), updatedById: text('updated_by_id').notNull(),
+  createdAt: date('created_at').notNull(), updatedAt: date('updated_at').notNull(),
+}, t => [check('chat_document_title', sql`length(${t.title}) BETWEEN 1 AND 200`), check('chat_document_body', sql`length(${t.body}) <= 100000`),
+  check('chat_document_revision', sql`${t.revision} >= 1`), check('chat_document_creator', sql`${t.createdByKind} IN ('user', 'agent')`),
+  check('chat_document_updater', sql`${t.updatedByKind} IN ('user', 'agent')`),
+  check('chat_document_scope', sql`(${t.groupId} IS NULL) = (${t.contactId} IS NOT NULL) AND (${t.contactId} IS NULL) = (${t.userId} IS NULL)`),
+  index('chat_document_contact').on(t.contactId, t.userId, t.updatedAt), index('chat_document_group').on(t.groupId, t.updatedAt)]);
+export const chatDocumentRevision = sqliteTable('chat_document_revision', {
+  documentId: text('document_id').notNull().references(() => chatDocument.id, { onDelete: 'cascade' }),
+  revision: integer('revision').notNull(), title: text('title').notNull(), body: text('body').notNull(), summary: text('summary'),
+  authorKind: text('author_kind').notNull(), authorId: text('author_id').notNull(), createdAt: date('created_at').notNull(),
+}, t => [primaryKey({ columns: [t.documentId, t.revision] }), check('chat_document_summary', sql`${t.summary} IS NULL OR length(${t.summary}) <= 300`),
+  check('chat_document_author', sql`${t.authorKind} IN ('user', 'agent')`)]);
+export const documentMutation = sqliteTable('document_mutation', {
+  id: text('id').primaryKey(), resultJson: text('result_json').notNull(), createdAt: date('created_at').notNull(),
+});

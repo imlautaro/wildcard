@@ -67,7 +67,15 @@ export function groupSourceAccess(reply: string, contributor: boolean) {
     WHERE ${source} AND source.user_id IS NULL AND request.status = 'waiting'
       AND request.expires_at > unixepoch() * 1000 AND ${groupRequestAccess('request', contributor)}
     UNION ALL
+    SELECT 1 FROM group_message source JOIN group_member requester
+      ON requester.group_id = source.group_id AND requester.user_id = source.requester_id
+      JOIN task ON task.id = source.task_id JOIN task_list ON task_list.id = task.list_id AND task_list.group_id = source.group_id
+    WHERE ${source} AND source.user_id IS NULL AND source.agent_id IS NULL AND requester.share_memory = 1
+      ${contributor ? 'AND requester.contributor_consent = 1' : ''}
+    UNION ALL
     SELECT 1 ${continuation} WHERE ${continuedAccess} AND root.user_id = source.requester_id
+    UNION ALL
+    SELECT 1 ${continuation} WHERE ${continuedAccess} AND root.task_id IS NOT NULL AND root.user_id IS NULL AND root.agent_id IS NULL
     UNION ALL
     SELECT 1 ${continuation} JOIN group_post post ON post.id = root.id
     WHERE ${continuedAccess} AND post.status = 'published' AND ${groupPublicationAccess('post', contributor)}

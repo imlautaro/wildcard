@@ -10,7 +10,10 @@ alphabetical contact list with avatars: current group contacts remain visible,
 disabled and labeled **In group**. Shared contacts created by someone else are
 also disabled, with a **Shared contact** label. Selecting an eligible contact opens
 its explicit memory/Contributor consent screen before addition. Returning to the
-list refreshes membership badges. Details also manage identity and permissions.
+list refreshes membership badges. Details also manage identity and permissions,
+and show the group's photos and files under **Shared in this chat** (see
+[attachments](attachments.md#shared-in-this-chat)). Groups also keep shared
+[task lists](tasks.md) that can assign work to contacts and humans.
 Invitations appear in **+ → Contacts → Group Invitations**, with a pending count.
 The Contacts screen also includes **Contact Invitations**.
 They are in-app invitations; the server does not send email.

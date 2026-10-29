@@ -2,7 +2,7 @@ import { remoteContext } from '../native/remote';
 import { parseNativeContext } from '../native/actions';
 import { reactionRoutes } from '../reactions/routes';
 import { parsePrivateReply, privateQuotes, privateTarget } from '../replies/data';
-import { parseAttachment, sameAttachment, storedAttachment, type Attachment } from '../chat/attachments';
+import { mediaPage, parseAttachment, sameAttachment, storedAttachment, type Attachment } from '../chat/attachments';
 import { contactModelAllowed } from '../chat/consent';
 import { validTimeZone } from '../schedules/data';
 import { readPresence } from '../chat/presence';
@@ -191,6 +191,34 @@ chats.post('/turns', attachmentBody, async (c) => {
   c.executionCtx.waitUntil(dispatchChat(c.env, turn));
   return c.json({ turn: await quotedTurn(c.env.DB, turn), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) }, 202);
 });
+// Shared media for chat details: images or files from both sides, newest first.
+// A page covers up to 30 messages with images (full-size bytes) or 60 with files; the cursor is the last sequence.
+chats.get('/media', async (c) => {
+  const kind = c.req.query('kind'), before = c.req.query('before');
+  if ((kind !== 'image' && kind !== 'file') || (before !== undefined && (!/^\d{1,16}$/.test(before) || Number(before) < 1))) {
+    return c.json({ error: 'Choose image or file media with a valid cursor' }, 400);
+  }
+  const { results } = await c.env.DB.prepare(`SELECT sequence, id, created_at AS createdAt,
+    attachment_json AS attachmentJSON, assistant_messages_json AS assistantMessagesJSON FROM chat_turn
+    WHERE contact_id = ?1 AND user_id = ?2 AND sequence < ?3 AND (
+      (attachment_json IS NOT NULL AND (json_extract(attachment_json, '$.mimeType') LIKE 'image/%') = (?4 = 'image'))
+      OR (json_extract(assistant_messages_json, '$[0].attachment.key') IS NOT NULL
+        AND (json_extract(assistant_messages_json, '$[0].attachment.mimeType') LIKE 'image/%') = (?4 = 'image')))
+    ORDER BY sequence DESC LIMIT ?5`)
+    .bind(c.get('contactID'), c.get('owner'), before ? Number(before) : Number.MAX_SAFE_INTEGER, kind, mediaPage(kind) + 1)
+    .all<{ sequence: number; id: string; createdAt: number; attachmentJSON: string | null; assistantMessagesJSON: string | null }>();
+  const page = results.slice(0, mediaPage(kind));
+  const items = page.flatMap((turn) => {
+    const reply = (JSON.parse(turn.assistantMessagesJSON ?? '[]') as { createdAt: number; attachment?: Attachment | null }[])[0];
+    return [
+      ...(reply?.attachment ? [{ side: 'assistant' as const, createdAt: reply.createdAt, attachment: reply.attachment }] : []),
+      ...(turn.attachmentJSON ? [{ side: 'user' as const, createdAt: turn.createdAt, attachment: JSON.parse(turn.attachmentJSON) as Attachment }] : []),
+    ].filter(({ attachment }) => attachment.mimeType.startsWith('image/') === (kind === 'image'))
+      .map(({ side, createdAt, attachment }) => ({ messageID: turn.id, side, sequence: turn.sequence, createdAt,
+        name: attachment.name, mimeType: attachment.mimeType, size: attachment.size }));
+  });
+  return c.json({ items, nextBefore: results.length > page.length ? page[page.length - 1].sequence : null });
+});
 chats.get('/turns/:turnID/attachment', async (c) => {
   const turn = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
   const attachment = turn && (c.req.query('side') === 'assistant'
@@ -211,6 +239,7 @@ chats.post('/turns/:turnID/retry', messageBody, async (c) => {
   if (previous.errorCode === 'MESSAGE_BATCHED') return c.json({ error: 'This message is included in the next reply' }, 409);
   if (previous.scheduleID) return c.json({ error: 'Scheduled messages cannot be manually retried' }, 409);
   if (previous.groupRequestID) return c.json({ error: 'Automatic group results cannot be manually retried. Ask a new question instead.' }, 409);
+  if (previous.taskID) return c.json({ error: 'Task updates cannot be manually retried. The contact reviews open tasks again later.' }, 409);
   if (previous.status !== 'failed') return c.json({ turn: await quotedTurn(c.env.DB, previous), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
   if (!c.env.META_API_KEY?.trim()) return c.json({ error: 'Replies are unavailable' }, 503);
   const limit = await admitAuthRequest(c.env.DB, c.get('owner'), 'chat-generation', 20);

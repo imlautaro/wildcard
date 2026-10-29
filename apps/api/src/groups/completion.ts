@@ -11,6 +11,8 @@ import { groupDecisionFormat, parseGroupDecision, type GroupDraft, type GroupInp
 import { acknowledgeAgentContext, acknowledgeGroupResults } from './receipts';
 import { executeGroupRetrieval, groupRetrievalTools } from './retrieval';
 import { groupSourceAccess } from './request-access';
+import { executeTaskTool, taskToolNames, taskTools } from '../tasks/tools';
+import { documentToolNames, documentTools, executeDocumentTool } from '../documents/tools';
 
 // Bound cost and latency independently of catalog size. A sequential search,
 // schema lookup and execution must not compete for just two model rounds.
@@ -71,7 +73,8 @@ async function modelMessages(env: Env, input: GroupInput, messages: ModelMessage
 }
 
 async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: number): Promise<string> {
-  const permitted = [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : [])];
+  const permitted = [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
+    ...(input.previous ? [] : [...taskTools, ...documentTools])];
   if (!permitted.some(tool => tool.function.name === call.function.name)) return toolError('This tool is not permitted in this turn.');
   let args: unknown;
   try { args = JSON.parse(call.function.arguments); }
@@ -85,6 +88,13 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
     if (call.function.name === imageTool.function.name) return await generateChatImage(env, { ...input.scope, turnID: input.scope.reactionJob.turnID, attempt: input.scope.reactionJob.attempt }, args);
     if (call.function.name === profilePhotoTool.function.name) return await viewProfilePhoto(env, input.scope, args);
     if (call.function.name === reactionTool.function.name) return await groupReaction(env, input.scope, args);
+    // Receipts are keyed by this reply, so a replayed tool step cannot apply a change twice.
+    if (taskToolNames.has(call.function.name)) {
+      return await executeTaskTool(env, { kind: 'group', groupID: input.scope.groupID }, input.scope.agentID, input.scope.reactionJob.turnID, call.function.name, args);
+    }
+    if (documentToolNames.has(call.function.name)) {
+      return await executeDocumentTool(env, { kind: 'group', groupID: input.scope.groupID }, input.scope.agentID, input.scope.reactionJob.turnID, call.function.name, args);
+    }
     return await executeGroupRetrieval(env.DB, input.scope, call);
   } catch (error) {
     console.error(JSON.stringify({ event: 'group_tool_failed', code: safeErrorCode(error), tool: call.function.name }));
@@ -119,7 +129,8 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
           return await museCompletion(env, await modelMessages(env, input, [...messages, {
             role: 'system', content: `Evidence-gathering phase. Use tools only when needed for the current trigger. You have ${executionLimit - executions} executions remaining. Do not produce a JSON decision or announce future work. Use real tools to obtain missing evidence. When ready, call finish_group_research alone, including when no tools are needed or data is unavailable. A final tool-free decision phase follows. Do not claim success without receipts.`,
           }]), env.META_CHAT_MODEL, { maxTokens: 4096,
-            tools: [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []), finishTool] });
+            tools: [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
+              ...(input.previous ? [] : [...taskTools, ...documentTools]), finishTool] });
         } catch (error) {
           const code = safeErrorCode(error);
           if (['MODEL_INCOMPLETE_RESPONSE', 'MODEL_INVALID_TOOL_CALLS', 'MODEL_TOOL_TEXT_TOO_LARGE', 'MODEL_EMPTY_RESPONSE'].includes(code)) {

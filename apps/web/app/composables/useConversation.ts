@@ -43,6 +43,9 @@ export function forgetConversation(id: string) {
   conversations.delete(id);
   forgetRemoteNative(id);
   forgetMiniApps(id);
+  forgetChatMedia(`contacts/${id}/chat`);
+  forgetTasks(`contacts/${id}`);
+  forgetDocuments(`contacts/${id}`);
   forgetRead(`contact:${id}`);
 }
 
