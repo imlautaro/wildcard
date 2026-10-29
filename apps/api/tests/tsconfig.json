@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "include": [
+    "../src/**/*.ts",
+    "../worker-configuration.d.ts",
+    "lifecycle.worker.ts"
+  ],
+  "compilerOptions": {
+    "types": [
+      "../worker-configuration.d.ts",
+      "node"
+    ]
+  }
+}

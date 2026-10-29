@@ -21,16 +21,23 @@ export async function dispatchAgent(env: Env, agentID: string) {
           AND prior.status IN ('queued','running') AND prior.sequence < r.sequence)
     ) ORDER BY createdAt, sequence, id LIMIT 1 ON CONFLICT(agent_id) DO NOTHING`).bind(agentID, Date.now()).run();
   const turn = await env.DB.prepare(`SELECT a.turn_id AS id, a.workflow_id AS workflowID, a.attempt,
+    (SELECT COALESCE(contact_id,group_id,agent_id) FROM chat_workflow_instance WHERE id=a.workflow_id) AS cleanupScope,
     EXISTS (SELECT 1 FROM group_reply r WHERE r.id = a.turn_id) AS isGroup
     FROM agent_attention a WHERE a.agent_id = ?`).bind(agentID)
-    .first<{ id: string; workflowID: string; attempt: number; isGroup: number }>();
+    .first<{ id: string; workflowID: string; attempt: number; isGroup: number; cleanupScope: string | null }>();
   if (!turn) return;
   try {
     const registered = await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(turn.workflowID).first();
     if (!registered) return;
     await env.CHAT_WORKFLOW.create({ id: turn.workflowID, params: turn.isGroup ? { kind: 'group', turnID: turn.id, attempt: turn.attempt } : { turnID: turn.id, attempt: turn.attempt } });
-    if (!await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(turn.workflowID).first()) await discardWorkflow(env,turn.workflowID,turn.id);
+    if (!await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(turn.workflowID).first()) await discardWorkflow(env,turn.workflowID,turn.cleanupScope ?? turn.id);
   } catch {
+    // The service may have created the instance even when its acknowledgement was
+    // lost. A clear can already have drained the original deletion job by then.
+    if (!await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(turn.workflowID).first()) {
+      await discardWorkflow(env,turn.workflowID,turn.cleanupScope ?? turn.id);
+      return;
+    }
     try {
       const instance = await env.CHAT_WORKFLOW.get(turn.workflowID);
       await instance.status();

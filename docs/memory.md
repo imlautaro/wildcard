@@ -414,3 +414,5 @@ excluded. See [group permissions and revocation](groups.md#optional-private-text
 ## Memory when clearing history
 
 [Chat lifecycle](chat-lifecycle.md) supports keeping only extracted facts/self preferences while removing transcripts, source quotes, FTS entries and embeddings. Kept rows use live consent/isolation checks and cascade on contact/group/member deletion. Clear with memory removes knowledge sourced in that conversation; persona settings and independently sourced memories elsewhere survive.
+
+Migration 0064 also repairs the group-isolation trigger to enumerate memory columns explicitly: the embedding column introduced in 0057 must not be copied into `group_local_memory`. The [local lifecycle tests](chat-lifecycle-testing.md) exercise isolation with existing extracted memories, retained reads, current consent and author removal.

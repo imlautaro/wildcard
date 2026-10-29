@@ -14,7 +14,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import chats from './chats';
 import schedules from './schedules';
-import { clearContact, cleanResources } from '../chat/cleanup';
+import { clearContact, cleanResources, cleanupPending } from '../chat/cleanup';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readBearerSession } from '../lib/session';
 import sharing from './sharing';
@@ -312,7 +312,7 @@ contacts.post('/:id/clear', contactBody, async c => {
   const row = await c.env.DB.prepare('SELECT id,clearing,history_revision AS revision FROM contact WHERE id=? AND user_id=?').bind(c.req.param('id'),c.get('owner')).first<{id:string;clearing:number;revision:number}>();
   if (!row) return c.json({error:'Contact not found'},404);
   if (row.revision>body.historyRevision) {
-    const pending=await c.env.DB.prepare('SELECT 1 FROM resource_cleanup WHERE scope=? LIMIT 1').bind(row.id).first();
+    const pending=await cleanupPending(c.env.DB,row.id);
     return c.json({cleared:true,cleanup:pending?'pending':'complete'},202);
   }
   if (row.revision!==body.historyRevision) return c.json({error:'Refresh before clearing this chat'},409);
@@ -324,8 +324,8 @@ contacts.post('/:id/clear', contactBody, async c => {
     if (!latest || latest.revision<=body.historyRevision) throw error;
   }
   c.executionCtx.waitUntil(cleanResources(c.env,row.id));
-  const state=await c.env.DB.prepare('SELECT EXISTS(SELECT 1 FROM resource_cleanup WHERE scope=contact.id) AS pending FROM contact WHERE id=?').bind(c.req.param('id')).first<{pending:number}>();
-  return c.json({cleared:true,cleanup:state?.pending ? 'pending' : 'complete'},202);
+  const pending=await cleanupPending(c.env.DB,row.id);
+  return c.json({cleared:true,cleanup:pending ? 'pending' : 'complete'},202);
 });
 contacts.route('/:id/native-actions', nativeActions);
 contacts.route('/:id/personality', personality);

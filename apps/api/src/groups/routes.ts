@@ -19,7 +19,7 @@ import { dispatchGroup } from './workflow';
 import { groupSourceAccess } from './request-access';
 import { miniAppRoutes } from '../miniapps/routes';
 
-import { clearGroup, cleanResources } from '../chat/cleanup';
+import { clearGroup, cleanResources, cleanupPending } from '../chat/cleanup';
 
 const groups = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 const contributor = (env: Env) => env.META_CHAT_MODEL.includes('contributor');
@@ -299,7 +299,7 @@ groups.post('/:id/clear', bodyLimit({maxSize:1024}), async c => {
   const group=await c.env.DB.prepare('SELECT id,clearing,history_revision AS revision FROM chat_group WHERE id=? AND owner_id=?').bind(c.req.param('id'),c.get('owner')).first<{id:string;clearing:number;revision:number}>();
   if (!group) return c.json({error:'Only the owner can clear this group for everyone'},403);
   if (group.revision>body.historyRevision) {
-    const pending=await c.env.DB.prepare('SELECT 1 FROM resource_cleanup WHERE scope=? LIMIT 1').bind(group.id).first();
+    const pending=await cleanupPending(c.env.DB,group.id);
     return c.json({cleared:true,cleanup:pending?'pending':'complete'},202);
   }
   if (group.revision!==body.historyRevision) return c.json({error:'Refresh before clearing this chat'},409);
@@ -311,8 +311,8 @@ groups.post('/:id/clear', bodyLimit({maxSize:1024}), async c => {
     if (!latest || latest.revision<=body.historyRevision) throw error;
   }
   c.executionCtx.waitUntil(cleanResources(c.env,group.id));
-  const state=await c.env.DB.prepare('SELECT EXISTS(SELECT 1 FROM resource_cleanup WHERE scope=chat_group.id) AS pending FROM chat_group WHERE id=?').bind(c.req.param('id')).first<{pending:number}>();
-  return c.json({cleared:true,cleanup:state?.pending ? 'pending' : 'complete'},202);
+  const pending=await cleanupPending(c.env.DB,group.id);
+  return c.json({cleared:true,cleanup:pending ? 'pending' : 'complete'},202);
 });
 groups.put('/:id/archive', bodyLimit({maxSize:1024}), async c => {
   const body = await c.req.json<Record<string,unknown>>().catch(()=>null);

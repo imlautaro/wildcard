@@ -916,3 +916,5 @@ for reproducible setup and rollback.
 ## Chat lifecycle
 
 Chat list Manage offers Archive/Unarchive, Clear chat with an optional memory-removal checkbox, and Delete contact and data. Archived is a view of the existing list cache. Clear group is owner-only and explicitly affects everyone. Behavior, copy, cascade, history fencing and cache rules match iOS; see [chat lifecycle](chat-lifecycle.md). No browser execution/build validation has been performed for these actions.
+
+The lifecycle API corrections in migration 0064 apply equally to web and iOS: pending cleanup now includes group-derived private work, generated images retain their chat scope, and stale failures cannot delay newer cleanup. [38 local integration checks](chat-lifecycle-testing.md) pass against actual routes and emulated bindings; this does not validate browser/iOS UI or production services. No client API/copy/permission contract changes were needed.

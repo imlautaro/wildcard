@@ -2426,3 +2426,41 @@ type checks alone do not validate background execution. Rollback removes the aud
 background mode and restores foreground-only playback; stored messages and numeric
 speed preferences need no migration. Any server/web release continues through the
 existing commit, push and automatic deployment process.
+
+## Lifecycle cleanup guards and local validation (migration 0064)
+
+Apply `0064_lifecycle_cleanup_guards.sql` after 0063 through the ordered migration
+pipeline. It adds `resource_cleanup_scope` with a cascading FK to the outbox job,
+indexes scope lookups, captures both owners of group-derived private cleanup,
+recreates generated-image deletion triggers to retain conversation scope before
+FK cascades, repairs queued media scopes where the registry still knows them,
+and replaces the group-isolation memory trigger's implicit column copy with
+explicit columns compatible with embeddings from migration 0057. It does not
+rewrite published migrations or reset retry counts/deadlines/revisions.
+
+Reuse the existing DB, R2, Workflow bindings, Cron, permissions and secrets. No
+new remote service or account setting is required in production or an independent
+installation; local setup still applies all migrations with
+`npm run db:migrate:local`. Production migration/code release must use committed,
+pushed source and the automatic API pipeline, never a manual deployment. Apply
+0064 before activating the updated consumer, which queries the scope table.
+
+Reproduce validation with `npm ci`, `npm run typecheck:lifecycle` and
+`npm run test:lifecycle`. The [report](chat-lifecycle-testing.md) records 38 passing
+local integration cases, injected failures and the limits of emulated service
+verification. The runner needs a loopback socket and temporary local directories;
+it never uses production Wrangler configuration, authentication or real data.
+Dependencies and scripts are versioned in the workspaces and root lockfile.
+
+Monitor both outbox rows and scope links when diagnosing a pending clear. A job
+linked to a private result and group must finish before either clear lock releases;
+links disappear automatically with the job. Do not delete links to force a clear
+to complete. Existing jobs whose lost source cannot be reconstructed retain their
+original scope and still drain through global cleanup; the migration only repairs
+relationships supported by stored registry evidence.
+
+Rollback: preserve migrations 0063/0064, queue rows and scope links; roll forward
+or keep a compatible consumer running. Old 0063 consumers cannot account for
+linked scope locks correctly. The database upgrade is exercised locally, but
+activation/source verification and global Cloudflare failure/retry behavior remain
+unverified for these corrections until an authorized automatic release.

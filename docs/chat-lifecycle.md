@@ -87,7 +87,10 @@ task boards/dependencies/work/monitors/checks, Markdown documents/revisions, min
 apps/state/actions, schedules, conversation initiatives and visits. Tool mutation
 receipts without parent foreign keys are explicitly removed by source prefix.
 Group clear also removes group requests/posts and their queued private result
-turns. Account connectors and existing integration opt-ins are not deleted just
+turns. Migration 0064 associates those result workflows/media with both the private
+chat and source group through `resource_cleanup_scope`; either scope can drive the
+same job and neither reports completion prematurely. Links cascade only from the
+job itself, so deleting source rows cannot erase a pending dependency. Account connectors and existing integration opt-ins are not deleted just
 because the conversation was cleared.
 
 The workflow registry tracks private/group attempts and proactive initiative
@@ -96,7 +99,9 @@ Dispatch checks registration before and after creation. A deletion winning that
 race queues the late instance again. Cleanup uses the binding's
 [instance delete API](https://developers.cloudflare.com/workflows/build/workers-api/#delete)
 to stop execution and remove checkpoints. It releases matching attention claims
-only after deletion succeeds or the instance is confirmed missing. Private/group
+only after deletion succeeds or the instance is confirmed missing. Migration 0064
+also preserves cleanup after a lost create acknowledgement and guards backoff
+updates against newer job revisions. Private/group
 resource producers cannot insert into a chat while its old workflows are being
 removed. `clearing` becomes zero once its workflow jobs drain, allowing new work;
 R2 cleanup can continue separately.
@@ -155,10 +160,14 @@ uncontrolled systems.
 
 ## Validation status and manual verification
 
-Static typechecks and SQL preparation do not demonstrate a real Cloudflare
-cascade. No production deletion, provider request, simulator run, build or test
-suite was executed for this implementation. Before release acceptance, use only
-fictional accounts and files to check:
+The [local integration suite](chat-lifecycle-testing.md) now passes 38 regression
+cases through real routes and local D1/R2/Workflow bindings, with injected failures,
+retries, late uploads, lost create acknowledgements, permissions and migration
+upgrades. Migration 0064 fixes the six reproduced defects documented there. No
+production deletion, paid provider call, simulator/device run or browser UI check
+was performed. The local runtime does not establish production behavior. Before
+release acceptance, use only fictional accounts and files for the remaining
+cloud/device verification:
 
 - private/group archive, new messages staying archived, unarchive, pagination,
   empty results, reopen/back navigation, offline refresh and account switching;

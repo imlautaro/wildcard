@@ -28,6 +28,8 @@
     "db:migrate:remote": "npm run db:migrate:remote --workspace @wildcard/api",
     "auth:setup:local": "node scripts/setup-local-auth.mjs && npm run db:migrate:local",
     "infra:photos": "node scripts/provision-photos.mjs",
-    "infra:ai-gateway": "node scripts/provision-ai-gateway.mjs"
+    "infra:ai-gateway": "node scripts/provision-ai-gateway.mjs",
+    "test:lifecycle": "npm run test:lifecycle --workspace @wildcard/api",
+    "typecheck:lifecycle": "npm run typecheck:lifecycle --workspace @wildcard/api"
   }
 }

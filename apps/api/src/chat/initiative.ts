@@ -69,8 +69,12 @@ export async function dispatchInitiatives(env: Env) {
     const job: InitiativeJob = { kind: 'initiative', ...row, revision: claimed.revision };
     const workflowID = `initiative-${row.sourceID}-${job.revision}`;
     if (!await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(workflowID).first()) return;
-    await env.CHAT_WORKFLOW.create({ id: workflowID, params: job });
-    if (!await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(workflowID).first()) await discardWorkflow(env,workflowID,job.contactID);
+    try {
+      await env.CHAT_WORKFLOW.create({ id: workflowID, params: job });
+    } finally {
+      // A lost create acknowledgement must not resurrect a cleared episode.
+      if (!await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(workflowID).first()) await discardWorkflow(env,workflowID,job.contactID);
+    }
   }));
   if (outcomes.some(result => result.status === 'rejected')) console.error(JSON.stringify({ event: 'initiative_dispatch_deferred' }));
 }

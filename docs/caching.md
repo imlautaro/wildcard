@@ -1215,3 +1215,5 @@ for reproducible setup and rollback.
 ## Chat lifecycle invalidation
 
 [Clear/delete](chat-lifecycle.md) purge conversations, pending submissions, reactions and secondary resource snapshots, stop playback, and clear existing image/audio caches (including iOS protected disk storage). Server history revisions reset other devices' caches and fence pagination/offline sends. Archive uses the existing session list cache and pagination; unread totals still include archived chats. Device/browser failure-recovery verification remains pending.
+
+Lifecycle validation now includes source deletion, retained-memory permissions and pending cleanup across linked private/group scopes. See the [local integration report](chat-lifecycle-testing.md). The 0064 corrections are server-side and preserve both clients' existing revision/cache invalidation contract; device/browser cache eviction and stale viewer responses still need UI verification.

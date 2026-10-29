@@ -2,7 +2,8 @@
 // Never discard a failed job; Cron retries with bounded backoff and concurrency.
 export async function cleanResources(env: Env, scope?: string): Promise<void> {
   const { results } = await env.DB.prepare(`SELECT kind, resource, scope, attempts, revision, settle_at AS settleAt FROM resource_cleanup
-    WHERE next_at <= ?1 AND (?2 IS NULL OR scope = ?2)
+    WHERE next_at <= ?1 AND (?2 IS NULL OR scope = ?2 OR EXISTS (SELECT 1 FROM resource_cleanup_scope s
+      WHERE s.kind=resource_cleanup.kind AND s.resource=resource_cleanup.resource AND s.scope=?2))
     ORDER BY CASE kind WHEN 'workflow' THEN 0 ELSE 1 END, next_at LIMIT 40`)
     .bind(Date.now(), scope ?? null).all<{ kind: string; resource: string; scope: string; attempts: number; revision: number; settleAt: number }>();
   for (let offset = 0; offset < results.length; offset += 4) {
@@ -46,15 +47,17 @@ export async function cleanResources(env: Env, scope?: string): Promise<void> {
         }
         await env.DB.prepare('DELETE FROM resource_cleanup WHERE kind = ? AND resource = ? AND revision=?').bind(job.kind, job.resource,job.revision).run();
       } catch {
-        await env.DB.prepare('UPDATE resource_cleanup SET attempts = attempts + 1, next_at = ? WHERE kind = ? AND resource = ?')
-          .bind(Date.now() + Math.min(3600000, 1000 * 2 ** Math.min(job.attempts, 12)), job.kind, job.resource).run();
+        await env.DB.prepare('UPDATE resource_cleanup SET attempts = attempts + 1, next_at = ? WHERE kind = ? AND resource = ? AND revision = ?')
+          .bind(Date.now() + Math.min(3600000, 1000 * 2 ** Math.min(job.attempts, 12)), job.kind, job.resource, job.revision).run();
         console.error(JSON.stringify({ event: 'resource_cleanup_deferred', kind: job.kind }));
       }
     }));
   }
   await env.DB.batch([
-    env.DB.prepare(`UPDATE contact SET clearing=0 WHERE clearing=1 AND NOT EXISTS (SELECT 1 FROM resource_cleanup WHERE scope=contact.id AND kind='workflow')`),
-    env.DB.prepare(`UPDATE chat_group SET clearing=0 WHERE clearing=1 AND NOT EXISTS (SELECT 1 FROM resource_cleanup WHERE scope=chat_group.id AND kind='workflow')`),
+    env.DB.prepare(`UPDATE contact SET clearing=0 WHERE clearing=1 AND NOT EXISTS (SELECT 1 FROM resource_cleanup j WHERE j.kind='workflow' AND
+      (j.scope=contact.id OR EXISTS(SELECT 1 FROM resource_cleanup_scope s WHERE s.kind=j.kind AND s.resource=j.resource AND s.scope=contact.id)))`),
+    env.DB.prepare(`UPDATE chat_group SET clearing=0 WHERE clearing=1 AND NOT EXISTS (SELECT 1 FROM resource_cleanup j WHERE j.kind='workflow' AND
+      (j.scope=chat_group.id OR EXISTS(SELECT 1 FROM resource_cleanup_scope s WHERE s.kind=j.kind AND s.resource=j.resource AND s.scope=chat_group.id)))`),
   ]);
 }
 
@@ -74,10 +77,11 @@ export async function clearContact(env: Env, id: string, userID: string, clearMe
         ON CONFLICT(contact_id,category,memory_key) DO UPDATE SET kind=excluded.kind,content=excluded.content,updated_at=excluded.updated_at`).bind(id));
     }
   }
-  for (const table of ['contact_schedule','conversation_initiative','chat_visit','mini_app','task_list','chat_document','native_remote_grant']) {
+  for (const table of ['conversation_initiative','chat_visit','mini_app','task_list','chat_document','native_remote_grant']) {
     statements.push(db.prepare(`DELETE FROM ${table} WHERE contact_id=?`).bind(id));
   }
   statements.push(db.prepare('DELETE FROM chat_turn WHERE contact_id=?').bind(id));
+  statements.push(db.prepare('DELETE FROM contact_schedule WHERE contact_id=?').bind(id));
   statements.push(db.prepare('DELETE FROM contact_memory_state WHERE contact_id=?').bind(id));
   statements.push(db.prepare('DELETE FROM chat_workflow_instance WHERE contact_id=?').bind(id));
   statements.push(db.prepare(`UPDATE contact SET onboarding_chat=0, last_read_sequence=0,last_reply_read_at=NULL WHERE id=?`).bind(id));
@@ -129,4 +133,9 @@ export async function discardWorkflow(env: Env, id: string, scope: string) {
   await env.DB.prepare(`INSERT INTO resource_cleanup(kind,resource,scope) VALUES('workflow',?,?)
     ON CONFLICT(kind,resource) DO UPDATE SET revision=resource_cleanup.revision+1,next_at=0`).bind(id,scope).run();
   await cleanResources(env,scope);
+}
+
+export async function cleanupPending(db: D1Database, scope: string): Promise<boolean> {
+  return !!await db.prepare(`SELECT 1 FROM resource_cleanup j WHERE j.scope=?1 OR EXISTS
+    (SELECT 1 FROM resource_cleanup_scope s WHERE s.kind=j.kind AND s.resource=j.resource AND s.scope=?1) LIMIT 1`).bind(scope).first();
 }

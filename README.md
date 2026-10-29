@@ -309,3 +309,5 @@ iOS includes proximity-based receiver routing on iPhone and a brief startup marg
 web background support depends on the browser and has no receiver-routing API.
 See [iOS setup](docs/infrastructure.md#ios-background-voice-playback). Physical-device
 and browser playback verification remains pending.
+
+Run [lifecycle integration checks](docs/chat-lifecycle-testing.md) with `npm run test:lifecycle` (local fictional D1/R2/Workflow data only). Migration 0064 fixes cascade ordering, generated-media ownership, lost Workflow acknowledgements, retry revisions, linked chat scopes, and memory isolation with embeddings.
