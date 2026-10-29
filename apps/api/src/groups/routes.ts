@@ -158,12 +158,16 @@ groups.get('/:id', async (c) => {
     UNION ALL SELECT a.id, 'agent', a.name, a.photo_version, 0, ga.added_by FROM group_agent ga
     JOIN contact_agent a ON a.id = ga.agent_id WHERE ga.group_id = ?`).bind(id, id).all();
   const { results: replies } = await c.env.DB.prepare(`SELECT r.id, r.agent_id AS agentID, a.name, r.status,
-    r.source_id AS sourceID, source.sequence AS sourceSequence, r.attempt FROM group_reply r
+    r.source_id AS sourceID, source.sequence AS sourceSequence, r.attempt,
+    EXISTS (SELECT 1 FROM agent_attention attention JOIN agent_presence presence ON presence.agent_id = attention.agent_id
+      WHERE attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt
+        AND r.status = 'running' AND presence.status = 'typing' AND presence.expires_at > ?2) AS isTyping
+    FROM group_reply r
     JOIN group_message source ON source.id = r.source_id
-    JOIN contact_agent a ON a.id = r.agent_id WHERE r.group_id = ? AND r.status IN ('queued', 'running', 'failed')
+    JOIN contact_agent a ON a.id = r.agent_id WHERE r.group_id = ?1 AND r.status IN ('queued', 'running', 'failed')
     AND (r.status != 'failed' OR NOT EXISTS (SELECT 1 FROM group_message later
       WHERE later.group_id = r.group_id AND later.agent_id = r.agent_id AND later.sequence > source.sequence))
-    ORDER BY (r.status = 'failed'), r.sequence DESC LIMIT 80`).bind(id).all();
+    ORDER BY (r.status = 'failed'), r.sequence DESC LIMIT 80`).bind(id, Date.now()).all();
   const { results: privateSharing } = await c.env.DB.prepare(`SELECT ga.agent_id AS agentID,
     EXISTS (SELECT 1 FROM group_private_sharing s WHERE s.group_id = ga.group_id
       AND s.agent_id = ga.agent_id AND s.user_id = ?2) AS enabled,

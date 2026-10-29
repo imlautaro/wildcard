@@ -205,8 +205,13 @@ Implementation references: [Meta structured output](https://dev.meta.ai/docs/str
 
 `agent_attention` remains the single unique lock per agent. Dispatch chooses the
 oldest eligible job across private chats and group rounds. A group agent waits for
-an earlier group reply, and for its own work in other chats. Saving the response
-ends typing; memory extraction completes before releasing the agent to another
+an earlier group reply, and for its own work in other chats. Group research and
+the decision to reply or skip remain Online. Only a nonempty completed draft
+starts Typing, followed by a durable 1.5–4 second pause before first publication.
+Subsequent parts retain Typing until the burst ends. A context review returns
+to Online while reconsidering the draft; publication still rechecks current history,
+permissions and energy, so a changed or revoked draft can be discarded.
+Saving the response ends visible typing; memory extraction completes before releasing the agent to another
 chat. Private-chat typing remains scoped to the attended private conversation;
 a contact replying in a group appears Online in its private chats. Workflow retries
 check saved completion before generating again. Cron recovers missing dispatches
@@ -700,3 +705,19 @@ provider recall, authorization races and visual behavior require verification wi
 fictional accounts: pizza plans with on/off permissions, other humans/groups/agents,
 revoke during research and successive delivery, regrant/rejoin, MCP isolation,
 Contributor consent changes, pagination, offline navigation and account switching.
+
+## Group typing state
+
+The group snapshot adds numeric `replies[].isTyping` (0 or 1), derived from a
+running reply, its current attempt's exclusive attention claim, and an unexpired
+Typing presence. Queued replies and silent decisions never imply typing. Both
+iOS and web require this explicit flag; missing fields from older API snapshots
+show no indicator. The web subtitle follows the same rule. Retry availability
+continues to consider all queued/running jobs. No migration or new service is needed.
+
+The existing session snapshot and one-second visible polling carry this state;
+there is no client prediction or draft disclosure. Existing cache invalidation and
+late-response guards remain in place. Live checks are pending on both clients:
+address one of three fictional contacts, verify the others skip silently, verify
+multiple actual replies appear in turn, successive messages, interrupted reviews,
+failures, navigation/reopen, offline recovery, removal and account switching.

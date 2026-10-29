@@ -15,6 +15,7 @@ useHead({ title: computed(() => group.value?.name ?? 'Group') });
 const members = computed(() => new Map((state.value.snapshot?.members ?? []).map((member) => [`${member.kind}/${member.id}`, member])));
 const memberLine = computed(() => (state.value.snapshot?.members ?? []).map((member) => member.kind === 'user' && member.id === user.value?.id ? 'You' : member.name).join(', '));
 const activeReplies = computed(() => (state.value.snapshot?.replies ?? []).filter((reply) => reply.status === 'queued' || reply.status === 'running'));
+const typingReplies = computed(() => activeReplies.value.filter((reply) => reply.status === 'running' && reply.isTyping === 1));
 function failedRepliesFor(message: GroupMessage) {
   return (state.value.snapshot?.replies ?? []).filter((reply) => reply.status === 'failed' && reply.sourceID === message.id
     && !state.value.messages.some((later) => later.agentID === reply.agentID && later.sequence > message.sequence));
@@ -168,7 +169,7 @@ onBeforeUnmount(() => {
         <AppAvatar :name="group?.name ?? ''" :path="group ? groupPhotoPath(group) : null" :size="36" />
         <div>
           <div class="name">{{ group?.name ?? 'Group' }}</div>
-          <div class="subtitle">{{ activeReplies.length ? `${activeReplies.map((reply) => reply.name).join(', ')} replying…` : memberLine }}</div>
+          <div class="subtitle">{{ typingReplies.length ? `${typingReplies.map((reply) => reply.name).join(', ')} typing…` : memberLine }}</div>
         </div>
       </NuxtLink>
     </template>
@@ -246,9 +247,9 @@ onBeforeUnmount(() => {
         </div>
       </template>
 
-      <div v-for="reply in activeReplies" :key="reply.id" class="bubble-row incoming">
+      <div v-for="reply in typingReplies" :key="reply.id" class="bubble-row incoming">
         <div class="avatar-slot" />
-        <div class="typing" :aria-label="`${reply.name} is replying`"><span /><span /><span /></div>
+        <div class="typing" :aria-label="`${reply.name} is typing`"><span /><span /><span /></div>
       </div>
     </div>
     <ChatComposer

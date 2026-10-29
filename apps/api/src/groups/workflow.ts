@@ -97,6 +97,18 @@ async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep,
   }
 }
 
+// Presence belongs to the current attempt and its exclusive attention claim.
+async function setGroupPresence(env: Env, job: GroupJob, status: 'online' | 'typing', throughSequence: number | null = null) {
+  const result = await env.DB.prepare(`UPDATE agent_presence SET status = ?3, expires_at = ?4
+    WHERE agent_id IN (SELECT r.agent_id FROM group_reply r JOIN agent_attention attention
+      ON attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt
+      WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
+        AND (?5 IS NULL OR NOT EXISTS (SELECT 1 FROM group_message newer
+          WHERE newer.group_id = r.group_id AND newer.sequence > ?5)))`)
+    .bind(job.turnID, job.attempt, status, Date.now() + 900_000, throughSequence).run();
+  return result.meta.changes > 0;
+}
+
 export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep) {
   const model = await step.do('group-select-account-model', () => jobModel(bindings, job.turnID, true));
   const env: Env = { ...bindings, META_CHAT_MODEL: model };
@@ -110,8 +122,9 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
         env.DB.prepare(`UPDATE group_reply SET status = 'running' WHERE id = ? AND attempt = ? AND status = 'queued'`)
           .bind(job.turnID, job.attempt),
         env.DB.prepare(`INSERT INTO agent_presence (agent_id, status, expires_at)
-          SELECT agent_id, 'typing', ?3 FROM group_reply WHERE id = ?1 AND attempt = ?2 AND status = 'running'
-          ON CONFLICT(agent_id) DO UPDATE SET status = 'typing', expires_at = excluded.expires_at`)
+          SELECT agent_id, 'online', ?3 FROM group_reply WHERE id = ?1 AND attempt = ?2 AND status = 'running'
+          AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)
+          ON CONFLICT(agent_id) DO UPDATE SET status = 'online', expires_at = excluded.expires_at`)
           .bind(job.turnID, job.attempt, Date.now() + 900_000),
       ]);
     });
@@ -135,12 +148,19 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
           const task = await env.DB.prepare('SELECT status FROM group_reply WHERE id = ? AND attempt = ?')
             .bind(job.turnID, job.attempt).first<{ status: string }>();
           if (!task || task.status !== 'running') return null;
+          // Research and deciding whether to speak are not visible typing.
+          await setGroupPresence(env, job, 'online');
           return prepareGroupInput(env, job, previous);
         });
         if (!preparation) { outcome = 'inactive'; break; }
         draft = 'draft' in preparation ? preparation.draft
           : await completeGroupDraft(env, preparation.input, step, `group-draft-${review}`);
         const prepared = draft;
+        const firstMessage = prepared.messages?.[0] ?? prepared.text;
+        if (firstMessage) {
+          const typing = await step.do(`group-mark-typing-${review}`, () => setGroupPresence(env, job, 'typing', prepared.throughSequence));
+          if (typing) await step.sleep(`group-first-message-pause-${review}`, messageDelay(firstMessage));
+        }
         outcome = await step.do(`group-publish-draft-${review}`, async () => publishGroupDraft(env, job, { ...prepared, text: prepared.messages?.[0] ?? prepared.text }, (prepared.messages?.length ?? 1) <= 1));
         if (outcome === 'published' && prepared.messages && prepared.messages.length > 1) {
           await step.do('group-push-first-message', async () => {

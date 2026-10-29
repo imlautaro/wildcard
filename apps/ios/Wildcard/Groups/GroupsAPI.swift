@@ -40,6 +40,7 @@ struct GroupMember: Decodable, Hashable, Identifiable {
     var identity: String { "\(kind)/\(id)" }
 }
 struct GroupReply: Decodable, Identifiable {
+    var isTyping: Int? = nil
     let id: String
     let agentID: String
     let name: String

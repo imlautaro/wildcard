@@ -300,7 +300,7 @@ struct GroupChatView: View {
                                               replyQuote: store.pendingAttachment == nil ? pendingQuote : nil)
                         }
                     }
-                    ForEach((store.snapshot?.replies ?? []).filter { $0.status == "running" }) { reply in
+                    ForEach((store.snapshot?.replies ?? []).filter { $0.status == "running" && $0.isTyping == 1 }) { reply in
                         HStack(spacing: 6) {
                             Text(reply.name).manrope(.caption, weight: .semibold)
                             ReplyTypingIndicator()

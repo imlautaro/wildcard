@@ -827,3 +827,16 @@ Server authorization is live on every retrieval; revocation cancels affected
 pending group attempts to invalidate model checkpoint contents as well. Validate
 reopen/back, empty state, failed refresh after mutation, revocation and account
 switching on device/browser; static checks alone do not establish these behaviors.
+
+## Group typing snapshots
+
+Group `replies[].isTyping` travels with existing session-owned snapshots and
+one-second visible polling on iOS and web. Both clients require an explicit 1
+and running status; old snapshots without the field show no typing. Queue
+occupancy never predicts typing. No new request, cache, disk data, retention,
+pagination or eviction policy is introduced. Background revalidation replaces
+this transient state using the existing generation guards; offline snapshots
+can retain the last observed state until a successful refresh. Deletion, access
+loss and account changes use existing conversation invalidation. Verify reopen,
+back navigation, refresh, offline recovery, revocation and account switching
+with fictional accounts on both clients; runtime/visual checks remain pending.

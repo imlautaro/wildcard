@@ -558,3 +558,15 @@ invalidate stale requests and refresh; transient refresh errors preserve usable
 confirmed state. Refresh details explicitly revalidates. Access loss and session
 changes clear snapshots and reject late results; no new private disk storage.
 Browser/device behavior and real-model recall remain unverified.
+
+## Group typing indicators
+
+Like iOS, group bubbles and the member subtitle use the snapshot's explicit
+`replies[].isTyping === 1` only for running replies. Queued work, research and
+silent decisions show no typing. A completed nonempty draft starts a durable
+1.5–4 second typing pause before publication; successive parts retain the indicator.
+Retries still wait for all active jobs, including invisible queued work.
+Missing typing flags are treated as inactive. Existing session snapshots, one-second
+visible polling, invalidation and stale-response guards remain unchanged; no draft
+text or extra client cache is introduced. See [groups](groups.md#group-typing-state)
+for remaining fictional-account and device/browser verification.
