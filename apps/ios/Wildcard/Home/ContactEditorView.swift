@@ -269,7 +269,7 @@ private struct ContactVoiceSection: View {
                 }
             ))
             .disabled(disabled || contacts.isMutating)
-            Picker("Speech accent", selection: Binding(
+            SearchablePicker(title: "Speech accent", selection: Binding(
                 get: { contact?.speechAccent ?? "" },
                 set: { accent in
                     guard !contacts.isMutating else { return }
@@ -279,10 +279,8 @@ private struct ContactVoiceSection: View {
                         catch { report(error.localizedDescription) }
                     }
                 }
-            )) {
-                Text("Voice default").tag("")
-                ForEach(accents, id: \.code) { accent in Text(accent.name).tag(accent.code) }
-            }
+            ), options: [SearchablePicker.Option(value: "", label: "Voice default")]
+                + accents.map { SearchablePicker.Option(value: $0.code, label: $0.name) })
             .disabled(disabled || contacts.isMutating || contact?.canManage != true)
             if contact?.canManage == true {
                 NavigationLink {
@@ -313,15 +311,23 @@ private struct ContactVoicePickerView: View {
     @State private var savingID: String?
     @State private var sampleLoading: String?
     @State private var sampleTask: Task<Void, Never>?
+    @State private var query = ""
     private var player: VoicePlayer { VoicePlayer.shared }
+    private var visibleVoices: [VoiceOption] {
+        let term = query.trimmingCharacters(in: .whitespaces)
+        guard !term.isEmpty else { return catalog.value ?? [] }
+        return (catalog.value ?? []).filter { "\($0.name) \($0.summary)".range(of: term, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+    }
 
     var body: some View {
         List {
             if let voices = catalog.value {
                 if voices.isEmpty {
                     Text("No voices are available.").manrope().foregroundStyle(.secondary)
+                } else if visibleVoices.isEmpty {
+                    Text("No matches").manrope().foregroundStyle(.secondary)
                 }
-                ForEach(voices) { voice in
+                ForEach(visibleVoices) { voice in
                     HStack(spacing: 12) {
                         Button { choose(voice) } label: {
                             HStack {
@@ -355,6 +361,8 @@ private struct ContactVoicePickerView: View {
                 }
             }
         }
+        // Voice catalogs are long; search name and description, like long selectors.
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search voices")
         .navigationTitle("Voice")
         .navigationBarTitleDisplayMode(.inline)
         .task { await refresh() }

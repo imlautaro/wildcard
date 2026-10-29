@@ -68,13 +68,22 @@ const chooseVoice = (voiceID: string) => run(async () => {
   if (contact.value?.voiceID === voiceID) return;
   apply((await api<{ contact: Contact }>(`contacts/${id.value}/voice`, { method: 'PUT', json: { voiceID } })).contact);
 });
-const setSpeechAccent = (event: Event) => run(async () => {
-  const input = event.target as HTMLSelectElement;
-  try {
+const accentOptions = [{ value: '', label: 'Voice default' }, ...speechAccents.map(accent => ({ value: accent.code as string, label: accent.name }))];
+const speechAccent = computed({
+  get: () => contact.value?.speechAccent ?? '',
+  set: (value: string) => run(async () => {
     apply((await api<{ contact: Contact }>(`contacts/${id.value}/speech-accent`, {
-      method: 'PUT', json: { speechAccent: input.value || null },
+      method: 'PUT', json: { speechAccent: value || null },
     })).contact);
-  } finally { input.value = contact.value?.speechAccent ?? ''; }
+  }),
+});
+// Long voice catalogs get a search field, matching long selectors.
+const voiceQuery = ref('');
+const normalizeSearch = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+const visibleVoices = computed(() => {
+  const term = normalizeSearch(voiceQuery.value.trim());
+  const voices = voiceCatalog.voices.value ?? [];
+  return term ? voices.filter(voice => normalizeSearch(`${voice.name} ${voiceDetails(voice)}`).includes(term)) : voices;
 });
 function toggleVoicePicker() {
   choosingVoice.value = !choosingVoice.value;
@@ -160,10 +169,7 @@ onMounted(() => run(async () => {
           </label>
           <div class="field">
             <label for="speech-accent">Speech accent</label>
-            <select id="speech-accent" :value="contact.speechAccent ?? ''" :disabled="!canManage || busy" @change="setSpeechAccent">
-              <option value="">Voice default</option>
-              <option v-for="accent in speechAccents" :key="accent.code" :value="accent.code">{{ accent.name }}</option>
-            </select>
+            <AppSelect id="speech-accent" v-model="speechAccent" variant="plain" :options="accentOptions" :disabled="!canManage || busy" />
           </div>
           <button v-if="canManage" type="button" class="voice-row" :aria-expanded="choosingVoice" aria-controls="voice-options" @click="toggleVoicePicker">
             <span>Voice</span><span class="muted">{{ contact.voiceName ?? 'Chosen automatically' }}</span><AppIcon name="dropdown" />
@@ -176,7 +182,12 @@ onMounted(() => run(async () => {
             <span class="muted">{{ voiceCatalog.error.value }}</span>
             <button type="button" class="link-button" @click="voiceCatalog.load(true)">Retry</button>
           </div>
-          <div v-for="voice in voiceCatalog.voices.value ?? []" :key="voice.id" class="voice-option">
+          <label v-if="(voiceCatalog.voices.value?.length ?? 0) > 10" class="search-field voice-search">
+            <AppIcon name="search" />
+            <input v-model="voiceQuery" type="search" placeholder="Search voices" aria-label="Search voices" autocomplete="off">
+          </label>
+          <p v-if="voiceCatalog.voices.value?.length && !visibleVoices.length" class="voice-row muted">No matches</p>
+          <div v-for="voice in visibleVoices" :key="voice.id" class="voice-option">
             <label>
               <input type="radio" name="contact-voice" :checked="contact.voiceID === voice.id" :disabled="busy" @change="chooseVoice(voice.id)">
               <span><strong>{{ voice.name }}</strong><span v-if="voiceDetails(voice)" class="small muted">{{ voiceDetails(voice) }}</span></span>
@@ -226,6 +237,7 @@ onMounted(() => run(async () => {
 button.voice-row { cursor: pointer; }
 .voice-row > .muted { margin-left: auto; }
 .voice-row svg { width: 24px; height: 24px; flex: none; }
+.voice-search { margin: 8px; }
 .voice-option { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 4px 8px 4px 16px; }
 .voice-option label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .voice-option label > span { display: flex; flex-direction: column; min-width: 0; }

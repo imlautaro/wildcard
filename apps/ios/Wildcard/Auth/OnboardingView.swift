@@ -36,6 +36,9 @@ struct OnboardingOption: Decodable, Identifiable, Sendable {
     let name: String
     var id: String { code }
 }
+extension [OnboardingOption] {
+    var pickerOptions: [SearchablePicker.Option] { map { SearchablePicker.Option(value: $0.code, label: $0.name) } }
+}
 struct OnboardingOptions: Decodable, Sendable {
     let countries: [OnboardingOption]
     let languages: [OnboardingOption]
@@ -143,13 +146,9 @@ struct OnboardingView: View {
                             Text("Male").tag("male")
                             Text("Female").tag("female")
                         }
-                        Picker("Preferred language", selection: $store.draft.language) {
-                            ForEach(options.languages) { Text($0.name).tag($0.code) }
-                        }
-                        Picker("Country", selection: $store.draft.country) {
-                            Text("Choose your country").tag("")
-                            ForEach(options.countries) { Text($0.name).tag($0.code) }
-                        }
+                        SearchablePicker(title: "Preferred language", selection: $store.draft.language, options: options.languages.pickerOptions)
+                        SearchablePicker(title: "Country", selection: $store.draft.country, options: options.countries.pickerOptions,
+                                         placeholder: "Choose your country")
                     } header: {
                         Text("About you")
                     } footer: {

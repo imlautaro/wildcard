@@ -7,7 +7,13 @@
 // Variants: `outlined` is the Material outlined field with a floating `label`;
 // `plain` fills a settings row whose label lives outside; `tonal` is a compact pill.
 // Attributes such as `id` and `aria-label` go to the trigger; `class` to the root.
+//
+// Long lists (more than `searchThreshold` options, such as countries or languages) add a
+// search field at the top of the menu. Focus moves to it, and it becomes the combobox
+// that owns aria-activedescendant; the list shows only matching labels.
 import type { StyleValue } from 'vue';
+
+const searchThreshold = 10;
 
 const props = withDefaults(defineProps<{
   options: readonly { value: T; label: string; disabled?: boolean }[];
@@ -26,8 +32,10 @@ const triggerAttrs = computed(() => {
 });
 const listID = useId();
 const trigger = ref<HTMLButtonElement>();
-const list = ref<HTMLUListElement>();
+const menu = ref<HTMLDivElement>();
+const search = ref<HTMLInputElement>();
 const open = ref(false);
+const query = ref('');
 const active = ref(-1);
 const position = ref<Record<string, string>>({});
 
@@ -35,6 +43,15 @@ const selectedIndex = computed(() => props.options.findIndex(option => Object.is
 const selected = computed(() => props.options[selectedIndex.value]);
 const floated = computed(() => open.value || !!selected.value || !!props.placeholder);
 const optionID = (index: number) => `${listID}-${index}`;
+const searchable = computed(() => props.options.length > searchThreshold);
+// Case- and accent-insensitive, so "peru" finds "Perú".
+const normalize = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+const visible = computed(() => {
+  const term = normalize(query.value.trim());
+  return props.options.map((option, index) => ({ option, index }))
+    .filter(({ option }) => !term || normalize(option.label).includes(term));
+});
+const visiblePosition = (index: number) => visible.value.findIndex(item => item.index === index);
 
 /** Places the menu under the trigger, or above it when there is no room below. */
 function place() {
@@ -52,9 +69,11 @@ function place() {
   };
 }
 
+/** The option index of the next enabled visible option, from a position in `visible`. */
 function enabledIndex(from: number, step: 1 | -1) {
-  for (let index = from; index >= 0 && index < props.options.length; index += step) {
-    if (!props.options[index]!.disabled) return index;
+  for (let position = from; position >= 0 && position < visible.value.length; position += step) {
+    const item = visible.value[position]!;
+    if (!item.option.disabled) return item.index;
   }
   return -1;
 }
@@ -62,14 +81,18 @@ function enabledIndex(from: number, step: 1 | -1) {
 function show(index = selectedIndex.value) {
   if (props.disabled || open.value) return;
   place();
+  query.value = '';
   open.value = true;
   active.value = index >= 0 && !props.options[index]?.disabled ? index : enabledIndex(0, 1);
+  if (searchable.value) nextTick(() => search.value?.focus());
+  if (index >= 0) nextTick(() => document.getElementById(optionID(index))?.scrollIntoView({ block: 'nearest' }));
 }
 
 function close(refocus = true) {
   if (!open.value) return;
   open.value = false;
   active.value = -1;
+  query.value = '';
   if (refocus) trigger.value?.focus();
 }
 
@@ -106,36 +129,57 @@ function typeahead(key: string) {
   }
 }
 
+const printable = (event: KeyboardEvent) => event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+
 function onKey(event: KeyboardEvent) {
   if (props.disabled) return;
-  const last = enabledIndex(props.options.length - 1, -1);
+  const last = enabledIndex(visible.value.length - 1, -1);
   if (!open.value) {
     if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); show(); }
     else if (event.key === 'Home') { event.preventDefault(); show(enabledIndex(0, 1)); }
     else if (event.key === 'End') { event.preventDefault(); show(last); }
-    else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) typeahead(event.key);
+    // Typing on a closed long list opens it and starts the search with that key.
+    else if (printable(event) && searchable.value) { event.preventDefault(); show(); query.value = event.key; }
+    else if (printable(event)) typeahead(event.key);
     return;
   }
   switch (event.key) {
-    case 'ArrowDown': event.preventDefault(); move(enabledIndex(active.value + 1, 1)); break;
-    case 'ArrowUp': event.preventDefault(); move(enabledIndex(active.value - 1, -1)); break;
+    case 'ArrowDown': event.preventDefault(); move(enabledIndex(visiblePosition(active.value) + 1, 1)); break;
+    case 'ArrowUp': event.preventDefault(); move(enabledIndex(visiblePosition(active.value) - 1, -1)); break;
     case 'Home': case 'PageUp': event.preventDefault(); move(enabledIndex(0, 1)); break;
     case 'End': case 'PageDown': event.preventDefault(); move(last); break;
     case 'Enter': case ' ': event.preventDefault(); choose(active.value); break;
     case 'Escape': event.preventDefault(); close(); break;
     case 'Tab': close(false); break;
     default:
-      if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) typeahead(event.key);
+      if (printable(event)) typeahead(event.key);
   }
 }
+
+// In the search field, text keys edit the query; arrows, Enter, Escape and Tab drive the list.
+function onSearchKey(event: KeyboardEvent) {
+  switch (event.key) {
+    case 'ArrowDown': event.preventDefault(); move(enabledIndex(visiblePosition(active.value) + 1, 1)); break;
+    case 'ArrowUp': event.preventDefault(); move(enabledIndex(visiblePosition(active.value) - 1, -1)); break;
+    case 'PageUp': event.preventDefault(); move(enabledIndex(0, 1)); break;
+    case 'PageDown': event.preventDefault(); move(enabledIndex(visible.value.length - 1, -1)); break;
+    case 'Enter': event.preventDefault(); choose(active.value); break;
+    case 'Escape': event.preventDefault(); close(); break;
+    case 'Tab': close(false); break;
+  }
+}
+watch(query, () => { if (open.value) move(enabledIndex(0, 1)); });
 
 // Close on outside presses, and on scrolls or resizes that would detach the menu.
 function onPointer(event: PointerEvent) {
   const target = event.target as Node;
-  if (!trigger.value?.contains(target) && !list.value?.contains(target)) close(false);
+  if (!trigger.value?.contains(target) && !menu.value?.contains(target)) close(false);
 }
 function onViewportChange(event: Event) {
-  if (event.type === 'scroll' && list.value?.contains(event.target as Node)) return;
+  if (event.type === 'scroll' && menu.value?.contains(event.target as Node)) return;
+  // Focusing the search field opens the on-screen keyboard, which resizes or scrolls the
+  // viewport; follow the trigger instead of closing.
+  if (searchable.value) { place(); return; }
   close(false);
 }
 watch(open, (value) => {
@@ -157,7 +201,7 @@ onBeforeUnmount(() => { open.value = false; clearTimeout(typedTimer); });
     <button
       ref="trigger" v-bind="triggerAttrs" type="button" role="combobox" class="select-trigger" :disabled="disabled"
       aria-haspopup="listbox" :aria-expanded="open" :aria-controls="listID"
-      :aria-activedescendant="open && active >= 0 ? optionID(active) : undefined"
+      :aria-activedescendant="open && !searchable && active >= 0 ? optionID(active) : undefined"
       @click="open ? close() : show()" @keydown="onKey"
     >
       <span v-if="label && variant === 'outlined'" class="select-label">{{ label }}</span>
@@ -165,17 +209,29 @@ onBeforeUnmount(() => { open.value = false; clearTimeout(typedTimer); });
       <AppIcon name="dropdown" class="select-arrow" />
     </button>
     <Teleport to="body">
-      <ul v-if="open" :id="listID" ref="list" role="listbox" class="select-menu" :aria-label="label ?? (attrs['aria-label'] as string | undefined)" :style="position">
-        <li
-          v-for="(option, index) in options" :id="optionID(index)" :key="index" role="option" class="select-option"
-          :class="{ active: index === active, selected: index === selectedIndex }"
-          :aria-selected="index === selectedIndex" :aria-disabled="option.disabled || undefined"
-          @pointermove="!option.disabled && (active = index)" @click="choose(index)"
-        >
-          <span>{{ option.label }}</span>
-          <AppIcon v-if="index === selectedIndex" name="done" class="select-check" />
-        </li>
-      </ul>
+      <div v-if="open" ref="menu" class="select-menu" :class="{ searchable }" :style="position">
+        <label v-if="searchable" class="select-search">
+          <AppIcon name="search" />
+          <input
+            ref="search" v-model="query" type="search" role="combobox" placeholder="Search" autocomplete="off" spellcheck="false"
+            aria-autocomplete="list" aria-expanded="true" :aria-controls="listID"
+            :aria-label="`Search ${label ?? (attrs['aria-label'] as string | undefined) ?? 'options'}`"
+            :aria-activedescendant="active >= 0 ? optionID(active) : undefined" @keydown="onSearchKey"
+          >
+        </label>
+        <ul :id="listID" role="listbox" class="select-list" :aria-label="label ?? (attrs['aria-label'] as string | undefined)">
+          <li
+            v-for="{ option, index } in visible" :id="optionID(index)" :key="index" role="option" class="select-option"
+            :class="{ active: index === active, selected: index === selectedIndex }"
+            :aria-selected="index === selectedIndex" :aria-disabled="option.disabled || undefined"
+            @pointermove="!option.disabled && (active = index)" @click="choose(index)"
+          >
+            <span>{{ option.label }}</span>
+            <AppIcon v-if="index === selectedIndex" name="done" class="select-check" />
+          </li>
+        </ul>
+        <p v-if="!visible.length" class="select-empty" role="status">No matches</p>
+      </div>
     </Teleport>
   </div>
 </template>

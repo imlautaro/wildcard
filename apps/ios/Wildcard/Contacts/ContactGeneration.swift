@@ -122,13 +122,9 @@ struct ContactGenerationSection: View {
                     Picker("Gender", selection: $store.draft.gender) {
                         Text("Male").tag("male"); Text("Female").tag("female")
                     }
-                    Picker("Preferred language", selection: $store.draft.language) {
-                        ForEach(options.languages) { Text($0.name).tag($0.code) }
-                    }
-                    Picker("Country", selection: $store.draft.country) {
-                        Text("Choose a country").tag("")
-                        ForEach(options.countries) { Text($0.name).tag($0.code) }
-                    }
+                    SearchablePicker(title: "Preferred language", selection: $store.draft.language, options: options.languages.pickerOptions)
+                    SearchablePicker(title: "Country", selection: $store.draft.country, options: options.countries.pickerOptions,
+                                     placeholder: "Choose a country")
                 }
                 .disabled(store.busy || store.job != nil)
             } else {

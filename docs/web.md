@@ -183,7 +183,15 @@ and caching still match across clients. Manrope stays the typeface on both.
   `plain` fills a settings row whose `<label for>` sits outside, and `tonal` is the
   compact pill used for the remote device. The menu is teleported with fixed
   positioning, opens upward near the bottom of the viewport, and closes on page
-  scroll or resize. Checkboxes that are not switches render as Material checkboxes;
+  scroll or resize. Lists with more than ten options (countries, languages, speech
+  accents) add a search field at the top of the menu: focus moves to it, typing on the
+  closed trigger starts the search, matching is case- and accent-insensitive, arrows
+  and Enter still choose, and scroll/resize (such as the on-screen keyboard) reposition
+  the menu instead of closing it. The contact voice list adds the same search above
+  more than ten voices. iOS matches this with `SearchablePicker` (a native `Picker` up
+  to ten options, otherwise a searchable sheet) and a searchable voice list. Browser
+  and device checks of the search fields (keyboard, screen readers, mobile keyboards)
+  are pending. Checkboxes that are not switches render as Material checkboxes;
   use `.check-row` for a consent beside its text, and switches (`.toggle`) for
   settings that take effect immediately. Two-line rows use `.two-line` with a
   `.small` supporting line. `.search-field`, `.chip`, `.code-box`, `details`, and
