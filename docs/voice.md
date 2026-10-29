@@ -145,8 +145,7 @@ participants hear the same voice, and only the creator can change it.
   group (old → middle-aged, young → middle-aged), then gender only, then any voice.
   Within that pool, voices labeled conversational, casual or relaxed in their
   description are preferred when available. Existing saved voices are preserved.
-  The default catalog (21 voices, verified on October 29, 2026) has a single old
-  voice (male), so older women get middle-aged voices.
+  Available age groups depend on the combined default and saved catalog.
 - **Other contacts** (manual, onboarding) get a voice the first time one is needed,
   using the gender/age stored at generation when present, otherwise any voice.
 - **Contact details** show a **Voice** section when the feature flag is on: a
@@ -155,10 +154,28 @@ participants hear the same voice, and only the creator can change it.
   join a shared contact) and, for the creator, a voice picker with a
   sample play button. Shared participants see the voice name read-only.
 
-The catalog is the ElevenLabs account's default voices, read from
-`GET https://api.elevenlabs.io/v2/voices?voice_type=default&page_size=100` with its
-`gender`, `age`, `accent` and `description` labels. It is cached for one hour per
-Worker isolate.
+The catalog combines the installation's ElevenLabs default voices and saved
+collection using `GET https://api.elevenlabs.io/v2/voices` with `voice_type=default`
+and `voice_type=saved`, retaining `gender`, `age`, `accent` and `description` labels.
+Both queries follow `has_more` / `next_page_token` with pages of 100. Results are
+deduplicated by voice ID (default entry wins) and sorted by name. A shared 20-second
+timeout and 100-page limit per query bound loading; malformed or failed pages reject
+the refresh rather than cache a partial catalog. An empty saved collection is valid.
+The combined result is cached in memory for one hour per Worker isolate, never on
+disk. Existing selected voices are preserved; new automatic assignments use the
+combined catalog. API routes and picker behavior are the same on iOS and web.
+
+Add marketplace voices to My Voices / a collection in the account or workspace
+whose `ELEVENLABS_API_KEY` the installation uses. This makes those voices available
+to all authorized Wildcard users of this installation, not just the operator.
+Voice Library API use requires an eligible paid ElevenLabs plan; saving a voice
+does not guarantee synthesis access or compatibility. See the provider's
+[list voices API](https://elevenlabs.io/docs/api-reference/voices/search) and
+[Voice Library](https://elevenlabs.io/docs/eleven-creative/voices/voice-library).
+After collection changes, allow the server cache to expire and reload the client
+catalog (explicit refresh on iOS, a new signed-in session on web). Client caches
+can otherwise retain the previous list. Live collection loading, pagination,
+samples and selection on both clients remain unverified.
 
 ## API
 

@@ -287,6 +287,18 @@ new bucket, binding or Cron is needed.
   voice messages** (`voice_messages_enabled`) in [the admin panel](admin.md). With the
   flag on but no key, the feature remains off.
 
+To include marketplace voices, save them to My Voices / a collection in the same
+ElevenLabs account or workspace as the API key. The backend combines paginated
+`default` and `saved` catalogs; the key needs voices read access as well as text to
+speech access. Voice Library API use requires an eligible paid plan. Saved voices
+are offered installation-wide to authorized users. No new secret, binding or
+migration is required. Release through the existing automatic commit/push flow;
+verify saved and default voices, previews and selection on both clients after the
+one-hour server cache expires and client catalogs reload. Live provider validation
+is pending. Reverting the catalog change hides saved-only voices from the picker
+but preserves stored contact voice IDs and audio; synthesis still depends on
+provider access. See [contact voices](voice.md#contact-voices).
+
 Order: apply the migration through the normal automatic release, set the secret,
 then enable the flag. Rollback: turn the flag off (no release); the code can be
 reverted without a data rollback because the columns are additive and unused by

@@ -333,6 +333,15 @@ not cached (the bubble shows a retry button), and accepted outgoing clips seed t
 cache. A clip that failed to send stays in its session conversation store with its
 UUID until it is retried or deleted, and that store is not evicted meanwhile. The
 contact voice catalog is a session `NavigationSnapshotCache` on `ContactsStore`.
+The API combines all pages of the installation's ElevenLabs default and saved
+voices, deduplicates IDs and caches only a complete successful result for one hour
+per Worker isolate. Collection changes do not invalidate client session caches:
+after server expiry, refresh explicitly on iOS or start a new signed-in web session.
+Provider failures do not replace the server snapshot with a partial list; expired
+server reads fail and existing client snapshots remain usable. Loading is bounded
+by 20 seconds and 100 pages of 100 voices per filter. No provider metadata is
+persisted to disk. Verify collection additions/removals, duplicate IDs, empty saved
+collections, multiple pages, failed refresh and account switching on both clients.
 See [voice messages](voice.md#ios-caching). Device verification is pending: replay
 after navigation and relaunch, offline replay of a cached clip, failed download
 retry, budget eviction and account switching.

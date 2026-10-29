@@ -16,24 +16,54 @@ export async function voiceRepliesAvailable(env: Env) {
 const label = (value: unknown) => typeof value === 'string' && value.trim()
   ? value.trim().toLowerCase().replace(/[\s-]+/g, '_') : null;
 
-// The catalog is public provider data, so a per-isolate cache is enough.
+// Installation-wide provider metadata; never persist the account's collection.
 let cached: { at: number; voices: Voice[] } | null = null;
+
+async function voicePages(key: string, type: 'default' | 'saved', signal: AbortSignal): Promise<unknown[]> {
+  const voices: unknown[] = [];
+  const tokens = new Set<string>();
+  let token: string | null = null;
+  // Bound provider calls and memory; never cache a truncated catalog.
+  for (let page = 0; page < 100; page += 1) {
+    const url = new URL('https://api.elevenlabs.io/v2/voices');
+    url.searchParams.set('voice_type', type);
+    url.searchParams.set('page_size', '100');
+    url.searchParams.set('include_total_count', 'false');
+    if (token) url.searchParams.set('next_page_token', token);
+    const response = await fetch(url, {
+      headers: { 'xi-api-key': key, Accept: 'application/json' }, redirect: 'manual', signal,
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      console.error(JSON.stringify({ event: 'voice_catalog_rejected', status: response.status }));
+      throw new Error('VOICE_UNAVAILABLE');
+    }
+    const value = await response.json<{ voices?: unknown; has_more?: unknown; next_page_token?: unknown }>().catch(() => null);
+    if (!value || !Array.isArray(value.voices) || typeof value.has_more !== 'boolean') throw new Error('VOICE_UNAVAILABLE');
+    voices.push(...value.voices);
+    if (!value.has_more) return voices;
+    if (typeof value.next_page_token !== 'string' || !value.next_page_token || tokens.has(value.next_page_token)) {
+      throw new Error('VOICE_UNAVAILABLE');
+    }
+    token = value.next_page_token;
+    tokens.add(token);
+  }
+  throw new Error('VOICE_UNAVAILABLE');
+}
+
 export async function listVoices(env: Env): Promise<Voice[]> {
   if (cached && Date.now() - cached.at < 3_600_000) return cached.voices;
   const key = elevenLabsKey(env);
   if (!key) throw new Error('VOICE_UNAVAILABLE');
-  const response = await fetch('https://api.elevenlabs.io/v2/voices?voice_type=default&page_size=100&include_total_count=false', {
-    headers: { 'xi-api-key': key, Accept: 'application/json' }, redirect: 'manual', signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok) {
-    await response.body?.cancel();
-    console.error(JSON.stringify({ event: 'voice_catalog_rejected', status: response.status }));
-    throw new Error('VOICE_UNAVAILABLE');
-  }
-  const value = await response.json<{ voices?: unknown }>().catch(() => null);
-  if (!value || !Array.isArray(value.voices)) throw new Error('VOICE_UNAVAILABLE');
-  const voices = value.voices.flatMap((voice: Record<string, unknown>): Voice[] => {
+  const signal = AbortSignal.timeout(20_000);
+  const catalogs = await Promise.all([voicePages(key, 'default', signal), voicePages(key, 'saved', signal)]);
+  const seen = new Set<string>();
+  const voices = catalogs.flat().flatMap((value): Voice[] => {
+    if (!value || typeof value !== 'object') return [];
+    const voice = value as Record<string, unknown>;
     if (!voice || typeof voice.voice_id !== 'string' || !/^[A-Za-z0-9]{1,64}$/.test(voice.voice_id)) return [];
+    if (seen.has(voice.voice_id)) return [];
+    seen.add(voice.voice_id);
     const labels = voice.labels && typeof voice.labels === 'object' ? voice.labels as Record<string, unknown> : {};
     const preview = typeof voice.preview_url === 'string' && voice.preview_url.startsWith('https://') ? voice.preview_url : null;
     return [{ id: voice.voice_id, name: typeof voice.name === 'string' && voice.name.trim() ? voice.name.trim().slice(0, 100) : voice.voice_id,
@@ -47,8 +77,8 @@ export async function listVoices(env: Env): Promise<Voice[]> {
   return voices;
 }
 
-// Age groups in order of preference: the matching one, then the nearest. The
-// default catalog has no old female voice, so older women get middle-aged voices.
+// Age groups in order of preference: the matching one, then the nearest.
+// Available voices can vary as the installation changes its saved collection.
 const ageBuckets = (age: number) => age < 35 ? ['young', 'middle_aged'] : age < 60 ? ['middle_aged'] : ['old', 'middle_aged'];
 
 // Deterministic per contact: the same seed keeps its voice across retries.

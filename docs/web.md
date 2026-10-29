@@ -327,6 +327,13 @@ failure. Existing session reset, access-loss invalidation and revalidation rules
 apply; no extra cache, persisted draft or provider request is added.
 Browser playback and accent quality remain unverified for this change.
 
+The contact voice picker uses the same backend catalog as iOS: ElevenLabs default
+voices plus voices saved in the installation account's collection, with pagination
+and duplicate IDs removed. The existing session cache and selection API apply.
+After adding a marketplace voice, allow the one-hour server cache to expire and
+start a new signed-in web session to reload the list. See [contact voices](voice.md#contact-voices)
+for setup, account-wide visibility and pending device/browser verification.
+
 Contact replies use server-side ElevenLabs `eleven_v4` synthesis, shared with iOS.
 Only new replies use the selected model; existing audio and catalog previews keep
 their original bytes and cache identity. Live v4 generation and listening quality
