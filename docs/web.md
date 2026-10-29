@@ -54,8 +54,9 @@ Matching iOS:
   512 px, under 512 KB), delete, and leaving a shared contact.
 - Private chats with persisted history, earlier pages, optimistic sends with
   idempotent UUIDs, reply retry, receipts (clock while sending, two checks once
-  accepted, colored when the agent read it), Online/Typing/Last seen presence,
-  activity leases (`open`/`typing`/`leave`, with no draft text), and image/PDF
+  accepted, colored when the agent read it), Online/Typing/Last seen presence in
+  the server's delivered → online → read → typing order, activity leases
+  (`open`/`typing`/`leave`, with no draft text, which never connect the contact), and image/PDF
   attachments up to 5 MB.
 - In private chats and groups, tapping outside the message field blurs it and lets
   the mobile keyboard close. Drafts, attachments, reply targets, and cached history
@@ -628,7 +629,7 @@ Browser/device behavior and real-model recall remain unverified.
 Like iOS, group bubbles and the member subtitle use the snapshot's explicit
 `replies[].isTyping === 1` only for running replies. Queued work, research and
 silent decisions show no typing. A completed nonempty draft starts a durable
-1.5–4 second typing pause before publication; successive parts retain the indicator.
+0.9–3 second typing pause before publication; successive parts retain the indicator.
 Retries still wait for all active jobs, including invisible queued work.
 Missing typing flags are treated as inactive. Existing session snapshots, one-second
 visible polling, invalidation and stale-response guards remain unchanged; no draft

@@ -351,17 +351,6 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       !recoveryCode && round < toolRounds ? { responseFormat: { type: 'json_object' }, maxTokens: 8192, tools: turn.scheduleID ? turnTools.filter((tool) => !['create_schedule', 'update_schedule', 'cancel_schedule', 'send_group_message', 'ask_agent_in_group', 'generate_chat_image'].includes(tool.function.name)) : turnTools } : { responseFormat: { type: 'json_object' } });
     await acknowledgeGroupResults(env.DB, agent.id, processedGroupResults);
     processedGroupResults.length = 0;
-    // A successful model response proves the current input was processed, even if
-    // it asks for tools. Preparation/connection failures do not manufacture a read.
-    await env.DB.prepare(`UPDATE chat_turn SET read_at = COALESCE(read_at, ?1)
-      WHERE id = ?2 AND attempt = ?3 AND status = 'running'
-      AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?2 AND attempt = ?3)`)
-      .bind(Date.now(), turn.id, turn.attempt).run();
-    if (batch.length) await env.DB.prepare(`UPDATE chat_turn SET read_at = COALESCE(read_at, ?1)
-      WHERE contact_id = ?2 AND user_id = ?3 AND error_code = 'MESSAGE_BATCHED'
-      AND id IN (SELECT value FROM json_each(?4))
-      AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?5 AND attempt = ?6)`)
-      .bind(Date.now(), turn.contactID, turn.userID, JSON.stringify(batch), turn.id, turn.attempt).run();
     if (!answer.tool_calls?.length) {
       console.log(JSON.stringify({ event: 'chat_tool_summary', executions, groupPublicationCalls }));
       const response = parseMessages(answer.content!);

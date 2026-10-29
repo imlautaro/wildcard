@@ -1,6 +1,6 @@
 import { generatedImage } from '../photos/generation';
 import { contactModelAllowed } from './consent';
-import { messageDelay, type ContactResponse } from './messages';
+import { messageDelay, readingDelay, type ContactResponse } from './messages';
 import { batchStatement, batchIntoNext, shouldHoldReply, waitForComposer } from './pacing';
 import { runInitiative, type InitiativeJob } from './initiative';
 import { jobAccountID, jobModel } from '../lib/model-preference';
@@ -9,8 +9,8 @@ import { dispatchGroupRequests } from '../groups/request-results';
 import { groupRequestTurnAllowed } from '../groups/request-access';
 import { runGroup, type GroupJob } from '../groups/workflow';
 import { scheduleAllowed } from '../schedules/data';
-import { runVisit, type VisitJob } from './visits';
-import { expirePresence, markTyping } from './presence';
+import type { VisitJob } from './visits';
+import { expirePresence, markRead, markTyping } from './presence';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { enqueueReply, deliverPush } from '../push/delivery';
 import { activeTurn, type AssistantMessage, type ChatJob } from './data';
@@ -24,7 +24,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
     if ('kind' in event.payload) {
       if (event.payload.kind === 'initiative') await runInitiative(this.env, event.payload, step);
       else if (event.payload.kind === 'group') await runGroup(this.env, event.payload, step);
-      else await runVisit(this.env, event.payload, step);
+      // Visits no longer connect contacts; legacy instances finish immediately.
       return;
     }
     const job = event.payload;
@@ -35,8 +35,9 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       .bind(job.turnID, job.attempt).first());
     if (!admitted) return;
     try {
-      // Keep the queued agent disconnected until it actually starts handling the message.
-      await step.sleep('connect-delay', '3 seconds');
+      // Delivered → online → read → typing. Keep the queued agent disconnected
+      // until it actually starts handling the message.
+      await step.sleep('connect-delay', '1 second');
       await waitForComposer(env, job, step, 'before-reply', 6);
       const batched = await step.do('batch-consecutive-messages', () => batchIntoNext(env, job));
       if (batched) {
@@ -49,8 +50,16 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
           .bind(Date.now(), job.turnID, job.attempt).run();
         return true;
       });
+      // mark-running connected the contact (agent_chat_status); it reads after a beat.
+      await step.sleep('read-delay', '1 second');
+      const readAt = await step.do('mark-read', () => markRead(env.DB, job));
       await this.refreshMemory(env, job, step, 'refresh-prior-memory', false);
       await this.refreshAgentMemory(env, job, step, 'refresh-agent-self-memory');
+      const reading = await step.do('reading-time', async () => {
+        const turn = await activeTurn(env.DB, job);
+        return readAt + readingDelay(turn?.userText ?? '');
+      });
+      await step.sleepUntil('reading-pause', new Date(reading));
       const prepared = await step.do('prepare-reply', {
         retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' },
         timeout: '5 minutes',
@@ -62,10 +71,17 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
           .bind(turn.contactID, turn.userID).first<{ name: string }>();
         if (!contact) return null;
         await markTyping(env.DB, job);
+        const typingAt = Date.now();
         const reply = await contactReply(env, turn, contact.name);
-        return { reply };
+        return { reply, typingAt };
       });
       if (prepared) {
+        // Fast generations still show a plausible amount of typing.
+        const first = typeof prepared.reply === 'string' ? prepared.reply
+          : (Array.isArray(prepared.reply) ? prepared.reply : prepared.reply?.messages)?.[0];
+        if (first && typeof prepared.typingAt === 'number') {
+          await step.sleepUntil('typing-pause', new Date(prepared.typingAt + messageDelay(first)));
+        }
         const hold = await step.do('reply-timing-decision', {
           retries: { limit: 0, delay: '1 second' }, timeout: '1 minute',
         }, () => shouldHoldReply(env, job, typeof prepared.reply === 'string' ? prepared.reply : (Array.isArray(prepared.reply) ? prepared.reply : prepared.reply?.messages)?.join('\n\n') ?? null)).catch(() => false);

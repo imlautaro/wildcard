@@ -127,8 +127,8 @@ An accepted message is stored as `queued` without reading it or showing local
 typing. Different participants may queue one active turn each; each user retains
 the existing ten-active-turn limit. `dispatchAgent` atomically inserts a single
 `agent_attention` claim for the oldest queued sequence. Only the claimed turn's
-Workflow starts. It waits three seconds, changes that turn to `running`, records
-`readAt`, catches up prior memories, marks the agent typing, generates and saves
+Workflow starts. It waits one second, changes that turn to `running` (Online),
+records `readAt` a second later, catches up prior memories, marks the agent typing, generates and saves
 the reply, attempts notification delivery and current-speaker memory maintenance,
 then releases attention and dispatches the next conversation. Waiting chats show
 **Waiting for contact…**. Typing bubbles require their own turn to be running.
@@ -146,9 +146,9 @@ persistently unqueryable instances may block the agent and require operator
 intervention; there is no time-based unsafe lock expiry. A dispatch gap is
 recovered by the existing minute Cron.
 
-`agent_presence` stores one status/deadline/last-seen value per agent. Reply and
-visit triggers update that same row; another participant's visit cannot override
-an active reply's typing lease. Reads and Cron reconcile expired leases. All
+`agent_presence` stores one status/deadline/last-seen value per agent. Replies,
+group rounds and follow-up checks update that same row; chat visits no longer
+connect the agent (migration 0045). Reads and Cron reconcile expired leases. All
 participants share online/offline connectivity, last seen, and expiry, subject to
 their polling time. Typing is visible only to the conversation whose running
 turn holds the agent's matching attention claim and attempt. Other participants

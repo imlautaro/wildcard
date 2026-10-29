@@ -530,6 +530,9 @@ schema rollback. Do not drop contacts or chat history to undo presence.
 
 ### Chat visit and draft activity leases
 
+Superseded in part by [presence ordering (migration 0045)](#presence-ordering-migration-0045):
+visits no longer connect contacts, so the Online checks below no longer apply.
+
 Apply migration `0010_chat_visits.sql` after 0008/0009. It adds `chat_visit` and
 updates the presence trigger to compose reply/visit leases atomically. The same
 `wildcard-chat` Workflow and `CHAT_WORKFLOW` binding now accept a `kind: visit`
@@ -1907,3 +1910,27 @@ not drop it while queued/new Workflows can still use it. Older private clients
 show captions only; older group clients support image attachments. A provider
 request with an uncertain outcome is not retried automatically, including after
 a rollback/recovery; an explicit new human turn can create a new reservation.
+
+### Presence ordering (migration 0045)
+
+Apply `0045_presence_ordering.sql` after 0044. It drops the `agent_visit_activity`
+trigger, so chat visits no longer connect contacts, and adds the nullable
+`agent_presence.typing_contact_id` column (foreign key to `contact`, `SET NULL` on
+delete) for follow-up typing. No new resource, binding, secret or permission is
+needed; the existing D1 database, `CHAT_WORKFLOW` Workflow and minute Cron are
+reused. The Cron no longer dispatches visit jobs; legacy `kind: visit` instances
+finish immediately. For local development run `npm run db:migrate:local`, then
+`npm run dev`. For production commit and push; the automatic release applies the
+migration before publishing. Do not deploy or migrate by hand.
+
+After an authorized release, verify Workers Builds, the active source SHA and that
+0045 applied, then use fictional accounts to check, in private chats, groups and
+follow-ups: opening a chat leaves the contact Offline/Last seen; a message turns
+Online, then Read, then Typing; Typing never appears before Read; a follow-up
+check shows Online and returns to Offline when nothing is sent. Only static
+TypeScript checks were run for this change; these runtime checks are pending.
+
+Rollback: older code ignores the additive column. Restoring visit-based Online
+requires re-creating the dropped trigger from migration 0013 deliberately; older
+code would also resume dispatching visit jobs. Read timestamps written earlier in
+the turn by this version remain valid for older code.

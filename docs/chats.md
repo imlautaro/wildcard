@@ -45,8 +45,8 @@ at 4,096 completion tokens, 256 KiB of provider JSON, and 20,000 code points.
 1. The HTTP handler commits a queued turn to D1 before acknowledging acceptance.
 2. A short background dispatch atomically claims agent attention for the oldest waiting sequence, then creates `wildcard-chat` with a deterministic ID
    for this turn/attempt. It performs no inference in the HTTP request lifetime.
-3. `ChatWorkflow` waits three seconds before connecting the agent and marking the
-   turn running, then calls Meta's Chat Completions endpoint
+3. `ChatWorkflow` waits one second, applies composer pacing and batching, then
+   connects the agent by marking the turn running, marks it read, then calls Meta's Chat Completions endpoint
    with the configured Muse Spark variant (`META_CHAT_MODEL`), and journals the prepared reply before a separate publication step. See composer pacing below.
 4. A Cron Trigger runs every minute, checks up to 50 pending turns, and recovers
    queued dispatch gaps. It checks five instances concurrently, rotating by last
@@ -197,9 +197,9 @@ an updated iOS installation are required. Foreground polling remains in use.
 ## Outgoing message checks
 
 Persisted user messages show muted double checks after server acceptance. Colored
-double checks appear only when the server records `readAt` after a successful
-model response processing that turn. Connection, queue admission and context
-preparation alone do not mark it read. This replaces the previous fixed-delay simulation. Queued
+double checks appear when the server records `readAt`, after the attending agent is
+connected and before it types (see [message lifecycle order](#message-lifecycle-order)).
+Queue admission alone does not mark it read. Queued
 messages in another participant's conversation remain unread until attention is
 released. Retries retain their first recorded read time. These are server agent
 processing receipts, not evidence of human reading or APNs delivery. The user's
@@ -259,12 +259,12 @@ Migration `0008_contact_presence.sql` adds a private, cascading D1 table and ato
 turn triggers. Migration `0009_delayed_contact_connection.sql` updates them:
 accepting a
 message/retry keeps the previous presence (or Offline for a new conversation).
-The Workflow waits three seconds durably before marking the turn running and
-atomically connecting the agent as Online. Already-online contacts stay connected;
+The Workflow waits one second durably (three seconds before migration 0045) before
+marking the turn running and atomically connecting the agent as Online. Already-online contacts stay connected;
 queue acceptance does not extend their lease. This wait also applies to retries
 and continues with iOS closed.
-The Workflow sets Typing immediately before reply generation, after prior-memory
-maintenance. Saving a reply or failure atomically sets Online with a 30-second
+The Workflow marks the message read, maintains prior memories, waits a short
+reading pause and sets Typing immediately before reply generation. Saving a reply or failure atomically sets Online with a 30-second
 idle deadline. Workflow sleep/expiry and the existing minute Cron persist Offline
 and `lastSeenAt` equal to that deadline even if iOS is closed. Late expiry uses a
 conditional deadline predicate so it cannot disconnect a newer message. History
@@ -333,7 +333,39 @@ retain the system secondary background. Swift and whitespace checks passed;
 visual device verification remains pending, with no builds or tests run.
 
 
+## Message lifecycle order
+
+Migration `0045_presence_ordering.sql` makes every visible state follow one order
+in private chats, groups and follow-ups: a message is delivered, the contact
+connects (Online), reads it, and only then types. A client can never observe Read
+before Online, or Typing before Online and Read, from the server state.
+
+- Private chats: one second after attention is claimed the turn becomes `running`,
+  which connects the agent. After another second `markRead` records `readAt` on the
+  turn and its earlier batched messages, only while the agent is connected. Memory
+  maintenance and a reading pause (`readingDelay`, 0.4–2.5 seconds by length) follow;
+  `markTyping` then requires the stored `readAt`. A fast generation still shows
+  typing for at least `messageDelay(first message)` (0.9–3 seconds) before the first
+  bubble. Successive messages keep Typing between parts.
+- Opening a chat or editing a draft never connects the contact. Visit activity only
+  paces replies and follow-ups (see [visiting a chat](#visiting-a-chat-and-composing-a-draft)).
+- Follow-up checks connect the contact for the decision, type for `messageDelay`
+  when they send, and otherwise go Offline about five seconds after the check. See
+  [conversation initiative](initiative.md#publication-and-control).
+- Groups follow the same order; see [group receipts](groups.md#delivery-and-read-receipts).
+
+A read is therefore a simulated contact action, not proof that a model response
+succeeded: a generation failure after the read leaves a read message with a failed
+reply, which the existing retry handles. All delays are deterministic Workflow
+sleeps so replay cannot reorder them.
+
 ## Visiting a chat and composing a draft
+
+Since migration 0045, visits never connect the contact: the presence trigger is
+dropped, opens no longer start visit jobs and the Cron no longer recovers them.
+Legacy `kind: visit` Workflow instances finish immediately. Visits still record
+leases and `typing_at` for reply pacing and follow-up deferral. The paragraphs
+below describe the earlier connection behavior where they mention Online.
 
 `POST /activity` accepts `{ "visitID": "<UUID>", "kind": "open" }`, `typing`,
 or `leave`, scoped to the authenticated owner/contact. It returns `{ active }`;

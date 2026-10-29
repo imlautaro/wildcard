@@ -5,7 +5,6 @@ import { parsePrivateReply, privateQuotes, privateTarget } from '../replies/data
 import { parseAttachment, sameAttachment, storedAttachment, type Attachment } from '../chat/attachments';
 import { contactModelAllowed } from '../chat/consent';
 import { validTimeZone } from '../schedules/data';
-import { dispatchVisit } from '../chat/visits';
 import { readPresence } from '../chat/presence';
 import { totalUnreadReplies } from '../lib/unread';
 import { Hono } from 'hono';
@@ -38,6 +37,7 @@ chats.use('*', async (c, next) => {
 });
 chats.route('/reactions', reactionRoutes(false));
 // Activity contains no draft text. Each foreground visit has a client UUID.
+// Visits only pace replies and follow-ups; they never connect the contact.
 chats.post('/activity', bodyLimit({ maxSize: 1024,
   onError: (c) => c.json({ error: 'Request body too large' }, 413) }), async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
@@ -77,22 +77,14 @@ chats.post('/activity', bodyLimit({ maxSize: 1024,
       (id, contact_id, user_id, ready_at, expires_at, updated_at, closed)
       SELECT ?1, ?2, ?3, ?4, ?4, ?4, 1 WHERE EXISTS (SELECT 1 FROM contact WHERE id = ?2 AND user_id = ?3)
       ON CONFLICT(id) DO UPDATE SET closed = 1, typing_at = NULL,
-        expires_at = CASE WHEN chat_visit.connected = 0 THEN MIN(chat_visit.expires_at, ?4) ELSE chat_visit.expires_at END
+        expires_at = MIN(chat_visit.expires_at, ?4)
       WHERE chat_visit.contact_id = ?2 AND chat_visit.user_id = ?3`)
       .bind(id, contactID, owner, now).run();
   }
-  const visit = await c.env.DB.prepare(`SELECT connected, closed, expires_at AS expiresAt FROM chat_visit
+  const visit = await c.env.DB.prepare(`SELECT closed, expires_at AS expiresAt FROM chat_visit
     WHERE id = ?1 AND contact_id = ?2 AND user_id = ?3`)
-    .bind(id, contactID, owner).first<{ connected: number; closed: number; expiresAt: number }>();
-  const active = !!visit && !visit.closed && visit.expiresAt > now;
-  if (body.kind === 'open' && active && !visit.connected) {
-    try { await dispatchVisit(c.env, { kind: 'visit', visitID: id, contactID, userID: owner }); }
-    catch {
-      console.error(JSON.stringify({ event: 'visit_dispatch_deferred' }));
-      return c.json({ error: 'Presence is temporarily unavailable' }, 503);
-    }
-  }
-  return c.json({ active });
+    .bind(id, contactID, owner).first<{ closed: number; expiresAt: number }>();
+  return c.json({ active: !!visit && !visit.closed && visit.expiresAt > now });
 });
 chats.get('/turns', async (c) => {
   const presence = await readPresence(c.env.DB, c.get('contactID'), c.get('owner'));

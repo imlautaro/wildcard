@@ -149,7 +149,7 @@ async function check(name,fn){await fn(); count++; console.log('PASS '+name);}
  await check('group deletion cascades receipt storage',()=>{
   sql.exec("DELETE FROM chat_group WHERE id='g'"); assert.equal(sql.prepare('SELECT COUNT(*) n FROM group_message_receipt').get().n,0);
  });
- await check('private read requires successful model processing, not admission',async()=>{
+ await check('private read follows connection, never model processing',async()=>{
   sql.exec(`INSERT INTO contact(id,user_id,agent_id,name,created_at,updated_at) VALUES ('p','a','bot','Demo Bot',0,0);
    INSERT INTO chat_turn(id,contact_id,user_id,user_text,status,workflow_id,created_at,updated_at) VALUES ('pt','p','a','Hello','running','pw',0,0);
    INSERT INTO agent_attention(agent_id,turn_id,attempt,workflow_id,acquired_at) VALUES ('bot','pt',1,'pw',0);`);
@@ -172,9 +172,22 @@ async function check(name,fn){await fn(); count++; console.log('PASS '+name);}
   const env={DB,META_CHAT_MODEL:'muse-spark-1.3'};
   await assert.rejects(()=>priv.contactReply(env,turn,'Demo Bot'));
   assert.equal(sql.prepare("SELECT read_at FROM chat_turn WHERE id='pt'").get().read_at,null);
+  const presence=vm.createContext({Date});
+  vm.runInContext(source('chat/presence.ts'),presence);
+  sql.exec("INSERT INTO agent_presence(agent_id,status) VALUES ('bot','offline') ON CONFLICT(agent_id) DO UPDATE SET status='offline', expires_at=NULL");
+  await presence.markTyping(DB,{turnID:'pt',attempt:1});
+  assert.equal(sql.prepare("SELECT status FROM agent_presence WHERE agent_id='bot'").get().status,'offline');
+  await presence.markRead(DB,{turnID:'pt',attempt:1});
+  assert.equal(sql.prepare("SELECT read_at FROM chat_turn WHERE id='pt'").get().read_at,null);
+  sql.exec("UPDATE agent_presence SET status='online', expires_at=9e15 WHERE agent_id='bot'");
+  await presence.markTyping(DB,{turnID:'pt',attempt:1});
+  assert.equal(sql.prepare("SELECT status FROM agent_presence WHERE agent_id='bot'").get().status,'online');
+  await presence.markRead(DB,{turnID:'pt',attempt:1});
+  assert.ok(sql.prepare("SELECT read_at FROM chat_turn WHERE id='pt'").get().read_at);
+  await presence.markTyping(DB,{turnID:'pt',attempt:1});
+  assert.equal(sql.prepare("SELECT status FROM agent_presence WHERE agent_id='bot'").get().status,'typing');
   priv.museCompletion=async()=>({content:'Hello back'});
   assert.equal(await priv.contactReply(env,turn,'Demo Bot'),'Hello back');
-  assert.ok(sql.prepare("SELECT read_at FROM chat_turn WHERE id='pt'").get().read_at);
   let recoveryCalls=0;
   priv.museCompletion=async(env,messages,model,options)=>{
    recoveryCalls++;

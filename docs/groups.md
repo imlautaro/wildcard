@@ -207,7 +207,7 @@ Implementation references: [Meta structured output](https://dev.meta.ai/docs/str
 oldest eligible job across private chats and group rounds. A group agent waits for
 an earlier group reply, and for its own work in other chats. Group research and
 the decision to reply or skip remain Online. Only a nonempty completed draft
-starts Typing, followed by a durable 1.5–4 second pause before first publication.
+starts Typing, followed by a durable 0.9–3 second pause before first publication.
 Subsequent parts retain Typing until the burst ends. A context review returns
 to Online while reconsidering the draft; publication still rechecks current history,
 permissions and energy, so a changed or revoked draft can be discarded.
@@ -293,8 +293,13 @@ The existing unread counter watermark is separate and does not grant read receip
 Older clients do not send these acknowledgements and can keep an aggregate pending.
 
 For agents, the durable shared message history is their mailbox: receipt is recorded
-at insertion. Reading is recorded only for IDs actually included in a model context
-after a successful model response, including bounded history, the original trigger,
+at insertion. Since migration 0045, when a reply round starts (one second after its
+attention claim) every group agent with unread receipts up to the round's trigger
+connects (Online, a 30-second lease that never shortens or interrupts other work),
+and one second later those agents read every message up to that trigger. The
+aggregate can therefore turn Read before any contact types, while human recipients
+still confirm their own reads. Model contexts additionally record reads for IDs
+actually included after a successful model response, including bounded history, the original trigger,
 earlier round replies and retrieval excerpts. Private-agent contexts also acknowledge
 included shared group excerpts. Context can be clipped and attachment markers may
 omit bytes. No reply is generated merely to advance a check. An unaddressed agent

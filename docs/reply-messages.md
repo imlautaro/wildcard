@@ -11,7 +11,7 @@ latency ceiling, not a target.
 ## Delivery
 
 The existing ChatWorkflow checkpoints the prepared response and publishes each
-part separately. Between parts it sleeps for 1.5–4 seconds, based on the next
+part separately. Between parts it sleeps for 0.9–3 seconds, based on the next
 message's length. Workflow scheduling and network latency may increase this gap.
 The timing uses durable [Workflow sleep](https://developers.cloudflare.com/workflows/build/sleeping-and-retrying/),
 not timers in an open app. Both clients poll the visible conversation every second;

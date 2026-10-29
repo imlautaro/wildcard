@@ -9,7 +9,6 @@ import { dispatchGroupRequests } from './groups/request-results';
 import { recoverGroups } from './groups/workflow';
 import { cleanAttachments } from './chat/attachments';
 import { dispatchSchedules } from './schedules/dispatch';
-import { recoverVisits } from './chat/visits';
 import { expirePresence } from './chat/presence';
 import { deliverPush } from './push/delivery';
 import app from './app';
@@ -33,7 +32,6 @@ export default {
     ctx.waitUntil(recoverGroups(env));
     ctx.waitUntil(dispatchGroupRequests(env));
     ctx.waitUntil(expirePresence(env.DB));
-    ctx.waitUntil(recoverVisits(env));
     ctx.waitUntil(deliverPush(env));
     ctx.waitUntil(deliverRemoteNative(env));
     ctx.waitUntil(deliverGroupPush(env));

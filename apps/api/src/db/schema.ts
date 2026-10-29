@@ -112,6 +112,7 @@ export const agentPresence = sqliteTable('agent_presence', {
   status: text('status', { enum: ['offline', 'online', 'typing'] }).notNull(),
   lastSeenAt: date('last_seen_at'),
   expiresAt: date('expires_at'),
+  typingContactId: text('typing_contact_id').references(() => contact.id, { onDelete: 'set null' }),
 }, (table) => [index('agent_presence_expiry_idx').on(table.expiresAt),
   check('agent_presence_status', sql`${table.status} IN ('offline', 'online', 'typing')`)]);
 

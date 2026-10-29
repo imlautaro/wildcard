@@ -25,5 +25,10 @@ export function parseMessages(content: string): ContactResponse {
 
 // Deterministic timing survives Workflow replay; no client timers reveal drafts.
 export function messageDelay(text: string) {
-  return Math.min(4000, 1500 + Array.from(text).length * 25);
+  return Math.min(3000, 900 + Array.from(text).length * 20);
+}
+
+// Pause between reading a message and starting to type, scaled to its length.
+export function readingDelay(text: string) {
+  return Math.min(2500, 400 + Array.from(text).length * 10);
 }

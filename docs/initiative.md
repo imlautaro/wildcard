@@ -78,8 +78,17 @@ Changed read/visit evidence discards a draft and schedules a fresh evaluation;
 new human input invalidates it completely. An active foreground visit/activity
 lease or busy agent defers a due review without invoking the model; activity is
 checked again at publication. No draft is published while another private/group turn holds
-the agent's attention. Planning itself does not claim attention or show typing.
-A successful publication briefly updates online presence.
+the agent's attention. Planning itself does not claim attention.
+
+Each evaluated check is visible as presence: the contact connects (60-second
+lease, never shortening a longer one) before the decision. A send that still
+passes the current read/activity, quiet-hours and gap checks sets Typing scoped to
+this conversation (`agent_presence.typing_contact_id`, migration 0045) for
+`messageDelay(message)` before the atomic publication; other participants of a
+shared contact see Online. A publication stays Online for 30 seconds. A wait, stop,
+rejected publication or failure clears that typing and lets the contact go Offline
+about five seconds later. A busy agent is never changed. Deferred reviews (quiet
+hours, active visits, busy agent) do not connect the contact.
 
 Messages are ordinary completed assistant-only turns, so both clients reuse their
 history, Markdown, quotes/reactions, previews, unread state and foreground polling.

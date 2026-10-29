@@ -12,6 +12,7 @@ import { deliverGroupPush } from './push';
 import type { WorkflowStep } from 'cloudflare:workers';
 import { dispatchAgent, releaseAttention } from '../chat/dispatch';
 import { rememberGroupMessage } from './memory';
+import { connectAgent } from '../chat/presence';
 
 export type GroupJob = { kind: 'group'; turnID: string; attempt: number };
 export async function dispatchGroup(env: Env, groupID: string) {
@@ -119,9 +120,35 @@ async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep,
   }
 }
 
+type Reader = { agentID: string; groupID: string; sequence: number };
+
+async function connectGroupReaders(env: Env, job: GroupJob) {
+  const { results } = await env.DB.prepare(`SELECT DISTINCT receipt.recipient_id AS agentID, r.group_id AS groupID,
+      source.sequence AS sequence
+    FROM group_reply r JOIN group_message source ON source.id = r.source_id
+    JOIN group_message gm ON gm.group_id = r.group_id AND gm.sequence <= source.sequence
+    JOIN group_message_receipt receipt ON receipt.message_id = gm.id AND receipt.recipient_kind = 'agent'
+    JOIN group_agent member ON member.group_id = r.group_id AND member.agent_id = receipt.recipient_id
+    WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND receipt.read_at IS NULL
+      AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)`)
+    .bind(job.turnID, job.attempt).all<Reader>();
+  if (results.length) await env.DB.batch(results.map(reader => connectAgent(env.DB, reader.agentID, Date.now() + 30_000)));
+  return results;
+}
+
+async function markGroupRead(env: Env, job: GroupJob, readers: Reader[]) {
+  await env.DB.batch(readers.map(reader => env.DB.prepare(`UPDATE group_message_receipt SET
+      delivered_at = COALESCE(delivered_at, ?1), read_at = ?1
+    WHERE recipient_kind = 'agent' AND recipient_id = ?2 AND read_at IS NULL
+      AND message_id IN (SELECT id FROM group_message WHERE group_id = ?3 AND sequence <= ?4)
+      AND EXISTS (SELECT 1 FROM agent_presence p WHERE p.agent_id = ?2 AND p.status != 'offline')
+      AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?5 AND attempt = ?6)`)
+    .bind(Date.now(), reader.agentID, reader.groupID, reader.sequence, job.turnID, job.attempt)));
+}
+
 // Presence belongs to the current attempt and its exclusive attention claim.
 async function setGroupPresence(env: Env, job: GroupJob, status: 'online' | 'typing', throughSequence: number | null = null) {
-  const result = await env.DB.prepare(`UPDATE agent_presence SET status = ?3, expires_at = ?4
+  const result = await env.DB.prepare(`UPDATE agent_presence SET status = ?3, typing_contact_id = NULL, expires_at = ?4
     WHERE agent_id IN (SELECT r.agent_id FROM group_reply r JOIN agent_attention attention
       ON attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt
       WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
@@ -138,7 +165,8 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
     'SELECT turn_id FROM agent_attention WHERE turn_id = ? AND attempt = ?').bind(job.turnID, job.attempt).first());
   if (!admitted) return;
   try {
-    await step.sleep('group-connect-delay', '3 seconds');
+    // Delivered → online → read → typing, as in private chats.
+    await step.sleep('group-connect-delay', '1 second');
     await step.do('group-mark-running', async () => {
       await env.DB.batch([
         env.DB.prepare(`UPDATE group_reply SET status = 'running' WHERE id = ? AND attempt = ? AND status = 'queued'`)
@@ -150,6 +178,13 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
           .bind(job.turnID, job.attempt, Date.now() + 900_000),
       ]);
     });
+    // Every contact in the group sees the round's message together, so the
+    // receipt can turn Read before anyone types. Each connects before reading.
+    const readers = await step.do('group-connect-readers', () => connectGroupReaders(env, job));
+    if (readers.length) {
+      await step.sleep('group-read-delay', '1 second');
+      await step.do('group-mark-read', () => markGroupRead(env, job, readers));
+    }
     const canSpeak = await step.do('group-energy-admission', async () => {
       const row = await env.DB.prepare(`UPDATE group_reply AS r SET status = 'complete'
         WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND NOT (${groupEnergyAvailable('r')})

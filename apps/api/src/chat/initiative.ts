@@ -8,6 +8,8 @@ import { contactModelAllowed } from './consent';
 import { clipText, readMemories, selectMemories } from './memory';
 import { readAgentMemories } from './agent-memory';
 import { isRecord, museCompletion, safeErrorCode } from './meta';
+import { messageDelay } from './messages';
+import { connectAgent } from './presence';
 
 export type InitiativeJob = { kind: 'initiative'; contactID: string; sourceID: string; revision: number };
 type Snapshot = {
@@ -132,6 +134,8 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
         .bind(evidence.deferredUntil, job.contactID, job.sourceID, job.revision).run(); });
       return;
     }
+    // A visible check: the contact connects to decide, then types or leaves.
+    await step.do('initiative-connect', async () => { await connectAgent(env.DB, state.agentID, Date.now() + 60_000).run(); });
     const plan = await step.do('initiative-decide', { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' }, async () => {
       const answer = await museCompletion(env, [
         { role: 'system', content: [
@@ -158,13 +162,33 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
       ], evidence.model, { responseFormat: { type: 'json_object' }, maxTokens: 1800 });
       return decision(JSON.parse(answer.content ?? 'null'));
     });
+    const characterGap = Math.max(minimumGapsMS[state.sent]!, (evidence.personalityDelay ?? 30) * 1000 * (state.sent + 1));
+    // Read/typing changes during inference discard the draft and schedule a fresh evaluation.
+    const changedSince = (current: Snapshot) => current.lastReadSequence !== state.lastReadSequence
+      || current.readAt !== state.readAt || current.activityAt !== state.activityAt;
+    if (plan.action === 'send' && plan.message) {
+      const typing = await step.do('initiative-typing', async () => {
+        const current = await snapshot(env, job);
+        const now = Date.now();
+        if (!current || changedSince(current) || quietUntil(state.timeZone, now) !== now || now < state.anchorAt + characterGap) return false;
+        // Typing only follows the check's connection, and never overrides a reply in progress.
+        const [, result] = await env.DB.batch([connectAgent(env.DB, state.agentID, now + 60_000),
+          env.DB.prepare(`UPDATE agent_presence SET status = 'typing', typing_contact_id = ?2
+            WHERE agent_id = ?1 AND status = 'online'
+              AND NOT EXISTS (SELECT 1 FROM agent_attention WHERE agent_id = ?1)`)
+            .bind(state.agentID, state.contactID)]);
+        return result!.meta.changes > 0;
+      });
+      if (typing) await step.sleep('initiative-typing-pause', messageDelay(plan.message));
+    }
     await step.do('initiative-commit', async () => {
       const current = await snapshot(env, job);
-      if (!current) return;
       const now = Date.now();
-      // Read/typing changes during inference discard the draft and schedule a fresh evaluation.
-      const changed = current.lastReadSequence !== state.lastReadSequence || current.readAt !== state.readAt || current.activityAt !== state.activityAt;
-      const characterGap = Math.max(minimumGapsMS[state.sent]!, (evidence.personalityDelay ?? 30) * 1000 * (state.sent + 1));
+      if (!current) {
+        await disconnect(env, state.agentID, now).run();
+        return;
+      }
+      const changed = changedSince(current);
       const next = Math.max(now + plan.delaySeconds * 1000, state.anchorAt + characterGap);
       const id = `initiative-${job.sourceID}-${job.revision}`;
       const contributor = evidence.model.includes('contributor');
@@ -207,9 +231,12 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           .bind(id, plan.intent, plan.action === 'stop' ? 1 : 0, now, next, job.contactID, job.sourceID, changed ? 1 : 0,
             Math.max(minimumGapsMS[Math.min(state.sent + 1, 2)]!, (evidence.personalityDelay ?? 30) * 1000 * (state.sent + 2)),
             job.revision, state.lastReadSequence, state.readAt, state.activityAt),
-        env.DB.prepare(`UPDATE agent_presence SET status = 'online', expires_at = ?
-          WHERE agent_id = ? AND EXISTS (SELECT 1 FROM chat_turn WHERE id = ?)`)
+        // Stay briefly after sending; otherwise leave shortly after the check.
+        env.DB.prepare(`UPDATE agent_presence SET status = 'online', typing_contact_id = NULL, expires_at = ?1
+          WHERE agent_id = ?2 AND EXISTS (SELECT 1 FROM chat_turn WHERE id = ?3)
+            AND NOT EXISTS (SELECT 1 FROM agent_attention WHERE agent_id = ?2)`)
           .bind(now + 30000, state.agentID, id),
+        disconnect(env, state.agentID, now, id),
         enqueueReply(env.DB, id, 1, now),
       ]);
     });
@@ -219,9 +246,22 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
     });
   } catch (error) {
     console.error(JSON.stringify({ event: 'initiative_failed', code: safeErrorCode(error) }));
-    await step.do('initiative-backoff', async () => { await env.DB.prepare(`UPDATE conversation_initiative
+    await step.do('initiative-backoff', async () => {
+      const agent = await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ?').bind(job.contactID).first<{ id: string }>();
+      if (agent) await disconnect(env, agent.id, Date.now()).run();
+      await env.DB.prepare(`UPDATE conversation_initiative
       SET next_at = CASE WHEN evaluations >= 6 THEN NULL ELSE ? END, revision = revision + 1
       WHERE contact_id = ? AND source_id = ? AND revision = ?`)
       .bind(Date.now() + 900_000, job.contactID, job.sourceID, job.revision).run(); });
   }
+}
+
+// Ends a check without a published follow-up: stop typing and go offline soon,
+// unless a reply has claimed the agent in the meantime.
+function disconnect(env: Env, agentID: string, now: number, publishedID: string | null = null) {
+  return env.DB.prepare(`UPDATE agent_presence SET status = 'online', typing_contact_id = NULL,
+      expires_at = MIN(COALESCE(expires_at, ?2), ?2)
+    WHERE agent_id = ?1 AND status != 'offline' AND (?3 IS NULL OR NOT EXISTS (SELECT 1 FROM chat_turn WHERE id = ?3))
+      AND NOT EXISTS (SELECT 1 FROM agent_attention WHERE agent_id = ?1)`)
+    .bind(agentID, now + 5000, publishedID);
 }
