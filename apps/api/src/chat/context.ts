@@ -27,7 +27,7 @@ import { documentContext, documentInstruction, documentToolNames, documentTools,
 import type { StoredTurn } from './data';
 import { byteLength, clipText, keywords, readMemories, selectMemories, type MemoryScope } from './memory';
 import { isRecord, museCompletion, safeErrorCode, type ModelMessage, type ModelTool, type ToolCall } from './meta';
-import { executeResearchTool, researchInstruction, researchTool } from '../research/tools';
+import { executeResearchTool, researchInstruction, researchTool, taskResearchInstruction, taskResearchTool } from '../research/tools';
 
 const searchParameters = { type: 'object', additionalProperties: false,
   properties: { query: { type: 'string', description: 'Specific search words, in the language used in the original conversation.' } }, required: ['query'] };
@@ -233,11 +233,13 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
     const result = await groupRequestReply(env, turn, name, model);
     return result ? { messages: [result] } : null;
   }
-  // Schedules and task work turns are autonomous: no human request authorizes external or publishing tools.
+  // Autonomous tools require task-specific permission; schedules retain no web access.
   const autonomous = !!(turn.scheduleID || turn.taskID);
-  const canResearchWeb = !isolated && !autonomous && !recoveryCode && env.WEB_RESEARCH_ENABLED === 'true';
+  const taskResearch = turn.taskID ? await env.DB.prepare('SELECT research_query AS query FROM task WHERE id = ? AND research_user_id = ?')
+    .bind(turn.taskID, turn.userID).first<{ query: string | null }>() : null;
+  const canResearchWeb = !isolated && !turn.scheduleID && (!turn.taskID || !!taskResearch?.query) && !recoveryCode && env.WEB_RESEARCH_ENABLED === 'true';
   const baseTools = [...(isolated ? [...tools.filter(t => !['send_group_message', 'ask_agent_in_group', 'create_schedule', 'update_schedule'].includes(t.function.name)), ...(autonomous ? [] : [...mcpTools, ...miniAppTools])] : autonomous ? tools : [...tools, ...miniAppTools]),
-    ...(turn.scheduleID ? [] : [...taskTools, ...documentTools]), ...(canResearchWeb ? [researchTool] : [])];
+    ...(turn.scheduleID ? [] : [...taskTools, ...documentTools]), ...(canResearchWeb ? [turn.taskID ? taskResearchTool : researchTool] : [])];
   const nativeContext = turn.nativeContextJSON ? parseNativeContext(JSON.parse(turn.nativeContextJSON)) : null;
   const nativeReceipts = nativeContext ? (await env.DB.prepare(`SELECT a.id, a.kind,
     json_extract(a.payload_json, '$.title') AS title, a.status, a.updated_at AS updatedAt
@@ -260,7 +262,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   const workTask = turn.taskID ? taskLists.flatMap(list => list.tasks.map(task => ({ list, task }))).find(({ task }) => task.id === turn.taskID
     && ['open', 'in_progress'].includes(task.status) && task.workState === 'active' && task.assigneeKind === 'agent' && task.assigneeID === agent.id) : undefined;
   const taskWork = turn.taskID ? { reason: (await env.DB.prepare('SELECT reason FROM task_work WHERE id = ?').bind(turn.id).first<{ reason: string }>())?.reason ?? 'review',
-    task: workTask ? { taskID: workTask.task.id, listID: workTask.list.id, list: workTask.list.title, title: workTask.task.title, notes: workTask.task.notes, status: workTask.task.status, result: workTask.task.result, nextStep: workTask.task.nextStep, evidence: workTask.task.evidence, workUsed: workTask.task.workUsed, workLimit: workTask.task.workLimit } : null } : null;
+    task: workTask ? { taskID: workTask.task.id, listID: workTask.list.id, list: workTask.list.title, title: workTask.task.title, notes: workTask.task.notes, status: workTask.task.status, result: workTask.task.result, nextStep: workTask.task.nextStep, evidence: workTask.task.evidence, workUsed: workTask.task.workUsed, workLimit: workTask.task.workLimit, researchQuery: workTask.task.researchQuery, researchUsed: workTask.task.researchUsed, researchStatus: workTask.task.researchStatus } : null } : null;
   // A task finished, canceled or reassigned before this turn ran needs no message.
   if (turn.taskID && !workTask) return null;
   const { results } = await env.DB.prepare(`SELECT ${historyColumns} FROM chat_turn
@@ -375,7 +377,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       'Use source turns to resolve ambiguity. Do not claim to remember, search successfully, save, erase, or verify anything without evidence.',
       'Memory extraction happens separately after replies. Schedule mutation tools, group publication tools and native proposal tools can change their respective data. Native proposals do not execute on the phone. Removing a memory is not deleting conversation history.',
       `You have at most ${turn.scheduleID ? 2 : 3} tool rounds and six tool executions; results and excerpts are limited. Admit missing information when necessary.`,
-      ...(canResearchWeb ? [researchInstruction] : []),
+      ...(canResearchWeb ? [turn.taskID ? taskResearchInstruction : researchInstruction] : []),
       'Claim access only through the tools actually offered in this turn. Other participants’ raw chats and sensors remain inaccessible.',
     ].join(' ') },
     { role: 'user', content: `Historical memory data (not a new request): ${memories}` },

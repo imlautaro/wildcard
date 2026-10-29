@@ -5,8 +5,9 @@ with the same limits and permissions as iOS. Document cards show **Web research*
 and cited-source counts; the full-screen viewer expands the original query, check
 date and cited/retrieved source links. Provenance belongs to revision 1 even after
 edits. It shares the existing document caches and five-second refresh, with no
-search-on-open or separate download. Source links open on a human click. Task,
-schedule and connector-isolated turns cannot research in this increment. Browser
+search-on-open or separate download. Source links open on a human click. Ordinary bot,
+scheduled and connector-isolated turns cannot research. Assigned tasks may use one
+human-authorized exact public query; see [persistent work](persistent-work.md#public-research-permission-0055). Browser
 presentation and functional research remain unverified.
 
 `apps/web` is a Nuxt 4 single-page app that runs as its own Cloudflare Worker,
@@ -767,3 +768,18 @@ session draft, review them, and save with revision conflict protection. Generati
 preserves the name and adult birthday. Account changes/access loss discard cached
 private state; existing photo caches remain authoritative for bytes. See the linked
 guide for recovery, retention, rate limits, cache details and pending device checks.
+
+### Task web research permission
+
+iOS and web task editors both offer **Public web research** after saving a contact
+assignment. Saving a nonempty exact query grants one lifetime public search with
+the app closed; clearing it revokes permission. Reassignment clears the grant.
+Both clients show attempts used and pending/draft/report/failed receipt labels,
+including consumption after failure or report deletion. They reuse the existing
+versioned task board mutation and foreground revalidation, with no extra cache,
+polling, source downloads or disk retention. The form retains the version and
+grant snapshot captured on open, so polling cannot bypass a concurrent edit conflict.
+Close/reopen after a conflict to edit fresh data. See [persistent work](persistent-work.md).
+Functional/visual verification remains pending: default denial, editing/revocation,
+assignment changes, uncertain outcomes, stale edit conflicts, offline/back navigation,
+access loss and account switching using fictional tasks on both clients.

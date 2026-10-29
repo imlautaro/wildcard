@@ -46,11 +46,11 @@ Contacts announce and report tasks themselves, in their own messages. There is n
 
 ## Contact work turns
 
-The first [web research](web-research.md) increment applies only to current human
-requests. Task turns retain their existing tools and work-turn budgets; they do
-not gain public search or MCP. They may read/edit an already saved research
-document in their own chat, whose source provenance still refers to revision 1.
-Public research budgets and external-tool grants remain future work.
+Task turns retain their existing tools and work-turn budgets. Migration 0055 adds
+one [web research](web-research.md) attempt with a human-saved exact public query;
+assignment alone grants no search or MCP access. They may read/edit an already
+saved research document in their own chat, whose source provenance still refers
+to revision 1. Broader external-tool grants remain future work.
 [Persistent work controls](persistent-work.md) now expose progress, retained work-turn
 budgets and pause/resume/cancel; background turns keep the existing internal tools.
 
@@ -212,3 +212,12 @@ iOS Simulator Swift typecheck, and the 11 changed statements (group list, activi
 messages, unread, snapshot replies, total unread, three push queries, the reply-quote
 guard and private turns), with the real receipt fragment, prepared on local workerd D1. Not verified on a device or
 browser, or against live task turns.
+
+## Exact-query web research
+
+Migration 0055 adds a human-only `researchQuery` PATCH field after assigning a
+contact. Both editors explain public transmission, one lifetime attempt, revocation
+and reassignment; both boards show usage and receipt state. The task-specific
+research tool receives only a title and the server sends the stored query. See
+[persistent work](persistent-work.md#public-research-permission-0055) for grant
+authority, daily budgets, generation guards, retention and cache verification.

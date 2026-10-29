@@ -1,15 +1,16 @@
 # Agentic execution limits
 
-Updated October 29, 2026, with persistent task controls before widening external autonomous tools. These are implementation
+Updated October 29, 2026, with persistent task controls and exact-query task research. These are implementation
 defaults, not guarantees of model quality or a financial spending cap.
 
-| Work | Existing execution boundary | First research increment |
+| Work | Existing execution boundary | Research boundary |
 | --- | --- | --- |
 | Private human reply | Three tool rounds, six executions; one optional mini-app repair round, still six executions | One bounded research operation shares the six slots |
 | Scheduled private reply | Two rounds, six executions; no external actions | No web research |
-| Private task work | Three rounds, six executions; no MCP/native/group publication | May edit saved reports, cannot research; current execution generation checked between model/tool steps |
+| Private task work | Three rounds, six executions; no MCP/native/group publication | One lifetime research attempt with a human-saved public query; current generation checked between model/tool steps |
 | Initial group draft | Six evidence rounds, six executions, 180-second evidence deadline | Human triggers can research; one reservation across the whole source round |
-| Group reviews / bot triggers | Existing constrained review/reply rules | No new research capability |
+| Assigned group task | Existing task/evidence budgets; current source and generation checks | Same human-saved exact-query grant and one lifetime reservation |
+| Group reviews / ordinary bot triggers | Existing constrained review/reply rules | No new research capability |
 | Task dispatch | Six work turns per task lifetime, 30 per contact per rolling day; 30-minute reviews | Persistent controls retain consumption and expose pause/block states |
 | Initiative | Existing bounded model review and silence cadence | No research tools |
 
@@ -36,8 +37,9 @@ monetary budget.
 
 The persistent-work foundation uses task titles as objectives, notes for completion
 conditions, nextStep/evidence/result for progress and an explicit blockedReason.
-Public research and broader background tools still require per-job permission
-and consumption receipts before admission. Start those extensions with read tools.
+Task public research now has an exact-query human grant, a lifetime counter and
+a consumption receipt before admission. Broader background tools still require
+separate per-job permission and receipts.
 Task work must not inherit arbitrary human chat permissions. Account/installation research limits do not replace those controls.
 
 Verification remains static until authorized live checks: TypeScript, Swift and

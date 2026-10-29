@@ -10,8 +10,18 @@ const busy = ref(false);
 const newList = ref('');
 const drafts = reactive<Record<string, string>>({});
 const editing = ref<string | null>(null);
-const form = reactive({ title: '', notes: '', status: 'open' as TaskStatus, assignee: '', blockedBy: [] as string[], nextStep: '', evidence: '', blockedReason: '' });
+// Polls replace the board while the form stays open. Submit the version and
+// permission snapshot the person actually edited, even if newer data arrived.
+const editingTask = shallowRef<TaskItem | null>(null);
+const form = reactive({ title: '', notes: '', status: 'open' as TaskStatus, assignee: '', blockedBy: [] as string[], nextStep: '', evidence: '', blockedReason: '', researchQuery: '' });
 
+const researchLabels: Record<string, string> = { pending: 'Pending or uncertain', ready: 'Draft saved', stopped: 'Stopped before publication', complete: 'Report saved', failed: 'Failed' };
+const researchDetail = (task: TaskItem) => `${task.researchUsed ?? 0}/${task.researchLimit ?? 1} web research attempts used${task.researchStatus ? ` · ${researchLabels[task.researchStatus] ?? task.researchStatus}` : ''}`;
+const originalTask = (task: TaskItem) => editingTask.value?.id === task.id ? editingTask.value : task;
+const assignmentChanged = (task: TaskItem) => {
+  const original = originalTask(task);
+  return form.assignee !== (original.assigneeKind ? `${original.assigneeKind}:${original.assigneeID}` : '');
+};
 const statusLabels: Record<TaskStatus, string> = { open: 'To do', in_progress: 'In progress', done: 'Done', canceled: 'Canceled' };
 const statusOptions = (Object.keys(statusLabels) as TaskStatus[]).map(value => ({ value, label: statusLabels[value] }));
 const assigneeOptions = computed(() => [{ value: '', label: 'Unassigned' },
@@ -35,7 +45,7 @@ async function run(action: () => Promise<void>) {
 const assignee = (value: string) => value ? { kind: value.split(':')[0], id: value.slice(value.indexOf(':') + 1) } : null;
 const workLabel = (task: TaskItem) => task.workState === 'paused' ? 'Paused' : task.workState === 'blocked' ? 'Blocked' : task.workUsed >= task.workLimit ? 'Budget exhausted' : null;
 const controlWork = (task: TaskItem, workState: 'active' | 'paused') => run(async () => {
-  await tasks.updateTask(task.id, task.version, { workState });
+  await tasks.updateTask(task.id, originalTask(task).version, { workState });
   editing.value = null;
 });
 const taskTitle = (list: TaskList, id: string) => list.tasks.find(task => task.id === id)?.title ?? 'a removed task';
@@ -53,14 +63,17 @@ function detail(list: TaskList, task: TaskItem) {
 function edit(task: TaskItem) {
   if (editing.value === task.id) { editing.value = null; return; }
   editing.value = task.id;
-  Object.assign(form, { title: task.title, notes: task.notes ?? '', status: task.status, nextStep: task.nextStep ?? '', evidence: task.evidence ?? '', blockedReason: task.blockedReason ?? '',
+  editingTask.value = task;
+  Object.assign(form, { title: task.title, notes: task.notes ?? '', status: task.status, nextStep: task.nextStep ?? '', evidence: task.evidence ?? '', blockedReason: task.blockedReason ?? '', researchQuery: task.researchQuery ?? '',
     assignee: task.assigneeKind ? `${task.assigneeKind}:${task.assigneeID}` : '', blockedBy: [...task.blockedBy] });
 }
 const toggle = (task: TaskItem) => run(() => tasks.updateTask(task.id, task.version, { status: task.status === 'done' ? 'open' : 'done' }));
 const save = (task: TaskItem) => run(async () => {
-  await tasks.updateTask(task.id, task.version, { title: form.title.trim(), notes: form.notes.trim() || null, status: form.status,
+  const original = originalTask(task);
+  await tasks.updateTask(task.id, original.version, { title: form.title.trim(), notes: form.notes.trim() || null, status: form.status,
     assignee: assignee(form.assignee), blockedBy: form.blockedBy, nextStep: form.nextStep.trim() || null,
-    evidence: form.evidence.trim() || null, blockedReason: form.blockedReason.trim() || null });
+    evidence: form.evidence.trim() || null, blockedReason: form.blockedReason.trim() || null,
+    ...(!assignmentChanged(task) && form.researchQuery.trim() !== (original.researchQuery ?? '') ? { researchQuery: form.researchQuery.trim() || null } : {}) });
   editing.value = null;
 });
 const createList = () => run(async () => {
@@ -111,6 +124,7 @@ const cancelList = (list: TaskList) => run(async () => {
                 <span class="small muted">{{ detail(list, task) }}</span>
                 <span v-if="task.nextStep" class="small">Next step: {{ task.nextStep }}</span>
                 <span v-if="task.blockedReason" class="small">Blocked: {{ task.blockedReason }}</span>
+                <span v-if="task.researchQuery || task.researchUsed" class="small">{{ researchDetail(task) }}</span>
                 <span v-if="task.result" class="small task-result">{{ task.result }}</span>
               </button>
             </div>
@@ -122,11 +136,17 @@ const cancelList = (list: TaskList) => run(async () => {
               <div class="field"><label :for="`next-${task.id}`">Next step</label><textarea :id="`next-${task.id}`" v-model="form.nextStep" rows="2" maxlength="2000" /></div>
               <div class="field"><label :for="`evidence-${task.id}`">Evidence</label><textarea :id="`evidence-${task.id}`" v-model="form.evidence" rows="2" maxlength="2000" /></div>
               <div v-if="task.workState === 'blocked'" class="field"><label :for="`blocked-${task.id}`">Blocked reason</label><textarea :id="`blocked-${task.id}`" v-model="form.blockedReason" rows="2" maxlength="2000" /></div>
+              <div v-if="task.assigneeKind === 'agent' || task.researchUsed" class="field">
+                <label :for="`research-${task.id}`">Public web research</label>
+                <textarea :id="`research-${task.id}`" v-model="form.researchQuery" rows="2" maxlength="600" placeholder="Exact public query" :disabled="assignmentChanged(task) || task.assigneeKind !== 'agent'" />
+                <p class="small">{{ researchDetail(task) }}</p>
+                <p class="group-footer">Saving this query authorizes one public search with the app closed. Only this exact query is sent; use public information. Leave empty to revoke. Failed or uncertain attempts count. Daily limits also apply. Changing assignee clears permission; save the assignment first. Reports appear in Docs.</p>
+              </div>
               <p v-if="task.assigneeKind === 'agent'" class="group-footer">Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget.</p>
               <div v-if="task.assigneeKind === 'agent' && task.workState && !['done', 'canceled'].includes(task.status)" class="task-actions">
                 <button v-if="task.workState === 'active'" type="button" class="button secondary" :disabled="busy" @click="controlWork(task, 'paused')">Pause work</button>
                 <button v-else type="button" class="button secondary" :disabled="busy || task.workUsed >= task.workLimit" @click="controlWork(task, 'active')">Resume work</button>
-                <button type="button" class="button secondary" :disabled="busy" @click="run(async () => { await tasks.updateTask(task.id, task.version, { status: 'canceled' }); editing = null; })">Cancel task</button>
+                <button type="button" class="button secondary" :disabled="busy" @click="run(async () => { await tasks.updateTask(task.id, originalTask(task).version, { status: 'canceled' }); editing = null; })">Cancel task</button>
               </div>
               <fieldset v-if="list.tasks.length > 1" class="task-blockers">
                 <legend class="small muted">Waits for</legend>

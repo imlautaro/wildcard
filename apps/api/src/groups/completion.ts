@@ -14,7 +14,7 @@ import { executeGroupRetrieval, groupRetrievalTools } from './retrieval';
 import { groupSourceAccess } from './request-access';
 import { executeTaskTool, taskToolNames, taskTools } from '../tasks/tools';
 import { documentToolNames, documentTools, executeDocumentTool } from '../documents/tools';
-import { executeResearchTool, researchTool } from '../research/tools';
+import { executeResearchTool, researchTool, taskResearchTool } from '../research/tools';
 import { executeGroupMiniAppTool, groupMiniAppTools } from '../miniapps/tools';
 import { messagePrivately, privateMessageTool } from './private-messages';
 
@@ -79,7 +79,7 @@ async function modelMessages(env: Env, input: GroupInput, messages: ModelMessage
 
 async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: number): Promise<string> {
   const permitted = [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, ...chatImageTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
-    ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canResearchWeb ? [researchTool] : []), ...(input.canBuildMiniApps ? groupMiniAppTools : []), ...(input.canMessagePrivately ? [privateMessageTool] : [])];
+    ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canResearchWeb ? [input.taskResearch ? taskResearchTool : researchTool] : []), ...(input.canBuildMiniApps ? groupMiniAppTools : []), ...(input.canMessagePrivately ? [privateMessageTool] : [])];
   if (!permitted.some(tool => tool.function.name === call.function.name)) return toolError('This tool is not permitted in this turn.');
   let args: unknown;
   try { args = JSON.parse(call.function.arguments); }
@@ -91,7 +91,7 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
     // authority, rather than checkpointed capability flags, controls admissions.
     const taskWork = await env.DB.prepare(`SELECT source.task_id FROM group_reply r JOIN group_message source ON source.id = r.source_id
       WHERE r.id = ? AND source.task_id IS NOT NULL`).bind(input.scope.reactionJob.turnID).first();
-    if (taskWork && [...mcpTools, ...groupMiniAppTools, imageTool, privateMessageTool, researchTool].some(tool => tool.function.name === call.function.name)) {
+    if (taskWork && [...mcpTools, ...groupMiniAppTools, imageTool, privateMessageTool].some(tool => tool.function.name === call.function.name)) {
       return toolError('Autonomous task work does not authorize this tool.');
     }
     if (call.function.name === researchTool.function.name) return await executeResearchTool(env, {
@@ -165,7 +165,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
             role: 'system', content: `Evidence-gathering phase. Use tools only when needed for the current trigger. You have ${executionLimit - executions} executions remaining. Do not produce a JSON decision or announce future work. Use real tools to obtain missing evidence. When ready, call finish_group_research alone, including when no tools are needed or data is unavailable. A final tool-free decision phase follows. Do not claim success without receipts.`,
           }]), env.META_CHAT_MODEL, { maxTokens: input.canBuildMiniApps ? 8192 : 4096,
             tools: [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, ...chatImageTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
-              ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canResearchWeb ? [researchTool] : []), ...(input.canBuildMiniApps ? groupMiniAppTools : []), ...(input.canMessagePrivately ? [privateMessageTool] : []), finishTool] });
+              ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canResearchWeb ? [input.taskResearch ? taskResearchTool : researchTool] : []), ...(input.canBuildMiniApps ? groupMiniAppTools : []), ...(input.canMessagePrivately ? [privateMessageTool] : []), finishTool] });
         } catch (error) {
           const code = safeErrorCode(error);
           if (['MODEL_INCOMPLETE_RESPONSE', 'MODEL_INVALID_TOOL_CALLS', 'MODEL_TOOL_TEXT_TOO_LARGE', 'MODEL_EMPTY_RESPONSE'].includes(code)) {

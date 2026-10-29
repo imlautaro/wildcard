@@ -13,12 +13,22 @@ if (!helper) throw Error('Missing researchAccess SQL helper');
 const queries = new Map();
 for (const kind of ['contact', 'group']) for (const contributor of [false, true]) {
   const context = vm.createContext({ scope: { kind, contributor, turnID: 'turn', attempt: 1, userID: 'user', agentID: 'agent', contactID: 'contact', groupID: 'group' } });
+  const accessTree = ts.createSourceFile('access.ts', fs.readFileSync(path.join(root, 'apps/api/src/tasks/access.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
+  const workAccess = accessTree.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'taskWorkAccess');
+  vm.runInContext(ts.transpile(workAccess.getText(accessTree).replace(/^export /, '')), context);
   vm.runInContext(ts.transpile(helper.getText(tree).replace(/^export /, '')), context);
   context.access = vm.runInContext('researchAccess(scope)', context);
   function visit(node) {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'prepare') {
       const sql = vm.runInContext(node.arguments[0].getText(tree), context);
-      queries.set(sql, { sql, parameters: (sql.match(/\?/g) || []).length });
+      const parameters = (sql.match(/\?/g) || []).length;
+      const bind = node.parent && ts.isPropertyAccessExpression(node.parent) && node.parent.name.text === 'bind' ? node.parent.parent : null;
+      if (bind && ts.isCallExpression(bind)) {
+        const supplied = bind.arguments.reduce((count, arg) => count + (ts.isSpreadElement(arg)
+          ? vm.runInContext(arg.expression.getText(tree), context).length : 1), 0);
+        if (supplied !== parameters) throw Error(`SQL binding arity: expected ${parameters}, found ${supplied}`);
+      }
+      queries.set(sql, { sql, parameters });
     }
     ts.forEachChild(node, visit);
   }
@@ -26,4 +36,4 @@ for (const kind of ['contact', 'group']) for (const contributor of [false, true]
 }
 const result = spawnSync('python3', ['scripts/checks/sql-depth.py'], { cwd: root, input: JSON.stringify([...queries.values()]), encoding: 'utf8' });
 if (result.status !== 0) throw Error(result.stderr || result.error || 'SQL preparation failed');
-console.log(`Compiled ${queries.size} web research SQL variants at expression depth 100.`);
+console.log(`Compiled ${queries.size} web research SQL variants and binding arities at expression depth 100.`);

@@ -1029,3 +1029,16 @@ session draft, review them, and save with revision conflict protection. Generati
 preserves the name and adult birthday. Account changes/access loss discard cached
 private state; existing photo caches remain authoritative for bytes. See the linked
 guide for recovery, retention, rate limits, cache details and pending device checks.
+
+Task research (0055): exact public query, attempts used and receipt status travel
+in the same task-board snapshot. The existing five-second foreground refresh
+replaces receipt state even when the task edit version is unchanged; task editing
+still uses the version and grant snapshot captured when the editor opened, even
+when foreground polling replaces the cached board. A conflict requires reopening
+the refreshed editor. Grants use the existing PATCH and replace the full board;
+no permission is acted on optimistically. Reports and provenance use the document
+cache above; there is no new disk store, network-backed view state or cache key.
+Revocation/access loss/account reset and late-response rejection follow those same
+board/document rules. Device/browser verification remains pending for reopening,
+empty results, offline recovery, in-flight revoke, failed/uncertain receipts and
+account switching with fictional queries.

@@ -3,8 +3,8 @@
 Tasks already continue through D1, the minute Cron and `CHAT_WORKFLOW` after the
 app closes. Migration 0054 adds explicit progress and execution controls to that
 same task, private chat or group. No new service is required. This increment is a
-foundation for roadmap step 2; public background research and per-job external
-tool grants remain pending.
+foundation for roadmap step 2. Migration 0055 adds one explicitly authorized public
+web search per task; broader external tool grants remain pending.
 
 ## State and progress
 
@@ -75,19 +75,70 @@ every private model round independently checkpointed.
 
 Autonomous work retains bounded internal retrieval, task and document tools.
 Contacts can read saved reports and record a deliverable in their own chat.
-Task turns do not gain web research, MCP, mini apps, generated images, native
-actions, schedule mutations or publication into another conversation. Group task triggers
-now explicitly exclude MCP, image/app creation and private-message capabilities;
+Task turns gain web research only through the exact-query grant below. They do
+not gain MCP, mini apps, generated images, native actions, schedule mutations or
+publication into another conversation. Group task triggers
+explicitly exclude MCP, image/app creation and private-message capabilities;
 execution admission also checks current source authority for older checkpoints.
 No new cross-chat memory access or external-write grant is implied by assignment.
 
+## Public research permission (0055)
+
+In either task editor, assign a contact and save, then enter an **Exact public
+query** under **Public web research** and save. The editor explains that this
+allows one search with the app closed. Empty the query and save to revoke it.
+Assignment itself grants no research access. Changing the assignee clears the
+query and grantor; save that assignment before granting a new query. Only humans
+can grant or change it, through the existing versioned PATCH (`researchQuery`).
+Grants default to absent for all existing and new tasks, including contact-created
+ones. Shared group members can edit/revoke them; grants are visible in that group.
+
+The task-specific `research_web` tool accepts only a report title. The server reads
+the exact public query from D1, so model-authored task notes, memory, messages and
+connector data cannot be appended to the search. The person must supply public
+information; this is not a semantic classifier for confidential text they enter.
+Connector-isolated chats/groups, schedules, initiative and draft reviews remain
+ineligible. The saved query does not authorize any other external action.
+
+There is one reservation over the task lifetime, separate from its six work turns.
+The research receipt, account/installation ledger and task counter are saved in a
+single batch before calling Meta. The account limit is charged to the person who
+saved the query (10 per rolling day); installation limit remains 100. These are
+implementation defaults, not monetary caps. Failed, uncertain or deleted receipts
+never refund the task counter. Pause/resume, reopening, reassignment, changing the
+query and deleting the report do not allow another paid search. A completed report
+can be read using the existing document tools. Contacts must not create replacement
+tasks to evade budgets.
+
+Admission checks the task execution generation, current assignee, active list,
+blockers, current grantor membership/shared-memory and Contributor consent, current
+source requester, contact ownership and agent attention. Changing/revoking a query
+increments the execution generation and schedules eligible active work; paused or
+blocked work still needs human resume. Recheck before sending and in publication.
+Already admitted requests may finish and cost money after pause/revocation. A ready
+draft belongs to its recorded generation and cannot be published by a later one.
+The same generation may finish publication on a later work turn without searching
+again. Publication keeps the existing atomic document/revision/receipt transaction.
+No independent publisher or retry endpoint is added.
+
+Both boards and editors show **web research attempts used** and receipt state:
+**Pending or uncertain**, **Draft saved**, **Stopped before publication**,
+**Report saved**, or **Failed**. A ready draft from an invalidated generation is
+shown as stopped. A pending receipt is not proof that a provider request was sent or completed; the process
+could have stopped after reservation. **Report saved** describes original
+publication even if later deleted.
+The report appears in the existing Docs list, with its original provenance.
+
 ## Provisioning, cache and verification
 
-Apply 0054 after 0053 through the existing migration/release process; see
+Apply 0054 after 0053, then 0055, through the existing migration/release process; see
 [infrastructure](infrastructure.md#persistent-task-controls-migration-0054).
 Both clients reuse their session-owned task board and five-second foreground
 revalidation. Every mutation returns a complete board and follows existing
-conflict, late-response, access-loss and account-reset rules. Progress remains in
+conflict, late-response, access-loss and account-reset rules. Both editors submit
+the task version captured when editing began; foreground polling cannot silently
+replace it with a newer version or renew a grant. Close/reopen after a conflict
+to edit the refreshed task. Progress remains in
 D1 with the task and is removed by the existing contact/group/account cascades;
 there is no new private client disk store. See [caching](caching.md#task-boards).
 
@@ -98,11 +149,15 @@ Before functional sign-off, use fictional tasks to verify work with apps closed,
 interruption/resume, concurrent dispatch, the sixth turn, reassignment/reopening
 without refunds, blockers, human pause during inference and between messages,
 blocked-input recovery, canceled lists, consent revocation, stale edits, offline
-navigation and account changes on both clients. Runtime tests, builds, provider
+navigation and account changes on both clients. For research, also cover default
+denial, exact-query transmission, human-only grants, group grantor departure,
+concurrent lifetime reservation, failed/uncertain replay, stale drafts after resume,
+report/turn deletion without refund, and both daily limits. Runtime tests, builds, provider
 inference and remote migrations/releases require their own authorized scope.
 
 Cloudflare references checked October 29, 2026:
 [Workflow replay/idempotency rules](https://developers.cloudflare.com/workflows/build/rules-of-workflows/)
+[D1 batch transactions](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch),
 and [Workflows pricing](https://developers.cloudflare.com/workflows/reference/pricing/).
 Existing services still consume their account quotas; reusing them does not
 guarantee free operation. Meta inference is separate.

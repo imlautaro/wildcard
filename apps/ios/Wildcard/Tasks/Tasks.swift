@@ -27,6 +27,15 @@ struct TaskItem: Decodable, Hashable, Sendable, Identifiable {
     let blockedReason: String?
     let workUsed: Int?
     let workLimit: Int?
+    let researchQuery: String?
+    let researchUsed: Int?
+    let researchLimit: Int?
+    let researchStatus: String?
+    var researchDetail: String {
+        let labels = ["pending": "Pending or uncertain", "ready": "Draft saved", "stopped": "Stopped before publication", "complete": "Report saved", "failed": "Failed"]
+        let status = researchStatus.map { " · \(labels[$0] ?? $0)" } ?? ""
+        return "\(researchUsed ?? 0)/\(researchLimit ?? 1) web research attempts used\(status)"
+    }
     var workLabel: String? {
         if workState == "paused" { return "Paused" }
         if workState == "blocked" { return "Blocked" }
@@ -180,6 +189,7 @@ struct TasksView: View {
                     }
                     Text(detail(task, in: list)).manrope(.caption).foregroundStyle(.secondary)
                     if let next = task.nextStep { Text("Next step: \(next)").manrope(.caption) }
+                    if task.researchQuery != nil || (task.researchUsed ?? 0) > 0 { Text(task.researchDetail).manrope(.caption) }
                     if let reason = task.blockedReason { Text("Blocked: \(reason)").manrope(.caption) }
                     if let result = task.result { Text(result).manrope(.footnote) }
                 }
@@ -276,6 +286,7 @@ private struct TaskEditorView: View {
     @State private var nextStep: String
     @State private var evidence: String
     @State private var blockedReason: String
+    @State private var researchQuery: String
     @State private var status: TaskStatusOption
     @State private var assignee: String
     @State private var blockers: Set<String>
@@ -288,6 +299,7 @@ private struct TaskEditorView: View {
         _nextStep = State(initialValue: task.nextStep ?? "")
         _evidence = State(initialValue: task.evidence ?? "")
         _blockedReason = State(initialValue: task.blockedReason ?? "")
+        _researchQuery = State(initialValue: task.researchQuery ?? "")
         _status = State(initialValue: TaskStatusOption(rawValue: task.status) ?? .open)
         _assignee = State(initialValue: task.assigneeKey)
         _blockers = State(initialValue: Set(task.blockedBy))
@@ -317,6 +329,15 @@ private struct TaskEditorView: View {
                 Section("Notes") { TextField("Notes", text: $notes, axis: .vertical).lineLimit(2...6) }
                 Section("Next step") { TextField("Next step", text: $nextStep, axis: .vertical).lineLimit(2...6) }
                 Section("Evidence") { TextField("Evidence", text: $evidence, axis: .vertical).lineLimit(2...6) }
+                if task.assigneeKind == "agent" || (task.researchUsed ?? 0) > 0 {
+                    Section {
+                        TextField("Exact public query", text: $researchQuery, axis: .vertical).lineLimit(2...6)
+                            .disabled(assignee != task.assigneeKey || task.assigneeKind != "agent")
+                        Text(task.researchDetail).font(.caption)
+                    } header: { Text("Public web research") } footer: {
+                        Text("Saving this query authorizes one public search with the app closed. Only this exact query is sent; use public information. Leave empty to revoke. Failed or uncertain attempts count. Daily limits also apply. Changing assignee clears permission; save the assignment first. Reports appear in Docs.")
+                    }
+                }
                 if task.workState == "blocked" {
                     Section("Blocked reason") { TextField("Blocked reason", text: $blockedReason, axis: .vertical).lineLimit(2...6) }
                 }
@@ -350,7 +371,7 @@ private struct TaskEditorView: View {
                     Button("Save") {
                         saving = true
                         let parts = assignee.split(separator: ":", maxSplits: 1).map(String.init)
-                        let patch: [String: Any] = [
+                        var patch: [String: Any] = [
                             "title": title.trimmingCharacters(in: .whitespacesAndNewlines),
                             "notes": notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSNull() : notes.trimmingCharacters(in: .whitespacesAndNewlines),
                             "status": status.rawValue,
@@ -360,12 +381,16 @@ private struct TaskEditorView: View {
                             "evidence": evidence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSNull() : evidence.trimmingCharacters(in: .whitespacesAndNewlines),
                             "blockedReason": blockedReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSNull() : blockedReason.trimmingCharacters(in: .whitespacesAndNewlines),
                         ]
+                        let query = researchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if assignee == task.assigneeKey && query != (task.researchQuery ?? "") {
+                            patch["researchQuery"] = query.isEmpty ? NSNull() : query
+                        }
                         Task {
                             if await save(patch) { dismiss() }
                             saving = false
                         }
                     }
-                    .disabled(saving || title.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(saving || title.trimmingCharacters(in: .whitespaces).isEmpty || researchQuery.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count > 600)
                 }
             }
         }

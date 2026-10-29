@@ -233,7 +233,9 @@ Human requests can use [web research](docs/web-research.md) through Meta Respons
 and `web_search`, saving a report with sources and original provenance in those
 documents. iOS and web show cited-source counts, check dates and source panels.
 Requests have durable replay receipts and rolling account/installation limits.
-Autonomous turns and connector-isolated chats cannot use research yet.
+Assigned tasks may run one human-saved exact public query with the app closed
+(migration 0055), with grant/revoke and receipt status on both clients. Schedules,
+ordinary bot triggers and connector-isolated chats cannot research.
 See [agentic execution limits](docs/agentic-limits.md) for current work budgets and
 the controls required before extending persistent autonomous work.
 

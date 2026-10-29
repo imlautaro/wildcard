@@ -12,14 +12,15 @@ links, and whether each source was cited or only retrieved. Provenance refers to
 revision 1; editing a report does not recheck its claims or update its original
 sources. Opening a link is a human action. Documents keep their usual editors.
 
-This is the first roadmap increment: bounded research requested by a human.
-Persistent autonomous research, monitors, semantic memory, collaboration budgets
-and per-job pause/cancel controls remain future work.
+Ordinary human requests support bounded research. [Persistent task work](persistent-work.md#public-research-permission-0055)
+also supports one exact public query authorized in the task editor, with explicit
+pause/revoke controls. Monitors, semantic memory and broader grants remain future work.
 
 ## Scope and permissions
 
 - Offered in ordinary private human turns and initial group replies to an actual
-  human message. Absent from task/schedule turns, initiative, bot triggers,
+  human message, plus explicitly authorized task turns (see below). Absent from
+  schedule turns, initiative, ordinary bot triggers,
   directed group requests, draft reviews and response recovery.
 - Connector-isolated private chats and groups cannot use research, even after a
   connector is removed. This first increment keeps their data away from public
@@ -45,7 +46,7 @@ Implementation defaults in `apps/api/src/research/model.ts`:
 
 | Limit | Default |
 | --- | --- |
-| Research requests | One per human message, shared across group contacts |
+| Research requests | One per human message, shared across group contacts; one per authorized task lifetime |
 | Rolling 24-hour account / installation limit | 10 / 100 reservations |
 | Question / title | 600 / 200 UTF-16 code units |
 | Responses output | 4,096 tokens including reasoning |
@@ -86,8 +87,9 @@ adds no separate job screen or retry button.
 There is no pause/resume contract for an in-flight HTTP search. Lost access
 prevents publication; a request already sent may still be billed. Disable
 `WEB_RESEARCH_ENABLED` in a future automatic release to stop offering/starting new
-research. This does not recall calls or delete reports. Before granting tools to
-autonomous work, define per-job permissions, durable progress and pause/cancel.
+research. This does not recall calls or delete reports. Task research additionally
+checks a human-supplied exact query, its grantor and the current execution generation;
+see [task permissions](persistent-work.md#public-research-permission-0055).
 
 ## Sources, storage and cost
 
@@ -104,6 +106,12 @@ Client renderers escape HTML and suppress remote Markdown images. Source-panel
 URLs accept credential-free HTTP(S) domain links, rejecting literal IPs and
 localhost/local names. The Worker never fetches those links. Domain validity is
 not a trust or availability guarantee.
+
+Migration `0055_task_research.sql` adds task grant/counter fields and a unique task
+link plus execution generation on each task research receipt. Consumption remains
+on the task if the original chat turn, receipt, report or granting account is deleted.
+The query/grant/counter share task retention; research receipts retain existing
+parent cascades. No backfill or new service is required.
 
 Migration `0053_web_research.sql` adds `web_research`, `web_research_usage` and nullable
 `chat_document.research_json`. Ready drafts retain normalized Markdown/provenance
@@ -139,7 +147,7 @@ deduplication, stale-response rejection, mutations, LRU limits, confirmed access
 loss and account reset follow [document caching](caching.md#chat-documents).
 Source metadata has the same lifetime as its document. Refresh never reruns search.
 
-Static preparation: `node scripts/checks/web-research-sql.cjs` compiles private/group,
+Static preparation: `node scripts/checks/web-research-sql.cjs` compiles SQL and binding arities for private/group,
 Standard/Contributor guards and statements against an empty schema with all
 migrations at D1's expression-depth limit. It executes no feature
 behavior and reads no data. API/web TypeScript and iOS Swift typechecks also apply.

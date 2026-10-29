@@ -1855,6 +1855,45 @@ to that code; leaving a task merely paused is insufficient. Already started
 provider work may finish and incur charges. Migration preparation does not verify
 live replay, pause races, model behavior, device UI or production migration.
 
+### Task research permission (migration 0055)
+
+Apply additive `0055_task_research.sql` after 0054. It adds nullable exact-query and
+human grantor fields, a nonrefundable task lifetime counter, and a unique task link
+plus execution generation on research receipts. Existing/new tasks have no grant
+and zero research consumption. No new service, binding, Cron, provider credential,
+resource identifier or account permission is required. Keep `DB`, `CHAT_WORKFLOW`,
+`META_API_KEY`, current model consent and the existing `WEB_RESEARCH_ENABLED` flag;
+`false` disables both human and task research admissions. Independent accounts
+provision the required resources above, replace account-specific IDs, and configure
+separate DB/Workflow/provider secrets for staging. Optional AI Gateway is unchanged.
+
+Local setup uses the existing full migration command `npm run db:migrate:local`;
+no persistent local database was migrated for this increment. Release the API and
+migration through committed/pushed automatic publication, then install/open the
+new clients. No manual deploy or remote migration is needed in the development
+workflow. Older clients ignore the added board fields and cannot grant research;
+iOS tolerates absent fields during transition. See [task research permission](persistent-work.md#public-research-permission-0055)
+for the reproducible assign/save/query/save flow, revocation, fixed public-query
+transmission, receipt retention, budgets and both clients' cache behavior.
+
+Static validation uses API/web types, full app/shared Swift typechecking and the
+existing `web-research-sql.cjs`, `persistent-task-sql.cjs`, `reply-messages-sql.cjs`
+under `scripts/checks/`. SQL preparation uses an empty schema with all migrations
+and expression depth 100; it exercises neither providers nor feature behavior.
+Authorized functional release verification must confirm the pushed source tag,
+0055 applied once, default denial, human-only grant, exact query, one lifetime
+reservation under concurrency, 10/100 daily limits, group grantor departure,
+Contributor revocation, pause/cancel/resume around a paid call, stale-generation
+publication denial, report/turn deletion without refund and UI/cache recovery on
+both clients with fictional data. Those live checks remain unverified.
+
+Rollback uses another automatic release: first disable `WEB_RESEARCH_ENABLED`,
+revoke active task grants/cancel work and allow admitted requests to settle. Keep
+the additive columns, counters and receipt links. Pre-0055 code ignores task grants;
+returning to it removes research availability for tasks and must not refund usage.
+Avoid rolling back before 0054's pause/generation controls without following its
+settling procedure above. A provider request already sent may still be charged.
+
 ## Contact personality
 
 [Contact personality](personality.md) reuses the required D1 `DB`, Meta key/model,
