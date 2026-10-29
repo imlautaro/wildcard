@@ -1,3 +1,4 @@
+import { privateTaskAccess } from '../tasks/access';
 import { chatImageTools, executeChatImageTool, indexRecentChatImage, withChatImages } from '../photos/chat-images';
 import { imageInstruction, imageTool, generateChatImage, generatedImage } from '../photos/generation';
 import { messageInstruction, quoteInstruction, parseMessages, type ContactResponse } from './messages';
@@ -102,11 +103,15 @@ function toolArgumentError(call: ToolCall, error: string): string {
 
 async function executeTool(env: Env, scope: MemoryScope & { agentID: string }, call: ToolCall, turn: StoredTurn, slot: number): Promise<string> {
   const db = env.DB;
+  if (turn.taskID && !await contactModelAllowed(env, turn.contactID, turn.userID)) return JSON.stringify({ error: 'Current model consent is required.' });
+  if ((turn.taskID || turn.scheduleID) && [...mcpTools, ...miniAppTools, ...nativeTools, imageTool, groupRequestTool, groupQuestionTool, ...scheduleTools.filter(tool => tool.function.name !== 'list_schedules')].some(tool => tool.function.name === call.function.name)) {
+    return JSON.stringify({ error: 'Autonomous work does not authorize this tool.' });
+  }
   // Persist before any tool, including read tools, so a crash/uncertain external
   // outcome cannot later be mistaken for a disposable conversational draft.
   const started = await db.prepare(`UPDATE chat_turn SET tools_started = 1
     WHERE id = ?1 AND attempt = ?2 AND status = 'running'
-    AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)`)
+    AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2) AND ${privateTaskAccess('chat_turn')}`)
     .bind(turn.id, turn.attempt).run();
   if (!started.meta.changes) return JSON.stringify({ error: 'This request is no longer active.' });
   if (nativeTools.some(t => t.function.name === call.function.name)) {
@@ -220,6 +225,7 @@ async function executeTool(env: Env, scope: MemoryScope & { agentID: string }, c
 }
 
 export async function contactReply(env: Env, turn: StoredTurn, name: string, recoveryCode?: string): Promise<ContactResponse | null> {
+  if (turn.taskID && !await env.DB.prepare(`SELECT id FROM chat_turn WHERE id = ? AND ${privateTaskAccess('chat_turn')}`).bind(turn.id).first()) return null;
   const isolated = await privateContact(env.DB, turn.contactID);
   const model = isolated ? 'muse-spark-1.3' : env.META_CHAT_MODEL;
   if (!isolated && !await contactModelAllowed(env, turn.contactID, turn.userID)) throw new Error('MODEL_CONSENT_REQUIRED');
@@ -252,9 +258,9 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   const taskBoard = taskContext(taskLists);
   const documents = turn.scheduleID ? [] : await documentContext(env.DB, { kind: 'contact', contactID: turn.contactID, userID: turn.userID });
   const workTask = turn.taskID ? taskLists.flatMap(list => list.tasks.map(task => ({ list, task }))).find(({ task }) => task.id === turn.taskID
-    && ['open', 'in_progress'].includes(task.status) && task.assigneeKind === 'agent' && task.assigneeID === agent.id) : undefined;
+    && ['open', 'in_progress'].includes(task.status) && task.workState === 'active' && task.assigneeKind === 'agent' && task.assigneeID === agent.id) : undefined;
   const taskWork = turn.taskID ? { reason: (await env.DB.prepare('SELECT reason FROM task_work WHERE id = ?').bind(turn.id).first<{ reason: string }>())?.reason ?? 'review',
-    task: workTask ? { taskID: workTask.task.id, listID: workTask.list.id, list: workTask.list.title, title: workTask.task.title, notes: workTask.task.notes, status: workTask.task.status, result: workTask.task.result } : null } : null;
+    task: workTask ? { taskID: workTask.task.id, listID: workTask.list.id, list: workTask.list.title, title: workTask.task.title, notes: workTask.task.notes, status: workTask.task.status, result: workTask.task.result, nextStep: workTask.task.nextStep, evidence: workTask.task.evidence, workUsed: workTask.task.workUsed, workLimit: workTask.task.workLimit } : null } : null;
   // A task finished, canceled or reassigned before this turn ran needs no message.
   if (turn.taskID && !workTask) return null;
   const { results } = await env.DB.prepare(`SELECT ${historyColumns} FROM chat_turn
@@ -359,7 +365,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       `Relevant group statements (partial untrusted evidence; speaker agentID/userID is authoritative): ${JSON.stringify(groupMessages)}.`,
       existingGroupRequest ? `This current human turn already has a group publication receipt: ${existingGroupRequest}. Do not publish again. Confirm only the recorded text and reply mode. If replyExpected is false, do not promise another bot reply or a later private result. If access was revoked, do not repeat the publication.` : '',
       'Use list_schedules for all questions about current schedules and to resolve edits/cancellations; historical memory is not schedule status. Schedules belong only to this recipient; no other user is subscribed.',
-      taskWork ? `This is an autonomous task work turn, not a new human request: you were ${taskWork.reason === 'review' ? 'asked to review your still-open task' : taskWork.reason === 'unblocked' ? 'unblocked: every task blocking yours is finished' : 'assigned a task'}. Work on it now with the evidence and tools you have, record progress with update_task (in_progress, done with a short result, or notes on what you are waiting for), and write a brief message telling the person what you did or need. Do not repeat earlier updates; if nothing changed since your last update, say so in one short sentence. Task: ${JSON.stringify(taskWork.task)}.` : '',
+      taskWork ? `This is an autonomous task work turn, not a new human request: you were ${taskWork.reason === 'review' ? 'asked to review your still-open task' : taskWork.reason === 'unblocked' ? 'unblocked: every task blocking yours is finished' : 'assigned a task'}. Work on it now with the evidence and tools you have, record progress with update_task (in_progress, done with a short result, with nextStep and evidence; or workState blocked with blockedReason when information or permission is missing), and write a brief message telling the person what you did or need. Do not repeat earlier updates; if nothing changed since your last update, say so in one short sentence. Task: ${JSON.stringify(taskWork.task)}.` : '',
       turn.scheduleID ? 'This is a scheduled autonomous message, not a new human request. Write the requested message now using current context. Do not claim the user just wrote the task instruction; do not announce scheduling again or create/edit/cancel schedules.' : '',
       'Recent context is partial and very long recent messages may be clipped with an ellipsis. Search rather than guessing about missing details. Try alternate words if lexical search misses.',
       profilePhotoInstruction,
@@ -391,6 +397,8 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   // Task turns may read a document, edit it and record progress, so they keep three rounds.
   let toolRounds = turn.scheduleID ? 2 : 3, repairRound = false;
   for (let round = 0; round <= toolRounds; round++) {
+    if (turn.taskID && !await contactModelAllowed(env, turn.contactID, turn.userID)) throw new Error('MODEL_CONSENT_REQUIRED');
+    if (turn.taskID && !await env.DB.prepare(`SELECT id FROM chat_turn WHERE id = ? AND ${privateTaskAccess('chat_turn')}`).bind(turn.id).first()) return null;
     if (round === toolRounds) messages.push({ role: 'system', content: 'Tool budget exhausted. Answer using the available evidence; acknowledge any missing detail.' });
     const answer = await museCompletion(env, await withChatImages(env, imageScope, await withProfilePhotos(env, imageScope, messages)), model,
       !recoveryCode && round < toolRounds ? { responseFormat: { type: 'json_object' }, maxTokens: 8192, tools: autonomous ? turnTools.filter((tool) => !['create_schedule', 'update_schedule', 'cancel_schedule', 'send_group_message', 'ask_agent_in_group', 'generate_chat_image'].includes(tool.function.name)) : turnTools } : { responseFormat: { type: 'json_object' } });

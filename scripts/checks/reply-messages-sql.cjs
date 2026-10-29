@@ -12,10 +12,10 @@ const dataTree = ts.createSourceFile('data.ts', dataSource, ts.ScriptTarget.Late
 dataTree.forEachChild(node => {
   if (ts.isVariableStatement(node) && node.declarationList.declarations.some(d => ['turnColumns', 'storedColumns'].includes(d.name.getText(dataTree)))) helpers.push(node.getText(dataTree).replace(/^export /, ''));
 });
-for (const file of ['groups/request-access.ts', 'groups/energy.ts', 'schedules/data.ts']) {
+for (const file of ['tasks/access.ts', 'groups/request-access.ts', 'groups/energy.ts', 'schedules/data.ts']) {
   const source = read(file), tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
   tree.forEachChild(node => {
-    if (ts.isFunctionDeclaration(node) && ['groupPublicationAccess', 'groupRequestAccess', 'groupRequestTurnAllowed', 'groupSourceAccess', 'scheduleAllowed', 'groupEnergyAvailable'].includes(node.name?.text)) {
+    if (ts.isFunctionDeclaration(node) && ['taskWorkAccess', 'privateTaskAccess', 'groupPublicationAccess', 'groupRequestAccess', 'groupRequestTurnAllowed', 'groupSourceAccess', 'scheduleAllowed', 'groupEnergyAvailable'].includes(node.name?.text)) {
       helpers.push(node.getText(tree).replace(/^export /, ''));
     }
     if (ts.isVariableStatement(node) && node.declarationList.declarations.some(d => d.name.getText(tree) === 'energyPoints')) helpers.push(node.getText(tree).replace(/^export /, ''));
@@ -38,6 +38,7 @@ for (const contributor of [false, true]) for (const index of [0, 1]) {
       }
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'prepare') {
         context.access = vm.runInContext(`typeof publicationAccess === 'undefined' ? '' : publicationAccess(${contributor})`, context);
+        context.workAllowed = vm.runInContext("privateTaskAccess('chat_turn')", context);
         context.resultAllowed = vm.runInContext(`groupRequestTurnAllowed('chat_turn', ${contributor})`, context);
         const sql = vm.runInContext(node.arguments[0].getText(tree), context);
         const numbers = [...sql.matchAll(/\?(\d+)/g)].map(m => Number(m[1]));

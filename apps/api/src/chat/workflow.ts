@@ -1,3 +1,4 @@
+import { privateTaskAccess } from '../tasks/access';
 import { privateContact } from '../mcp/client';
 import { generatedImage } from '../photos/generation';
 import { contactModelAllowed } from './consent';
@@ -164,6 +165,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       const more = await step.do(`${prefix}-publish-message-${index}`, async () => {
         const now = Date.now();
         const resultAllowed = groupRequestTurnAllowed('chat_turn', env.META_CHAT_MODEL.includes('contributor'));
+        const workAllowed = privateTaskAccess('chat_turn');
         const delivered = await activeTurn(env.DB, job);
         if (!delivered || delivered.status !== 'running') return false;
         if (!await contactModelAllowed(env, delivered.contactID, delivered.userID)) throw new Error('MODEL_CONSENT_REQUIRED');
@@ -186,14 +188,14 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
             status = CASE WHEN ?6 = 1 THEN 'complete' ELSE 'running' END, error_code = NULL, updated_at = ?2
             WHERE id = ?3 AND attempt = ?4 AND status = 'running'
             AND json_array_length(COALESCE(assistant_messages_json, '[]')) = ?7
-            AND ${scheduleAllowed('chat_turn')} AND ${resultAllowed}
+            AND ${scheduleAllowed('chat_turn')} AND ${resultAllowed} AND ${workAllowed}
             AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?3 AND attempt = ?4)
             ${index ? `AND NOT (${interrupted})` : ''}`)
             .bind(text, now, job.turnID, job.attempt, JSON.stringify(next), index === messages.length - 1 || !messages.length ? 1 : 0, index),
-          env.DB.prepare(`UPDATE chat_turn SET status = CASE WHEN assistant_text IS NULL THEN 'failed' ELSE 'complete' END,
-            error_code = CASE WHEN assistant_text IS NULL THEN 'GROUP_REQUEST_CANCELLED' ELSE NULL END, updated_at = ?1
+          env.DB.prepare(`UPDATE chat_turn SET status = CASE WHEN task_id IS NOT NULL OR assistant_text IS NOT NULL THEN 'complete' ELSE 'failed' END,
+            error_code = CASE WHEN task_id IS NULL AND assistant_text IS NULL THEN 'GROUP_REQUEST_CANCELLED' ELSE NULL END, updated_at = ?1
             WHERE id = ?2 AND attempt = ?3 AND status = 'running'
-            AND (NOT (${resultAllowed}) OR NOT (${scheduleAllowed('chat_turn')})
+            AND (NOT (${resultAllowed}) OR NOT (${scheduleAllowed('chat_turn')}) OR NOT (${workAllowed})
               ${index ? `OR (${interrupted})` : ''})`).bind(now, job.turnID, job.attempt),
           enqueueReply(env.DB, job.turnID, job.attempt, now),
         ]);
@@ -208,7 +210,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       await step.do(name, { retries: { limit: 1, delay: '5 seconds' }, timeout: '1 minute' }, async () => {
         const row = await env.DB.prepare(`SELECT c.agent_id AS id, c.id AS contactID FROM chat_turn t JOIN contact c ON c.id = t.contact_id
           JOIN agent_attention attention ON attention.turn_id = t.id AND attention.attempt = t.attempt
-          WHERE t.id = ? AND t.attempt = ? AND t.status IN ('running', 'complete')`)
+          WHERE t.id = ? AND t.attempt = ? AND t.status IN ('running', 'complete') AND ${privateTaskAccess('t')}`)
           .bind(job.turnID, job.attempt).first<{ id: string; contactID: string }>();
         if (row) await maintainAgentMemories(env, row.id, await jobAccountID(env, job.turnID, false), { contactID: row.contactID });
         return true;
@@ -220,7 +222,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
     try {
       await step.do(name, { retries: { limit: 1, delay: '5 seconds' }, timeout: '1 minute' }, async () => {
         const turn = await activeTurn(env.DB, job);
-        if (!turn || turn.groupRequestID || (includeCurrent && turn.status !== 'complete') || turn.status === 'failed') return false;
+        if (!turn || (turn.taskID && !await env.DB.prepare(`SELECT id FROM chat_turn WHERE id = ? AND ${privateTaskAccess('chat_turn')}`).bind(turn.id).first()) || turn.groupRequestID || (includeCurrent && turn.status !== 'complete') || turn.status === 'failed') return false;
         const { results } = await env.DB.prepare(`SELECT c.id, c.user_id AS userID FROM contact c
           WHERE c.agent_id = (SELECT agent_id FROM contact WHERE id = ?1) AND (?2 = 0 OR c.id = ?1)`)
           .bind(turn.contactID, includeCurrent ? 1 : 0).all<{ id: string; userID: string }>();

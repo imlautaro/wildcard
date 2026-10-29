@@ -1,3 +1,5 @@
+import { taskWorkAccess } from '../tasks/access';
+
 // Internal aliases are supplied by code, never by a model or HTTP parameter.
 // Apply at admission, inference, publication and push; a private instruction does
 // not grant access to a group after the requester or either agent has left it.
@@ -65,8 +67,7 @@ export function groupSourceAccess(reply: string, contributor: boolean) {
       ON author.group_id = source.group_id AND author.user_id = ${taskAuthor('source')}
     WHERE ${source} AND author.share_memory = 1
       ${contributor ? 'AND author.contributor_consent = 1' : ''}
-      AND (source.task_id IS NULL OR EXISTS (SELECT 1 FROM task JOIN task_list ON task_list.id = task.list_id
-        WHERE task.id = source.task_id AND task_list.group_id = source.group_id))
+      AND (source.task_id IS NULL OR ${taskWorkAccess('source.id', 'source.task_id', `${reply}.agent_id`, 'work_list.group_id = source.group_id')})
     UNION ALL
     SELECT 1 FROM group_message source JOIN group_request request
       ON request.id = source.request_id AND request.id = source.id AND request.group_id = source.group_id

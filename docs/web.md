@@ -73,7 +73,11 @@ Matching iOS:
 - **Tasks** (`/contacts/:id/tasks`, `/groups/:id/tasks`, `TaskBoard`), opened from the
   chat bar or details, matching iOS. A contact on a task work turn shows a "Working on
   “…”" row in the chat and in the header; the board marks contact tasks in progress with
-  **Working**. See [tasks](tasks.md#seeing-the-work).
+  **Working** while execution is active. Both clients also show next step, evidence,
+  blocked reason and work-turn consumption, with **Pause work**, **Resume work** and
+  **Cancel task** in the editor. Pausing/reassignment/reopening retains the budget.
+  Updates replace the existing session board cache; no separate downloads or polling
+  are added. See [persistent work](persistent-work.md) and [tasks](tasks.md#seeing-the-work).
 - **Shared in this chat** on contact details (`/contacts/:id/edit`) and group details
   (`/groups/:id/members`): Media and Docs tabs (`ChatMediaTabs`). See
   [attachments](attachments.md#shared-in-this-chat).

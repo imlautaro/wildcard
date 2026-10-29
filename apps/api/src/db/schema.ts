@@ -699,11 +699,17 @@ export const task = sqliteTable('task', {
   createdByKind: text('created_by_kind').notNull(), createdById: text('created_by_id').notNull(), version: integer('version').notNull().default(1),
   createdAt: date('created_at').notNull(), updatedAt: date('updated_at').notNull(), completedAt: date('completed_at'),
   workDueAt: date('work_due_at'), workReason: text('work_reason'), workCount: integer('work_count').notNull().default(0),
+  workState: text('work_state').notNull().default('active'), nextStep: text('next_step'), evidence: text('evidence'), blockedReason: text('blocked_reason'),
+  workGeneration: integer('work_generation').notNull().default(0), mutationToken: text('mutation_token'),
 }, t => [check('task_title', sql`length(${t.title}) BETWEEN 1 AND 300`), check('task_notes', sql`${t.notes} IS NULL OR length(${t.notes}) <= 2000`),
   check('task_status', sql`${t.status} IN ('open', 'in_progress', 'done', 'canceled')`),
   check('task_assignee_kind', sql`${t.assigneeKind} IN ('user', 'agent')`), check('task_result', sql`${t.result} IS NULL OR length(${t.result}) <= 2000`),
   check('task_creator', sql`${t.createdByKind} IN ('user', 'agent')`),
   check('task_work_reason', sql`${t.workReason} IS NULL OR ${t.workReason} IN ('assigned', 'unblocked', 'review')`),
+  check('task_work_state', sql`${t.workState} IN ('active', 'paused', 'blocked')`),
+  check('task_next_step', sql`${t.nextStep} IS NULL OR length(${t.nextStep}) <= 2000`),
+  check('task_evidence', sql`${t.evidence} IS NULL OR length(${t.evidence}) <= 2000`),
+  check('task_blocked_reason', sql`${t.blockedReason} IS NULL OR length(${t.blockedReason}) <= 2000`),
   check('task_assignee', sql`(${t.assigneeKind} IS NULL) = (${t.assigneeId} IS NULL)`),
   index('task_list_position').on(t.listId, t.position), index('task_work_due').on(t.workDueAt).where(sql`${t.workDueAt} IS NOT NULL`),
   index('task_assignee').on(t.assigneeKind, t.assigneeId, t.status)]);
@@ -720,6 +726,7 @@ export const taskWork = sqliteTable('task_work', {
   taskId: text('task_id').notNull().references(() => task.id, { onDelete: 'cascade' }),
   agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
   reason: text('reason').notNull(), createdAt: date('created_at').notNull(),
+  generation: integer('generation').notNull().default(0),
 }, t => [index('task_work_agent').on(t.agentId, t.createdAt)]);
 export const chatDocument = sqliteTable('chat_document', {
   id: text('id').primaryKey(),

@@ -18,11 +18,13 @@ have not been verified yet.
 - **Open Tasks**: the checklist button in the chat's top bar, or **Tasks** in chat
   details (iOS and web). Create a list, add tasks, tap the circle to mark a task done,
   and tap a task to edit its title, status (To do, In progress, Done, Canceled),
-  assignee, notes and what it waits for. **Cancel list** cancels the list and every
+  assignee, notes, next step, evidence and what it waits for. Contact tasks also offer
+  **Pause work**, **Resume work** and **Cancel task**. **Cancel list** cancels the list and every
   unfinished task. On iOS, swipe a task to cancel it.
 - Each task row shows the assignee, its status, what it is waiting for (a clock icon
   while blocked) and the result the contact recorded. Contact tasks in progress show a
-  **Working** chip.
+  **Working** chip while their work is active. Paused, blocked and exhausted tasks
+  show their execution state instead, plus the number of work turns used.
 
 ## Seeing the work
 
@@ -48,7 +50,9 @@ The first [web research](web-research.md) increment applies only to current huma
 requests. Task turns retain their existing tools and work-turn budgets; they do
 not gain public search or MCP. They may read/edit an already saved research
 document in their own chat, whose source provenance still refers to revision 1.
-Per-job research budgets, pause/cancel and external-tool grants remain future work.
+Public research budgets and external-tool grants remain future work.
+[Persistent work controls](persistent-work.md) now expose progress, retained work-turn
+budgets and pause/resume/cancel; background turns keep the existing internal tools.
 
 Contacts normally act only when someone writes. Tasks add a new trigger: a task
 assigned to a contact gives it its own **work turn**, without a human message.
@@ -62,27 +66,35 @@ assigned to a contact gives it its own **work turn**, without a human message.
 
 `dispatchTasks` runs from the existing minute Cron and right after every task
 change. A blocked task never starts a turn. Limits (`taskLimits` in
-`apps/api/src/tasks/data.ts`): six turns per task until it is reassigned or reopened,
+`apps/api/src/tasks/data.ts`): six turns over the lifetime of a task, including reassignment and reopening,
 and 30 work turns per contact in a rolling 24 hours (`task_work`). A busy chat retries
 the next minute without spending budget. These are implementation defaults, not
 product decisions.
 
-Work IDs are `task-<taskID>-v<version>-<n>`, so a reassigned or reopened task (which
-changes its version) starts a fresh cycle without colliding with earlier turns. The
-budget row and the next review are written in the same batch as the turn, and only
-if the turn was created.
+Work IDs are `task-<taskID>-g<generation>-<n>`. An execution generation changes
+when work is paused, resumed, blocked, canceled, reassigned or reopened, and when a
+person completes or edits the objective/notes/dependencies. Ordinary contact progress edits keep
+that authority. Earlier generations cannot start another tool/model step or publish
+a reply. The budget row and next review are written in the same batch as the turn;
+current state, blockers and daily budget are checked inside that transaction.
+Neither reassignment nor reopening refunds recorded work. Migration 0054 counts
+earlier assignment cycles when preserving existing consumption.
 
 Known gaps:
+
 - A failed task turn shows its failure without **Retry reply** (turns carry `taskID`);
   the next review tries again.
 - The hidden group trigger still counts as a newer message for other contacts' drafts
   in flight (the history-unchanged guard), as before.
 - Proactive reviews do not follow the initiative's quiet hours (22:00–08:00), so a
   review can post, and push, at night.
-- The task trigger does not repeat the human-message check that every group member
-  consented to the Contributor model. Under Contributor without full consent the
-  reply fails, and each review adds another hidden trigger until the six-turn
-  budget is spent.
+
+Group dispatch now checks shared-memory permission and every member's Contributor
+consent before adding an internal trigger, using Standard for connector-isolated
+groups. Inference and publication still check current access. Provider errors
+and already admitted work can still spend a reserved turn.
+
+## Turn scope
 
 - **Private chats**: a queued `chat_turn` with empty `user_text` and `task_id`,
   dispatched like a scheduled message through the same attention lock, with three
@@ -100,8 +112,9 @@ Known gaps:
   responsible human (task creator, list creator or group owner) as `requester_id`, so
   the existing membership, shared-memory and Contributor consent checks apply.
   `groupSourceAccess` admits it structurally (a task of this group's lists), so the
-  contact can mark its task done and still publish or review its update. Whether
-  there is work left is decided on the first draft: if the task is no longer open
+  contact can mark its task done and still publish or review its update within the
+  same active generation. Paused, blocked, canceled or superseded work cannot
+  publish. Whether there is work left is decided on the first draft: if the task is no longer open
   or assigned to that contact, the turn ends without a message. Group task tools
   never start turns inline; the Cron picks new assignments up within a minute, so
   the assigning contact's own draft is not forced into a review. The assignee must reply (like a human-requested opening) unless a
@@ -109,7 +122,8 @@ Known gaps:
   bounded bot replies.
 
 The prompts ask the contact to work on the task with the evidence it has, record
-progress with `update_task` (in progress, or done with a short result), report
+progress with `update_task` (in progress with next step/evidence, done with a short
+result, or blocked with a reason when human input is needed), report
 briefly, and not repeat earlier updates. This is model guidance; nothing enforces
 the quality of the work.
 
@@ -126,7 +140,7 @@ and in the evidence phase of every initial group draft (not reviews):
 | `list_tasks` | Active lists with task IDs, status, assignee, blockers and results, plus assignable members |
 | `create_task_list` | A list with up to 50 tasks; `blockedBy` names earlier tasks by position (`"1"`) |
 | `add_task` | One task in a list; `blockedBy` lists task IDs |
-| `update_task` | Status, assignee, result, notes, title or blockers |
+| `update_task` | Status, assignee, result, notes, title, blockers, next step, evidence or a blocked reason/state |
 | `cancel_task_list` | Cancels the list and its unfinished tasks |
 
 Every mutation stores a receipt in `task_mutation`, keyed by the turn (or group
@@ -158,9 +172,13 @@ limited to 60 per account per minute. Every write returns the whole board.
 | POST | `/lists` | `{ id (UUID), title, tasks?: [{ title, notes?, assignee?, blockedBy? }] }` |
 | PATCH | `/lists/:listID` | `{ title? , status?: "canceled" }` |
 | POST | `/lists/:listID/tasks` | `{ id (UUID), title, notes?, assignee?, blockedBy? }` |
-| PATCH | `/items/:taskID` | `{ version, title?, notes?, status?, assignee?: {kind, id} \| null, result?, blockedBy? }` |
+| PATCH | `/items/:taskID` | `{ version, title?, notes?, status?, assignee?: {kind, id} \| null, result?, blockedBy?, workState?, nextStep?, evidence?, blockedReason? }` |
 
 ## Storage
+
+Migration `0054_persistent_task_controls.sql` adds execution state/generation,
+progress/evidence, guarded edit tokens and receipt generations; see
+[persistent work](persistent-work.md) for compatibility and verification.
 
 Migration `0046_tasks.sql` adds `task_list`, `task`, `task_dependency`,
 `task_mutation` and `task_work`, and nullable `task_id` columns on `chat_turn` and

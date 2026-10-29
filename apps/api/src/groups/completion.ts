@@ -87,6 +87,13 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
   if (!isRecord(args)) return toolError('Tool arguments must be a JSON object.');
   try {
     await assertCurrentAccess(env, input);
+    // Old Workflow checkpoints can retain an earlier tool catalog. Current source
+    // authority, rather than checkpointed capability flags, controls admissions.
+    const taskWork = await env.DB.prepare(`SELECT source.task_id FROM group_reply r JOIN group_message source ON source.id = r.source_id
+      WHERE r.id = ? AND source.task_id IS NOT NULL`).bind(input.scope.reactionJob.turnID).first();
+    if (taskWork && [...mcpTools, ...groupMiniAppTools, imageTool, privateMessageTool, researchTool].some(tool => tool.function.name === call.function.name)) {
+      return toolError('Autonomous task work does not authorize this tool.');
+    }
     if (call.function.name === researchTool.function.name) return await executeResearchTool(env, {
       kind: 'group', groupID: input.scope.groupID, userID: input.scope.userID, agentID: input.scope.agentID,
       turnID: input.scope.reactionJob.turnID, attempt: input.scope.reactionJob.attempt, contributor: input.scope.contributor,
@@ -127,7 +134,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
   if (!input.previous) {
     try {
       await step.do(`${prefix}-index-image`, { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' },
-        async () => { await indexRecentChatImage(env, { ...input.scope, beforeSequence: input.throughSequence + 1 }); return true; });
+        async () => { await assertCurrentAccess(env, input); await indexRecentChatImage(env, { ...input.scope, beforeSequence: input.throughSequence + 1 }); return true; });
     } catch (error) {
       console.error(JSON.stringify({ event: 'group_image_index_unavailable', code: safeErrorCode(error) }));
     }

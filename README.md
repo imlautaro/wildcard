@@ -29,6 +29,7 @@ docs/
   web.md                     # Web app architecture, features, and limitations
   mini-apps.md               # Contact-built native mini apps over MCP tools
   tasks.md                   # Shared to-do lists and contact work turns
+  persistent-work.md         # Task progress, retained budgets and pause/resume
   documents.md               # Collaborative Markdown documents in chats
   web-research.md            # Bounded Meta web research with sourced reports
 ```
@@ -223,7 +224,9 @@ Google OAuth client and preview access; live provider/device validation is pendi
 
 Private chats and groups can keep [shared task lists](docs/tasks.md): contacts and
 people create, assign, block and cancel tasks, and an assigned contact works on its
-task in its own turn, again when its blockers finish, and in periodic reviews. Chats also hold [Markdown documents](docs/documents.md) that
+task in its own turn, again when its blockers finish, and in periodic reviews.
+[Persistent work](docs/persistent-work.md) records next steps/evidence and exposes
+pause/resume/cancel and retained work-turn budgets on iOS and web (migration 0054). Chats also hold [Markdown documents](docs/documents.md) that
 contacts and people write together, opened full screen with a viewer and editor.
 
 Human requests can use [web research](docs/web-research.md) through Meta Responses

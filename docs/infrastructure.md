@@ -1818,6 +1818,43 @@ automatic release: older code ignores the tables and columns, does not dispatch 
 turns, and leaves already queued task turns to run as ordinary turns with empty text,
 so drain or cancel open task lists before rolling back. See [tasks](tasks.md).
 
+### Persistent task controls (migration 0054)
+
+Apply additive `0054_persistent_task_controls.sql` after 0053. It adds task execution
+state/generation, next step, evidence, blocked reason, guarded mutation tokens and
+receipt generations. Existing tasks start active; work consumption is preserved
+across all recorded assignment cycles. Existing tasks move to generation 1;
+pre-control receipts stay at 0, invalidating their attempts under the new code.
+The next scheduled review can resume active tasks with remaining budget. No new binding, service, secret, account
+permission or Cron is required. The required `DB`, `CHAT_WORKFLOW`, Meta model/key
+and existing group/member permissions remain the prerequisites. Independent
+accounts replace the existing D1/Worker identifiers as described above; optional
+AI Gateway is unchanged. Staging uses its own existing DB/Workflow/Meta secret.
+
+For local setup, provision the existing required resources and apply migrations
+with `npm run db:migrate:local`; keep local secrets in ignored files. Production
+migrations and publication run only through the clean committed/pushed automatic
+release. Publish the API before using the new clients; older clients ignore added
+JSON fields, and the iOS client tolerates missing fields during an API transition.
+No local or remote persistent database was migrated for the implementation checks.
+
+Static checks: API/web TypeScript, Swift typechecking, and
+`node scripts/checks/persistent-task-sql.cjs` plus
+`node scripts/checks/reply-messages-sql.cjs` prepare SQL against an empty migrated
+schema without exercising feature behavior. Authorized functional verification
+must cover concurrent admission, sixth-turn exhaustion, no refunds on reopening,
+pause/resume/cancel during work, dependency completion, consent/access revocation,
+stale edits and both client caches with fictional data. See
+[persistent work](persistent-work.md).
+
+Rollback is another automatic release. Keep the additive columns and receipts;
+do not reverse the consumption backfill or remove task data. Code before 0054
+does not enforce pause/generation controls and can reset work counts on reopening.
+Cancel open task lists and let admitted task Workflows settle before rolling back
+to that code; leaving a task merely paused is insufficient. Already started
+provider work may finish and incur charges. Migration preparation does not verify
+live replay, pause races, model behavior, device UI or production migration.
+
 ## Contact personality
 
 [Contact personality](personality.md) reuses the required D1 `DB`, Meta key/model,

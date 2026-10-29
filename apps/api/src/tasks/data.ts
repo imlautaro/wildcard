@@ -5,14 +5,15 @@ export type TaskActor = { kind: 'user' | 'agent'; id: string };
 export type TaskStatus = 'open' | 'in_progress' | 'done' | 'canceled';
 export type TaskAssignee = { kind: 'user' | 'agent'; id: string } | null;
 export type TaskInput = { id?: string; title: string; notes?: string | null; assignee?: TaskAssignee; blockedBy?: string[] };
-export type TaskPatch = { title?: string; notes?: string | null; status?: TaskStatus; assignee?: TaskAssignee; result?: string | null; blockedBy?: string[] };
+export type TaskWorkState = 'active' | 'paused' | 'blocked';
+export type TaskPatch = { workState?: TaskWorkState; nextStep?: string | null; evidence?: string | null; blockedReason?: string | null; title?: string; notes?: string | null; status?: TaskStatus; assignee?: TaskAssignee; result?: string | null; blockedBy?: string[] };
 
 export class TaskError extends Error {
   constructor(message: string, readonly status: 400 | 404 | 409 = 400) { super(message); }
 }
 
 export const taskLimits = { lists: 20, tasks: 50, title: 300, listTitle: 200, notes: 2000, blockers: 10,
-  // Contact work turns: each task gets at most this many until reassigned, with
+  // Contact work turns: each task gets at most this many over its lifetime, with
   // a proactive review this long after each turn while it stays open.
   workPerTask: 6, reviewDelay: 30 * 60_000, agentDaily: 30 };
 const statuses: TaskStatus[] = ['open', 'in_progress', 'done', 'canceled'];
@@ -20,7 +21,7 @@ const open = `status IN ('open', 'in_progress')`;
 
 type Row = { id: string; listID: string; position: number; title: string; notes: string | null; status: TaskStatus;
   assigneeKind: 'user' | 'agent' | null; assigneeID: string | null; result: string | null; createdByKind: string; createdByID: string;
-  version: number; createdAt: number; updatedAt: number; completedAt: number | null; workDueAt: number | null; blockedByJSON: string };
+  version: number; createdAt: number; updatedAt: number; completedAt: number | null; workDueAt: number | null; workState: TaskWorkState; nextStep: string | null; evidence: string | null; blockedReason: string | null; workUsed: number; blockedByJSON: string };
 type ListRow = { id: string; title: string; status: 'active' | 'canceled'; createdByKind: string; createdByID: string; createdAt: number; updatedAt: number };
 
 const scopeWhere = (scope: TaskScope, alias = 'l') => scope.kind === 'group'
@@ -48,7 +49,7 @@ export async function readTaskLists(db: D1Database, scope: TaskScope, includeCan
   if (!lists.length) return [];
   const { results: tasks } = await db.prepare(`SELECT t.id, t.list_id AS listID, t.position, t.title, t.notes, t.status,
     t.assignee_kind AS assigneeKind, t.assignee_id AS assigneeID, t.result, t.created_by_kind AS createdByKind, t.created_by_id AS createdByID,
-    t.version, t.created_at AS createdAt, t.updated_at AS updatedAt, t.completed_at AS completedAt, t.work_due_at AS workDueAt,
+    t.version, t.created_at AS createdAt, t.updated_at AS updatedAt, t.completed_at AS completedAt, t.work_due_at AS workDueAt, t.work_state AS workState, t.next_step AS nextStep, t.evidence, t.blocked_reason AS blockedReason, t.work_count AS workUsed,
     COALESCE((SELECT json_group_array(d.blocked_by_id) FROM task_dependency d WHERE d.task_id = t.id), '[]') AS blockedByJSON
     FROM task t WHERE t.list_id IN (SELECT value FROM json_each(?)) ORDER BY t.position`)
     .bind(JSON.stringify(lists.map(list => list.id))).all<Row>();
@@ -60,7 +61,8 @@ export async function readTaskLists(db: D1Database, scope: TaskScope, includeCan
       blocked: blockedBy.some(id => ['open', 'in_progress'].includes(byID.get(id)?.status ?? 'done')),
       assigneeName: task.assigneeKind ? members.get(`${task.assigneeKind}:${task.assigneeID}`) ?? 'Former member' : null,
       createdByName: members.get(`${task.createdByKind}:${task.createdByID}`) ?? 'Former member',
-      workScheduled: workDueAt !== null };
+      workScheduled: workDueAt !== null && task.workState === 'active' && task.workUsed < taskLimits.workPerTask,
+      workLimit: taskLimits.workPerTask };
   }) }));
 }
 export type TaskList = Awaited<ReturnType<typeof readTaskLists>>[number];
@@ -99,7 +101,10 @@ export function parseTaskInput(value: unknown): TaskInput {
 }
 export function parseTaskPatch(value: Record<string, unknown>): TaskPatch {
   if (value.status !== undefined && !statuses.includes(value.status as TaskStatus)) throw new TaskError('status must be open, in_progress, done or canceled.');
-  return { title: value.title === undefined ? undefined : text(value.title, taskLimits.title, 'Task title'),
+  if (value.workState !== undefined && !['active', 'paused', 'blocked'].includes(value.workState as string)) throw new TaskError('workState must be active, paused or blocked.');
+  return { workState: value.workState as TaskWorkState | undefined, nextStep: text(value.nextStep, taskLimits.notes, 'Next step', true),
+    evidence: text(value.evidence, taskLimits.notes, 'Evidence', true), blockedReason: text(value.blockedReason, taskLimits.notes, 'Blocked reason', true),
+    title: value.title === undefined ? undefined : text(value.title, taskLimits.title, 'Task title'),
     notes: text(value.notes, taskLimits.notes, 'Notes', true), status: value.status as TaskStatus | undefined,
     assignee: parseAssignee(value.assignee), result: text(value.result, taskLimits.notes, 'Result', true), blockedBy: parseBlockers(value.blockedBy) };
 }
@@ -138,23 +143,24 @@ async function checkBlockers(db: D1Database, listID: string, taskID: string, blo
  * someone else is due now; one a contact assigned to itself is reviewed later.
  * Tasks that are no longer open or assigned to a contact stop.
  */
-function workStatement(db: D1Database, taskID: string, actor: TaskActor, assigned: boolean, now: number) {
+function workStatement(db: D1Database, taskID: string, actor: TaskActor, assigned: boolean, now: number, token: string | null = null, resumed = false) {
   return db.prepare(`UPDATE task SET
-      work_due_at = CASE WHEN status NOT IN ('open', 'in_progress') OR assignee_kind IS NOT 'agent' THEN NULL
-        WHEN ?2 = 1 THEN CASE WHEN assignee_id = ?3 AND ?4 = 'agent' THEN ?5 + ?6 ELSE ?5 END ELSE work_due_at END,
-      work_reason = CASE WHEN status NOT IN ('open', 'in_progress') OR assignee_kind IS NOT 'agent' THEN NULL
-        WHEN ?2 = 1 THEN CASE WHEN assignee_id = ?3 AND ?4 = 'agent' THEN 'review' ELSE 'assigned' END ELSE work_reason END,
-      work_count = CASE WHEN ?2 = 1 THEN 0 ELSE work_count END
-    WHERE id = ?1`).bind(taskID, assigned ? 1 : 0, actor.id, actor.kind, now, taskLimits.reviewDelay);
+      work_due_at = CASE WHEN status NOT IN ('open', 'in_progress') OR assignee_kind IS NOT 'agent' OR work_count >= ${taskLimits.workPerTask} THEN NULL
+        WHEN work_state != 'active' THEN NULL
+        WHEN ?2 = 1 OR ?8 = 1 THEN CASE WHEN assignee_id = ?3 AND ?4 = 'agent' THEN ?5 + ?6 ELSE ?5 END ELSE work_due_at END,
+      work_reason = CASE WHEN status NOT IN ('open', 'in_progress') OR assignee_kind IS NOT 'agent' OR work_state != 'active' THEN NULL
+        WHEN ?2 = 1 OR ?8 = 1 THEN CASE WHEN assignee_id = ?3 AND ?4 = 'agent' THEN 'review' ELSE 'assigned' END ELSE work_reason END
+    WHERE id = ?1 AND (?7 IS NULL OR mutation_token = ?7)`)
+    .bind(taskID, assigned ? 1 : 0, actor.id, actor.kind, now, taskLimits.reviewDelay, token, resumed ? 1 : 0);
 }
 // Contact-owned tasks whose last blocker just finished become due now.
-function unblockStatement(db: D1Database, taskID: string, now: number) {
+function unblockStatement(db: D1Database, taskID: string, now: number, token: string | null = null) {
   return db.prepare(`UPDATE task SET work_due_at = ?2, work_reason = 'unblocked'
     WHERE id IN (SELECT task_id FROM task_dependency WHERE blocked_by_id = ?1)
-    AND ${open} AND assignee_kind = 'agent'
-    AND (SELECT status FROM task WHERE id = ?1) IN ('done', 'canceled')
+    AND ${open} AND assignee_kind = 'agent' AND work_state = 'active' AND work_count < ${taskLimits.workPerTask}
+    AND (SELECT status FROM task WHERE id = ?1 AND (?3 IS NULL OR mutation_token = ?3)) IN ('done', 'canceled')
     AND NOT EXISTS (SELECT 1 FROM task_dependency d JOIN task blocker ON blocker.id = d.blocked_by_id
-      WHERE d.task_id = task.id AND blocker.status IN ('open', 'in_progress'))`).bind(taskID, now);
+      WHERE d.task_id = task.id AND blocker.status IN ('open', 'in_progress'))`).bind(taskID, now, token);
 }
 
 export async function createTaskList(db: D1Database, scope: TaskScope, actor: TaskActor, id: string, title: unknown, rawTasks: unknown) {
@@ -211,32 +217,43 @@ export async function addTask(db: D1Database, scope: TaskScope, actor: TaskActor
 /** Applies a patch with optimistic concurrency when `version` is given (humans); tools pass none. */
 export async function updateTask(db: D1Database, scope: TaskScope, actor: TaskActor, taskID: string, patch: TaskPatch, version?: number) {
   const where = scopeWhere(scope);
-  const task = await db.prepare(`SELECT t.id, t.list_id AS listID, t.status, t.version, t.assignee_kind AS assigneeKind, t.assignee_id AS assigneeID, l.status AS listStatus
+  const task = await db.prepare(`SELECT t.id, t.list_id AS listID, t.status, t.version, t.assignee_kind AS assigneeKind, t.assignee_id AS assigneeID, t.work_state AS workState, t.blocked_reason AS blockedReason, l.status AS listStatus
     FROM task t JOIN task_list l ON l.id = t.list_id WHERE t.id = ? AND ${where.sql}`).bind(taskID, ...where.binds)
-    .first<{ id: string; listID: string; status: TaskStatus; version: number; assigneeKind: string | null; assigneeID: string | null; listStatus: string }>();
+    .first<{ id: string; listID: string; status: TaskStatus; version: number; assigneeKind: string | null; assigneeID: string | null; workState: TaskWorkState; blockedReason: string | null; listStatus: string }>();
   if (!task) throw new TaskError('Task not found in this chat.', 404);
   if (task.listStatus !== 'active') throw new TaskError('This list was canceled.', 409);
   if (version !== undefined && version !== task.version) throw new TaskError('This task changed. Refresh and try again.', 409);
+  if (actor.kind === 'agent' && patch.workState !== undefined && patch.workState !== 'blocked') throw new TaskError('Only people can pause or resume task work.');
+  if (actor.kind === 'agent' && patch.workState === 'blocked' && (task.assigneeKind !== 'agent' || task.assigneeID !== actor.id)) throw new TaskError('Only the assignee can block its work.');
+  if ((patch.workState ?? task.workState) === 'blocked' && !(patch.blockedReason === undefined ? task.blockedReason : patch.blockedReason)) throw new TaskError('Provide the reason this work is blocked.');
   await requireMember(db, scope, patch.assignee);
   if (patch.blockedBy) await checkBlockers(db, task.listID, taskID, patch.blockedBy);
   const assigned = patch.assignee !== undefined
     && ((patch.assignee?.kind ?? null) !== task.assigneeKind || (patch.assignee?.id ?? null) !== task.assigneeID);
   const reopened = patch.status !== undefined && ['open', 'in_progress'].includes(patch.status) && ['done', 'canceled'].includes(task.status);
-  const now = Date.now();
+  const now = Date.now(), token = crypto.randomUUID();
+  const authorityChanged = assigned || reopened || (patch.workState !== undefined && patch.workState !== task.workState) || patch.status === 'canceled'
+    || (actor.kind === 'user' && (patch.status === 'done' || patch.title !== undefined || patch.notes !== undefined || patch.blockedBy !== undefined));
   const updated = await db.batch([
     db.prepare(`UPDATE task SET title = COALESCE(?3, title), notes = CASE WHEN ?4 = 1 THEN ?5 ELSE notes END,
         status = COALESCE(?6, status), assignee_kind = CASE WHEN ?7 = 1 THEN ?8 ELSE assignee_kind END,
         assignee_id = CASE WHEN ?7 = 1 THEN ?9 ELSE assignee_id END, result = CASE WHEN ?10 = 1 THEN ?11 ELSE result END,
         completed_at = CASE WHEN COALESCE(?6, status) = 'done' THEN COALESCE(completed_at, ?12) WHEN ?6 IS NOT NULL THEN NULL ELSE completed_at END,
-        version = version + 1, updated_at = ?12 WHERE id = ?1 AND version = ?2`)
+        work_state = COALESCE(?13, work_state), next_step = CASE WHEN ?14 = 1 THEN ?15 ELSE next_step END,
+        evidence = CASE WHEN ?16 = 1 THEN ?17 ELSE evidence END,
+        blocked_reason = CASE WHEN COALESCE(?13, work_state) != 'blocked' THEN NULL WHEN ?18 = 1 THEN ?19 ELSE blocked_reason END,
+        work_generation = work_generation + ?20, mutation_token = ?21,
+        version = version + 1, updated_at = ?12 WHERE id = ?1 AND version = ?2
+          AND EXISTS (SELECT 1 FROM task_list WHERE id = task.list_id AND status = 'active')`)
       .bind(taskID, task.version, patch.title ?? null, patch.notes !== undefined ? 1 : 0, patch.notes ?? null, patch.status ?? null,
         patch.assignee !== undefined ? 1 : 0, patch.assignee?.kind ?? null, patch.assignee?.id ?? null,
-        patch.result !== undefined ? 1 : 0, patch.result ?? null, now),
-    ...(patch.blockedBy ? [db.prepare('DELETE FROM task_dependency WHERE task_id = ?').bind(taskID),
-      ...patch.blockedBy.map(blocker => db.prepare('INSERT INTO task_dependency (task_id, blocked_by_id) VALUES (?, ?)').bind(taskID, blocker))] : []),
-    workStatement(db, taskID, actor, assigned || reopened, now),
-    unblockStatement(db, taskID, now),
-    db.prepare('UPDATE task_list SET updated_at = ? WHERE id = ?').bind(now, task.listID),
+        patch.result !== undefined ? 1 : 0, patch.result ?? null, now, patch.workState ?? null, patch.nextStep !== undefined ? 1 : 0, patch.nextStep ?? null,
+        patch.evidence !== undefined ? 1 : 0, patch.evidence ?? null, patch.blockedReason !== undefined ? 1 : 0, patch.blockedReason ?? null, authorityChanged ? 1 : 0, token),
+    ...(patch.blockedBy ? [db.prepare('DELETE FROM task_dependency WHERE task_id = ?1 AND EXISTS (SELECT 1 FROM task WHERE id = ?1 AND mutation_token = ?2)').bind(taskID, token),
+      ...patch.blockedBy.map(blocker => db.prepare('INSERT INTO task_dependency (task_id, blocked_by_id) SELECT ?1, ?2 WHERE EXISTS (SELECT 1 FROM task WHERE id = ?1 AND mutation_token = ?3)').bind(taskID, blocker, token))] : []),
+    workStatement(db, taskID, actor, assigned || reopened, now, token, patch.workState === 'active' && task.workState !== 'active'),
+    unblockStatement(db, taskID, now, token),
+    db.prepare('UPDATE task_list SET updated_at = ?1 WHERE id = ?2 AND EXISTS (SELECT 1 FROM task WHERE id = ?3 AND mutation_token = ?4)').bind(now, task.listID, taskID, token),
   ]);
   if (!updated[0]!.meta.changes) throw new TaskError('This task changed. Refresh and try again.', 409);
 }
@@ -247,7 +264,7 @@ export async function cancelTaskList(db: D1Database, scope: TaskScope, listID: s
   const now = Date.now();
   await db.batch([
     db.prepare(`UPDATE task_list SET status = 'canceled', updated_at = ? WHERE id = ?`).bind(now, listID),
-    db.prepare(`UPDATE task SET status = 'canceled', work_due_at = NULL, work_reason = NULL, version = version + 1, updated_at = ?
+    db.prepare(`UPDATE task SET status = 'canceled', work_due_at = NULL, work_reason = NULL, work_generation = work_generation + 1, version = version + 1, updated_at = ?
       WHERE list_id = ? AND ${open}`).bind(now, listID),
   ]);
 }

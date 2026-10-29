@@ -101,7 +101,7 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
   const contact = await env.DB.prepare(`SELECT c.id, c.user_id AS userID FROM contact c JOIN contact_agent a ON a.id = c.agent_id
     WHERE a.id = ? AND c.user_id = a.owner_id AND a.memory_shared = 1`).bind(row.agentID).first<{ id: string; userID: string }>();
   if (!contact) throw new Error('SHARED_MEMORY_CONSENT_REQUIRED');
-  const connectorAccess = !contributor && !row.sourceAgentID && !previous && !!await env.DB.prepare(`SELECT ga.connection_id FROM mcp_group_access ga
+  const connectorAccess = !contributor && !row.taskID && !row.sourceAgentID && !previous && !!await env.DB.prepare(`SELECT ga.connection_id FROM mcp_group_access ga
     JOIN group_agent member ON member.group_id = ga.group_id AND member.agent_id = ga.agent_id
     WHERE ga.group_id = ? AND ga.agent_id = ? AND ga.user_id = member.added_by LIMIT 1`).bind(row.groupID, row.agentID).first();
   const energy = await readEnergy(env.DB, row.agentID);
@@ -109,10 +109,10 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
   const openingReplyRequired = !!row.opening && !row.laterHuman;
   // A task work turn reports back like an opening: the assignee must post an update.
   const lists = await readTaskLists(env.DB, { kind: 'group', groupID: row.groupID }, false);
-  // Access to a Tasks notice is structural, so the assignee can finish its task and
-  // still publish or review. Whether there is work left is decided on the first draft.
+  // A current execution generation may finish its own task and still publish its
+  // result; paused, blocked, canceled and superseded generations cannot continue.
   const workTask = row.taskID ? lists.flatMap(list => list.tasks.map(task => ({ list, task }))).find(({ task }) => task.id === row.taskID
-    && ['open', 'in_progress'].includes(task.status) && task.assigneeKind === 'agent' && task.assigneeID === row.agentID) : undefined;
+    && ['open', 'in_progress'].includes(task.status) && task.workState === 'active' && task.assigneeKind === 'agent' && task.assigneeID === row.agentID) : undefined;
   if (row.taskID && !workTask && !previous) return { draft: { text: null, throughSequence: row.throughSequence } };
   const canResearchWeb = env.WEB_RESEARCH_ENABLED === 'true' && !previous && !row.sourceAgentID && !row.directed && !row.taskID
     && !await env.DB.prepare('SELECT 1 FROM mcp_private_group WHERE group_id = ?').bind(row.groupID).first();
@@ -201,7 +201,7 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
       tasks: taskContext(lists), documents,
       round: { openingReplyRequired, taskReplyRequired, trigger: { id: row.sourceID, sequence: row.sourceSequence, userID: row.sourceAgentID ? null : row.userID,
         agentID: row.sourceAgentID, directed: !!row.directed, requestedBy: row.sourceAgentID ? { userID: row.userID, name: row.requesterName } : null,
-        name: row.senderName, text: row.text, ...(workTask ? { task: { taskID: workTask.task.id, listID: workTask.list.id, list: workTask.list.title, title: workTask.task.title, notes: workTask.task.notes, status: workTask.task.status, result: workTask.task.result } } : {}),
+        name: row.senderName, text: row.text, ...(workTask ? { task: { taskID: workTask.task.id, listID: workTask.list.id, list: workTask.list.title, title: workTask.task.title, notes: workTask.task.notes, status: workTask.task.status, result: workTask.task.result, nextStep: workTask.task.nextStep, evidence: workTask.task.evidence, workUsed: workTask.task.workUsed, workLimit: workTask.task.workLimit } } : {}),
         attachment: fileMarker(row.attachmentJSON), replyTo: replyContext(row.replyToID, quoted) },
         participants, earlierRepliesInRound: roundReplies.map(describe) },
       recentHistoryIsPartial: true, recentGroupMessages: [...history].reverse().map(describe),
@@ -220,10 +220,10 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
     // Persist the object reference, never attachment bytes, in Workflow checkpoints.
     attachment: file ? { attachmentJSON: file.attachmentJSON,
       userText: `Group attachment shared by ${JSON.stringify(file.name)}. ${file.text}` } : null,
-    canGenerateImage: !previous && !row.sourceAgentID && !row.directed,
+    canGenerateImage: !previous && !row.taskID && !row.sourceAgentID && !row.directed,
     // Like images, apps are built only for a human's own message, never during review.
-    canBuildMiniApps: !previous && !row.sourceAgentID && !row.directed,
-    canMessagePrivately: !previous && !row.sourceAgentID && !row.directed,
+    canBuildMiniApps: !previous && !row.taskID && !row.sourceAgentID && !row.directed,
+    canMessagePrivately: !previous && !row.taskID && !row.sourceAgentID && !row.directed,
     canResearchWeb,
     throughSequence: row.throughSequence, directed: !!row.directed, openingReplyRequired: replyRequired, allowedActions, previous: previous ?? null,
     contextMessageIDs: [...new Set([row.sourceID, ...history.map(m => m.id), ...roundReplies.map(m => m.id)])],

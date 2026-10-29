@@ -10,7 +10,7 @@ const busy = ref(false);
 const newList = ref('');
 const drafts = reactive<Record<string, string>>({});
 const editing = ref<string | null>(null);
-const form = reactive({ title: '', notes: '', status: 'open' as TaskStatus, assignee: '', blockedBy: [] as string[] });
+const form = reactive({ title: '', notes: '', status: 'open' as TaskStatus, assignee: '', blockedBy: [] as string[], nextStep: '', evidence: '', blockedReason: '' });
 
 const statusLabels: Record<TaskStatus, string> = { open: 'To do', in_progress: 'In progress', done: 'Done', canceled: 'Canceled' };
 const statusOptions = (Object.keys(statusLabels) as TaskStatus[]).map(value => ({ value, label: statusLabels[value] }));
@@ -33,24 +33,34 @@ async function run(action: () => Promise<void>) {
   finally { busy.value = false; }
 }
 const assignee = (value: string) => value ? { kind: value.split(':')[0], id: value.slice(value.indexOf(':') + 1) } : null;
+const workLabel = (task: TaskItem) => task.workState === 'paused' ? 'Paused' : task.workState === 'blocked' ? 'Blocked' : task.workUsed >= task.workLimit ? 'Budget exhausted' : null;
+const controlWork = (task: TaskItem, workState: 'active' | 'paused') => run(async () => {
+  await tasks.updateTask(task.id, task.version, { workState });
+  editing.value = null;
+});
 const taskTitle = (list: TaskList, id: string) => list.tasks.find(task => task.id === id)?.title ?? 'a removed task';
 
 function detail(list: TaskList, task: TaskItem) {
   const parts = [task.assigneeName ?? 'Unassigned'];
   if (task.status !== 'open') parts.push(statusLabels[task.status]);
+  if (task.assigneeKind === 'agent') {
+    if (workLabel(task) && !['done', 'canceled'].includes(task.status)) parts.push(workLabel(task)!);
+    if (task.workUsed != null && task.workLimit != null) parts.push(`${task.workUsed}/${task.workLimit} work turns used`);
+  }
   if (task.blocked) parts.push(`Waiting for ${task.blockedBy.filter(id => ['open', 'in_progress'].includes(list.tasks.find(t => t.id === id)?.status ?? '')).map(id => taskTitle(list, id)).join(', ')}`);
   return parts.join(' · ');
 }
 function edit(task: TaskItem) {
   if (editing.value === task.id) { editing.value = null; return; }
   editing.value = task.id;
-  Object.assign(form, { title: task.title, notes: task.notes ?? '', status: task.status,
+  Object.assign(form, { title: task.title, notes: task.notes ?? '', status: task.status, nextStep: task.nextStep ?? '', evidence: task.evidence ?? '', blockedReason: task.blockedReason ?? '',
     assignee: task.assigneeKind ? `${task.assigneeKind}:${task.assigneeID}` : '', blockedBy: [...task.blockedBy] });
 }
 const toggle = (task: TaskItem) => run(() => tasks.updateTask(task.id, task.version, { status: task.status === 'done' ? 'open' : 'done' }));
 const save = (task: TaskItem) => run(async () => {
   await tasks.updateTask(task.id, task.version, { title: form.title.trim(), notes: form.notes.trim() || null, status: form.status,
-    assignee: assignee(form.assignee), blockedBy: form.blockedBy });
+    assignee: assignee(form.assignee), blockedBy: form.blockedBy, nextStep: form.nextStep.trim() || null,
+    evidence: form.evidence.trim() || null, blockedReason: form.blockedReason.trim() || null });
   editing.value = null;
 });
 const createList = () => run(async () => {
@@ -97,8 +107,10 @@ const cancelList = (list: TaskList) => run(async () => {
                 <AppIcon :name="task.status === 'done' ? 'check' : task.status === 'canceled' ? 'block' : task.blocked ? 'clock' : 'circle'" :filled="task.status === 'done'" />
               </button>
               <button type="button" class="task-copy link-button" :disabled="list.status === 'canceled'" @click="edit(task)">
-                <span class="task-title">{{ task.title }}<span v-if="task.assigneeKind === 'agent' && task.status === 'in_progress'" class="chip primary task-working"><span class="live-dot" aria-hidden="true" />Working</span></span>
+                <span class="task-title">{{ task.title }}<span v-if="task.assigneeKind === 'agent' && task.status === 'in_progress' && !workLabel(task)" class="chip primary task-working"><span class="live-dot" aria-hidden="true" />Working</span></span>
                 <span class="small muted">{{ detail(list, task) }}</span>
+                <span v-if="task.nextStep" class="small">Next step: {{ task.nextStep }}</span>
+                <span v-if="task.blockedReason" class="small">Blocked: {{ task.blockedReason }}</span>
                 <span v-if="task.result" class="small task-result">{{ task.result }}</span>
               </button>
             </div>
@@ -107,6 +119,15 @@ const cancelList = (list: TaskList) => run(async () => {
               <div class="field"><label :for="`status-${task.id}`">Status</label><AppSelect :id="`status-${task.id}`" v-model="form.status" variant="plain" :options="statusOptions" /></div>
               <div class="field"><label :for="`assignee-${task.id}`">Assignee</label><AppSelect :id="`assignee-${task.id}`" v-model="form.assignee" variant="plain" :options="assigneeOptions" /></div>
               <div class="field"><label :for="`notes-${task.id}`">Notes</label><textarea :id="`notes-${task.id}`" v-model="form.notes" rows="2" maxlength="2000" /></div>
+              <div class="field"><label :for="`next-${task.id}`">Next step</label><textarea :id="`next-${task.id}`" v-model="form.nextStep" rows="2" maxlength="2000" /></div>
+              <div class="field"><label :for="`evidence-${task.id}`">Evidence</label><textarea :id="`evidence-${task.id}`" v-model="form.evidence" rows="2" maxlength="2000" /></div>
+              <div v-if="task.workState === 'blocked'" class="field"><label :for="`blocked-${task.id}`">Blocked reason</label><textarea :id="`blocked-${task.id}`" v-model="form.blockedReason" rows="2" maxlength="2000" /></div>
+              <p v-if="task.assigneeKind === 'agent'" class="group-footer">Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget.</p>
+              <div v-if="task.assigneeKind === 'agent' && task.workState && !['done', 'canceled'].includes(task.status)" class="task-actions">
+                <button v-if="task.workState === 'active'" type="button" class="button secondary" :disabled="busy" @click="controlWork(task, 'paused')">Pause work</button>
+                <button v-else type="button" class="button secondary" :disabled="busy || task.workUsed >= task.workLimit" @click="controlWork(task, 'active')">Resume work</button>
+                <button type="button" class="button secondary" :disabled="busy" @click="run(async () => { await tasks.updateTask(task.id, task.version, { status: 'canceled' }); editing = null; })">Cancel task</button>
+              </div>
               <fieldset v-if="list.tasks.length > 1" class="task-blockers">
                 <legend class="small muted">Waits for</legend>
                 <label v-for="other in list.tasks.filter(t => t.id !== task.id)" :key="other.id" class="small">

@@ -968,6 +968,17 @@ failed edit shows its error and reloads. Transient failures keep the board visib
 404 shows that the tasks are unavailable. Contact removal, leaving a group and
 sign-out drop the boards. Nothing is written to disk. Device verification pending.
 
+Persistent work (0054): execution state, next step, evidence, blocked reason and
+work-turn consumption travel in this same board. Pause/resume/cancel and progress
+edits use the existing versioned PATCH and full-board replacement. No optimistic
+permission grants, independent requests, disk retention or new cache keys are
+introduced. Polling can show a queued old turn until its Workflow observes the
+revoked generation; server admission/publication checks remain authoritative.
+Check reopen/back navigation, cached empty boards, explicit refresh, offline
+recovery, a stale editor versus background progress (409), pause/resume from
+another client, cancellation, access loss and account switching with fictional
+data. Static validation does not establish those client behaviors.
+
 
 ## Internal chat image description index
 

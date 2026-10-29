@@ -21,6 +21,18 @@ struct TaskItem: Decodable, Hashable, Sendable, Identifiable {
     let version: Int
     let blockedBy: [String]
     let blocked: Bool
+    let workState: String?
+    let nextStep: String?
+    let evidence: String?
+    let blockedReason: String?
+    let workUsed: Int?
+    let workLimit: Int?
+    var workLabel: String? {
+        if workState == "paused" { return "Paused" }
+        if workState == "blocked" { return "Blocked" }
+        if let workUsed, let workLimit, workUsed >= workLimit { return "Budget exhausted" }
+        return nil
+    }
     var assigneeKey: String { assigneeKind.map { "\($0):\(assigneeID ?? "")" } ?? "" }
     var isFinished: Bool { status == "done" || status == "canceled" }
 }
@@ -158,7 +170,7 @@ struct TasksView: View {
                         Text(task.title).manrope(.body, weight: .semibold)
                             .strikethrough(task.isFinished).foregroundStyle(task.isFinished ? .secondary : .primary)
                         // A contact actively working on this task.
-                        if task.assigneeKind == "agent" && task.status == "in_progress" {
+                        if task.assigneeKind == "agent" && task.status == "in_progress" && task.workLabel == nil {
                             Label("Working", systemImage: "circle.fill").labelStyle(.titleAndIcon)
                                 .manrope(.caption2, weight: .semibold).imageScale(.small)
                                 .foregroundStyle(Color.accentColor)
@@ -167,6 +179,8 @@ struct TasksView: View {
                         }
                     }
                     Text(detail(task, in: list)).manrope(.caption).foregroundStyle(.secondary)
+                    if let next = task.nextStep { Text("Next step: \(next)").manrope(.caption) }
+                    if let reason = task.blockedReason { Text("Blocked: \(reason)").manrope(.caption) }
                     if let result = task.result { Text(result).manrope(.footnote) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -186,6 +200,10 @@ struct TasksView: View {
     private func detail(_ task: TaskItem, in list: TaskListValue) -> String {
         var parts = [task.assigneeName ?? "Unassigned"]
         if task.status != "open" { parts.append(TaskStatusOption(rawValue: task.status)?.label ?? task.status) }
+        if task.assigneeKind == "agent" {
+            if let label = task.workLabel, !task.isFinished { parts.append(label) }
+            if let used = task.workUsed, let limit = task.workLimit { parts.append("\(used)/\(limit) work turns used") }
+        }
         if task.blocked {
             let waiting = task.blockedBy.compactMap { id in list.tasks.first { $0.id == id && !$0.isFinished }?.title }
             parts.append("Waiting for \(waiting.joined(separator: ", "))")
@@ -255,6 +273,9 @@ private struct TaskEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var notes: String
+    @State private var nextStep: String
+    @State private var evidence: String
+    @State private var blockedReason: String
     @State private var status: TaskStatusOption
     @State private var assignee: String
     @State private var blockers: Set<String>
@@ -264,9 +285,20 @@ private struct TaskEditorView: View {
         self.task = task; self.list = list; self.members = members; self.selfID = selfID; self.save = save
         _title = State(initialValue: task.title)
         _notes = State(initialValue: task.notes ?? "")
+        _nextStep = State(initialValue: task.nextStep ?? "")
+        _evidence = State(initialValue: task.evidence ?? "")
+        _blockedReason = State(initialValue: task.blockedReason ?? "")
         _status = State(initialValue: TaskStatusOption(rawValue: task.status) ?? .open)
         _assignee = State(initialValue: task.assigneeKey)
         _blockers = State(initialValue: Set(task.blockedBy))
+    }
+
+    private func control(_ patch: [String: Any]) {
+        saving = true
+        Task {
+            if await save(patch) { dismiss() }
+            saving = false
+        }
     }
 
     var body: some View {
@@ -283,6 +315,23 @@ private struct TaskEditorView: View {
                     }
                 }
                 Section("Notes") { TextField("Notes", text: $notes, axis: .vertical).lineLimit(2...6) }
+                Section("Next step") { TextField("Next step", text: $nextStep, axis: .vertical).lineLimit(2...6) }
+                Section("Evidence") { TextField("Evidence", text: $evidence, axis: .vertical).lineLimit(2...6) }
+                if task.workState == "blocked" {
+                    Section("Blocked reason") { TextField("Blocked reason", text: $blockedReason, axis: .vertical).lineLimit(2...6) }
+                }
+                if task.assigneeKind == "agent", task.workState != nil, !task.isFinished {
+                    Section {
+                        if let used = task.workUsed, let limit = task.workLimit { Text("\(used)/\(limit) work turns used") }
+                        Button(task.workState == "active" ? "Pause work" : "Resume work") {
+                            control(["workState": task.workState == "active" ? "paused" : "active"])
+                        }
+                        .disabled(saving || (task.workState != "active" && (task.workUsed ?? 0) >= (task.workLimit ?? 6)))
+                        Button("Cancel task", role: .destructive) { control(["status": "canceled"]) }.disabled(saving)
+                    } footer: {
+                        Text("Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget.")
+                    }
+                }
                 if list.tasks.count > 1 {
                     Section("Waits for") {
                         ForEach(list.tasks.filter { $0.id != task.id }) { other in
@@ -307,6 +356,9 @@ private struct TaskEditorView: View {
                             "status": status.rawValue,
                             "assignee": parts.count == 2 ? ["kind": parts[0], "id": parts[1]] : NSNull(),
                             "blockedBy": Array(blockers),
+                            "nextStep": nextStep.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSNull() : nextStep.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "evidence": evidence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSNull() : evidence.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "blockedReason": blockedReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSNull() : blockedReason.trimmingCharacters(in: .whitespacesAndNewlines),
                         ]
                         Task {
                             if await save(patch) { dismiss() }

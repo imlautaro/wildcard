@@ -1,16 +1,16 @@
 # Agentic execution limits
 
-Observed October 29, 2026, before widening autonomous tools. These are implementation
+Updated October 29, 2026, with persistent task controls before widening external autonomous tools. These are implementation
 defaults, not guarantees of model quality or a financial spending cap.
 
 | Work | Existing execution boundary | First research increment |
 | --- | --- | --- |
 | Private human reply | Three tool rounds, six executions; one optional mini-app repair round, still six executions | One bounded research operation shares the six slots |
 | Scheduled private reply | Two rounds, six executions; no external actions | No web research |
-| Private task work | Three rounds, six executions; no MCP/native/group publication | May edit saved reports, cannot research |
+| Private task work | Three rounds, six executions; no MCP/native/group publication | May edit saved reports, cannot research; current execution generation checked between model/tool steps |
 | Initial group draft | Six evidence rounds, six executions, 180-second evidence deadline | Human triggers can research; one reservation across the whole source round |
 | Group reviews / bot triggers | Existing constrained review/reply rules | No new research capability |
-| Task dispatch | Six work turns per assignment cycle, 30 per contact per rolling day; 30-minute reviews | Unchanged |
+| Task dispatch | Six work turns per task lifetime, 30 per contact per rolling day; 30-minute reviews | Persistent controls retain consumption and expose pause/block states |
 | Initiative | Existing bounded model review and silence cadence | No research tools |
 
 The group evidence deadline controls admission of new steps; a step already
@@ -25,17 +25,20 @@ per account and 100 per installation per rolling day. See
 [research budgets and retention](web-research.md#budgets-and-receipts).
 
 Task/list cancellation and current ownership/membership checks remain available.
-They do not provide a universal stop button for already-started tools. Research
-has a 60-second provider deadline, no HTTP retries, current-access checks and a
-versioned feature flag for future admissions. Lost access prevents publication;
-already-sent provider work may still be charged. No per-job pause/resume UI or
-external write grants are introduced.
+[Persistent work controls](persistent-work.md) add human pause/resume, recorded next
+steps/evidence and a blocked reason. An execution generation prevents stopped
+work from continuing after resume; it does not interrupt a step already started.
+Research has a 60-second provider deadline, no HTTP retries, current-access checks
+and a versioned feature flag for future admissions. Lost access prevents publication;
+already-sent provider work may still be charged. No external write grants are
+introduced. The task work-turn budget is durable; it is not an exact token or
+monetary budget.
 
-Before the persistent-work increment, define a durable objective, next step,
-evidence, completion/blocking conditions, per-job permissions and consumption,
-user-visible pause/cancel, and current-access checks between every background
-step. Start with read tools. Task work must not inherit arbitrary human chat
-permissions. Account/installation research limits do not replace those controls.
+The persistent-work foundation uses task titles as objectives, notes for completion
+conditions, nextStep/evidence/result for progress and an explicit blockedReason.
+Public research and broader background tools still require per-job permission
+and consumption receipts before admission. Start those extensions with read tools.
+Task work must not inherit arbitrary human chat permissions. Account/installation research limits do not replace those controls.
 
 Verification remains static until authorized live checks: TypeScript, Swift and
 SQL preparation cannot prove replay behavior, live consent revocation, cost,
