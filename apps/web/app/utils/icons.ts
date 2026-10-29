@@ -21,6 +21,8 @@ export const appIcons = {
   share: ['material-symbols:share-outline-rounded', 'material-symbols:share-rounded'],
   'group-add': ['material-symbols:group-add-outline-rounded', 'material-symbols:group-add-rounded'],
   reply: ['material-symbols:reply-rounded', 'material-symbols:reply-rounded'],
+  mic: ['material-symbols:mic-outline-rounded', 'material-symbols:mic-rounded'],
+  stop: ['material-symbols:stop-rounded', 'material-symbols:stop-rounded'],
   image: ['material-symbols:image-outline-rounded', 'material-symbols:image-rounded'],
   timer: ['material-symbols:timer-outline-rounded', 'material-symbols:timer-rounded'],
   alarm: ['material-symbols:alarm-outline-rounded', 'material-symbols:alarm-rounded'],

@@ -319,7 +319,7 @@ onBeforeUnmount(() => {
     </div>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable" :sending="!!state.pending" :reply="replyTarget"
-      @send="onSend" @typing="activity.typing()" @cancel-reply="state.replyTo = null"
+      :transcription-path="`contacts/${contactID}/chat/transcriptions`" @send="onSend" @typing="activity.typing()" @cancel-reply="state.replyTo = null"
     />
   </template>
 </template>

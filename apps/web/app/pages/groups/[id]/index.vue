@@ -279,7 +279,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
     </div>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded" :reply="replyTarget"
-      @send="onSend" @cancel-reply="state.replyTo = null"
+      :transcription-path="`groups/${groupID}/transcriptions`" @send="onSend" @cancel-reply="state.replyTo = null"
     />
   </template>
 </template>

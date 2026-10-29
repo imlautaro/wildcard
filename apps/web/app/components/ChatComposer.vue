@@ -4,7 +4,8 @@ import type { ReplyPreview } from '~/utils/replies';
 
 // Text plus one optional image/PDF attachment, matching the API's 4,000 character limit.
 // The parent owns the reply target so it survives navigation with the draft.
-const props = defineProps<{ disabled?: boolean; sending?: boolean; placeholder?: string; reply?: ReplyPreview | null }>();
+// With `transcriptionPath`, an empty draft shows a microphone for voice dictation, as on iOS.
+const props = defineProps<{ disabled?: boolean; sending?: boolean; placeholder?: string; reply?: ReplyPreview | null; transcriptionPath?: string | null }>();
 const draft = defineModel<string>({ required: true });
 const emit = defineEmits<{ send: [text: string, attachment: DraftAttachment | null]; typing: []; cancelReply: [] }>();
 
@@ -15,6 +16,15 @@ const textarea = ref<HTMLTextAreaElement>();
 const picker = ref<HTMLInputElement>();
 const length = computed(() => [...draft.value.trim()].length);
 const canSend = computed(() => !props.disabled && !props.sending && !preparing.value && length.value <= 4000 && (length.value > 0 || !!attachment.value));
+const voice = useVoiceDictation(() => props.transcriptionPath, (text) => {
+  draft.value = draft.value ? `${draft.value} ${text}` : text;
+  nextTick(() => textarea.value?.focus());
+});
+const supportsVoice = ref(false);
+onMounted(() => { supportsVoice.value = dictationSupported(); });
+// The microphone replaces the send button while there is nothing to send.
+const showsMicrophone = computed(() => supportsVoice.value && !!props.transcriptionPath && !length.value && !attachment.value && !preparing.value);
+const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 
 function resize() {
   const element = textarea.value;
@@ -71,6 +81,21 @@ defineExpose({ focus: () => textarea.value?.focus() });
 
 <template>
   <div class="composer">
+    <div v-if="voice.phase.value === 'recording'" class="voice-status" role="status">
+      <span class="voice-dot" />Recording {{ clock(voice.elapsed.value) }} / 1:00
+      <button type="button" class="link-button" @click="voice.cancel()">Cancel</button>
+    </div>
+    <div v-else-if="voice.phase.value === 'transcribing' || voice.phase.value === 'requesting'" class="voice-status" role="status">
+      <span class="spinner" />{{ voice.phase.value === 'requesting' ? 'Waiting for the microphone…' : 'Transcribing…' }}
+      <button type="button" class="link-button" @click="voice.cancel()">Cancel</button>
+    </div>
+    <div v-else-if="voice.error.value" class="voice-status error" role="alert">
+      <span>{{ voice.error.value }}</span>
+      <template v-if="voice.hasRecording.value">
+        <button type="button" class="link-button" @click="voice.transcribe()">Retry transcription</button>
+        <button type="button" class="link-button danger" @click="voice.cancel()">Discard recording</button>
+      </template>
+    </div>
     <form @submit.prevent="submit">
       <button type="button" class="icon-button" aria-label="Attach an image or PDF" :disabled="disabled || preparing" @click="picker?.click()">
         <AppIcon name="attach" />
@@ -93,9 +118,24 @@ defineExpose({ focus: () => textarea.value?.focus() });
           @keydown="onKey" @input="emit('typing')"
         />
       </div>
-      <button type="submit" class="send" :disabled="!canSend" aria-label="Send"><AppIcon name="send" /></button>
+      <button v-if="voice.phase.value === 'recording'" type="button" class="send recording" aria-label="Stop recording and transcribe" @click="voice.stop()"><AppIcon name="stop" /></button>
+      <button v-else-if="showsMicrophone" type="button" class="send" aria-label="Record a voice message"
+        :disabled="disabled || voice.phase.value === 'transcribing' || voice.phase.value === 'requesting'" @click="voice.start()"><AppIcon name="mic" /></button>
+      <button v-else type="submit" class="send" :disabled="!canSend" aria-label="Send"><AppIcon name="send" /></button>
     </form>
     <p v-if="length > 4000" class="hint">Messages can contain up to 4,000 characters.</p>
     <p v-else-if="problem" class="hint">{{ problem }}</p>
   </div>
 </template>
+
+<style scoped>
+.voice-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 8px 8px; font-size: 13px; color: var(--md-on-surface-variant); }
+.voice-status .link-button { margin-left: auto; }
+.voice-status .link-button + .link-button { margin-left: 0; }
+.voice-status.error { color: var(--md-error); }
+.voice-status .danger { color: var(--md-error); }
+.voice-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--md-error); animation: voice-pulse 1.2s ease-in-out infinite; }
+.send.recording { background: var(--md-error); color: var(--md-on-error); }
+@keyframes voice-pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .voice-dot { animation: none; } }
+</style>

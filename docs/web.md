@@ -106,11 +106,6 @@ checks. iOS retains its existing native cropper; this change is scoped to the we
 
 Not in the web app yet:
 
-- **Voice dictation.** The API accepts only mono 16-bit 16 kHz WAV. `MediaRecorder`
-  produces WebM/Ogg, so this needs client-side resampling and WAV encoding.
-  The iOS fix that distinguishes system interruptions from app-requested audio
-  deactivation applies to the native recorder used in private and group chats;
-  there is no browser recorder to update.
 - **Push notifications.** Delivery is APNs-only. Web Push would need new API storage
   and VAPID keys.
 - **Scheduled messages** (list/cancel), private-to-group requests, group photo
@@ -260,6 +255,15 @@ Not yet verified: model replies and private read receipts (they need a model run
 group catch-up across more than 50 missed messages, PDF attachments in a browser,
 photo selection through the file picker, session expiry over time, and rate-limit
 behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.
+
+## Voice dictation
+
+Private and group composers show a microphone instead of the send button while the
+draft is empty, as on iOS ([voice dictation](voice.md#web)). `useVoiceDictation.ts`
+records with `MediaRecorder`, then decodes the clip with Web Audio and renders it
+through an `OfflineAudioContext` as mono 16-bit PCM WAV at 16 kHz, the only format
+the API accepts, and uploads it to the existing transcription routes. The
+transcript is appended to the editable draft and never sent automatically.
 
 ## Message sounds
 

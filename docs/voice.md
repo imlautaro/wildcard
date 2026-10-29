@@ -117,6 +117,23 @@ no-store transcription behavior are unchanged.
 - [Apple AVAudioRecorder](https://developer.apple.com/documentation/avfaudio/avaudiorecorder)
 
 
+## Web
+
+The web composer offers the same dictation in private and group chats, with the same
+copy, one-minute limit, Cancel, **Retry transcription** and **Discard recording**.
+The browser asks for microphone permission on the first recording. `MediaRecorder`
+produces WebM, Ogg or MP4 depending on the browser, so `useVoiceDictation.ts` decodes
+the clip with Web Audio and renders it through an `OfflineAudioContext` as mono
+16-bit PCM WAV at 16 kHz before uploading it to the same routes. Audio stays in
+memory: it is dropped after a successful transcription, on discard, when the page is
+left and when the tab is hidden during recording (as backgrounding does on iOS).
+The microphone appears only in browsers with `getUserMedia` and `MediaRecorder`.
+
+Verified on October 29, 2026 in headless Chrome: a 1.4-second synthetic recording
+(`audio/webm;codecs=opus`) became a 16 kHz mono PCM16 WAV that the API's
+`normalizedRecording` accepts. Real microphone capture, Safari and Firefox, and a
+paid transcription were not exercised.
+
 ## Group dictation
 
 Groups reuse the recorder, limits, provider and editable-transcript interaction.

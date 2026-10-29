@@ -32,6 +32,13 @@ function failureMessage(path: string, method: string, status: number, body: unkn
   if (path.includes('/mcp')) return serverMessage(body) ?? 'Connections are temporarily unavailable. Please try again.';
   if (path.includes('/mini-apps')) return serverMessage(body) ?? 'Mini apps are temporarily unavailable. Please try again.';
   if (path.endsWith('/reactions')) return serverMessage(body) ?? 'Reactions are temporarily unavailable. Please try again.';
+  // Dictation copy matches iOS for both private and group transcriptions.
+  if (path.endsWith('/transcriptions')) {
+    if (status === 422) return code === 'NO_SPEECH' ? 'No speech was detected. Please record again.' : 'The transcript is too long. Please record a shorter message.';
+    if (status === 429) return 'Too many recordings. Wait a minute before trying again.';
+    if ([502, 503, 504].includes(status)) return 'Transcription is unavailable right now. Please try again.';
+    if (status === 400 || status === 413 || status === 415) return 'This recording could not be read. Please record again.';
+  }
   if (path.startsWith('groups')) {
     if (path.endsWith('/transcriptions') && status === 422) {
       return code === 'NO_SPEECH' ? 'No speech was detected. Please record again.' : 'The transcript is too long. Please record a shorter message.';

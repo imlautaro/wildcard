@@ -10,7 +10,7 @@
   (`docs/web.md` plus the affected feature guides). Ship a change to only one client
   only when the user explicitly scopes it that way, or when a platform limitation
   prevents it; document that limitation in the affected guide and in `docs/web.md`
-  (for example, APNs push and WAV voice dictation).
+  (for example, APNs push).
 - Do not copy implementation, assets, configuration, credentials, or Git history
   from the archived project. Implement new features in this repository.
 - Do not run tests or builds unless the user asks. Static validation is allowed.
