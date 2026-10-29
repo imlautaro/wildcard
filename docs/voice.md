@@ -109,7 +109,7 @@ message text, transcripts, previews, notifications or memory.
 **Speech accent** is an optional preference on the shared agent
 (`contact_agent.speech_accent`), independent of nationality, identity claims and the
 listener's language or country. In contact details on iOS and web, the creator can
-choose **Voice default** or one of the regional presets in `shared/voice.ts`,
+choose, in the **Voice** sheet, **Default accent** (stored as no preference) or one of the regional presets in `shared/voice.ts`,
 including **Argentine**. Other participants see the selection but cannot change it.
 It applies to new private and group replies for everyone. The accent also guides
 natural regional phrasing in voice-enabled conversation prompts; Argentine Spanish
@@ -151,11 +151,13 @@ participants hear the same voice, and only the creator can change it.
   Available age groups depend on the combined default and saved catalog.
 - **Other contacts** (manual, onboarding) get a voice the first time one is needed,
   using the gender/age stored at generation when present, otherwise any voice.
-- **Contact details** show a **Voice** section when the feature flag is on: a
-  **Voice messages** switch (each participant's own opt-in; on by default in the creator's
-  conversation with AI-generated contacts, off for other contacts and for people who
-  join a shared contact) and, for the creator, a voice picker with a
-  sample play button. Shared participants see the voice name read-only.
+- **Contact details** show, when the feature flag is on, a **Voice messages** switch
+  (each participant's own opt-in; on by default in the creator's conversation with
+  AI-generated contacts, off for other contacts and for people who join a shared
+  contact) and a **Voice** row summarizing accent and voice ("Default accent ·
+  Automatic voice" when unset). The row opens a sheet with the accent selector and, for
+  the creator, the searchable voice list with a sample play button. Shared participants
+  see both read-only. Explanations are behind info buttons.
 
 The catalog combines the installation's ElevenLabs default voices and saved
 collection using `GET https://api.elevenlabs.io/v2/voices` with `voice_type=default`
@@ -333,10 +335,10 @@ The native app (`apps/ios`) implements the same behavior in private chats and gr
   action), which opens `VoiceTranscriptSheet`; the sheet reads the current message,
   so it updates when polling delivers the transcript.
 - **Contact details.** With `features.voiceMessages` from `GET /me` (refreshed when
-  contact details open), `ContactEditorView` shows the **Voice** section: the
-  participant's **Voice messages** switch and, for the creator (`canManage`), a
-  **Voice** row opening a picker with a sample button per voice. Shared participants
-  see the voice name read-only.
+  contact details open), `ContactEditorView` shows `ContactVoiceRows`: the
+  participant's **Voice messages** switch and a **Voice** row whose sheet holds the
+  accent `SearchablePicker` and, for the creator (`canManage`), a pushed voice list
+  with a sample button per voice. Shared participants see the voice name read-only.
 
 ### iOS caching
 
@@ -411,9 +413,9 @@ The web app (`apps/web`) implements the same behavior in private chats and group
   adds **View transcript**, which opens a dialog that updates as polling delivers the
   transcript. Reply quotes of person voice messages read "Voice message".
 - **Contact details.** With `features.voiceMessages` from `GET /me`, the contact page
-  shows the **Voice** section: the participant's **Voice messages** switch and, for
-  the creator, an expandable voice list with a sample play button per voice.
-  Participants see the voice name read-only.
+  shows the participant's **Voice messages** switch and a **Voice** row whose
+  `AppSheet` holds the accent select and, for the creator, the voice list with a sample
+  play button per voice. Participants see the voice name read-only.
 
 ### Web caching
 

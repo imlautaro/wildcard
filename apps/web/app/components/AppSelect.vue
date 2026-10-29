@@ -36,6 +36,8 @@ const menu = ref<HTMLDivElement>();
 const search = ref<HTMLInputElement>();
 const open = ref(false);
 const query = ref('');
+// Inside a modal <dialog> (AppSheet) the menu must join the dialog's top layer, or it renders behind it.
+const container = shallowRef<HTMLElement | 'body'>('body');
 const active = ref(-1);
 const position = ref<Record<string, string>>({});
 
@@ -80,6 +82,7 @@ function enabledIndex(from: number, step: 1 | -1) {
 
 function show(index = selectedIndex.value) {
   if (props.disabled || open.value) return;
+  container.value = trigger.value?.closest('dialog') ?? 'body';
   place();
   query.value = '';
   open.value = true;
@@ -208,7 +211,7 @@ onBeforeUnmount(() => { open.value = false; clearTimeout(typedTimer); });
       <span class="select-value" :class="{ placeholder: !selected }">{{ selected?.label ?? placeholder ?? '' }}</span>
       <AppIcon name="dropdown" class="select-arrow" />
     </button>
-    <Teleport to="body">
+    <Teleport :to="container">
       <div v-if="open" ref="menu" class="select-menu" :class="{ searchable }" :style="position">
         <label v-if="searchable" class="select-search">
           <AppIcon name="search" />

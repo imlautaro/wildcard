@@ -66,8 +66,10 @@ Authenticated creator endpoints, scoped through their own contact:
   consume a point by the time the reset response is read.
 
 Both recheck creator ownership and return 404 for absent/inaccessible contacts, including
-shared-contact members. Responses use Cache-Control: no-store. The iOS contact editor
-shows **Group Energy** and **Reset Energy to 50** only for confirmed owners. The web contact editor shows the same section with the same
+shared-contact members. Responses use Cache-Control: no-store. The iOS and web contact
+editors show a **Group energy** row (points / capacity) only for confirmed owners; it
+opens a sheet with the meter, next recharge, **Reset to 50** and an info button with
+the explanation. Polling belongs to the row, not the sheet, with the same
 snapshot rules (see [web caching](caching.md#web-app)). A session-owned
 `NavigationSnapshotCache<ContactEnergy>` reuses the last server value synchronously,
 including zero, and deduplicates requests. It revalidates on entry/Retry and every five

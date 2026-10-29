@@ -100,7 +100,7 @@ failures independently. Browser push remains unavailable. A message already
 published remains in history when initiative is disabled.
 
 **Contact details → Conversation initiative** is enabled by default in iOS and
-web. Any participant can change their own setting, including for a shared contact;
+web. Its explanation is behind the info button beside the switch. Any participant can change their own setting, including for a shared contact;
 it never changes another participant's initiative or shared agent identity.
 `PUT /api/v1/contacts/:id/initiative` accepts only `{ "enabled": boolean }` and
 returns the current contact projection. Contact responses include numeric

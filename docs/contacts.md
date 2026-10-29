@@ -198,6 +198,26 @@ alphabetical Contacts directory remain available. Groups older than the current
 private-chat pagination boundary appear only as Load more reaches that timestamp.
 See [groups](groups.md).
 
+## Contact details layout
+
+Contact details follow the settings pattern used across both clients:
+
+- **Identity header.** Avatar with a camera button (choose or remove the photo) and the
+  name below it; tapping the name edits it (iOS name editor; web `AppSheet`). Shared
+  participants see "Shared contact · managed by its creator" instead.
+- **Settings rows** with leading icons. Switches stay inline (Conversation initiative,
+  Voice messages). Anything with choices or details is one row with its current value
+  that opens a sheet: **Voice** (accent and voice) and, for the creator, **Group
+  energy**. Explanations are behind info buttons (iOS `InfoButton` popover, web
+  `InfoButton` sheet) instead of footer paragraphs.
+- **Navigation rows** with icons: Personality, Connections, Mini apps, Tasks, and on web
+  Share contact.
+- Shared media and docs, then (web) archive, clear and delete at the bottom.
+
+The iOS edit screen keeps its toolbar **Save** for name and photo changes; web saves a
+renamed name or a new photo immediately. Device and browser checks of sheets, popovers,
+focus and screen readers are pending.
+
 ## Shared in this chat
 
 Contact details on iOS and web show the photos and files of your private chat with

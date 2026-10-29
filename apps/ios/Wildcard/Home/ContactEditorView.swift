@@ -57,12 +57,9 @@ struct ContactEditorView: View {
                 .listRowSeparator(.hidden)
             }
             }
-            if let contactID, contacts.contact(id: contactID)?.role == "owner" {
-                ContactEnergySection(contactID: contactID, cache: contacts.energySnapshots.store(for: contactID))
-            }
             if let contactID {
                 Section {
-                    Toggle("Conversation initiative", isOn: Binding(
+                    Toggle(isOn: Binding(
                         get: { contacts.contact(id: contactID)?.initiativeEnabled != 0 },
                         set: { enabled in
                             guard !contacts.isMutating else { return }
@@ -72,22 +69,30 @@ struct ContactEditorView: View {
                                 catch { self.error = error.localizedDescription }
                             }
                         }
-                    ))
+                    )) {
+                        HStack {
+                            Label("Conversation initiative", systemImage: "bubble.left.and.text.bubble.right")
+                            InfoButton(title: "Conversation initiative", text: "Allow thoughtful follow-ups when you have not replied. Stops after a few unanswered messages. Applies only to your private chat.")
+                        }
+                    }
                     .disabled(saving || contacts.isMutating)
-                } footer: {
-                    Text("Allow thoughtful follow-ups when you have not replied. Stops after a few unanswered messages. Applies only to your private chat.")
-                }
-                if auth.user?.features?.voiceMessages == true {
-                    ContactVoiceSection(contactID: contactID, disabled: saving) { self.error = $0 }
+                    if auth.user?.features?.voiceMessages == true {
+                        ContactVoiceRows(contactID: contactID, disabled: saving) { self.error = $0 }
+                    }
+                    if contacts.contact(id: contactID)?.role == "owner" {
+                        ContactEnergyRow(contactID: contactID, cache: contacts.energySnapshots.store(for: contactID))
+                    }
                 }
                 Section {
-                    NavigationLink("Connections") { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) }
-                    NavigationLink("Personality") {
+                    NavigationLink {
                         ContactPersonalityView(contactID: contactID, cache: contacts.personalitySnapshot(id: contactID),
                                                draft: contacts.personalityDraft(id: contactID))
-                    }
-                    NavigationLink("Mini apps") { MiniAppListView(base: "contacts/\(contactID)") }
-                    NavigationLink("Tasks") { TasksView(base: "contacts/\(contactID)", snapshot: contacts.taskSnapshots.store(for: "contacts/\(contactID)")) }
+                    } label: { Label("Personality", systemImage: "person") }
+                    NavigationLink { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) }
+                        label: { Label("Connections", systemImage: "link") }
+                    NavigationLink { MiniAppListView(base: "contacts/\(contactID)") } label: { Label("Mini apps", systemImage: "square.grid.2x2") }
+                    NavigationLink { TasksView(base: "contacts/\(contactID)", snapshot: contacts.taskSnapshots.store(for: "contacts/\(contactID)")) }
+                        label: { Label("Tasks", systemImage: "checklist") }
                 }
                 ChatMediaSection(scope: .contact(contactID), cache: contacts.mediaSnapshots, documents: contacts.documentCaches)
                 Section {
@@ -97,7 +102,7 @@ struct ContactEditorView: View {
                 }
             }
             if !canEdit {
-                Text("This is a shared contact. Its creator manages its name, photo, and participants.")
+                Text("Shared contact · managed by its creator")
                     .manrope(.footnote).foregroundStyle(.secondary)
             }
             if let error {
@@ -163,7 +168,9 @@ struct ContactEditorView: View {
     }
 }
 
-private struct ContactEnergySection: View {
+/// Creator-only Group energy row: the row shows the points and polls every five seconds
+/// while visible; its sheet has the meter, next recharge and Reset (web: ContactEnergySection).
+private struct ContactEnergyRow: View {
     let contactID: String
     let cache: NavigationSnapshot<ContactEnergy>
     @Environment(AuthStore.self) private var auth
@@ -171,29 +178,11 @@ private struct ContactEnergySection: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var busy = false
     @State private var error: String?
+    @State private var presented = false
 
     var body: some View {
-        Section("Group Energy") {
-            if let energy = cache.value {
-                LabeledContent("Energy", value: "\(energy.points) / \(energy.capacity)")
-                ProgressView(value: Double(energy.points), total: Double(energy.capacity))
-                    .tint(energy.points <= 5 ? .orange : .green)
-                Text("Each group message uses one point. One point recharges every five minutes, even offline. Private replies do not use energy.")
-                    .manrope(.footnote).foregroundStyle(.secondary)
-                if let timestamp = energy.nextPointAt {
-                    Text("Next point: \(Date(timeIntervalSince1970: timestamp / 1000).formatted(date: .omitted, time: .shortened))")
-                        .manrope(.footnote).foregroundStyle(.secondary)
-                }
-            } else if busy {
-                ProgressView("Loading energy…")
-            }
-            Button("Reset Energy to 50") { Task { await refresh(reset: true) } }
-                .disabled(busy || cache.value == nil)
-            if let error {
-                Text(error).manrope(.footnote).foregroundStyle(.red)
-                Button("Retry") { Task { await refresh() } }.disabled(busy)
-            }
-        }
+        SheetRow(title: "Group energy", systemImage: "bolt",
+                 value: cache.value.map { "\($0.points) / \($0.capacity)" } ?? (busy ? "Loading…" : "—")) { presented = true }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await refresh()
@@ -202,6 +191,45 @@ private struct ContactEnergySection: View {
                 catch { return }
                 await refresh()
             }
+        }
+        .sheet(isPresented: $presented) {
+            NavigationStack {
+                Form {
+                    Section {
+                        if let energy = cache.value {
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text("\(energy.points)").manrope(.largeTitle, weight: .semibold)
+                                Text("/ \(energy.capacity)").manrope(.title3).foregroundStyle(.secondary)
+                            }
+                            ProgressView(value: Double(energy.points), total: Double(energy.capacity))
+                                .tint(energy.points <= 5 ? .orange : .green)
+                            if let timestamp = energy.nextPointAt {
+                                Text("Next point at \(Date(timeIntervalSince1970: timestamp / 1000).formatted(date: .omitted, time: .shortened))")
+                                    .manrope(.footnote).foregroundStyle(.secondary)
+                            }
+                        } else if busy {
+                            ProgressView("Loading energy…")
+                        }
+                        Button("Reset to 50", systemImage: "arrow.clockwise") { Task { await refresh(reset: true) } }
+                            .disabled(busy || cache.value == nil)
+                    }
+                    if let error {
+                        Section {
+                            Text(error).manrope(.footnote).foregroundStyle(.red)
+                            Button("Retry") { Task { await refresh() } }.disabled(busy)
+                        }
+                    }
+                }
+                .navigationTitle("Group energy")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        InfoButton(title: "Group energy", text: "Each group message uses one point. One point recharges every five minutes, even offline. Private replies do not use energy.")
+                    }
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { presented = false } }
+                }
+            }
+            .presentationDetents([.medium])
         }
     }
 
@@ -226,8 +254,9 @@ private struct ContactEnergySection: View {
     }
 }
 
-/// Voice replies: each participant's own opt-in, and the shared voice its creator chooses.
-private struct ContactVoiceSection: View {
+/// Voice replies: each participant's own opt-in toggle, and a row whose sheet holds the
+/// accent and the shared voice its creator chooses.
+private struct ContactVoiceRows: View {
     // Keep codes and labels aligned with shared/voice.ts.
     private let accents: [(code: String, name: String)] = [
         ("AR", "Argentine"),
@@ -255,48 +284,66 @@ private struct ContactVoiceSection: View {
     @Environment(ContactsStore.self) private var contacts
     private var contact: Contact? { contacts.contact(id: contactID) }
 
+    @State private var presented = false
+    private var accentName: String { accents.first { $0.code == contact?.speechAccent }?.name ?? "Default accent" }
+
     var body: some View {
-        Section {
-            Toggle("Voice messages", isOn: Binding(
-                get: { contact?.voiceMessagesEnabled == 1 },
-                set: { enabled in
-                    guard !contacts.isMutating else { return }
-                    Task {
-                        do { try await contacts.setVoiceMessages(contactID: contactID, enabled: enabled, using: auth) }
-                        catch is CancellationError { }
-                        catch { report(error.localizedDescription) }
-                    }
+        Toggle(isOn: Binding(
+            get: { contact?.voiceMessagesEnabled == 1 },
+            set: { enabled in
+                guard !contacts.isMutating else { return }
+                Task {
+                    do { try await contacts.setVoiceMessages(contactID: contactID, enabled: enabled, using: auth) }
+                    catch is CancellationError { }
+                    catch { report(error.localizedDescription) }
                 }
-            ))
-            .disabled(disabled || contacts.isMutating)
-            SearchablePicker(title: "Speech accent", selection: Binding(
-                get: { contact?.speechAccent ?? "" },
-                set: { accent in
-                    guard !contacts.isMutating else { return }
-                    Task {
-                        do { try await contacts.setSpeechAccent(contactID: contactID, accent: accent, using: auth) }
-                        catch is CancellationError { }
-                        catch { report(error.localizedDescription) }
-                    }
-                }
-            ), options: [SearchablePicker.Option(value: "", label: "Voice default")]
-                + accents.map { SearchablePicker.Option(value: $0.code, label: $0.name) })
-            .disabled(disabled || contacts.isMutating || contact?.canManage != true)
-            if contact?.canManage == true {
-                NavigationLink {
-                    ContactVoicePickerView(contactID: contactID, catalog: contacts.voiceCatalog.store(for: "voices"))
-                } label: {
-                    LabeledContent("Voice", value: contact?.voiceName ?? "Not chosen")
-                }
-                .disabled(disabled)
-            } else {
-                LabeledContent("Voice", value: contact?.voiceName ?? "Not chosen")
             }
-        } header: {
-            Text("Voice")
-        } footer: {
-            Text("Let this contact answer you with short voice messages when a reply suits speech. In groups, the creator's setting applies. Accent applies to new messages for everyone. Results depend on the voice; samples keep their original accent.")
+        )) {
+            HStack {
+                Label("Voice messages", systemImage: "mic")
+                InfoButton(title: "Voice messages", text: "With voice messages on, \(contact?.name ?? "this contact") sometimes answers your private chat with a short voice message. In groups, the creator's setting applies.")
+            }
         }
+        .disabled(disabled || contacts.isMutating)
+        SheetRow(title: "Voice", systemImage: "person.wave.2", value: "\(accentName) · \(contact?.voiceName ?? "Automatic voice")") { presented = true }
+            .sheet(isPresented: $presented) {
+                NavigationStack {
+                    Form {
+                        SearchablePicker(title: "Accent", selection: Binding(
+                            get: { contact?.speechAccent ?? "" },
+                            set: { accent in
+                                guard !contacts.isMutating else { return }
+                                Task {
+                                    do { try await contacts.setSpeechAccent(contactID: contactID, accent: accent, using: auth) }
+                                    catch is CancellationError { }
+                                    catch { report(error.localizedDescription) }
+                                }
+                            }
+                        ), options: [SearchablePicker.Option(value: "", label: "Default accent")]
+                            + accents.map { SearchablePicker.Option(value: $0.code, label: $0.name) })
+                        .disabled(disabled || contacts.isMutating || contact?.canManage != true)
+                        if contact?.canManage == true {
+                            NavigationLink {
+                                ContactVoicePickerView(contactID: contactID, catalog: contacts.voiceCatalog.store(for: "voices"))
+                            } label: {
+                                LabeledContent("Voice", value: contact?.voiceName ?? "Automatic")
+                            }
+                            .disabled(disabled)
+                        } else {
+                            LabeledContent("Voice", value: contact?.voiceName ?? "Automatic")
+                        }
+                    }
+                    .navigationTitle("Voice")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            InfoButton(title: "Voice", text: "Accent applies to new messages for everyone. Results depend on the voice; samples keep their original accent. " + (contact?.canManage == true ? "Everyone who chats with this contact hears the voice you choose." : "The contact's creator chooses its voice."))
+                        }
+                        ToolbarItem(placement: .confirmationAction) { Button("Done") { presented = false } }
+                    }
+                }
+                .presentationDetents([.medium, .large])
+            }
     }
 }
 

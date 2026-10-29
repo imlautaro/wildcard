@@ -66,6 +66,10 @@ export const appIcons = {
   tasks: ['material-symbols:checklist-rounded', 'material-symbols:checklist-rounded'],
   circle: ['material-symbols:radio-button-unchecked', 'material-symbols:radio-button-unchecked'],
   block: ['material-symbols:block', 'material-symbols:block'],
+  info: ['material-symbols:info-outline-rounded', 'material-symbols:info-rounded'],
+  camera: ['material-symbols:photo-camera-outline-rounded', 'material-symbols:photo-camera-rounded'],
+  initiative: ['material-symbols:forum-outline-rounded', 'material-symbols:forum-rounded'],
+  voice: ['material-symbols:record-voice-over-outline-rounded', 'material-symbols:record-voice-over-rounded'],
 } as const satisfies Record<string, readonly [outline: string, filled: string]>;
 
 export type AppIconName = keyof typeof appIcons;

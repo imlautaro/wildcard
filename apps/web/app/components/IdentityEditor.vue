@@ -1,7 +1,23 @@
 <script setup lang="ts">
-// Shared avatar and photo controls for contacts and the account, like ProfileIdentityView.
-const props = defineProps<{ name: string; path: string | null; editable?: boolean; busy?: boolean }>();
-const emit = defineEmits<{ photo: [photo: Blob | null] }>();
+// Shared avatar and photo controls for contacts and the account, like ProfileIdentityView:
+// a camera button on the avatar changes the photo, and with `renamable` the name below it
+// opens a sheet to rename. `showName` shows the name without editing it.
+const props = defineProps<{ name: string; path: string | null; editable?: boolean; busy?: boolean; renamable?: boolean; showName?: boolean }>();
+const emit = defineEmits<{ photo: [photo: Blob | null]; rename: [name: string] }>();
+const choosingPhoto = ref(false);
+const renaming = ref(false);
+const draftName = ref('');
+const validName = computed(() => { const value = draftName.value.trim(); return value.length > 0 && [...value].length <= 100; });
+function changePhoto() {
+  if (props.path) choosingPhoto.value = true;
+  else picker.value?.click();
+}
+function startRename() { draftName.value = props.name; renaming.value = true; }
+function rename() {
+  if (!validName.value) return;
+  renaming.value = false;
+  if (draftName.value.trim() !== props.name) emit('rename', draftName.value.trim());
+}
 const picker = ref<HTMLInputElement>();
 const problem = ref<string | null>(null);
 const source = shallowRef<ImageBitmap | null>(null);
@@ -47,14 +63,35 @@ async function choose(event: Event) {
 
 <template>
   <div class="identity">
-    <AppAvatar :name="name" :path="path" :size="104" />
-    <div v-if="editable" class="actions">
-      <button type="button" class="link-button" :disabled="busy || loading" @click="picker?.click()">{{ loading ? 'Preparing…' : path ? 'Replace photo' : 'Add photo' }}</button>
-      <button v-if="path" type="button" class="link-button danger" :disabled="busy || loading" @click="emit('photo', null)">Remove photo</button>
-      <input ref="picker" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="visually-hidden" tabindex="-1" @change="choose">
+    <div class="identity-avatar">
+      <AppAvatar :name="name" :path="path" :size="104" />
+      <template v-if="editable">
+        <button type="button" class="identity-camera" :aria-label="path ? 'Change photo' : 'Add photo'" :disabled="busy || loading" @click="changePhoto">
+          <span v-if="loading" class="spinner" /><AppIcon v-else name="camera" />
+        </button>
+        <input ref="picker" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="visually-hidden" tabindex="-1" @change="choose">
+      </template>
     </div>
-    <p v-if="editable" class="small muted" style="margin: 0">Move and zoom your photo before saving.</p>
+    <button v-if="renamable" type="button" class="identity-name" :disabled="busy" :aria-label="`Edit name, ${name}`" @click="startRename">
+      <span>{{ name || 'Add name' }}</span><AppIcon name="compose" />
+    </button>
+    <h2 v-else-if="showName" class="identity-title">{{ name }}</h2>
     <p v-if="problem" class="small" style="color: var(--danger); margin: 0">{{ problem }}</p>
   </div>
   <PhotoCropDialog v-if="source" :source="source" @cancel="cancel" @save="confirm" />
+  <AppSheet v-if="choosingPhoto" title="Photo" @close="choosingPhoto = false">
+    <div class="group">
+      <button type="button" class="button-row" @click="choosingPhoto = false; picker?.click()"><AppIcon name="image" />Choose photo</button>
+      <button type="button" class="button-row danger" @click="choosingPhoto = false; emit('photo', null)"><AppIcon name="delete" />Remove photo</button>
+    </div>
+  </AppSheet>
+  <AppSheet v-if="renaming" title="Name" @close="renaming = false">
+    <form @submit.prevent="rename">
+      <div class="group"><div class="field"><input v-model="draftName" type="text" maxlength="100" aria-label="Name" autofocus></div></div>
+      <div class="actions-row">
+        <button type="button" class="button text" @click="renaming = false">Cancel</button>
+        <button type="submit" class="button" :disabled="!validName">Save</button>
+      </div>
+    </form>
+  </AppSheet>
 </template>

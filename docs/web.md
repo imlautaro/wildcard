@@ -191,7 +191,16 @@ and caching still match across clients. Manrope stays the typeface on both.
   more than ten voices. iOS matches this with `SearchablePicker` (a native `Picker` up
   to ten options, otherwise a searchable sheet) and a searchable voice list. Browser
   and device checks of the search fields (keyboard, screen readers, mobile keyboards)
-  are pending. Checkboxes that are not switches render as Material checkboxes;
+  are pending.
+- **Sheets and info.** `AppSheet` is the modal for settings with choices or details: a
+  `<dialog>` that is a centered card on wide screens and a bottom sheet up to 600 px,
+  closed by Escape, its close button or a backdrop press; `AppSelect` menus opened in it
+  teleport into the dialog so they render above it. `InfoButton` replaces footer
+  paragraphs with an info icon that opens the explanation in an `AppSheet`. Rows that
+  open a sheet use `.button-row.opens` (chevron) with a trailing `.row-value`; switches
+  use `.toggle-label` for a leading icon and info button. iOS equivalents are `.sheet`
+  with `presentationDetents`, `InfoButton` (popover) and `SheetRow`. See
+  [contacts](contacts.md#contact-details-layout). Checkboxes that are not switches render as Material checkboxes;
   use `.check-row` for a consent beside its text, and switches (`.toggle`) for
   settings that take effect immediately. Two-line rows use `.two-line` with a
   `.small` supporting line. `.search-field`, `.chip`, `.code-box`, `details`, and

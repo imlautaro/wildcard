@@ -8,13 +8,9 @@ const chats = useChats();
 const session = useSession();
 const ownerID = session.user.value?.id;
 const contact = ref<Contact | null>(chats.contacts.value.find((item) => item.id === id.value) ?? null);
-const name = ref(contact.value?.name ?? '');
 const busy = ref(false);
 const error = ref<string | null>(null);
-const saved = ref(false);
 const canManage = computed(() => contact.value?.role !== 'member');
-const changed = computed(() => !!contact.value && name.value.trim() !== contact.value.name);
-const valid = computed(() => name.value.trim().length > 0 && [...name.value.trim()].length <= 100);
 const archived = computed(() => (chats.contacts.value.find(item => item.id === id.value) ?? contact.value)?.archivedAt != null);
 useHead({ title: computed(() => contact.value?.name ?? 'Contact') });
 
@@ -28,17 +24,13 @@ async function run(task: () => Promise<void>) {
   if (busy.value) return;
   busy.value = true;
   error.value = null;
-  saved.value = false;
   try { await task(); }
   catch (failure) { error.value = errorMessage(failure); }
   finally { busy.value = false; }
 }
 
-const saveName = () => run(async () => {
-  if (!valid.value) return;
-  apply((await api<{ contact: Contact }>(`contacts/${id.value}`, { method: 'PATCH', json: { name: name.value.trim() } })).contact);
-  name.value = contact.value!.name;
-  saved.value = true;
+const rename = (name: string) => run(async () => {
+  apply((await api<{ contact: Contact }>(`contacts/${id.value}`, { method: 'PATCH', json: { name } })).contact);
 });
 
 const setInitiative = (event: Event) => run(async () => {
@@ -55,7 +47,11 @@ const setInitiative = (event: Event) => run(async () => {
 // The opt-in belongs to this participant; only the creator picks the shared voice.
 const voiceFeature = computed(() => !!session.features.value?.voiceMessages);
 const voiceCatalog = useVoices();
-const choosingVoice = ref(false);
+const voiceSheet = ref(false);
+const voiceSummary = computed(() => [
+  speechAccents.find(accent => accent.code === contact.value?.speechAccent)?.name ?? 'Default accent',
+  contact.value?.voiceName ?? 'Automatic voice',
+].join(' · '));
 const setVoiceMessages = (event: Event) => run(async () => {
   const input = event.target as HTMLInputElement;
   try {
@@ -85,9 +81,9 @@ const visibleVoices = computed(() => {
   const voices = voiceCatalog.voices.value ?? [];
   return term ? voices.filter(voice => normalizeSearch(`${voice.name} ${voiceDetails(voice)}`).includes(term)) : voices;
 });
-function toggleVoicePicker() {
-  choosingVoice.value = !choosingVoice.value;
-  if (choosingVoice.value) void voiceCatalog.load();
+function openVoiceSheet() {
+  voiceSheet.value = true;
+  void voiceCatalog.load();
 }
 function voiceDetails(voice: VoiceOption) {
   return [voice.gender, voice.age?.replace('_', ' '), voice.accent].filter(Boolean).join(' · ');
@@ -127,11 +123,11 @@ const remove = () => run(async () => {
 
 onMounted(() => { void session.refreshProfile().catch(() => {}); });
 onMounted(() => run(async () => {
-  const fresh = (await api<{ contact: Contact }>(`contacts/${id.value}`)).contact;
-  const untouched = !contact.value || name.value === contact.value.name;
-  apply(fresh);
-  if (untouched) name.value = fresh.name;
+  apply((await api<{ contact: Contact }>(`contacts/${id.value}`)).contact);
 }));
+const initiativeInfo = 'Allow thoughtful follow-ups when you have not replied. Stops after a few unanswered messages. Applies only to your private chat.';
+const voiceInfo = computed(() => `With voice messages on, ${contact.value?.name ?? 'this contact'} sometimes answers your private chat with a short voice message. In groups, the creator's setting applies.`);
+const voiceChoiceInfo = computed(() => `Accent applies to new messages for everyone. Results depend on the voice; samples keep their original accent. ${canManage.value ? 'Everyone who chats with this contact hears the voice you choose.' : "The contact's creator chooses its voice."}`);
 </script>
 
 <template>
@@ -139,105 +135,93 @@ onMounted(() => run(async () => {
   <div class="page">
     <div v-if="!contact && busy" class="center"><span class="spinner" /> Loading…</div>
     <div v-else-if="!contact" class="page-inner"><p class="notice">{{ error ?? 'This contact is no longer available.' }}</p></div>
-    <form v-else class="page-inner" @submit.prevent="saveName">
-      <IdentityEditor :name="contact.name" :path="contactPhotoPath(contact)" :editable="canManage" :busy="busy" @photo="savePhoto" />
-      <div class="group">
-        <div class="field">
-          <label for="contact-name">Name</label>
-          <input id="contact-name" v-model="name" type="text" maxlength="100" :readonly="!canManage">
-        </div>
-      </div>
-      <p v-if="!canManage" class="group-footer">This is a shared contact. Its creator manages its name, photo, and participants.</p>
-      <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
-      <p v-if="saved" class="group-footer" role="status">Saved.</p>
-      <button v-if="canManage" type="submit" class="button block" :disabled="!changed || !valid || busy" style="margin-bottom: 20px">Save</button>
+    <div v-else class="page-inner">
+      <IdentityEditor :name="contact.name" :path="contactPhotoPath(contact)" :editable="canManage" :renamable="canManage" show-name :busy="busy" @photo="savePhoto" @rename="rename" />
+      <p v-if="!canManage" class="identity-subtitle">Shared contact · managed by its creator</p>
+      <p v-if="error" class="notice" style="margin: 12px 0">{{ error }}</p>
 
-      <div class="group">
+      <div class="group" style="margin-top: 12px">
         <label class="toggle">
-          <span>Conversation initiative</span>
+          <span class="toggle-label"><AppIcon name="initiative" />Conversation initiative<InfoButton label="Conversation initiative" :text="initiativeInfo" /></span>
           <input type="checkbox" role="switch" :checked="contact.initiativeEnabled !== 0" :disabled="busy" @change="setInitiative">
         </label>
-      </div>
-      <p class="group-footer">Allow thoughtful follow-ups when you have not replied. Stops after a few unanswered messages. Applies only to your private chat.</p>
-
-      <template v-if="voiceFeature">
-        <div class="group-title">Voice</div>
-        <div class="group">
+        <template v-if="voiceFeature">
           <label class="toggle">
-            <span>Voice messages</span>
+            <span class="toggle-label"><AppIcon name="mic" />Voice messages<InfoButton label="Voice messages" :text="voiceInfo" /></span>
             <input type="checkbox" role="switch" :checked="contact.voiceMessagesEnabled === 1" :disabled="busy" @change="setVoiceMessages">
           </label>
-          <div class="field">
-            <label for="speech-accent">Speech accent</label>
-            <AppSelect id="speech-accent" v-model="speechAccent" variant="plain" :options="accentOptions" :disabled="!canManage || busy" />
-          </div>
-          <button v-if="canManage" type="button" class="voice-row" :aria-expanded="choosingVoice" aria-controls="voice-options" @click="toggleVoicePicker">
-            <span>Voice</span><span class="muted">{{ contact.voiceName ?? 'Chosen automatically' }}</span><AppIcon name="dropdown" />
+          <button type="button" class="button-row opens" @click="openVoiceSheet">
+            <AppIcon name="voice" />Voice<span class="row-value">{{ voiceSummary }}</span>
           </button>
-          <div v-else class="voice-row"><span>Voice</span><span class="muted">{{ contact.voiceName ?? 'Chosen automatically' }}</span></div>
-        </div>
-        <div v-if="canManage && choosingVoice" id="voice-options" class="group voice-options" role="radiogroup" aria-label="Contact voice">
-          <div v-if="!voiceCatalog.voices.value && !voiceCatalog.error.value" class="voice-row"><span class="spinner" /> Loading voices…</div>
-          <div v-else-if="!voiceCatalog.voices.value" class="voice-row">
-            <span class="muted">{{ voiceCatalog.error.value }}</span>
-            <button type="button" class="link-button" @click="voiceCatalog.load(true)">Retry</button>
-          </div>
-          <label v-if="(voiceCatalog.voices.value?.length ?? 0) > 10" class="search-field voice-search">
-            <AppIcon name="search" />
-            <input v-model="voiceQuery" type="search" placeholder="Search voices" aria-label="Search voices" autocomplete="off">
-          </label>
-          <p v-if="voiceCatalog.voices.value?.length && !visibleVoices.length" class="voice-row muted">No matches</p>
-          <div v-for="voice in visibleVoices" :key="voice.id" class="voice-option">
-            <label>
-              <input type="radio" name="contact-voice" :checked="contact.voiceID === voice.id" :disabled="busy" @change="chooseVoice(voice.id)">
-              <span><strong>{{ voice.name }}</strong><span v-if="voiceDetails(voice)" class="small muted">{{ voiceDetails(voice) }}</span></span>
-            </label>
-            <button
-              type="button" class="icon-button" :disabled="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.loading"
-              :aria-label="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.playing ? `Pause ${voice.name} sample` : `Play ${voice.name} sample`"
-              @click="previewVoice(voice)"
-            >
-              <span v-if="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.loading" class="spinner" />
-              <AppIcon v-else :name="voicePlayer.failed === voicePreviewPath(voice.id) ? 'refresh' : voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.playing ? 'pause' : 'play'" />
-            </button>
-          </div>
-        </div>
-        <p class="group-footer">
-          With voice messages on, {{ contact.name }} sometimes answers your private chat with a short voice message.
-          Accent applies to new messages for everyone. Results depend on the voice; samples keep their original accent.
-          {{ canManage ? 'Everyone who chats with this contact hears the voice you choose.' : "The contact's creator chooses its voice." }}
-        </p>
-      </template>
+        </template>
+        <ContactEnergySection v-if="contact.role === 'owner'" :contact-id="id" />
+      </div>
 
-      <ContactEnergySection v-if="contact.role === 'owner'" :contact-id="id" />
+      <div class="group" style="margin-top: 20px">
+        <NuxtLink :to="`/contacts/${id}/personality`" class="button-row"><AppIcon name="person" />Personality</NuxtLink>
+        <NuxtLink :to="`/contacts/${id}/connections`" class="button-row"><AppIcon name="link" />Connections</NuxtLink>
+        <NuxtLink :to="`/contacts/${id}/mini-apps`" class="button-row"><AppIcon name="grid" />Mini apps</NuxtLink>
+        <NuxtLink :to="`/contacts/${id}/tasks`" class="button-row"><AppIcon name="tasks" />Tasks</NuxtLink>
+        <NuxtLink v-if="canManage" :to="`/contacts/${id}/sharing`" class="button-row"><AppIcon name="share" />Share contact</NuxtLink>
+      </div>
 
       <ChatMediaTabs :base="`contacts/${id}/chat`" :attachment-path="mediaPath" :documents-base="`contacts/${id}`" :document-route="`/contacts/${id}/documents`" />
 
-      <div class="group" style="margin-top: 20px">
-        <NuxtLink :to="`/contacts/${id}/connections`" class="button-row"><AppIcon name="link" />Connections</NuxtLink>
-        <NuxtLink :to="`/contacts/${id}/personality`" class="button-row"><AppIcon name="person" />Personality</NuxtLink>
-        <NuxtLink :to="`/contacts/${id}/mini-apps`" class="button-row"><AppIcon name="grid" />Mini apps</NuxtLink>
-        <NuxtLink :to="`/contacts/${id}/tasks`" class="button-row"><AppIcon name="tasks" />Tasks</NuxtLink>
-        <NuxtLink :to="`/chats/${id}`" class="button-row"><AppIcon name="chat" />Open chat</NuxtLink>
-        <NuxtLink v-if="canManage" :to="`/contacts/${id}/sharing`" class="button-row"><AppIcon name="share" />Share contact</NuxtLink>
-      </div>
       <div class="group" style="margin-top: 20px">
         <ChatLifecycleActions :archived="archived" :can-clear="true" :busy="busy"
           @archive="run(() => chats.archiveChat('contact', id, !archived))"
           @clear="memory => run(() => chats.clearChat('contact', id, memory))"
         />
-        <button type="button" class="button-row danger" :disabled="busy" @click="remove">Delete contact and data</button>
+        <button type="button" class="button-row danger" :disabled="busy" @click="remove"><AppIcon name="delete" />Delete contact and data</button>
       </div>
-    </form>
+
+      <AppSheet v-if="voiceSheet" title="Voice" @close="voiceSheet = false">
+        <template #header><InfoButton label="Voice" :text="voiceChoiceInfo" /></template>
+        <div class="group">
+          <div class="field">
+            <label for="speech-accent">Accent</label>
+            <AppSelect id="speech-accent" v-model="speechAccent" variant="plain" :options="accentOptions" :disabled="!canManage || busy" />
+          </div>
+          <div v-if="!canManage" class="button-row static">Voice<span class="row-value">{{ contact.voiceName ?? 'Automatic' }}</span></div>
+        </div>
+        <template v-if="canManage">
+          <div class="group-title">Voice</div>
+          <label v-if="(voiceCatalog.voices.value?.length ?? 0) > 10" class="search-field voice-search">
+            <AppIcon name="search" />
+            <input v-model="voiceQuery" type="search" placeholder="Search voices" aria-label="Search voices" autocomplete="off">
+          </label>
+          <div class="group voice-options" role="radiogroup" aria-label="Contact voice">
+            <div v-if="!voiceCatalog.voices.value && !voiceCatalog.error.value" class="voice-row"><span class="spinner" /> Loading voices…</div>
+            <div v-else-if="!voiceCatalog.voices.value" class="voice-row">
+              <span class="muted">{{ voiceCatalog.error.value }}</span>
+              <button type="button" class="link-button" @click="voiceCatalog.load(true)">Retry</button>
+            </div>
+            <p v-if="voiceCatalog.voices.value?.length && !visibleVoices.length" class="voice-row muted">No matches</p>
+            <div v-for="voice in visibleVoices" :key="voice.id" class="voice-option">
+              <label>
+                <input type="radio" name="contact-voice" :checked="contact.voiceID === voice.id" :disabled="busy" @change="chooseVoice(voice.id)">
+                <span><strong>{{ voice.name }}</strong><span v-if="voiceDetails(voice)" class="small muted">{{ voiceDetails(voice) }}</span></span>
+              </label>
+              <button
+                type="button" class="icon-button" :disabled="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.loading"
+                :aria-label="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.playing ? `Pause ${voice.name} sample` : `Play ${voice.name} sample`"
+                @click="previewVoice(voice)"
+              >
+                <span v-if="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.loading" class="spinner" />
+                <AppIcon v-else :name="voicePlayer.failed === voicePreviewPath(voice.id) ? 'refresh' : voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.playing ? 'pause' : 'play'" />
+              </button>
+            </div>
+          </div>
+        </template>
+        <p v-if="error" class="notice" style="margin: 12px 0 0">{{ error }}</p>
+      </AppSheet>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.voice-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; width: 100%; border: 0; color: inherit; font: inherit; text-align: left; }
-button.voice-row { cursor: pointer; }
-.voice-row > .muted { margin-left: auto; }
-.voice-row svg { width: 24px; height: 24px; flex: none; }
-.voice-search { margin: 8px; }
+.voice-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; margin: 0; }
+.voice-search { margin: 0 0 8px; }
 .voice-option { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 4px 8px 4px 16px; }
 .voice-option label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .voice-option label > span { display: flex; flex-direction: column; min-width: 0; }
