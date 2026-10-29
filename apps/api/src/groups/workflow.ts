@@ -12,7 +12,8 @@ import { deliverGroupPush } from './push';
 import type { WorkflowStep } from 'cloudflare:workers';
 import { dispatchAgent, releaseAttention } from '../chat/dispatch';
 import { rememberGroupMessage } from './memory';
-import { connectAgent } from '../chat/presence';
+import { connectAgent, markRecording } from '../chat/presence';
+import { voiceRepliesAvailable } from '../voice/catalog';
 import { storedAttachment, type Attachment } from '../chat/attachments';
 import { speakMessage, transcribeVoice, voiceSuitable } from '../voice/speech';
 
@@ -193,6 +194,14 @@ async function markGroupRead(env: Env, job: GroupJob, readers: Reader[]) {
     .bind(Date.now(), reader.agentID, reader.groupID, reader.sequence, job.turnID, job.attempt)));
 }
 
+// The running reply's agent when its contact's creator turned on voice messages.
+function groupVoiceScope(env: Env, job: GroupJob) {
+  return env.DB.prepare(`SELECT r.agent_id AS agentID, r.group_id AS groupID FROM group_reply r
+    JOIN contact_agent a ON a.id = r.agent_id JOIN contact owner_contact ON owner_contact.agent_id = a.id AND owner_contact.user_id = a.owner_id
+    WHERE r.id = ? AND r.attempt = ? AND r.status = 'running' AND owner_contact.voice_messages_enabled = 1`)
+    .bind(job.turnID, job.attempt).first<{ agentID: string; groupID: string }>();
+}
+
 // Presence belongs to the current attempt and its exclusive attention claim.
 async function setGroupPresence(env: Env, job: GroupJob, status: 'online' | 'typing', throughSequence: number | null = null) {
   const result = await env.DB.prepare(`UPDATE agent_presence SET status = ?3, recording_until = NULL, typing_contact_id = NULL, expires_at = ?4
@@ -262,19 +271,22 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
           : await completeGroupDraft(env, preparation.input, step, `group-draft-${review}`);
         const prepared = draft;
         const firstMessage = prepared.messages?.[0] ?? prepared.text;
-        if (firstMessage) {
-          const typing = await step.do(`group-mark-typing-${review}`, () => setGroupPresence(env, job, 'typing', prepared.throughSequence));
-          if (typing) await step.sleep(`group-first-message-pause-${review}`, messageDelay(firstMessage));
-        }
         const single = (prepared.messages?.length ?? 1) <= 1;
         const spokenText = prepared.messages?.[0] ?? prepared.text;
         // Only single-message replies without a generated image can be spoken.
-        const voice = single && spokenText && !prepared.attachment && voiceSuitable(spokenText)
+        const spoken = !!(single && spokenText && !prepared.attachment && voiceSuitable(spokenText));
+        if (firstMessage) {
+          // A reply that will be spoken shows Recording from the start, never Typing first.
+          const typing = await step.do(`group-mark-typing-${review}`, async () => {
+            const marked = await setGroupPresence(env, job, 'typing', prepared.throughSequence);
+            if (marked && spoken && await groupVoiceScope(env, job) && await voiceRepliesAvailable(env)) await markRecording(env.DB, job.turnID, job.attempt);
+            return marked;
+          });
+          if (typing) await step.sleep(`group-first-message-pause-${review}`, messageDelay(firstMessage));
+        }
+        const voice = spoken && spokenText
           ? await step.do(`group-voice-message-${review}`, { retries: { limit: 0, delay: '1 second' }, timeout: '2 minutes' }, async () => {
-            const scope = await env.DB.prepare(`SELECT r.agent_id AS agentID, r.group_id AS groupID FROM group_reply r
-              JOIN contact_agent a ON a.id = r.agent_id JOIN contact owner_contact ON owner_contact.agent_id = a.id AND owner_contact.user_id = a.owner_id
-              WHERE r.id = ? AND r.attempt = ? AND r.status = 'running' AND owner_contact.voice_messages_enabled = 1`)
-              .bind(job.turnID, job.attempt).first<{ agentID: string; groupID: string }>();
+            const scope = await groupVoiceScope(env, job);
             return scope ? speakMessage(env, { turnID: job.turnID, attempt: job.attempt, agentID: scope.agentID, text: spokenText,
               key: `group-attachments/${scope.groupID}/${scope.agentID}/${encodeURIComponent(job.turnID)}/voice-a${job.attempt}-${review}` }) : null;
           }).catch(() => null) : null;

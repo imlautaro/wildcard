@@ -753,9 +753,14 @@ chat. See [onboarding](onboarding.md) and [caching](caching.md).
 
 ## Reply activity indicators
 
-Private chat headers and incoming reply indicators show **Recording...** while the
-server prepares a voice attachment; inference before the delivery format is known
-continues to show **Typing...**. Groups label each responding contact separately.
+Private chat headers and incoming reply indicators show **Recording...** for a reply
+that will be a voice note, from the start of its composing pause through synthesis,
+and never **Typing...** first. When a contact's replies may be spoken (flag, provider
+key and opt-in), inference shows the contact online without an indicator, because
+the delivery format is unknown until the reply exists; afterwards it shows Typing...
+or Recording... for that message. Contacts without voice keep Typing... during
+inference. Group contacts already stay online during inference and now start with
+Recording... when their single-message reply will be spoken. Groups label each responding contact separately.
 Text fallback restores typing, and a finished turn returns to the normal presence.
 Chat list second lines temporarily replace the last message with **Typing...** or
 **Recording...** (including contact names in groups), hiding the last message's
@@ -770,9 +775,10 @@ activity even when the last message is unchanged. Existing offline/failure behav
 retains the latest loaded summary until a successful refresh; activity may therefore
 remain stale while disconnected. A shared contact only exposes private typing or
 recording for the currently attended participant; a group only exposes its own
-attended replies. The server recording overlay expires after at most two minutes,
-is cleared after synthesis (including text fallback), and resets on a new typing
-phase. It does not indicate that the contact is listening to incoming audio.
+attended replies. The server recording overlay (`markRecording` in
+`apps/api/src/chat/presence.ts`) expires after at most two minutes, is cleared for
+the attended turn after synthesis (including text fallback), and resets on a new
+typing phase. It does not indicate that the contact is listening to incoming audio.
 
 Requires migration `0062_recording_presence.sql`. Static API/web typechecking,
 Swift syntax parsing and SQL compilation do not validate visible or audible behavior.

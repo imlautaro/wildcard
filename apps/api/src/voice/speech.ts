@@ -6,6 +6,7 @@ import { isRecord } from '../chat/meta';
 import { normalizedRecording, transcribeRecording, TranscriptionFailure } from '../chat/transcription';
 import type { Attachment } from '../chat/attachments';
 import { agentVoice, elevenLabsKey, voiceRepliesAvailable } from './catalog';
+import { markRecording } from '../chat/presence';
 
 export type VoiceAttachment = Attachment & { durationMs: number };
 export type PublicVoice = { durationMs: number; listenedAt: number | null; transcript: string | null };
@@ -35,16 +36,19 @@ export function voiceSuitable(text: string) {
     && !/^\s*([-*+]|\d+[.)])\s/m.test(text) && !/^\s*#{1,6}\s/m.test(text) && !/\|.*\|/.test(text);
 }
 
+// Whether a private contact's suitable replies are spoken (super admin flag, provider key, opt-in).
+export async function privateVoiceReplies(env: Env, contactID: string) {
+  return !!await env.DB.prepare('SELECT 1 FROM contact WHERE id = ? AND voice_messages_enabled = 1').bind(contactID).first()
+    && await voiceRepliesAvailable(env);
+}
+
 // Speak `text` with the agent's voice, store the MP3 and return its attachment.
 // Any failure returns null so the caller publishes the message as text.
 export async function speakMessage(env: Env, input: { agentID: string; turnID: string; attempt: number; text: string; key: string }): Promise<VoiceAttachment | null> {
   const recordingUntil = Date.now() + 120_000;
   try {
     if (!await voiceRepliesAvailable(env) || !voiceSuitable(input.text)) return null;
-    await env.DB.prepare(`UPDATE agent_presence SET recording_until = ?1
-      WHERE agent_id = ?2 AND status = 'typing' AND EXISTS (
-        SELECT 1 FROM agent_attention WHERE agent_id = ?2 AND turn_id = ?3 AND attempt = ?4)`)
-      .bind(recordingUntil, input.agentID, input.turnID, input.attempt).run();
+    await markRecording(env.DB, input.turnID, input.attempt, recordingUntil);
     const source = await env.DB.prepare(`SELECT contact_id AS scope FROM chat_turn WHERE id=?1 AND attempt=?2
       UNION ALL SELECT group_id FROM group_reply WHERE id=?1 AND attempt=?2`).bind(input.turnID,input.attempt).first<{scope:string}>();
     if (!source) return null;
@@ -66,8 +70,10 @@ export async function speakMessage(env: Env, input: { agentID: string; turnID: s
     console.error(JSON.stringify({ event: 'voice_reply_skipped' }));
     return null;
   } finally {
-    await env.DB.prepare('UPDATE agent_presence SET recording_until = NULL WHERE agent_id = ? AND recording_until = ?')
-      .bind(input.agentID, recordingUntil).run().catch(() => {
+    // Clears this turn's overlay, including one the workflow set before synthesis.
+    await env.DB.prepare(`UPDATE agent_presence SET recording_until = NULL WHERE agent_id = ?1 AND (recording_until = ?2
+      OR EXISTS (SELECT 1 FROM agent_attention WHERE agent_id = ?1 AND turn_id = ?3 AND attempt = ?4))`)
+      .bind(input.agentID, recordingUntil, input.turnID, input.attempt).run().catch(() => {
         console.error(JSON.stringify({ event: 'recording_presence_cleanup_deferred' }));
       });
   }

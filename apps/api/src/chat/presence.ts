@@ -59,6 +59,15 @@ export async function markTyping(db: D1Database, job: ChatJob) {
     .bind(Date.now() + 900_000, job.turnID, job.attempt).run();
 }
 
+// Recording overlays the attended typing lease once a reply is known to be a voice note,
+// so it never shows Typing first. Bounded to two minutes; a new typing phase resets it.
+export function markRecording(db: D1Database, turnID: string, attempt: number, until = Date.now() + 120_000) {
+  return db.prepare(`UPDATE agent_presence SET recording_until = ?1
+    WHERE status = 'typing' AND EXISTS (SELECT 1 FROM agent_attention a
+      WHERE a.agent_id = agent_presence.agent_id AND a.turn_id = ?2 AND a.attempt = ?3)`)
+    .bind(until, turnID, attempt).run();
+}
+
 // Database time keeps list and detail reads consistent without extra per-row requests.
 export function privatePresenceStatus(contact: string) {
   return `CASE WHEN p.expires_at <= unixepoch('subsec') * 1000 OR p.status = 'offline' THEN 'offline'

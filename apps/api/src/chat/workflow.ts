@@ -12,7 +12,7 @@ import { groupRequestTurnAllowed } from '../groups/request-access';
 import { runGroup, type GroupJob } from '../groups/workflow';
 import { scheduleAllowed } from '../schedules/data';
 import type { VisitJob } from './visits';
-import { expirePresence, markRead, markTyping } from './presence';
+import { expirePresence, markRead, markRecording, markTyping } from './presence';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { enqueueReply, deliverPush } from '../push/delivery';
 import { activeTurn, type AssistantMessage, type ChatJob } from './data';
@@ -22,7 +22,7 @@ import { maintainMemories } from './memory';
 import { releaseAttention } from './dispatch';
 import { storedAttachment } from './attachments';
 import { TranscriptionFailure } from './transcription';
-import { isVoice, speakMessage, transcribeVoice, voiceSuitable } from '../voice/speech';
+import { isVoice, privateVoiceReplies, speakMessage, transcribeVoice, voiceSuitable } from '../voice/speech';
 import { NonRetryableError } from 'cloudflare:workflows';
 
 // Checkpoint the remaining delay so replay takes the same branch. Memory work,
@@ -30,6 +30,15 @@ import { NonRetryableError } from 'cloudflare:workflows';
 async function pauseUntil(step: WorkflowStep, name: string, deadline: number) {
   const remaining = await step.do(`${name}-remaining`, async () => Math.max(0, deadline - Date.now()));
   if (remaining > 0) await step.sleep(name, remaining);
+}
+
+// Null is an intentional reaction-only turn. Old checkpoints contain prose.
+function replyMessages(reply: ContactResponse | string[] | string | null) {
+  const response = reply && typeof reply === 'object' && !Array.isArray(reply) ? reply : null;
+  const messages = response ? response.messages : typeof reply === 'string' ? [reply] : Array.isArray(reply) ? reply : [];
+  // At most one message per reply is spoken: the first suitable one without an image.
+  const spoken = messages.findIndex((text, index) => voiceSuitable(text) && !(index === 0 && response?.attachment));
+  return { response, messages, spoken };
 }
 
 export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob | InitiativeJob> {
@@ -84,17 +93,25 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         const contact = await env.DB.prepare('SELECT name FROM contact WHERE id = ?1 AND user_id = ?2')
           .bind(turn.contactID, turn.userID).first<{ name: string }>();
         if (!contact) return null;
-        await markTyping(env.DB, job);
+        // When replies may be spoken, the format is unknown until generation ends, so the
+        // contact stays online and shows Typing or Recording only once the reply exists.
+        const voice = await privateVoiceReplies(env, turn.contactID);
+        if (!voice) await markTyping(env.DB, job);
         const typingAt = Date.now();
         const reply = await contactReply(env, turn, contact.name);
-        return { reply, typingAt };
+        return { reply, typingAt, voice };
       });
       if (prepared) {
+        const { messages, spoken } = replyMessages(prepared.reply);
+        const first = messages[0];
+        const typingAt = first && prepared.voice ? await step.do('mark-composing', async () => {
+          await markTyping(env.DB, job);
+          if (spoken === 0) await markRecording(env.DB, job.turnID, job.attempt);
+          return Date.now();
+        }) : prepared.typingAt;
         // Fast generations still show a plausible amount of typing.
-        const first = typeof prepared.reply === 'string' ? prepared.reply
-          : (Array.isArray(prepared.reply) ? prepared.reply : prepared.reply?.messages)?.[0];
-        if (first && typeof prepared.typingAt === 'number') {
-          await pauseUntil(step, 'typing-pause', prepared.typingAt + messageDelay(first));
+        if (first && typeof typingAt === 'number') {
+          await pauseUntil(step, 'typing-pause', typingAt + messageDelay(first));
         }
         const hold = await step.do('reply-timing-decision', {
           retries: { limit: 0, delay: '1 second' }, timeout: '1 minute',
@@ -198,17 +215,19 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
   }
 
   private async publishMessages(env: Env, job: ChatJob, step: WorkflowStep, reply: ContactResponse | string[] | string | null, prefix = 'reply') {
-    // Null is an intentional reaction-only turn. Old checkpoints contain prose.
-    const response = reply && typeof reply === 'object' && !Array.isArray(reply) ? reply : null;
-    const messages = response ? response.messages : typeof reply === 'string' ? [reply] : Array.isArray(reply) ? reply : [];
-    // At most one message per reply is spoken: the first suitable one without an image.
-    const spoken = messages.findIndex((text, index) => voiceSuitable(text) && !(index === 0 && response?.attachment));
+    const { response, messages, spoken } = replyMessages(reply);
     for (let index = 0; index < Math.max(1, messages.length); index++) {
+      // A later spoken message shows Recording, not Typing, during its pause.
+      if (index && index === spoken) await step.do(`${prefix}-mark-recording-${index}`, async () => {
+        const turn = await activeTurn(env.DB, job);
+        if (turn?.status === 'running' && await privateVoiceReplies(env, turn.contactID)) await markRecording(env.DB, job.turnID, job.attempt);
+        return true;
+      });
       if (index) await step.sleep(`${prefix}-message-pause-${index}`, messageDelay(messages[index]));
       // Checkpointed separately so publication retries never synthesize twice.
       const voice = index === spoken ? await step.do(`${prefix}-voice-message-${index}`, { retries: { limit: 0, delay: '1 second' }, timeout: '2 minutes' }, async () => {
         const turn = await activeTurn(env.DB, job);
-        if (!turn || turn.status !== 'running' || !await env.DB.prepare('SELECT 1 FROM contact WHERE id = ? AND voice_messages_enabled = 1').bind(turn.contactID).first()) return null;
+        if (!turn || turn.status !== 'running' || !await privateVoiceReplies(env, turn.contactID)) return null;
         const agent = await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ?').bind(turn.contactID).first<{ id: string }>();
         return agent ? speakMessage(env, { turnID: job.turnID, attempt: job.attempt, agentID: agent.id, text: messages[index],
           key: `attachments/${turn.userID}/${turn.contactID}/${job.turnID}/voice-a${job.attempt}-${index}` }) : null;
