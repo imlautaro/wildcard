@@ -1,10 +1,10 @@
 import { createReactionCache, clearReactionCache, refreshReactions, type ReactionCache } from './useMessageReactions';
-import type { DraftAttachment, GroupMessage, GroupMessagesPage, GroupSnapshot, ReplyQuote } from '~/utils/types';
+import type { DraftAttachment, DraftVoice, GroupMessage, GroupMessagesPage, GroupSnapshot, ReplyQuote } from '~/utils/types';
 
 // Session cache of group conversations, mirroring useConversation. A pending send
 // becomes `accepted` (Sent) on HTTP acceptance, before the follow-up history
 // request; history then replaces it by UUID.
-export type GroupPending = { id: string; text: string; attachment: DraftAttachment | null; replyTo: ReplyQuote | null; failed: string | null; accepted: boolean; createdAt: number };
+export type GroupPending = { id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; replyTo: ReplyQuote | null; failed: string | null; accepted: boolean; createdAt: number };
 export type GroupConversation = {
   reactions: ReactionCache;
   snapshot: GroupSnapshot | null;
@@ -283,8 +283,11 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
       ? { name: pending.attachment.name, mimeType: pending.attachment.mimeType, data: pending.attachment.data }
       : undefined;
     try {
-      await api<{ id: string }>(`groups/${id}/messages`, { json: { id: pending.id, text: pending.text, attachment, replyToID: pending.replyTo?.messageID } });
+      await api<{ id: string }>(`groups/${id}/messages`, { json: { id: pending.id, text: pending.text, attachment,
+        voice: pending.voice ? { data: pending.voice.data } : undefined, replyToID: pending.replyTo?.messageID } });
       if (entry.pending?.id !== pending.id) return;
+      // Seed before history loads, so the accepted voice bubble plays without a download.
+      if (pending.voice) seedVoiceAudio(`groups/${id}/messages/${pending.id}/attachment`, pending.voice.blob);
       // Acceptance means Sent, not Received; polling confirms it even if this load fails.
       entry.pending.accepted = true;
       messageSent(`group/${id}`, pending.id);
@@ -295,11 +298,11 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
     }
   }
 
-  async function send(text: string, attachment: DraftAttachment | null) {
+  async function send(text: string, attachment: DraftAttachment | null, voice: DraftVoice | null = null) {
     const entry = state.value;
     if (entry.pending) return;
-    entry.pending = { id: crypto.randomUUID(), text: text.trim(), attachment, replyTo: entry.replyTo, failed: null, accepted: false, createdAt: Date.now() };
-    entry.draft = '';
+    entry.pending = { id: crypto.randomUUID(), text: voice ? '' : text.trim(), attachment: voice ? null : attachment, voice, replyTo: entry.replyTo, failed: null, accepted: false, createdAt: Date.now() };
+    if (!voice) entry.draft = '';
     entry.replyTo = null;
     await submit();
   }
@@ -307,7 +310,8 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
   function discardPending() {
     const entry = state.value;
     if (!entry.pending?.failed) return;
-    entry.draft = entry.pending.text;
+    // A failed voice message has no text to edit: discarding drops the clip.
+    if (!entry.pending.voice) entry.draft = entry.pending.text;
     entry.replyTo = entry.pending.replyTo;
     if (entry.pending.attachment?.previewURL) URL.revokeObjectURL(entry.pending.attachment.previewURL);
     entry.pending = null;

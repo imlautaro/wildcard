@@ -26,6 +26,7 @@ export function replyColor(groupID: string, identity: string) {
 export function quoteSummary(quote: ReplyQuote) {
   if (!quote.available) return 'Original message unavailable';
   if (quote.text) return quote.previewText ?? (quote.side === 'assistant' || quote.agentID ? plainMessageMarkdown(quote.text) : quote.text);
-  if (!quote.attachment) return '';
+  // Quotes of voice messages carry no text or attachment (docs/voice.md).
+  if (!quote.attachment) return 'Voice message';
   return quote.attachment.mimeType.startsWith('image/') ? 'Photo' : quote.attachment.name;
 }

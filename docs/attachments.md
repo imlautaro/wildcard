@@ -18,8 +18,8 @@ sending. A message can contain one attachment, with or without text. Sending
 immediately moves the attachment into an optimistic outgoing bubble; image
 thumbnails use local bytes while the request is pending. A clock indicates sending,
 and attachment preview actions wait for server acceptance. The right
-button sends when an attachment is selected; dictation remains available for an
-empty composer. Failed sends retain the draft and attachment, including the request
+button sends when an attachment is selected; the [voice message](voice.md)
+microphone replaces it only when the composer is empty. Failed sends retain the draft and attachment, including the request
 identifier for uncertain network results. Images load automatically as square
 inline thumbnails up to 260 points wide, using centered aspect-fill (cover):
 the image fills the available area without distortion and excess edges are
@@ -53,7 +53,7 @@ preserves bytes; Photo library selection converts to JPEG with a maximum 2048-po
 long edge rendered at scale 1, with a white background for transparency. The selected
 photo representation must also fit 5 MiB before conversion. Camera capture, multiple
 attachments, Word/Excel documents, video, and audio file input are not offered.
-Voice dictation continues to use the separate transcription endpoint.
+Recorded [voice messages](voice.md) use a separate `voice` body field, not attachments.
 
 The API validates base64, MIME allowlist, file signatures, name, and size before
 storage; this is format validation, not a malware scan or full file parser. The model

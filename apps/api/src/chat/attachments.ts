@@ -5,7 +5,7 @@ import type { StoredTurn } from './data';
 export const attachmentLimit = 5 * 1024 * 1024;
 // Chat details media pages: fewer messages for images, whose grid loads full-size bytes.
 export const mediaPage = (kind: string) => kind === 'image' ? 30 : 60;
-export type Attachment = { name: string; mimeType: string; size: number; digest: string; key: string };
+export type Attachment = { name: string; mimeType: string; size: number; digest: string; key: string; durationMs?: number };
 export type PublicAttachment = Pick<Attachment, 'name' | 'mimeType' | 'size'>;
 
 // Accept only the formats offered by the native picker; never fetch user URLs.
@@ -43,6 +43,9 @@ export function publicAttachment(turn: Pick<StoredTurn, 'attachmentJSON'>): Publ
 export async function attachmentMessage(env: Env, turn: Pick<StoredTurn, 'attachmentJSON' | 'userText'>): Promise<Extract<ModelMessage, { role: 'user' }>> {
   const attachment = storedAttachment(turn);
   if (!attachment) return { role: 'user', content: turn.userText };
+  // The workflow saved the transcript as the message text before generation.
+  // Callers label it with voiceText.
+  if (attachment.mimeType.startsWith('audio/')) return { role: 'user', content: turn.userText };
   const object = await env.CONTACT_PHOTOS.get(attachment.key);
   if (!object || object.size !== attachment.size || object.size > attachmentLimit) throw new Error('ATTACHMENT_UNAVAILABLE');
   const data = `data:${attachment.mimeType};base64,${Buffer.from(await object.arrayBuffer()).toString('base64')}`;
@@ -69,3 +72,7 @@ export async function cleanAttachments(env: Env): Promise<void> {
     await env.DB.prepare('DELETE FROM chat_attachment_object WHERE object_key = ?').bind(key).run();
   }
 }
+
+// How a person's voice message reads to the model, matching history rows.
+export const voiceText = (transcript: string) => transcript
+  ? `[Voice message, transcribed] ${transcript}` : '[Voice message without recognizable speech]';

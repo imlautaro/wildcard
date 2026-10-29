@@ -8,7 +8,8 @@ import media, { groupPhotoKey } from './media';
 import { taskRoutes } from '../tasks/routes';
 import { documentRoutes } from '../documents/routes';
 import { removePhoto } from '../photos/storage';
-import { parseAttachment, sameAttachment, publicAttachment } from '../chat/attachments';
+import { parseAttachment, sameAttachment, publicAttachment, storedAttachment } from '../chat/attachments';
+import { isVoice, parseVoice, publicVoice } from '../voice/speech';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { readBearerSession } from '../lib/session';
@@ -41,7 +42,7 @@ const summary = `m.last_read_sequence AS lastReadSequence,
   (SELECT id FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageID,
   (SELECT user_id FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageUserID,
   (SELECT ${receiptState('gm')} FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageReceiptState, g.created_at AS createdAt, g.photo_version AS photoVersion,
-  (SELECT CASE WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
+  (SELECT CASE WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
   (SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageAt,
   (SELECT sender_name FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageSenderName,
   COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt`;
@@ -74,7 +75,7 @@ groups.get('/', async (c) => {
     WHERE m.user_id = ? ORDER BY updatedAt DESC, g.id LIMIT 100`).bind(c.get('owner')).all<GroupSummary>();
   const { results: activity } = await c.env.DB.prepare(`SELECT gm.id AS messageID, gm.sequence, gm.group_id AS groupID,
     g.name AS groupName, gm.sender_name AS senderName, gm.agent_id AS agentID, gm.created_at AS sentAt,
-    CASE WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END AS text
+    CASE WHEN json_extract(gm.attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END AS text
     FROM group_message gm JOIN group_member m ON m.group_id = gm.group_id JOIN chat_group g ON g.id = gm.group_id
     WHERE m.user_id = ? AND gm.sequence > m.last_read_sequence AND gm.user_id IS NOT m.user_id AND gm.task_id IS NULL
     ORDER BY gm.sequence DESC LIMIT 50`).bind(c.get('owner')).all<Record<string, unknown> & { text: string; agentID: string | null }>();
@@ -294,12 +295,19 @@ groups.get('/:id/messages', async (c) => {
   const before = Number(c.req.query('before') ?? Number.MAX_SAFE_INTEGER);
   if (!Number.isSafeInteger(before) || before < 1) return c.json({ error: 'Invalid history cursor' }, 400);
   const { results } = await c.env.DB.prepare(`SELECT ${receiptState('group_message')} AS receiptState, sequence, id, user_id AS userID, agent_id AS agentID,
-    sender_name AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON, reply_to_id AS replyToID FROM group_message
-    WHERE group_id = ? AND sequence < ? AND task_id IS NULL ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before).all<{ sequence: number; attachmentJSON: string | null; replyToID: string | null }>();
+    sender_name AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON, reply_to_id AS replyToID,
+    voice_listened_at AS voiceListenedAt, voice_transcribed_at AS voiceTranscribedAt FROM group_message
+    WHERE group_id = ? AND sequence < ? AND task_id IS NULL ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before)
+    .all<{ sequence: number; attachmentJSON: string | null; replyToID: string | null; text: string; agentID: string | null; voiceListenedAt: number | null; voiceTranscribedAt: number | null }>();
   const page = results.slice(0, 50);
   const quotes = await groupQuotes(c.env.DB, c.req.param('id'), page);
-  return c.json({ messages: page.reverse().map(({ attachmentJSON, replyToID, ...message }) => ({ ...message,
-    attachment: publicAttachment({ attachmentJSON }), replyTo: quotes({ replyToID }) })), nextBefore: results.length > 50 ? page[0].sequence : null });
+  return c.json({ messages: page.reverse().map(({ attachmentJSON, replyToID, voiceListenedAt, voiceTranscribedAt, ...message }) => {
+    // Contacts' voice messages keep their spoken text; people's transcripts stay behind long press.
+    const voice = publicVoice(storedAttachment({ attachmentJSON }), message.agentID ? null : voiceListenedAt,
+      message.agentID ? message.text : voiceTranscribedAt ? message.text : null);
+    return { ...message, text: voice && !message.agentID ? '' : message.text,
+      attachment: voice ? null : publicAttachment({ attachmentJSON }), voice, replyTo: quotes({ replyToID }) };
+  }), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 // Aggregate-only refresh for retained history; recheck membership in the query.
 groups.get('/:id/receipts', async (c) => {
@@ -357,19 +365,25 @@ groups.post('/:id/messages', async (c) => {
   const id = c.req.param('id'), owner = c.get('owner');
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (typeof b?.id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.id)
-    || typeof b.text !== 'string' || (!b.text.trim() && b.attachment === undefined) || b.text.includes('\0')
-    || Array.from(b.text.trim()).length > 4000 || Object.keys(b).some((key) => !['id','text','attachment','replyToID'].includes(key))) {
-    return c.json({ error: 'Use a message up to 4,000 characters or an attachment, with a UUID' }, 400);
+    || typeof b.text !== 'string' || (!b.text.trim() && b.attachment === undefined && b.voice === undefined) || b.text.includes('\0')
+    || Array.from(b.text.trim()).length > 4000 || Object.keys(b).some((key) => !['id','text','attachment','voice','replyToID'].includes(key))
+    || (b.voice !== undefined && (b.text.trim() || b.attachment !== undefined))) {
+    return c.json({ error: 'Use a message up to 4,000 characters, an attachment or a voice message, with a UUID' }, 400);
   }
   b.id = b.id.toLowerCase();
   const replyToID = parseGroupReply(b.replyToID) ?? null;
   if (b.replyToID !== undefined && !replyToID) return c.json({ error: 'Choose a message from this group to reply to' }, 400);
-  const attachment = b.attachment === undefined ? null : await parseAttachment(b.attachment);
+  const attachment = b.voice !== undefined ? await parseVoice(b.voice)
+    : b.attachment === undefined ? null : await parseAttachment(b.attachment);
+  if (b.voice !== undefined && !attachment) return c.json({ error: 'Use a mono 16-bit 16 kHz WAV lasting 0.25–60 seconds' }, 400);
   if (b.attachment !== undefined && !attachment) return c.json({ error: 'Choose a JPEG, PNG, GIF, WebP, or PDF up to 5 MB' }, 400);
+  // A transcribed voice message has text; the audio digest alone identifies the send.
+  const sameText = (saved: { text: string; attachmentJSON: string | null }) => saved.text === (b.text as string).trim()
+    || (b.voice !== undefined && isVoice(storedAttachment(saved)));
   const existing = await c.env.DB.prepare('SELECT text, attachment_json AS attachmentJSON, reply_to_id AS replyToID FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
     .bind(b.id, id, owner).first<{ text: string; attachmentJSON: string | null; replyToID: string | null }>();
   if (existing) {
-    if (existing.text !== b.text.trim() || !sameAttachment(existing, attachment?.metadata) || existing.replyToID !== replyToID) return c.json({ error: 'Message ID already used' }, 409);
+    if (!sameText(existing) || !sameAttachment(existing, attachment?.metadata) || existing.replyToID !== replyToID) return c.json({ error: 'Message ID already used' }, 409);
     c.executionCtx.waitUntil(dispatchGroup(c.env, id));
     return c.json({ id: b.id });
   }
@@ -402,7 +416,7 @@ groups.post('/:id/messages', async (c) => {
   ]);
   const saved = await c.env.DB.prepare('SELECT id, text, attachment_json AS attachmentJSON, reply_to_id AS replyToID FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
     .bind(b.id, id, owner).first<{ id: string; text: string; attachmentJSON: string | null; replyToID: string | null }>();
-  if (!saved || saved.text !== b.text.trim() || !sameAttachment(saved, attachment?.metadata) || saved.replyToID !== replyToID) return c.json({ error: 'The group queue is full or model consent is required' }, 409);
+  if (!saved || !sameText(saved) || !sameAttachment(saved, attachment?.metadata) || saved.replyToID !== replyToID) return c.json({ error: 'The group queue is full or model consent is required' }, 409);
   c.executionCtx.waitUntil(dispatchGroup(c.env, id));
   c.executionCtx.waitUntil(deliverGroupPush(c.env, saved.id));
   return c.json({ id: saved.id }, 202);

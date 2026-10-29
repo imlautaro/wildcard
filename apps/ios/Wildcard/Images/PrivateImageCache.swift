@@ -30,7 +30,10 @@ enum CachedImageResource: Hashable, Sendable {
 final class PrivateImageCache {
     private let decoded = NSCache<NSString, UIImage>()
     private let originals = NSCache<NSString, NSData>()
-    private let disk = ImageDiskCache()
+    private let disk = ProtectedDiskCache(directory: "PrivateImages-v1")
+    /// Voice message audio shares this cache's account lifecycle, so every activation,
+    /// sign-out, account switch and access-loss clear also drops cached audio.
+    let audio = VoiceAudioCache()
     private var userID: String?
     private var session = UUID()
     private struct Request {
@@ -45,6 +48,7 @@ final class PrivateImageCache {
     }
 
     func activate(userID: String) {
+        audio.activate(userID: userID)
         guard self.userID != userID else { return }
         resetMemory()
         self.userID = userID
@@ -55,6 +59,7 @@ final class PrivateImageCache {
         let previousSession = session
         resetMemory()
         if deactivate { userID = nil }
+        await audio.clear(deactivate: deactivate)
         await disk.clear(userID: previousUser, session: previousSession)
     }
 
@@ -137,13 +142,19 @@ final class PrivateImageCache {
     }
 }
 
-private actor ImageDiskCache {
+/// Account-scoped disk cache with complete file protection, a 64 MiB budget per account
+/// and seven-day idle expiry. Private images and voice audio use separate directories.
+actor ProtectedDiskCache {
     private let limit = 64 * 1024 * 1024
     private let lifetime: TimeInterval = 7 * 24 * 60 * 60
     private var invalidSessions: Set<UUID> = []
     private var lastPruned: [String: Date] = [:]
-    private let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-        .appending(path: "PrivateImages-v1", directoryHint: .isDirectory)
+    private let root: URL?
+
+    init(directory: String) {
+        root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appending(path: directory, directoryHint: .isDirectory)
+    }
 
     private func hash(_ value: String) -> String {
         SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
@@ -175,7 +186,7 @@ private actor ImageDiskCache {
             try folder.setResourceValues(values)
             try data.write(to: file, options: [.atomic, .completeFileProtection])
             prune(userID: userID, force: true)
-        } catch { /* Cache failures never fail an image request. */ }
+        } catch { /* Cache failures never fail a download. */ }
     }
 
     func remove(userID: String, key: String) {

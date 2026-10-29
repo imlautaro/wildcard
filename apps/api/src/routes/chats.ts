@@ -12,6 +12,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { findTurn, publicTurn, storedColumns, turnColumns, type ChatTurn, type StoredTurn } from '../chat/data';
 import { normalizedRecording, transcribeRecording, TranscriptionFailure } from '../chat/transcription';
 import { dispatchChat } from '../chat/dispatch';
+import { isVoice, parseVoice } from '../voice/speech';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 
 const chats = new Hono<{ Bindings: Env; Variables: { owner: string; contactID: string } }>();
@@ -128,11 +129,15 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
 });
 chats.post('/turns', attachmentBody, async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
-  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'replyTo', 'nativeContext', 'remoteDeviceID'].includes(key))
+  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'voice', 'replyTo', 'nativeContext', 'remoteDeviceID'].includes(key))
     || (body.timeZone !== undefined && !validTimeZone(body.timeZone))
     || typeof body.id !== 'string' || !uuid.test(body.id) || typeof body.text !== 'string'
-    || (!body.text.trim() && body.attachment === undefined) || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
+    || (!body.text.trim() && body.attachment === undefined && body.voice === undefined) || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
     return c.json({ error: 'Provide an id and a message using 1–4000 characters' }, 400);
+  }
+  // A voice message is only audio: no caption or file. Its transcript comes later.
+  if (body.voice !== undefined && (body.text.trim() || body.attachment !== undefined)) {
+    return c.json({ error: 'Send a voice message without text or attachments' }, 400);
   }
   if (body.remoteDeviceID !== undefined && (typeof body.remoteDeviceID !== 'string' || !uuid.test(body.remoteDeviceID) || body.nativeContext !== undefined)) return c.json({ error: 'Choose one native device' }, 400);
   const localNative = body.nativeContext === undefined ? null : parseNativeContext(body.nativeContext);
@@ -144,13 +149,17 @@ chats.post('/turns', attachmentBody, async (c) => {
   const nativeJSON = native ? JSON.stringify(native) : null;
   const reply = parsePrivateReply(body.replyTo);
   if (reply === null) return c.json({ error: 'Choose a message from this conversation to reply to' }, 400);
-  const attachment = body.attachment === undefined ? null : await parseAttachment(body.attachment);
+  const attachment = body.voice !== undefined ? await parseVoice(body.voice)
+    : body.attachment === undefined ? null : await parseAttachment(body.attachment);
+  if (body.voice !== undefined && !attachment) return c.json({ error: 'Use a mono 16-bit 16 kHz WAV lasting 0.25–60 seconds' }, 400);
   if (body.attachment !== undefined && !attachment) return c.json({ error: 'Choose a JPEG, PNG, GIF, WebP, or PDF up to 5 MB' }, 400);
   const id = body.id.toLowerCase();
   const text = body.text.trim();
+  // A transcribed voice turn has text; the audio digest alone identifies the send.
+  const sameText = (turn: StoredTurn) => turn.userText === text || (body.voice !== undefined && isVoice(storedAttachment(turn)));
   const existing = await findTurn(c.env.DB, id, c.get('contactID'), c.get('owner'));
   if (existing) {
-    if (existing.userText !== text || !sameAttachment(existing, attachment?.metadata) || !sameReply(existing, reply)) return c.json({ error: 'Message id already used' }, 409);
+    if (!sameText(existing) || !sameAttachment(existing, attachment?.metadata) || !sameReply(existing, reply)) return c.json({ error: 'Message id already used' }, 409);
     if (existing.status === 'queued') c.executionCtx.waitUntil(dispatchChat(c.env, existing));
     return c.json({ turn: await quotedTurn(c.env.DB, existing), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) }, 200);
   }
@@ -184,7 +193,7 @@ chats.post('/turns', attachmentBody, async (c) => {
       reply?.messageID ?? null, reply?.side ?? null, nativeJSON).first<StoredTurn>();
   if (!turn) {
     const duplicate = await findTurn(c.env.DB, id, c.get('contactID'), c.get('owner'));
-    if (duplicate?.userText === text && sameAttachment(duplicate, attachment?.metadata) && sameReply(duplicate, reply)) return c.json({ turn: await quotedTurn(c.env.DB, duplicate), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
+    if (duplicate && sameText(duplicate) && sameAttachment(duplicate, attachment?.metadata) && sameReply(duplicate, reply)) return c.json({ turn: await quotedTurn(c.env.DB, duplicate), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
     return c.json({ error: 'Too many pending messages or the conversation changed' }, 409);
   }
   await c.env.DB.prepare(`UPDATE chat_visit SET typing_at = NULL
@@ -203,8 +212,10 @@ chats.get('/media', async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT sequence, id, created_at AS createdAt,
     attachment_json AS attachmentJSON, assistant_messages_json AS assistantMessagesJSON FROM chat_turn
     WHERE contact_id = ?1 AND user_id = ?2 AND sequence < ?3 AND (
-      (attachment_json IS NOT NULL AND (json_extract(attachment_json, '$.mimeType') LIKE 'image/%') = (?4 = 'image'))
+      (attachment_json IS NOT NULL AND json_extract(attachment_json, '$.mimeType') NOT LIKE 'audio/%'
+        AND (json_extract(attachment_json, '$.mimeType') LIKE 'image/%') = (?4 = 'image'))
       OR (json_extract(assistant_messages_json, '$[0].attachment.key') IS NOT NULL
+        AND json_extract(assistant_messages_json, '$[0].attachment.mimeType') NOT LIKE 'audio/%'
         AND (json_extract(assistant_messages_json, '$[0].attachment.mimeType') LIKE 'image/%') = (?4 = 'image')))
     ORDER BY sequence DESC LIMIT ?5`)
     .bind(c.get('contactID'), c.get('owner'), before ? Number(before) : Number.MAX_SAFE_INTEGER, kind, mediaPage(kind) + 1)
@@ -215,7 +226,7 @@ chats.get('/media', async (c) => {
     return [
       ...(reply?.attachment ? [{ side: 'assistant' as const, createdAt: reply.createdAt, attachment: reply.attachment }] : []),
       ...(turn.attachmentJSON ? [{ side: 'user' as const, createdAt: turn.createdAt, attachment: JSON.parse(turn.attachmentJSON) as Attachment }] : []),
-    ].filter(({ attachment }) => attachment.mimeType.startsWith('image/') === (kind === 'image'))
+    ].filter(({ attachment }) => !isVoice(attachment) && attachment.mimeType.startsWith('image/') === (kind === 'image'))
       .map(({ side, createdAt, attachment }) => ({ messageID: turn.id, side, sequence: turn.sequence, createdAt,
         name: attachment.name, mimeType: attachment.mimeType, size: attachment.size }));
   });
@@ -223,8 +234,10 @@ chats.get('/media', async (c) => {
 });
 chats.get('/turns/:turnID/attachment', async (c) => {
   const turn = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
+  const part = Number(c.req.query('part') ?? '0');
+  if (!Number.isSafeInteger(part) || part < 0 || part > 7) return c.json({ error: 'Attachment not found' }, 404);
   const attachment = turn && (c.req.query('side') === 'assistant'
-    ? (JSON.parse(turn.assistantMessagesJSON ?? '[]') as { attachment?: Attachment }[])[0]?.attachment
+    ? (JSON.parse(turn.assistantMessagesJSON ?? '[]') as { attachment?: Attachment }[])[part]?.attachment
     : storedAttachment(turn));
   if (!attachment) return c.json({ error: 'Attachment not found' }, 404);
   const object = await c.env.CONTACT_PHOTOS.get(attachment.key);

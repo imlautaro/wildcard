@@ -278,14 +278,20 @@ group catch-up across more than 50 missed messages, PDF attachments in a browser
 photo selection through the file picker, session expiry over time, and rate-limit
 behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.
 
-## Voice dictation
+## Voice messages
 
 Private and group composers show a microphone instead of the send button while the
-draft is empty, as on iOS ([voice dictation](voice.md#web)). `useVoiceDictation.ts`
-records with `MediaRecorder`, then decodes the clip with Web Audio and renders it
-through an `OfflineAudioContext` as mono 16-bit PCM WAV at 16 kHz, the only format
-the API accepts, and uploads it to the existing transcription routes. The
-transcript is appended to the editable draft and never sent automatically.
+draft is empty and has no attachment, as on iOS ([voice messages](voice.md#web)):
+hold to record and release to send, slide left to cancel, slide up to lock (Delete or
+Stop), or press Space/Enter on the microphone for a locked recording.
+`useVoiceRecorder.ts` records with `MediaRecorder` and renders the clip through an
+`OfflineAudioContext` as mono 16-bit PCM WAV at 16 kHz, which is sent with the
+message; nothing is transcribed before sending. `VoiceMessage.vue` plays voice
+bubbles from the memory-only audio cache in `useVoiceAudio.ts` (32 MiB per session),
+the message menu offers **View transcript**, and the contact page shows the **Voice**
+section when `features.voiceMessages` is on. The dictation flow (transcribe into an
+editable draft) is removed from the web app. Browser verification is pending; see
+[voice messages](voice.md#web-limitations-and-verification).
 
 ## Message sounds
 

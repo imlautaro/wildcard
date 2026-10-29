@@ -78,7 +78,8 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
         .bind(now + 120_000, item.turnID, item.deviceID, item.sessionID, now).first();
       if (!claim) return;
       const contributor = (await accountModel(env, item.userID)).includes('contributor');
-      const alert = await env.DB.prepare(`SELECT c.name AS contactName, c.photo_version AS photoVersion, t.assistant_text AS reply
+      const alert = await env.DB.prepare(`SELECT c.name AS contactName, c.photo_version AS photoVersion, CASE WHEN json_extract(t.assistant_messages_json, '$[#-1].attachment.mimeType') LIKE 'audio/%'
+          THEN 'Voice message' ELSE t.assistant_text END AS reply
         FROM chat_turn t JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
         WHERE t.id = ? AND t.user_id = ? AND t.status = 'complete' AND t.assistant_text IS NOT NULL
           AND t.sequence > c.last_read_sequence AND ${scheduleAllowed('t')}

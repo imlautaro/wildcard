@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ReactionCache } from '~/composables/useMessageReactions';
-const props = defineProps<{ cache: ReactionCache; path: string; messageID: string; side: string; replyable?: boolean }>();
+// `voice` adds "View transcript" to the menu; `transcript` follows docs/voice.md.
+const props = defineProps<{ cache: ReactionCache; path: string; messageID: string; side: string; replyable?: boolean; voice?: boolean; transcript?: string | null }>();
 const emit = defineEmits<{ reply: [] }>();
 const { user } = useSession();
 const open = ref(false);
@@ -15,6 +16,11 @@ const summaries = computed(() => reactionEmojis.map((emoji) => ({ emoji, rows: r
 function choose(emoji: string | null) {
   open.value = false;
   void setMessageReaction(props.cache, props.path, props.messageID, props.side, emoji);
+}
+const showsTranscript = ref(false);
+function viewTranscript() {
+  open.value = false;
+  showsTranscript.value = true;
 }
 function reply() {
   open.value = false;
@@ -83,10 +89,12 @@ onBeforeUnmount(() => {
         :style="position ? { top: `${position.top}px`, left: `${position.left}px` } : { visibility: 'hidden', top: '0', left: '0' }" @keydown.esc="open = false">
         <button v-for="emoji in reactionEmojis" :key="emoji" :disabled="cache.busy.includes(key)" :aria-pressed="own === emoji" :aria-label="`React ${emoji}`" @click="choose(own === emoji ? null : emoji)">{{ emoji }}</button>
         <button v-if="replyable" class="reaction-reply" @click="reply"><AppIcon name="reply" /> Reply</button>
+        <button v-if="voice" class="reaction-reply" @click="viewTranscript"><AppIcon name="file" /> View transcript</button>
         <button v-if="own" :disabled="cache.busy.includes(key)" @click="choose(null)">Remove</button>
         <div v-if="rows.length" class="reaction-people"><div v-for="row in rows" :key="row.actorID">{{ row.emoji }} {{ row.name }}</div></div>
       </div>
     </Teleport>
+    <VoiceTranscriptDialog v-if="voice && showsTranscript" :transcript="transcript ?? null" @close="showsTranscript = false" />
     <div v-if="cache.pending[key] && cache.errors[key]" role="status" class="reaction-error">
       {{ cache.errors[key] }} <button @click="choose(cache.pending[key]!.emoji)">Retry reaction</button>
     </div>

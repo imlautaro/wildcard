@@ -1,9 +1,12 @@
-import type { AuthUser } from '~/utils/types';
+import type { AuthUser, Features } from '~/utils/types';
 
 // Session-owned state. Every cache registers a reset so signing out, an expired
 // session, or switching accounts never shows another account's data.
 const user = ref<AuthUser | null>(null);
 const status = ref<'unknown' | 'signed-in' | 'signed-out' | 'unreachable'>('unknown');
+// Feature switches from GET /me; absent until a profile load returns them.
+const features = ref<Features | null>(null);
+type Profile = { user: AuthUser; features?: Features };
 const resetters = new Set<() => void>();
 const modelListeners = new Set<(contributor: boolean) => void>();
 
@@ -20,6 +23,7 @@ export function registerSessionReset(reset: () => void) {
 
 function resetCaches() {
   profileRevision += 1;
+  features.value = null;
   profileRequest = null;
   for (const reset of resetters) reset();
 }
@@ -35,9 +39,10 @@ onUnauthorized(expire);
 
 async function restore() {
   if (status.value === 'signed-in' || status.value === 'signed-out') return;
-  restoring ??= api<{ user: AuthUser }>('me')
+  restoring ??= api<Profile>('me')
     .then((result) => {
       user.value = result.user;
+      features.value = result.features ?? null;
       status.value = 'signed-in';
     })
     .catch((error) => {
@@ -53,7 +58,11 @@ async function authenticate(email: string, password: string, name: string | null
   const result = await api<{ user: AuthUser }>(path, { json: name === null ? { email, password } : { name, email, password } });
   if (user.value?.id !== result.user.id) resetCaches();
   user.value = { ...result.user, onboardingRequired: true };
-  try { user.value = (await api<{ user: AuthUser }>('me')).user; }
+  try {
+    const profile = await api<Profile>('me');
+    user.value = profile.user;
+    features.value = profile.features ?? null;
+  }
   catch (failure) {
     if (failure instanceof ApiError && failure.status === 401) {
       resetCaches(); user.value = null; status.value = 'signed-out';
@@ -88,10 +97,11 @@ async function refreshProfile() {
   if (status.value !== 'signed-in') return;
   const owner = user.value?.id;
   const revision = profileRevision;
-  profileRequest ??= api<{ user: AuthUser }>('me').then((result) => {
+  profileRequest ??= api<Profile>('me').then((result) => {
     if (revision !== profileRevision || status.value !== 'signed-in' || user.value?.id !== owner) return;
     const changed = user.value?.chatModel !== result.user.chatModel;
     user.value = result.user;
+    features.value = result.features ?? null;
     if (changed) for (const listener of modelListeners) listener(result.user.chatModel === 'muse-spark-1.3-contributor');
   }).finally(() => { if (revision === profileRevision) profileRequest = null; });
   await profileRequest;
@@ -108,5 +118,5 @@ async function saveModel(chatModel: string, contributorConsent: boolean) {
 }
 
 export function useSession() {
-  return { user: readonly(user), status: readonly(status), restore, authenticate, signOut, saveName, savePhoto, saveModel, refreshProfile };
+  return { user: readonly(user), features: readonly(features), status: readonly(status), restore, authenticate, signOut, saveName, savePhoto, saveModel, refreshProfile };
 }

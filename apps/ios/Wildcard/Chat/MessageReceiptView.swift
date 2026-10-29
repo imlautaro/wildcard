@@ -10,7 +10,10 @@ struct MessageReceiptView: View {
     @ScaledMetric(relativeTo: .caption2) private var height: CGFloat = 9.6
     @ScaledMetric(relativeTo: .caption2) private var lineWidth: CGFloat = 1.3
 
-    private var readColor: Color {
+    private var readColor: Color { Self.readColor(colorScheme) }
+
+    /// Read checks and listened voice messages share this color.
+    static func readColor(_ colorScheme: ColorScheme) -> Color {
         colorScheme == .dark ? Color(red: 0.6, green: 0.9, blue: 1) : .accentColor
     }
 

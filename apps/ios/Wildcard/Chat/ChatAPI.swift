@@ -13,12 +13,28 @@ struct MessageReplyQuote: Codable, Equatable, Sendable {
     let attachment: ChatAttachment?
 }
 
+/// A recorded or synthesized voice message. `transcript` is `nil` until transcription
+/// finishes and empty when no speech was found; `listenedAt` is set when a contact listens.
+struct MessageVoice: Decodable, Equatable, Sendable {
+    let durationMs: Int
+    var listenedAt: Double?
+    var transcript: String?
+
+    /// History and acknowledgements may arrive out of order; listening and transcription only move forward.
+    func merging(_ other: MessageVoice?) -> MessageVoice {
+        guard let other else { return self }
+        return MessageVoice(durationMs: durationMs, listenedAt: [listenedAt, other.listenedAt].compactMap { $0 }.max(),
+                            transcript: transcript ?? other.transcript)
+    }
+}
+
 struct AssistantMessage: Decodable, Equatable, Sendable, Identifiable {
     let id: String
     let text: String
     let createdAt: Double
     var replyTo: MessageReplyQuote? = nil
     var attachment: ChatAttachment? = nil
+    var voice: MessageVoice? = nil
 }
 
 struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
@@ -42,6 +58,8 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     var readAt: Double?
     let updatedAt: Double
     var replyTo: MessageReplyQuote? = nil
+    /// Set for a voice message; `userText` is empty and `attachment` is `nil`.
+    var voice: MessageVoice? = nil
     var isPending: Bool { status == .queued || status == .running }
 
     /// History, send acknowledgements, and pagination may arrive out of order.
@@ -52,6 +70,7 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
             (incoming.updatedAt > updatedAt || (incoming.updatedAt == updatedAt && rank[incoming.status]! >= rank[status]!)))
         var result = newer ? incoming : self
         result.readAt = [readAt, incoming.readAt].compactMap { $0 }.max()
+        result.voice = result.voice?.merging(newer ? voice : incoming.voice)
         return result
     }
 }
@@ -110,15 +129,8 @@ extension AuthAPI {
         return try JSONDecoder().decode(ChatReadState.self, from: data)
     }
 
-    private struct TranscriptionEnvelope: Decodable { let text: String }
     private struct ReplyInput: Encodable { let messageID: String; let side: String }
-    private struct MessageInput: Encodable { let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment?; let replyTo: ReplyInput?; let nativeContext: NativeContext? }
-
-    func transcribeAudio(contactID: String, audio: Data, token: String) async throws -> String {
-        let (data, _) = try await send(path: "contacts/\(contactID)/chat/transcriptions", method: "POST",
-            body: audio, token: token, contentType: "audio/wav", timeout: 120)
-        return try JSONDecoder().decode(TranscriptionEnvelope.self, from: data).text
-    }
+    private struct MessageInput: Encodable { let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment?; var voice: VoiceInput? = nil; let replyTo: ReplyInput?; let nativeContext: NativeContext? }
 
     func chatTurns(contactID: String, before: Int? = nil, token: String) async throws -> ChatPage {
         let query = before.map { [URLQueryItem(name: "before", value: String($0))] } ?? []
@@ -126,13 +138,13 @@ extension AuthAPI {
         return try JSONDecoder().decode(ChatPage.self, from: data)
     }
 
-    func sendMessage(contactID: String, id: String, text: String, attachment: DraftAttachment? = nil, replyTo: MessageReplyQuote? = nil, nativeContext: NativeContext? = nil, token: String) async throws -> ChatSubmission {
+    func sendMessage(contactID: String, id: String, text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, nativeContext: NativeContext? = nil, token: String) async throws -> ChatSubmission {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .withoutEscapingSlashes
         let timeZone = TimeZone.current.identifier
         let reply = replyTo.map { ReplyInput(messageID: $0.messageID, side: $0.side) }
         let body = try encoder.encode(MessageInput(id: id, text: text, timeZone: timeZone, attachment: attachment,
-                                                   replyTo: reply, nativeContext: nativeContext))
+                                                   voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, nativeContext: nativeContext))
         let data: Data
         do {
             data = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: body, token: token, timeout: 90).0
@@ -141,14 +153,16 @@ extension AuthAPI {
             var legacyContext = nativeContext
             legacyContext?.automaticKinds = nil
             let legacyBody = try encoder.encode(MessageInput(id: id, text: text, timeZone: timeZone, attachment: attachment,
-                                                             replyTo: reply, nativeContext: legacyContext))
+                                                             voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, nativeContext: legacyContext))
             data = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: legacyBody, token: token, timeout: 90).0
         }
         return try JSONDecoder().decode(ChatSubmission.self, from: data)
     }
 
-    func chatAttachment(contactID: String, turnID: String, assistant: Bool = false, token: String) async throws -> Data {
-        let query = assistant ? [URLQueryItem(name: "side", value: "assistant")] : []
+    /// `part` selects one message of a multi-message reply (contact voice messages).
+    func chatAttachment(contactID: String, turnID: String, assistant: Bool = false, part: Int? = nil, token: String) async throws -> Data {
+        var query = assistant ? [URLQueryItem(name: "side", value: "assistant")] : []
+        if let part { query.append(URLQueryItem(name: "part", value: String(part))) }
         let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns/\(turnID)/attachment", token: token, query: query, timeout: 60)
         return data
     }

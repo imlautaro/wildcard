@@ -53,6 +53,12 @@ R2 cleanup for abandoned/deleted accounts remains an operator responsibility,
 as for failed onboarding assets. A provider success followed by storage failure
 can repeat a billable request. This is not exactly-once inference billing.
 
+The publish batch also turns on [voice messages](voice.md) for the creator's
+conversation and stores the requested gender and age as the agent's voice profile.
+A separate best-effort step then assigns a matching ElevenLabs voice when the
+feature is available; otherwise the voice is chosen when it is first needed.
+First-circle onboarding contacts get the same profile and opt-in.
+
 ## Existing personalities
 
 Only the creator sees **Generate with AI / Regenerate with AI** in Personality.

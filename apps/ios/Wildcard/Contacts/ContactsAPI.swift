@@ -5,6 +5,11 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     let name: String
     var onboardingChat: Int? = nil
     var initiativeEnabled: Int? = nil
+    /// This participant's opt-in to voice replies (0 or 1).
+    var voiceMessagesEnabled: Int? = nil
+    /// The contact's shared voice; only the creator can change it.
+    var voiceID: String? = nil
+    var voiceName: String? = nil
     var agentID: String? = nil
     var role: String? = nil
     var photoVersion: String? = nil
@@ -24,6 +29,21 @@ struct ContactsPage: Decodable, Sendable {
     let contacts: [Contact]
     let totalUnreadCount: Int?
     let nextCursor: String?
+}
+
+/// A catalog voice a contact's creator can choose (`GET /voices`).
+struct VoiceOption: Decodable, Hashable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    var gender: String? = nil
+    var age: String? = nil
+    var accent: String? = nil
+    var description: String? = nil
+
+    var summary: String {
+        [gender, age?.replacingOccurrences(of: "_", with: " "), accent].compactMap { $0?.isEmpty == false ? $0!.capitalized : nil }
+            .joined(separator: " · ")
+    }
 }
 
 struct ContactEnergy: Decodable, Sendable {
@@ -60,6 +80,24 @@ extension AuthAPI {
         let body = try JSONEncoder().encode(["enabled": enabled])
         let (data, _) = try await send(path: "contacts/\(id)/initiative", method: "PUT", body: body, token: token)
         return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
+    }
+
+    func setContactVoiceMessages(id: String, enabled: Bool, token: String) async throws -> Contact {
+        let body = try JSONEncoder().encode(["enabled": enabled])
+        let (data, _) = try await send(path: "contacts/\(id)/voice-messages", method: "PUT", body: body, token: token)
+        return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
+    }
+
+    func setContactVoice(id: String, voiceID: String, token: String) async throws -> Contact {
+        let body = try JSONEncoder().encode(["voiceID": voiceID])
+        let (data, _) = try await send(path: "contacts/\(id)/voice", method: "PUT", body: body, token: token)
+        return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
+    }
+
+    func voices(token: String) async throws -> [VoiceOption] {
+        struct Envelope: Decodable { let voices: [VoiceOption] }
+        let (data, _) = try await send(path: "voices", token: token)
+        return try JSONDecoder().decode(Envelope.self, from: data).voices
     }
 
     func contactPhoto(id: String, version: String, token: String) async throws -> Data {

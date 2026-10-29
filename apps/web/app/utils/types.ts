@@ -8,12 +8,18 @@ export type AuthUser = {
   chatModel?: 'muse-spark-1.3' | 'muse-spark-1.3-contributor';
   photoVersion?: string | null;
 };
+// Server feature switches returned next to `user` by GET /me (docs/voice.md).
+export type Features = { voiceMessages: boolean };
 
 export type Contact = {
   onboardingChat?: number;
   id: string;
   name: string;
   initiativeEnabled?: number;
+  // The contact's shared voice and this participant's voice-reply opt-in (0 or 1).
+  voiceID?: string | null;
+  voiceName?: string | null;
+  voiceMessagesEnabled?: number;
   agentID?: string | null;
   role?: string | null;
   photoVersion?: string | null;
@@ -35,6 +41,12 @@ export type ContactsPage = { contacts: Contact[]; totalUnreadCount?: number | nu
 
 export type Attachment = { name: string; mimeType: string; size: number };
 export type DraftAttachment = Attachment & { data: string; previewURL: string | null };
+// A recorded voice message (docs/voice.md): `listenedAt` turns the outgoing microphone
+// blue; `transcript` is null while transcribing and "" when no speech was detected.
+export type VoiceInfo = { durationMs: number; listenedAt: number | null; transcript: string | null };
+// A recorded clip waiting to be sent: mono 16 kHz PCM16 WAV and its base64 body.
+export type DraftVoice = { blob: Blob; data: string; durationMs: number };
+export type VoiceOption = { id: string; name: string; gender: string | null; age: string | null; accent: string | null; description: string | null };
 // A chat attachment listed in chat details. Private chats set `side`; groups set the sender.
 export type ChatMediaItem = Attachment & { messageID: string; sequence: number; createdAt: number; side?: 'user' | 'assistant';
   senderName?: string; userID?: string | null; agentID?: string | null };
@@ -66,13 +78,14 @@ export type ChatTurn = {
   id: string;
   userText: string;
   assistantText: string | null;
-  assistantMessages?: { id: string; text: string; createdAt: number; replyTo?: ReplyQuote | null; attachment?: Attachment | null }[];
+  assistantMessages?: { id: string; text: string; createdAt: number; replyTo?: ReplyQuote | null; attachment?: Attachment | null; voice?: VoiceInfo | null }[];
   status: TurnStatus;
   attempt: number;
   createdAt: number;
   readAt: number | null;
   updatedAt: number;
   replyTo?: ReplyQuote | null;
+  voice?: VoiceInfo | null;
 };
 
 export type Presence = { status: 'offline' | 'online' | 'typing'; lastSeenAt: number | null; expiresAt: number | null };
@@ -113,6 +126,7 @@ export type GroupMessage = {
   // Aggregate recipient state: sent, received, or read; null for legacy messages.
   receiptState?: string | null;
   replyTo?: ReplyQuote | null;
+  voice?: VoiceInfo | null;
 };
 export type GroupPrivateSharing = { agentID: string; enabled: number; available: number };
 export type GroupSnapshot = { privateSharing?: GroupPrivateSharing[]; group: ChatGroup; members: GroupMember[]; replies: GroupReply[]; canInvite: boolean; contributorModel: boolean };

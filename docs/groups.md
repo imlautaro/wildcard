@@ -269,7 +269,7 @@ photos and mutations require current membership. Responses have `no-store`.
 | GET /:id/photo?version=uuid | Current group avatar, members only |
 | PUT or DELETE /:id/photo | Owner replaces/removes the JPEG avatar |
 | GET /:id/messages/:messageID/attachment | Download a group message file |
-| POST /:id/transcriptions | Transcribe a bounded WAV for a member |
+| POST /:id/transcriptions | Transcribe a bounded WAV for a member (older clients only; see [voice messages](voice.md)) |
 | POST /:id/agents | Add owned `contactID`, with explicit consent |
 | DELETE /:id/agents/:agentID | Remove a contact from this group |
 | POST /:id/invitations | Invite an existing account by `email` |
@@ -411,7 +411,7 @@ need performance verification. See [chat positioning](chats.md) for the tradeoff
 The group header aligns its 38-point identity and compact title/member
 subtitle beside the back button, matching the individual chat header layout.
 
-Groups support text, image/PDF attachments, voice dictation and foreground polling.
+Groups support text, image/PDF attachments, [voice messages](voice.md) and foreground polling.
 Group push alerts, per-member unread counts and foreground notifications are
 implemented; group schedules are not implemented.
 Groups and individual conversations appear together in one plain Chats list,
@@ -462,14 +462,13 @@ bytes. Contributor checks apply to source messages and historical files. File by
 are untrusted evidence and grant no permission to alter schedules or other data.
 Group memory extraction still uses only human text/captions, not file contents.
 
-The microphone uses the same `VoiceRecorder` as private chats: mono 16 kHz WAV,
-0.25–60 seconds, 2 MiB request maximum, six transcriptions per account/minute shared
-with private chats, cancellation/interruption handling and retry/discard. Audio is
-transcribed by Muse Voice Transcribe and discarded; the editable transcript is
-sent only after tapping Send. This is dictation, not a stored playable audio clip.
-The group endpoint checks membership and model consent before transcription and
-membership again before returning text. No additional microphone permission,
-provider model, secret or storage service is required.
+The microphone records [voice messages](voice.md) with the same recorder, composer
+gesture, bubble and protected audio cache as private chats: hold to record, release
+to send, with mono 16 kHz WAV clips of 0.5–60 seconds. Messages are stored as
+playable audio and transcribed after sending by the first contact reply of the
+round; the transcript stays behind **View transcript**. An uncertain send keeps its
+clip and UUID pending for **Retry sending**. Group dictation
+(`POST /:id/transcriptions`) remains for older clients only.
 
 ## Setup and verification
 
@@ -487,7 +486,8 @@ Check a Standard-to-Contributor model change excludes old unconsented messages.
 Check group deletion while a reply is running, offline send recovery, owner photo
 editing/removal, non-owner photo rejection, group image/PDF sending/preview,
 attachment-only messages, idempotent file retries, revoked file access, orphan
-cleanup, voice permission/stop/cancel/retry/background interruption, avatars,
+cleanup, voice message permission/hold/cancel/lock/retry/background interruption
+and playback, avatars,
 header overflow/Reduce Motion, Dynamic Type and keyboard layout on a device.
 
 

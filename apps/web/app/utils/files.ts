@@ -4,7 +4,7 @@ export const attachmentTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/w
 const attachmentLimit = 5 * 1024 * 1024;
 const photoLimit = 500 * 1024;
 
-function base64(bytes: Uint8Array) {
+export function base64(bytes: Uint8Array) {
   let binary = '';
   for (let index = 0; index < bytes.length; index += 0x8000) {
     binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));

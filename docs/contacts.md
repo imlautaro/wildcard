@@ -240,3 +240,10 @@ session draft, review them, and save with revision conflict protection. Generati
 preserves the name and adult birthday. Account changes/access loss discard cached
 private state; existing photo caches remain authoritative for bytes. See the linked
 guide for recovery, retention, rate limits, cache details and pending device checks.
+
+## Voice
+
+Contacts expose `voiceID`, `voiceName` and the participant's `voiceMessagesEnabled`.
+The voice belongs to the shared agent (creator-only `PUT /:id/voice`); the opt-in is
+per participant (`PUT /:id/voice-messages`). Contact details show these controls only
+when `GET /me` reports `features.voiceMessages`. See [voice messages](voice.md).

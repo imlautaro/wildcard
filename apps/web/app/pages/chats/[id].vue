@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ChatTurn, Contact, DraftAttachment, ReplyQuote } from '~/utils/types';
+import type { ChatTurn, Contact, DraftAttachment, DraftVoice, ReplyQuote } from '~/utils/types';
 
 const route = useRoute();
 const contactID = computed(() => String(route.params.id));
@@ -36,7 +36,8 @@ const composer = ref<{ focus: () => void }>();
 
 useHead({ title: computed(() => contact.value?.name ?? 'Chat') });
 
-type MessageItem = { kind: 'user' | 'assistant' | 'status'; key: string; turn: ChatTurn; timestamp: number; text?: string; first?: boolean };
+// `part` is the index of a contact message within its turn (voice downloads use it).
+type MessageItem = { kind: 'user' | 'assistant' | 'status'; key: string; turn: ChatTurn; timestamp: number; text?: string; first?: boolean; part?: number };
 type PendingItem = { kind: 'pending'; key: string; timestamp: number };
 type Item = { kind: 'day'; key: string; label: string } | MessageItem | PendingItem;
 
@@ -46,11 +47,11 @@ const items = computed<Item[]>(() => {
   const turns = state.value.turns;
   const latestTimestamp = Math.max(0, ...turns.map(turn => Math.max(turn.createdAt, turn.updatedAt)), state.value.pending?.createdAt ?? 0);
   const messages: (MessageItem | PendingItem)[] = turns.flatMap((turn): MessageItem[] => [
-    ...((turn.scheduleID === null && (!!turn.userText || !!turn.attachment))
+    ...((turn.scheduleID === null && (!!turn.userText || !!turn.attachment || !!turn.voice))
       || remote.state.value.actions.some(action => action.turnID === turn.id)
       ? [{ kind: 'user' as const, key: `${turn.id}-user`, turn, timestamp: turn.createdAt }] : []),
     ...(turn.assistantMessages?.length
-      ? turn.assistantMessages.map((message, index) => ({ kind: 'assistant' as const, key: message.id, turn, timestamp: message.createdAt, text: message.text, first: index === 0 }))
+      ? turn.assistantMessages.map((message, index) => ({ kind: 'assistant' as const, key: message.id, turn, timestamp: message.createdAt, text: message.text, first: index === 0, part: index }))
       : turn.assistantText !== null
         ? [{ kind: 'assistant' as const, key: `${turn.id}-assistant`, turn, timestamp: turn.updatedAt, text: turn.assistantText, first: true }] : []),
     ...(turn.status === 'queued' || turn.status === 'running' || turn.status === 'failed'
@@ -116,9 +117,17 @@ async function showQuoted(quote: ReplyQuote) {
 function attachmentPath(turn: ChatTurn) {
   return `contacts/${contactID.value}/chat/turns/${turn.id}/attachment`;
 }
+// A contact voice message: its audio is addressed by side and message index.
+function assistantVoice(item: MessageItem) {
+  return item.part === undefined ? null : item.turn.assistantMessages?.[item.part]?.voice ?? null;
+}
+function assistantVoicePath(item: MessageItem) {
+  return `${attachmentPath(item.turn)}?side=assistant&part=${item.part ?? 0}`;
+}
 function failureText(turn: ChatTurn) {
   if (turn.errorCode === 'SCHEDULE_CANCELLED') return 'Scheduled message cancelled.';
   if (turn.errorCode === 'GROUP_REQUEST_CANCELLED') return 'Group request cancelled.';
+  if (turn.errorCode === 'VOICE_TRANSCRIPTION_FAILED') return "This voice message couldn't be transcribed.";
   return "The reply to this message couldn't be completed.";
 }
 
@@ -160,11 +169,18 @@ async function onSend(text: string, attachment: DraftAttachment | null) {
   await send(text, attachment);
   scrollToBottom();
 }
+async function onVoice(clip: DraftVoice) {
+  scrollToBottom();
+  activity.sent();
+  await send('', null, clip);
+  scrollToBottom();
+}
 
 // One-second tick while visible, like the iOS session synchronizer.
 const { now: pollNow } = usePolling(refresh, () => 1000);
 
 watch(contactID, async () => {
+  stopVoicePlayback();
   fetched.value = null;
   scrollToBottom();
   await pollNow();
@@ -181,6 +197,7 @@ onMounted(async () => {
   composer.value?.focus();
 });
 onBeforeUnmount(() => {
+  stopVoicePlayback();
   window.removeEventListener('focus', markRead);
   clearTimeout(highlightTimer);
 });
@@ -241,6 +258,13 @@ onBeforeUnmount(() => {
       <template v-for="item in items" :key="item.key">
         <div v-if="item.kind === 'day'" class="day">{{ item.label }}</div>
       <template v-else-if="item.kind === 'pending' && state.pending">
+        <div v-if="state.pending.voice" class="bubble-row outgoing">
+          <div class="bubble">
+            <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
+            <VoiceMessage :voice="{ durationMs: state.pending.voice.durationMs, listenedAt: null, transcript: null }" :path="`contacts/${contactID}/chat/turns/${state.pending.id}/attachment`" :blob="state.pending.voice.blob" outgoing />
+            <div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div>
+          </div>
+        </div>
         <div v-if="state.pending.attachment" class="bubble-row outgoing">
           <div class="bubble media">
             <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
@@ -255,16 +279,23 @@ onBeforeUnmount(() => {
         <div v-if="state.pending.failed" class="status-line outgoing error">
           {{ state.pending.failed }}
           <button class="link-button" @click="submit">Retry</button>
-          <button class="link-button danger" @click="discardPending">Edit</button>
+          <button class="link-button danger" @click="discardPending">{{ state.pending.voice ? 'Delete' : 'Edit' }}</button>
         </div>
       </template>
         <template v-else-if="item.kind !== 'pending'">
           <div
-            v-if="item.kind === 'user' && item.turn.scheduleID === null && (item.turn.userText || item.turn.attachment)" :id="`message-${item.turn.id}-user`"
+            v-if="item.kind === 'user' && item.turn.scheduleID === null && (item.turn.userText || item.turn.attachment || item.turn.voice)" :id="`message-${item.turn.id}-user`"
             class="bubble-row outgoing" :class="{ highlighted: highlighted === `${item.turn.id}-user` }"
           >
-            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="user" :replyable="canReply" @reply="startReply(item.turn, 'user')">
+            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="user" :replyable="canReply"
+              :voice="!!item.turn.voice" :transcript="item.turn.voice?.transcript" @reply="startReply(item.turn, 'user')">
               <div class="private-message-content">
+                <div v-if="item.turn.voice" class="bubble">
+                  <MessageReplyQuote v-if="item.turn.replyTo" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />
+                  <VoiceMessage :voice="item.turn.voice" :path="attachmentPath(item.turn)" outgoing />
+                  <div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
+                </div>
+                <template v-else>
                 <div v-if="item.turn.attachment" class="bubble media">
                   <MessageReplyQuote v-if="item.turn.replyTo" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />
                   <MessageAttachment :attachment="item.turn.attachment" :path="attachmentPath(item.turn)" />
@@ -272,6 +303,7 @@ onBeforeUnmount(() => {
                   <div class="meta" style="padding: 0 6px 2px">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
                 </div>
                 <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble"><MessageReplyQuote v-if="item.turn.replyTo && !item.turn.attachment" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />{{ item.turn.userText }}<div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
+                </template>
               </div>
             </MessageReactions>
           </div>
@@ -279,11 +311,13 @@ onBeforeUnmount(() => {
             v-if="item.kind === 'assistant' && item.turn.assistantText" :id="item.first ? `message-${item.turn.id}-assistant` : item.key"
             class="bubble-row incoming" :class="{ highlighted: highlighted === `${item.turn.id}-assistant` }"
           >
-            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply" @reply="startReply(item.turn, 'assistant')">
+            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply"
+              :voice="!!assistantVoice(item)" :transcript="item.text ?? null" @reply="startReply(item.turn, 'assistant')">
               <div class="bubble" :class="{ media: item.first && item.turn.assistantMessages?.[0]?.attachment }">
                 <MessageReplyQuote v-if="item.first && item.turn.assistantMessages?.[0]?.replyTo" :preview="replyPreview(item.turn.assistantMessages[0].replyTo)" interactive @open="showQuoted(item.turn.assistantMessages[0].replyTo)" />
                 <MessageAttachment v-if="item.first && item.turn.assistantMessages?.[0]?.attachment" :attachment="item.turn.assistantMessages[0].attachment" :path="`contacts/${contactID}/chat/turns/${item.turn.id}/attachment?side=assistant`" />
-                <div :class="{ caption: item.first && item.turn.assistantMessages?.[0]?.attachment }"><MessageMarkdown :text="item.text ?? item.turn.assistantText" /></div>
+                <VoiceMessage v-if="assistantVoice(item)" :voice="assistantVoice(item)!" :path="assistantVoicePath(item)" />
+                <div v-else :class="{ caption: item.first && item.turn.assistantMessages?.[0]?.attachment }"><MessageMarkdown :text="item.text ?? item.turn.assistantText" /></div>
                 <template v-if="item.first">
                   <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => a.turnID === item.turn.id)" :key="app.id" :app="app" :base="`contacts/${contactID}`" />
                   <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.turn.id)" :key="doc.id" :document="doc" :to="`/contacts/${contactID}/documents/${doc.id}`" />
@@ -319,7 +353,7 @@ onBeforeUnmount(() => {
     </div>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable" :sending="!!state.pending" :reply="replyTarget"
-      :transcription-path="`contacts/${contactID}/chat/transcriptions`" @send="onSend" @typing="activity.typing()" @cancel-reply="state.replyTo = null"
+      :voice-key="contactID" @send="onSend" @voice="onVoice" @typing="activity.typing()" @cancel-reply="state.replyTo = null"
     />
   </template>
 </template>

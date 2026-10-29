@@ -13,6 +13,8 @@ import type { WorkflowStep } from 'cloudflare:workers';
 import { dispatchAgent, releaseAttention } from '../chat/dispatch';
 import { rememberGroupMessage } from './memory';
 import { connectAgent } from '../chat/presence';
+import { storedAttachment, type Attachment } from '../chat/attachments';
+import { speakMessage, transcribeVoice, voiceSuitable } from '../voice/speech';
 
 export type GroupJob = { kind: 'group'; turnID: string; attempt: number };
 export async function dispatchGroup(env: Env, groupID: string) {
@@ -48,10 +50,10 @@ const publicationAccess = (contributor: boolean) => `EXISTS (SELECT 1 FROM agent
 const unchangedHistory = `NOT EXISTS (SELECT 1 FROM group_message newer
   WHERE newer.group_id = r.group_id AND newer.sequence > ?6)`;
 
-async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, final = true): Promise<PublishOutcome> {
+async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, final = true, voice: Attachment | null = null): Promise<PublishOutcome> {
   const contributor = env.META_CHAT_MODEL.includes('contributor');
   const access = publicationAccess(contributor);
-  let attachment = null;
+  let attachment: Attachment | null = voice;
   if (draft.attachment && draft.text) {
     const scope = await env.DB.prepare(`SELECT r.agent_id AS agentID, r.group_id AS groupID,
       COALESCE(source.user_id, source.requester_id) AS userID FROM group_reply r
@@ -122,6 +124,51 @@ async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep,
 
 type Reader = { agentID: string; groupID: string; sequence: number };
 
+// People's voice messages up to this round's trigger are transcribed once, by the
+// first contact job that reaches them. Group jobs are serialized, so later contacts
+// reuse the saved transcript. A failure leaves it for a later round.
+async function listenGroup(env: Env, job: GroupJob, step: WorkflowStep) {
+  const pending = await step.do('group-voice-pending', async () => {
+    const { results } = await env.DB.prepare(`SELECT gm.id, json_extract(gm.attachment_json, '$.durationMs') AS durationMs
+      FROM group_reply r JOIN group_message source ON source.id = r.source_id
+      JOIN group_message gm ON gm.group_id = r.group_id AND gm.sequence <= source.sequence
+      WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND gm.user_id IS NOT NULL
+        AND gm.voice_transcribed_at IS NULL AND json_extract(gm.attachment_json, '$.mimeType') LIKE 'audio/%'
+        AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)
+      ORDER BY gm.sequence DESC LIMIT 3`).bind(job.turnID, job.attempt).all<{ id: string; durationMs: number }>();
+    return results;
+  });
+  if (!pending.length) return;
+  await step.sleep('group-listen-delay', '1 second');
+  const listenedAt = await step.do('group-mark-listened', async () => {
+    const now = Date.now();
+    await env.DB.prepare(`UPDATE group_message SET voice_listened_at = COALESCE(voice_listened_at, ?1)
+      WHERE id IN (SELECT value FROM json_each(?2))`).bind(now, JSON.stringify(pending.map(message => message.id))).run();
+    return now;
+  });
+  try {
+    await step.do('group-transcribe-voice', { retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' }, timeout: '4 minutes' }, async () => {
+      for (const { id } of pending) {
+        const row = await env.DB.prepare('SELECT attachment_json AS attachmentJSON FROM group_message WHERE id = ? AND voice_transcribed_at IS NULL')
+          .bind(id).first<{ attachmentJSON: string | null }>();
+        const audio = row && storedAttachment(row);
+        if (!audio) continue;
+        const transcript = await transcribeVoice(env, audio);
+        await env.DB.prepare('UPDATE group_message SET text = ?, voice_transcribed_at = ? WHERE id = ? AND voice_transcribed_at IS NULL')
+          .bind(transcript, Date.now(), id).run();
+      }
+      return true;
+    });
+  } catch { console.error(JSON.stringify({ event: 'group_voice_transcription_deferred' })); }
+  // Listen to the newest clip before deciding whether to speak.
+  await pauseGroupUntil(step, 'group-listen-pause', listenedAt + Math.min(pending[0].durationMs ?? 0, 60_000));
+}
+
+async function pauseGroupUntil(step: WorkflowStep, name: string, deadline: number) {
+  const remaining = await step.do(`${name}-remaining`, async () => Math.max(0, deadline - Date.now()));
+  if (remaining > 0) await step.sleep(name, remaining);
+}
+
 async function connectGroupReaders(env: Env, job: GroupJob) {
   const { results } = await env.DB.prepare(`SELECT DISTINCT receipt.recipient_id AS agentID, r.group_id AS groupID,
       source.sequence AS sequence
@@ -185,6 +232,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
       await step.sleep('group-read-delay', '1 second');
       await step.do('group-mark-read', () => markGroupRead(env, job, readers));
     }
+    await listenGroup(env, job, step);
     const canSpeak = await step.do('group-energy-admission', async () => {
       const row = await env.DB.prepare(`UPDATE group_reply AS r SET status = 'complete'
         WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND NOT (${groupEnergyAvailable('r')})
@@ -218,7 +266,19 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
           const typing = await step.do(`group-mark-typing-${review}`, () => setGroupPresence(env, job, 'typing', prepared.throughSequence));
           if (typing) await step.sleep(`group-first-message-pause-${review}`, messageDelay(firstMessage));
         }
-        outcome = await step.do(`group-publish-draft-${review}`, async () => publishGroupDraft(env, job, { ...prepared, text: prepared.messages?.[0] ?? prepared.text }, (prepared.messages?.length ?? 1) <= 1));
+        const single = (prepared.messages?.length ?? 1) <= 1;
+        const spokenText = prepared.messages?.[0] ?? prepared.text;
+        // Only single-message replies without a generated image can be spoken.
+        const voice = single && spokenText && !prepared.attachment && voiceSuitable(spokenText)
+          ? await step.do(`group-voice-message-${review}`, { retries: { limit: 0, delay: '1 second' }, timeout: '2 minutes' }, async () => {
+            const scope = await env.DB.prepare(`SELECT r.agent_id AS agentID, r.group_id AS groupID FROM group_reply r
+              JOIN contact_agent a ON a.id = r.agent_id JOIN contact owner_contact ON owner_contact.agent_id = a.id AND owner_contact.user_id = a.owner_id
+              WHERE r.id = ? AND r.attempt = ? AND r.status = 'running' AND owner_contact.voice_messages_enabled = 1`)
+              .bind(job.turnID, job.attempt).first<{ agentID: string; groupID: string }>();
+            return scope ? speakMessage(env, { agentID: scope.agentID, text: spokenText,
+              key: `group-attachments/${scope.groupID}/${scope.agentID}/${encodeURIComponent(job.turnID)}/voice-a${job.attempt}-${review}` }) : null;
+          }).catch(() => null) : null;
+        outcome = await step.do(`group-publish-draft-${review}`, async () => publishGroupDraft(env, job, { ...prepared, text: spokenText }, single, voice));
         if (outcome === 'published' && prepared.messages && prepared.messages.length > 1) {
           await step.do('group-push-first-message', async () => {
             try { await deliverGroupPush(env, job.turnID); }

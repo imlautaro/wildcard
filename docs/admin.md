@@ -109,12 +109,11 @@ without a release.
 | Key | Default | Effect |
 | --- | --- | --- |
 | `registration_enabled` | `true` | When off, `POST /api/v1/auth/sign-up/email` returns 403 `REGISTRATION_CLOSED`, after the per-IP admission check. Sign-in is unaffected. iOS and web show "New accounts are not being accepted right now. Existing accounts can still sign in." |
+| `voice_messages_enabled` | `false` | Contacts may reply with ElevenLabs voice messages and contact details show the Voice section. Takes effect only when `ELEVENLABS_API_KEY` is set. Delivered to clients as `features.voiceMessages` on `GET /me`. People can always send voice messages. See [voice messages](voice.md). |
 
 To add a flag, add a definition, read it with `readSetting` where it matters, and
-document it here. The panel lists it automatically. The flags are not yet exposed
-to the iOS or web clients. A flag that changes client behavior also needs a
-delivery path, such as a field on `GET /me` (which both clients already
-revalidate), plus caching rules in both clients. `WEB_RESEARCH_ENABLED` and
+document it here. The panel lists it automatically. A flag that changes client behavior needs a delivery path: `GET /me` returns
+`features` (currently `voiceMessages`), which both clients already revalidate. `WEB_RESEARCH_ENABLED` and
 `SEMANTIC_MEMORY_ENABLED` are still Wrangler vars that require a release.
 
 ## Panel caching

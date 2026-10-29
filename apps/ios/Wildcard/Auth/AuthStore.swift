@@ -69,6 +69,7 @@ final class AuthStore {
             if user?.id != newUser.id { onboarding.reset(); contactGeneration.reset() }
             var profile = newUser
             profile.onboardingRequired = true
+            profile.features = AccountFeatures()
             do { profile = try await api.currentUser(token: newToken) }
             catch AuthAPI.Failure.unauthorized {
                 try SessionKeychain.delete()
@@ -83,16 +84,23 @@ final class AuthStore {
         }
     }
 
+    /// Only `GET /me` returns feature flags; keep them across other profile responses.
+    private func keepingFeatures(_ updated: AuthUser) -> AuthUser {
+        var result = updated
+        if result.features == nil, user?.id == updated.id { result.features = user?.features }
+        return result
+    }
+
     func saveModel(_ model: String, contributorConsent: Bool) async throws {
-        user = try await withSession { api, token in
+        user = keepingFeatures(try await withSession { api, token in
             try await api.saveModel(model, contributorConsent: contributorConsent, token: token)
-        }
+        })
     }
 
     func saveProfile(name: String) async throws {
-        user = try await withSession { api, token in
+        user = keepingFeatures(try await withSession { api, token in
             try await api.saveProfile(name: name, token: token)
-        }
+        })
     }
 
     func saveProfilePhoto(data: Data?) async throws {
@@ -103,7 +111,7 @@ final class AuthStore {
             await images.store(data, for: .accountAvatar(version: version))
         }
         guard state == .signedIn, user?.id == updated.id else { throw CancellationError() }
-        user = updated
+        user = keepingFeatures(updated)
     }
 
     func refreshProfile() async throws {

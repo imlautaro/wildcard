@@ -29,21 +29,19 @@ function failureMessage(path: string, method: string, status: number, body: unkn
   if (path.startsWith('onboarding')) return serverMessage(body) ?? 'Setup is temporarily unavailable. Please try again.';
   if (path === 'contacts/generation') return serverMessage(body) ?? 'Contact generation is temporarily unavailable. Please try again.';
   if (path.includes('/personality')) return serverMessage(body) ?? 'Personality is temporarily unavailable. Please try again.';
-  const code = body && typeof body === 'object' && 'code' in body ? (body as { code: unknown }).code : null;
   if (path.includes('/mcp')) return serverMessage(body) ?? 'Connections are temporarily unavailable. Please try again.';
   if (path.includes('/mini-apps')) return serverMessage(body) ?? 'Mini apps are temporarily unavailable. Please try again.';
   if (path.endsWith('/reactions')) return serverMessage(body) ?? 'Reactions are temporarily unavailable. Please try again.';
-  // Dictation copy matches iOS for both private and group transcriptions.
-  if (path.endsWith('/transcriptions')) {
-    if (status === 422) return code === 'NO_SPEECH' ? 'No speech was detected. Please record again.' : 'The transcript is too long. Please record a shorter message.';
-    if (status === 429) return 'Too many recordings. Wait a minute before trying again.';
-    if ([502, 503, 504].includes(status)) return 'Transcription is unavailable right now. Please try again.';
-    if (status === 400 || status === 413 || status === 415) return 'This recording could not be read. Please record again.';
+  if (path === 'voices' || path.startsWith('voices/')) {
+    if (status === 404) return 'This voice is no longer available.';
+    return 'Voices are unavailable right now. Please try again.';
+  }
+  if (path.endsWith('/voice') || path.endsWith('/voice-messages')) {
+    if (path.endsWith('/voice') && status === 403) return "Only the contact's creator can change its voice.";
+    if (status === 404) return 'This contact is no longer available.';
+    return serverMessage(body) ?? 'Voice settings could not be saved. Please try again.';
   }
   if (path.startsWith('groups')) {
-    if (path.endsWith('/transcriptions') && status === 422) {
-      return code === 'NO_SPEECH' ? 'No speech was detected. Please record again.' : 'The transcript is too long. Please record a shorter message.';
-    }
     if (status === 429 || status >= 500) return 'Groups are temporarily unavailable. Please try again.';
     if (status === 404 && method === 'GET' && !path.includes('/photos/')) return 'This group is no longer available.';
     if ([400, 403, 404, 409, 413, 422].includes(status)) return serverMessage(body) ?? 'Groups are temporarily unavailable. Please try again.';

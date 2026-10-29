@@ -36,9 +36,11 @@ export function parseGroupReply(value: unknown): string | null | undefined {
 function quote(target: ReplyTarget, row: QuoteRow | undefined): ReplyQuote {
   if (!row) return { ...target, available: false, userID: null, agentID: null, senderName: null, text: '', attachment: null };
   const assistant = target.side === 'assistant';
-  const source = assistant ? row.assistantText ?? '' : row.userText;
+  // Quoted voice messages read as a label; their transcripts stay behind long press.
+  const voice = !assistant && publicAttachment(row)?.mimeType.startsWith('audio/');
+  const source = voice ? 'Voice message' : assistant ? row.assistantText ?? '' : row.userText;
   return { ...target, available: true, userID: row.userID, agentID: row.agentID, senderName: row.senderName,
-    text: quoteText(source), previewText: quoteText(assistant || row.agentID ? plainMessageMarkdown(source) : source), attachment: assistant ? null : publicAttachment(row) };
+    text: quoteText(source), previewText: quoteText(assistant || row.agentID ? plainMessageMarkdown(source) : source), attachment: assistant || voice ? null : publicAttachment(row) };
 }
 
 export async function privateQuotes(db: D1Database, contactID: string, userID: string,

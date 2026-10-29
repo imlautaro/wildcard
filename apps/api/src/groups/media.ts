@@ -59,6 +59,7 @@ media.get('/media', async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT sequence, id AS messageID, user_id AS userID, agent_id AS agentID,
     sender_name AS senderName, created_at AS createdAt, attachment_json AS attachmentJSON FROM group_message
     WHERE group_id = ?1 AND sequence < ?2 AND attachment_json IS NOT NULL
+    AND json_extract(attachment_json, '$.mimeType') NOT LIKE 'audio/%'
     AND (json_extract(attachment_json, '$.mimeType') LIKE 'image/%') = (?3 = 'image')
     ORDER BY sequence DESC LIMIT ?4`).bind(c.req.param('id'), before, kind, mediaPage(kind) + 1)
     .all<{ sequence: number; messageID: string; userID: string | null; agentID: string | null; senderName: string; createdAt: number; attachmentJSON: string }>();

@@ -18,6 +18,8 @@ final class ContactsStore {
     let mcpAccessSnapshots = NavigationSnapshotCache<[McpAccess]>()
     let mcpSnapshots = NavigationSnapshotCache<[McpConnection]>()
     let energySnapshots = NavigationSnapshotCache<ContactEnergy>()
+    /// The account-independent voice catalog for the contact voice picker, cached for the session.
+    let voiceCatalog = NavigationSnapshotCache<[VoiceOption]>()
     let personalitySnapshots = NavigationSnapshotCache<ContactPersonalitySnapshot>()
     @ObservationIgnored private var personalityDrafts: [String: PersonalityDraft] = [:]
     @ObservationIgnored private var personalityDraftOrder: [String] = []
@@ -91,7 +93,8 @@ final class ContactsStore {
         guard chat.isSubmitting(turn.id) || timestamp >= (contact.lastMessageAt ?? 0) else { return contact }
         var result = contact
         result.lastMessageText = messagePreview(for: turn)
-        result.lastMessagePreview = turn.assistantText.map { String(MessageMarkdown.plainText($0).prefix(500)) } ?? result.lastMessageText
+        result.lastMessagePreview = result.lastMessageText == "Voice message" ? result.lastMessageText
+            : turn.assistantText.map { String(MessageMarkdown.plainText($0).prefix(500)) } ?? result.lastMessageText
         result.lastMessageAt = timestamp
         result.lastMessageFromUser = turn.assistantText == nil && turn.scheduleID == nil && turn.groupRequestID == nil ? 1 : 0
         result.lastMessageReadAt = [turn.readAt, timestamp == contact.lastMessageAt ? contact.lastMessageReadAt : nil].compactMap { $0 }.max()
@@ -138,6 +141,8 @@ final class ContactsStore {
     }
 
     private func messagePreview(for turn: ChatTurn) -> String {
+        // Voice messages never preview their transcript or spoken text.
+        if turn.assistantText == nil ? turn.voice != nil : turn.assistantMessages?.last?.voice != nil { return "Voice message" }
         let fallback = turn.scheduleID != nil ? "Scheduled message" : turn.groupRequestID != nil ? "Group response" :
             turn.userText.isEmpty ? turn.attachment.map { "Attachment: " + $0.name } ?? "" : turn.userText
         return String(String.UnicodeScalarView((turn.assistantText ?? fallback).unicodeScalars.prefix(500)))
@@ -319,12 +324,31 @@ final class ContactsStore {
     }
 
     func setInitiative(contactID: String, enabled: Bool, using auth: AuthStore) async throws {
+        try await updateContact(contactID: contactID, using: auth) { api, token in
+            try await api.setContactInitiative(id: contactID, enabled: enabled, token: token)
+        }
+    }
+
+    /// This participant's opt-in to voice replies from the contact.
+    func setVoiceMessages(contactID: String, enabled: Bool, using auth: AuthStore) async throws {
+        try await updateContact(contactID: contactID, using: auth) { api, token in
+            try await api.setContactVoiceMessages(id: contactID, enabled: enabled, token: token)
+        }
+    }
+
+    /// The contact's shared voice; the server allows only its creator to change it.
+    func setVoice(contactID: String, voiceID: String, using auth: AuthStore) async throws {
+        try await updateContact(contactID: contactID, using: auth) { api, token in
+            try await api.setContactVoice(id: contactID, voiceID: voiceID, token: token)
+        }
+    }
+
+    private func updateContact(contactID: String, using auth: AuthStore,
+                               _ operation: (AuthAPI, String) async throws -> Contact) async throws {
         try beginMutation()
         let request = generation
         defer { if request == generation { isMutating = false } }
-        let saved = try await auth.withSession { api, token in
-            try await api.setContactInitiative(id: contactID, enabled: enabled, token: token)
-        }
+        let saved = try await auth.withSession(operation)
         guard request == generation, !Task.isCancelled else { return }
         knownContacts[contactID] = saved
         if let index = contacts.firstIndex(where: { $0.id == contactID }) { contacts[index] = saved }

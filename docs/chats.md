@@ -146,11 +146,10 @@ this implementation does not establish a new consent or training-data policy.
 
 ## Voice input
 
-When the draft is empty, the composer offers a microphone. Record, stop, and
-review the Muse Voice Transcribe result as an editable draft before sending it.
-See [voice dictation](voice.md) for permissions, formats, endpoint limits, privacy,
-foreground lifecycle, and verification status. Durable generation begins after
-sending the reviewed text; recording/transcription is not a Workflow job.
+When the draft is empty, the composer offers a microphone for recorded voice
+messages: hold to record and release to send. Messages are transcribed after
+sending, never before. See [voice messages](voice.md) for gestures, formats,
+endpoint limits, privacy, caching and each client's implementation.
 
 ## Setup and release
 
@@ -457,14 +456,15 @@ Text, image, captioned image, and document bubbles use a flat appearance without
 a drop shadow, in both individual and group conversations.
 
 
-Group conversations have shared human/agent history and reuse the global agent attention queue. See [groups](groups.md) for finite reply rounds, consent, sender identities, group avatars, attachments and voice dictation.
+Group conversations have shared human/agent history and reuse the global agent attention queue. See [groups](groups.md) for finite reply rounds, consent, sender identities, group avatars, attachments and voice messages.
 
 
 Group and individual chats share `MessageBubbleView` and the composer field,
 action button and scroll-to-latest control in `ChatControls.swift`. Shared controls
 preserve the same glass treatment, dimensions and Dynamic Type scaling. Groups add
 sender names/avatars and aggregate [group receipts](groups.md#delivery-and-read-receipts). Groups also reuse
-the attachment views, Photos/Files picker and voice recorder/transcription flow.
+the attachment views, Photos/Files picker and the [voice message](voice.md) recorder,
+composer gesture and bubble.
 See [groups](groups.md).
 
 ## Shared Home and chat state

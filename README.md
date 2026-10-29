@@ -97,8 +97,9 @@ pauses for actual typing, grouping of short messages through an atomic publicati
 check, and independently timestamped human/reply bubbles. Started tools keep their receipts. Accepted replies
 continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
 limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1 (including conversation-local memory for MCP chats/groups), selects bounded recent context, and provides shared attributed memories with private history search tools. Each agent also keeps its own stated persona/preferences across chats and can discover common group members and retrieve their attributed group statements through bounded, permission-checked search. An empty draft offers a microphone for
-[Muse Voice Transcribe dictation](docs/voice.md); the transcript is editable before
-sending. Navigation reuses a bounded session-scoped [memory cache](docs/caching.md) for
+WhatsApp-style [voice messages](docs/voice.md): hold to record, release to send, slide
+to cancel or lock. They are transcribed after sending, and contacts can answer with
+their own ElevenLabs voice. Navigation reuses a bounded session-scoped [memory cache](docs/caching.md) for
 private/group chats, group details, schedules and sharing, and
 refreshes loaded content in the background. Recent chat images and avatars share
 a bounded memory/protected disk cache, reducing reloads across navigation and app
@@ -180,8 +181,7 @@ history check sends a stale draft through up to two reviews; canceled, supersede
 or continuously changing turns can finish without a message. See the
 [reply policy and review limits](docs/groups.md#reply-rounds-and-exclusive-attention).
 Participants can optionally allow a contact to [discuss their private text](docs/groups.md#optional-private-text-sharing) in one group from Group details, with per-person consent and revocation. Groups support editable avatars,
-image/PDF attachments with native previews, voice dictation with an editable
-transcript, and foreground polling. Chats interleaves groups and individual
+image/PDF attachments with native previews, voice messages, and foreground polling. Chats interleaves groups and individual
 conversations by latest message, with dates and a bold sender prefix on group
 previews. Group messages from other members generate push alerts, persistent
 unread counts and foreground banner/sound notifications; tapping an alert opens

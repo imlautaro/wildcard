@@ -18,7 +18,8 @@ import { agentMemoryContext, readAgentMemories } from './agent-memory';
 import { executeGroupRequest, groupRequestReceipt, groupRequestTool, groupQuestionTool, recentGroupDestinations } from '../groups/requests';
 import { groupRequestReply } from '../groups/request-results';
 import { executeGroupRetrieval, groupRetrievalTools, searchGroupMessages, sharedGroups } from '../groups/retrieval';
-import { attachmentMessage } from './attachments';
+import { attachmentMessage, storedAttachment, voiceText } from './attachments';
+import { isVoice } from '../voice/speech';
 import { contactModelAllowed } from './consent';
 import { executeScheduleTool, scheduleTools } from '../schedules/tools';
 import { readTaskLists } from '../tasks/data';
@@ -60,6 +61,8 @@ type HistoryRow = { errorCode: string | null; id: string; sequence: number; user
   replyToID: string | null; replyToSide: string | null };
 const historyColumns = `id, sequence, error_code AS errorCode,
   CASE WHEN attachment_json IS NULL THEN user_text
+    WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN CASE WHEN user_text = ''
+      THEN '[Voice message without recognizable speech]' ELSE '[Voice message, transcribed] ' || user_text END
     ELSE user_text || '\n[Attached file: ' || json_extract(attachment_json, '$.name') || '; bytes omitted from history]' END AS userText,
   COALESCE(assistant_text, '') AS assistantText, created_at AS createdAt, attachment_json AS attachmentJSON,
   reply_to_id AS replyToID, reply_to_side AS replyToSide`;
@@ -290,7 +293,9 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   let remaining = 12_000;
   // Keep one file in context: the current attachment, or the most recent one
   // inside the bounded history. This also bounds PDF page/image payloads.
-  const historicalAttachmentID = !turn.attachmentJSON ? results.find((row) => row.attachmentJSON)?.id : undefined;
+  // Voice messages are represented by their transcripts, never as files.
+  const file = (row: { attachmentJSON: string | null }) => !!row.attachmentJSON && !isVoice(storedAttachment(row));
+  const historicalAttachmentID = !file(turn) ? results.find(file)?.id : undefined;
   for (const prior of results.map((row) => ({ ...row, userText: replyMarker(quotes(row)) + row.userText }))) {
     const length = byteLength(prior.userText) + byteLength(prior.assistantText);
     if (length > remaining) {
@@ -390,7 +395,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
     ...history,
     turn.scheduleID ? { role: 'user', content: `Scheduled task instruction: ${JSON.stringify(turn.scheduleInstruction)}. Execute now; this is not a new human request.` }
       : taskWork ? { role: 'user', content: `Task work trigger (${taskWork.reason}) for task ${JSON.stringify(taskWork.task?.taskID ?? turn.taskID)}. Execute now; this is not a new human request.` }
-      : await attachmentMessage(env, { ...turn, userText: replyMarker(quotes(turn)) + turn.userText }),
+      : await attachmentMessage(env, { ...turn, userText: replyMarker(quotes(turn)) + (isVoice(storedAttachment(turn)) ? voiceText(turn.userText) : turn.userText) }),
   ];
   if (recoveryCode) messages.push({ role: 'system', content: 'Response recovery: an earlier attempt failed to finish this request. No tools are available and no actions may be repeated. Write a brief message in the user’s language. Answer only what the supplied evidence supports; explain any incomplete work. Only supplied device-reported native operation receipts can establish native outcomes from that attempt. Other external execution receipts are not supplied; never invent success or failure, and mention uncertainty when relevant. Do not invent results or promise a later retry.' });
   const imageScope = { ...scope, contributor: !!scope.contributorModel, beforeSequence: turn.sequence + 1 };

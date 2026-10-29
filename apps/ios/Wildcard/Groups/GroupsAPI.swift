@@ -63,6 +63,8 @@ struct GroupMessage: Decodable, Identifiable, Equatable {
     let createdAt: Double
     let attachment: ChatAttachment?
     var replyTo: MessageReplyQuote? = nil
+    /// Voice message metadata; human voice messages have empty `text`, contact ones keep the spoken text.
+    var voice: MessageVoice? = nil
 }
 struct GroupPrivateSharing: Decodable, Identifiable {
     let agentID: String
@@ -313,6 +315,7 @@ final class GroupChatStore {
         nextBefore = nil
         newIncomingMessageIDs = []
         pending = nil
+        failedVoice = nil
         pendingAccepted = false
         pendingReadIDs = []
         receivedIDs = []
@@ -406,7 +409,10 @@ final class GroupChatStore {
         }
     }
 
-    private var pending: (id: String, text: String, attachment: DraftAttachment?, sentAt: Double, replyTo: MessageReplyQuote?)?
+    private var pending: (id: String, text: String, attachment: DraftAttachment?, voice: VoiceClip?, sentAt: Double, replyTo: MessageReplyQuote?)?
+    /// A voice message the server rejected; kept until the person retries (with a new ID) or discards it.
+    private(set) var failedVoice: (clip: VoiceClip, replyTo: MessageReplyQuote?)?
+    func discardFailedVoice() { failedVoice = nil }
     private(set) var pendingAccepted = false
     private var pendingSender: (id: String, name: String)?
     var pendingText: String? { pending.map { value in messages.contains(where: { $0.id == value.id }) ? nil : value.text } ?? nil }
@@ -429,8 +435,10 @@ final class GroupChatStore {
         if let message = messages.last,
            message.id == group.lastMessageID || message.createdAt >= (group.lastMessageAt ?? 0) {
             result.lastMessageID = message.id
-            result.lastMessageText = message.text.isEmpty ? message.attachment.map { "Attachment: " + $0.name } ?? "" : String(message.text.prefix(500))
-            result.lastMessagePreview = message.agentID != nil && !message.text.isEmpty ? String(MessageMarkdown.plainText(message.text).prefix(500)) : result.lastMessageText
+            result.lastMessageText = message.voice != nil ? "Voice message"
+                : message.text.isEmpty ? message.attachment.map { "Attachment: " + $0.name } ?? "" : String(message.text.prefix(500))
+            result.lastMessagePreview = message.agentID != nil && message.voice == nil && !message.text.isEmpty
+                ? String(MessageMarkdown.plainText(message.text).prefix(500)) : result.lastMessageText
             result.lastMessageAt = message.createdAt
             result.lastMessageSenderName = message.senderName
             result.lastMessageUserID = message.userID
@@ -439,7 +447,8 @@ final class GroupChatStore {
         }
         if let pending, !messages.contains(where: { $0.id == pending.id }) {
             result.lastMessageID = pending.id
-            result.lastMessageText = pending.text.isEmpty ? pending.attachment.map { "Attachment: " + $0.name } ?? "" : pending.text
+            result.lastMessageText = pending.voice != nil ? "Voice message"
+                : pending.text.isEmpty ? pending.attachment.map { "Attachment: " + $0.name } ?? "" : pending.text
             result.lastMessagePreview = result.lastMessageText
             result.lastMessageAt = pending.sentAt
             result.lastMessageUserID = pendingSender?.id
@@ -450,6 +459,7 @@ final class GroupChatStore {
     }
     var pendingID: String? { pending?.id }
     var pendingAttachment: DraftAttachment? { pending?.attachment }
+    var pendingVoice: VoiceClip? { pending?.voice }
     var pendingSentAt: Double? { pending?.sentAt }
     var pendingReplyTo: MessageReplyQuote? { pending?.replyTo }
 
@@ -505,6 +515,7 @@ final class GroupChatStore {
                 if let file = pending.attachment, file.mimeType.hasPrefix("image/") {
                     await auth.images.store(file.data, for: .groupAttachment(groupID: id, messageID: pending.id))
                 }
+                if let clip = pending.voice { await auth.images.audio.store(clip.data, for: .groupVoice(groupID: id, messageID: pending.id)) }
                 guard !invalidated, epoch == accessEpoch else { return }
             }
             // Refresh older retained outgoing receipts without refetching message bodies.
@@ -546,6 +557,7 @@ final class GroupChatStore {
         for message in page {
             var merged = message
             merged.receiptState = ReceiptProgress.merge(indexed[message.id]?.receiptState, message.receiptState)
+            merged.voice = merged.voice?.merging(indexed[message.id]?.voice)
             indexed[message.id] = merged
         }
         messages = indexed.values.sorted { $0.sequence < $1.sequence }
@@ -576,12 +588,16 @@ final class GroupChatStore {
             self.error = error.localizedDescription
         }
     }
-    func send(_ text: String, attachment: DraftAttachment? = nil, replyTo: MessageReplyQuote? = nil, id: String, auth: AuthStore) async -> Bool {
+    func send(_ text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, id: String, auth: AuthStore) async -> Bool {
         guard !invalidated, !isSending, pending == nil || (pending?.text == text && pending?.attachment == attachment
-            && pending?.replyTo?.messageID == replyTo?.messageID) else { return false }
+            && pending?.voice == voice && pending?.replyTo?.messageID == replyTo?.messageID) else {
+            if let voice, !invalidated, pending?.voice != voice { failedVoice = (voice, replyTo) }
+            return false
+        }
         isSending = true
+        if voice != nil { failedVoice = nil }
         if pending == nil {
-            pending = (UUID().uuidString.lowercased(), text, attachment, Date.now.timeIntervalSince1970 * 1000, replyTo)
+            pending = (UUID().uuidString.lowercased(), text, attachment, voice, Date.now.timeIntervalSince1970 * 1000, replyTo)
             pendingAccepted = false
             pendingSender = auth.user.map { ($0.id, $0.name) }
         }
@@ -591,7 +607,7 @@ final class GroupChatStore {
         do {
             try await auth.withSession { api, token in
                 try await api.sendGroupMessage(groupID: id, id: submitted.id, text: submitted.text, attachment: submitted.attachment,
-                                               replyToID: submitted.replyTo?.messageID, token: token)
+                                               voice: submitted.voice, replyToID: submitted.replyTo?.messageID, token: token)
             }
             guard !invalidated, epoch == accessEpoch else { return false }
             if pending?.id == submitted.id { pendingAccepted = true }
@@ -600,6 +616,7 @@ final class GroupChatStore {
             if let file = submitted.attachment, file.mimeType.hasPrefix("image/") {
                 await auth.images.store(file.data, for: .groupAttachment(groupID: id, messageID: submitted.id))
             }
+            if let clip = submitted.voice { await auth.images.audio.store(clip.data, for: .groupVoice(groupID: id, messageID: submitted.id)) }
             await refresh(id: id, auth: auth)
             return true
         } catch is CancellationError { return false }
@@ -611,6 +628,8 @@ final class GroupChatStore {
             if messages.contains(where: { $0.id == submitted.id }) { pending = nil; pendingAccepted = false; return true }
             if case AuthAPI.Failure.rejected = error { pending = nil }
             if case AuthAPI.Failure.unauthorized = error { pending = nil }
+            // A rejected clip is not pending anymore, but the person can still retry or discard it.
+            if pending == nil, let clip = submitted.voice { failedVoice = (clip, submitted.replyTo) }
             self.error = error.localizedDescription
             return false
         }
@@ -639,7 +658,7 @@ final class GroupConversationCache {
         if let store = entries[id] { return store }
         while entries.count >= 8, let oldest = entries.filter({
             !$0.value.isRetained && !$0.value.isSending && !$0.value.isLoadingMore
-                && $0.value.pendingID == nil && $0.value.reactions.pending.isEmpty
+                && $0.value.pendingID == nil && $0.value.failedVoice == nil && $0.value.reactions.pending.isEmpty
         }).min(by: { (lastAccess[$0.key] ?? 0) < (lastAccess[$1.key] ?? 0) })?.key {
             lastAccess.removeValue(forKey: oldest)
             entries.removeValue(forKey: oldest)?.invalidate()

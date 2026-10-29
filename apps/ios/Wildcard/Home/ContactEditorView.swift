@@ -74,6 +74,9 @@ struct ContactEditorView: View {
                 } footer: {
                     Text("Allow thoughtful follow-ups when you have not replied. Stops after a few unanswered messages. Applies only to your private chat.")
                 }
+                if auth.user?.features?.voiceMessages == true {
+                    ContactVoiceSection(contactID: contactID, disabled: saving) { self.error = $0 }
+                }
                 Section {
                     NavigationLink("Connections") { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) }
                     NavigationLink("Personality") {
@@ -101,9 +104,12 @@ struct ContactEditorView: View {
         }
         .task(id: contactID) {
             guard let contactID else { return }
+            // Feature flags come only from `GET /me`; revalidate them so the Voice section follows the admin switch.
+            async let profile: Void? = try? auth.refreshProfile()
             do { try await contacts.refreshContact(id: contactID, using: auth, force: false) }
             catch is CancellationError { }
             catch { self.error = error.localizedDescription }
+            _ = await profile
         }
         .navigationTitle(contactID == nil ? "Add Contact" : (canEdit ? "Edit Contact" : "Contact"))
         .navigationBarTitleDisplayMode(.inline)
@@ -211,5 +217,166 @@ private struct ContactEnergySection: View {
             error = "This contact is no longer available to its creator."
         }
         catch { self.error = error.localizedDescription }
+    }
+}
+
+/// Voice replies: each participant's own opt-in, and the shared voice its creator chooses.
+private struct ContactVoiceSection: View {
+    let contactID: String
+    let disabled: Bool
+    let report: (String) -> Void
+    @Environment(AuthStore.self) private var auth
+    @Environment(ContactsStore.self) private var contacts
+    private var contact: Contact? { contacts.contact(id: contactID) }
+
+    var body: some View {
+        Section {
+            Toggle("Voice messages", isOn: Binding(
+                get: { contact?.voiceMessagesEnabled == 1 },
+                set: { enabled in
+                    guard !contacts.isMutating else { return }
+                    Task {
+                        do { try await contacts.setVoiceMessages(contactID: contactID, enabled: enabled, using: auth) }
+                        catch is CancellationError { }
+                        catch { report(error.localizedDescription) }
+                    }
+                }
+            ))
+            .disabled(disabled || contacts.isMutating)
+            if contact?.canManage == true {
+                NavigationLink {
+                    ContactVoicePickerView(contactID: contactID, catalog: contacts.voiceCatalog.store(for: "voices"))
+                } label: {
+                    LabeledContent("Voice", value: contact?.voiceName ?? "Not chosen")
+                }
+                .disabled(disabled)
+            } else {
+                LabeledContent("Voice", value: contact?.voiceName ?? "Not chosen")
+            }
+        } header: {
+            Text("Voice")
+        } footer: {
+            Text("Let this contact answer you with short voice messages when a reply suits speech. In groups, the creator's setting applies.")
+        }
+    }
+}
+
+/// Creator-only voice picker with a sample for each catalog voice.
+private struct ContactVoicePickerView: View {
+    let contactID: String
+    let catalog: NavigationSnapshot<[VoiceOption]>
+    @Environment(AuthStore.self) private var auth
+    @Environment(ContactsStore.self) private var contacts
+    @State private var loading = false
+    @State private var error: String?
+    @State private var savingID: String?
+    @State private var sampleLoading: String?
+    @State private var sampleTask: Task<Void, Never>?
+    private var player: VoicePlayer { VoicePlayer.shared }
+
+    var body: some View {
+        List {
+            if let voices = catalog.value {
+                if voices.isEmpty {
+                    Text("No voices are available.").manrope().foregroundStyle(.secondary)
+                }
+                ForEach(voices) { voice in
+                    HStack(spacing: 12) {
+                        Button { choose(voice) } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(voice.name).manrope()
+                                    if !voice.summary.isEmpty {
+                                        Text(voice.summary).manrope(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                if savingID == voice.id { ProgressView() }
+                                else if contacts.contact(id: contactID)?.voiceID == voice.id {
+                                    Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                                        .accessibilityLabel("Selected")
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(savingID != nil || contacts.isMutating)
+                        sampleButton(voice)
+                    }
+                }
+            } else if loading {
+                ProgressView("Loading voices…")
+            }
+            if let error {
+                Section {
+                    Text(error).manrope(.footnote).foregroundStyle(.red)
+                    Button("Retry") { Task { await refresh() } }.disabled(loading)
+                }
+            }
+        }
+        .navigationTitle("Voice")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await refresh() }
+        .refreshable { await refresh(force: true) }
+        .onDisappear {
+            sampleTask?.cancel()
+            if player.currentKey?.contains("/voices/") == true { player.stop() }
+        }
+    }
+
+    private func sampleButton(_ voice: VoiceOption) -> some View {
+        let resource = VoiceAudioResource.voicePreview(voiceID: voice.id)
+        let key = "\(auth.user?.id ?? "")/\(resource.key)"
+        return Button {
+            if player.isPlaying(key) { player.pause(); return }
+            sampleTask?.cancel()
+            sampleLoading = voice.id
+            sampleTask = Task {
+                defer { if sampleLoading == voice.id { sampleLoading = nil } }
+                do {
+                    let data = try await auth.voiceAudio(resource)
+                    try Task.checkCancellation()
+                    if !player.play(data, key: key) {
+                        error = "This sample could not be played."
+                        await auth.images.audio.remove(resource)
+                    }
+                } catch is CancellationError { }
+                catch { self.error = error.localizedDescription }
+            }
+        } label: {
+            Group {
+                if sampleLoading == voice.id { ProgressView() }
+                else { Image(systemName: player.isPlaying(key) ? "pause.circle.fill" : "play.circle.fill").font(.title2) }
+            }
+            .frame(width: 32, height: 32)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(player.isPlaying(key) ? "Pause sample of \(voice.name)" : "Play sample of \(voice.name)")
+    }
+
+    /// The catalog is reused for the session; an explicit refresh revalidates it.
+    private func refresh(force: Bool = false) async {
+        guard force || catalog.value == nil, !loading else { return }
+        loading = true
+        defer { loading = false }
+        do {
+            try await catalog.refresh {
+                try await auth.withSession { api, token in try await api.voices(token: token) }
+            }
+            error = nil
+        } catch is CancellationError { }
+        catch { self.error = catalog.value == nil ? error.localizedDescription : nil }
+    }
+
+    private func choose(_ voice: VoiceOption) {
+        guard savingID == nil, contacts.contact(id: contactID)?.voiceID != voice.id else { return }
+        savingID = voice.id
+        error = nil
+        Task {
+            defer { savingID = nil }
+            do { try await contacts.setVoice(contactID: contactID, voiceID: voice.id, using: auth) }
+            catch is CancellationError { }
+            catch { self.error = error.localizedDescription }
+        }
     }
 }

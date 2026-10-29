@@ -33,7 +33,8 @@ struct ChatView: View {
     @State private var quoteTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var voice = VoiceRecorder()
-    @State private var voiceTask: Task<Void, Never>?
+    @State private var voiceLocked = false
+    @State private var voiceDrag: CGFloat = 0
     @FocusState private var composerFocused: Bool
     @ScaledMetric(relativeTo: .body) private var composerHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .body) private var sendIconSize: CGFloat = 20
@@ -41,16 +42,13 @@ struct ChatView: View {
     private var canSend: Bool {
         (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachment != nil) && draft.unicodeScalars.count <= 4000
             && chat.hasLoaded && !chat.isSending && !chat.isUnavailable
-            && !voice.isBusy && !voice.hasRecording && !isLoadingAttachment
+            && !voice.isBusy && !isLoadingAttachment
     }
 
     private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachment == nil }
+    /// A failed voice message must be retried or deleted before recording another.
     private var canUseMicrophone: Bool {
-        chat.hasLoaded && !chat.isUnavailable && !chat.isSending && !voice.isBusy && !isLoadingAttachment
-    }
-    private var actionEnabled: Bool {
-        if voice.phase == .recording { return true }
-        return draftIsEmpty ? canUseMicrophone : canSend
+        voice.isBusy || (chat.hasLoaded && !chat.isUnavailable && !chat.isSending && !isLoadingAttachment && chat.failedVoice == nil)
     }
     private var canReply: Bool { chat.hasLoaded && !chat.isUnavailable }
 
@@ -61,9 +59,12 @@ struct ChatView: View {
                                   color: GroupMemberColor.color(groupID: contactID, identity: "contact"))
     }
 
-    private func reply(to turn: ChatTurn, side: String) {
+    private func reply(to turn: ChatTurn, side: String, isVoice: Bool = false) {
         guard canReply else { return }
-        replyTarget = side == "assistant"
+        // The server quotes voice messages as "Voice message"; match it locally.
+        replyTarget = isVoice || (side == "user" && turn.voice != nil)
+            ? .local(messageID: turn.id, side: side, text: "Voice message", attachment: nil)
+            : side == "assistant"
             ? .local(messageID: turn.id, side: side, text: turn.assistantText ?? "", attachment: nil)
             : .local(messageID: turn.id, side: side, text: turn.userText, attachment: turn.attachment)
         composerFocused = true
@@ -92,22 +93,29 @@ struct ChatView: View {
                     }
                     ForEach(chat.timelineItems) { item in
                         let turn = item.turn
-                        if item.kind == .user && turn.scheduleID == nil && (!turn.userText.isEmpty || turn.attachment != nil) {
+                        if item.kind == .user && turn.scheduleID == nil && (!turn.userText.isEmpty || turn.attachment != nil || turn.voice != nil) {
                             let quote = turn.replyTo.map(replyPreview)
                             let showQuote = { if let replyTo = turn.replyTo { showQuoted(replyTo, proxy: proxy) } }
                             VStack(spacing: 8) {
-                                if let attachment = turn.attachment {
+                                if let voiceMessage = turn.voice {
+                                    // The transcript may be saved as user text; it stays hidden behind the menu.
+                                    VoiceMessageView(resource: .userVoice(contactID: contactID, turnID: turn.id), voice: voiceMessage,
+                                                     sentAt: turn.createdAt, fromUser: true, readAt: turn.readAt, isSending: chat.isSubmitting(turn.id),
+                                                     localData: chat.outgoingMessage?.turn.id == turn.id ? chat.outgoingMessage?.voice?.data : nil,
+                                                     replyQuote: quote, onQuoteTap: showQuote)
+                                } else if let attachment = turn.attachment {
                                     ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id, sentAt: turn.createdAt, caption: attachment.isImage ? turn.userText : "", readAt: turn.readAt, isSending: chat.isSubmitting(turn.id), localData: chat.outgoingMessage?.turn.id == turn.id ? chat.outgoingMessage?.attachment?.data : nil,
                                                        replyQuote: quote, onQuoteTap: showQuote)
                                 }
-                                if !turn.userText.isEmpty && turn.attachment?.isImage != true {
+                                if turn.voice == nil && !turn.userText.isEmpty && turn.attachment?.isImage != true {
                                     MessageBubbleView(text: turn.userText, sentAt: turn.createdAt, fromUser: true, readAt: turn.readAt, isSending: chat.isSubmitting(turn.id),
                                                       replyQuote: turn.attachment == nil ? quote : nil, onQuoteTap: showQuote)
                                 }
                             }
                             .swipeToReply(enabled: canReply && !chat.isSubmitting(turn.id)) { reply(to: turn, side: "user") }
                             .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "user", fromUser: true, enabled: !chat.isSubmitting(turn.id),
-                                              onReply: canReply ? { reply(to: turn, side: "user") } : nil)
+                                              onReply: canReply ? { reply(to: turn, side: "user") } : nil,
+                                              transcript: turn.voice.map { $0.transcript })
                             .messageHighlight(highlightedMessage == "\(turn.id)/user")
                             .id("\(turn.id)/user")
                         }
@@ -116,8 +124,15 @@ struct ChatView: View {
                             let isFirst = item.message == nil || item.message?.id == "\(turn.id)/assistant/0"
                             let apps = isFirst ? contacts.miniApps.apps(base: "contacts/\(contactID)", turnID: turn.id) : []
                             let documents = isFirst ? (contacts.documentCaches.list("contacts/\(contactID)").value ?? []).filter { $0.sourceID == turn.id } : []
+                            let voiceMessage = item.message?.voice
                             Group {
-                                if let attachment = item.message?.attachment {
+                                if let voiceMessage, let message = item.message {
+                                    VoiceMessageView(resource: .contactVoice(contactID: contactID, turnID: turn.id,
+                                                                             part: turn.assistantMessages?.firstIndex(where: { $0.id == message.id }) ?? 0),
+                                                     voice: voiceMessage, sentAt: item.timestamp, fromUser: false, showsReceipt: false,
+                                                     replyQuote: message.replyTo.map(replyPreview),
+                                                     onQuoteTap: { if let quote = message.replyTo { showQuoted(quote, proxy: proxy) } })
+                                } else if let attachment = item.message?.attachment {
                                     ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id,
                                                        assistantAttachment: true, sentAt: item.timestamp, caption: reply,
                                                        fromUser: false, showsReceipt: false, formatsMarkdown: true,
@@ -133,9 +148,11 @@ struct ChatView: View {
                                                       }))
                                 }
                             }
-                                .swipeToReply(enabled: canReply) { self.reply(to: turn, side: "assistant") }
+                                .swipeToReply(enabled: canReply) { self.reply(to: turn, side: "assistant", isVoice: voiceMessage != nil) }
+                                // A contact voice message's transcript is the text it spoke.
                                 .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "assistant", fromUser: false,
-                                                  onReply: canReply ? { self.reply(to: turn, side: "assistant") } : nil)
+                                                  onReply: canReply ? { self.reply(to: turn, side: "assistant", isVoice: voiceMessage != nil) } : nil,
+                                                  transcript: voiceMessage.map { $0.transcript ?? reply })
                                 .messageHighlight(highlightedMessage == "\(turn.id)/assistant")
                                 .id(item.message?.id == "\(turn.id)/assistant/0" || item.message == nil ? "\(turn.id)/assistant" : item.id)
                                 .task {
@@ -152,8 +169,8 @@ struct ChatView: View {
                                         replyIsVisible: true
                                     )
                                 }
-                            // A reply with a photo keeps its cards under the photo bubble.
-                            if item.message?.attachment != nil {
+                            // A reply with a photo or voice keeps its cards under that bubble.
+                            if item.message?.attachment != nil || voiceMessage != nil {
                                 ForEach(apps) { MiniAppCardView(app: $0, base: "contacts/\(contactID)") }
                                 ForEach(documents) { DocumentCardView(document: $0, base: "contacts/\(contactID)", caches: contacts.documentCaches) }
                             }
@@ -274,7 +291,12 @@ struct ChatView: View {
             }
         }
         .onChange(of: voice.phase) { _, phase in
-            if phase == .ready { transcribeRecording() }
+            if phase == .ready { sendRecording() }
+        }
+        .task(id: voice.hint) {
+            guard voice.hint != nil else { return }
+            do { try await Task.sleep(for: .seconds(4)) } catch { return }
+            voice.hint = nil
         }
         .onChange(of: composerFocused) { _, focused in
             if !focused { lastComposerActivity = .distantPast }
@@ -282,7 +304,7 @@ struct ChatView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { noteVisibleRepliesRead() }
             if phase != .active { endVisit(); chat.clearPresence() }
-            if phase == .background { cancelRecording() }
+            if phase == .background { cancelRecording(); VoicePlayer.shared.stop() }
         }
         .onChange(of: chat.isUnavailable) { _, unavailable in
             if unavailable { cancelRecording() }
@@ -311,6 +333,7 @@ struct ChatView: View {
             endVisit()
             chat.clearPresence()
             cancelRecording()
+            VoicePlayer.shared.stop()
             attachmentTask?.cancel()
             quoteTask?.cancel()
             chat.compactHistory()
@@ -398,19 +421,24 @@ struct ChatView: View {
     }
 
     private func cancelRecording() {
-        voiceTask?.cancel()
-        voiceTask = nil
         voice.cancel()
+        voiceLocked = false
+        voiceDrag = 0
     }
 
-    private func transcribeRecording() {
-        voiceTask?.cancel()
-        voiceTask = Task {
-            if let text = await voice.transcribe(contactID: contactID, using: auth), !Task.isCancelled {
-                draftRevision += 1
-                draft = draft.isEmpty ? text : draft + " " + text
-                composerFocused = true
-            }
+    /// Sends a finished recording at once, quoting the current reply target.
+    private func sendRecording() {
+        guard let clip = voice.takeClip() else { return }
+        let reply = replyTarget
+        replyTarget = nil
+        sendVoice(clip, reply: reply)
+    }
+
+    private func sendVoice(_ clip: VoiceClip, reply: MessageReplyQuote?) {
+        Task {
+            let accepted = await chat.send(text: "", voice: clip, replyTo: reply, contactID: contactID, using: auth)
+            sync.request(.contact(contactID))
+            if accepted { scrollToLatest() }
         }
     }
 
@@ -431,32 +459,17 @@ struct ChatView: View {
                 }
             }
             if let error = voice.error {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(error).manrope(.footnote).foregroundStyle(.red)
-                    if voice.hasRecording {
-                        HStack {
-                            Button("Retry transcription") { transcribeRecording() }
-                            Button("Discard recording", role: .destructive) { cancelRecording() }
-                        }.manrope(.footnote)
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading)
+                Text(error).manrope(.footnote).foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if voice.phase == .recording {
-                HStack {
-                    Image(systemName: "waveform").foregroundStyle(.red)
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        Text("Recording \(voice.elapsed / 60):\(String(format: "%02d", voice.elapsed % 60)) / 1:00").monospacedDigit()
-                    }
-                    Spacer()
-                    Button("Cancel") { cancelRecording() }
-                }.manrope(.footnote)
-            } else if voice.phase == .transcribing || voice.phase == .ready {
-                HStack {
-                    ProgressView()
-                    Text("Transcribing…")
-                    Spacer()
-                    Button("Cancel") { cancelRecording() }
-                }.manrope(.footnote)
+            if let hint = voice.hint {
+                Text(hint).manrope(.footnote).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let failed = chat.failedVoice, !chat.isSending {
+                FailedVoiceMessageRow(clip: failed.clip, isBusy: chat.isSending || chat.isUnavailable,
+                                      retry: { sendVoice(failed.clip, reply: failed.replyTo) },
+                                      discard: { chat.discardFailedVoice() })
             }
             if let attachmentError {
                 Text(attachmentError).manrope(.footnote).foregroundStyle(.red)
@@ -493,39 +506,38 @@ struct ChatView: View {
                 }.padding(10).background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
             }
             HStack(alignment: .bottom, spacing: 12) {
-                Menu {
-                    Button("Photo library", systemImage: "photo.on.rectangle") { showPhotoPicker = true }
-                    Button("Choose file", systemImage: "doc") { showFilePicker = true }
-                } label: {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: sendIconSize, weight: .medium))
-                        .frame(width: composerHeight, height: composerHeight)
-                        .contentShape(Circle())
+                if voice.isBusy {
+                    VoiceRecordingBar(recorder: voice, locked: voiceLocked, dragOffset: voiceDrag, onDelete: cancelRecording)
+                } else {
+                    Menu {
+                        Button("Photo library", systemImage: "photo.on.rectangle") { showPhotoPicker = true }
+                        Button("Choose file", systemImage: "doc") { showFilePicker = true }
+                    } label: {
+                        Image(systemName: "paperclip")
+                            .font(.system(size: sendIconSize, weight: .medium))
+                            .frame(width: composerHeight, height: composerHeight)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: Circle())
+                    .accessibilityLabel("Add attachment")
+                    .disabled(!chat.hasLoaded || chat.isUnavailable || chat.isSending || isLoadingAttachment)
+                    TextField("Message", text: Binding(get: { draft }, set: {
+                        draftRevision += 1
+                        lastComposerActivity = .now
+                        draft = $0
+                    }), axis: .vertical)
+                        .focused($composerFocused)
+                        .chatComposerFieldStyle()
+                        .disabled(chat.isUnavailable)
                 }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: Circle())
-                .accessibilityLabel("Add attachment")
-                .disabled(!chat.hasLoaded || chat.isUnavailable || chat.isSending || voice.isBusy || voice.hasRecording || isLoadingAttachment)
-                TextField("Message", text: Binding(get: { draft }, set: {
-                    draftRevision += 1
-                    lastComposerActivity = .now
-                    draft = $0
-                }), axis: .vertical)
-                    .focused($composerFocused)
-                    .chatComposerFieldStyle()
-                    .disabled(chat.isUnavailable || voice.isBusy || voice.hasRecording)
-                ChatComposerActionButton(
-                    symbol: voice.phase == .recording ? "stop.fill" : (draftIsEmpty ? "mic.fill" : "arrow.up"),
-                    label: voice.phase == .recording ? "Stop recording and transcribe" : (draftIsEmpty ? "Record audio" : "Send message"),
-                    isEnabled: actionEnabled,
-                    tint: voice.phase == .recording ? .red : .accentColor
-                ) {
-                    if voice.phase == .recording {
-                        voice.stop()
-                    } else if draftIsEmpty {
+                // The microphone keeps its identity while recording so the hold gesture continues.
+                if draftIsEmpty {
+                    VoiceRecordButton(recorder: voice, isEnabled: canUseMicrophone, locked: $voiceLocked, dragOffset: $voiceDrag) {
                         composerFocused = false
-                        voiceTask = Task { await voice.start() }
-                    } else {
+                    }
+                } else {
+                    ChatComposerActionButton(symbol: "arrow.up", label: "Send message", isEnabled: canSend) {
                         guard canSend else { return }
                         let submittedAttachment = attachment
                         let submittedReply = replyTarget

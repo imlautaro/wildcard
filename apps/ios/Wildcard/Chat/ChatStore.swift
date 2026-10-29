@@ -7,8 +7,11 @@ final class ChatStore {
     struct OutgoingMessage {
         let turn: ChatTurn
         let attachment: DraftAttachment?
+        var voice: VoiceClip? = nil
     }
     private(set) var outgoingMessage: OutgoingMessage?
+    /// A voice message whose send failed; kept with its reply target until retried or discarded.
+    private(set) var failedVoice: (clip: VoiceClip, replyTo: MessageReplyQuote?)?
     var displayedTurns: [ChatTurn] {
         guard let outgoingMessage, !turns.contains(where: { $0.id == outgoingMessage.turn.id }) else { return turns }
         return turns + [outgoingMessage.turn]
@@ -64,7 +67,7 @@ final class ChatStore {
     var isRetained = false
     private var invalidated = false
     private var revision = 0
-    private var submission: (id: String, text: String, attachmentID: UUID?, replyKey: String?, nativeContext: NativeContext?)?
+    private var submission: (id: String, text: String, contentID: UUID?, replyKey: String?, nativeContext: NativeContext?)?
     var hasPendingReply: Bool { turns.contains(where: \.isPending) }
 
     func clearPresence() { presence = nil }
@@ -103,6 +106,7 @@ final class ChatStore {
         nextBefore = nil
         submission = nil
         outgoingMessage = nil
+        failedVoice = nil
         refreshedAt = nil
         isUnavailable = true
     }
@@ -205,16 +209,26 @@ final class ChatStore {
         }
     }
 
-    func send(text: String, attachment: DraftAttachment? = nil, replyTo: MessageReplyQuote? = nil, contactID: String, using auth: AuthStore) async -> Bool {
-        guard !isSending, !invalidated, !isUnavailable else { return false }
-        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (!text.isEmpty || attachment != nil), text.unicodeScalars.count <= 4000 else { return false }
+    func discardFailedVoice() { failedVoice = nil }
+
+    func send(text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, contactID: String, using auth: AuthStore) async -> Bool {
+        guard !isSending, !invalidated, !isUnavailable else {
+            if let voice, !invalidated { failedVoice = (voice, replyTo) }
+            return false
+        }
+        let text = voice == nil ? text.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        guard (!text.isEmpty || attachment != nil || voice != nil), text.unicodeScalars.count <= 4000 else { return false }
         // Keep the identifier across an uncertain network result to prevent duplicate sends.
-        // A different quoted message is different content and needs a new identifier.
+        // A different quoted message or clip is different content and needs a new identifier.
         let replyKey = replyTo.map { "\($0.messageID)/\($0.side)" }
-        if submission?.text != text || submission?.attachmentID != attachment?.id || submission?.replyKey != replyKey {
-            do { submission = (UUID().uuidString.lowercased(), text, attachment?.id, replyKey, try NativeExperiments.shared.context(contactID: contactID)) }
-            catch { self.error = error.localizedDescription; return false }
+        let contentID = voice?.id ?? attachment?.id
+        if submission?.text != text || submission?.contentID != contentID || submission?.replyKey != replyKey {
+            do { submission = (UUID().uuidString.lowercased(), text, contentID, replyKey, try NativeExperiments.shared.context(contactID: contactID)) }
+            catch {
+                self.error = error.localizedDescription
+                if let voice { failedVoice = (voice, replyTo) }
+                return false
+            }
         }
         guard let submission else { return false }
         isSending = true
@@ -227,17 +241,20 @@ final class ChatStore {
                 attachment: attachment.map { ChatAttachment(name: $0.name, mimeType: $0.mimeType, size: $0.data.count) },
                 scheduleID: nil, groupRequestID: nil, errorCode: nil, sequence: 0, id: submission.id,
                 userText: text, assistantText: nil, status: .queued, attempt: 0,
-                createdAt: now, readAt: nil, updatedAt: now, replyTo: replyTo
+                createdAt: now, readAt: nil, updatedAt: now, replyTo: replyTo, voice: voice?.metadata
             ),
-            attachment: attachment
+            attachment: attachment,
+            voice: voice
         )
+        if voice != nil { failedVoice = nil }
         defer {
             isSending = false
             if outgoingMessage?.turn.id == submission.id { outgoingMessage = nil }
         }
         do {
             let turn = try await auth.withSession { api, token in
-                try await api.sendMessage(contactID: contactID, id: submission.id, text: text, attachment: attachment, replyTo: replyTo, nativeContext: submission.nativeContext, token: token)
+                try await api.sendMessage(contactID: contactID, id: submission.id, text: text, attachment: attachment, voice: voice,
+                                          replyTo: replyTo, nativeContext: submission.nativeContext, token: token)
             }
             revision += 1
             guard !invalidated else { return false }
@@ -250,9 +267,13 @@ final class ChatStore {
             if let attachment, attachment.mimeType.hasPrefix("image/") {
                 await auth.images.store(attachment.data, for: .attachment(contactID: contactID, turnID: submission.id))
             }
+            if let voice { await auth.images.audio.store(voice.data, for: .userVoice(contactID: contactID, turnID: submission.id)) }
             MessageSounds.shared.sent(turnID: submission.id, contactID: contactID)
             return true
-        } catch is CancellationError { return false }
+        } catch is CancellationError {
+            if let voice, !invalidated { failedVoice = (voice, replyTo) }
+            return false
+        }
         catch {
             self.error = error.localizedDescription
             // A timeout may happen after D1 has already accepted the message.
@@ -263,10 +284,12 @@ final class ChatStore {
                 if let attachment, attachment.mimeType.hasPrefix("image/") {
                     await auth.images.store(attachment.data, for: .attachment(contactID: contactID, turnID: submission.id))
                 }
+                if let voice { await auth.images.audio.store(voice.data, for: .userVoice(contactID: contactID, turnID: submission.id)) }
                 MessageSounds.shared.sent(turnID: submission.id, contactID: contactID)
                 return true
             }
             self.error = error.localizedDescription
+            if let voice, !invalidated { failedVoice = (voice, replyTo) }
             return false
         }
     }

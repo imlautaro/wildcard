@@ -18,15 +18,18 @@ import { readBearerSession } from '../lib/session';
 import sharing from './sharing';
 import personality from '../personality/routes';
 import generation from '../contacts/generation';
+import { listVoices, voiceRepliesAvailable, type Voice } from '../voice/catalog';
 
-type Contact = { onboardingChat?: number; initiativeEnabled: number; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
-const columns = `onboarding_chat AS onboardingChat, initiative_enabled AS initiativeEnabled, id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
+type Contact = { onboardingChat?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
+const columns = `onboarding_chat AS onboardingChat, initiative_enabled AS initiativeEnabled, voice_messages_enabled AS voiceMessagesEnabled,
+  (SELECT voice_id FROM contact_agent WHERE id = contact.agent_id) AS voiceID, (SELECT voice_name FROM contact_agent WHERE id = contact.agent_id) AS voiceName, id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
   CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
 const managesAgent = `EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = contact.user_id)`;
 const selection = `${columns},
   (SELECT CASE WHEN t.assistant_text IS NULL AND t.schedule_id IS NULL AND t.group_request_id IS NULL AND t.task_id IS NULL THEN 1 ELSE 0 END
     FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageFromUser,
-  (SELECT t.read_at FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageReadAt, (SELECT COALESCE(t.assistant_text, CASE WHEN t.schedule_id IS NOT NULL THEN 'Scheduled message' WHEN t.group_request_id IS NOT NULL THEN 'Group response' WHEN t.task_id IS NOT NULL THEN 'Working on a task' WHEN t.user_text = '' AND t.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(t.attachment_json, '$.name') ELSE t.user_text END)
+  (SELECT t.read_at FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageReadAt, (SELECT CASE WHEN json_extract(t.assistant_messages_json, '$[#-1].attachment.mimeType') LIKE 'audio/%'
+    OR (t.assistant_text IS NULL AND json_extract(t.attachment_json, '$.mimeType') LIKE 'audio/%') THEN 'Voice message' ELSE COALESCE(t.assistant_text, CASE WHEN t.schedule_id IS NOT NULL THEN 'Scheduled message' WHEN t.group_request_id IS NOT NULL THEN 'Group response' WHEN t.task_id IS NOT NULL THEN 'Working on a task' WHEN t.user_text = '' AND t.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(t.attachment_json, '$.name') ELSE t.user_text END) END
   FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
   ORDER BY t.sequence DESC LIMIT 1) AS lastMessageText,
   (SELECT CASE WHEN t.assistant_text IS NOT NULL THEN t.updated_at ELSE t.created_at END
@@ -145,6 +148,42 @@ contacts.put('/:id/initiative', contactBody, async (c) => {
   }
   await c.env.DB.prepare('UPDATE contact SET initiative_enabled = ? WHERE id = ? AND user_id = ?')
     .bind(body.enabled ? 1 : 0, c.req.param('id'), c.get('owner')).run();
+  const contact = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param('id'), c.get('owner')).first<Contact>();
+  return contact ? c.json({ contact: contactPreview(contact) }) : c.json({ error: 'Contact not found' }, 404);
+});
+
+contacts.put('/:id/voice-messages', contactBody, async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!body || Object.keys(body).join(',') !== 'enabled' || typeof body.enabled !== 'boolean') {
+    return c.json({ error: 'Provide only enabled as a boolean' }, 400);
+  }
+  await c.env.DB.prepare('UPDATE contact SET voice_messages_enabled = ? WHERE id = ? AND user_id = ?')
+    .bind(body.enabled ? 1 : 0, c.req.param('id'), c.get('owner')).run();
+  const contact = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param('id'), c.get('owner')).first<Contact>();
+  return contact ? c.json({ contact: contactPreview(contact) }) : c.json({ error: 'Contact not found' }, 404);
+});
+
+// The voice is shared identity: only the creator chooses it, from the catalog.
+contacts.put('/:id/voice', contactBody, async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!body || Object.keys(body).join(',') !== 'voiceID' || typeof body.voiceID !== 'string') {
+    return c.json({ error: 'Provide only voiceID' }, 400);
+  }
+  const member = await c.env.DB.prepare(`SELECT agent_id AS agentID, ${managesAgent} AS creator FROM contact WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param('id'), c.get('owner')).first<{ agentID: string; creator: number }>();
+  if (!member) return c.json({ error: 'Contact not found' }, 404);
+  if (!member.creator) return c.json({ error: 'Only the creator can edit this contact' }, 403);
+  if (!await voiceRepliesAvailable(c.env)) return c.json({ error: 'Voice messages are unavailable' }, 503);
+  let voice: Voice | undefined;
+  try { voice = (await listVoices(c.env)).find(item => item.id === body.voiceID); }
+  catch { return c.json({ error: 'Voices are unavailable right now' }, 503); }
+  if (!voice) return c.json({ error: 'Choose an available voice' }, 422);
+  await c.env.DB.prepare('UPDATE contact_agent SET voice_id = ?, voice_name = ? WHERE id = ? AND owner_id = ?')
+    .bind(voice.id, voice.name, member.agentID, c.get('owner')).run();
   const contact = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
     .bind(c.req.param('id'), c.get('owner')).first<Contact>();
   return contact ? c.json({ contact: contactPreview(contact) }) : c.json({ error: 'Contact not found' }, 404);

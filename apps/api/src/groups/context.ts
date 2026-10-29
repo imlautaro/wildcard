@@ -9,6 +9,7 @@ import { reactionColumns, reactionJoins, type Reaction } from '../reactions/data
 import { readEnergy } from './energy';
 import { agentMemoryContext, readAgentMemories } from '../chat/agent-memory';
 import { storedAttachment } from '../chat/attachments';
+import { isVoice } from '../voice/speech';
 import { clipText, readMemories } from '../chat/memory';
 import { rankMemories } from '../chat/semantic-memory';
 import { isRecord, type ModelMessage } from '../chat/meta';
@@ -63,7 +64,10 @@ export const visibleMessage = `(?3 = 0 OR gm.contributor_consent = 1)
     WHERE author.group_id = gm.group_id AND author.agent_id = gm.agent_id))`;
 const messageColumns = `gm.sequence, gm.sender_name AS name, gm.user_id AS userID, gm.agent_id AS agentID,
   gm.id, gm.attachment_json AS attachmentJSON, gm.text, gm.created_at AS createdAt, gm.reply_to_id AS replyToID`;
-const fileMarker = (attachmentJSON: string | null) => attachmentJSON ? { name: storedAttachment({ attachmentJSON })?.name, bytesOmitted: true } : null;
+// A voice message's text is its transcript (empty when no speech was recognized).
+const fileMarker = (attachmentJSON: string | null) => !attachmentJSON ? null
+  : isVoice(storedAttachment({ attachmentJSON })) ? { voiceMessage: true, textIsTranscript: true }
+  : { name: storedAttachment({ attachmentJSON })?.name, bytesOmitted: true };
 
 // Quoted messages pass the same author/consent filter; otherwise only their ID is disclosed.
 function replyContext(replyToID: string | null, quoted: Map<string, GroupContextMessage>) {
@@ -218,8 +222,9 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
         .filter((message) => message.sequence > previous.throughSequence).map(describe), newMessagesMayBeTruncated: true } : {}),
     }) },
   ];
-  const file = row.attachmentJSON ? { attachmentJSON: row.attachmentJSON, text: row.text, name: row.senderName }
-    : history.find((message) => message.attachmentJSON);
+  const isFile = (attachmentJSON: string | null) => !!attachmentJSON && !isVoice(storedAttachment({ attachmentJSON }));
+  const file = isFile(row.attachmentJSON) ? { attachmentJSON: row.attachmentJSON!, text: row.text, name: row.senderName }
+    : history.find((message) => isFile(message.attachmentJSON));
   return { input: {
     messages,
     scope: { agentID: row.agentID, userID: row.userID, groupID: row.groupID,

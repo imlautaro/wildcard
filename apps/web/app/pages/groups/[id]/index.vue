@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DraftAttachment, GroupMember, GroupMessage, ReplyQuote } from '~/utils/types';
+import type { DraftAttachment, DraftVoice, GroupMember, GroupMessage, ReplyQuote } from '~/utils/types';
 
 const route = useRoute();
 const groupID = computed(() => String(route.params.id));
@@ -101,7 +101,7 @@ async function showQuoted(quote: ReplyQuote) {
   clearTimeout(highlightTimer);
   highlightTimer = setTimeout(() => { highlighted.value = null; }, 1200);
 }
-function attachmentPath(message: GroupMessage) {
+function attachmentPath(message: { id: string }) {
   return `groups/${groupID.value}/messages/${message.id}/attachment`;
 }
 
@@ -134,6 +134,15 @@ async function onSend(text: string, attachment: DraftAttachment | null) {
   await send(text, attachment);
   scrollToBottom();
 }
+async function onVoice(clip: DraftVoice) {
+  scrollToBottom();
+  await send('', null, clip);
+  scrollToBottom();
+}
+// Contact voice messages keep the spoken text as their transcript.
+function transcriptOf(message: GroupMessage) {
+  return message.agentID ? message.text : message.voice?.transcript ?? null;
+}
 
 // Recipient read receipts: a message from someone else counts as read once at
 // least half of it is on screen while the tab is visible.
@@ -153,7 +162,7 @@ watch(items, () => nextTick(observeRows));
 
 // One-second tick while visible, like the iOS session synchronizer.
 const { now: pollNow } = usePolling(refresh, () => 1000);
-watch(groupID, async () => { scrollToBottom(); rescan(); await pollNow(); });
+watch(groupID, async () => { stopVoicePlayback(); scrollToBottom(); rescan(); await pollNow(); });
 onMounted(async () => {
   observer = new IntersectionObserver((entries) => {
     if (document.visibilityState !== 'visible') return;
@@ -167,6 +176,7 @@ onMounted(async () => {
   composer.value?.focus();
 });
 onBeforeUnmount(() => {
+  stopVoicePlayback();
   clearTimeout(highlightTimer);
   observer?.disconnect();
   document.removeEventListener('visibilitychange', onVisibility);
@@ -225,15 +235,17 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
           <div v-if="!isMine(item.message)" class="avatar-slot">
             <AppAvatar v-if="item.last" :name="item.message.senderName" :path="senderPhoto(item.message)" :size="28" />
           </div>
-          <MessageReactions :cache="state.reactions" :path="`groups/${groupID}/reactions`" :message-i-d="item.message.id" side="group" :replyable="canReply" @reply="startReply(item.message)">
+          <MessageReactions :cache="state.reactions" :path="`groups/${groupID}/reactions`" :message-i-d="item.message.id" side="group" :replyable="canReply"
+            :voice="!!item.message.voice" :transcript="transcriptOf(item.message)" @reply="startReply(item.message)">
           <div class="bubble" :class="{ media: item.message.attachment?.mimeType.startsWith('image/') }">
             <span
               v-if="!isMine(item.message) && item.first" class="sender"
               :style="[senderStyle(item.message), item.message.attachment?.mimeType.startsWith('image/') ? { padding: '4px 8px 0' } : {}]"
             >{{ senderOf(item.message)?.name ?? item.message.senderName }}</span>
             <MessageReplyQuote v-if="item.message.replyTo" :preview="replyPreview(item.message.replyTo)" interactive @open="showQuoted(item.message.replyTo)" />
-            <MessageAttachment v-if="item.message.attachment" :attachment="item.message.attachment" :path="attachmentPath(item.message)" />
-            <div v-if="item.message.text" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }"><MessageMarkdown v-if="item.message.agentID" :text="item.message.text" /><template v-else>{{ item.message.text }}</template></div>
+            <VoiceMessage v-if="item.message.voice" :voice="item.message.voice" :path="attachmentPath(item.message)" :outgoing="isMine(item.message)" />
+            <MessageAttachment v-else-if="item.message.attachment" :attachment="item.message.attachment" :path="attachmentPath(item.message)" />
+            <div v-if="item.message.text && !item.message.voice" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }"><MessageMarkdown v-if="item.message.agentID" :text="item.message.text" /><template v-else>{{ item.message.text }}</template></div>
             <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => a.replyID === item.message.id)" :key="app.id" :app="app" :base="`groups/${groupID}`" />
             <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.message.id)" :key="doc.id" :document="doc" :to="`/groups/${groupID}/documents/${doc.id}`" />
             <div class="meta" :style="item.message.attachment?.mimeType.startsWith('image/') ? 'padding: 0 6px 2px' : ''">
@@ -254,6 +266,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
         <div class="bubble-row outgoing">
           <div class="bubble" :class="{ media: state.pending.attachment?.previewURL }">
             <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
+            <VoiceMessage v-if="state.pending.voice" :voice="{ durationMs: state.pending.voice.durationMs, listenedAt: null, transcript: null }" :path="attachmentPath(state.pending)" :blob="state.pending.voice.blob" outgoing />
             <MessageAttachment v-if="state.pending.attachment" :attachment="state.pending.attachment" :path="null" :local-url="state.pending.attachment.previewURL" />
             <div v-if="state.pending.text" :class="{ caption: state.pending.attachment?.previewURL }">{{ state.pending.text }}</div>
             <div class="meta" :style="state.pending.attachment?.previewURL ? 'padding: 0 6px 2px' : ''">
@@ -264,7 +277,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
         <div v-if="state.pending.failed" class="status-line outgoing error">
           {{ state.pending.failed }}
           <button class="link-button" @click="submit">Retry</button>
-          <button class="link-button danger" @click="discardPending">Edit</button>
+          <button class="link-button danger" @click="discardPending">{{ state.pending.voice ? 'Delete' : 'Edit' }}</button>
         </div>
       </template>
 
@@ -279,7 +292,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
     </div>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded" :reply="replyTarget"
-      :transcription-path="`groups/${groupID}/transcriptions`" @send="onSend" @cancel-reply="state.replyTo = null"
+      :voice-key="groupID" @send="onSend" @voice="onVoice" @cancel-reply="state.replyTo = null"
     />
   </template>
 </template>

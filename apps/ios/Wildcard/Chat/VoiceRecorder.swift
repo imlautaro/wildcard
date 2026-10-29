@@ -2,11 +2,15 @@ import AVFAudio
 import Foundation
 import Observation
 
+/// Captures one voice message as mono 16 kHz PCM16 WAV in a protected temporary file.
+/// The clip is read into memory by `takeClip()` and the file is deleted immediately.
 @Observable @MainActor
 final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
-    enum Phase { case idle, requestingPermission, recording, ready, transcribing, failed }
+    enum Phase { case idle, requestingPermission, recording, ready, failed }
     private(set) var phase: Phase = .idle
     private(set) var error: String?
+    /// Non-error guidance, such as after a press that was too short to record.
+    var hint: String?
     private var recorder: AVAudioRecorder?
     private var ownsAudioSession = false
     private var directory: URL?
@@ -27,15 +31,18 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         }
     }
 
-    var hasRecording: Bool { file != nil && (phase == .ready || phase == .transcribing || phase == .failed) }
-    var isBusy: Bool { phase == .requestingPermission || phase == .recording || phase == .ready || phase == .transcribing }
+    var isBusy: Bool { phase == .requestingPermission || phase == .recording || phase == .ready }
     var elapsed: Int { min(60, max(0, Int(startedAt.map { Date().timeIntervalSince($0) } ?? 0))) }
+    static let minimumDuration: TimeInterval = 0.5
+    static let shortHint = "Hold to record, release to send."
 
     func start() async {
         guard !isBusy else { return }
         cancel()
         let current = operation
         phase = .requestingPermission
+        // The press that shows the system prompt only grants access; the next press records.
+        let prompted = AVAudioApplication.shared.recordPermission == .undetermined
         let allowed = await AVAudioApplication.requestRecordPermission()
         guard current == operation, !Task.isCancelled else { return }
         guard allowed else {
@@ -43,7 +50,14 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             error = "Microphone access is disabled. Enable it for Wildcard in Settings to record audio."
             return
         }
+        guard !prompted else {
+            phase = .idle
+            hint = Self.shortHint
+            return
+        }
         do {
+            // Recording takes the shared session from any voice message that is playing.
+            VoicePlayer.shared.isRecording = true
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .default)
             try session.setActive(true)
@@ -76,9 +90,36 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         }
     }
 
-    func stop() {
-        guard phase == .recording else { return }
+    /// Ends recording; `phase` becomes `.ready` when the file is complete.
+    /// Returns `false` and discards a clip shorter than half a second.
+    @discardableResult
+    func stop() -> Bool {
+        guard phase == .recording else { return false }
+        guard let startedAt, Date().timeIntervalSince(startedAt) >= Self.minimumDuration else {
+            cancel()
+            hint = Self.shortHint
+            return false
+        }
         recorder?.stop()
+        return true
+    }
+
+    /// Reads the finished recording and deletes its temporary file.
+    func takeClip() -> VoiceClip? {
+        guard phase == .ready, let file else { return nil }
+        let size = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        let data = (44...(2 * 1024 * 1024)).contains(size) ? try? Data(contentsOf: file) : nil
+        cancel()
+        guard let data, let duration = VoiceClip.wavDurationMs(data) else {
+            phase = .failed
+            error = "This recording could not be read. Please record again."
+            return nil
+        }
+        guard duration >= Int(Self.minimumDuration * 1000) else {
+            hint = Self.shortHint
+            return nil
+        }
+        return VoiceClip(data: data, durationMs: min(duration, 60_000))
     }
 
     func cancel() {
@@ -93,9 +134,11 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         startedAt = nil
         phase = .idle
         error = nil
+        hint = nil
     }
 
     private func deactivateAudioSession() {
+        if VoicePlayer.shared.isRecording { VoicePlayer.shared.isRecording = false }
         guard ownsAudioSession else { return }
         ownsAudioSession = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -109,35 +152,6 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         cancel()
         phase = .failed
         error = "Recording was interrupted. Please record again."
-    }
-
-    func transcribe(contactID: String, groupID: String? = nil, using auth: AuthStore) async -> String? {
-        guard hasRecording, phase == .ready || phase == .failed, let file else { return nil }
-        let current = operation
-        phase = .transcribing
-        error = nil
-        do {
-            let size = (try file.resourceValues(forKeys: [.fileSizeKey])).fileSize ?? 0
-            guard (44...(2 * 1024 * 1024)).contains(size) else { throw RecordingFailure() }
-            let audio = try Data(contentsOf: file)
-            let text = try await auth.withSession { api, token in
-                if let groupID { return try await api.transcribeGroupAudio(groupID: groupID, audio: audio, token: token) }
-                return try await api.transcribeAudio(contactID: contactID, audio: audio, token: token)
-            }
-            try Task.checkCancellation()
-            guard current == operation else { return nil }
-            cancel()
-            return text
-        } catch {
-            guard current == operation else { return nil }
-            if Task.isCancelled || error is CancellationError {
-                cancel()
-            } else {
-                phase = .failed
-                self.error = (error is RecordingFailure || error is CocoaError) ? "This recording could not be read. Please record again." : error.localizedDescription
-            }
-            return nil
-        }
     }
 
     nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {

@@ -4,6 +4,7 @@ import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readPhoto, validPhoto, removePhoto } from '../photos/storage';
 import { contributorModel, validChatModel } from '../lib/model-preference';
+import { voiceRepliesAvailable } from '../voice/catalog';
 
 type Profile = { id: string; name: string; email: string; emailVerified: number; photoVersion: string | null; chatModel: string; onboardingRequired: number };
 const columns = 'id, name, email, email_verified AS emailVerified, photo_version AS photoVersion, chat_model AS chatModel, onboarding_required AS onboardingRequired';
@@ -21,7 +22,8 @@ me.use('*', async (c, next) => {
 me.get('/', async (c) => {
   const row = await c.env.DB.prepare(`SELECT ${columns} FROM user WHERE id = ?`).bind(c.get('owner')).first<Profile>();
   if (!row) return c.json({ error: 'Unauthorized' }, 401);
-  return c.json({ user: responseUser(row) });
+  // Runtime flags that change client behavior (docs/admin.md).
+  return c.json({ user: responseUser(row), features: { voiceMessages: await voiceRepliesAvailable(c.env) } });
 });
 
 me.patch('/', bodyLimit({ maxSize: 4096 }), async (c) => {

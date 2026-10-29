@@ -4,6 +4,10 @@ BETTER_AUTH_SECRET=replace-with-a-random-secret-of-at-least-32-characters
 # Optional locally; required for generating replies. Never commit a real key.
 META_API_KEY=
 
+# Optional: contact voices and spoken voice messages (docs/voice.md). Also turn on
+# "Contact voice messages" in the admin panel. Never commit a real key.
+# ELEVENLABS_API_KEY=
+
 # Each account selects its model in Account. New/existing accounts default to Standard.
 META_CHAT_MODEL=muse-spark-1.3
 

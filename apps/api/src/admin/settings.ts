@@ -7,6 +7,11 @@ export const settingDefinitions = {
     description: 'Allow anyone to create a Wildcard account on iOS and the web. Existing accounts can always sign in.',
     defaultValue: true,
   },
+  voice_messages_enabled: {
+    label: 'Contact voice messages',
+    description: 'Let contacts reply with synthesized voice messages (ElevenLabs) and show the voice settings in contact details. Requires ELEVENLABS_API_KEY. People can always send voice messages.',
+    defaultValue: false,
+  },
 } as const satisfies Record<string, { label: string; description: string; defaultValue: boolean }>;
 
 export type SettingKey = keyof typeof settingDefinitions;

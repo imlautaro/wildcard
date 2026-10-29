@@ -8,8 +8,11 @@ private struct MessageReactionsModifier: ViewModifier {
     let fromUser: Bool
     let enabled: Bool
     let onReply: (() -> Void)?
+    /// `.some` for voice messages: the transcript, `nil` while transcribing, empty without speech.
+    let transcript: String??
     @Environment(AuthStore.self) private var auth
     @State private var showsPicker = false
+    @State private var showsTranscript = false
     private var key: String { "\(messageID)/\(side)" }
     private var rows: [MessageReaction] { store.rows.filter { $0.messageID == messageID && $0.side == side } }
     private var own: String? { rows.first { $0.actorID == "user/\(auth.user?.id ?? "")" }?.emoji }
@@ -26,6 +29,7 @@ private struct MessageReactionsModifier: ViewModifier {
                 .accessibilityAction(named: "React to message") { if enabled { showsPicker = true } }
                 .accessibilityActions {
                     if enabled, let onReply { Button("Reply", action: onReply) }
+                    if transcript != nil { Button("View transcript") { showsTranscript = true } }
                 }
             if !rows.isEmpty {
                 HStack(spacing: 4) {
@@ -70,6 +74,16 @@ private struct MessageReactionsModifier: ViewModifier {
                         onReply()
                     }
                 }
+                if transcript != nil {
+                    Button("View transcript", systemImage: "text.quote") {
+                        showsPicker = false
+                        // Present after the popover has dismissed; UIKit rejects overlapping presentations.
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(350))
+                            showsTranscript = true
+                        }
+                    }
+                }
                 if own != nil { Button("Remove reaction") { choose(nil) }.disabled(store.busy.contains(key)) }
                 if !rows.isEmpty {
                     ScrollView {
@@ -82,12 +96,15 @@ private struct MessageReactionsModifier: ViewModifier {
             .padding(12)
             .presentationCompactAdaptation(.popover)
         }
+        // Reads the current value, so an open sheet updates when transcription finishes.
+        .sheet(isPresented: $showsTranscript) { VoiceTranscriptSheet(transcript: transcript ?? nil) }
     }
 }
 
 extension View {
     func messageReactions(_ store: MessageReactionStore, path: String, messageID: String, side: String, fromUser: Bool, enabled: Bool = true,
-                          onReply: (() -> Void)? = nil) -> some View {
-        modifier(MessageReactionsModifier(store: store, path: path, messageID: messageID, side: side, fromUser: fromUser, enabled: enabled, onReply: onReply))
+                          onReply: (() -> Void)? = nil, transcript: String?? = nil) -> some View {
+        modifier(MessageReactionsModifier(store: store, path: path, messageID: messageID, side: side, fromUser: fromUser, enabled: enabled, onReply: onReply,
+                                          transcript: transcript))
     }
 }

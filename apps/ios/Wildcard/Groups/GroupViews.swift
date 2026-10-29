@@ -172,7 +172,8 @@ struct GroupChatView: View {
     @State private var attachmentTask: Task<Void, Never>?
     @State private var draftRevision = 0
     @State private var voice = VoiceRecorder()
-    @State private var voiceTask: Task<Void, Never>?
+    @State private var voiceLocked = false
+    @State private var voiceDrag: CGFloat = 0
     @State private var nearBottom = true
     @State private var composerBarHeight: CGFloat = 0
     @State private var historyPosition = ChatHistoryPosition()
@@ -188,15 +189,12 @@ struct GroupChatView: View {
     private var canSend: Bool {
         (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachment != nil) && draft.unicodeScalars.count <= 4000
             && !store.isSending && store.pendingID == nil && store.snapshot != nil
-            && !voice.isBusy && !voice.hasRecording && !isLoadingAttachment
+            && !voice.isBusy && !isLoadingAttachment
     }
     private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachment == nil }
+    /// A pending or failed voice message must be resolved before recording another.
     private var canUseMicrophone: Bool {
-        store.snapshot != nil && !store.isSending && store.pendingID == nil && !voice.isBusy && !isLoadingAttachment
-    }
-    private var actionEnabled: Bool {
-        if voice.phase == .recording { return true }
-        return draftIsEmpty ? canUseMicrophone : canSend
+        voice.isBusy || (store.snapshot != nil && !store.isSending && store.pendingID == nil && store.failedVoice == nil && !isLoadingAttachment)
     }
     private var workingReplies: [GroupReply] {
         (store.snapshot?.replies ?? []).filter { $0.taskID != nil && ($0.status == "queued" || $0.status == "running") }
@@ -225,7 +223,8 @@ struct GroupChatView: View {
     }
     private func reply(to message: GroupMessage) {
         guard store.snapshot != nil else { return }
-        replyTarget = .local(messageID: message.id, side: "group", text: message.text, attachment: message.attachment,
+        // The server quotes voice messages as "Voice message"; match it locally.
+        replyTarget = .local(messageID: message.id, side: "group", text: message.voice != nil ? "Voice message" : message.text, attachment: message.attachment,
                              userID: message.userID, agentID: message.agentID, senderName: message.senderName)
         composerFocused = true
     }
@@ -304,6 +303,11 @@ struct GroupChatView: View {
                     }
                     if let pending = store.pendingText {
                         let pendingQuote = store.pendingReplyTo.map(replyPreview)
+                        if let clip = store.pendingVoice {
+                            VoiceMessageView(resource: .groupVoice(groupID: groupID, messageID: store.pendingID ?? "pending"), voice: clip.metadata,
+                                             sentAt: store.pendingSentAt ?? 0, fromUser: true, receiptState: "sent", isSending: !store.pendingAccepted,
+                                             localData: clip.data, replyQuote: pendingQuote)
+                        }
                         if let file = store.pendingAttachment {
                             ChatAttachmentView(attachment: ChatAttachment(name: file.name, mimeType: file.mimeType, size: file.data.count),
                                                contactID: groupID, turnID: store.pendingID ?? "pending", groupID: groupID,
@@ -442,11 +446,16 @@ struct GroupChatView: View {
             }
         }
         .onChange(of: voice.phase) { _, phase in
-            if phase == .ready { transcribeRecording() }
+            if phase == .ready { sendRecording() }
+        }
+        .task(id: voice.hint) {
+            guard voice.hint != nil else { return }
+            do { try await Task.sleep(for: .seconds(4)) } catch { return }
+            voice.hint = nil
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { noteVisibleMessagesRead() }
-            if phase == .background { cancelRecording(); attachmentTask?.cancel() }
+            if phase == .background { cancelRecording(); VoicePlayer.shared.stop(); attachmentTask?.cancel() }
         }
         .onChange(of: store.hasLoadedMessages) { _, loaded in
             if loaded { animateNewMessages = true }
@@ -479,6 +488,7 @@ struct GroupChatView: View {
                 MessageSounds.shared.visibleContactID = nil
             }
             cancelRecording()
+            VoicePlayer.shared.stop()
             attachmentTask?.cancel()
             quoteTask?.cancel()
         }
@@ -516,36 +526,24 @@ struct GroupChatView: View {
                 }
             }
             if let pending = store.pendingText, !store.isSending, !store.pendingAccepted {
-                Button("Retry sending") { send(pending, file: store.pendingAttachment, reply: store.pendingReplyTo, proxy: proxy) }
+                Button("Retry sending") {
+                    if let clip = store.pendingVoice { sendVoice(clip, reply: store.pendingReplyTo) }
+                    else { send(pending, file: store.pendingAttachment, reply: store.pendingReplyTo, proxy: proxy) }
+                }
                     .manrope(.footnote).frame(maxWidth: .infinity, alignment: .leading)
             }
             if let error = voice.error {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(error).manrope(.footnote).foregroundStyle(.red)
-                    if voice.hasRecording {
-                        HStack {
-                            Button("Retry transcription") { transcribeRecording() }
-                            Button("Discard recording", role: .destructive) { cancelRecording() }
-                        }.manrope(.footnote)
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading)
+                Text(error).manrope(.footnote).foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if voice.phase == .recording {
-                HStack {
-                    Image(systemName: "waveform").foregroundStyle(.red)
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        Text("Recording \(voice.elapsed / 60):\(String(format: "%02d", voice.elapsed % 60)) / 1:00").monospacedDigit()
-                    }
-                    Spacer()
-                    Button("Cancel") { cancelRecording() }
-                }.manrope(.footnote)
-            } else if voice.phase == .transcribing || voice.phase == .ready {
-                HStack {
-                    ProgressView()
-                    Text("Transcribing…")
-                    Spacer()
-                    Button("Cancel") { cancelRecording() }
-                }.manrope(.footnote)
+            if let hint = voice.hint {
+                Text(hint).manrope(.footnote).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let failed = store.failedVoice, !store.isSending {
+                FailedVoiceMessageRow(clip: failed.clip, isBusy: store.isSending || store.pendingID != nil || store.snapshot == nil,
+                                      retry: { sendVoice(failed.clip, reply: failed.replyTo) },
+                                      discard: { store.discardFailedVoice() })
             }
             if let attachmentError {
                 Text(attachmentError).manrope(.footnote).foregroundStyle(.red)
@@ -582,33 +580,34 @@ struct GroupChatView: View {
                 }.padding(10).background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
             }
             HStack(alignment: .bottom, spacing: 12) {
-                Menu {
-                    Button("Photo library", systemImage: "photo.on.rectangle") { showPhotoPicker = true }
-                    Button("Choose file", systemImage: "doc") { showFilePicker = true }
-                } label: {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 20, weight: .medium))
-                        .frame(width: composerControlHeight, height: composerControlHeight)
-                        .contentShape(Circle())
+                if voice.isBusy {
+                    VoiceRecordingBar(recorder: voice, locked: voiceLocked, dragOffset: voiceDrag, onDelete: cancelRecording)
+                } else {
+                    Menu {
+                        Button("Photo library", systemImage: "photo.on.rectangle") { showPhotoPicker = true }
+                        Button("Choose file", systemImage: "doc") { showFilePicker = true }
+                    } label: {
+                        Image(systemName: "paperclip")
+                            .font(.system(size: 20, weight: .medium))
+                            .frame(width: composerControlHeight, height: composerControlHeight)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: Circle())
+                    .accessibilityLabel("Add attachment")
+                    .disabled(store.snapshot == nil || store.isSending || store.pendingID != nil || isLoadingAttachment)
+                    TextField("Message", text: Binding(get: { draft }, set: { draftRevision += 1; draft = $0 }), axis: .vertical)
+                        .focused($composerFocused)
+                        .chatComposerFieldStyle()
+                        .disabled(store.snapshot == nil)
                 }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: Circle())
-                .accessibilityLabel("Add attachment")
-                .disabled(store.snapshot == nil || store.isSending || store.pendingID != nil || voice.isBusy || voice.hasRecording || isLoadingAttachment)
-                TextField("Message", text: Binding(get: { draft }, set: { draftRevision += 1; draft = $0 }), axis: .vertical)
-                    .focused($composerFocused)
-                    .chatComposerFieldStyle()
-                    .disabled(store.snapshot == nil || voice.isBusy || voice.hasRecording)
-                ChatComposerActionButton(
-                    symbol: voice.phase == .recording ? "stop.fill" : (draftIsEmpty ? "mic.fill" : "arrow.up"),
-                    label: voice.phase == .recording ? "Stop recording and transcribe" : (draftIsEmpty ? "Record audio" : "Send message"),
-                    isEnabled: actionEnabled, tint: voice.phase == .recording ? .red : .accentColor
-                ) {
-                    if voice.phase == .recording { voice.stop() }
-                    else if draftIsEmpty {
+                // The microphone keeps its identity while recording so the hold gesture continues.
+                if draftIsEmpty {
+                    VoiceRecordButton(recorder: voice, isEnabled: canUseMicrophone, locked: $voiceLocked, dragOffset: $voiceDrag) {
                         composerFocused = false
-                        voiceTask = Task { await voice.start() }
-                    } else {
+                    }
+                } else {
+                    ChatComposerActionButton(symbol: "arrow.up", label: "Send message", isEnabled: canSend) {
                         guard canSend else { return }
                         send(draft, file: attachment, reply: replyTarget, proxy: proxy)
                     }
@@ -630,18 +629,23 @@ struct GroupChatView: View {
     }
 
     private func cancelRecording() {
-        voiceTask?.cancel()
-        voiceTask = nil
         voice.cancel()
+        voiceLocked = false
+        voiceDrag = 0
     }
-    private func transcribeRecording() {
-        voiceTask?.cancel()
-        voiceTask = Task {
-            if let text = await voice.transcribe(contactID: groupID, groupID: groupID, using: auth), !Task.isCancelled {
-                draftRevision += 1
-                draft = draft.isEmpty ? text : draft + " " + text
-                composerFocused = true
-            }
+    /// Sends a finished recording at once, quoting the current reply target.
+    private func sendRecording() {
+        guard let clip = voice.takeClip() else { return }
+        let reply = replyTarget
+        replyTarget = nil
+        sendVoice(clip, reply: reply)
+    }
+    private func sendVoice(_ clip: VoiceClip, reply: MessageReplyQuote?) {
+        nearBottom = true
+        Task {
+            _ = await store.send("", voice: clip, replyTo: reply, id: groupID, auth: auth)
+            sync.request(.group(groupID))
+            scrollToLatest()
         }
     }
     private func selectFile(_ url: URL) throws {
@@ -703,13 +707,18 @@ private struct GroupMessageRow: View {
         HStack(alignment: .bottom, spacing: 8) {
             if !own { GroupAvatar(member: sender, groupID: groupID, size: 30) }
             VStack(alignment: .leading, spacing: 4) {
-                if let file = message.attachment {
+                if let voice = message.voice {
+                    VoiceMessageView(resource: .groupVoice(groupID: groupID, messageID: message.id), voice: voice, sentAt: message.createdAt,
+                                     fromUser: own, receiptState: message.receiptState ?? "sent", showsReceipt: own,
+                                     senderName: own ? nil : (sender?.name ?? message.senderName),
+                                     senderColor: senderColor, replyQuote: replyQuote, onQuoteTap: onQuoteTap)
+                } else if let file = message.attachment {
                     ChatAttachmentView(attachment: file, contactID: groupID, turnID: message.id, groupID: groupID,
                                        sentAt: message.createdAt, caption: file.isImage ? message.text : "", receiptState: message.receiptState ?? "sent", fromUser: own, showsReceipt: own, formatsMarkdown: message.agentID != nil,
                                        senderName: own ? nil : (sender?.name ?? message.senderName),
                                       senderColor: senderColor, replyQuote: replyQuote, onQuoteTap: onQuoteTap)
                 }
-                if !message.text.isEmpty && message.attachment?.isImage != true {
+                if message.voice == nil && !message.text.isEmpty && message.attachment?.isImage != true {
                     MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, receiptState: message.receiptState ?? "sent", showsReceipt: own, formatsMarkdown: message.agentID != nil,
                                       senderName: own ? nil : (sender?.name ?? message.senderName),
                                       senderColor: senderColor, replyQuote: message.attachment == nil ? replyQuote : nil, onQuoteTap: onQuoteTap,
@@ -718,15 +727,17 @@ private struct GroupMessageRow: View {
                                           ForEach(documents) { DocumentCardView(document: $0, base: "groups/\(groupID)", caches: groups.conversations.documents, embedded: true) }
                                       }))
                 }
-                if message.text.isEmpty || message.attachment?.isImage == true {
+                if message.text.isEmpty || message.attachment?.isImage == true || message.voice != nil {
                     ForEach(apps) { MiniAppCardView(app: $0, base: "groups/\(groupID)") }
                     ForEach(documents) { DocumentCardView(document: $0, base: "groups/\(groupID)", caches: groups.conversations.documents) }
                 }
             }
         }
         .swipeToReply(enabled: canReply, action: onReply)
+        // A contact voice message's transcript is the text it spoke.
         .messageReactions(groups.conversations.store(for: groupID).reactions, path: "groups/\(groupID)/reactions", messageID: message.id, side: "group", fromUser: own,
-                          onReply: canReply ? onReply : nil)
+                          onReply: canReply ? onReply : nil,
+                          transcript: message.voice.map { $0.transcript ?? (message.agentID != nil ? message.text : nil) })
         .onScrollVisibilityChange(threshold: 0.5) { isOnScreen = $0 }
         .task(id: "\(message.id)-\(isOnScreen)-\(scenePhase)") {
             guard isOnScreen, scenePhase == .active, !own else { return }

@@ -9,6 +9,7 @@ import { parseContactGeneration, type ContactGenerationInput } from '../../../..
 import { type OnboardingInput } from '../../../../shared/onboarding';
 import { photoKey } from '../photos/storage';
 import { generatePortrait } from './portrait';
+import { agentVoice, voiceRepliesAvailable } from '../voice/catalog';
 
 type Plan = { id: string; name: string; portrait: string; age: number; gender: 'male' | 'female'; description: string; personality: Personality };
 export async function generateIdentity(env: Env, owner: string, input: ContactGenerationInput | null, existing?: { name: string; personality: Personality }): Promise<Plan> {
@@ -119,10 +120,17 @@ export async function runContactGeneration(env: Env, owner: string, id: string, 
       if (!row || row.status === 'complete') return;
       const now = Date.now();
       await env.DB.batch([
-        env.DB.prepare('INSERT INTO contact (id, user_id, name, photo_version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').bind(plan.id, owner, plan.name, plan.id, now, now),
+        env.DB.prepare('INSERT INTO contact (id, user_id, name, photo_version, created_at, updated_at, voice_messages_enabled) VALUES (?, ?, ?, ?, ?, ?, 1)').bind(plan.id, owner, plan.name, plan.id, now, now),
+        // The insert trigger created the agent; keep the demographics for its voice.
+        env.DB.prepare('UPDATE contact_agent SET voice_profile_json = ? WHERE id = ?').bind(JSON.stringify({ gender: plan.gender, age: plan.age }), plan.id),
         env.DB.prepare('INSERT INTO agent_personality (agent_id, profile_json, updated_at) VALUES (?, ?, ?)').bind(plan.id, JSON.stringify(plan.personality), now),
         env.DB.prepare("UPDATE contact_generation SET status = 'complete', contact_id = ?, updated_at = ? WHERE id = ? AND user_id = ?").bind(plan.id, now, id, owner),
       ]);
+    });
+    // Best effort: without a key or catalog, the voice is chosen when first needed.
+    await step.do('contact-voice', async () => {
+      try { if (await voiceRepliesAvailable(env)) await agentVoice(env, plan.id); }
+      catch { console.error(JSON.stringify({ event: 'contact_voice_deferred' })); }
     });
   } catch (error) {
     await step.do('contact-failed', async () => {

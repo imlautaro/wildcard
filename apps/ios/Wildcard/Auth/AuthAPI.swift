@@ -8,6 +8,18 @@ struct AuthUser: Codable, Sendable {
     var onboardingRequired: Bool? = nil
     var chatModel: String? = nil
     var photoVersion: String? = nil
+    /// Runtime flags from `GET /me`; other profile responses omit them, so the store keeps the last value.
+    var features: AccountFeatures? = nil
+}
+
+struct AccountFeatures: Codable, Equatable, Sendable {
+    var voiceMessages = false
+
+    init() { }
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        voiceMessages = try container.decodeIfPresent(Bool.self, forKey: .voiceMessages) ?? false
+    }
 }
 
 struct AuthAPI: Sendable {
@@ -53,6 +65,7 @@ struct AuthAPI: Sendable {
         let password: String
     }
     private struct UserResponse: Decodable { let user: AuthUser }
+    private struct MeResponse: Decodable { let user: AuthUser; let features: AccountFeatures? }
     private struct ErrorResponse: Decodable { let error: String }
 
     private let session: URLSession
@@ -87,7 +100,10 @@ struct AuthAPI: Sendable {
 
     func currentUser(token: String) async throws -> AuthUser {
         let (data, _) = try await send(path: "me", token: token)
-        return try JSONDecoder().decode(UserResponse.self, from: data).user
+        let response = try JSONDecoder().decode(MeResponse.self, from: data)
+        var user = response.user
+        user.features = response.features ?? AccountFeatures()
+        return user
     }
 
     func saveProfile(name: String, token: String) async throws -> AuthUser {

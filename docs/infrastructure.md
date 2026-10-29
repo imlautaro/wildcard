@@ -10,7 +10,8 @@
 | Runtime auth secret | `BETTER_AUTH_SECRET` | Signs cookies and native bearer sessions |
 | Cloudflare Workflow | `CHAT_WORKFLOW`, `wildcard-chat`, class `ChatWorkflow` | Durable reply generation |
 | Cron Trigger | `* * * * *` in Wrangler | Recover queued dispatch gaps and reconcile terminal workflows |
-| Meta Model API | Runtime `META_API_KEY`, `META_CHAT_MODEL` / `muse-voice-transcribe-1.0` | Generate replies and Muse Voice Transcribe dictation |
+| Meta Model API | Runtime `META_API_KEY`, `META_CHAT_MODEL` / `muse-voice-transcribe-1.0` | Generate replies and Muse Voice Transcribe transcription of voice messages |
+| ElevenLabs (optional) | Runtime secret `ELEVENLABS_API_KEY` | Contact voices and spoken voice messages; see [Voice messages](#voice-messages) |
 | Public origin | `BETTER_AUTH_URL` | Canonical auth origin, separate from the secret |
 | Workers Builds | GitHub `imlautaro/wildcard`, `main`, root `/` | Automatic releases from committed and pushed source |
 | Web Worker | `apps/web/wrangler.jsonc`, `wildcard-web` | Nuxt web app and same-origin API proxy; see [Web Worker](#web-worker) |
@@ -265,16 +266,34 @@ be reserved for explicitly authorized operations; releases already perform it.
 from Wrangler; `npm run typecheck` includes it. `npm run build` is a local dry run
 only and does not publish. Follow the repository's build/test preferences.
 
-## Voice transcription
+## Voice messages
 
-[Voice dictation](voice.md) reuses the existing Worker and `META_API_KEY`; it adds
-no resource, binding, migration, or new credential name. The Meta project must
-permit `muse-voice-transcribe-1.0`. Its route forwards bounded WAV audio to Meta
-without storing audio in D1/R2. Local setup and automatic releases use the same
-commands and secret handling described above. Independent accounts need model
-access in addition to the existing Cloudflare permissions. No key or model
-permission change was performed during implementation; runtime model access is
-unverified. The additive route can be rolled back without a schema rollback.
+[Voice messages](voice.md) need migration `0060_voice_messages.sql` (additive
+columns on `contact_agent`, `contact`, `chat_turn` and `group_message`). Audio uses
+the existing private `CONTACT_PHOTOS` bucket and attachment-object registry, so no
+new bucket, binding or Cron is needed.
+
+- **Transcription (required for voice messages):** the existing `META_API_KEY`. Its
+  Meta project must permit `muse-voice-transcribe-1.0`. Transcription runs in the
+  chat Workflow after sending; the stored WAV is read from R2.
+- **Speech and the voice catalog (optional):** an ElevenLabs API key with access to
+  text to speech and voices, stored as the runtime secret `ELEVENLABS_API_KEY`. It is
+  not in `secrets.required`, so releases succeed without it. In production, add it as
+  an encrypted build variable of the API's Workers Builds project; the release script
+  copies it to the runtime secret, like `META_API_KEY`, and preserves an existing
+  runtime key when the build omits it. Locally, add it to ignored
+  `apps/api/.dev.vars`. Never commit it.
+- **Operator flag:** contact voices stay off until a super admin turns on **Contact
+  voice messages** (`voice_messages_enabled`) in [the admin panel](admin.md). With the
+  flag on but no key, the feature remains off.
+
+Order: apply the migration through the normal automatic release, set the secret,
+then enable the flag. Rollback: turn the flag off (no release); the code can be
+reverted without a data rollback because the columns are additive and unused by
+older code. Older clients show contact voice messages as text.
+
+Unverified at implementation time: real ElevenLabs calls, the catalog's `age`
+label values, real Meta transcription of stored clips, and both clients on devices.
 
 ## Migrations, compatibility, and verification
 

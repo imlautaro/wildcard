@@ -294,6 +294,24 @@ it. Backgrounding/navigation close the visit best effort, and server TTLs expire
 lost clients. See [visit presence](chats.md#visiting-a-chat-and-composing-a-draft).
 
 
+## Voice message audio
+
+Voice message bytes use `VoiceAudioCache`, owned by `PrivateImageCache` so it shares
+the image cache's activation and every clear (sign-out, session expiry, account
+switch, contact deletion, contact/history 404, lost group membership). It keeps an
+8 MiB memory cache and a separate protected disk directory, `Caches/PrivateAudio-v1`,
+written by the same `ProtectedDiskCache` actor: complete file protection, excluded
+from backups, 64 MiB per account, least recently read eviction and seven-day idle
+expiry. Keys include the account directory, conversation ID, immutable message or
+turn ID, side and reply part. Concurrent requests share one download, failures are
+not cached (the bubble shows a retry button), and accepted outgoing clips seed the
+cache. A clip that failed to send stays in its session conversation store with its
+UUID until it is retried or deleted, and that store is not evicted meanwhile. The
+contact voice catalog is a session `NavigationSnapshotCache` on `ContactsStore`.
+See [voice messages](voice.md#ios-caching). Device verification is pending: replay
+after navigation and relaunch, offline replay of a cached clip, failed download
+retry, budget eviction and account switching.
+
 ## Group images
 
 Group avatar versions and message IDs use distinct `group/<id>/avatar/<version>`
@@ -404,8 +422,9 @@ caches.
   deduplicated (bounded to retained history), pending reads survive failures, and
   confirmed Home previews are bounded to the current preview IDs.
 - **Mutations.** Sends are optimistic. A pending send keeps its UUID, text, and
-  attachment across navigation and failures. Retry resends the same UUID (the API
-  treats it idempotently), and Edit moves the text back to the composer. Contact
+  attachment or recorded voice clip across navigation and failures. Retry resends the same UUID (the API
+  treats it idempotently), and Edit moves the text back to the composer (Delete
+  discards a failed voice message). Contact
   edits, deletions, group leave/delete, and read receipts update the list in place.
   A 404 marks the conversation unavailable and removes it from the list.
 - **Images.** Avatars and chat thumbnails are fetched through the proxy and kept as
@@ -420,6 +439,12 @@ caches.
   reopen, source replacement, navigation and account switching in a browser.
   PDF files open
   from a temporary blob URL that is revoked after a minute.
+- **Voice audio.** Voice message bytes and voice samples are object URLs in a
+  memory-only LRU bounded to 32 MiB per session, keyed by account ID and download
+  path, with deduplicated downloads, no caching of failures, seeding from accepted
+  outgoing clips and a full reset (playback stopped, URLs revoked) on sign-out and
+  account changes. The voice catalog loads once per session. See
+  [voice messages](voice.md#web-caching).
 - **Energy.** Creator energy uses up to eight memory-only snapshots reused
   synchronously on entry, with shared in-flight reads, a five-second refresh while
   the editor is visible, and a reset that invalidates earlier reads. A 404 drops the

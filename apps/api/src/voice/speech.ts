@@ -1,0 +1,101 @@
+import { Buffer } from 'node:buffer';
+import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
+import { isRecord } from '../chat/meta';
+import { normalizedRecording, transcribeRecording, TranscriptionFailure } from '../chat/transcription';
+import type { Attachment } from '../chat/attachments';
+import { agentVoice, elevenLabsKey, voiceRepliesAvailable } from './catalog';
+
+export type VoiceAttachment = Attachment & { durationMs: number };
+export type PublicVoice = { durationMs: number; listenedAt: number | null; transcript: string | null };
+export const isVoice = (attachment: Pick<Attachment, 'mimeType'> | null | undefined): attachment is VoiceAttachment =>
+  !!attachment?.mimeType.startsWith('audio/');
+
+// A person's voice message: base64 of the same bounded WAV that dictation accepted.
+export async function parseVoice(value: unknown): Promise<{ metadata: Omit<VoiceAttachment, 'key'>; bytes: Buffer } | null> {
+  if (!isRecord(value) || Object.keys(value).join(',') !== 'data' || typeof value.data !== 'string'
+    || value.data.length > Math.ceil(2 * 1024 * 1024 / 3) * 4 || /[^A-Za-z0-9+/=]/.test(value.data)) return null;
+  const decoded = Buffer.from(value.data, 'base64');
+  if (decoded.toString('base64') !== value.data) return null;
+  const wav = normalizedRecording(decoded.buffer.slice(decoded.byteOffset, decoded.byteOffset + decoded.byteLength) as ArrayBuffer);
+  if (!wav) return null;
+  const bytes = Buffer.from(wav);
+  const digest = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
+  // 16 kHz mono PCM16 is 32 bytes per millisecond after the 44-byte header.
+  return { metadata: { name: 'Voice message.wav', mimeType: 'audio/wav', size: bytes.length, digest,
+    durationMs: Math.round((bytes.length - 44) / 32) }, bytes };
+}
+
+// Short acknowledgements and long or structured answers stay text.
+export function voiceSuitable(text: string) {
+  const length = Array.from(text.trim()).length;
+  return length >= 60 && length <= 600
+    && !/```|`[^`\n]+`|https?:\/\/|www\.|\]\(/i.test(text)
+    && !/^\s*([-*+]|\d+[.)])\s/m.test(text) && !/^\s*#{1,6}\s/m.test(text) && !/\|.*\|/.test(text);
+}
+
+// Speak `text` with the agent's voice, store the MP3 and return its attachment.
+// Any failure returns null so the caller publishes the message as text.
+export async function speakMessage(env: Env, input: { agentID: string; text: string; key: string }): Promise<VoiceAttachment | null> {
+  try {
+    if (!await voiceRepliesAvailable(env) || !voiceSuitable(input.text)) return null;
+    const existing = await env.CONTACT_PHOTOS.head(input.key);
+    const bytes = existing ? Buffer.from(await (await env.CONTACT_PHOTOS.get(input.key))!.arrayBuffer()) : await synthesize(env, input.agentID, input.text);
+    if (!bytes) return null;
+    if (!existing) {
+      await env.DB.prepare('INSERT INTO chat_attachment_object (object_key, created_at) VALUES (?, ?) ON CONFLICT DO NOTHING').bind(input.key, Date.now()).run();
+      await env.CONTACT_PHOTOS.put(input.key, bytes, { httpMetadata: { contentType: 'audio/mpeg' } });
+    }
+    const digest = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
+    // mp3_44100_128 is constant bitrate: 16 bytes per millisecond.
+    return { name: 'Voice message.mp3', mimeType: 'audio/mpeg', size: bytes.length, digest, key: input.key, durationMs: Math.round(bytes.length / 16) };
+  } catch {
+    console.error(JSON.stringify({ event: 'voice_reply_skipped' }));
+    return null;
+  }
+}
+
+async function synthesize(env: Env, agentID: string, text: string): Promise<Buffer | null> {
+  const voiceID = await agentVoice(env, agentID);
+  const key = elevenLabsKey(env);
+  if (!voiceID || !key) return null;
+  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceID)}?output_format=mp3_44100_128`, {
+    method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(60_000),
+    headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+    body: JSON.stringify({ text: plainMessageMarkdown(text), model_id: 'eleven_multilingual_v2' }),
+  });
+  if (!response.ok || !response.body) {
+    await response.body?.cancel();
+    console.error(JSON.stringify({ event: 'voice_provider_rejected', status: response.status }));
+    return null;
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      if (size > 5 * 1024 * 1024) return null;
+      chunks.push(chunk.value);
+    }
+  } finally { await reader.cancel().catch(() => undefined); }
+  return size ? Buffer.concat(chunks) : null;
+}
+
+// Clients render the bubble from this; storage keys never leave the API.
+export function publicVoice(attachment: Attachment | null | undefined, listenedAt: number | null, transcript: string | null): PublicVoice | null {
+  return isVoice(attachment) ? { durationMs: attachment.durationMs, listenedAt, transcript } : null;
+}
+
+// Transcribe a stored voice message once. No recognizable speech is an empty
+// transcript, not a failure; provider errors propagate for Workflow retries.
+export async function transcribeVoice(env: Env, attachment: Attachment): Promise<string> {
+  const object = await env.CONTACT_PHOTOS.get(attachment.key);
+  if (!object) throw new Error('ATTACHMENT_UNAVAILABLE');
+  try { return await transcribeRecording(env.META_API_KEY, await object.arrayBuffer()); }
+  catch (error) {
+    if (error instanceof TranscriptionFailure && error.code === 'NO_SPEECH') return '';
+    throw error;
+  }
+}

@@ -20,6 +20,10 @@ import { safeErrorCode } from './meta';
 import { contactReply } from './context';
 import { maintainMemories } from './memory';
 import { releaseAttention } from './dispatch';
+import { storedAttachment } from './attachments';
+import { TranscriptionFailure } from './transcription';
+import { isVoice, speakMessage, transcribeVoice, voiceSuitable } from '../voice/speech';
+import { NonRetryableError } from 'cloudflare:workflows';
 
 // Checkpoint the remaining delay so replay takes the same branch. Memory work,
 // generation and retries can consume the deadline before the pause is reached.
@@ -62,9 +66,10 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       // mark-running connected the contact (agent_chat_status); it reads after a beat.
       await step.sleep('read-delay', '1 second');
       const readAt = await step.do('mark-read', () => markRead(env.DB, job));
+      const listening = await this.listen(env, job, step);
       await this.refreshMemory(env, job, step, 'refresh-prior-memory', false);
       await this.refreshAgentMemory(env, job, step, 'refresh-agent-self-memory');
-      const reading = await step.do('reading-time', async () => {
+      const reading = listening ?? await step.do('reading-time', async () => {
         const turn = await activeTurn(env.DB, job);
         return readAt + readingDelay(turn?.userText ?? '');
       });
@@ -156,12 +161,58 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
     }
   }
 
+  // A person's voice message: read, then listen (blue microphone) and transcribe
+  // once, then keep listening for the clip's duration. Returns the time to start typing.
+  private async listen(env: Env, job: ChatJob, step: WorkflowStep): Promise<number | null> {
+    const duration = await step.do('voice-duration', async () => {
+      const turn = await activeTurn(env.DB, job);
+      const audio = turn && storedAttachment(turn);
+      return isVoice(audio) ? audio.durationMs : null;
+    });
+    if (duration === null) return null;
+    await step.sleep('listen-delay', '1 second');
+    const listenedAt = await step.do('mark-listened', async () => {
+      const now = Date.now();
+      await env.DB.prepare(`UPDATE chat_turn SET voice_listened_at = COALESCE(voice_listened_at, ?1)
+        WHERE id = ?2 AND attempt = ?3 AND status = 'running'`).bind(now, job.turnID, job.attempt).run();
+      return now;
+    });
+    await step.do('transcribe-voice', { retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' }, timeout: '3 minutes' }, async () => {
+      const turn = await activeTurn(env.DB, job);
+      const audio = turn && storedAttachment(turn);
+      if (!turn || turn.status !== 'running' || turn.voiceTranscribedAt || !audio) return true;
+      let transcript: string;
+      try { transcript = await transcribeVoice(env, audio); }
+      catch (error) {
+        console.error(JSON.stringify({ event: 'voice_transcription_failed', code: error instanceof TranscriptionFailure ? error.code : safeErrorCode(error) }));
+        // Provider rejections and missing audio will not succeed on a Workflow retry.
+        if ((error instanceof TranscriptionFailure && error.code !== 'UNAVAILABLE')
+          || (error instanceof Error && error.message === 'ATTACHMENT_UNAVAILABLE')) throw new NonRetryableError('VOICE_TRANSCRIPTION_FAILED');
+        throw new Error('VOICE_TRANSCRIPTION_FAILED');
+      }
+      await env.DB.prepare(`UPDATE chat_turn SET user_text = ?1, voice_transcribed_at = ?2
+        WHERE id = ?3 AND attempt = ?4 AND voice_transcribed_at IS NULL`).bind(transcript, Date.now(), job.turnID, job.attempt).run();
+      return true;
+    });
+    return listenedAt + Math.min(duration, 60_000);
+  }
+
   private async publishMessages(env: Env, job: ChatJob, step: WorkflowStep, reply: ContactResponse | string[] | string | null, prefix = 'reply') {
     // Null is an intentional reaction-only turn. Old checkpoints contain prose.
     const response = reply && typeof reply === 'object' && !Array.isArray(reply) ? reply : null;
     const messages = response ? response.messages : typeof reply === 'string' ? [reply] : Array.isArray(reply) ? reply : [];
+    // At most one message per reply is spoken: the first suitable one without an image.
+    const spoken = messages.findIndex((text, index) => voiceSuitable(text) && !(index === 0 && response?.attachment));
     for (let index = 0; index < Math.max(1, messages.length); index++) {
       if (index) await step.sleep(`${prefix}-message-pause-${index}`, messageDelay(messages[index]));
+      // Checkpointed separately so publication retries never synthesize twice.
+      const voice = index === spoken ? await step.do(`${prefix}-voice-message-${index}`, { retries: { limit: 0, delay: '1 second' }, timeout: '2 minutes' }, async () => {
+        const turn = await activeTurn(env.DB, job);
+        if (!turn || turn.status !== 'running' || !await env.DB.prepare('SELECT 1 FROM contact WHERE id = ? AND voice_messages_enabled = 1').bind(turn.contactID).first()) return null;
+        const agent = await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ?').bind(turn.contactID).first<{ id: string }>();
+        return agent ? speakMessage(env, { agentID: agent.id, text: messages[index],
+          key: `attachments/${turn.userID}/${turn.contactID}/${job.turnID}/voice-a${job.attempt}-${index}` }) : null;
+      }).catch(() => null) : null;
       const more = await step.do(`${prefix}-publish-message-${index}`, async () => {
         const now = Date.now();
         const resultAllowed = groupRequestTurnAllowed('chat_turn', env.META_CHAT_MODEL.includes('contributor'));
@@ -178,7 +229,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
           userID: delivered.userID, contactID: delivered.contactID, contributor: env.META_CHAT_MODEL.includes('contributor') && !await privateContact(env.DB, delivered.contactID),
           beforeSequence: delivered.sequence + 1, turnID: job.turnID, attempt: job.attempt,
         }) : null;
-        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${index}`, text: messages[index], createdAt: now, ...(attachment ? { attachment } : {}), ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
+        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${index}`, text: messages[index], createdAt: now, ...(attachment ?? voice ? { attachment: attachment ?? voice } : {}), ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
         const interrupted = `EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = chat_turn.contact_id
           AND newer.user_id = chat_turn.user_id AND newer.sequence > chat_turn.sequence)`;
         const text = next.length ? next.map(message => message.text).join('\n\n') : null;

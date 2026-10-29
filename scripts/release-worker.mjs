@@ -45,6 +45,9 @@ try {
   } else if (!secrets.some((secret) => secret.name === 'META_API_KEY')) {
     throw new Error('Set the encrypted META_API_KEY secret in Workers Builds before releasing.');
   }
+  // Optional voice provider (docs/voice.md): copied when the build supplies it,
+  // otherwise any existing runtime key is preserved.
+  if (process.env.ELEVENLABS_API_KEY?.trim()) updates.ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY.trim();
   const pushNames = ['APNS_PRIVATE_KEY', 'APNS_KEY_ID', 'APNS_TEAM_ID', 'APNS_TOPIC'];
   const suppliedPush = pushNames.some((name) => process.env[name] !== undefined);
   if (suppliedPush) {

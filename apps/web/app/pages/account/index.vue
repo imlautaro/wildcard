@@ -80,7 +80,7 @@ onMounted(async () => {
         <button type="button" class="button-row danger" :disabled="busy" @click="leave">Sign out</button>
       </div>
       <p class="group-footer" style="padding-top: 16px">
-        The web app does not support voice dictation, scheduled messages, or push notifications yet. Use the iOS app for those features.
+        The web app does not support scheduled messages or push notifications yet. Use the iOS app for those features.
       </p>
     </form>
   </div>

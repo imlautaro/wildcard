@@ -1,9 +1,10 @@
 import { createReactionCache, clearReactionCache, refreshReactions, type ReactionCache } from './useMessageReactions';
-import type { ChatPage, ChatReadState, ChatSubmission, ChatTurn, DraftAttachment, Presence, ReplyQuote } from '~/utils/types';
+import type { ChatPage, ChatReadState, ChatSubmission, ChatTurn, DraftAttachment, DraftVoice, Presence, ReplyQuote } from '~/utils/types';
 
 // Session cache of private conversations, keyed by contact. Pending sends keep
 // their UUID across navigation and failures so a retry can never duplicate them.
-export type PendingSend = { id: string; text: string; attachment: DraftAttachment | null; replyTo: ReplyQuote | null; failed: string | null; createdAt: number; remoteDeviceID: string | null; timeZone: string };
+// A voice message keeps its recorded clip in memory until the API accepts it.
+export type PendingSend = { id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; replyTo: ReplyQuote | null; failed: string | null; createdAt: number; remoteDeviceID: string | null; timeZone: string };
 export type Conversation = {
   remoteDeviceID: string | null;
   reactions: ReactionCache;
@@ -168,11 +169,14 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
       : undefined;
     try {
       const result = await api<ChatSubmission>(`contacts/${id}/chat/turns`, {
-        json: { id: pending.id, text: pending.text, timeZone: pending.timeZone, attachment, remoteDeviceID: pending.remoteDeviceID ?? undefined,
+        json: { id: pending.id, text: pending.text, timeZone: pending.timeZone, attachment, voice: pending.voice ? { data: pending.voice.data } : undefined,
+          remoteDeviceID: pending.remoteDeviceID ?? undefined,
           replyTo: pending.replyTo ? { messageID: pending.replyTo.messageID, side: pending.replyTo.side } : undefined },
       });
       if (entry.pending?.id !== pending.id) return;
       messageSent(`contact/${id}`, pending.id);
+      // The accepted clip seeds the audio cache, so its bubble plays without a download.
+      if (pending.voice) seedVoiceAudio(`contacts/${id}/chat/turns/${result.turn.id}/attachment`, pending.voice.blob);
       entry.turns = mergeInto(entry.turns, [result.turn]);
       if (result.presence) entry.presence = result.presence;
       revokePreview(pending.attachment);
@@ -182,11 +186,11 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
     }
   }
 
-  async function send(text: string, attachment: DraftAttachment | null) {
+  async function send(text: string, attachment: DraftAttachment | null, voice: DraftVoice | null = null) {
     const entry = state.value;
     if (entry.pending) return;
-    entry.pending = { id: crypto.randomUUID(), text: text.trim(), attachment, replyTo: entry.replyTo, failed: null, createdAt: Date.now(), remoteDeviceID: entry.remoteDeviceID, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
-    entry.draft = '';
+    entry.pending = { id: crypto.randomUUID(), text: voice ? '' : text.trim(), attachment: voice ? null : attachment, voice, replyTo: entry.replyTo, failed: null, createdAt: Date.now(), remoteDeviceID: entry.remoteDeviceID, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+    if (!voice) entry.draft = '';
     entry.replyTo = null;
     await submit();
   }
@@ -194,7 +198,8 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
   function discardPending() {
     const entry = state.value;
     if (!entry.pending?.failed) return;
-    entry.draft = entry.pending.text;
+    // A failed voice message has no text to edit: discarding drops the clip.
+    if (!entry.pending.voice) entry.draft = entry.pending.text;
     entry.replyTo = entry.pending.replyTo;
     revokePreview(entry.pending.attachment);
     entry.pending = null;

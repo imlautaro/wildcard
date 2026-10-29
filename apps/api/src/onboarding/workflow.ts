@@ -134,8 +134,11 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string;
           Object.assign(profile.traits, temperaments[i]!.traits);
           statements.push(
             // The existing contact trigger creates its one shared agent identity.
-            db.prepare('INSERT INTO contact (id, user_id, name, photo_version, created_at, updated_at, onboarding_chat) VALUES (?, ?, ?, ?, ?, ?, 1)')
+            db.prepare('INSERT INTO contact (id, user_id, name, photo_version, created_at, updated_at, onboarding_chat, voice_messages_enabled) VALUES (?, ?, ?, ?, ?, ?, 1, 1)')
               .bind(identity.id, owner, identity.name, identity.id, now, now),
+            // Legacy saved plans may lack demographics; their voice is then any voice.
+            db.prepare('UPDATE contact_agent SET voice_profile_json = ? WHERE id = ?')
+              .bind(identity.gender && identity.age ? JSON.stringify({ gender: identity.gender, age: identity.age }) : null, identity.id),
             db.prepare('INSERT INTO agent_personality (agent_id, profile_json, updated_at) VALUES (?, ?, ?)').bind(identity.id, JSON.stringify(profile), now),
             db.prepare('UPDATE contact_agent SET memory_shared = 1 WHERE id = ? AND owner_id = ?').bind(identity.id, owner),
           );
