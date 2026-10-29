@@ -62,7 +62,7 @@ function toggle() {
     // when the accepted message replaces the pending bubble.
     if (props.blob) seedVoiceAudio(props.path, props.blob);
     return voiceAudioURL(props.path);
-  }, selectedTime.value);
+  }, selectedTime.value, true, props.outgoing ? ownPhoto.value : props.senderPhoto);
 }
 function seek(event: Event) {
   selectedTime.value = Number((event.target as HTMLInputElement).value);

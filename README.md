@@ -301,3 +301,9 @@ Reply activity now distinguishes Typing... and Recording... in private/group cha
 and list previews on iOS and web. Recording covers voice attachment preparation;
 see [voice messages](docs/voice.md#reply-activity-indicators) and
 [migration 0062 setup](docs/infrastructure.md#recording-presence-migration-0062).
+
+Loaded voice messages support [background playback and system media controls](docs/voice.md#background-playback-and-ear-routing).
+iOS includes proximity-based receiver routing on iPhone and a brief startup margin;
+web background support depends on the browser and has no receiver-routing API.
+See [iOS setup](docs/infrastructure.md#ios-background-voice-playback). Physical-device
+and browser playback verification remains pending.

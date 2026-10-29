@@ -15,6 +15,7 @@ struct VoiceMessageView: View {
     var showsReceipt = true
     var localData: Data? = nil
     var senderAvatar: AnyView? = nil
+    var senderPhoto: CachedImageResource? = nil
     var senderName: String? = nil
     var senderColor: Color? = nil
     var replyQuote: MessageReplyPreview? = nil
@@ -79,6 +80,12 @@ struct VoiceMessageView: View {
         .task(id: "\(key)/\(visible)") {
             guard visible else { return }
             await loadWaveform()
+        }
+        .onChange(of: player.failedKey) { _, value in
+            if value == key {
+                failed = true
+                Task { await auth.images.audio.remove(resource) }
+            }
         }
         .onChange(of: key) { _, _ in samples = nil; selectedTime = 0 }
         .onChange(of: player.currentKey) { previous, current in
@@ -172,15 +179,24 @@ struct VoiceMessageView: View {
         .accessibilityValue(VoiceDuration.format(milliseconds: voice.durationMs))
     }
 
+    private func playWithArtwork(_ data: Data) -> Bool {
+        guard player.play(data, key: key, isMessage: true) else { return false }
+        let photo = fromUser
+            ? auth.user?.photoVersion.map { CachedImageResource.accountAvatar(version: $0) }
+            : senderPhoto
+        player.setSenderArtwork(for: key, resource: photo, auth: auth)
+        return true
+    }
+
     private func toggle() {
         if isPlaying { player.pause(); return }
         // A paused clip resumes from the player, even if its bytes left the memory cache.
         if player.isCurrent(key) {
-            player.play(Data(), key: key)
+            failed = !playWithArtwork(Data())
             return
         }
         if let localData {
-            failed = !player.play(localData, key: key)
+            failed = !playWithArtwork(localData)
             player.seek(selectedTime, for: key)
             Task { await loadWaveform() }
             return
@@ -193,7 +209,7 @@ struct VoiceMessageView: View {
             do {
                 let data = try await auth.voiceAudio(resource)
                 try Task.checkCancellation()
-                failed = !player.play(data, key: key)
+                failed = !playWithArtwork(data)
                 player.seek(selectedTime, for: key)
                 if !failed { await loadWaveform() }
                 if failed { await auth.images.audio.remove(resource) }

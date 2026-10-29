@@ -35,7 +35,8 @@ UUID for **Retry**, exactly like text and attachment sends.
 A voice bubble shows a play/pause button, a progress bar, the elapsed time while
 playing (the duration otherwise), the send time and, for outgoing messages, the usual
 receipt checks. Only one voice message plays at a time; starting another pauses the
-current one. Playback continues while scrolling and stops when leaving the chat.
+current one. Playback continues while scrolling, navigating away and listening in the background.
+See [background playback and ear routing](#background-playback-and-ear-routing) for platform limits.
 
 Outgoing voice messages show a microphone icon next to the duration:
 
@@ -272,16 +273,18 @@ The native app (`apps/ios`) implements the same behavior in private chats and gr
 - **Permission.** The first press asks for microphone access and records nothing
   (the hint "Hold to record, release to send." follows). A denied permission shows
   "Microphone access is disabled…" under the composer; enable it in Settings.
-- **Audio session.** Recording uses the `.record` category and playback `.playback`
-  with `.spokenAudio`, so voice messages play with the silent switch on. Each side
+- **Audio session.** Recording uses `.record`; normal playback uses `.playback`
+  with `.spokenAudio`, with `.playAndRecord`/`.default` only for receiver output,
+  so voice messages play with the silent switch on. Each side
   activates the shared session only while it is in use and deactivates it with
   `.notifyOthersOnDeactivation`. Starting a recording stops any playing voice message
   first (`VoicePlayer.isRecording`), and playback never starts while recording.
 - **Interruptions.** A system deactivation of the session (call, Siri, another app)
   discards an active recording with "Recording was interrupted. Please record
   again." and pauses playback without resuming it. Unplugging headphones pauses
-  playback. Backgrounding the app, leaving the chat or losing access to it discards
-  an active recording and stops playback.
+  playback. Backgrounding the app or leaving the chat discards an active recording
+  while an already loaded voice message continues. Losing access, clearing history
+  or changing accounts stops playback and clears the existing caches.
 - **Composer.** `VoiceComposer.swift` holds `VoiceRecordButton` (one `DragGesture`
   with zero minimum distance: release sends, 100 points left cancels, 80 points up
   locks) and `VoiceRecordingBar` (pulsing red dot, timer, "‹ Slide to cancel" that
@@ -380,7 +383,9 @@ The web app (`apps/web`) implements the same behavior in private chats and group
   incoming senders on the right, including groups and pending sends) and the
   elapsed time or duration; outgoing bubbles add the microphone, grey until
   `voice.listenedAt` and then `--read` (the read-check color). One shared `<audio>`
-  element plays at a time; leaving a chat, group or contact page stops it. A failed
+  element plays at a time and messages continue across navigation and hidden tabs,
+  subject to browser background restrictions. Catalog samples stop on hiding the
+  tab or leaving their picker. A failed
   download or playback shows a retry button in the bubble.
 - **Transcript.** The message menu (long press, right click or the reaction button)
   adds **View transcript**, which opens a dialog that updates as polling delivers the
@@ -512,3 +517,115 @@ account isolation and cache eviction without extra row requests or disk storage.
 See [chat activity](chats.md#reply-activity-indicators) for freshness/failure
 behavior and pending device checks, and [migration 0062](infrastructure.md#recording-presence-migration-0062)
 for reproducible setup and rollback.
+
+## Background playback and ear routing
+
+On iOS, an already loaded private/group voice message (including a local pending
+clip) continues across navigation, screen lock and backgrounding. `VoicePlayer`
+owns the in-memory `AVAudioPlayer` independently of the bubble, and the app declares
+`UIBackgroundModes = audio`. Force-quitting the app, an OS termination or restarting
+the phone ends playback; no process or audio is resurrected. Downloads still in
+progress are not promised to complete in the background. There is no autoplay of
+the next message. Catalog samples remain foreground-only and stop on picker exit.
+
+Messages publish a generic **Voice message** title, source duration, position and
+selected speed to Now Playing. System controls support play/pause, stop and seeking;
+the sender profile photo is published as artwork at the user's request; sender
+names and transcripts remain unpublished. Pausing retains the
+loaded clip and position for explicit resume, releases the audio session and sensor,
+and never resumes automatically after calls/Siri or headphone removal. Replacing a
+clip, recording, finishing, decoding failure, known access loss, history clearing
+and session/account invalidation stop the player and clear its system controls.
+
+On an iPhone using only its built-in output, message play/resume includes a
+cancellable **300 ms** grace period before sound. It also applies after a download,
+not to the download itself. Samples, iPad and external outputs start without that
+extra delay. A second tap, recording, invalidation or replacing the clip cancels a
+pending start. Asynchronous playback failures restore the retry state and discard
+unplayable cached bytes.
+
+Ear routing uses `UIDevice` proximity monitoring only during message playback on
+the built-in iPhone route. Orientation notifications prevent arming it while the
+phone is flat or its orientation is unknown. A stable near reading for **120 ms**
+switches to the top receiver; a stable far reading for **350 ms** returns to the
+speaker, reducing chatter and momentary loud bursts. iOS also blanks the display
+and suppresses touches while the enabled proximity sensor is covered. The system
+sensor detects nearby objects, not an ear; finger/case interference is still
+possible and needs physical-device verification.
+
+Receiver output requires `.playAndRecord` with `.default` and no speaker override;
+normal output returns to `.playback`/`.spokenAudio`. No audio input is opened or
+recorded for listening. Each transition pauses output while changing category,
+preserves source position and speed, and resumes only if it was already audible.
+Failure pauses/stops safely instead of falling back to loud playback. Headphones,
+Bluetooth, USB, AirPlay and car outputs keep system routing: proximity is disabled
+and no speaker override steals an accessory route. Removing an output pauses until
+explicit play. The sensor and orientation subscription are released on pause,
+completion, error, recording and invalidation. A receiver session already in use
+may finish its near/far gesture in the background; background speaker playback
+cannot arm a new near gesture, avoiding pocket-triggered routing.
+
+Web keeps the existing shared HTML audio element alive across chat navigation and
+hidden tabs. Feature-detected Media Session controls offer a generic title and
+sender profile artwork,
+play/pause, stop, seeking and current source position/rate when supported. Recording
+stops playback and blocks new starts until capture releases the microphone. Browsers
+control whether locked-screen/background playback survives suspension; closing the
+tab/browser ends it. Browser APIs do not offer dependable proximity monitoring or
+built-in receiver selection, so web has no ear routing or artificial startup delay.
+No new permission or browser output-selection prompt is introduced.
+
+### Cache and verification
+
+The active iOS clip remains in memory, so ongoing playback does not read completely
+protected files while locked. Existing account-owned audio caches, protected disk
+retention, request sharing and stale-response rejection are unchanged. Web pins the
+active object URL against existing LRU eviction. Position, route, proximity and
+system metadata are session-only and cleared with the player; only the existing
+numeric speed preference persists. No API, migration, new service or background
+network refresh is added. Access changes made elsewhere are enforced when the
+existing synchronizer learns them; audio already in memory is not reauthorized
+continuously while the app is suspended.
+
+Static Swift/web typechecking and plist/diff validation do not establish audible
+routing or timing. Physical iPhone checks remain required: incoming/outgoing and
+pending clips in private/groups; immediate pause during the grace period; near at
+play, near after playback starts, rapid near/far jitter, flat-phone finger cover,
+case interference, lower/raise while locked, foreground/background on both routes,
+headphones/Bluetooth/AirPlay connect and disconnect, calls/Siri, seek/speed changes
+at the ear, completion, download/route failure, recording, navigation/offline replay,
+clear/delete/access loss and account switching. Check that the display wakes and
+touches recover after every pause/end/error. On iPad verify speaker/accessories
+without proximity. In Safari/Chrome/Firefox verify hidden-tab and locked-screen
+playback, system controls, autoplay denial/retry and cleanup after tab closure.
+
+### Sender artwork on system playback controls
+
+The playback card now shows the audio sender's profile photo on iOS and supported
+web Media Session surfaces. Private incoming clips use the contact avatar; group
+incoming clips use that specific user/agent's member avatar rather than the group
+photo. Your sent and pending clips use your account avatar. Missing, unavailable
+or failed photos show a neutral person avatar. The title remains **Voice message**;
+this change publishes the photo to system surfaces (including the lock screen and
+compatible accessories), without publishing names or transcripts. It changes the
+playback card, not APNs reply notifications.
+
+Artwork uses the existing account-scoped, versioned private image cache and its
+permissions, shared loads and retention limits. iOS reuses a decoded 288-pixel avatar
+synchronously, or the session player loads it asynchronously without delaying audio.
+That load survives bubble navigation, is canceled on stop/replacement and rejects
+late results by cancellation, clip identity and the existing cache session epoch.
+The player retains only its current artwork in memory; pause retains it for resume.
+Web uses the same avatar path/cache as the bubble and pins its current object URL
+against the existing 150-entry image LRU until playback stops or is replaced. Stops,
+recording, completion, known access loss, history clearing and account resets release
+artwork and clear system metadata. No extra private image persistence or service is
+added; a generic placeholder stays visible while a photo loads or cannot load.
+
+The user reported on October 29, 2026 that background playback and proximity routing
+work well on their device. The new artwork itself still needs device/browser review:
+private/group incoming/outgoing and pending clips, senders without photos, cached
+and uncached photos, offline/photo failure, immediate lock/navigation, pause/resume,
+rapid clip replacement while photos load, web LRU pressure, and clear/delete/access
+loss or account changes while an artwork request is in flight. Static typechecking
+does not establish the system's rendered artwork or app-icon presentation.

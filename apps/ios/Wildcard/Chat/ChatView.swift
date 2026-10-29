@@ -131,6 +131,7 @@ struct ChatView: View {
                                                                              part: turn.assistantMessages?.firstIndex(where: { $0.id == message.id }) ?? 0),
                                                      voice: voiceMessage, sentAt: item.timestamp, fromUser: false, showsReceipt: false,
                                                      senderAvatar: AnyView(ContactAvatar(contact: contacts.contact(id: contactID), size: 40)),
+                                                     senderPhoto: contacts.contact(id: contactID)?.photoVersion.map { .contactAvatar(contactID: contactID, version: $0) },
                                                      replyQuote: message.replyTo.map(replyPreview),
                                                      onQuoteTap: { if let quote = message.replyTo { showQuoted(quote, proxy: proxy) } })
                                 } else if let attachment = item.message?.attachment {
@@ -305,7 +306,7 @@ struct ChatView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { noteVisibleRepliesRead() }
             if phase != .active { endVisit(); chat.clearPresence() }
-            if phase == .background { cancelRecording(); VoicePlayer.shared.stop() }
+            if phase == .background { cancelRecording() }
         }
         .onChange(of: chat.isUnavailable) { _, unavailable in
             if unavailable { cancelRecording() }
@@ -334,7 +335,6 @@ struct ChatView: View {
             endVisit()
             chat.clearPresence()
             cancelRecording()
-            VoicePlayer.shared.stop()
             attachmentTask?.cancel()
             quoteTask?.cancel()
             chat.compactHistory()

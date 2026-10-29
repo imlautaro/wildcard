@@ -101,6 +101,7 @@ final class VoiceAudioCache {
     }
 
     func clear(deactivate: Bool = true) async {
+        VoicePlayer.shared.stop()
         let previousUser = userID
         let previousSession = session
         resetMemory()

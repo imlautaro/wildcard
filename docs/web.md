@@ -288,6 +288,22 @@ behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.
 
 ## Voice messages
 
+Loaded messages now continue through chat navigation and hidden tabs. Supported
+browsers expose a generic Voice message title, the sender profile photo (or a
+neutral person avatar), and Media Session play/pause, stop,
+seek and position/rate controls. Your sent clips use your account photo; group
+clips use the specific sender, not the group photo. Artwork reuses the existing
+private image cache with the active object URL pinned until playback stops.
+Artwork loading does not delay audio. Recording stops playback; known access loss,
+clear/delete and account reset clear audio and system metadata. Closing the tab or
+browser ends playback, and browser/OS suspension can interrupt background audio.
+iOS also enables native locked-screen playback and a 300 ms built-in-phone startup
+margin with proximity-based receiver routing. Browsers cannot reliably access that
+sensor or select the top receiver, so web keeps system routing and immediate play.
+See [background playback](voice.md#background-playback-and-ear-routing) for
+lifecycle, cache ownership and pending device/browser verification.
+
+
 During playback, the sender avatar becomes a speed button cycling **1x → 1.5x →
 2x → 1x**. It updates the current audio immediately and restores the avatar when
 paused or finished. The shared player starts subsequent private/group messages,

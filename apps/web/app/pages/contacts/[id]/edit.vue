@@ -86,7 +86,7 @@ function previewVoice(voice: VoiceOption) {
   const path = voicePreviewPath(voice.id);
   void toggleVoice(path, () => voiceAudioURL(path));
 }
-onBeforeUnmount(stopVoicePlayback);
+onBeforeUnmount(() => { if (voicePlayer.key?.startsWith('voices/')) stopVoicePlayback(); });
 
 // Media paths match the chat bubbles, so thumbnails share the private image cache.
 function mediaPath(item: ChatMediaItem) {

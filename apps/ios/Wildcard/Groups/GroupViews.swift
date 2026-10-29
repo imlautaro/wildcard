@@ -455,7 +455,7 @@ struct GroupChatView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { noteVisibleMessagesRead() }
-            if phase == .background { cancelRecording(); VoicePlayer.shared.stop(); attachmentTask?.cancel() }
+            if phase == .background { cancelRecording(); attachmentTask?.cancel() }
         }
         .onChange(of: store.hasLoadedMessages) { _, loaded in
             if loaded { animateNewMessages = true }
@@ -488,7 +488,6 @@ struct GroupChatView: View {
                 MessageSounds.shared.visibleContactID = nil
             }
             cancelRecording()
-            VoicePlayer.shared.stop()
             attachmentTask?.cancel()
             quoteTask?.cancel()
         }
@@ -711,6 +710,9 @@ private struct GroupMessageRow: View {
                     VoiceMessageView(resource: .groupVoice(groupID: groupID, messageID: message.id), voice: voice, sentAt: message.createdAt,
                                      fromUser: own, receiptState: message.receiptState ?? "sent", showsReceipt: own,
                                      senderAvatar: AnyView(GroupAvatar(member: sender, groupID: groupID, size: 40)),
+                                     senderPhoto: sender.flatMap { member in
+                                         member.photoVersion.map { .groupMemberAvatar(groupID: groupID, kind: member.kind, memberID: member.id, version: $0) }
+                                     },
                                      senderName: own ? nil : (sender?.name ?? message.senderName),
                                      senderColor: senderColor, replyQuote: replyQuote, onQuoteTap: onQuoteTap)
                 } else if let file = message.attachment {

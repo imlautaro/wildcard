@@ -149,7 +149,7 @@ watch(items, () => nextTick(observeRows));
 
 // One-second tick while visible, like the iOS session synchronizer.
 const { now: pollNow } = usePolling(refresh, () => 1000);
-watch(groupID, async () => { stopVoicePlayback(); rescan(); await pollNow(); });
+watch(groupID, async () => { rescan(); await pollNow(); });
 onMounted(async () => {
   observer = new IntersectionObserver((entries) => {
     if (document.visibilityState !== 'visible') return;
@@ -162,7 +162,6 @@ onMounted(async () => {
   composer.value?.focus();
 });
 onBeforeUnmount(() => {
-  stopVoicePlayback();
   clearTimeout(highlightTimer);
   observer?.disconnect();
   document.removeEventListener('visibilitychange', onVisibility);

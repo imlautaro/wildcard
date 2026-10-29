@@ -2394,3 +2394,25 @@ the previous API/client code and leave the additive column in place; no message
 history is modified. Verify text, voice, text fallback, interrupted synthesis and
 shared-contact/group scoping in an independent account. These runtime/device checks
 have not been performed.
+
+## iOS background voice playback
+
+The main app target enables Background Modes in `Wildcard.xcodeproj` and declares
+`UIBackgroundModes` with `audio` in `apps/ios/Config/Info.plist`. An independent
+installation uses those checked-in settings without a service, binding, secret,
+server migration or additional provisioning entitlement. Open the existing Xcode
+project and install the app with your own signing configuration to apply this
+bundle change; an API/web release cannot update an installed iOS bundle. No
+background task scheduler, silent push or manual deployment is involved.
+
+The session-owned voice player activates the audio session only for explicit
+playback. Normal output uses playback/spokenAudio; proximity receiver output uses
+playAndRecord/default without opening audio input. Existing microphone permission
+is still required only for recording. Both clients add generic system media controls;
+browsers determine their background support and cannot reproduce receiver routing.
+See [voice playback](voice.md#background-playback-and-ear-routing) for cache/privacy,
+termination limits and unverified physical-device/browser checks. Static plist and
+type checks alone do not validate background execution. Rollback removes the audio
+background mode and restores foreground-only playback; stored messages and numeric
+speed preferences need no migration. Any server/web release continues through the
+existing commit, push and automatic deployment process.

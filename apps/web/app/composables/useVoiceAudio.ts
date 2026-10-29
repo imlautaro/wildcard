@@ -14,6 +14,82 @@ let currentURL: string | null = null;
 let request = 0;
 let playbackFrame: number | undefined;
 let rateOwner: string | null = null;
+let messagePlayback = false;
+let captureActive = false;
+let mediaArtwork: MediaImage[] = [];
+let releaseArtwork: (() => void) | null = null;
+let placeholderArtwork: string | null = null;
+
+function fallbackMediaArtwork(): MediaImage[] {
+  if (!placeholderArtwork) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 288;
+    const context = canvas.getContext('2d');
+    if (!context) return [];
+    context.fillStyle = '#e5e7eb'; context.fillRect(0, 0, 288, 288);
+    context.fillStyle = '#8e8e93';
+    context.beginPath(); context.arc(144, 101, 43, 0, Math.PI * 2); context.fill();
+    context.beginPath(); context.ellipse(144, 233, 86, 69, 0, Math.PI, 0); context.fill();
+    placeholderArtwork = canvas.toDataURL('image/png');
+  }
+  return [{ src: placeholderArtwork, sizes: '288x288', type: 'image/png' }];
+}
+
+function updateMediaMetadata() {
+  if (!import.meta.client || !('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+  navigator.mediaSession.metadata = messagePlayback
+    ? new MediaMetadata({ title: 'Voice message', artwork: mediaArtwork }) : null;
+}
+
+function loadSenderArtwork(path: string | null | undefined, started: number) {
+  if (!path || !('mediaSession' in navigator)) return;
+  const retained = retainPrivateImage(path);
+  releaseArtwork = retained.release;
+  void retained.url.then((url) => {
+    if (!url || request !== started || !messagePlayback) return;
+    mediaArtwork = [{ src: url }];
+    updateMediaMetadata();
+  });
+}
+
+/** Recording owns the audio path until capture is released. */
+export function setVoiceCaptureActive(active: boolean) {
+  captureActive = active;
+  if (active) stopVoicePlayback();
+}
+
+function updateMediaPosition() {
+  if (!import.meta.client || !('mediaSession' in navigator) || !messagePlayback || !audio) return;
+  navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
+  try {
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      navigator.mediaSession.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate,
+        position: Math.min(audio.duration, Math.max(0, audio.currentTime)) });
+    }
+  } catch { /* Position reporting is optional in older browsers. */ }
+}
+
+function configureMediaSession(active: boolean) {
+  if (!import.meta.client || !('mediaSession' in navigator)) return;
+  const session = navigator.mediaSession;
+  // Publish the requested sender photo; keep names and transcripts off system surfaces.
+  updateMediaMetadata();
+  session.playbackState = active ? 'paused' : 'none';
+  const actions: [MediaSessionAction, MediaSessionActionHandler][] = [
+    ['play', () => { if (messagePlayback && !captureActive) void audio?.play().catch(() => {}); }],
+    ['pause', () => audio?.pause()],
+    ['stop', stopVoicePlayback],
+    ['seekto', (event) => { if (voicePlayer.key && event.seekTime !== undefined) seekVoice(voicePlayer.key, event.seekTime); }],
+    ['seekbackward', (event) => { if (voicePlayer.key) seekVoice(voicePlayer.key, (audio?.currentTime ?? 0) - (event.seekOffset ?? 10)); }],
+    ['seekforward', (event) => { if (voicePlayer.key) seekVoice(voicePlayer.key, (audio?.currentTime ?? 0) + (event.seekOffset ?? 10)); }],
+  ];
+  for (const [action, handler] of actions) {
+    try { session.setActionHandler(action, active ? handler : null); }
+    catch { /* Each browser supports a different subset of media commands. */ }
+  }
+  try { session.setPositionState(); } catch { /* Optional API. */ }
+  if (active) updateMediaPosition();
+}
 
 function playbackRateKey(owner: string) { return `voicePlaybackRate.v1.${owner}`; }
 
@@ -35,19 +111,22 @@ export function cycleVoicePlaybackRate() {
   if (!rateOwner) return;
   voicePlayer.rate = voicePlayer.rate === 1 ? 1.5 : voicePlayer.rate === 1.5 ? 2 : 1;
   if (audio) audio.playbackRate = voicePlayer.rate;
+  updateMediaPosition();
   try { localStorage.setItem(playbackRateKey(rateOwner), String(voicePlayer.rate)); }
   catch { /* Keep playback usable when browser storage is unavailable. */ }
 }
 
-registerSessionReset(() => {
+export function clearVoiceAudio() {
   stopVoicePlayback();
   rateOwner = null;
+  captureActive = false;
   voicePlayer.rate = 1;
   voicePlayer.failed = null;
   for (const entry of entries.values()) if (entry.url) URL.revokeObjectURL(entry.url);
   entries.clear();
   total = 0;
-});
+}
+registerSessionReset(clearVoiceAudio);
 
 function cacheKey(path: string) {
   return `${useSession().user.value?.id ?? ''}|${path}`;
@@ -171,7 +250,10 @@ function element() {
   audio = new Audio();
   audio.preload = 'auto';
   audio.preservesPitch = true;
-  audio.addEventListener('timeupdate', () => { voicePlayer.position = audio!.currentTime; });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && !messagePlayback) stopVoicePlayback();
+  });
+  audio.addEventListener('timeupdate', () => { voicePlayer.position = audio!.currentTime; updateMediaPosition(); });
   audio.addEventListener('loadedmetadata', () => {
     audio!.playbackRate = voicePlayer.rate;
     if (!Number.isFinite(audio!.duration)) return;
@@ -179,10 +261,11 @@ function element() {
     const position = Math.min(audio!.duration, Math.max(0, voicePlayer.position));
     audio!.currentTime = position;
     voicePlayer.position = position;
+    updateMediaPosition();
   });
-  audio.addEventListener('play', () => { voicePlayer.playing = true; stopPlaybackFrame(); updatePlaybackFrame(); });
-  audio.addEventListener('pause', () => { voicePlayer.playing = false; stopPlaybackFrame(); });
-  audio.addEventListener('ended', () => { voicePlayer.playing = false; voicePlayer.position = 0; stopPlaybackFrame(); });
+  audio.addEventListener('play', () => { voicePlayer.playing = true; stopPlaybackFrame(); updatePlaybackFrame(); updateMediaPosition(); });
+  audio.addEventListener('pause', () => { voicePlayer.playing = false; stopPlaybackFrame(); updateMediaPosition(); });
+  audio.addEventListener('ended', stopVoicePlayback);
   audio.addEventListener('error', () => {
     if (!voicePlayer.key || !currentURL) return;
     voicePlayer.failed = voicePlayer.key;
@@ -195,7 +278,8 @@ function element() {
  * Plays or pauses the bubble `key`. `source` resolves its object URL (from the cache,
  * or a local clip for a pending send). Starting another bubble pauses the current one.
  */
-export async function toggleVoice(key: string, source: () => Promise<string>, startAt = 0) {
+export async function toggleVoice(key: string, source: () => Promise<string>, startAt = 0, isMessage = false, senderPhoto?: string | null) {
+  if (captureActive) return;
   restorePlaybackRate();
   const player = element();
   player.playbackRate = voicePlayer.rate;
@@ -216,6 +300,10 @@ export async function toggleVoice(key: string, source: () => Promise<string>, st
     player.currentTime = Math.max(0, startAt);
     voicePlayer.position = Math.max(0, startAt);
     voicePlayer.loading = false;
+    messagePlayback = isMessage;
+    mediaArtwork = isMessage ? fallbackMediaArtwork() : [];
+    configureMediaSession(isMessage);
+    if (isMessage) loadSenderArtwork(senderPhoto, started);
     await player.play();
   } catch {
     if (started !== request) return;
@@ -230,10 +318,13 @@ export function seekVoice(key: string, seconds: number) {
   if (!Number.isFinite(position)) return;
   audio.currentTime = position;
   voicePlayer.position = position;
+  updateMediaPosition();
 }
 
-/** Stops playback; called when leaving a chat, group or contact page. */
+/** Stops playback on replacement, recording, completion, invalidation or session reset. */
 export function stopVoicePlayback() {
+  releaseArtwork?.(); releaseArtwork = null;
+  mediaArtwork = [];
   stopPlaybackFrame();
   request += 1;
   if (audio) {
@@ -242,5 +333,7 @@ export function stopVoicePlayback() {
     audio.load();
   }
   currentURL = null;
+  messagePlayback = false;
+  configureMediaSession(false);
   voicePlayer.key = null; voicePlayer.playing = false; voicePlayer.loading = false; voicePlayer.position = 0; voicePlayer.duration = 0;
 }

@@ -55,6 +55,7 @@ export function useVoiceRecorder(onClip: (clip: DraftVoice) => void) {
 
   function release() {
     clearInterval(ticker); clearTimeout(limit);
+    setVoiceCaptureActive(false);
     for (const track of stream?.getTracks() ?? []) track.stop();
     stream = null; recorder = null; chunks = [];
   }
@@ -71,6 +72,7 @@ export function useVoiceRecorder(onClip: (clip: DraftVoice) => void) {
     notice.value = null;
     const current = run;
     phase.value = 'requesting';
+    setVoiceCaptureActive(true);
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
     } catch (failure) {

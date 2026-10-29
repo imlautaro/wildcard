@@ -161,7 +161,6 @@ async function onVoice(clip: DraftVoice) {
 const { now: pollNow } = usePolling(refresh, () => 1000);
 
 watch(contactID, async () => {
-  stopVoicePlayback();
   fetched.value = null;
   await pollNow();
 });
@@ -176,7 +175,6 @@ onMounted(async () => {
   composer.value?.focus();
 });
 onBeforeUnmount(() => {
-  stopVoicePlayback();
   window.removeEventListener('focus', markRead);
   clearTimeout(highlightTimer);
 });

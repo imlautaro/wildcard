@@ -258,6 +258,7 @@ function upsertContact(contact: Contact) {
 }
 
 function removeContact(id: string) {
+  clearPrivateImages(); clearVoiceAudio();
   forgetPersonality(id);
   forgetConversation(id);
   contacts.value = contacts.value.filter((contact) => contact.id !== id);
@@ -270,6 +271,7 @@ function updateGroup(id: string, changes: Partial<ChatGroup>) {
 }
 
 function removeGroup(id: string) {
+  clearPrivateImages(); clearVoiceAudio();
   forgetGroup(id);
   groups.value = groups.value.filter((group) => group.id !== id);
   readGuards.delete(`group:${id}`);

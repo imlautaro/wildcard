@@ -296,6 +296,31 @@ lost clients. See [visit presence](chats.md#visiting-a-chat-and-composing-a-draf
 
 ## Voice message audio
 
+System playback artwork reuses the existing versioned sender-avatar image cache:
+iOS reuses/loads a 288-pixel image and retains just the current artwork in the
+session player; web pins its active avatar object URL in the existing 150-entry
+image LRU and releases the pin on stop/replacement. No parallel image cache or
+extra private disk retention is added. Missing/offline photos use a nonprivate
+generic avatar. Audio starts independently of the photo load. Cancellation,
+player/request identity and the existing cache epochs reject late artwork after
+replacement or invalidation; account/access/history resets clear system metadata
+as well as the original caches. See [sender artwork](voice.md#sender-artwork-on-system-playback-controls)
+for photo disclosure and pending offline/navigation/eviction/account checks.
+
+
+An already loaded message now remains owned by the session player across navigation
+and backgrounding. iOS retains the active decoded player in memory without reading
+protected disk files while locked; web retains/pins the existing active object URL.
+No extra download cache, retention period or background revalidation is introduced.
+Position, route/proximity state and system media metadata remain memory-only;
+recording, completion, failure, known access loss, history clear/delete and account
+reset release playback resources and clear system metadata. Pause retains the clip
+and position for explicit resume. Existing cache invalidations still stop playback
+and reject late downloads. See [background playback](voice.md#background-playback-and-ear-routing)
+for platform limitations and the required offline/reopen, sensor, lock-screen,
+access-revocation and account-switch checks; physical behavior is not yet verified.
+
+
 Voice message bytes use `VoiceAudioCache`, owned by `PrivateImageCache` so it shares
 the image cache's activation and every clear (sign-out, session expiry, account
 switch, contact deletion, contact/history 404, lost group membership). It keeps an
