@@ -119,6 +119,13 @@ with `?side=assistant`, which requires ownership of the same conversation. R2 ke
 and digests are never exposed in history. iOS uses its incoming attachment bubble
 and full-screen zoom/swipe viewer. Web uses the existing image/file viewer.
 
+iOS passes `side=assistant` as a `URLQueryItem` to the shared request builder,
+separate from the attachment path. Embedding the query in the path encodes the
+question mark and causes a 404, surfaced as a contact-unavailable error. This
+correction also covers the full-screen viewer and chat media downloads through
+the same API method; web already sends the correct query. Device verification
+remains pending.
+
 Private generated images have a distinct assistant-side key/path, preventing a
 human's attachment on the same turn from being reused as the generated image.
 The existing account-scoped image cache handles deduplication, memory limits,

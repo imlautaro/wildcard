@@ -148,7 +148,8 @@ extension AuthAPI {
     }
 
     func chatAttachment(contactID: String, turnID: String, assistant: Bool = false, token: String) async throws -> Data {
-        let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns/\(turnID)/attachment\(assistant ? "?side=assistant" : "")", token: token, timeout: 60)
+        let query = assistant ? [URLQueryItem(name: "side", value: "assistant")] : []
+        let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns/\(turnID)/attachment", token: token, query: query, timeout: 60)
         return data
     }
 

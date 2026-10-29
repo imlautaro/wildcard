@@ -740,6 +740,11 @@ their existing message/presence cache. See [loop control](groups.md#ending-ackno
 
 ## Generated chat images
 
+The web client already sends private image `side=assistant` as a query parameter.
+The iOS request correction uses the same contract through `URLQueryItem`, restoring
+parity for bot images in bubbles, the full-screen viewer and chat media. No web
+behavior or cache change is needed. Device verification remains pending.
+
 Chat image thumbnails use a square frame with `object-fit: cover`, cropping excess
 edges without distortion. In private chats and groups, clicking a loaded image
 opens a black full-screen modal in the same tab, reusing its existing private

@@ -901,6 +901,13 @@ fresh human traffic still updates the conversation after it has gone quiet.
 
 ## Generated assistant images
 
+iOS supplies the assistant side through the request builder's query items rather
+than embedding it in the URL path. Existing cache identities, budgets and access
+invalidation remain unchanged. After installing the corrected client, retry a
+failed image, open it full screen and from chat media, then reopen the chat;
+also verify a human image on the same turn, offline recovery and account switching.
+Device verification of this request correction remains pending.
+
 Private generated-image metadata is part of the delivered assistant message, so
 existing attempt/update-time merges reject stale data. The byte path has
 `?side=assistant`; iOS adds `assistantAttachment` to the existing PrivateImageCache
