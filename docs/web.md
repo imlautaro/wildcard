@@ -119,6 +119,54 @@ The web cache follows the [caching guide](caching.md#web-app). In short:
 session-owned memory caches only, reset on sign-out, expiry, or account change, and
 nothing private written to browser storage.
 
+## Design
+
+The web app follows Material 3 rather than the iOS look. The user scoped this
+change to the web client: iOS keeps its native SwiftUI design, and behavior, copy,
+and caching still match across clients. Manrope stays the typeface on both.
+
+- **Tokens.** `app/assets/css/main.css` defines Material 3 color roles (`--md-*`)
+  from a tonal-spot scheme seeded with the brand blue `#045de3`, which stays the
+  light-mode primary. Dark mode uses the scheme's dark roles. Shape, elevation,
+  and motion scales live beside them. Older names (`--accent`, `--surface`,
+  `--separator`, …) remain as aliases so page and scoped styles keep working; use the
+  `--md-*` roles in new code.
+- **Components.** The shared classes keep their names and markup. `.button` is
+  filled; `.button.secondary` (tonal), `.button.outlined`, and `.button.text` are the
+  alternatives, with one filled action per task area. `.link-button` is a text
+  button and `.icon-button` a standard 40 px icon button. `.group` renders a
+  Material 3 expressive list: items separated by 2 px gaps inside one rounded block.
+  `a.button-row` (navigation) trails a chevron; `button.button-row` (action) keeps
+  the primary color. `.toggle` inputs are Material switches, `.text-field` is an
+  outlined field with a floating label (used on sign-in), `.fab` is the
+  extended floating action button for **New chat** in the chat list, and
+  `.mini-tabs` is a navigation bar with an active indicator pill.
+- **Layout.** On wide screens the chat list sits on the container color and the
+  page renders in a rounded surface pane; below 860 px both are full-bleed.
+- **State layers and ripple.** Interactive classes get a `currentColor` overlay
+  (8% hover, 10% focus and press). `app/plugins/ripple.client.ts` adds the press
+  ripple with one delegated `pointerdown` listener; the host list there and in
+  `main.css` must stay in sync. Add `data-ripple` to opt an element in, or
+  `data-no-ripple` to opt one out. Touch presses wait 90 ms and cancel when the
+  pointer moves more than 10 px, so starting a scroll doesn't flash a row. Disabled
+  controls and `prefers-reduced-motion` get no ripple. The wave renders in its own
+  clipping layer, so hosts keep `overflow: visible` (icon-button badges).
+- **Icons.** `AppIcon` renders Material Symbols (Rounded) through `@nuxt/icon` in SVG
+  mode, so CSS that sizes `svg` still applies. `app/utils/icons.ts` maps each
+  semantic name to an outline and a filled symbol (`<AppIcon name="heart" filled />`);
+  `nuxt.config.ts` bundles exactly those icons into the client (about 80 icons,
+  ~40 KB uncompressed). The provider is `none` with no API fallback and no server
+  bundle, so the app never requests icons from Iconify and the Worker doesn't carry
+  the multi-megabyte collection. Add new icons to the map only after confirming the
+  name exists in `@iconify-json/material-symbols`.
+
+Verification (October 29, 2026): `npm run typecheck:web` passes. A headless Chrome
+harness using the real `main.css`, real Material Symbols, and representative
+markup was checked in light, dark, and a 390 px viewport; the ripple plugin was
+exercised there with synthetic mouse and touch events (press, disabled, scroll
+cancel, quick tap, cleanup). The app itself was not run: pages against the live
+API, real touch devices, and the production build are not yet visually verified.
+
 ## Local development
 
 ```sh

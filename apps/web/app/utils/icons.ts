@@ -1,0 +1,55 @@
+// Material Symbols (Rounded) for each semantic icon name. Each entry has the
+// outline glyph used by default and the filled glyph for selected or emphasized
+// states. nuxt.config.ts bundles exactly these icons into the client, so a new
+// icon only needs an entry here. Verify names against
+// node_modules/@iconify-json/material-symbols/icons.json; not every symbol has
+// an outline variant.
+export const appIcons = {
+  compose: ['material-symbols:edit-outline-rounded', 'material-symbols:edit-rounded'],
+  back: ['material-symbols:arrow-back-rounded', 'material-symbols:arrow-back-rounded'],
+  chevron: ['material-symbols:chevron-right-rounded', 'material-symbols:chevron-right-rounded'],
+  send: ['material-symbols:send-outline-rounded', 'material-symbols:send-rounded'],
+  attach: ['material-symbols:attach-file-rounded', 'material-symbols:attach-file-rounded'],
+  person: ['material-symbols:person-outline-rounded', 'material-symbols:person-rounded'],
+  people: ['material-symbols:group-outline-rounded', 'material-symbols:group-rounded'],
+  plus: ['material-symbols:add-rounded', 'material-symbols:add-rounded'],
+  mail: ['material-symbols:mail-outline-rounded', 'material-symbols:mail-rounded'],
+  key: ['material-symbols:key-outline-rounded', 'material-symbols:key-rounded'],
+  file: ['material-symbols:description-outline-rounded', 'material-symbols:description-rounded'],
+  close: ['material-symbols:close-rounded', 'material-symbols:close-rounded'],
+  gear: ['material-symbols:settings-outline-rounded', 'material-symbols:settings-rounded'],
+  share: ['material-symbols:share-outline-rounded', 'material-symbols:share-rounded'],
+  'group-add': ['material-symbols:group-add-outline-rounded', 'material-symbols:group-add-rounded'],
+  reply: ['material-symbols:reply-rounded', 'material-symbols:reply-rounded'],
+  image: ['material-symbols:image-outline-rounded', 'material-symbols:image-rounded'],
+  timer: ['material-symbols:timer-outline-rounded', 'material-symbols:timer-rounded'],
+  alarm: ['material-symbols:alarm-outline-rounded', 'material-symbols:alarm-rounded'],
+  iphone: ['material-symbols:mobile-outline-rounded', 'material-symbols:mobile-rounded'],
+  calendar: ['material-symbols:calendar-today-outline-rounded', 'material-symbols:calendar-today-rounded'],
+  speaker: ['material-symbols:volume-up-outline-rounded', 'material-symbols:volume-up-rounded'],
+  target: ['material-symbols:target-rounded', 'material-symbols:target-rounded'],
+  nfc: ['material-symbols:nfc-rounded', 'material-symbols:nfc-rounded'],
+  check: ['material-symbols:check-circle-outline-rounded', 'material-symbols:check-circle-rounded'],
+  clock: ['material-symbols:schedule-outline-rounded', 'material-symbols:schedule-rounded'],
+  alert: ['material-symbols:warning-outline-rounded', 'material-symbols:warning-rounded'],
+  'x-circle': ['material-symbols:cancel-outline-rounded', 'material-symbols:cancel-rounded'],
+  minus: ['material-symbols:do-not-disturb-on-outline-rounded', 'material-symbols:do-not-disturb-on-rounded'],
+  refresh: ['material-symbols:refresh-rounded', 'material-symbols:refresh-rounded'],
+  chart: ['material-symbols:bar-chart-rounded', 'material-symbols:bar-chart-rounded'],
+  list: ['material-symbols:format-list-bulleted-rounded', 'material-symbols:format-list-bulleted-rounded'],
+  money: ['material-symbols:payments-outline-rounded', 'material-symbols:payments-rounded'],
+  cart: ['material-symbols:shopping-cart-outline-rounded', 'material-symbols:shopping-cart-rounded'],
+  star: ['material-symbols:star-outline-rounded', 'material-symbols:star-rounded'],
+  bolt: ['material-symbols:bolt-outline-rounded', 'material-symbols:bolt-rounded'],
+  folder: ['material-symbols:folder-outline-rounded', 'material-symbols:folder-rounded'],
+  grid: ['material-symbols:grid-view-outline-rounded', 'material-symbols:grid-view-rounded'],
+  home: ['material-symbols:home-outline-rounded', 'material-symbols:home-rounded'],
+  chat: ['material-symbols:chat-outline-rounded', 'material-symbols:chat-rounded'],
+  book: ['material-symbols:menu-book-outline-rounded', 'material-symbols:menu-book-rounded'],
+  trophy: ['material-symbols:trophy-outline-rounded', 'material-symbols:trophy-rounded'],
+  heart: ['material-symbols:favorite-outline-rounded', 'material-symbols:favorite-rounded'],
+  more: ['material-symbols:more-vert-rounded', 'material-symbols:more-vert-rounded'],
+  'add-reaction': ['material-symbols:add-reaction-outline-rounded', 'material-symbols:add-reaction-rounded'],
+} as const satisfies Record<string, readonly [outline: string, filled: string]>;
+
+export type AppIconName = keyof typeof appIcons;

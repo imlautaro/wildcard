@@ -20,7 +20,7 @@ onMounted(() => apps.refresh(true));
         <NuxtLink v-for="app in apps.state.value.apps" :key="app.id" :to="`/contacts/${contactID}/mini-apps/${app.id}`" class="mini-row" style="color: inherit">
           <span class="mini-app-glyph"><AppIcon :name="miniAppIcon(app.icon)" /></span>
           <span class="copy"><strong>{{ app.title }}</strong><span>{{ app.status === 'enabled' ? (app.subtitle ?? 'Enabled') : 'Needs review' }}</span></span>
-          <AppIcon name="chevron" class="chevron" style="width: 16px; height: 16px; color: var(--tertiary)" />
+          <AppIcon name="chevron" class="chevron" style="width: 20px; height: 20px; color: var(--secondary)" />
         </NuxtLink>
       </div>
       <p class="group-footer">Mini apps use this contact’s connections and are visible only to you.</p>

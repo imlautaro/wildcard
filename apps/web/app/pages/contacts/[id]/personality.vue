@@ -100,8 +100,7 @@ onMounted(async () => {
 .personality-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
 .personality-field { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
 .personality-field textarea { font: inherit; color: inherit; background: transparent; border: 0; resize: vertical; width: 100%; }
-.personality-trait { display: flex; flex-direction: column; padding: 16px; gap: 10px; border-bottom: 1px solid var(--separator); }
-.personality-trait:last-child { border-bottom: 0; }
+.personality-trait { display: flex; flex-direction: column; padding: 16px; gap: 10px; }
 .personality-trait > span, .personality-trait small { display: flex; justify-content: space-between; gap: 12px; }
 .personality-trait small { color: var(--secondary); }
 .personality-trait input { width: 100%; accent-color: var(--accent); }

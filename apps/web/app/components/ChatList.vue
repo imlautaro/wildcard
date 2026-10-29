@@ -22,13 +22,9 @@ onMounted(() => { void chats.refresh(); });
 
 <template>
   <header class="bar">
+    <h1 class="title">Chats</h1>
     <NuxtLink to="/account" class="icon-button" aria-label="Account">
-      <AppAvatar :name="user?.name ?? ''" :path="accountPhotoPath()" :size="30" />
-    </NuxtLink>
-    <h1 class="title" style="justify-content: center">Chats</h1>
-    <NuxtLink to="/contacts" class="icon-button" aria-label="Contacts and new chat">
-      <AppIcon name="compose" />
-      <span v-if="chats.invitationCount.value" class="badge">{{ chats.invitationCount.value }}</span>
+      <AppAvatar :name="user?.name ?? ''" :path="accountPhotoPath()" :size="32" />
     </NuxtLink>
   </header>
   <div v-if="chats.error.value && chats.rows.value.length" class="notice" role="status">
@@ -70,4 +66,8 @@ onMounted(() => { void chats.refresh(); });
       <button class="link-button" @click="chats.loadMore()">Load older chats</button>
     </div>
   </div>
+  <NuxtLink to="/contacts" class="fab" aria-label="Contacts and new chat">
+    <AppIcon name="compose" />New chat
+    <span v-if="chats.invitationCount.value" class="badge">{{ chats.invitationCount.value }}</span>
+  </NuxtLink>
 </template>

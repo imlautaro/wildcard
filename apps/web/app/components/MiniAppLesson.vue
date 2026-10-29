@@ -55,10 +55,10 @@ const answer = computed(() => question.value.options ? question.value.options[qu
       <header>
         <button type="button" class="icon-button" aria-label="Close" @click="playing = false"><AppIcon name="close" /></button>
         <div class="track"><div class="fill" :style="{ width: `${(index + (result === null ? 0 : 1)) / lesson.questions.length * 100}%` }" /></div>
-        <span class="hearts" :aria-label="`${hearts} hearts`"><AppIcon name="heart" />{{ hearts }}</span>
+        <span class="hearts" :aria-label="`${hearts} hearts`"><AppIcon name="heart" filled />{{ hearts }}</span>
       </header>
       <section v-if="finished || failed" class="summary">
-        <AppIcon :name="failed ? 'heart' : 'trophy'" class="big" :class="{ failed }" />
+        <AppIcon :name="failed ? 'heart' : 'trophy'" filled class="big" :class="{ failed }" />
         <h2>{{ failed ? 'Out of hearts' : 'Lesson complete!' }}</h2>
         <p>{{ correct }} of {{ lesson.questions.length }} correct</p>
         <p v-if="!failed && lesson.xp && correct" class="xp">+{{ correct }} XP</p>

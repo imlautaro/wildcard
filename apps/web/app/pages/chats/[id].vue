@@ -313,7 +313,7 @@ onBeforeUnmount(() => {
   width: 100%; max-width: 200px; padding: 6px 30px 6px 12px; border: 0; border-radius: 999px; font-size: 14px; font-weight: 600;
   background: var(--selected); color: var(--accent); appearance: none; text-overflow: ellipsis;
 }
-.device-select svg { position: absolute; right: 10px; top: 50%; width: 13px; height: 13px; transform: translateY(-50%) rotate(90deg); color: var(--accent); pointer-events: none; stroke-width: 2.6; }
+.device-select svg { position: absolute; right: 8px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%) rotate(90deg); color: var(--accent); pointer-events: none; }
 .remote-actions .icon-button svg { width: 18px; height: 18px; }
 @media (max-width: 560px) {
   .remote-native-bar { flex-wrap: wrap; }
