@@ -67,6 +67,16 @@ the group owner or the contact's contributor can remove a contact; only the owne
 can remove another human or grant permissions. Members can leave. The owner must
 delete the group to leave; ownership transfer is not implemented.
 
+**Group details layout (iOS and web).** Rows with icons: **Discuss my private chats**
+shows "N of M on" and opens a sheet with the per-contact switches (explanation behind
+an info button), then Connections, Mini apps and Tasks. Members are compact rows with
+their role ("Owner", "Can invite", "Member", "Contact"); a "⋯" button on members you
+can manage offers **Allow invites/Stop allowing invites** and **Remove from group**.
+Invitations and adding contacts open from **+** in the iOS toolbar and from **Invite
+people** / **Add a contact** sheets on web, where the shared-memory text that consent
+covers stays visible. iOS also offers **Shared memory consent** as a row with a sheet.
+Web refresh is an icon in the page bar; iOS uses pull to refresh.
+
 Creation, acceptance and adding a contact require an unchecked, explicit shared
 memory confirmation. With the Contributor model they also require separate
 Contributor data-use consent. Group details can renew consent for future messages.
@@ -719,7 +729,7 @@ clients reuse their existing group message caches and polling. See
 
 ## Optional private text sharing
 
-In **Group details → Discuss my private chats**, each human can allow an individual
+In **Group details → Discuss my private chats** (a row that opens a sheet), each human can allow an individual
 contact to discuss that human's entire past and future private text conversation
 with everyone in this group. Each switch is off by default and enabling it requires
 an explicit disclosure/confirmation on iOS and web. The permission is scoped to
