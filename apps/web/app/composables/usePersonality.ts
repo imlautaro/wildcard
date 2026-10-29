@@ -36,6 +36,7 @@ export function usePersonality(contactID: MaybeRefOrGetter<string>) {
       try {
         const result = await api<PersonalitySnapshot>(`contacts/${id}/personality`);
         if (snapshots.get(id) !== current || current.revision !== revision) return;
+        result.personality.specialties ??= '';
         current.value = result;
         error.value = null;
       } catch (failure) {
@@ -62,6 +63,7 @@ export function usePersonality(contactID: MaybeRefOrGetter<string>) {
       const result = await api<PersonalitySnapshot>(`contacts/${id}/personality`, { method: 'PUT',
         json: { personality, revision: expectedRevision } });
       if (snapshots.get(id) !== current || current.revision !== revision) return null;
+      result.personality.specialties ??= '';
       current.value = result;
       return result;
     } catch (failure) {

@@ -54,7 +54,8 @@ flowchart LR
 
 The versioned profile is stored once on `contact_agent` through the
 `agent_personality` relation. It contains `enabled`, `description` (at most 2,000
-Unicode code points), nullable `birthDate` (`YYYY-MM-DD`, 1900 or later), an IANA
+Unicode code points), `specialties` (optional text, at most 1,000 Unicode code
+points), nullable `birthDate` (`YYYY-MM-DD`, 1900 or later), an IANA
 `timeZone`, and a complete `traits` object. Birth dates must be real calendar
 dates and cannot be in the future in that zone. There is no separately mutable
 age counter: age is derived from the birth date and current local calendar date.
@@ -68,6 +69,38 @@ server-derived birthday-today flag. A greeting on another day cannot change thos
 facts. Historical remembered ages cannot override the current calendar. A
 birthday greeting in a group must address this contact, rather than another
 member with a birthday.
+
+## Specialties
+
+**Contact details → Personality → Specialties** is editable by the creator on iOS
+and web and read-only for other participants, like the stable identity. It describes
+relative strengths and familiar approaches independently of the temperament sliders.
+An empty value adds no specialty direction. Existing stored profiles and old API
+payloads without this field remain valid; reads normalize it to an empty string.
+An older client saving a profile without the field preserves the stored specialties
+under the existing optimistic revision check. An explicit empty string clears them.
+No schema migration, new tools, model selection or permission changes are required.
+
+The shared reply/initiative context quotes specialties as character data. It tells
+the contact to draw on them when useful while discussing any other subject, without
+forced topic steering, repetitive introductions or referrals to another contact.
+Specialties confer no credentials, real-world experience, certainty, additional
+tools or access. They guide the same underlying model; they do not establish measured
+expertise or guarantee better answers. The acting director still governs expression.
+Saving follows the existing profile revision and emotional-history reset semantics.
+
+New onboarding plans persist five different strengths, shuffled independently of
+five temperaments: explanation/evidence, practical planning, creative exploration,
+thoughtful communication, and everyday discovery. Each has related approaches, with
+multifaceted interests and age-appropriate identity text. Existing contacts and
+legacy saved onboarding plans keep their identities; creators can add strengths
+manually. See [onboarding](onboarding.md).
+
+Pending device/model verification for this addition: edit/save/clear specialties
+as creator, inspect as participant, preserve values when an older client saves,
+reject stale revisions, resume onboarding with a saved assignment, and compare
+relevant versus unrelated topics in private chats and groups. Static checks cannot
+establish conversational quality or actual differences in model performance.
 
 ## Temperament controls
 

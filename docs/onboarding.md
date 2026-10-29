@@ -40,7 +40,18 @@ on the model following that direction; language is not a translation filter.
 Five contrasting trait profiles (patient listener, playful adventurer, analytical
 skeptic, expressive artist, practical organizer) activate the existing personality
 system automatically. Text generation supplies separate identities around those
-profiles; creators can edit them later in **Contact details → Personality**.
+profiles. Five strengths (explanation/evidence, practical planning, creative
+exploration, thoughtful communication and everyday discovery) are shuffled separately
+from the temperaments and supplied alongside them when generating identities. Each
+contact's strength includes related approaches, without making it a job, exclusive
+role or claim of professional credentials. Descriptions retain unrelated interests
+and keep these strengths appropriate to the contact's age. The assignment is saved
+as `specialties` in each identity plan and then in the shared personality, so retries
+reuse it. Existing completed contacts and legacy saved plans without specialties
+are preserved; they are not automatically rewritten. Every contact can still talk
+about any subject; the shared personality context discourages forced steering and
+unsupported expertise. These are model directions, not measured capability differences.
+Creators can edit identity and specialties later in **Contact details → Personality**.
 Profiles have no invented calendar birthday. All team-authored descriptions and
 group names are English; contact names retain native spelling. The group starts
 empty and accepts messages immediately after creation; individual contacts appear
@@ -52,7 +63,7 @@ base64 output and low reasoning, with reference search/web search/shell disabled
 The realistic portrait prompt is exactly:
 
 ```text
-${identity.age} years old ${identity.gender} social media natural photo taken with phone. Appearance: ${identity.portrait}. Personality cues: ${identity.description}.
+${identity.age} years old ${identity.gender} social media natural photo taken with phone. profile picture for social media. Appearance: ${identity.portrait}. Personality cues: ${identity.description}.
 ```
 
 It omits the earlier head-and-shoulders, background, clothing, watermark and
@@ -134,7 +145,7 @@ Device/browser checks still required: new registration, existing-account exempti
 empty options/error recovery, every selector, age validation and realistic age matching, consent validation, generating each
 style, reopen/back navigation, offline draft retention, duplicate submits, failed
 portrait retry, session expiry/account switch, final group roster, editable
-personalities, preferred-language private/group replies and private avatar access.
+personalities/specialties, distinct strengths without fixed temperament pairings, broad-topic replies without forced steering, preferred-language private/group replies and private avatar access.
 Also verify restart after a dispatch outage and final transaction failure. Static
 validation does not establish model quality, real provider access, UI layout,
 live deployment or functional behavior. No live inference, remote migration or

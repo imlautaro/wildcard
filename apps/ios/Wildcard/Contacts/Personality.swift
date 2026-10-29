@@ -5,22 +5,36 @@ import SwiftUI
 struct ContactPersonality: Codable, Equatable, Sendable {
     var enabled = false
     var description = ""
+    var specialties = ""
     var birthDate: String? = nil
     var timeZone = "UTC"
     var traits = Dictionary(uniqueKeysWithValues: PersonalityTrait.all.map { ($0.key, 5) })
 
-    private enum CodingKeys: String, CodingKey { case enabled, description, birthDate, timeZone, traits }
+    private enum CodingKeys: String, CodingKey { case enabled, description, specialties, birthDate, timeZone, traits }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try values.decode(Bool.self, forKey: .enabled)
+        description = try values.decode(String.self, forKey: .description)
+        specialties = try values.decodeIfPresent(String.self, forKey: .specialties) ?? ""
+        birthDate = try values.decodeIfPresent(String.self, forKey: .birthDate)
+        timeZone = try values.decode(String.self, forKey: .timeZone)
+        traits = try values.decode([String: Int].self, forKey: .traits)
+    }
     func encode(to encoder: Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(enabled, forKey: .enabled)
         try values.encode(description, forKey: .description)
+        try values.encode(specialties, forKey: .specialties)
         try values.encode(birthDate, forKey: .birthDate)
         try values.encode(timeZone, forKey: .timeZone)
         try values.encode(traits, forKey: .traits)
     }
 
     var isValid: Bool {
-        guard description.unicodeScalars.count <= 2000, TimeZone(identifier: timeZone) != nil,
+        guard description.unicodeScalars.count <= 2000, specialties.unicodeScalars.count <= 1000,
+              !specialties.unicodeScalars.contains(where: { $0.value < 9 || (11...12).contains($0.value) || (14...31).contains($0.value) || (127...159).contains($0.value) }),
+              TimeZone(identifier: timeZone) != nil,
               !description.unicodeScalars.contains(where: { $0.value < 9 || (11...12).contains($0.value) || (14...31).contains($0.value) || (127...159).contains($0.value) }),
               traits.count == PersonalityTrait.all.count,
               PersonalityTrait.all.allSatisfy({ (1...10).contains(traits[$0.key] ?? 0) }) else { return false }
@@ -145,6 +159,13 @@ struct ContactPersonalityView: View {
                 }
                 .disabled(!canEdit || draft.saving)
                 Section {
+                    TextEditor(text: $draft.profile.specialties).frame(minHeight: 100)
+                        .accessibilityLabel("Specialties")
+                } header: { Text("Specialties") } footer: {
+                    Text("Things this contact is especially good at. These strengths are shared with everyone and independent of temperament. They can still talk about anything. Optional, up to 1,000 characters.")
+                }
+                .disabled(!canEdit || draft.saving)
+                Section {
                     Toggle("Date of birth", isOn: Binding(
                         get: { draft.profile.birthDate != nil },
                         set: { draft.profile.birthDate = $0 ? ContactPersonality.string(.now) : nil }
@@ -184,7 +205,7 @@ struct ContactPersonalityView: View {
                 }
                 .disabled(!canEdit || draft.saving)
                 if !draft.profile.isValid {
-                    Text("Use a valid date, time zone, description up to 2,000 characters, and whole-number traits from 1 to 10.")
+                    Text("Use a valid date, time zone, description up to 2,000 characters, specialties up to 1,000 characters, and whole-number traits from 1 to 10.")
                         .foregroundStyle(.red).manrope(.footnote)
                 }
                 if draft.saved && !draft.dirty { Text("Saved.").foregroundStyle(.secondary) }

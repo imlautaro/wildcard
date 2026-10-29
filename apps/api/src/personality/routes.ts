@@ -30,6 +30,10 @@ routes.put('/', bodyLimit({ maxSize: 16_384, onError: c => c.json({ error: 'Pers
     || !Number.isSafeInteger(body.revision) || Number(body.revision) < 0) {
     return c.json({ error: 'Provide a valid personality and revision' }, 400);
   }
+  // Older clients omit specialties; preserve the current value under the same revision check.
+  if (!Object.hasOwn(body.personality as object, 'specialties')) {
+    profile.specialties = (await readPersonality(c.env.DB, agent.agentID)).personality.specialties;
+  }
   const saved = await c.env.DB.prepare(`INSERT INTO agent_personality (agent_id, profile_json, revision, updated_at)
     SELECT a.id, ?1, 1, ?2 FROM contact_agent a JOIN contact c ON c.agent_id = a.id
     WHERE a.id = ?3 AND a.owner_id = ?4 AND c.id = ?5 AND c.user_id = ?4 AND ?6 = 0

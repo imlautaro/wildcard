@@ -473,7 +473,7 @@ apply instantly and are reconciled with the server (`useMiniApps`).
 ## Contact personality
 
 **Contact details → Personality** (`/contacts/:id/personality`) matches the native
-iOS experiment: stable identity, optional date of birth, birthday time zone,
+iOS experiment: stable identity, optional specialties (up to 1,000 characters), optional date of birth, birthday time zone,
 computed age and fifteen labeled 1–10 sliders. Only the creator can save; other
 participants have a read-only view. Existing contacts start disabled. Both clients
 use the same server director for private/group replies and initiative. Relationships
@@ -523,7 +523,7 @@ for limits, privacy, retention and pending functional checks.
 Onboarding also requires an integer age (1–120), matching iOS. New realistic
 contacts have validated ages within ±2 years, with explicit per-contact gender.
 The realistic prompt uses `N years old female|male social media natural photo
-taken with phone`, followed only by Appearance and Personality cues. Other styles
+taken with phone. profile picture for social media`, followed by Appearance and Personality cues. Other styles
 retain their portrait prompt. Age uses the existing session draft/cache and D1
 input, with no extra local persistence. Legacy saved setups still resume without
 requiring or inventing age; completed photos are preserved. See [onboarding](onboarding.md).

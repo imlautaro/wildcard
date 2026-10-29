@@ -199,7 +199,8 @@ See [groups](groups.md).
 ## Personality
 
 After creating a contact, open **Contact details → Personality** on iOS or web.
-The creator edits the shared fictional identity, optional birth date and time
+The creator edits the shared fictional identity, optional specialties (relative strengths
+that do not limit conversation topics), optional birth date and time
 zone, and fifteen integer temperament controls; other participants can inspect
 these read-only. Age is derived from the current date. The experiment starts
 disabled and settings use a separate versioned endpoint, leaving the existing

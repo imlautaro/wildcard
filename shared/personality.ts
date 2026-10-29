@@ -20,13 +20,14 @@ export type TraitKey = typeof personalityTraits[number]['key'];
 export type Personality = {
   enabled: boolean;
   description: string;
+  specialties: string;
   birthDate: string | null;
   timeZone: string;
   traits: Record<TraitKey, number>;
 };
 export type PersonalitySnapshot = { personality: Personality; revision: number; age: number | null; isBirthday: boolean };
 export function defaultPersonality(): Personality {
-  return { enabled: false, description: '', birthDate: null, timeZone: 'UTC',
+  return { enabled: false, description: '', specialties: '', birthDate: null, timeZone: 'UTC',
     traits: Object.fromEntries(personalityTraits.map(t => [t.key, 5])) as Record<TraitKey, number> };
 }
 
@@ -50,7 +51,11 @@ export function birthdayFacts(profile: Personality, at: number) {
 export function parsePersonality(value: unknown, now = Date.now()): Personality | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const p = value as Record<string, unknown>;
-  if (Object.keys(p).sort().join(',') !== 'birthDate,description,enabled,timeZone,traits'
+  const keys = Object.keys(p).filter(key => key !== 'specialties').sort().join(',');
+  const specialties = p.specialties === undefined ? '' : p.specialties;
+  if (keys !== 'birthDate,description,enabled,timeZone,traits'
+    || typeof specialties !== 'string' || [...specialties].length > 1000
+    || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(specialties)
     || typeof p.enabled !== 'boolean' || typeof p.description !== 'string' || [...p.description].length > 2000
     || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(p.description)
     || typeof p.timeZone !== 'string' || p.timeZone.length > 100 || /^[+-]/.test(p.timeZone)
@@ -65,6 +70,6 @@ export function parsePersonality(value: unknown, now = Date.now()): Personality 
   const traits = p.traits as Record<string, unknown>;
   if (Object.keys(traits).length !== personalityTraits.length || personalityTraits.some(t =>
     typeof traits[t.key] !== 'number' || !Number.isInteger(traits[t.key]) || Number(traits[t.key]) < 1 || Number(traits[t.key]) > 10)) return null;
-  return { enabled: p.enabled, description: p.description.trim(), birthDate: p.birthDate as string | null,
+  return { enabled: p.enabled, description: p.description.trim(), specialties: specialties.trim(), birthDate: p.birthDate as string | null,
     timeZone: p.timeZone, traits: { ...traits } as Record<TraitKey, number> };
 }

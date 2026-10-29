@@ -735,6 +735,11 @@ session-owned `PersonalityDraft` objects in `ContactsStore` on iOS, and
 protected from ordinary eviction and may temporarily exceed the budget. No
 profile, dirty draft, or derived relationship state is persisted to client disk.
 
+Specialties live in the same profile snapshots and dirty drafts as identity and
+traits, with the same eight-entry budget, revision handling and invalidation. No
+additional request, persistent cache or capability catalog is introduced. Old
+profiles normalize missing specialties to empty text.
+
 The last snapshot (including the disabled/empty default) is immediately reusable.
 Opening/reopening revalidates in the background; iOS also refreshes on foreground.
 Explicit refresh asks before discarding a dirty draft. The server revision used
@@ -745,7 +750,9 @@ changes clear state and reject late responses. There is no pagination or new ima
 cache. Age/birthday display is refreshed on navigation or explicit refresh, while
 server reply context always derives the current date.
 
-Verify reopen/back, empty defaults, refresh/discard, offline reads and failed saves,
+Verify specialties survive reopen/back and failed saves, clear on account changes,
+and preserve dirty edits during refresh. Verify empty defaults, refresh/discard,
+offline reads and failed saves,
 concurrent edits/409, pending saves across navigation, eviction, deletion/revocation,
 and account switching on both clients. These checks remain pending on devices and
 in a browser; static type checking cannot establish UI behavior.

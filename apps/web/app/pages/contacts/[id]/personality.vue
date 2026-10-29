@@ -70,6 +70,10 @@ onMounted(async () => {
         </div>
         <p class="group-footer">This identity is shared with everyone who talks to the contact. Conversation and mood do not rewrite it. Use fictional information. Saving changes starts a fresh emotional history.</p>
         <div class="group">
+          <label class="field personality-field">Specialties<textarea v-model="draft.specialties" rows="4" placeholder="Things this contact is especially good at." /></label>
+        </div>
+        <p class="group-footer">Things this contact is especially good at. These strengths are shared with everyone and independent of temperament. They can still talk about anything. Optional, up to 1,000 characters.</p>
+        <div class="group">
           <label class="field personality-field">Date of birth<input :value="draft.birthDate ?? ''" type="date" min="1900-01-01" @input="draft.birthDate = ($event.target as HTMLInputElement).value || null"></label>
           <label class="field personality-field">Birthday time zone<input v-model="draft.timeZone" type="text" placeholder="America/Argentina/Buenos_Aires" spellcheck="false"></label>
         </div>
@@ -83,7 +87,7 @@ onMounted(async () => {
         </div>
       </fieldset>
       <p class="group-footer">The contact expresses tendencies through tone and timing. It does not receive these scores. Feelings settle over time. Its acting direction adapts to each person without exposing private causes. Conversations with connections stay isolated. Follow-ups still respect your initiative switch and delivery limits.</p>
-      <p v-if="!valid" class="notice">Use a valid date, time zone, description up to 2,000 characters, and whole-number traits from 1 to 10.</p>
+      <p v-if="!valid" class="notice">Use a valid date, time zone, description up to 2,000 characters, specialties up to 1,000 characters, and whole-number traits from 1 to 10.</p>
       <p v-if="saved && !dirty" class="group-footer" role="status">Saved.</p>
       <button v-if="canEdit" type="submit" class="button block" :disabled="busy || !valid || !dirty">Save personality</button>
       <button type="button" class="button-row" :disabled="busy" @click="discardAndRefresh">Refresh personality</button>
