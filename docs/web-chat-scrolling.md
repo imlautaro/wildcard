@@ -54,3 +54,13 @@ Vue patches. Browser scroll anchoring is disabled for this viewport to avoid dou
 compensation. Delayed media growth while detached never forces the reader down.
 Pending browser verification: scroll up during a slow poll/upload, load earlier
 history while replies arrive, open quotes, and use wheel, touch and keyboard.
+
+## Return to latest messages
+
+Private and group chats show an accessible 44-pixel floating button above the
+composer while following is detached. Clicking it scrolls instantly to the latest
+messages and resumes following. It is positioned relative to the message viewport,
+so it does not move with history or overlap the composer.
+
+Pending browser verification: visibility in desktop/narrow layouts, keyboard
+activation, disappearance at the bottom, and continued following after clicking.

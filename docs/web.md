@@ -860,3 +860,9 @@ latest five checks and change turns used; the board row shows the same summary. 
 server checks the page with code and starts a contact turn only for a relevant change.
 Same versioned PATCH, board cache and polling as other task fields; no new cache.
 Browser and device presentation remain unverified. See [page monitors](monitors.md).
+
+### Conversation scrolling
+
+Web private chats and groups open instantly at the bottom, follow content growth,
+keep the reading position when scrolling up, and offer a return-to-latest button.
+See [web chat scrolling](web-chat-scrolling.md) for synchronization and verification.

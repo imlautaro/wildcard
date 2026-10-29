@@ -74,7 +74,7 @@ const items = computed<Item[]>(() => {
   }
   return result;
 });
-const { positioned, onScroll, onWheel, onTouchStart, onTouchMove, onKeydown, scrollToBottom } = useChatScroll(
+const { positioned, pinned, onScroll, onWheel, onTouchStart, onTouchMove, onKeydown, scrollToBottom } = useChatScroll(
   scroller, messageContent, contactID, () => state.value.loaded, () => items.value,
 );
 
@@ -219,6 +219,7 @@ onBeforeUnmount(() => {
         <button v-if="state.remoteDeviceID" type="button" class="link-button danger" @click="revokeRemote">Revoke access</button>
       </div>
     </div>
+    <div class="message-viewport">
     <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" tabindex="0" @scroll.passive="onScroll" @wheel.passive="onWheel" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @keydown="onKeydown">
       <div ref="messageContent" class="message-content">
       <div class="spacer" />
@@ -331,6 +332,8 @@ onBeforeUnmount(() => {
 
 
       </div>
+    </div>
+    <ChatScrollDown v-if="positioned && !pinned" @click="scrollToBottom" />
     </div>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable" :sending="!!state.pending" :reply="replyTarget"

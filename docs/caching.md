@@ -1144,3 +1144,12 @@ reply gets the new delivery. Existing download deduplication, memory/disk budget
 eviction and session rejection rules are unchanged. Pending verification in both
 clients: back/reopen, offline save failure, refresh after another participant edits,
 creator/member restrictions, revocation and account switching during a save.
+
+## Web conversation refresh coordination
+
+Web private/group history refreshes deduplicate requests per cached entry. The
+sidebar refresh prioritizes the visible history before publishing newer activity.
+Existing cache ownership, eviction, stale-response checks and pending-send IDs
+remain in force. Scroll state is visit-local and adds no persisted private data.
+See [web chat scrolling](web-chat-scrolling.md) for behavior and pending browser
+checks, including navigation, failures and session/account changes.

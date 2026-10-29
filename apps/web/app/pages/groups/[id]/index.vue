@@ -50,7 +50,7 @@ const items = computed<Item[]>(() => {
   return result;
 });
 
-const { positioned, onScroll, onWheel, onTouchStart, onTouchMove, onKeydown, scrollToBottom } = useChatScroll(
+const { positioned, pinned, onScroll, onWheel, onTouchStart, onTouchMove, onKeydown, scrollToBottom } = useChatScroll(
   scroller, messageContent, groupID, () => state.value.loaded, () => items.value,
 );
 
@@ -196,6 +196,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
     <NuxtLink to="/" class="button secondary">Back to Chats</NuxtLink>
   </div>
   <template v-else>
+    <div class="message-viewport">
     <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" tabindex="0" @scroll.passive="onScroll" @wheel.passive="onWheel" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @keydown="onKeydown">
       <div ref="messageContent" class="message-content">
       <div class="spacer" />
@@ -277,6 +278,8 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
         <div class="typing" :aria-label="`${reply.name} is typing`"><span /><span /><span /></div>
       </div>
       </div>
+    </div>
+    <ChatScrollDown v-if="positioned && !pinned" @click="scrollToBottom" />
     </div>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded" :reply="replyTarget"
