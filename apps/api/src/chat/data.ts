@@ -1,7 +1,7 @@
-import { publicAttachment, type PublicAttachment } from './attachments';
+import { publicAttachment, type PublicAttachment, type Attachment } from './attachments';
 import type { ReplyQuote, ReplyTarget } from '../replies/data';
 export type ChatState = 'queued' | 'running' | 'complete' | 'failed';
-export type AssistantMessage = { id: string; text: string; createdAt: number; replyTo?: ReplyQuote | ReplyTarget | null };
+export type AssistantMessage = { id: string; text: string; createdAt: number; attachment?: Attachment | PublicAttachment | null; replyTo?: ReplyQuote | ReplyTarget | null };
 export type ChatTurn = {
   assistantMessagesJSON?: string | null;
   readAt: number | null;
@@ -30,7 +30,18 @@ export const storedColumns = `${turnColumns}, attachment_json AS attachmentJSON,
 
 export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }, replyTo: ReplyQuote | null, resolveQuote?: (target: { replyToID: string | null; replyToSide: string | null }) => ReplyQuote | null): PublicTurn {
   const { sequence, id, readAt, userText, assistantText, status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode } = turn;
-  return { assistantMessages: turn.assistantMessagesJSON ? (JSON.parse(turn.assistantMessagesJSON) as AssistantMessage[]).map(message => ({ ...message, replyTo: message.replyTo && resolveQuote ? resolveQuote({ replyToID: message.replyTo.messageID, replyToSide: message.replyTo.side }) : null })) : [], attachment: publicAttachment(turn), sequence, id, readAt, userText, assistantText, status: errorCode === 'MESSAGE_BATCHED' ? 'complete' : status, attempt, createdAt, updatedAt, scheduleID, groupRequestID, errorCode: errorCode === 'MESSAGE_BATCHED' ? null : errorCode, replyTo };
+  const assistantMessages = turn.assistantMessagesJSON
+    ? (JSON.parse(turn.assistantMessagesJSON) as AssistantMessage[]).map(message => ({
+      ...message,
+      attachment: message.attachment ? {
+        name: message.attachment.name, mimeType: message.attachment.mimeType, size: message.attachment.size,
+      } : null,
+      replyTo: message.replyTo && resolveQuote
+        ? resolveQuote({ replyToID: message.replyTo.messageID, replyToSide: message.replyTo.side }) : null,
+    })) : [];
+  return { assistantMessages, attachment: publicAttachment(turn), sequence, id, readAt, userText, assistantText,
+    status: errorCode === 'MESSAGE_BATCHED' ? 'complete' : status, attempt, createdAt, updatedAt, scheduleID,
+    groupRequestID, errorCode: errorCode === 'MESSAGE_BATCHED' ? null : errorCode, replyTo };
 }
 
 export function findTurn(db: D1Database, id: string, contactID: string, userID: string) {

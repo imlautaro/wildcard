@@ -670,3 +670,8 @@ and keep typing visible while the turn runs. A new human message stops the unsen
 tail. Private reactions, quotes, sounds, unread counts and push retain turn-level
 identity. See [successive contact messages](reply-messages.md) for limits, recovery,
 legacy history, cache behavior and verification steps.
+
+Contacts may send a contextual generated image with their first reply message,
+optionally referencing current authorized avatars. The delivered assistant entry
+contains attachment metadata; both clients use the ordinary incoming image/caption
+UI and private image cache. See [generated images](generated-images.md).

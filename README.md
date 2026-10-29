@@ -238,3 +238,8 @@ server-side acting director that produces per-recipient direction without privat
 causes. Connector conversations retain their local isolation. Initiative adapts within existing delivery limits. Existing contacts
 remain disabled until explicitly enabled. Migrations 0039–0040 are required; see
 [infrastructure](docs/infrastructure.md#contact-personality) for release and rollback.
+
+Contacts can [generate contextual chat images](docs/generated-images.md), optionally
+combining up to three authorized current profile photos. Both clients show images
+with captions; migration 0044 and the existing Meta/R2 services are required. See
+[infrastructure setup](docs/infrastructure.md#contact-generated-chat-images).

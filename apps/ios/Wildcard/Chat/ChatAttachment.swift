@@ -60,6 +60,7 @@ struct ChatAttachmentView: View {
     let contactID: String
     let turnID: String
     var groupID: String? = nil
+    var assistantAttachment = false
     let sentAt: Double
     let caption: String
     var receiptState: String? = nil
@@ -83,7 +84,7 @@ struct ChatAttachmentView: View {
     @State private var documentTask: Task<Void, Never>?
 
     private var imageResource: CachedImageResource {
-        groupID.map { .groupAttachment(groupID: $0, messageID: turnID) } ?? .attachment(contactID: contactID, turnID: turnID)
+        groupID.map { .groupAttachment(groupID: $0, messageID: turnID) } ?? (assistantAttachment ? .assistantAttachment(contactID: contactID, turnID: turnID) : .attachment(contactID: contactID, turnID: turnID))
     }
     private var standaloneImage: Bool { caption.isEmpty && senderName == nil && replyQuote == nil }
     private var imageBubbleRadius: CGFloat { standaloneImage ? 20 : 0 }
@@ -154,7 +155,7 @@ struct ChatAttachmentView: View {
             }
         }
         .fullScreenCover(isPresented: $showImage) {
-            AttachmentImageViewer(attachment: attachment, contactID: contactID, turnID: turnID, groupID: groupID)
+            AttachmentImageViewer(attachment: attachment, contactID: contactID, turnID: turnID, groupID: groupID, assistantAttachment: assistantAttachment)
         }
         .sheet(isPresented: Binding(get: { previewURL != nil }, set: { if !$0 { clearPreview() } })) {
             if let previewURL { AttachmentQuickLook(url: previewURL).ignoresSafeArea() }
@@ -228,7 +229,7 @@ struct ChatAttachmentView: View {
                 do {
                     let bytes = try await auth.withSession { api, token in
                         if let groupID { return try await api.groupAttachment(groupID: groupID, messageID: turnID, token: token) }
-                        return try await api.chatAttachment(contactID: contactID, turnID: turnID, token: token)
+                        return try await api.chatAttachment(contactID: contactID, turnID: turnID, assistant: assistantAttachment, token: token)
                     }
                     try Task.checkCancellation()
                     let folder = FileManager.default.temporaryDirectory.appending(path: "chat-preview-\(UUID().uuidString)")
@@ -279,6 +280,7 @@ private struct AttachmentImageViewer: View {
     let contactID: String
     let turnID: String
     var groupID: String? = nil
+    var assistantAttachment = false
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @State private var image: UIImage?
@@ -314,7 +316,7 @@ private struct AttachmentImageViewer: View {
         .task(id: attempt) {
             error = nil
             do {
-                let resource: CachedImageResource = groupID.map { .groupAttachment(groupID: $0, messageID: turnID) } ?? .attachment(contactID: contactID, turnID: turnID)
+                let resource: CachedImageResource = groupID.map { .groupAttachment(groupID: $0, messageID: turnID) } ?? (assistantAttachment ? .assistantAttachment(contactID: contactID, turnID: turnID) : .attachment(contactID: contactID, turnID: turnID))
                 image = try await auth.cachedImage(resource, maxPixelSize: 4096)
             } catch is CancellationError { }
             catch {

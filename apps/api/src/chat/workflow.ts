@@ -1,3 +1,4 @@
+import { generatedImage } from '../photos/generation';
 import { contactModelAllowed } from './consent';
 import { messageDelay, type ContactResponse } from './messages';
 import { batchStatement, batchIntoNext, shouldHoldReply, waitForComposer } from './pacing';
@@ -52,7 +53,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       await this.refreshAgentMemory(env, job, step, 'refresh-agent-self-memory');
       const prepared = await step.do('prepare-reply', {
         retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' },
-        timeout: '3 minutes',
+        timeout: '5 minutes',
       }, async () => {
         if (await batchIntoNext(env, job)) return null;
         const turn = await activeTurn(env.DB, job);
@@ -145,7 +146,13 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         const previous: AssistantMessage[] = delivered.assistantMessagesJSON ? JSON.parse(delivered.assistantMessagesJSON) : [];
         // A crash after the transaction but before its checkpoint must not append twice.
         if (previous.length > index) return true;
-        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${index}`, text: messages[index], createdAt: now, ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
+        // Recheck profile versions and conversation access after inference/pauses.
+        const attachment = index === 0 && response?.attachment ? await generatedImage(env, {
+          agentID: (await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ?').bind(delivered.contactID).first<{ id: string }>())!.id,
+          userID: delivered.userID, contactID: delivered.contactID, contributor: env.META_CHAT_MODEL.includes('contributor'),
+          turnID: job.turnID, attempt: job.attempt,
+        }) : null;
+        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${index}`, text: messages[index], createdAt: now, ...(attachment ? { attachment } : {}), ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
         const interrupted = `EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = chat_turn.contact_id
           AND newer.user_id = chat_turn.user_id AND newer.sequence > chat_turn.sequence)`;
         const text = next.length ? next.map(message => message.text).join('\n\n') : null;

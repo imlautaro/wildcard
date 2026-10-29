@@ -132,3 +132,9 @@ private turns or group messages. Each group contact can analyze the current file
 (or most recent eligible group file) within its existing exclusive attention turn.
 See [group media](groups.md#group-photos-attachments-and-voice) for the routes,
 source consent, visibility and cleanup behavior.
+
+Generated contact images use the same private R2 attachment registry and 5 MB
+limit. Group images are ordinary messages; private assistant attachments are in
+delivered message metadata and use the ownership-checked attachment endpoint with
+`?side=assistant`. Incoming image/caption UI, quotes and shared image caches match
+on iOS and web. See [generated images](generated-images.md).

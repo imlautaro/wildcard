@@ -2,7 +2,7 @@ import { remoteContext } from '../native/remote';
 import { parseNativeContext } from '../native/actions';
 import { reactionRoutes } from '../reactions/routes';
 import { parsePrivateReply, privateQuotes, privateTarget } from '../replies/data';
-import { parseAttachment, sameAttachment, storedAttachment } from '../chat/attachments';
+import { parseAttachment, sameAttachment, storedAttachment, type Attachment } from '../chat/attachments';
 import { contactModelAllowed } from '../chat/consent';
 import { validTimeZone } from '../schedules/data';
 import { dispatchVisit } from '../chat/visits';
@@ -201,7 +201,9 @@ chats.post('/turns', attachmentBody, async (c) => {
 });
 chats.get('/turns/:turnID/attachment', async (c) => {
   const turn = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
-  const attachment = turn && storedAttachment(turn);
+  const attachment = turn && (c.req.query('side') === 'assistant'
+    ? (JSON.parse(turn.assistantMessagesJSON ?? '[]') as { attachment?: Attachment }[])[0]?.attachment
+    : storedAttachment(turn));
   if (!attachment) return c.json({ error: 'Attachment not found' }, 404);
   const object = await c.env.CONTACT_PHOTOS.get(attachment.key);
   if (!object) return c.json({ error: 'Attachment not found' }, 404);

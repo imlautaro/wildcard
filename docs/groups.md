@@ -776,3 +776,13 @@ The semantic decision remains model-driven and can be wrong; this is not a proof
 that all repetition is impossible. Verify a team compliment, several agreement
 messages, substantive follow-up questions, personal round-robin answers, successive
 messages, publication retries and interleaved human messages with fictional data.
+
+## Generated contact images
+
+On an initial direct human trigger, contacts can generate a useful image with zero
+to three current authorized profile references and publish it on their first
+message. Draft review reuses that image rather than generating another; skips
+publish nothing. Bot continuations and designated private-return answers cannot
+generate images. Both clients use ordinary group attachment/cache/navigation
+behavior. See [generated images](generated-images.md) for current access checks,
+latency, durable reservations and pending live validation.

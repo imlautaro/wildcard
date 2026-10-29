@@ -651,3 +651,17 @@ export const personalityEvent = sqliteTable('personality_event', {
   check('personality_event_scope', sql`(${table.contactId} IS NOT NULL AND ${table.privateTurnId} IS NOT NULL AND ${table.groupId} IS NULL AND ${table.groupReplyId} IS NULL)
     OR (${table.groupId} IS NOT NULL AND ${table.groupReplyId} IS NOT NULL AND ${table.contactId} IS NULL AND ${table.privateTurnId} IS NULL)`),
 ]);
+
+export const generatedChatImage = sqliteTable('generated_chat_image', {
+  id: text('id').primaryKey(),
+  chatTurnId: text('chat_turn_id').unique().references(() => chatTurn.id, { onDelete: 'cascade' }),
+  groupReplyId: text('group_reply_id').unique().references(() => groupReply.id, { onDelete: 'cascade' }),
+  status: text('status', { enum: ['pending', 'complete', 'failed'] }).notNull(),
+  attachmentJson: text('attachment_json'),
+  referencesJson: text('references_json').notNull().default('[]'),
+  createdAt: date('created_at').notNull(),
+}, table => [
+  check('generated_image_scope', sql`(${table.chatTurnId} IS NULL) != (${table.groupReplyId} IS NULL)`),
+  check('generated_image_status', sql`${table.status} IN ('pending', 'complete', 'failed')`),
+  check('generated_image_complete', sql`${table.status} != 'complete' OR ${table.attachmentJson} IS NOT NULL`),
+]);

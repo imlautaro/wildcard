@@ -266,7 +266,14 @@ onBeforeUnmount(() => {
             v-if="item.kind === 'assistant' && item.turn.assistantText" :id="item.first ? `message-${item.turn.id}-assistant` : item.key"
             class="bubble-row incoming" :class="{ highlighted: highlighted === `${item.turn.id}-assistant` }"
           >
-            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply" @reply="startReply(item.turn, 'assistant')"><div class="bubble"><MessageReplyQuote v-if="item.first && item.turn.assistantMessages?.[0]?.replyTo" :preview="replyPreview(item.turn.assistantMessages[0].replyTo)" interactive @open="showQuoted(item.turn.assistantMessages[0].replyTo)" /><MessageMarkdown :text="item.text ?? item.turn.assistantText" /><div class="meta">{{ messageTime(item.timestamp) }}</div></div></MessageReactions>
+            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply" @reply="startReply(item.turn, 'assistant')">
+              <div class="bubble" :class="{ media: item.first && item.turn.assistantMessages?.[0]?.attachment }">
+                <MessageReplyQuote v-if="item.first && item.turn.assistantMessages?.[0]?.replyTo" :preview="replyPreview(item.turn.assistantMessages[0].replyTo)" interactive @open="showQuoted(item.turn.assistantMessages[0].replyTo)" />
+                <MessageAttachment v-if="item.first && item.turn.assistantMessages?.[0]?.attachment" :attachment="item.turn.assistantMessages[0].attachment" :path="`contacts/${contactID}/chat/turns/${item.turn.id}/attachment?side=assistant`" />
+                <div :class="{ caption: item.first && item.turn.assistantMessages?.[0]?.attachment }"><MessageMarkdown :text="item.text ?? item.turn.assistantText" /></div>
+                <div class="meta">{{ messageTime(item.timestamp) }}</div>
+              </div>
+            </MessageReactions>
           </div>
           <div v-else-if="item.kind === 'status' && item.turn.status === 'running' && state.presence?.status === 'typing'" class="bubble-row incoming">
             <div class="typing" aria-label="Typing"><span /><span /><span /></div>

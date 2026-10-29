@@ -1,5 +1,6 @@
+import type { Attachment } from './attachments';
 import { parsePrivateReply, type ReplyTarget } from '../replies/data';
-export type ContactResponse = { messages: string[]; replyTo?: ReplyTarget | null };
+export type ContactResponse = { messages: string[]; attachment?: Attachment | null; replyTo?: ReplyTarget | null };
 export const quoteInstruction = 'Quote an earlier message only when it clarifies which message you are answering: overlapping topics, several unanswered messages, or returning to an older point. Default to no quote when the context is obvious. A shared question such as what everyone ate does not need a quote on each answer. Use actual supplied message IDs, never copied quote text or invented IDs. Quote only once at the start of your response, not on every successive message.';
 
 // A turn may be one cohesive message or a short conversational burst.

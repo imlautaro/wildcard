@@ -18,6 +18,7 @@ struct AssistantMessage: Decodable, Equatable, Sendable, Identifiable {
     let text: String
     let createdAt: Double
     var replyTo: MessageReplyQuote? = nil
+    var attachment: ChatAttachment? = nil
 }
 
 struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
@@ -142,8 +143,8 @@ extension AuthAPI {
         return try JSONDecoder().decode(ChatSubmission.self, from: data)
     }
 
-    func chatAttachment(contactID: String, turnID: String, token: String) async throws -> Data {
-        let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns/\(turnID)/attachment", token: token, timeout: 60)
+    func chatAttachment(contactID: String, turnID: String, assistant: Bool = false, token: String) async throws -> Data {
+        let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns/\(turnID)/attachment\(assistant ? "?side=assistant" : "")", token: token, timeout: 60)
         return data
     }
 

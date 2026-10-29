@@ -880,3 +880,17 @@ publication. No client cache entries, synthetic messages or new polling are used
 Existing group snapshots revalidate queue/presence changes on iOS and web. Confirm
 that terminal replies remain stable across navigation/offline recovery and that
 fresh human traffic still updates the conversation after it has gone quiet.
+
+## Generated assistant images
+
+Private generated-image metadata is part of the delivered assistant message, so
+existing attempt/update-time merges reject stale data. The byte path has
+`?side=assistant`; iOS adds `assistantAttachment` to the existing PrivateImageCache
+resource enum. These distinct immutable keys include conversation/turn identity
+and the existing account boundary, preventing collisions with human attachments.
+Thumbnails and full-screen images use the same cache, budgets and protected disk
+policy, with ordinary eviction, deduplication, access-loss/account invalidation
+and cancellation. Groups reuse message attachment keys. No polling or download
+is added to a view. Verify cache reopen/back, refresh, offline recovery, image
+publication, deletion, revocation and account switching on both clients. See
+[generated images](generated-images.md) for byte retention and cleanup.

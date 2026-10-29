@@ -269,3 +269,10 @@ bot photos in a group, missing photos, replacement/deletion between tool and
 inference, membership/consent revocation, Contributor/Standard selection, isolated
 connector chats, repeated calls, image budgets, and equivalent replies from iOS
 and web. Live model calls and device/browser validation require separate execution.
+
+Contacts may use current accessible profile photos as generation references when
+a visual fits the conversation, in addition to inspecting them. Private scope is
+self/current human; groups use current authorized roster members. Up to three
+versioned references can be composed into one image; no public URL is created.
+See [generated images](generated-images.md) for authorization and derived-image
+retention after an avatar changes.

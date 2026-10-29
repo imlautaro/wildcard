@@ -9,6 +9,7 @@ enum CachedImageResource: Hashable, Sendable {
     case groupAvatar(groupID: String, version: String)
     case groupMemberAvatar(groupID: String, kind: String, memberID: String, version: String)
     case groupAttachment(groupID: String, messageID: String)
+    case assistantAttachment(contactID: String, turnID: String)
     case attachment(contactID: String, turnID: String)
 
     var key: String {
@@ -18,6 +19,7 @@ enum CachedImageResource: Hashable, Sendable {
         case let .groupAvatar(id, version): return "group/\(id)/avatar/\(version)"
         case let .groupMemberAvatar(group, kind, member, version): return "group/\(group)/member/\(kind)/\(member)/avatar/\(version)"
         case let .groupAttachment(id, message): return "group/\(id)/attachment/\(message)"
+        case let .assistantAttachment(id, turn): return "contact/\(id)/assistant-attachment/\(turn)"
         case let .attachment(id, turn): return "contact/\(id)/attachment/\(turn)"
         }
     }
@@ -225,6 +227,7 @@ extension AuthStore {
                 case let .groupMemberAvatar(group, kind, member, _):
                     return try await api.send(path: "groups/\(group)/photos/\(kind)/\(member)", token: token).0
                 case let .groupAttachment(id, message): return try await api.groupAttachment(groupID: id, messageID: message, token: token)
+                case let .assistantAttachment(id, turn): return try await api.chatAttachment(contactID: id, turnID: turn, assistant: true, token: token)
                 case let .attachment(id, turn): return try await api.chatAttachment(contactID: id, turnID: turn, token: token)
                 }
             }

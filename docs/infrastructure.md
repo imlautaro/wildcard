@@ -1875,3 +1875,35 @@ in-flight drafts; reverting application code alone cannot recall already running
 Workflow checkpoints. Already delivered group text and provider data remain.
 No remote migration, release, live-model or device verification was performed for
 this implementation.
+
+## Contact-generated chat images
+
+The image experiment reuses the required private `CONTACT_PHOTOS` R2 bucket, `DB`,
+`CHAT_WORKFLOW`, recovery/cleanup Cron and encrypted runtime `META_API_KEY` already
+provisioned for onboarding/chats. No extra resource or binding is needed; access
+to `muse-image-1.0` generation/edit endpoints must be enabled in the independent
+account's Meta project. Follow the existing resource order and secret setup above,
+replacing all account IDs, Worker names, domains and bucket/database identities.
+Image requests go directly to Meta, as onboarding portraits do; the optional Spark
+AI Gateway is not required and does not record these image calls.
+
+Apply additive migration `0044_generated_chat_images.sql` after 0043. For local
+development use the authenticated global Wrangler workflow documented above and
+`npm run db:migrate:local`; configure the existing local Meta secret without
+committing it, then run the API/web or point iOS at that local API. Never copy
+production image data to a demo account. Generated objects live under `generated/`
+in the existing private bucket. The receipt table records one reserved generation
+per response, status, reference versions and attachment metadata, with cascading
+conversation/group foreign keys. The existing attachment registry controls R2
+cleanup after the 24-hour grace period, including generated assistant images.
+
+For production, commit and push the intended source; the existing automatic release
+applies the migration before publishing. Verify Workers Builds and the active
+source SHA, then use fictional accounts to check the scenarios in
+[generated images](generated-images.md). Do not deploy or migrate production by
+hand. No remote migration or live provider verification was performed for this
+implementation. Rollback keeps the additive table and delivered JSON fields; do
+not drop it while queued/new Workflows can still use it. Older private clients
+show captions only; older group clients support image attachments. A provider
+request with an uncertain outcome is not retried automatically, including after
+a rollback/recovery; an explicit new human turn can create a new reservation.

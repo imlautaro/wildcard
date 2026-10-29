@@ -652,3 +652,14 @@ Acknowledgements and closing group replies can end automatic bot continuations.
 The shared server transaction closes the opportunities created by that reply;
 original human questions and new human messages remain eligible. iOS and web use
 their existing message/presence cache. See [loop control](groups.md#ending-acknowledgement-loops).
+
+## Generated chat images
+
+Contacts can generate one contextual image per response and optionally combine up
+to three currently accessible avatars. The first private assistant message can
+carry `attachment`; the private image component uses the authorized attachment
+path with `?side=assistant`. Groups use ordinary attachment messages. iOS and web
+show the same image/caption/quote data and preserve their existing session caches.
+No draft bytes are returned during generation; server checkpoints contain metadata
+only. See [generated images](generated-images.md) for scope, setup, retry limits
+and pending live verification.

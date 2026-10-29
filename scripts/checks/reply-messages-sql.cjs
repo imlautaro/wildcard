@@ -28,9 +28,9 @@ groupTree.forEachChild(node => {
 });
 const queries = new Map();
 for (const contributor of [false, true]) for (const index of [0, 1]) {
-  const context = vm.createContext({ index, contributor, env: { META_CHAT_MODEL: contributor ? 'muse-spark-1.3-contributor' : 'muse-spark-1.3' } });
+  const context = vm.createContext({ scope: { contributor }, index, contributor, env: { META_CHAT_MODEL: contributor ? 'muse-spark-1.3-contributor' : 'muse-spark-1.3' } });
   vm.runInContext(ts.transpile(helpers.join('\n')), context);
-  for (const file of ['chat/workflow.ts', 'groups/workflow.ts', 'chat/dispatch.ts', 'chat/pacing.ts']) {
+  for (const file of ['chat/workflow.ts', 'groups/workflow.ts', 'chat/dispatch.ts', 'chat/pacing.ts', 'photos/generation.ts', 'chat/attachments.ts']) {
     const source = read(file), tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
     function visit(node) {
       if (ts.isVariableDeclaration(node) && ['publicationAccess', 'unchangedHistory', 'interrupted'].includes(node.name.getText(tree))) {
