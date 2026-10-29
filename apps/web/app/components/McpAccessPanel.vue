@@ -13,13 +13,19 @@ async function toggle(item: McpAccess, event: Event) {
 onMounted(() => { void refresh(); });
 </script>
 <template>
-  <p class="group-footer">{{ group ? 'Grant your bots access to their assigned connectors in this group. Other members can request tools; responses are visible to everyone. Only the bot owner who added it can grant access.' : 'Configure connectors once in Account, then grant this contact access. Tool approvals are managed in Account.' }}</p>
-  <NuxtLink class="button" to="/account/connections">Manage account connections</NuxtLink>
-  <button type="button" class="button" :disabled="busy" @click="refresh()">Refresh connections</button>
-  <p v-if="error" class="notice" role="alert">{{ error }}</p>
-  <p v-if="entries === null" class="group-footer">Loading connections…</p>
-  <p v-else-if="!entries.length" class="group-footer">{{ group ? 'Assign a connector to one of your bots in its contact details first.' : 'No account connections yet.' }}</p>
-  <div v-for="item in entries ?? []" :key="`${item.agentID ?? ''}:${item.id}`" class="group">
-    <label class="toggle"><span>{{ item.agentName ? `${item.agentName} · ${item.name}` : item.name }}</span><input type="checkbox" role="switch" :checked="!!item.granted" :disabled="busy" @change="toggle(item, $event)"></label>
+  <p class="group-footer" style="padding-top: 8px">{{ group ? 'Grant your bots access to their assigned connectors in this group. Other members can request tools; responses are visible to everyone. Only the bot owner who added it can grant access.' : 'Configure connectors once in Account, then grant this contact access. Tool approvals are managed in Account.' }}</p>
+  <p v-if="error" class="notice" role="alert" style="margin: 0 0 12px">{{ error }}</p>
+  <div class="group-title">Access</div>
+  <div v-if="entries === null" class="center"><span class="spinner" /> Loading connections…</div>
+  <div v-else class="group">
+    <div v-if="!entries.length" class="text-block">{{ group ? 'Assign a connector to one of your bots in its contact details first.' : 'No account connections yet.' }}</div>
+    <label v-for="item in entries" :key="`${item.agentID ?? ''}:${item.id}`" class="toggle">
+      <span class="two-line">{{ item.name }}<span v-if="item.agentName" class="small">{{ item.agentName }}</span></span>
+      <input type="checkbox" role="switch" :checked="!!item.granted" :disabled="busy" @change="toggle(item, $event)">
+    </label>
+  </div>
+  <div class="group" style="margin-top: 24px">
+    <NuxtLink class="button-row" to="/account/connections"><AppIcon name="gear" />Manage account connections</NuxtLink>
+    <button type="button" class="button-row" :disabled="busy" @click="refresh()"><AppIcon name="refresh" />Refresh connections</button>
   </div>
 </template>

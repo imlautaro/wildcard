@@ -97,9 +97,9 @@ onMounted(load);
           <div class="group-title">New invitation</div>
           <div class="group">
             <div v-if="created.code" class="text-block">
-              <p class="code" style="color: var(--text)">{{ created.code }}</p>
+              <p class="code-box">{{ created.code }}</p>
               <p>The recipient signs in, opens Contacts → Join shared contact, and pastes this code. Expires {{ fullDate(created.expiresAt) }}.</p>
-              <button type="button" class="link-button" style="padding-left: 0" @click="copy(created.code)">{{ copied ? 'Copied' : 'Copy code' }}</button>
+              <button type="button" class="button secondary" style="margin-top: 4px" @click="copy(created.code)"><AppIcon :name="copied ? 'done' : 'copy'" />{{ copied ? 'Copied' : 'Copy code' }}</button>
             </div>
             <div v-else class="text-block">Invitation sent to {{ created.recipientEmail }}. They can accept it from Invitations in Wildcard.</div>
           </div>
@@ -109,7 +109,7 @@ onMounted(load);
         <div class="group">
           <div v-for="member in sharing.members" :key="member.id" class="field">
             <span style="flex: 1">{{ member.name }}</span>
-            <span v-if="member.role === 'owner'" class="muted small">Creator</span>
+            <span v-if="member.role === 'owner'" class="chip">Creator</span>
             <button v-else type="button" class="link-button danger" :disabled="busy" @click="removeMember(member.id, member.name)">Remove</button>
           </div>
         </div>
@@ -118,9 +118,9 @@ onMounted(load);
           <div class="group-title">Pending invitations</div>
           <div class="group">
             <div v-for="invitation in sharing.invitations" :key="invitation.id" class="field">
-              <span style="flex: 1; min-width: 0">
-                {{ invitation.recipientEmail ?? 'Invitation code' }}<br>
-                <span class="small muted">Expires {{ fullDate(invitation.expiresAt) }}</span>
+              <span class="two-line">
+                {{ invitation.recipientEmail ?? 'Invitation code' }}
+                <span class="small">Expires {{ fullDate(invitation.expiresAt) }}</span>
               </span>
               <button type="button" class="link-button danger" :disabled="busy" @click="revokeInvitation(invitation.id)">Revoke</button>
             </div>

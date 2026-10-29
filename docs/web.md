@@ -141,6 +141,17 @@ and caching still match across clients. Manrope stays the typeface on both.
   outlined field with a floating label (used on sign-in), `.fab` is the
   extended floating action button for **New chat** in the chat list, and
   `.mini-tabs` is a navigation bar with an active indicator pill.
+- **Forms.** `AppSelect` replaces every native `<select>`: a Material menu listbox
+  following the WAI-ARIA select-only combobox pattern (arrow keys, Home/End,
+  type-ahead, Escape, outside press). Its `outlined` variant has a floating `label`,
+  `plain` fills a settings row whose `<label for>` sits outside, and `tonal` is the
+  compact pill used for the remote device. The menu is teleported with fixed
+  positioning, opens upward near the bottom of the viewport, and closes on page
+  scroll or resize. Checkboxes that are not switches render as Material checkboxes;
+  use `.check-row` for a consent beside its text, and switches (`.toggle`) for
+  settings that take effect immediately. Two-line rows use `.two-line` with a
+  `.small` supporting line. `.search-field`, `.chip`, `.code-box`, `details`, and
+  `.actions-row` (end-aligned buttons) cover the remaining page patterns.
 - **Layout.** On wide screens the chat list sits on the container color and the
   page renders in a rounded surface pane; below 860 px both are full-bleed.
 - **State layers and ripple.** Interactive classes get a `currentColor` overlay
@@ -166,6 +177,11 @@ markup was checked in light, dark, and a 390 px viewport; the ripple plugin was
 exercised there with synthetic mouse and touch events (press, disabled, scroll
 cancel, quick tap, cleanup). The app itself was not run: pages against the live
 API, real touch devices, and the production build are not yet visually verified.
+`AppSelect` was compiled from its SFC and mounted with Vue in headless Chrome;
+22 interaction checks pass (ARIA state, keyboard selection, disabled options,
+type-ahead, Escape, outside press, external label, `null` values, upward
+placement, and closing on container scroll). The group details, connections, and
+onboarding layouts were checked as static markup in light and dark.
 
 ## Local development
 

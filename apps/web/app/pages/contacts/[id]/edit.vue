@@ -89,7 +89,8 @@ onMounted(() => run(async () => {
       <IdentityEditor :name="contact.name" :path="contactPhotoPath(contact)" :editable="canManage" :busy="busy" @photo="savePhoto" />
       <div class="group">
         <div class="field">
-          <input v-model="name" type="text" aria-label="Name" maxlength="100" :readonly="!canManage">
+          <label for="contact-name">Name</label>
+          <input id="contact-name" v-model="name" type="text" maxlength="100" :readonly="!canManage">
         </div>
       </div>
       <p v-if="!canManage" class="group-footer">This is a shared contact. Its creator manages its name, photo, and participants.</p>
@@ -108,11 +109,11 @@ onMounted(() => run(async () => {
       <ContactEnergySection v-if="contact.role === 'owner'" :contact-id="id" />
 
       <div class="group" style="margin-top: 20px">
-        <NuxtLink :to="`/contacts/${id}/connections`" class="button-row">Connections</NuxtLink>
-        <NuxtLink :to="`/contacts/${id}/personality`" class="button-row">Personality</NuxtLink>
-        <NuxtLink :to="`/contacts/${id}/mini-apps`" class="button-row">Mini apps</NuxtLink>
-        <NuxtLink :to="`/chats/${id}`" class="button-row">Open chat</NuxtLink>
-        <NuxtLink v-if="canManage" :to="`/contacts/${id}/sharing`" class="button-row">Share contact</NuxtLink>
+        <NuxtLink :to="`/contacts/${id}/connections`" class="button-row"><AppIcon name="link" />Connections</NuxtLink>
+        <NuxtLink :to="`/contacts/${id}/personality`" class="button-row"><AppIcon name="person" />Personality</NuxtLink>
+        <NuxtLink :to="`/contacts/${id}/mini-apps`" class="button-row"><AppIcon name="grid" />Mini apps</NuxtLink>
+        <NuxtLink :to="`/chats/${id}`" class="button-row"><AppIcon name="chat" />Open chat</NuxtLink>
+        <NuxtLink v-if="canManage" :to="`/contacts/${id}/sharing`" class="button-row"><AppIcon name="share" />Share contact</NuxtLink>
       </div>
       <div class="group" style="margin-top: 20px">
         <button type="button" class="button-row danger" :disabled="busy" @click="remove">{{ canManage ? 'Delete contact' : 'Leave shared contact' }}</button>

@@ -61,10 +61,10 @@ onMounted(async () => {
       <button type="submit" class="button block" :disabled="!changed || !valid || busy">Save</button>
       <div class="group" style="margin-top: 24px">
         <div class="field"><label for="chat-model">Chat model</label>
-          <select id="chat-model" v-model="chatModel" :disabled="busy" @change="contributorConsent = false">
-            <option value="muse-spark-1.3">Muse Spark 1.3 · Standard</option>
-            <option value="muse-spark-1.3-contributor">Muse Spark 1.3 · Contributor</option>
-          </select>
+          <AppSelect
+            id="chat-model" v-model="chatModel" variant="plain" :disabled="busy" @update:model-value="contributorConsent = false"
+            :options="[{ value: 'muse-spark-1.3', label: 'Muse Spark 1.3 · Standard' }, { value: 'muse-spark-1.3-contributor', label: 'Muse Spark 1.3 · Contributor' }]"
+          />
         </div>
         <label v-if="chatModel === 'muse-spark-1.3-contributor' && modelChanged" class="toggle">
           <span>I agree to Meta's Contributor data use</span><input v-model="contributorConsent" type="checkbox" role="switch" :disabled="busy">
@@ -73,8 +73,8 @@ onMounted(async () => {
       <p class="group-footer">Contributor allows Meta to use submitted messages, files, context and responses to train models. Standard does not. Applies to new chat jobs, schedules and group exchanges you start; jobs already started keep their model. Shared data may still use Contributor when you separately consent. MCP chats always use Standard.</p>
       <button type="button" class="button block" :disabled="busy || !modelChanged || (chatModel === 'muse-spark-1.3-contributor' && !contributorConsent)" @click="saveChatModel">Save model</button>
       <div class="group" style="margin-top: 24px">
-        <NuxtLink class="button-row" to="/account/connections">Connections</NuxtLink>
-        <NuxtLink class="button-row" to="/native">Native experiments</NuxtLink>
+        <NuxtLink class="button-row" to="/account/connections"><AppIcon name="link" />Connections</NuxtLink>
+        <NuxtLink class="button-row" to="/native"><AppIcon name="iphone" />Native experiments</NuxtLink>
       </div>
       <div class="group" style="margin-top: 24px">
         <button type="button" class="button-row danger" :disabled="busy" @click="leave">Sign out</button>

@@ -74,9 +74,9 @@ onMounted(() => chats.refresh());
             ? 'Messages and shared memories sent to Meta may be used to train its models.'
             : 'This installation uses Meta\'s Contributor model. Group messages and shared memories sent to Meta may be used for model training.'"
         />
-        <div style="display: flex; gap: 8px; margin: 12px 0 24px">
-          <button type="button" class="button secondary" style="flex: 1" @click="selected = null">Cancel</button>
-          <button type="button" class="button" style="flex: 1" :disabled="!consented || busy" @click="accept">Accept</button>
+        <div class="actions-row" style="margin-bottom: 24px">
+          <button type="button" class="button text" @click="selected = null">Cancel</button>
+          <button type="button" class="button" :disabled="!consented || busy" @click="accept">Accept</button>
         </div>
       </template>
 
@@ -84,9 +84,9 @@ onMounted(() => chats.refresh());
       <div class="group">
         <div v-if="!chats.contactInvitations.value.length" class="text-block">No contact invitations</div>
         <div v-for="invitation in chats.contactInvitations.value" :key="invitation.id" class="field">
-          <span style="flex: 1; min-width: 0">
-            <strong>{{ invitation.contactName }}</strong><br>
-            <span class="small muted">From {{ invitation.senderName }} · Expires {{ fullDate(invitation.expiresAt) }}</span>
+          <span class="two-line">
+            <strong>{{ invitation.contactName }}</strong>
+            <span class="small">From {{ invitation.senderName }} · Expires {{ fullDate(invitation.expiresAt) }}</span>
           </span>
           <button type="button" class="link-button danger" :disabled="busy" @click="decline('contact', invitation.id)">Decline</button>
           <button type="button" class="link-button" :disabled="busy" @click="choose({ kind: 'contact', invitation })">Review</button>
@@ -97,9 +97,9 @@ onMounted(() => chats.refresh());
       <div class="group">
         <div v-if="!chats.groupInvitations.value.length" class="text-block">No group invitations</div>
         <div v-for="invitation in chats.groupInvitations.value" :key="invitation.id" class="field">
-          <span style="flex: 1; min-width: 0">
-            <strong>{{ invitation.groupName }}</strong><br>
-            <span class="small muted">Invited by {{ invitation.senderName }} · Expires {{ fullDate(invitation.expiresAt) }}</span>
+          <span class="two-line">
+            <strong>{{ invitation.groupName }}</strong>
+            <span class="small">Invited by {{ invitation.senderName }} · Expires {{ fullDate(invitation.expiresAt) }}</span>
           </span>
           <button type="button" class="link-button danger" :disabled="busy" @click="decline('group', invitation.id)">Decline</button>
           <button type="button" class="link-button" :disabled="busy" @click="choose({ kind: 'group', invitation })">Review</button>

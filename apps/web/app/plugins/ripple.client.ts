@@ -6,7 +6,7 @@ const rippleHosts = [
   '.button', '.icon-button', '.link-button', '.button-row', '.fab', '.send',
   'a.row', 'a.mini-row', '.mini-tile-row', '.mini-lesson-row', '.mini-app-card',
   '.mini-button', '.mini-card-button', '.mini-tile', '.mini-segmented button',
-  '.mini-menu .items button', '.mini-lesson .options button', '[data-ripple]',
+  '.mini-menu .items button', '.mini-lesson .options button', '.select-option', '[data-ripple]',
 ].join(', ');
 
 // Touch presses wait briefly so a scroll that starts on a row doesn't flash it.

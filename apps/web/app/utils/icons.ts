@@ -49,6 +49,11 @@ export const appIcons = {
   trophy: ['material-symbols:trophy-outline-rounded', 'material-symbols:trophy-rounded'],
   heart: ['material-symbols:favorite-outline-rounded', 'material-symbols:favorite-rounded'],
   more: ['material-symbols:more-vert-rounded', 'material-symbols:more-vert-rounded'],
+  dropdown: ['material-symbols:arrow-drop-down-rounded', 'material-symbols:arrow-drop-down-rounded'],
+  done: ['material-symbols:check-rounded', 'material-symbols:check-rounded'],
+  search: ['material-symbols:search-rounded', 'material-symbols:search-rounded'],
+  copy: ['material-symbols:content-copy-outline-rounded', 'material-symbols:content-copy-rounded'],
+  link: ['material-symbols:link-rounded', 'material-symbols:link-rounded'],
   'add-reaction': ['material-symbols:add-reaction-outline-rounded', 'material-symbols:add-reaction-rounded'],
 } as const satisfies Record<string, readonly [outline: string, filled: string]>;
 

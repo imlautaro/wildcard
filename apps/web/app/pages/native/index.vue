@@ -12,7 +12,7 @@ const capabilities = [
   <div class="page"><div class="page-inner">
     <div class="identity">
       <span class="native-glyph" style="width: 64px; height: 64px; border-radius: 16px"><AppIcon name="iphone" style="width: 34px; height: 34px" /></span>
-      <h2 style="font-size: 22px; font-weight: 800">Try it on your iPhone</h2>
+      <h2 class="identity-title">Try it on your iPhone</h2>
       <p class="muted" style="margin: 0; text-align: center; max-width: 460px">In the iOS app, open a contact → Native experiments, or Account → Native experiments. Enable the contact on that device, then request an action in its private chat.</p>
     </div>
 

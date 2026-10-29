@@ -22,4 +22,10 @@ onMounted(async () => {
   } catch (failure) { message.value = errorMessage(failure); }
 });
 </script>
-<template><PageBar title="Authorization" /><div class="page"><div class="page-inner"><p class="notice" role="status">{{ message }}</p><NuxtLink :to="destination" class="button">Return to Connections</NuxtLink></div></div></template>
+<template>
+  <PageBar title="Authorization" />
+  <div class="page"><div class="page-inner">
+    <div class="group" style="margin-top: 8px"><p class="text-block" role="status" style="color: var(--text)">{{ message }}</p></div>
+    <div class="actions-row"><NuxtLink :to="destination" class="button">Return to Connections</NuxtLink></div>
+  </div></div>
+</template>

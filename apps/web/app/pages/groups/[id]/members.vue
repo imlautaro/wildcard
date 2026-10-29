@@ -100,31 +100,42 @@ onMounted(() => run(async () => {
   <PageBar :title="snapshot?.group.name ?? 'Group'" :back="`/groups/${id}`" always-back />
   <div class="page">
     <div class="page-inner">
-      <NuxtLink class="button" :to="`/groups/${id}/connections`">Connections</NuxtLink>
       <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
       <p v-if="notice" class="group-footer" role="status" style="padding-top: 8px">{{ notice }}</p>
       <div v-if="!snapshot && busy" class="center"><span class="spinner" /> Loading…</div>
       <template v-if="snapshot">
         <IdentityEditor :name="snapshot.group.name" :path="groupPhotoPath(snapshot.group)" />
+        <h2 class="identity-title">{{ snapshot.group.name }}</h2>
+        <p class="identity-subtitle">{{ snapshot.members.length }} {{ snapshot.members.length === 1 ? 'member' : 'members' }}</p>
+
+        <div class="group" style="margin-top: 24px">
+          <NuxtLink :to="`/groups/${id}/connections`" class="button-row"><AppIcon name="link" />Connections</NuxtLink>
+        </div>
 
         <div class="group-title">Discuss my private chats</div>
         <div class="group">
-          <label v-for="permission in snapshot.privateSharing ?? []" :key="permission.agentID" class="field">
-            <span style="flex: 1">{{ snapshot.members.find(member => member.kind === 'agent' && member.id === permission.agentID)?.name ?? 'Contact' }}</span>
-            <input type="checkbox" :checked="!!permission.enabled" :disabled="busy || (!permission.available && !permission.enabled)" @change="togglePrivateSharing(permission)">
+          <!-- The switch shows the saved state until the confirmed change is stored. -->
+          <label v-for="permission in snapshot.privateSharing ?? []" :key="permission.agentID" class="toggle">
+            <span class="two-line">
+              {{ snapshot.members.find(member => member.kind === 'agent' && member.id === permission.agentID)?.name ?? 'Contact' }}
+              <span v-if="!permission.available && !permission.enabled" class="small">Needs an eligible private chat</span>
+            </span>
+            <input
+              type="checkbox" role="switch" :checked="!!permission.enabled" :disabled="busy || (!permission.available && !permission.enabled)"
+              @change="($event.target as HTMLInputElement).checked = !!permission.enabled; togglePrivateSharing(permission)"
+            >
           </label>
           <div v-if="!snapshot.privateSharing?.length" class="text-block">Add a contact to manage private chat sharing.</div>
         </div>
         <p class="group-footer">Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat.</p>
-        <button type="button" class="link-button" :disabled="busy" @click="run(load)">Refresh details</button>
 
         <div class="group-title">Members</div>
         <div class="group">
           <div v-for="member in snapshot.members" :key="`${member.kind}/${member.id}`" class="field">
-            <AppAvatar :name="member.name" :path="photoPath(member)" :size="32" />
-            <span style="flex: 1; min-width: 0">
-              {{ member.kind === 'user' && member.id === user?.id ? `${member.name} (You)` : member.name }}<br>
-              <span class="small muted">
+            <AppAvatar :name="member.name" :path="photoPath(member)" :size="40" />
+            <span class="two-line">
+              {{ member.kind === 'user' && member.id === user?.id ? `${member.name} (You)` : member.name }}
+              <span class="small">
                 {{ member.kind === 'agent' ? 'Contact' : member.id === snapshot.group.ownerID ? 'Owner' : member.canInvite ? 'Can invite' : 'Member' }}
               </span>
             </span>
@@ -150,10 +161,11 @@ onMounted(() => run(async () => {
           <template v-else>
             <div class="group">
               <div class="field">
-                <select v-model="contactID" aria-label="Contact" style="flex: 1; border: 0; background: transparent">
-                  <option value="" disabled>Choose one of your contacts</option>
-                  <option v-for="contact in addable" :key="contact.id" :value="contact.id">{{ contact.name }}</option>
-                </select>
+                <label for="add-contact">Contact</label>
+                <AppSelect
+                  id="add-contact" v-model="contactID" variant="plain" placeholder="Choose a contact"
+                  :options="addable.map(contact => ({ value: contact.id, label: contact.name }))"
+                />
               </div>
             </div>
             <ConsentFields
@@ -167,7 +179,8 @@ onMounted(() => run(async () => {
           </template>
         </template>
 
-        <div class="group" style="margin-top: 20px">
+        <div class="group" style="margin-top: 24px">
+          <button type="button" class="button-row" :disabled="busy" @click="run(load)"><AppIcon name="refresh" />Refresh details</button>
           <button type="button" class="button-row danger" :disabled="busy" @click="leave">{{ isOwner ? 'Delete group' : 'Leave group' }}</button>
         </div>
       </template>

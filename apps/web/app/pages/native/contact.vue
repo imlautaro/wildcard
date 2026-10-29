@@ -26,6 +26,6 @@ onMounted(open);
     <div v-if="busy" class="center"><span class="spinner" /> Opening…</div>
     <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
     <p class="group-footer" style="padding-top: 4px">Contact links open the same agent for existing participants. They do not grant access.</p>
-    <button v-if="!busy" type="button" class="button secondary" @click="open">Try again</button>
+    <div v-if="!busy" class="actions-row"><button type="button" class="button secondary" @click="open">Try again</button></div>
   </div></div>
 </template>

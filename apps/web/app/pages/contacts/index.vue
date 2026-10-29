@@ -20,10 +20,10 @@ onMounted(async () => {
 <template>
   <PageBar title="Contacts" />
   <div class="scroll">
-    <div class="field" style="padding-top: 12px">
-      <input v-model="query" type="text" placeholder="Search contacts" aria-label="Search contacts"
-             style="background: var(--grouped); border-radius: 10px; padding: 8px 12px">
-    </div>
+    <label class="search-field">
+      <AppIcon name="search" />
+      <input v-model="query" type="search" placeholder="Search contacts" aria-label="Search contacts">
+    </label>
     <ul v-if="!query" class="list">
       <li><NuxtLink to="/groups/new" class="row action-row"><span class="glyph"><AppIcon name="people" /></span><span class="body">Create group</span></NuxtLink></li>
       <li>

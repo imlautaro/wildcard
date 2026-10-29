@@ -202,13 +202,10 @@ onBeforeUnmount(() => {
         <p v-if="remote.state.value.error || remoteError" class="error">{{ remoteError || remote.state.value.error }}</p>
       </div>
       <div class="remote-actions">
-        <span class="device-select">
-          <select id="remote-device" v-model="state.remoteDeviceID" :disabled="!!state.pending || !remote.state.value.loaded">
-            <option :value="null">No remote device</option>
-            <option v-for="device in remote.state.value.devices" :key="device.id" :value="device.id">{{ device.name }} · {{ device.id.slice(-6) }}</option>
-          </select>
-          <AppIcon name="chevron" />
-        </span>
+        <AppSelect
+          id="remote-device" v-model="state.remoteDeviceID" variant="tonal" class="device-select" :disabled="!!state.pending || !remote.state.value.loaded"
+          :options="[{ value: null, label: 'No remote device' }, ...remote.state.value.devices.map(device => ({ value: device.id, label: `${device.name} · ${device.id.slice(-6)}` }))]"
+        />
         <button type="button" class="icon-button" title="Refresh devices" aria-label="Refresh devices" @click="remote.refresh(true)"><AppIcon name="refresh" /></button>
         <button v-if="state.remoteDeviceID" type="button" class="link-button danger" @click="revokeRemote">Revoke access</button>
       </div>
@@ -308,17 +305,11 @@ onBeforeUnmount(() => {
 .remote-copy p { margin: 1px 0 0; font-size: 12px; color: var(--secondary); }
 .remote-copy p.error { color: var(--danger); }
 .remote-actions { display: flex; align-items: center; gap: 4px; flex: none; }
-.device-select { position: relative; display: inline-flex; min-width: 0; }
-.device-select select {
-  width: 100%; max-width: 200px; padding: 6px 30px 6px 12px; border: 0; border-radius: 999px; font-size: 14px; font-weight: 600;
-  background: var(--selected); color: var(--accent); appearance: none; text-overflow: ellipsis;
-}
-.device-select svg { position: absolute; right: 8px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%) rotate(90deg); color: var(--accent); pointer-events: none; }
+.device-select { min-width: 0; max-width: 220px; }
 .remote-actions .icon-button svg { width: 18px; height: 18px; }
 @media (max-width: 560px) {
   .remote-native-bar { flex-wrap: wrap; }
   .remote-actions { width: 100%; padding-left: 38px; }
-  .device-select { flex: 1; }
-  .device-select select { max-width: none; }
+  .device-select { flex: 1; max-width: none; }
 }
 </style>

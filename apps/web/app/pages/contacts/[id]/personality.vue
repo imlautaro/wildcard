@@ -98,8 +98,11 @@ onMounted(async () => {
 
 <style scoped>
 .personality-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
-.personality-field { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-.personality-field textarea { font: inherit; color: inherit; background: transparent; border: 0; resize: vertical; width: 100%; }
+.personality-field { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding-top: 12px; padding-bottom: 12px; font-size: 13px; font-weight: 600; color: var(--md-on-surface-variant); }
+.personality-field:focus-within { color: var(--md-primary); }
+.personality-field :is(textarea, input) { font-size: 16px; font-weight: 400; color: var(--md-on-surface); width: 100%; }
+.personality-trait > span { font-weight: 500; }
+.personality-trait output { font-weight: 700; color: var(--md-primary); font-variant-numeric: tabular-nums; }
 .personality-trait { display: flex; flex-direction: column; padding: 16px; gap: 10px; }
 .personality-trait > span, .personality-trait small { display: flex; justify-content: space-between; gap: 12px; }
 .personality-trait small { color: var(--secondary); }
