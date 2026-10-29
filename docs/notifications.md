@@ -259,6 +259,10 @@ retest of a notification tap from a terminated/backgrounded app remains necessar
 
 ## Message sounds (October 27, 2026)
 
+The [web app](web.md#message-sounds) plays the same in-app sounds with the same rules
+(`useMessageSounds.ts`, files in `apps/web/public/sounds`); it has no push, so no
+background notification sound.
+
 The main app bundles the three owner-supplied Mixkit WAV files in `Wildcard/Sounds`.
 Xcode's synchronized app group includes them as resources; keep their filenames
 unchanged. The in-app pop and chime are attenuated by 40 dB, and the background

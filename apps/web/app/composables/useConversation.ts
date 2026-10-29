@@ -108,7 +108,11 @@ export async function loadConversation(id: string) {
     if (revision !== entry.revision || conversations.get(id) !== entry) return;
     if (known.size && cursor !== null && !overlaps()) entry.turns = [];
     const hadOlder = entry.turns.some((turn) => turn.sequence < (fetched[0]?.sequence ?? -Infinity));
+    const replied = new Set(entry.turns.filter((turn) => turn.assistantText != null).map((turn) => turn.id));
+    const wasLoaded = entry.loaded;
     entry.turns = mergeInto(entry.turns, fetched);
+    // Replies that completed since the last load sound in the visible chat (see useMessageSounds).
+    if (wasLoaded) for (const turn of fetched) if (turn.assistantText != null && !replied.has(turn.id)) replyShown(`contact/${id}`, turn.id, turn.updatedAt);
     if (!hadOlder) entry.nextBefore = cursor;
     entry.presence = page.presence;
     entry.loaded = true;
@@ -168,6 +172,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
           replyTo: pending.replyTo ? { messageID: pending.replyTo.messageID, side: pending.replyTo.side } : undefined },
       });
       if (entry.pending?.id !== pending.id) return;
+      messageSent(`contact/${id}`, pending.id);
       entry.turns = mergeInto(entry.turns, [result.turn]);
       if (result.presence) entry.presence = result.presence;
       revokePreview(pending.attachment);

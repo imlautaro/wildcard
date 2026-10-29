@@ -193,7 +193,14 @@ export async function loadGroupConversation(id: string, visible = false) {
     if (revision !== entry.revision || groups.get(id) !== entry) return;
     if (known.size && cursor !== null && !overlaps()) entry.messages = [];
     const hadOlder = entry.messages.some((message) => message.sequence < (fetched[0]?.sequence ?? -Infinity));
+    const wasLoaded = entry.loaded;
     entry.messages = mergeMessages(entry.messages, fetched);
+    // Others' new messages sound in the visible group (see useMessageSounds).
+    if (wasLoaded) {
+      for (const message of fetched) {
+        if (!known.has(message.id) && (message.agentID !== null || message.userID !== user.value?.id)) replyShown(`group/${id}`, message.id, message.createdAt);
+      }
+    }
     if (!hadOlder) entry.nextBefore = cursor;
     entry.snapshot = snapshot;
     entry.loaded = true;
@@ -280,6 +287,7 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
       if (entry.pending?.id !== pending.id) return;
       // Acceptance means Sent, not Received; polling confirms it even if this load fails.
       entry.pending.accepted = true;
+      messageSent(`group/${id}`, pending.id);
       await load();
     } catch (error) {
       // A transient failure keeps the UUID so Retry cannot duplicate the message.

@@ -7,6 +7,7 @@ const chats = useChats();
 const { state, load, loadEarlier, send, submit, discardPending, retryReply, markRead } = useConversation(contactID);
 const activity = useChatActivity(contactID);
 const remote = useRemoteNative(contactID);
+useVisibleConversation(() => `contact/${contactID.value}`);
 const miniApps = useMiniApps(() => `contacts/${contactID.value}`);
 const documents = useDocuments(() => `contacts/${contactID.value}`);
 // Cards appear under the reply that created a document; refresh when new replies arrive.

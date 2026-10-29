@@ -261,6 +261,26 @@ group catch-up across more than 50 missed messages, PDF attachments in a browser
 photo selection through the file picker, session expiry over time, and rate-limit
 behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.
 
+## Message sounds
+
+The web plays the same foreground sounds as iOS ([notifications](notifications.md#message-sounds-october-27-2026)),
+from copies of the same attenuated Mixkit files in `public/sounds`:
+
+- An outgoing message the server accepted, in the visible chat or group, and a newly
+  completed reply in the visible conversation play the pop. The reply sound waits
+  250 ms so its bubble has rendered, as on iOS.
+- A new incoming message in another conversation, seen by the chats list polling
+  (unread count up, latest message from someone else), plays the chime.
+- Only messages completed while the tab has been visible play. Hidden tabs, the first
+  load of a conversation, failed or retried sends and messages already announced
+  stay silent; state clears on sign-out. There is no background or push sound, because
+  the web has no push.
+
+`useMessageSounds.ts` keeps the visible conversation (`useVisibleConversation` in the
+chat and group pages), the visibility interval and a bounded set of announced IDs, in
+memory only. Browsers block audio until the person interacts with the page; a blocked
+sound is skipped. Playback has not been verified in a browser.
+
 ## Message reactions
 
 See [message reactions](reactions.md) for the shared iOS/web selector, actor and

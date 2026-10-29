@@ -6,6 +6,7 @@ const groupID = computed(() => String(route.params.id));
 const chats = useChats();
 const { user } = useSession();
 const { state, load, loadEarlier, send, submit, discardPending, retryReply, noteSeen, markRead } = useGroupConversation(groupID);
+useVisibleConversation(() => `group/${groupID.value}`);
 const scroller = ref<HTMLElement>();
 const composer = ref<{ focus: () => void }>();
 

@@ -130,6 +130,20 @@ async function confirmPreviews() {
   } catch { /* Retried on the next list refresh. */ }
 }
 
+function announce(previousContacts: Map<string, Contact> | null, previousGroups: Map<string, ChatGroup> | null) {
+  const { user } = useSession();
+  for (const contact of previousContacts ? contacts.value : []) {
+    const old = previousContacts!.get(contact.id);
+    if (old && contact.lastMessageAt && contact.lastMessageFromUser !== 1 && (contact.unreadCount ?? 0) > (old.unreadCount ?? 0)
+      && contact.lastMessageAt !== old.lastMessageAt) messageElsewhere(`contact/${contact.id}`, `contact/${contact.id}/${contact.lastMessageAt}`, contact.lastMessageAt);
+  }
+  for (const group of previousGroups ? groups.value : []) {
+    const old = previousGroups!.get(group.id);
+    if (old && group.lastMessageID && group.lastMessageAt && group.lastMessageID !== old.lastMessageID
+      && group.lastMessageUserID !== user.value?.id && (group.unreadCount ?? 0) > (old.unreadCount ?? 0)) messageElsewhere(`group/${group.id}`, group.lastMessageID, group.lastMessageAt);
+  }
+}
+
 async function refreshLists() {
   refreshingLists ??= (async () => {
     const started = generation;
@@ -138,6 +152,9 @@ async function refreshLists() {
       api<{ groups: ChatGroup[]; contributorModel: boolean }>('groups'),
     ]);
     if (started !== generation) return;
+    // New incoming messages in conversations that are not on screen chime (see useMessageSounds).
+    const before = { contacts: contactsLoaded.value ? new Map(contacts.value.map((contact) => [contact.id, contact])) : null,
+      groups: groupsLoaded.value ? new Map(groups.value.map((group) => [group.id, group])) : null };
     if (page.status === 'fulfilled') {
       const keepsOlder = contacts.value.length > page.value.contacts.length;
       contacts.value = mergeContacts(page.value.contacts);
@@ -163,6 +180,7 @@ async function refreshLists() {
     } else if (!(groupsLoaded.value && isTransientFailure(groupList.reason))) {
       groupsError.value = errorMessage(groupList.reason);
     }
+    announce(before.contacts, before.groups);
     warm();
   })().finally(() => { refreshingLists = null; });
   await refreshingLists;
