@@ -39,6 +39,9 @@ function later(delay: number, keys: string[], name: keyof typeof files, still: (
   }, delay);
 }
 
+// Shared by list synchronization so the open history takes priority over previews.
+export function visibleConversationKey() { return visibleConversation; }
+
 /** Marks a conversation as on screen while the calling page is mounted. */
 export function useVisibleConversation(key: MaybeRefOrGetter<string>) {
   const set = () => { visibleConversation = toValue(key); };

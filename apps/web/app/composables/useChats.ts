@@ -152,6 +152,24 @@ async function refreshLists() {
       api<{ groups: ChatGroup[]; contributorModel: boolean }>('groups'),
     ]);
     if (started !== generation) return;
+    // Hydrate the open conversation before publishing a newer sidebar summary.
+    // Other chats keep their existing bounded background warming behavior.
+    const visible = visibleConversationKey();
+    if (visible?.startsWith('contact/') && page.status === 'fulfilled') {
+      const id = visible.slice('contact/'.length);
+      const summary = page.value.contacts.find((contact) => contact.id === id);
+      const cached = peekConversation(id);
+      const newest = cached?.turns.reduce((at, turn) => Math.max(at, turnTimestamp(turn)), 0) ?? 0;
+      if (summary && (!cached?.loaded || (summary.lastMessageAt ?? 0) > newest)) await loadConversation(id);
+    } else if (visible?.startsWith('group/') && groupList.status === 'fulfilled') {
+      const id = visible.slice('group/'.length);
+      const summary = groupList.value.groups.find((group) => group.id === id);
+      const cached = peekGroupConversation(id);
+      if (summary && (!cached?.loaded || (summary.lastMessageID && summary.lastMessageID !== cached.messages.at(-1)?.id))) {
+        await loadGroupConversation(id, true);
+      }
+    }
+    if (started !== generation) return;
     // New incoming messages in conversations that are not on screen chime (see useMessageSounds).
     const before = { contacts: contactsLoaded.value ? new Map(contacts.value.map((contact) => [contact.id, contact])) : null,
       groups: groupsLoaded.value ? new Map(groups.value.map((group) => [group.id, group])) : null };

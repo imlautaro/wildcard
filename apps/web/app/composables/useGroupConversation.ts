@@ -171,7 +171,18 @@ async function acknowledge(id: string, ids: string[], state: 'received' | 'read'
 
 // `visible`: the group is on screen. Only then is downloaded history acknowledged
 // as received, matching iOS (Home warming refreshes without acknowledging).
-export async function loadGroupConversation(id: string, visible = false) {
+const historyRequests = new WeakMap<GroupConversation, Promise<void>>();
+
+export function loadGroupConversation(id: string, visible = false): Promise<void> {
+  const entry = entryFor(id);
+  const existing = historyRequests.get(entry);
+  if (existing) return existing;
+  const request = fetchGroupConversation(id, visible).finally(() => { historyRequests.delete(entry); });
+  historyRequests.set(entry, request);
+  return request;
+}
+
+async function fetchGroupConversation(id: string, visible: boolean) {
   const chats = useChats();
   const { user } = useSession();
   const entry = entryFor(id);
@@ -227,7 +238,7 @@ export async function loadGroupConversation(id: string, visible = false) {
     }
 
     await refreshReactions(entry.reactions, `groups/${id}/reactions`, entry.messages.map((message) => message.id));
-    if (visible) {
+    if (visible || visibleConversationKey() === `group/${id}`) {
       const others = entry.messages.filter((message) => message.userID !== user.value?.id).map((message) => message.id);
       await acknowledge(id, others, 'received');
     }

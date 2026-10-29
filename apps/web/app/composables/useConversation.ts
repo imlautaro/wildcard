@@ -89,7 +89,18 @@ function mergeInto(existing: ChatTurn[], incoming: ChatTurn[]) {
   return [...byID.values()].sort((a, b) => a.sequence - b.sequence);
 }
 
-export async function loadConversation(id: string) {
+const historyRequests = new WeakMap<Conversation, Promise<void>>();
+
+export function loadConversation(id: string): Promise<void> {
+  const entry = conversation(id);
+  const existing = historyRequests.get(entry);
+  if (existing) return existing;
+  const request = fetchConversation(id).finally(() => { historyRequests.delete(entry); });
+  historyRequests.set(entry, request);
+  return request;
+}
+
+async function fetchConversation(id: string) {
   const chats = useChats();
   const entry = conversation(id);
   const revision = ++entry.revision;

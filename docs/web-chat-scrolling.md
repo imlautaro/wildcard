@@ -24,3 +24,18 @@ scroll state belongs to the visit and adds no stored conversation data.
 
 Pending browser verification: consecutive replies, delayed images/cards, voice
 uploads and composer/viewport resizing while at the end.
+
+## Open history and sidebar synchronization
+
+When a list response detects newer activity in the visible conversation, it awaits
+that conversation's history refresh before publishing the summary. Existing cached
+content remains available during the request or a transient failure. Other chats
+retain bounded background warming. Private and group history requests share one
+in-flight promise per cached entry; list warming and visible polling no longer
+supersede each other's responses. Session/account changes and deletion still
+reject obsolete results through existing cache identity/revision checks.
+
+This coordinates responses already observed by the list; separate server reads
+are not an atomic snapshot. Newer activity is reconciled on subsequent polls.
+Pending browser verification: incoming private/group replies with the sidebar
+visible, overlapping refreshes, slow/failing requests, navigation and account reset.
