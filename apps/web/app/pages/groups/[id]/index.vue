@@ -8,7 +8,8 @@ const { user } = useSession();
 const { state, load, loadEarlier, send, submit, discardPending, retryReply, noteSeen, markRead } = useGroupConversation(groupID);
 useVisibleConversation(() => `group/${groupID.value}`);
 const scroller = ref<HTMLElement>();
-const { positioned } = useChatScroll(scroller, groupID, () => state.value.loaded);
+const messageContent = ref<HTMLElement>();
+const { positioned, onScroll, scrollToBottom } = useChatScroll(scroller, messageContent, groupID, () => state.value.loaded);
 const composer = ref<{ focus: () => void }>();
 
 const group = computed(() => state.value.snapshot?.group ?? chats.groups.value.find((item) => item.id === groupID.value) ?? null);
@@ -110,14 +111,6 @@ function nearBottom() {
   const element = scroller.value;
   return !element || element.scrollHeight - element.scrollTop - element.clientHeight < 120;
 }
-// Photos size themselves when they load, after the first scroll to the bottom;
-// keep the view pinned while they grow if the reader was already at the end.
-let pinned = true;
-function onScroll() { pinned = nearBottom(); }
-function onMediaLoad() { if (pinned) scrollToBottom(); }
-function scrollToBottom() {
-  nextTick(() => { if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight; });
-}
 async function refresh() {
   const stick = nearBottom();
   await load();
@@ -210,7 +203,8 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
     <NuxtLink to="/" class="button secondary">Back to Chats</NuxtLink>
   </div>
   <template v-else>
-    <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" @scroll.passive="onScroll" @load.capture="onMediaLoad">
+    <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" @scroll.passive="onScroll">
+      <div ref="messageContent" class="message-content">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
         <button class="link-button" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</button>
@@ -288,6 +282,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
       <div v-for="reply in typingReplies" :key="reply.id" class="bubble-row incoming">
         <div class="avatar-slot" />
         <div class="typing" :aria-label="`${reply.name} is typing`"><span /><span /><span /></div>
+      </div>
       </div>
     </div>
     <ChatComposer

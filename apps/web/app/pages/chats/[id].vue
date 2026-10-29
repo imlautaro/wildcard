@@ -32,7 +32,8 @@ async function revokeRemote() {
 const fetched = ref<Contact | null>(null);
 const contact = computed(() => chats.contacts.value.find((item) => item.id === contactID.value) ?? fetched.value);
 const scroller = ref<HTMLElement>();
-const { positioned } = useChatScroll(scroller, contactID, () => state.value.loaded);
+const messageContent = ref<HTMLElement>();
+const { positioned, onScroll, scrollToBottom } = useChatScroll(scroller, messageContent, contactID, () => state.value.loaded);
 const composer = ref<{ focus: () => void }>();
 
 useHead({ title: computed(() => contact.value?.name ?? 'Chat') });
@@ -136,18 +137,6 @@ function nearBottom() {
   const element = scroller.value;
   return !element || element.scrollHeight - element.scrollTop - element.clientHeight < 120;
 }
-// Photos size themselves when they load, after the first scroll to the bottom;
-// keep the view pinned while they grow if the reader was already at the end.
-let pinned = true;
-function onScroll() { pinned = nearBottom(); }
-function onMediaLoad() { if (pinned) scrollToBottom(); }
-function scrollToBottom() {
-  nextTick(() => {
-    const element = scroller.value;
-    if (element) element.scrollTop = element.scrollHeight;
-  });
-}
-
 async function refresh() {
   const stick = nearBottom();
   await Promise.all([load(), remote.refresh(), miniApps.refresh()]);
@@ -239,7 +228,8 @@ onBeforeUnmount(() => {
         <button v-if="state.remoteDeviceID" type="button" class="link-button danger" @click="revokeRemote">Revoke access</button>
       </div>
     </div>
-    <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" @scroll.passive="onScroll" @load.capture="onMediaLoad">
+    <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" @scroll.passive="onScroll">
+      <div ref="messageContent" class="message-content">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
         <button class="link-button" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</button>
@@ -349,6 +339,7 @@ onBeforeUnmount(() => {
       </template>
 
 
+      </div>
     </div>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable" :sending="!!state.pending" :reply="replyTarget"

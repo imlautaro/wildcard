@@ -13,3 +13,14 @@ shrinks inside the app shell instead of expanding with the conversation.
 Browser verification remains pending: open short and long chats with and without
 cached history, switch between contacts and groups, and reopen via back navigation.
 No tests or builds were run; repository instructions permit static validation only.
+
+## Follow content growth
+
+A shared ResizeObserver follows message content and viewport resizing while the
+reader is near the bottom. This covers new messages, media, document/app cards,
+and composer resizing without waiting for reactions or auxiliary polling requests.
+Explicit sends immediately opt into following. Observers disconnect on unmount;
+scroll state belongs to the visit and adds no stored conversation data.
+
+Pending browser verification: consecutive replies, delayed images/cards, voice
+uploads and composer/viewport resizing while at the end.
