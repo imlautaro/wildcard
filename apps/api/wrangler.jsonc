@@ -30,7 +30,7 @@
     "WEB_RESEARCH_ENABLED": "true",
     "SEMANTIC_MEMORY_ENABLED": "false",
     // Comma-separated user IDs allowed into apps/admin. Not secret; see docs/admin.md.
-    "SUPER_ADMIN_USER_IDS": ""
+    "SUPER_ADMIN_USER_IDS": "F16b7zR7fmdk1HJcFfX9kUOxSW3fvFmM"
   },
   "d1_databases": [
     {
