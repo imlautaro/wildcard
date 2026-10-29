@@ -17,6 +17,7 @@ const notice = ref<string | null>(null);
 useHead({ title: computed(() => snapshot.value?.group.name ?? 'Group') });
 
 const isOwner = computed(() => snapshot.value?.group.ownerID === user.value?.id);
+const archived = computed(() => (chats.groups.value.find(item => item.id === id.value) ?? snapshot.value?.group)?.archivedAt != null);
 const agentIDs = computed(() => new Set(snapshot.value?.members.filter((member) => member.kind === 'agent').map((member) => member.id)));
 // Only a contact's creator can add it to a group.
 const addable = computed(() => chats.directory.value.filter((contact) => contact.role !== 'member' && contact.agentID && !agentIDs.value.has(contact.agentID)));
@@ -187,6 +188,10 @@ onMounted(() => run(async () => {
 
         <div class="group" style="margin-top: 24px">
           <button type="button" class="button-row" :disabled="busy" @click="run(load)"><AppIcon name="refresh" />Refresh details</button>
+          <ChatLifecycleActions :archived="archived" :can-clear="isOwner" :busy="busy" group
+            @archive="run(() => chats.archiveChat('group', id, !archived))"
+            @clear="memory => run(() => chats.clearChat('group', id, memory))"
+          />
           <button type="button" class="button-row danger" :disabled="busy" @click="leave">{{ isOwner ? 'Delete group' : 'Leave group' }}</button>
         </div>
       </template>

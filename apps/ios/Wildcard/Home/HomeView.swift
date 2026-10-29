@@ -2,6 +2,7 @@ import SwiftUI
 
 enum HomeDestination: Hashable {
     case contacts
+    case archived
     case nativeExperiments
     case nativeTools(String)
     case createGroup
@@ -63,6 +64,17 @@ struct HomeView: View {
             .navigationTitle(section.title)
             .toolbar {
                 if section == .chats && destinations.isEmpty {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu {
+                            NavigationLink(value: HomeDestination.archived) {
+                                Label("Archived", systemImage: "archivebox")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                        }
+                        .tint(Color(uiColor: .label))
+                        .accessibilityLabel("Chat options")
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         NavigationLink(value: HomeDestination.contacts) {
                             Image(systemName: "plus")
@@ -209,6 +221,15 @@ struct HomeView: View {
     @ViewBuilder
     private func destinationView(_ destination: HomeDestination) -> some View {
         switch destination {
+        case .archived:
+            ChatsView(
+                mode: .archived,
+                openContact: { contact in destinations.append(.contact(contact.id)) },
+                editContact: { contact in destinations.append(.editContact(contact.id)) },
+                openGroup: { group in destinations.append(.group(group.id)) }
+            )
+            .navigationTitle("Archived")
+            .navigationBarTitleDisplayMode(.inline)
         case .nativeExperiments:
             NativeExperimentsDirectoryView()
         case .nativeTools(let id):

@@ -15,6 +15,7 @@ const saved = ref(false);
 const canManage = computed(() => contact.value?.role !== 'member');
 const changed = computed(() => !!contact.value && name.value.trim() !== contact.value.name);
 const valid = computed(() => name.value.trim().length > 0 && [...name.value.trim()].length <= 100);
+const archived = computed(() => (chats.contacts.value.find(item => item.id === id.value) ?? contact.value)?.archivedAt != null);
 useHead({ title: computed(() => contact.value?.name ?? 'Contact') });
 
 function apply(updated: Contact) {
@@ -106,8 +107,7 @@ const remove = () => run(async () => {
     ? `This permanently deletes ${contact.value?.name ?? 'this contact'} for everyone, including all participants' chats, schedules, memories, and this contact's group messages and work.`
     : 'This removes your access and deletes your private chat, schedules, and contributed memories. Other participants keep the contact.';
   if (!window.confirm(message)) return;
-  await api(`contacts/${id.value}`, { method: 'DELETE' });
-  chats.removeContact(id.value);
+  await chats.deleteChatContact(id.value);
   forgetContactEnergy(id.value);
   forgetPersonality(id.value);
   forgetMcpConnections(id.value);
@@ -211,7 +211,11 @@ onMounted(() => run(async () => {
         <NuxtLink v-if="canManage" :to="`/contacts/${id}/sharing`" class="button-row"><AppIcon name="share" />Share contact</NuxtLink>
       </div>
       <div class="group" style="margin-top: 20px">
-        <button type="button" class="button-row danger" :disabled="busy" @click="remove">{{ canManage ? 'Delete contact' : 'Leave shared contact' }}</button>
+        <ChatLifecycleActions :archived="archived" :can-clear="true" :busy="busy"
+          @archive="run(() => chats.archiveChat('contact', id, !archived))"
+          @clear="memory => run(() => chats.clearChat('contact', id, memory))"
+        />
+        <button type="button" class="button-row danger" :disabled="busy" @click="remove">Delete contact and data</button>
       </div>
     </form>
   </div>

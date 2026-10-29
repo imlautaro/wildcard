@@ -1223,6 +1223,15 @@ for reproducible setup and rollback.
 
 ## Chat lifecycle invalidation
 
+Archived is opened from the top-left Chats menu on iOS and the header archive
+button beside Account on web, with no Home list row. These entry points keep the
+same session stores and refresh/pagination behavior. Web contact/group details
+read archive state reactively from these stores and use the existing lifecycle
+mutation helpers for archive, clear and contact deletion; no view-local cache is
+added. Verify details state after archive/unarchive and history invalidation after
+clear, including both memory choices and deletion failures. Verify returning from an
+archived chat, an empty archive, unarchiving and Back to Chats on device/browser.
+
 [Clear/delete](chat-lifecycle.md) purge conversations, pending submissions, reactions and secondary resource snapshots, stop playback, and clear existing image/audio caches (including iOS protected disk storage). Server history revisions reset other devices' caches and fence pagination/offline sends. Archive uses the existing session list cache and pagination; unread totals still include archived chats. Device/browser failure-recovery verification remains pending.
 
 Lifecycle validation now includes source deletion, retained-memory permissions and pending cleanup across linked private/group scopes. See the [local integration report](chat-lifecycle-testing.md). The 0064 corrections are server-side and preserve both clients' existing revision/cache invalidation contract; device/browser cache eviction and stale viewer responses still need UI verification.

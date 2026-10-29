@@ -6,6 +6,7 @@
 // an outline variant.
 export const appIcons = {
   compose: ['material-symbols:edit-outline-rounded', 'material-symbols:edit-rounded'],
+  archive: ['material-symbols:archive-outline-rounded', 'material-symbols:archive-rounded'],
   back: ['material-symbols:arrow-back-rounded', 'material-symbols:arrow-back-rounded'],
   chevron: ['material-symbols:chevron-right-rounded', 'material-symbols:chevron-right-rounded'],
   send: ['material-symbols:send-outline-rounded', 'material-symbols:send-rounded'],

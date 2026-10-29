@@ -85,14 +85,6 @@ struct ChatsView: View {
     var body: some View {
         let entries = chatEntries
         List {
-            if mode == .chats {
-                Section {
-                    NavigationLink {
-                        ChatsView(mode: .archived, openContact: openContact, editContact: editContact, openGroup: openGroup)
-                            .navigationTitle("Archived")
-                    } label: { Label("Archived", systemImage: "archivebox") }
-                }
-            }
             if mode != .contacts {
                 if let error = groups.error {
                     Text(error).manrope(.footnote).foregroundStyle(.red)

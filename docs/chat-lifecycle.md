@@ -1,10 +1,24 @@
 # Chat lifecycle and resource cleanup
 
-Both iOS and web offer Archive/Unarchive, Clear chat, and Delete contact from the
-chat list. On iOS, use a row's swipe actions or context menu; on web, use Manage.
+Both iOS and web offer Archive/Unarchive, Clear chat, and Delete contact.
+On iOS, use a chat row's swipe actions or context menu. On web, open contact
+details from the chat title and scroll to the bottom for these actions; chat rows
+have no Manage button. Group details likewise place Archive/Unarchive and the
+owner-only Clear chat beside the existing Delete group/Leave group actions.
 Clear chat offers **keep memory** or **also delete memory learned here**, with an
 explicit destructive confirmation. A private chat also offers Delete contact and
 data. The existing contact editor's Delete action uses the same server cascade.
+
+Open **Archived** from the three-dot menu at the top left of Chats on iOS.
+The web chat-list header has an archive icon button immediately to the left of
+Account; it toggles Archived, with a Back to Chats button in the archived header.
+Neither client shows an Archived row in the Home chat list. iOS pushes Archived
+onto the shared navigation stack, so opening a chat and going back returns there.
+Both entry points reuse the session chat-list stores, pagination and refresh rules
+described below; changing the entry point adds no separate cache or request.
+Device/browser verification should cover opening contact/group details, archive
+state updates, clear confirmations with both memory choices, deletion, opening Archived, empty archives,
+returning from a chat, unarchiving a row and returning to Chats.
 
 ## Scope and permissions
 
