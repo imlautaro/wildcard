@@ -7,7 +7,7 @@ starts an empty chat. It never clones an agent or copies someone else's history.
 
 ## iOS flow and consent
 
-The creator opens a contact and taps the person-plus toolbar button. **Share
+The creator opens a contact and chooses **Share contact** in the chat's three-dot menu. **Share
 Contact** explains shared memory, requires approval to share existing and future
 memories, and lets the creator enter an existing user's email and tap **Invite
 User**. The server resolves that address to an immutable account ID and creates

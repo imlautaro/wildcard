@@ -15,8 +15,8 @@ have not been verified yet.
 - **Ask in the chat**: "Split the trip planning into tasks", "Ana, take the hotel
   research and tell Leo when it's done". The contact calls `create_task_list` or
   `add_task`. In groups any contact can assign itself, another contact or a human.
-- **Open Tasks**: the checklist button in the chat's top bar, or **Tasks** in chat
-  details (iOS and web). Create a list, add tasks, tap the circle to mark a task done,
+- **Open Tasks**: the checklist button in the chat's top bar (web), **Tasks** in the
+  chat's three-dot menu (iOS), or **Tasks** in chat details (iOS and web). Create a list, add tasks, tap the circle to mark a task done,
   and tap a task to edit its title, status (To do, In progress, Done, Canceled),
   assignee, notes, next step, evidence and what it waits for. Contact tasks also offer
   **Pause work**, **Resume work** and **Cancel task**. **Cancel list** cancels the list and every

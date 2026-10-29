@@ -2,9 +2,12 @@ import SwiftUI
 
 struct ContactDetailView: View {
     let contactID: String
+    /// Pushes onto the Home navigation stack.
+    let open: (HomeDestination) -> Void
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
     @State private var loading = true
+    @State private var barWidth: CGFloat = 0
     @State private var error: String?
     /// A task work turn has no human message; say what the contact is working on instead of its presence.
     private var statusLabel: String {
@@ -32,34 +35,19 @@ struct ContactDetailView: View {
                 ContentUnavailableView("Contact not found", systemImage: "person.crop.circle.badge.questionmark")
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let contact = contacts.contact(id: contactID) {
-                if contact.canManage {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        NavigationLink(value: HomeDestination.sharing(contactID)) {
-                            Image(systemName: "person.badge.plus")
+                ToolbarItem(placement: .topBarTrailing) {
+                    ChatActionsMenu {
+                        Button("Tasks", systemImage: "checklist") { open(.contactTasks(contactID)) }
+                        Button("Schedules", systemImage: "clock") { open(.schedules(contactID)) }
+                        if contact.canManage {
+                            Button("Share contact", systemImage: "person.badge.plus") { open(.sharing(contactID)) }
                         }
-                        .tint(Color(uiColor: .label))
-                        .accessibilityLabel("Share contact")
                     }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        TasksView(base: "contacts/\(contactID)", snapshot: contacts.taskSnapshots.store(for: "contacts/\(contactID)"))
-                    } label: {
-                        Image(systemName: "checklist")
-                    }
-                    .tint(Color(uiColor: .label))
-                    .accessibilityLabel("Tasks")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(value: HomeDestination.schedules(contactID)) {
-                        Image(systemName: "clock")
-                    }
-                    .tint(Color(uiColor: .label))
-                    .accessibilityLabel("Schedules")
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink(value: HomeDestination.editContact(contactID)) {
@@ -68,12 +56,14 @@ struct ContactDetailView: View {
                             VStack(alignment: .leading, spacing: -2) {
                                 Text(contact.name).manrope(.headline, weight: .semibold)
                                     .foregroundStyle(Color(uiColor: .label))
+                                    .lineLimit(1)
                                 Text(statusLabel)
                                     .manrope(.caption2)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
                         }
+                        .frame(width: ChatHeaderLayout.width(barWidth: barWidth), alignment: .leading)
                         .padding(.leading, -6)
                         .padding(.trailing, 8)
                     }

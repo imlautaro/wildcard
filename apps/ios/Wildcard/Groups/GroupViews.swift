@@ -161,6 +161,9 @@ struct GroupChatView: View {
     @Environment(GroupsStore.self) private var groups
     @Environment(\.scenePhase) private var scenePhase
     let store: GroupChatStore
+    /// Pushes onto the Home navigation stack.
+    let open: (HomeDestination) -> Void
+    @State private var barWidth: CGFloat = 0
     @State private var isVisible = false
     @State private var draft = ""
     @State private var attachment: DraftAttachment?
@@ -377,17 +380,14 @@ struct GroupChatView: View {
             }
             .refreshable { await store.refresh(id: groupID, auth: auth) }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    TasksView(base: "groups/\(groupID)", snapshot: groups.conversations.tasks.store(for: "groups/\(groupID)"))
-                } label: {
-                    Image(systemName: "checklist")
+                ChatActionsMenu {
+                    Button("Tasks", systemImage: "checklist") { open(.groupTasks(groupID)) }
                 }
-                .tint(Color(uiColor: .label))
-                .accessibilityLabel("Tasks")
             }
             ToolbarItem(placement: .topBarLeading) {
                 NavigationLink(value: HomeDestination.groupDetails(groupID)) {
@@ -399,9 +399,10 @@ struct GroupChatView: View {
                                 .foregroundStyle(Color(uiColor: .label))
                                 .lineLimit(1)
                             GroupMarquee(text: subtitle)
-                                .frame(width: 160, height: memberLineHeight)
+                                .frame(height: memberLineHeight)
                         }
                     }
+                    .frame(width: ChatHeaderLayout.width(barWidth: barWidth), alignment: .leading)
                     .padding(.leading, -6)
                     .padding(.trailing, 8)
                 }

@@ -298,6 +298,16 @@ edge and 8 points of extra trailing padding after the name/status. It reserves
 the subtitle line with **Loading...** while presence is unavailable, including
 its accessibility value. The name and status use -2 points of vertical spacing
 to tighten the visual gap left by the font line metrics.
+
+On iOS the header has a fixed width (bar width minus 160 points for the back button,
+actions menu and margins, at least 120 points; `ChatHeaderLayout`), so a long contact
+or group name truncates on one line. Without it the system moved the whole
+avatar/title/subtitle segment into the toolbar overflow. Chat actions (Tasks,
+Schedules, Share contact; Tasks in groups) always live in one three-dot menu
+(`ChatActionsMenu`) whose buttons push onto the Home stack, never as separate bar
+buttons, so the bar never overflows into the system menu, where navigation links did
+not open. This is iOS-only as requested; web keeps its header buttons. Device checks
+pending: long names on small phones and large Dynamic Type, menu navigation and back.
 The title shows Online, Typing..., Last seen today/yesterday at HH:mm, or a dated
 Last seen
 for older activity. A contact without prior activity shows Offline rather than an

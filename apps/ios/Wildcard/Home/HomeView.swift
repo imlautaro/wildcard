@@ -16,6 +16,8 @@ enum HomeDestination: Hashable {
     case contact(String)
     case editContact(String)
     case schedules(String)
+    case contactTasks(String)
+    case groupTasks(String)
     case sharing(String)
     case joinContact
     case contactInvitations
@@ -237,7 +239,7 @@ struct HomeView: View {
         case .createGroup:
             CreateGroupView { id in destinations = [.group(id)] }
         case .group(let id):
-            GroupChatView(groupID: id, store: groups.conversations.store(for: id))
+            GroupChatView(groupID: id, store: groups.conversations.store(for: id)) { destinations.append($0) }
                 .id("\(id):\(groups.groups.first(where: { $0.id == id })?.historyRevision ?? 0)")
         case .groupDetails(let id):
             GroupMembersView(groupID: id, store: groups.conversations.store(for: id))
@@ -271,9 +273,13 @@ struct HomeView: View {
         case .sharing(let id):
             ContactSharingView(contactID: id, cache: contacts.sharingSnapshots.store(for: id))
         case .contact(let id):
-            ContactDetailView(contactID: id)
+            ContactDetailView(contactID: id) { destinations.append($0) }
         case .schedules(let id):
             SchedulesView(contactID: id, cache: contacts.scheduleSnapshots.store(for: id))
+        case .contactTasks(let id):
+            TasksView(base: "contacts/\(id)", snapshot: contacts.taskSnapshots.store(for: "contacts/\(id)"))
+        case .groupTasks(let id):
+            TasksView(base: "groups/\(id)", snapshot: groups.conversations.tasks.store(for: "groups/\(id)"))
         case .editContact(let id):
             if let contact = contacts.contact(id: id) {
                 ContactEditorView(contact: contact)
