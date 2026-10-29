@@ -1,3 +1,4 @@
+import { chatImageTools, executeChatImageTool, indexRecentChatImage, withChatImages } from '../photos/chat-images';
 import { imageTool, generateChatImage, generatedImage } from '../photos/generation';
 import { profilePhotoTool, viewProfilePhoto, withProfilePhotos } from '../photos/model';
 import type { WorkflowStep } from 'cloudflare:workers';
@@ -69,11 +70,12 @@ async function modelMessages(env: Env, input: GroupInput, messages: ModelMessage
   const context = input.attachment
     ? [...messages.slice(0, input.messages.length), await attachmentMessage(env, input.attachment),
       ...messages.slice(input.messages.length)] : messages;
-  return withProfilePhotos(env, input.scope, context);
+  return withChatImages(env, { ...input.scope, beforeSequence: input.throughSequence + 1 },
+    await withProfilePhotos(env, input.scope, context));
 }
 
 async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: number): Promise<string> {
-  const permitted = [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
+  const permitted = [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, ...chatImageTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
     ...(input.previous ? [] : [...taskTools, ...documentTools])];
   if (!permitted.some(tool => tool.function.name === call.function.name)) return toolError('This tool is not permitted in this turn.');
   let args: unknown;
@@ -85,7 +87,9 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
     if (input.scope.mcp && mcpTools.some(tool => tool.function.name === call.function.name)) {
       return await executeMcp(env, input.scope.mcp, call.function.name, args, slot);
     }
-    if (call.function.name === imageTool.function.name) return await generateChatImage(env, { ...input.scope, turnID: input.scope.reactionJob.turnID, attempt: input.scope.reactionJob.attempt }, args);
+    if (chatImageTools.some(tool => tool.function.name === call.function.name)) return await executeChatImageTool(env,
+      { ...input.scope, beforeSequence: input.throughSequence + 1 }, call.function.name, args);
+    if (call.function.name === imageTool.function.name) return await generateChatImage(env, { ...input.scope, beforeSequence: input.throughSequence + 1, turnID: input.scope.reactionJob.turnID, attempt: input.scope.reactionJob.attempt }, args);
     if (call.function.name === profilePhotoTool.function.name) return await viewProfilePhoto(env, input.scope, args);
     if (call.function.name === reactionTool.function.name) return await groupReaction(env, input.scope, args);
     // Receipts are keyed by this reply, so a replayed tool step cannot apply a change twice.
@@ -105,6 +109,14 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
 // This orchestrator runs OUTSIDE step.do. Each model call and tool result is
 // checkpointed independently; all replay state is rebuilt from step returns.
 export async function completeGroupDraft(env: Env, input: GroupInput, step: WorkflowStep, prefix: string): Promise<GroupDraft> {
+  if (!input.previous) {
+    try {
+      await step.do(`${prefix}-index-image`, { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' },
+        async () => { await indexRecentChatImage(env, { ...input.scope, beforeSequence: input.throughSequence + 1 }); return true; });
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'group_image_index_unavailable', code: safeErrorCode(error) }));
+    }
+  }
   const deadline = await step.do(`${prefix}-deadline`, async () => Date.now() + explorationMs);
   const messages: ModelMessage[] = [...input.messages];
   let executions = 0;
@@ -129,7 +141,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
           return await museCompletion(env, await modelMessages(env, input, [...messages, {
             role: 'system', content: `Evidence-gathering phase. Use tools only when needed for the current trigger. You have ${executionLimit - executions} executions remaining. Do not produce a JSON decision or announce future work. Use real tools to obtain missing evidence. When ready, call finish_group_research alone, including when no tools are needed or data is unavailable. A final tool-free decision phase follows. Do not claim success without receipts.`,
           }]), env.META_CHAT_MODEL, { maxTokens: 4096,
-            tools: [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
+            tools: [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, ...chatImageTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
               ...(input.previous ? [] : [...taskTools, ...documentTools]), finishTool] });
         } catch (error) {
           const code = safeErrorCode(error);
@@ -172,7 +184,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
           content = await step.do(`${prefix}-tool-${round}-${index}`, {
             // Tool actions are not transport-retried. MCP still uses its durable
             // reservation/receipt ledger if interruption occurs before checkpoint.
-            retries: { limit: 0, delay: '1 second' }, timeout: call.function.name === imageTool.function.name ? '3 minutes' : '1 minute',
+            retries: { limit: 0, delay: '1 second' }, timeout: call.function.name === imageTool.function.name ? '4 minutes' : '1 minute',
           }, async () => Date.now() < deadline ? executeTool(env, input, call, slot)
             : toolError('Evidence-gathering deadline reached. This tool was not executed.'));
           if (['get_group_excerpt', 'search_group_messages'].includes(call.function.name)) {
@@ -194,7 +206,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
           }]), env.META_CHAT_MODEL, { maxTokens: attempt ? 8192 : 4096, responseFormat: groupDecisionFormat(input) });
           consumed = true;
           const draft = parseGroupDecision(answer.content!, input);
-          if (draft.text !== null && draft.includeImage !== false) draft.attachment = await generatedImage(env, { ...input.scope,
+          if (draft.text !== null && draft.includeImage !== false) draft.attachment = await generatedImage(env, { ...input.scope, beforeSequence: input.throughSequence + 1,
             turnID: input.scope.reactionJob.turnID, attempt: input.scope.reactionJob.attempt });
           console.log(JSON.stringify({ event: 'group_turn_decision', action: JSON.parse(answer.content!).action,
             openingReplyRequired: input.openingReplyRequired, executions, finalizationAttempt: attempt }));
@@ -236,7 +248,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
       if (!answer.content || answer.tool_calls?.length) throw new NonRetryableError('MODEL_EMPTY_RESPONSE');
       console.log(JSON.stringify({ event: 'group_reply_recovered', code }));
       return { draft: { text: answer.content, invitesReply: false,
-        attachment: await generatedImage(env, { ...input.scope, turnID: input.scope.reactionJob.turnID,
+        attachment: await generatedImage(env, { ...input.scope, beforeSequence: input.throughSequence + 1, turnID: input.scope.reactionJob.turnID,
           attempt: input.scope.reactionJob.attempt }), throughSequence: input.throughSequence }, consumed: true };
     });
     if (recovery.consumed) await acknowledge(`${prefix}-recovery-read`);

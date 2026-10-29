@@ -247,6 +247,8 @@ remain disabled until explicitly enabled. Migrations 0039–0040 are required; s
 [infrastructure](docs/infrastructure.md#contact-personality) for release and rollback.
 
 Contacts can [generate contextual chat images](docs/generated-images.md), optionally
-combining up to three authorized current profile photos. Both clients show images
-with captions; migration 0044 and the existing Meta/R2 services are required. See
+combining up to three authorized current profile photos and images from the same
+chat. Selfies use the contact avatar; named members use their avatars. Internal
+visual descriptions support finding earlier scenes without exposing labels in chat. Both clients show images
+with captions; migrations 0044/0048 and the existing Meta/R2 services are required. See
 [infrastructure setup](docs/infrastructure.md#contact-generated-chat-images).

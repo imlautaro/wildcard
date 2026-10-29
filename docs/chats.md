@@ -718,3 +718,12 @@ Contacts may send a contextual generated image with their first reply message,
 optionally referencing current authorized avatars. The delivered assistant entry
 contains attachment metadata; both clients use the ordinary incoming image/caption
 UI and private image cache. See [generated images](generated-images.md).
+
+
+Image generation uses current avatars for requested selfies and named members, and
+can retrieve photos sent by people or contacts in this same chat as scene/edit
+references. Internal visual descriptions are server-only and are not shown in
+captions, public history or media grids. Both iOS and web use the shared API and
+the existing delivered-image viewer/cache; no client format changes are needed.
+See [image references and descriptions](generated-images.md#internal-image-descriptions-and-retrieval)
+for scope, lazy old-history indexing, limits, retention and verification.

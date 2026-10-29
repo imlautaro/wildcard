@@ -794,3 +794,12 @@ publish nothing. Bot continuations and designated private-return answers cannot
 generate images. Both clients use ordinary group attachment/cache/navigation
 behavior. See [generated images](generated-images.md) for current access checks,
 latency, durable reservations and pending live validation.
+
+
+Image generation uses current avatars for requested selfies and named members, and
+can retrieve photos sent by people or contacts in this same chat as scene/edit
+references. Internal visual descriptions are server-only and are not shown in
+captions, public history or media grids. Both iOS and web use the shared API and
+the existing delivered-image viewer/cache; no client format changes are needed.
+See [image references and descriptions](generated-images.md#internal-image-descriptions-and-retrieval)
+for scope, lazy old-history indexing, limits, retention and verification.

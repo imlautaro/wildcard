@@ -102,7 +102,7 @@ export async function museCompletion(env: Env, messages: ModelMessage[], configu
         call.type !== 'function' || !isRecord(call.function) || typeof call.function.name !== 'string' ||
         call.function.name.length > 80 || typeof call.function.arguments !== 'string' ||
         new TextEncoder().encode(call.function.arguments).byteLength >
-          (['create_mini_app', 'create_document', 'edit_document'].includes(call.function.name) ? 30000
+          (['create_mini_app', 'create_document', 'edit_document', 'generate_chat_image'].includes(call.function.name) ? 30000
             : ['send_group_message', 'call_mcp_tool', 'create_task_list'].includes(call.function.name) ? 16000
             : ['add_task', 'update_task'].includes(call.function.name) ? 6000
             : ['create_schedule', 'update_schedule', 'ask_agent_in_group'].includes(call.function.name) ? 6000 : 1000) ||

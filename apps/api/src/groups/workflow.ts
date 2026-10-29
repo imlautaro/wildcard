@@ -57,7 +57,7 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
       COALESCE(source.user_id, source.requester_id) AS userID FROM group_reply r
       JOIN group_message source ON source.id = r.source_id WHERE r.id = ? AND r.attempt = ?`)
       .bind(job.turnID, job.attempt).first<{ agentID: string; groupID: string; userID: string }>();
-    if (scope) attachment = await generatedImage(env, { ...scope, contributor, turnID: job.turnID, attempt: job.attempt });
+    if (scope) attachment = await generatedImage(env, { ...scope, contributor, beforeSequence: draft.throughSequence + 1, turnID: job.turnID, attempt: job.attempt });
   }
   const bindings = [job.turnID, job.attempt, draft.text, Date.now(), env.META_CHAT_MODEL.includes('contributor') ? 1 : 0,
     draft.throughSequence];

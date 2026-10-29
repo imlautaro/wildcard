@@ -689,3 +689,12 @@ show the same image/caption/quote data and preserve their existing session cache
 No draft bytes are returned during generation; server checkpoints contain metadata
 only. See [generated images](generated-images.md) for scope, setup, retry limits
 and pending live verification.
+
+
+Image generation uses current avatars for requested selfies and named members, and
+can retrieve photos sent by people or contacts in this same chat as scene/edit
+references. Internal visual descriptions are server-only and are not shown in
+captions, public history or media grids. Both iOS and web use the shared API and
+the existing delivered-image viewer/cache; no client format changes are needed.
+See [image references and descriptions](generated-images.md#internal-image-descriptions-and-retrieval)
+for scope, lazy old-history indexing, limits, retention and verification.

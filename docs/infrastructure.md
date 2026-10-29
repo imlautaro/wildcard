@@ -1938,6 +1938,37 @@ show captions only; older group clients support image attachments. A provider
 request with an uncertain outcome is not retried automatically, including after
 a rollback/recovery; an explicit new human turn can create a new reservation.
 
+### Same-chat image references and internal descriptions (migration 0048)
+
+Apply additive `0048_chat_image_references.sql` after 0047. It creates the internal
+`chat_image_index` with immutable registry-object foreign key, digest, bounded
+visual description/attributed context/search text, lease and update time. Source
+message deletion triggers remove descriptions; registry cleanup cascades orphaned
+rows. No external index, public bucket, new binding, permission or secret is needed.
+The existing Spark model describes actual pixels; Muse Image accepts current
+avatars and same-chat original image references through its existing edit endpoint.
+Enable both existing model APIs in an independent Meta account; descriptions add
+Spark usage and latency. Current Standard/Contributor and connector isolation
+rules apply. The private reply step permits eight minutes for search, generation
+and indexing; group generation tool steps permit four minutes, while generation
+HTTP remains bounded to 150 seconds and each description call to 45 seconds.
+
+Independent setup keeps the existing order: create D1/private R2, configure the
+existing model/auth secrets without committing values, apply all local migrations
+with `npm run db:migrate:local`, then run the API and either client against it.
+There is no bulk backfill command or data import: new reply turns index a bounded
+image, generated images are described after creation, and old history is described
+lazily on search. See [generated images](generated-images.md) for exact limits.
+
+Production requires authorized commit/push and the existing Workers Builds release
+that applies migrations before publishing. Verify migration 0048, active source SHA
+and fictional-account reference/isolation/deletion scenarios before relying on the
+feature. No remote migration, provider inference or deployment was performed for
+this change. Rollback retains the additive index/table/triggers and mixed reference
+JSON: drain in-flight image work before reverting to code that only understands
+profile references. Do not drop descriptions or registry rows while active
+Workflows use them. Delivered images remain compatible with both existing clients.
+
 ### Presence ordering (migration 0045)
 
 Apply `0045_presence_ordering.sql` after 0044. It drops the `agent_visit_activity`

@@ -1,3 +1,4 @@
+import { privateContact } from '../mcp/client';
 import { generatedImage } from '../photos/generation';
 import { contactModelAllowed } from './consent';
 import { messageDelay, readingDelay, type ContactResponse } from './messages';
@@ -69,7 +70,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       await pauseUntil(step, 'reading-pause', reading);
       const prepared = await step.do('prepare-reply', {
         retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' },
-        timeout: '5 minutes',
+        timeout: '8 minutes',
       }, async () => {
         if (await batchIntoNext(env, job)) return null;
         const turn = await activeTurn(env.DB, job);
@@ -172,8 +173,8 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         // Recheck profile versions and conversation access after inference/pauses.
         const attachment = index === 0 && response?.attachment ? await generatedImage(env, {
           agentID: (await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ?').bind(delivered.contactID).first<{ id: string }>())!.id,
-          userID: delivered.userID, contactID: delivered.contactID, contributor: env.META_CHAT_MODEL.includes('contributor'),
-          turnID: job.turnID, attempt: job.attempt,
+          userID: delivered.userID, contactID: delivered.contactID, contributor: env.META_CHAT_MODEL.includes('contributor') && !await privateContact(env.DB, delivered.contactID),
+          beforeSequence: delivered.sequence + 1, turnID: job.turnID, attempt: job.attempt,
         }) : null;
         const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${index}`, text: messages[index], createdAt: now, ...(attachment ? { attachment } : {}), ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
         const interrupted = `EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = chat_turn.contact_id

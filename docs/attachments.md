@@ -188,3 +188,12 @@ A server-side thumbnail would reduce this and is not implemented.
 Validation: API and web TypeScript and a full iOS Simulator Swift typecheck. Not yet
 checked in a browser or on a device: grid layout on narrow screens, pagination,
 opening images/files from details, and invalidation after leaving a group.
+
+
+Image generation uses current avatars for requested selfies and named members, and
+can retrieve photos sent by people or contacts in this same chat as scene/edit
+references. Internal visual descriptions are server-only and are not shown in
+captions, public history or media grids. Both iOS and web use the shared API and
+the existing delivered-image viewer/cache; no client format changes are needed.
+See [image references and descriptions](generated-images.md#internal-image-descriptions-and-retrieval)
+for scope, lazy old-history indexing, limits, retention and verification.

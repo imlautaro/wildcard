@@ -953,3 +953,27 @@ replaces the cache; on web a pending edit blocks polling from overwriting it. A
 failed edit shows its error and reloads. Transient failures keep the board visible;
 404 shows that the tasks are unavailable. Contact removal, leaving a group and
 sign-out drop the boards. Nothing is written to disk. Device verification pending.
+
+
+## Internal chat image description index
+
+Migration 0048 stores derived visual search descriptions and attributed context in
+D1 for the shared API. This server index is not a client image cache: iOS/web
+retain their current session stores, account/context/immutable-resource image keys,
+request deduplication, stale-response rejection, protected disk limits, navigation
+reuse and offline viewing. No descriptions or object keys enter public history or
+media endpoints, and no view-local downloads are introduced.
+
+Indexing reuses a completed description by immutable object key and digest and
+shares a 60-second lease between concurrent group bots. Failed descriptions retry
+after the lease; legacy history fills lazily one image per search. Every lookup and
+model byte read checks the current source, chat audience, membership, consent and
+sequence watermark. Cached tool references are reauthorized at later inference,
+generation and before publication. Deleting a source message deletes its metadata;
+orphaned generated objects/index rows follow registry cleanup after the 24-hour
+grace period. Avatar replacement does not invalidate old delivered chat images.
+
+With fictional accounts, verify reopen/back, offline viewing and recovery, page
+boundaries with both human/assistant images, indexing failure, deletion, revoked
+membership/consent, connector isolation and account switching on both clients.
+Only API types and SQL preparation were checked for this server-only change.
