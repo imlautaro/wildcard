@@ -8,14 +8,41 @@ const budget = 32 * 1024 * 1024;
 let total = 0;
 
 // Reactive playback state for the bubbles. `key` identifies the bubble that owns the player.
-export const voicePlayer = reactive({ key: null as string | null, playing: false, loading: false, position: 0, duration: 0, failed: null as string | null });
+export const voicePlayer = reactive({ key: null as string | null, playing: false, loading: false, position: 0, duration: 0, rate: 1, failed: null as string | null });
 let audio: HTMLAudioElement | null = null;
 let currentURL: string | null = null;
 let request = 0;
 let playbackFrame: number | undefined;
+let rateOwner: string | null = null;
+
+function playbackRateKey(owner: string) { return `voicePlaybackRate.v1.${owner}`; }
+
+function restorePlaybackRate() {
+  const owner = useSession().user.value?.id ?? null;
+  if (owner === rateOwner) return;
+  rateOwner = owner;
+  let saved = 1;
+  if (owner && import.meta.client) {
+    try { saved = Number(localStorage.getItem(playbackRateKey(owner))); }
+    catch { /* Storage can be disabled; the in-memory preference still works. */ }
+  }
+  voicePlayer.rate = [1, 1.5, 2].includes(saved) ? saved : 1;
+}
+
+/** Change the active audio in place and retain the selection for the next clip. */
+export function cycleVoicePlaybackRate() {
+  restorePlaybackRate();
+  if (!rateOwner) return;
+  voicePlayer.rate = voicePlayer.rate === 1 ? 1.5 : voicePlayer.rate === 1.5 ? 2 : 1;
+  if (audio) audio.playbackRate = voicePlayer.rate;
+  try { localStorage.setItem(playbackRateKey(rateOwner), String(voicePlayer.rate)); }
+  catch { /* Keep playback usable when browser storage is unavailable. */ }
+}
 
 registerSessionReset(() => {
   stopVoicePlayback();
+  rateOwner = null;
+  voicePlayer.rate = 1;
   voicePlayer.failed = null;
   for (const entry of entries.values()) if (entry.url) URL.revokeObjectURL(entry.url);
   entries.clear();
@@ -143,8 +170,10 @@ function element() {
   if (audio) return audio;
   audio = new Audio();
   audio.preload = 'auto';
+  audio.preservesPitch = true;
   audio.addEventListener('timeupdate', () => { voicePlayer.position = audio!.currentTime; });
   audio.addEventListener('loadedmetadata', () => {
+    audio!.playbackRate = voicePlayer.rate;
     if (!Number.isFinite(audio!.duration)) return;
     voicePlayer.duration = audio!.duration;
     const position = Math.min(audio!.duration, Math.max(0, voicePlayer.position));
@@ -167,7 +196,9 @@ function element() {
  * or a local clip for a pending send). Starting another bubble pauses the current one.
  */
 export async function toggleVoice(key: string, source: () => Promise<string>, startAt = 0) {
+  restorePlaybackRate();
   const player = element();
+  player.playbackRate = voicePlayer.rate;
   if (voicePlayer.key === key && currentURL) {
     if (player.paused) await player.play().catch(() => {});
     else player.pause();
@@ -181,6 +212,7 @@ export async function toggleVoice(key: string, source: () => Promise<string>, st
     if (started !== request) return;
     currentURL = url;
     player.src = url;
+    player.playbackRate = voicePlayer.rate;
     player.currentTime = Math.max(0, startAt);
     voicePlayer.position = Math.max(0, startAt);
     voicePlayer.loading = false;

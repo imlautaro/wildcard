@@ -45,10 +45,10 @@ struct VoiceMessageView: View {
                     let elapsed = player.isCurrent(key) ? player.currentTime(for: key) : selectedTime
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(alignment: .center, spacing: 10) {
-                            if fromUser { avatar }
+                            if fromUser { avatarSlot }
                             playButton
                             waveform(elapsed: elapsed)
-                            if !fromUser { avatar }
+                            if !fromUser { avatarSlot }
                         }
                         HStack(alignment: .lastTextBaseline, spacing: 4) {
                             if fromUser {
@@ -85,6 +85,26 @@ struct VoiceMessageView: View {
             if previous == key && current != key { selectedTime = 0 }
         }
         .onDisappear { loadTask?.cancel() }
+    }
+
+    private var avatarSlot: some View {
+        Group {
+            if isPlaying {
+                Button { player.cyclePlaybackRate() } label: {
+                    Text(player.playbackRateLabel)
+                        .manrope(.caption).fontWeight(.semibold).monospacedDigit()
+                        .frame(width: 40, height: 40)
+                        .background(Color.primary.opacity(0.08), in: Capsule())
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Playback speed")
+                .accessibilityValue(player.playbackRateLabel)
+                .accessibilityHint("Cycles through 1x, 1.5x, and 2x for all voice messages.")
+            } else { avatar }
+        }
+        .frame(width: 44, height: 44)
     }
 
     @ViewBuilder private var avatar: some View {

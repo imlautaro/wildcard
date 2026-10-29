@@ -10,6 +10,10 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
     static let shared = VoicePlayer()
     private(set) var currentKey: String?
     private(set) var isPlaying = false
+    private(set) var playbackRate: Float = 1
+    private var preferenceOwner: String?
+    private var ratePreferenceKey: String? { preferenceOwner.map { "voicePlaybackRate.v1.\($0)" } }
+    var playbackRateLabel: String { playbackRate == 1.5 ? "1.5x" : playbackRate == 2 ? "2x" : "1x" }
     private var player: AVAudioPlayer?
     private var ownsAudioSession = false
     /// Set by `VoiceRecorder` while it owns the `.record` session.
@@ -38,6 +42,22 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
         }
     }
 
+    /// Only a numeric listening preference persists; audio/session state never goes into defaults.
+    func activate(userID: String?) {
+        guard preferenceOwner != userID else { return }
+        stop()
+        preferenceOwner = userID
+        let saved = ratePreferenceKey.map { UserDefaults.standard.float(forKey: $0) } ?? 1
+        playbackRate = [Float(1), 1.5, 2].contains(saved) ? saved : 1
+    }
+
+    func cyclePlaybackRate() {
+        guard preferenceOwner != nil else { return }
+        playbackRate = playbackRate == 1 ? 1.5 : playbackRate == 1.5 ? 2 : 1
+        player?.rate = playbackRate
+        if let ratePreferenceKey { UserDefaults.standard.set(playbackRate, forKey: ratePreferenceKey) }
+    }
+
     func isCurrent(_ key: String) -> Bool { currentKey == key }
     func isPlaying(_ key: String) -> Bool { isPlaying && currentKey == key }
     func seek(_ seconds: TimeInterval, for key: String) {
@@ -55,6 +75,7 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
         do {
             if currentKey == key, let player {
                 try activateAudioSession()
+                player.rate = playbackRate
                 guard player.play() else { throw PlaybackFailure() }
                 isPlaying = true
                 return true
@@ -62,6 +83,8 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
             stop()
             let player = try AVAudioPlayer(data: data)
             player.delegate = self
+            player.enableRate = true
+            player.rate = playbackRate
             try activateAudioSession()
             guard player.prepareToPlay(), player.play() else { throw PlaybackFailure() }
             self.player = player

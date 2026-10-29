@@ -466,3 +466,36 @@ Also compare real silence/speech peaks in WAV and MP3, seek before first play,
 seek while paused/playing, drag to both ends and verify the thumb, time and sound
 agree, check that scrubbing cannot reply to a message, and check decode/download
 failure and memory eviction.
+
+## Playback speed
+
+While a voice message plays, its sender avatar is replaced with a **1x**, **1.5x**
+or **2x** button. Each tap cycles 1x → 1.5x → 2x → 1x and changes the current
+clip immediately, preserving its playback position. Pausing, stopping or finishing
+restores the avatar. Incoming and outgoing private/group bubbles, including local
+pending clips, use the same control, with a fixed 44-point/pixel slot and accessible
+speed labels. The same shared player rate applies to subsequent voice messages and
+catalog samples; changing chats or stopping playback does not reset it.
+
+This is a listening preference per account on the current device/browser, not a
+contact identity or server setting. iOS stores one validated numeric rate under
+`voicePlaybackRate.v1.<userID>` in UserDefaults; web stores it under the same key in
+localStorage. Only 1, 1.5 and 2 are accepted; missing/invalid values use 1x. Switching
+accounts or signing out stops playback and clears the in-memory preference; signing
+back in restores that account's saved value. The local value intentionally survives
+sign-out. It is not synchronized between devices, browsers or live tabs, and is
+removed by clearing the app/browser's local storage. If browser storage is blocked,
+the preference lasts only for the current session. No message text, audio or
+playback position is stored with this setting.
+
+iOS enables AVAudioPlayer rate adjustment before preparing a new player and reapplies
+the saved rate when resuming. Web applies HTMLMediaElement.playbackRate before play
+and after source metadata loads, with pitch preservation enabled. Waveform progress,
+seeking and elapsed/total labels continue using source-audio time. No regenerated
+audio, additional download, provider generation, API change or migration is needed.
+
+Pending device/browser checks: repeated speed cycling mid-clip without restart,
+next private/group/local clip at the saved rate, pause/resume and seek, finish/error
+avatar restoration, screen reopen and app/browser restart, separate accounts,
+blocked browser storage, keyboard/VoiceOver, layout and reply-swipe coexistence.
+Static checks do not establish audible timing or touch behavior.

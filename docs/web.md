@@ -288,6 +288,16 @@ behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.
 
 ## Voice messages
 
+During playback, the sender avatar becomes a speed button cycling **1x → 1.5x →
+2x → 1x**. It updates the current audio immediately and restores the avatar when
+paused or finished. The shared player starts subsequent private/group messages,
+pending clips and catalog samples at the selected rate. A validated, account-scoped
+numeric preference persists in localStorage across reloads and sign-ins in this
+browser; blocked storage falls back to session memory. Other devices/browsers and
+live tabs do not synchronize this setting. Account resets stop playback and clear
+the in-memory selection. See [playback speed](voice.md#playback-speed) for lifecycle,
+caching and pending device/browser checks.
+
 New replies use conversational delivery and moderate stability. Contact details →
 **Voice → Speech accent** lets the creator select a shared regional preference,
 including Argentine, or Voice default; members see it read-only. It applies to

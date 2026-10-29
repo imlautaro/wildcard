@@ -73,7 +73,14 @@ function seek(event: Event) {
 <template>
   <div ref="root" class="voice-message">
     <div class="voice-controls">
-      <AppAvatar v-if="outgoing" :name="user?.name ?? 'You'" :path="ownPhoto" :size="40" />
+      <div v-if="outgoing" class="voice-avatar">
+        <button v-if="playing" type="button" class="voice-speed"
+          :aria-label="`Playback speed: ${voicePlayer.rate}x`"
+          title="Cycle playback speed: 1x, 1.5x, 2x" @click.stop="cycleVoicePlaybackRate">
+          {{ voicePlayer.rate }}x
+        </button>
+        <AppAvatar v-else :name="user?.name ?? 'You'" :path="ownPhoto" :size="40" />
+      </div>
       <button
         type="button" class="voice-play" :disabled="loading"
         :aria-label="failed ? 'Retry loading voice message' : playing ? 'Pause voice message' : 'Play voice message'" @click="toggle"
@@ -93,7 +100,14 @@ function seek(event: Event) {
           >
         </div>
       </div>
-      <AppAvatar v-if="!outgoing" :name="senderName ?? 'Contact'" :path="senderPhoto" :size="40" />
+      <div v-if="!outgoing" class="voice-avatar">
+        <button v-if="playing" type="button" class="voice-speed"
+          :aria-label="`Playback speed: ${voicePlayer.rate}x`"
+          title="Cycle playback speed: 1x, 1.5x, 2x" @click.stop="cycleVoicePlaybackRate">
+          {{ voicePlayer.rate }}x
+        </button>
+        <AppAvatar v-else :name="senderName ?? 'Contact'" :path="senderPhoto" :size="40" />
+      </div>
     </div>
     <div class="voice-info">
       <span v-if="failed" class="voice-error">Couldn't load audio</span>
@@ -106,6 +120,9 @@ function seek(event: Event) {
 <style scoped>
 .voice-message { width: min(290px, 66vw); padding-top: 2px; white-space: normal; }
 .voice-controls { display: flex; align-items: center; gap: 10px; }
+.voice-avatar { width: 44px; height: 44px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.voice-speed { width: 44px; height: 44px; flex: none; border: 2px solid transparent; border-radius: 50%; background: var(--md-surface-container-highest); background-clip: padding-box; color: inherit; font: inherit; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+.voice-speed:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
 .voice-play { width: 44px; height: 44px; flex: none; border: 0; border-radius: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--md-on-surface-variant); cursor: pointer; }
 .voice-play svg { width: 24px; height: 24px; }
 .voice-play:disabled { cursor: default; }

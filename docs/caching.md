@@ -1153,3 +1153,23 @@ Existing cache ownership, eviction, stale-response checks and pending-send IDs
 remain in force. Scroll state is visit-local and adds no persisted private data.
 See [web chat scrolling](web-chat-scrolling.md) for behavior and pending browser
 checks, including navigation, failures and session/account changes.
+
+## Voice playback speed preference
+
+Playback rate is a small local preference, separate from cached audio. One validated
+numeric value (1, 1.5 or 2) per account is retained in UserDefaults on iOS and
+localStorage on web under `voicePlaybackRate.v1.<userID>`. It restores synchronously
+when that account's player activates, with a 1x fallback for missing/invalid data.
+No extra fetch, refresh, request deduplication or media-cache entry is needed.
+The active player updates immediately and all later clips reuse the selection;
+audio bytes, waveform samples, immutable keys, cache budgets and eviction stay the
+same. Time labels and seek remain in source-audio seconds.
+
+Sign-out/account switches stop the player and clear the in-memory rate, retaining
+the saved numeric value for that account's next sign-in. The preference contains
+no audio, transcript or position; it is intentionally not erased with media cache
+clears, contact deletion or access loss. Clearing local app/browser storage removes
+it. No device/browser/live-tab synchronization is implemented. Browser storage
+failures keep the in-memory selection usable for the session. Verify restart,
+account switching, offline playback, interrupted playback and denied storage on real
+clients; these behaviors are not established by static checks.

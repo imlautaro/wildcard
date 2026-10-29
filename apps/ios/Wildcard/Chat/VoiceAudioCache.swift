@@ -94,6 +94,7 @@ final class VoiceAudioCache {
     }
 
     func activate(userID: String) {
+        VoicePlayer.shared.activate(userID: userID)
         guard self.userID != userID else { return }
         resetMemory()
         self.userID = userID
@@ -103,7 +104,10 @@ final class VoiceAudioCache {
         let previousUser = userID
         let previousSession = session
         resetMemory()
-        if deactivate { userID = nil }
+        if deactivate {
+            userID = nil
+            VoicePlayer.shared.activate(userID: nil)
+        }
         await disk.clear(userID: previousUser, session: previousSession)
     }
 
