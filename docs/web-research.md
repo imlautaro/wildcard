@@ -112,10 +112,16 @@ see [task permissions](persistent-work.md#public-research-permission-0055).
 ## Sources, storage and cost
 
 The parser requires a completed Responses result, at least one completed
-`web_search_call`, a bounded answer and a usable `url_citation`. If Meta skips
+`web_search_call`, a bounded answer and a usable citation. A citation can be a
+provider `url_citation` annotation or a parsed Markdown link whose normalized URL
+exactly matches a result of a completed search in the same response. Matching
+preserves paths, query strings and fragments; a common domain alone is not enough.
+Bare URL text, code, image URLs and raw HTML anchors do not count as Markdown
+citations. Retrieved hits without a matching link remain retrieved-only. If Meta skips
 search, returns no citations, refuses, truncates or times out, no research document
 is published. Cited sources take priority over merely retrieved sources. Each
-output section gets links from its provider citation annotations; the immutable
+output section gets links from those accepted citations; commentary-phase messages
+are excluded from the saved report. The immutable
 source panel preserves titles/URLs and the cited/retrieved distinction. Source-page
 content and search snippets are not stored separately. Citation correctness and
 coverage depend on Meta; citations are not independent verification.
@@ -169,6 +175,14 @@ Static preparation: `node scripts/checks/web-research-sql.cjs` compiles SQL and 
 Standard/Contributor guards and statements against an empty schema with all
 migrations at D1's expression-depth limit. It executes no feature
 behavior and reads no data. API/web TypeScript and iOS Swift typechecks also apply.
+
+October 29 follow-up diagnosis: one authorized live request using the production
+code and the public RSS/Atom question returned HTTP 200/completed, three completed
+search calls (9, 11 and 10 hits), and seven URL strings in the final answer, but
+empty annotation arrays. The annotation-only parser rejected it. Only structural
+counts were printed; the raw response was not saved and no document was published.
+The Markdown/retrieved-hit compatibility fix was implemented afterward; a second
+live request and end-to-end publication have not been verified.
 
 Live Meta research, citation quality, billing, uncertain-outcome replay, concurrent
 budget admission, model/consent changes while running and client presentation

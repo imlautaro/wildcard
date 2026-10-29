@@ -4,7 +4,9 @@
 with the same limits and permissions as iOS. Failed grounding checks are reported
 separately from pending or uncertain operations. Document cards show **Web research**
 and cited-source counts; the full-screen viewer expands the original query, check
-date and cited/retrieved source links. Provenance belongs to revision 1 even after
+date and cited/retrieved source links. Both clients accept source metadata from
+provider annotations or report Markdown links matched exactly to completed search
+hits; unlinked search hits remain retrieved-only. Provenance belongs to revision 1 even after
 edits. It shares the existing document caches and five-second refresh, with no
 search-on-open or separate download. Source links open on a human click. Ordinary bot,
 scheduled and connector-isolated turns cannot research. Assigned tasks may use one

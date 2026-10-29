@@ -1,3 +1,4 @@
+import MarkdownIt from 'markdown-it';
 import { isRecord } from '../chat/meta';
 import { validChatModel } from '../lib/model-preference';
 
@@ -28,10 +29,37 @@ export function sourceURL(value: unknown): string | null {
 const label = (value: unknown) => (typeof value === 'string' ? value : 'Source')
   .replace(/[\[\]<>\\\r\n]/g, ' ').trim().slice(0, 200) || 'Source';
 const tokens = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+const citationMarkdown = new MarkdownIt({ html: false, linkify: false });
+
+// Parse links, not URL-shaped text: code, images and raw HTML are not citations.
+function markdownCitationURLs(text: string): string[] {
+  type Token = ReturnType<typeof citationMarkdown.parse>[number];
+  const urls = new Set<string>();
+  const visit = (items: Token[]) => {
+    for (const item of items) {
+      if (item.type === 'link_open') {
+        const url = sourceURL(item.attrGet('href'));
+        if (url) urls.add(url);
+      }
+      if (item.type !== 'image' && item.children) visit(item.children);
+    }
+  };
+  visit(citationMarkdown.parse(text, {}));
+  return [...urls];
+}
 
 export function parseResearchResponse(value: unknown, query: string, model: string): ResearchResult {
   if (!isRecord(value) || value.status !== 'completed' || !Array.isArray(value.output)) throw new Error('MODEL_RESEARCH_INCOMPLETE');
   const sources: ResearchSource[] = [], blocks: string[] = [];
+  const retrieved = new Map<string, Record<string, unknown>>();
+  for (const item of value.output) {
+    if (!isRecord(item) || item.type !== 'web_search_call' || item.status !== 'completed' || !Array.isArray(item.results)) continue;
+    for (const result of item.results) {
+      if (!isRecord(result)) continue;
+      const url = sourceURL(result.url);
+      if (url && !retrieved.has(url)) retrieved.set(url, result);
+    }
+  }
   const addSource = (value: Record<string, unknown>, cited: boolean) => {
     const url = sourceURL(value.url);
     if (!url) return null;
@@ -46,22 +74,29 @@ export function parseResearchResponse(value: unknown, query: string, model: stri
   for (const item of value.output) {
     if (!isRecord(item)) continue;
     if (item.type === 'web_search_call' && item.status === 'completed') searchCalls++;
-    if (item.type !== 'message' || item.role !== 'assistant' || !Array.isArray(item.content)) continue;
+    if (item.type !== 'message' || item.role !== 'assistant' || item.phase === 'commentary' || !Array.isArray(item.content)) continue;
     for (const block of item.content) {
       if (!isRecord(block) || block.type !== 'output_text' || typeof block.text !== 'string') continue;
+      if (block.text.length > researchLimits.reportCharacters) throw new Error('MODEL_RESEARCH_INVALID_REPORT');
       const links: string[] = [];
       if (Array.isArray(block.annotations)) for (const annotation of block.annotations) {
         if (!isRecord(annotation) || annotation.type !== 'url_citation') continue;
         const index = addSource(annotation, true);
         if (index && !links.includes(`[${index}](<${sources[index - 1]!.url}>)`)) links.push(`[${index}](<${sources[index - 1]!.url}>)`);
       }
+      // Meta can return Markdown links with empty annotations. Accept a linked
+      // source only when the same normalized URL occurs in completed search hits.
+      // Keep paths, query strings and fragments: a same-domain guess is not proof.
+      for (const url of markdownCitationURLs(block.text)) {
+        const hit = retrieved.get(url);
+        if (!hit) continue;
+        const index = addSource(hit, true);
+        if (index && !links.includes(`[${index}](<${sources[index - 1]!.url}>)`)) links.push(`[${index}](<${sources[index - 1]!.url}>)`);
+      }
       blocks.push(block.text.trim() + (links.length ? `\n\nSources for this section: ${links.join(', ')}` : ''));
     }
   }
-  for (const item of value.output) {
-    if (!isRecord(item) || item.type !== 'web_search_call' || !Array.isArray(item.results)) continue;
-    for (const result of item.results) if (isRecord(result)) addSource(result, false);
-  }
+  for (const result of retrieved.values()) addSource(result, false);
   const markdown = blocks.join('\n\n').trim();
   if (!searchCalls) throw new Error('MODEL_RESEARCH_NO_SEARCH');
   if (!sources.some(source => source.cited)) throw new Error('MODEL_RESEARCH_NO_CITATIONS');
