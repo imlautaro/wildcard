@@ -30,6 +30,7 @@ docs/
   mini-apps.md               # Contact-built native mini apps over MCP tools
   tasks.md                   # Shared to-do lists and contact work turns
   documents.md               # Collaborative Markdown documents in chats
+  web-research.md            # Bounded Meta web research with sourced reports
 ```
 
 ## API development
@@ -224,6 +225,14 @@ Private chats and groups can keep [shared task lists](docs/tasks.md): contacts a
 people create, assign, block and cancel tasks, and an assigned contact works on its
 task in its own turn, again when its blockers finish, and in periodic reviews. Chats also hold [Markdown documents](docs/documents.md) that
 contacts and people write together, opened full screen with a viewer and editor.
+
+Human requests can use [web research](docs/web-research.md) through Meta Responses
+and `web_search`, saving a report with sources and original provenance in those
+documents. iOS and web show cited-source counts, check dates and source panels.
+Requests have durable replay receipts and rolling account/installation limits.
+Autonomous turns and connector-isolated chats cannot use research yet.
+See [agentic execution limits](docs/agentic-limits.md) for current work budgets and
+the controls required before extending persistent autonomous work.
 
 In private chats a contact can build [mini apps](docs/mini-apps.md): declarative
 small tools and dashboards (saved state such as counters, stats, lists, charts and

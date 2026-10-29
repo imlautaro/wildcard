@@ -1,5 +1,11 @@
 # Private conversations
 
+Ordinary human requests can use bounded [web research](web-research.md). The
+contact saves a sourced document in this participant's chat, with matching iOS/web
+source panels and the existing document cache. Autonomous and connector-isolated
+turns do not gain search. See [agentic limits](agentic-limits.md) for budgets,
+uncertain-outcome handling and the boundaries before persistent work.
+
 Each participant has one private conversation with an agent. A [shared contact](sharing.md)
 keeps the same identity, global memory, presence, and exclusive attention across
 these conversations. Bearer-session authorization isolates each participant's

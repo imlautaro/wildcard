@@ -86,6 +86,17 @@ async function remove() {
       </template>
       <template v-else-if="doc">
         <p class="small muted document-meta">Revision {{ doc.revision }} · Updated by {{ doc.updatedByName }} · {{ fullDate(doc.updatedAt) }}</p>
+        <details v-if="doc.research" class="group text-block">
+          <summary>Web research · {{ doc.research.sources.filter(source => source.cited).length }} cited sources</summary>
+          <p class="small muted">Checked {{ fullDate(doc.research.checkedAt) }} · Sources refer to revision {{ doc.research.originalRevision }}.</p>
+          <p>{{ doc.research.query }}</p>
+          <ul>
+            <li v-for="source in doc.research.sources" :key="source.url">
+              <a :href="source.url" target="_blank" rel="noopener noreferrer">{{ source.title }}</a>
+              <span class="small muted"> · {{ source.cited ? 'Cited' : 'Retrieved' }}</span>
+            </li>
+          </ul>
+        </details>
         <div v-if="showHistory" class="group">
           <div v-for="revision in doc.revisions" :key="revision.revision" class="text-block">
             <strong>{{ revision.revision }}</strong> · {{ revision.authorName }} · {{ fullDate(revision.createdAt) }}<br>

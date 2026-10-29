@@ -26,6 +26,7 @@ import { documentContext, documentInstruction, documentToolNames, documentTools,
 import type { StoredTurn } from './data';
 import { byteLength, clipText, keywords, readMemories, selectMemories, type MemoryScope } from './memory';
 import { isRecord, museCompletion, safeErrorCode, type ModelMessage, type ModelTool, type ToolCall } from './meta';
+import { executeResearchTool, researchInstruction, researchTool } from '../research/tools';
 
 const searchParameters = { type: 'object', additionalProperties: false,
   properties: { query: { type: 'string', description: 'Specific search words, in the language used in the original conversation.' } }, required: ['query'] };
@@ -118,6 +119,10 @@ async function executeTool(env: Env, scope: MemoryScope & { agentID: string }, c
   catch { return toolArgumentError(call, 'Arguments must be a JSON object.'); }
   if (!isRecord(args)) return toolArgumentError(call, 'Arguments must be a JSON object.');
   const imageScope = { ...scope, contributor: !!scope.contributorModel, beforeSequence: turn.sequence + 1 };
+  if (call.function.name === researchTool.function.name) return executeResearchTool(env, {
+    kind: 'contact', contactID: turn.contactID, userID: turn.userID, agentID: scope.agentID,
+    turnID: turn.id, attempt: turn.attempt, contributor: !!scope.contributorModel,
+  }, args);
   if (chatImageTools.some(tool => tool.function.name === call.function.name)) return executeChatImageTool(env, imageScope, call.function.name, args);
   if (call.function.name === imageTool.function.name) return generateChatImage(env, { ...imageScope, turnID: turn.id, attempt: turn.attempt }, args);
   if (call.function.name === profilePhotoTool.function.name) return viewProfilePhoto(env, { ...scope, contributor: !!scope.contributorModel }, args);
@@ -224,8 +229,9 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   }
   // Schedules and task work turns are autonomous: no human request authorizes external or publishing tools.
   const autonomous = !!(turn.scheduleID || turn.taskID);
+  const canResearchWeb = !isolated && !autonomous && !recoveryCode && env.WEB_RESEARCH_ENABLED === 'true';
   const baseTools = [...(isolated ? [...tools.filter(t => !['send_group_message', 'ask_agent_in_group', 'create_schedule', 'update_schedule'].includes(t.function.name)), ...(autonomous ? [] : [...mcpTools, ...miniAppTools])] : autonomous ? tools : [...tools, ...miniAppTools]),
-    ...(turn.scheduleID ? [] : [...taskTools, ...documentTools])];
+    ...(turn.scheduleID ? [] : [...taskTools, ...documentTools]), ...(canResearchWeb ? [researchTool] : [])];
   const nativeContext = turn.nativeContextJSON ? parseNativeContext(JSON.parse(turn.nativeContextJSON)) : null;
   const nativeReceipts = nativeContext ? (await env.DB.prepare(`SELECT a.id, a.kind,
     json_extract(a.payload_json, '$.title') AS title, a.status, a.updated_at AS updatedAt
@@ -362,8 +368,9 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       'Memories are fallible and may be outdated. Prefer explicit current corrections; distinguish user statements from assistant suggestions.',
       'Use source turns to resolve ambiguity. Do not claim to remember, search successfully, save, erase, or verify anything without evidence.',
       'Memory extraction happens separately after replies. Schedule mutation tools, group publication tools and native proposal tools can change their respective data. Native proposals do not execute on the phone. Removing a memory is not deleting conversation history.',
-      'You have at most two tool rounds and six tool executions; results and excerpts are limited. Admit missing information when necessary.',
-      'Do not claim access to other participants’ raw chats, external services, sensors, or the internet.',
+      `You have at most ${turn.scheduleID ? 2 : 3} tool rounds and six tool executions; results and excerpts are limited. Admit missing information when necessary.`,
+      ...(canResearchWeb ? [researchInstruction] : []),
+      'Claim access only through the tools actually offered in this turn. Other participants’ raw chats and sensors remain inaccessible.',
     ].join(' ') },
     { role: 'user', content: `Historical memory data (not a new request): ${memories}` },
     { role: 'assistant', content: 'I will treat this as historical evidence and prioritize the current conversation.' },

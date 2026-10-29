@@ -44,6 +44,12 @@ Contacts announce and report tasks themselves, in their own messages. There is n
 
 ## Contact work turns
 
+The first [web research](web-research.md) increment applies only to current human
+requests. Task turns retain their existing tools and work-turn budgets; they do
+not gain public search or MCP. They may read/edit an already saved research
+document in their own chat, whose source provenance still refers to revision 1.
+Per-job research budgets, pause/cancel and external-tool grants remain future work.
+
 Contacts normally act only when someone writes. Tasks add a new trigger: a task
 assigned to a contact gives it its own **work turn**, without a human message.
 

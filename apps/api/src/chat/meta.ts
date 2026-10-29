@@ -105,6 +105,7 @@ export async function museCompletion(env: Env, messages: ModelMessage[], configu
           (['create_mini_app', 'create_document', 'edit_document', 'generate_chat_image'].includes(call.function.name) ? 30000
             : ['send_group_message', 'call_mcp_tool', 'create_task_list'].includes(call.function.name) ? 16000
             : ['add_task', 'update_task'].includes(call.function.name) ? 6000
+            : call.function.name === 'research_web' ? 4000
             : ['create_schedule', 'update_schedule', 'ask_agent_in_group'].includes(call.function.name) ? 6000 : 1000) ||
         toolCalls.some((previous) => previous.id === call.id)) throw new Error('MODEL_INVALID_TOOL_CALLS');
       toolCalls.push({ id: call.id, type: 'function', function: { name: call.function.name, arguments: call.function.arguments } });

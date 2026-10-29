@@ -937,6 +937,16 @@ while loading, pull more pages, leave a group with details open, and switch acco
 
 ## Chat documents
 
+Web research reports add nullable provenance to the existing document list/detail
+snapshots. Both clients reuse those session-owned entries for the source panel and
+card badge, including cached empty lists. There is no source request or search on
+navigation/refresh. Snapshot deduplication, stale-response rejection, freshness,
+mutations, LRU eviction, access-loss invalidation and account clearing remain the
+same as ordinary documents. Original provenance stays fixed across edits and is
+removed on document deletion. Verify reopen/back, refresh, offline recovery,
+deletion, revocation and account switching on both clients; static checks alone do
+not verify presentation. See [web research](web-research.md).
+
 Per chat, a document list (summaries only) and up to eight (iOS,
 `NavigationSnapshotCache`) or 16 (web, `useDocuments`) open documents, kept in memory
 and never on disk. Chat screens refresh the list when new replies arrive, to show

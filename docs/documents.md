@@ -6,6 +6,13 @@ contact; in a group every member and group contact can read and edit them, so
 several contacts can write one document together. Documents open full screen like
 mini apps, with a Markdown viewer and an editor.
 
+[Web research](web-research.md) creates sourced reports in these same documents.
+Both clients label the card **Web research** and offer an expandable source panel
+with the question, check date and cited/retrieved links. Provenance refers to
+revision 1 and survives later edits. Existing documents have `research: null`;
+older APIs can omit it, which both clients accept. Refresh never starts a search.
+Deletion removes provenance and prevents the research receipt recreating a report.
+
 This is a first implementation. Model writing quality, concurrent editing by several
 contacts, and device/browser presentation have not been verified yet.
 

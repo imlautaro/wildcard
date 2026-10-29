@@ -14,6 +14,7 @@ import { executeGroupRetrieval, groupRetrievalTools } from './retrieval';
 import { groupSourceAccess } from './request-access';
 import { executeTaskTool, taskToolNames, taskTools } from '../tasks/tools';
 import { documentToolNames, documentTools, executeDocumentTool } from '../documents/tools';
+import { executeResearchTool, researchTool } from '../research/tools';
 import { executeGroupMiniAppTool, groupMiniAppTools } from '../miniapps/tools';
 import { messagePrivately, privateMessageTool } from './private-messages';
 
@@ -78,7 +79,7 @@ async function modelMessages(env: Env, input: GroupInput, messages: ModelMessage
 
 async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: number): Promise<string> {
   const permitted = [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, ...chatImageTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
-    ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canBuildMiniApps ? groupMiniAppTools : []), ...(input.canMessagePrivately ? [privateMessageTool] : [])];
+    ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canResearchWeb ? [researchTool] : []), ...(input.canBuildMiniApps ? groupMiniAppTools : []), ...(input.canMessagePrivately ? [privateMessageTool] : [])];
   if (!permitted.some(tool => tool.function.name === call.function.name)) return toolError('This tool is not permitted in this turn.');
   let args: unknown;
   try { args = JSON.parse(call.function.arguments); }
@@ -86,6 +87,10 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
   if (!isRecord(args)) return toolError('Tool arguments must be a JSON object.');
   try {
     await assertCurrentAccess(env, input);
+    if (call.function.name === researchTool.function.name) return await executeResearchTool(env, {
+      kind: 'group', groupID: input.scope.groupID, userID: input.scope.userID, agentID: input.scope.agentID,
+      turnID: input.scope.reactionJob.turnID, attempt: input.scope.reactionJob.attempt, contributor: input.scope.contributor,
+    }, args);
     if (input.scope.mcp && mcpTools.some(tool => tool.function.name === call.function.name)) {
       return await executeMcp(env, input.scope.mcp, call.function.name, args, slot);
     }
@@ -153,7 +158,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
             role: 'system', content: `Evidence-gathering phase. Use tools only when needed for the current trigger. You have ${executionLimit - executions} executions remaining. Do not produce a JSON decision or announce future work. Use real tools to obtain missing evidence. When ready, call finish_group_research alone, including when no tools are needed or data is unavailable. A final tool-free decision phase follows. Do not claim success without receipts.`,
           }]), env.META_CHAT_MODEL, { maxTokens: input.canBuildMiniApps ? 8192 : 4096,
             tools: [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, ...chatImageTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
-              ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canBuildMiniApps ? groupMiniAppTools : []), ...(input.canMessagePrivately ? [privateMessageTool] : []), finishTool] });
+              ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canResearchWeb ? [researchTool] : []), ...(input.canBuildMiniApps ? groupMiniAppTools : []), ...(input.canMessagePrivately ? [privateMessageTool] : []), finishTool] });
         } catch (error) {
           const code = safeErrorCode(error);
           if (['MODEL_INCOMPLETE_RESPONSE', 'MODEL_INVALID_TOOL_CALLS', 'MODEL_TOOL_TEXT_TOO_LARGE', 'MODEL_EMPTY_RESPONSE'].includes(code)) {
@@ -195,7 +200,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
           content = await step.do(`${prefix}-tool-${round}-${index}`, {
             // Tool actions are not transport-retried. MCP still uses its durable
             // reservation/receipt ledger if interruption occurs before checkpoint.
-            retries: { limit: 0, delay: '1 second' }, timeout: call.function.name === imageTool.function.name ? '4 minutes' : '1 minute',
+            retries: { limit: 0, delay: '1 second' }, timeout: call.function.name === imageTool.function.name ? '4 minutes' : call.function.name === researchTool.function.name ? '2 minutes' : '1 minute',
           }, async () => Date.now() < deadline ? executeTool(env, input, call, slot)
             : toolError('Evidence-gathering deadline reached. This tool was not executed.'));
           if (['get_group_excerpt', 'search_group_messages'].includes(call.function.name)) {

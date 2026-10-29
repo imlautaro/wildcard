@@ -1,5 +1,18 @@
 import SwiftUI
 
+struct ResearchProvenance: Decodable, Hashable, Sendable {
+    struct Source: Decodable, Hashable, Sendable {
+        let title: String
+        let url: String
+        let cited: Bool
+    }
+    let checkedAt: Double
+    let query: String
+    let originalRevision: Int
+    let sources: [Source]
+    var citedCount: Int { sources.filter(\.cited).count }
+}
+
 /// Markdown documents in a private chat or group (see docs/documents.md).
 struct ChatDocumentSummary: Decodable, Hashable, Sendable, Identifiable {
     let id: String
@@ -9,6 +22,7 @@ struct ChatDocumentSummary: Decodable, Hashable, Sendable, Identifiable {
     let preview: String
     let updatedByName: String
     let updatedAt: Double
+    let research: ResearchProvenance?
 }
 
 struct ChatDocumentRevision: Decodable, Hashable, Sendable, Identifiable {
@@ -27,6 +41,7 @@ struct ChatDocument: Decodable, Hashable, Sendable {
     let updatedByName: String
     let updatedAt: Double
     let revisions: [ChatDocumentRevision]
+    let research: ResearchProvenance?
 }
 
 extension AuthAPI {
@@ -81,6 +96,9 @@ struct DocumentCardView: View {
                     .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(document.title).manrope(.subheadline, weight: .bold).foregroundStyle(.primary).lineLimit(1)
+                    if let research = document.research {
+                        Text("Web research · \(research.citedCount) cited sources").manrope(.footnote).foregroundStyle(.secondary)
+                    }
                     Text(document.preview.isEmpty ? "Empty document" : document.preview).manrope(.footnote).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -235,6 +253,24 @@ struct DocumentScreen: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Revision \(document.revision) · Updated by \(document.updatedByName) · \(Date(timeIntervalSince1970: document.updatedAt / 1000).formatted(date: .abbreviated, time: .shortened))")
                     .manrope(.caption).foregroundStyle(.secondary)
+                if let research = document.research {
+                    DisclosureGroup("Web research · \(research.citedCount) cited sources") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Checked \(Date(timeIntervalSince1970: research.checkedAt / 1000).formatted(date: .abbreviated, time: .shortened)) · Sources refer to revision \(research.originalRevision).")
+                                .manrope(.caption).foregroundStyle(.secondary)
+                            Text(research.query).manrope(.footnote)
+                            ForEach(research.sources, id: \.url) { source in
+                                if let url = URL(string: source.url), ["https", "http"].contains(url.scheme?.lowercased() ?? "") {
+                                    Link(destination: url) {
+                                        Text("\(source.title) · \(source.cited ? "Cited" : "Retrieved")").manrope(.footnote)
+                                    }
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 8)
+                    }
+                }
                 if showHistory {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(document.revisions) { revision in

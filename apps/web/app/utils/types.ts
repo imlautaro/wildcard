@@ -182,8 +182,10 @@ export type TaskList = { id: string; title: string; status: 'active' | 'canceled
 export type TaskBoard = { lists: TaskList[]; members: TaskMember[] };
 
 // Markdown documents in a private chat or group (see docs/documents.md).
+export type ResearchProvenance = { checkedAt: number; query: string; model: string; originalRevision: number;
+  sources: { title: string; url: string; cited: boolean }[]; searchCalls: number; inputTokens: number | null; outputTokens: number | null };
 export type ChatDocumentSummary = { id: string; title: string; revision: number; sourceID: string | null; length: number; preview: string;
   createdByKind: 'user' | 'agent'; createdByID: string; createdByName: string; updatedByKind: 'user' | 'agent'; updatedByID: string; updatedByName: string;
-  createdAt: number; updatedAt: number };
+  createdAt: number; updatedAt: number; research?: ResearchProvenance | null };
 export type ChatDocumentRevision = { revision: number; summary: string | null; authorKind: 'user' | 'agent'; authorID: string; authorName: string; createdAt: number };
 export type ChatDocument = Omit<ChatDocumentSummary, 'length' | 'preview'> & { body: string; revisions: ChatDocumentRevision[] };

@@ -1,5 +1,11 @@
 # Account model settings and AI Gateway
 
+[Web research](web-research.md) preserves the human turn's Standard/Contributor
+selection and current consent checks, using direct Meta Responses requests with
+`store: false`. It does not currently pass through AI Gateway, so dashboard gateway
+estimates omit its tokens and search fees. Successful document provenance records
+reported token counts and completed search-call items; these are not billing totals.
+
 Requested October 27, 2026: close new account registration, let each existing
 account choose Muse Spark 1.3 Standard or Contributor from Account on iOS/web,
 and observe estimated Spark spending in Cloudflare AI Gateway.

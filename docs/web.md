@@ -1,5 +1,14 @@
 # Web app
 
+[Web research](web-research.md) is available through ordinary human chat requests,
+with the same limits and permissions as iOS. Document cards show **Web research**
+and cited-source counts; the full-screen viewer expands the original query, check
+date and cited/retrieved source links. Provenance belongs to revision 1 even after
+edits. It shares the existing document caches and five-second refresh, with no
+search-on-open or separate download. Source links open on a human click. Task,
+schedule and connector-isolated turns cannot research in this increment. Browser
+presentation and functional research remain unverified.
+
 `apps/web` is a Nuxt 4 single-page app that runs as its own Cloudflare Worker,
 `wildcard-web`. It uses the same API as the iOS app and adds no API routes,
 migrations, or data. The API Worker stays the only owner of D1, R2, Workflows,

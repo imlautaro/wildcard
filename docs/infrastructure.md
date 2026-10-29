@@ -1753,6 +1753,44 @@ release). Rollback: older code ignores the column and still shows those turns as
 ordinary assistant messages. Verified locally on workerd D1: a guarded insert reaches
 a member with a private chat and creates nothing for a member without one.
 
+### Web research (migration 0053)
+
+[Web research](web-research.md) reuses `DB`, `CHAT_WORKFLOW`, agent attention and the
+existing encrypted `META_API_KEY`. No new service, binding, bucket, dependency or
+Cron is required. Independent installations follow the existing D1/Meta/Workers
+Builds setup first, apply all migrations in order, then enable
+`WEB_RESEARCH_ENABLED: "true"` in the API's versioned `wrangler.jsonc` (checked in).
+Replace account-specific IDs/origins as described above; obtain Meta Responses and
+web-search access in your own Meta account. Do not put key values in config.
+
+Additive `0053_web_research.sql`, after 0052, creates the scoped reservation/draft
+ledger, content-free usage events and nullable document provenance. Usage events
+survive parent deletion to prevent budget refunds; they contain a hashed account
+key, random ID and timestamp, and expire after 24 hours, with bounded lazy cleanup
+on later admissions. For local development, use the existing
+ignored local Meta secret and `npm run db:migrate:local`; search uses the actual
+Meta service and may incur charges. No staging account is created by this change.
+A staging installation needs its own D1, Worker, key and build target/IDs.
+
+Production migration and publication run only through the automatic committed and
+pushed release. Do not apply remote migrations or deploy manually. Publish the API
+before expecting clients to show provenance. Old clients ignore it; new clients
+accept an omitted/null research field from older APIs. No existing document is
+rewritten. Before release run static API/web checks and
+`node scripts/checks/web-research-sql.cjs`. After an authorized release verify the
+pushed source tag, migration 0053, a fictional public query, source links and replay
+without a second reservation, then perform the feature guide's client checks.
+
+Rollback through another automatic release; keep the additive schema/data.
+Set `WEB_RESEARCH_ENABLED` to `"false"` to stop offering/starting new research.
+This does not cancel already-sent searches. Existing reports remain ordinary
+editable documents. No recovery job reissues pending/failed provider calls.
+Ready drafts retain their result until publication or parent deletion; completed
+receipts clear the duplicate body. Deleting a document removes its provenance and
+nulls the receipt pointer. See the feature guide for retention, limits, direct Meta
+routing, shared Cloudflare free quotas and unverified behavior. No remote resource
+changes or live provider calls are part of this local implementation.
+
 ### Chat documents (migration 0047)
 
 Apply additive `0047_documents.sql` after 0046. It creates `chat_document` (current

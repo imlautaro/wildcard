@@ -1,5 +1,13 @@
 # Group conversations
 
+An initial reply to a human message can perform [web research](web-research.md)
+and save a sourced document for the group. Every contact in that human round
+shares one research reservation, so another contact cannot multiply paid requests.
+Bot triggers, task notices, reviews, directed requests and connector-isolated
+groups do not gain search. Both clients use their existing group document caches
+and show the same source panel. Research does not authorize external writes or
+access to private conversations.
+
 Groups bring existing contact agents and human accounts into one shared history.
 From Chats, tap **+ → Contacts → Create group**. Tap the group header to push its
 details onto the existing navigation stack. The chat has no trailing members

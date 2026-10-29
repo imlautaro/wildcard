@@ -1,4 +1,5 @@
 import { taskMembers, TaskError, type TaskActor, type TaskScope } from '../tasks/data';
+import type { ResearchProvenance } from '../research/model';
 
 // Markdown documents shared in a chat, with the same scopes as task lists. Every save
 // is a compare-and-swap on `revision` and stores an attributed revision row.
@@ -7,9 +8,9 @@ export const DocumentError = TaskError;
 export const documentLimits = { documents: 30, title: 200, body: 100_000, summary: 300, revisions: 50, readWindow: 12_000, edits: 20 };
 
 type Row = { id: string; title: string; body: string; revision: number; sourceID: string | null; createdByKind: string; createdByID: string;
-  updatedByKind: string; updatedByID: string; createdAt: number; updatedAt: number };
+  updatedByKind: string; updatedByID: string; createdAt: number; updatedAt: number; researchJSON: string | null };
 const columns = `d.id, d.title, d.body, d.revision, d.source_id AS sourceID, d.created_by_kind AS createdByKind, d.created_by_id AS createdByID,
-  d.updated_by_kind AS updatedByKind, d.updated_by_id AS updatedByID, d.created_at AS createdAt, d.updated_at AS updatedAt`;
+  d.updated_by_kind AS updatedByKind, d.updated_by_id AS updatedByID, d.created_at AS createdAt, d.updated_at AS updatedAt, d.research_json AS researchJSON`;
 const scopeWhere = (scope: DocumentScope) => scope.kind === 'group'
   ? { sql: 'd.group_id = ?', binds: [scope.groupID] }
   : { sql: 'd.contact_id = ? AND d.user_id = ?', binds: [scope.contactID, scope.userID] };
@@ -26,7 +27,7 @@ export async function listDocuments(db: D1Database, scope: DocumentScope) {
   const { results } = await db.prepare(`SELECT ${columns} FROM chat_document d WHERE ${where.sql} ORDER BY d.updated_at DESC LIMIT ${documentLimits.documents}`)
     .bind(...where.binds).all<Row>();
   const name = await names(db, scope);
-  return results.map(({ body, ...doc }) => ({ ...doc, length: body.length, preview: preview(body),
+  return results.map(({ body, researchJSON, ...doc }) => ({ ...doc, research: researchJSON ? JSON.parse(researchJSON) as ResearchProvenance : null, length: body.length, preview: preview(body),
     createdByName: name(doc.createdByKind, doc.createdByID), updatedByName: name(doc.updatedByKind, doc.updatedByID) }));
 }
 
@@ -38,7 +39,9 @@ export async function readDocument(db: D1Database, scope: DocumentScope, id: str
     FROM chat_document_revision WHERE document_id = ? ORDER BY revision DESC LIMIT 20`).bind(id)
     .all<{ revision: number; summary: string | null; authorKind: string; authorID: string; createdAt: number }>();
   const name = await names(db, scope);
-  return { ...doc, createdByName: name(doc.createdByKind, doc.createdByID), updatedByName: name(doc.updatedByKind, doc.updatedByID),
+  const { researchJSON, ...content } = doc;
+  return { ...content, research: researchJSON ? JSON.parse(researchJSON) as ResearchProvenance : null,
+    createdByName: name(doc.createdByKind, doc.createdByID), updatedByName: name(doc.updatedByKind, doc.updatedByID),
     revisions: results.map(revision => ({ ...revision, authorName: name(revision.authorKind, revision.authorID) })) };
 }
 
