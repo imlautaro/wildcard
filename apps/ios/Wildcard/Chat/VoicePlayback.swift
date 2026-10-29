@@ -40,6 +40,12 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
 
     func isCurrent(_ key: String) -> Bool { currentKey == key }
     func isPlaying(_ key: String) -> Bool { isPlaying && currentKey == key }
+    func seek(_ seconds: TimeInterval, for key: String) {
+        guard currentKey == key, let player, seconds.isFinite else { return }
+        player.currentTime = min(player.duration, max(0, seconds))
+    }
+
+    func duration(for key: String) -> TimeInterval? { currentKey == key ? player?.duration : nil }
     func currentTime(for key: String) -> TimeInterval { currentKey == key ? player?.currentTime ?? 0 : 0 }
 
     /// Starts `data` for `key`, or resumes it when `key` is paused. Returns `false` when the audio cannot play.

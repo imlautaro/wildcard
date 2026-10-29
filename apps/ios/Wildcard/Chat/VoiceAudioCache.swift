@@ -1,3 +1,4 @@
+import AVFAudio
 import Foundation
 
 /// A recorded clip held in memory from release until the server accepts it, so a failed
@@ -71,9 +72,25 @@ final class VoiceAudioCache {
         let task: Task<Data, Error>
     }
     private var requests: [String: Request] = [:]
+    private let waveforms = NSCache<NSString, NSArray>()
+    private struct WaveformRequest {
+        let id = UUID()
+        let task: Task<[Double], Error>
+    }
+    private var waveformRequests: [String: WaveformRequest] = [:]
 
     init() {
         memory.totalCostLimit = 8 * 1024 * 1024
+        waveforms.totalCostLimit = 256 * 1024
+        waveforms.countLimit = 512
+        // Recover protected decoder files left by an interrupted process.
+        let root = FileManager.default.temporaryDirectory
+        for folder in (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.contentModificationDateKey])) ?? [] {
+            guard folder.lastPathComponent.hasPrefix("wildcard-waveform-"),
+                  let modified = try? folder.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+                  modified < Date().addingTimeInterval(-900) else { continue }
+            try? FileManager.default.removeItem(at: folder)
+        }
     }
 
     func activate(userID: String) {
@@ -95,6 +112,9 @@ final class VoiceAudioCache {
         for request in requests.values { request.task.cancel() }
         requests.removeAll()
         memory.removeAllObjects()
+        waveforms.removeAllObjects()
+        for request in waveformRequests.values { request.task.cancel() }
+        waveformRequests.removeAll()
     }
 
     func cachedData(_ resource: VoiceAudioResource) -> Data? {
@@ -113,8 +133,42 @@ final class VoiceAudioCache {
     /// Drops bytes that could not be played so a retry downloads them again.
     func remove(_ resource: VoiceAudioResource) async {
         memory.removeObject(forKey: resource.key as NSString)
+        waveforms.removeObject(forKey: resource.key as NSString)
+        waveformRequests.removeValue(forKey: resource.key)?.task.cancel()
         guard let userID else { return }
         await disk.remove(userID: userID, key: resource.key)
+    }
+
+    func cachedWaveform(_ resource: VoiceAudioResource) -> [Double]? {
+        guard userID != nil else { return nil }
+        return waveforms.object(forKey: resource.key as NSString) as? [Double]
+    }
+
+    /// Shares decoding as well as downloads; derived samples never go to disk.
+    func waveform(_ resource: VoiceAudioResource, source: @escaping @MainActor () async throws -> Data) async throws -> [Double] {
+        guard userID != nil else { throw CancellationError() }
+        if let cached = cachedWaveform(resource) { return cached }
+        let currentSession = session
+        let request: WaveformRequest
+        if let pending = waveformRequests[resource.key] { request = pending }
+        else {
+            request = WaveformRequest(task: Task {
+                let bytes = try await source()
+                try Task.checkCancellation()
+                let decode = Task.detached(priority: .utility) { try VoiceWaveform.decode(bytes) }
+                return try await withTaskCancellationHandler {
+                    try await decode.value
+                } onCancel: { decode.cancel() }
+            })
+            waveformRequests[resource.key] = request
+        }
+        defer {
+            if waveformRequests[resource.key]?.id == request.id { waveformRequests.removeValue(forKey: resource.key) }
+        }
+        let samples = try await request.task.value
+        guard currentSession == session, !request.task.isCancelled else { throw CancellationError() }
+        waveforms.setObject(samples as NSArray, forKey: resource.key as NSString, cost: samples.count * 8)
+        return samples
     }
 
     /// Concurrent requests for the same key share one disk read or download.
@@ -162,5 +216,46 @@ extension AuthStore {
                 }
             }
         }
+    }
+}
+
+/// RMS energy in equal time windows, normalized per clip. WAV and MP3 use the same decoder.
+private enum VoiceWaveform {
+    nonisolated static func decode(_ data: Data) throws -> [Double] {
+        guard !data.isEmpty, data.count <= 8 * 1024 * 1024 else { throw CocoaError(.fileReadCorruptFile) }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("wildcard-waveform-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o700, .protectionKey: FileProtectionType.complete])
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let suffix = data.starts(with: Array("RIFF".utf8)) ? "wav" : "mp3"
+        let url = folder.appendingPathComponent("audio.\(suffix)")
+        try data.write(to: url, options: [.atomic, .completeFileProtection])
+        let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
+        let format = file.processingFormat
+        guard file.length > 0, format.channelCount > 0, format.channelCount <= 8,
+              Double(file.length) / format.sampleRate <= 600,
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 8192) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let count = 37
+        var energy = [Double](repeating: 0, count: count)
+        var samples = [Int](repeating: 0, count: count)
+        var offset: Int64 = 0
+        while offset < file.length {
+            try Task.checkCancellation()
+            try file.read(into: buffer, frameCount: AVAudioFrameCount(min(8192, file.length - offset)))
+            guard buffer.frameLength > 0, let channels = buffer.floatChannelData else { break }
+            for frame in 0..<Int(buffer.frameLength) {
+                let bin = min(count - 1, Int((offset + Int64(frame)) * Int64(count) / file.length))
+                for channel in 0..<Int(format.channelCount) {
+                    let value = Double(channels[channel][frame])
+                    if value.isFinite { energy[bin] += value * value; samples[bin] += 1 }
+                }
+            }
+            offset += Int64(buffer.frameLength)
+        }
+        let rms = zip(energy, samples).map { sqrt($0 / Double(max(1, $1))) }
+        let peak = rms.max() ?? 0
+        return rms.map { peak > 0 ? pow($0 / peak, 0.65) : 0 }
     }
 }

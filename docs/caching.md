@@ -312,6 +312,34 @@ See [voice messages](voice.md#ios-caching). Device verification is pending: repl
 after navigation and relaunch, offline replay of a cached clip, failed download
 retry, budget eviction and account switching.
 
+### Voice bubble avatars and waveform
+
+Both clients reuse the existing versioned account, contact and group-member photo
+caches for avatars inside voice bubbles. Visible bubbles load immutable audio through
+the existing audio cache and derive 37 real RMS amplitude samples. Analysis and
+playback share downloads; repeated navigation uses cached samples or derives them
+from cached bytes. Pending clips use local bytes without a separate download.
+
+iOS caches derived samples in `VoiceAudioCache` with a 256 KiB cost budget and
+512-entry limit, deduplicates concurrent analysis, cancels it on reset/removal and
+rejects late session results. Decode runs off the main actor using bounded PCM
+chunks and a protected temporary file removed after completion/cancellation; stale
+files left by interruption are cleaned on cache initialization after 15 minutes.
+Samples never persist. Existing protected audio bytes retain their disk budgets
+and expiry. Web stores samples/in-flight analysis on its existing audio entries,
+charges numeric sample bytes against the same 32 MiB budget and serializes decoding.
+Eviction removes the samples with the audio; reset clears all entries and late
+analysis is rejected. Decoded PCM buffers are not retained on either client.
+
+Silent clips produce minimum-height bars. Decode failures show a neutral baseline
+and can retry on viewport re-entry or play, without preventing playback. The cache
+keeps no failed sample result. There are no API, permission or freshness changes;
+server authorization remains required for uncached audio. See
+[voice bubble verification](voice.md#voice-bubble-presentation-and-verification) for
+pending device/browser checks, including reopen/back navigation, cached offline
+playback, download/decode failure, eviction, photo refresh, access loss and account
+switching. This presentation has only static validation so far.
+
 ## Group images
 
 Group avatar versions and message IDs use distinct `group/<id>/avatar/<version>`
@@ -1095,13 +1123,3 @@ responses, invalidation after account deletion and setting changes, and a full r
 on sign-out or session expiry. Nothing is persisted in the browser. The API reads
 runtime settings from D1 on every use, with no isolate cache. Details:
 [admin panel caching](admin.md#panel-caching). Not verified in a browser.
-
-### Voice bubble avatars and waveform
-
-Both clients reuse the existing versioned account, contact and group-member photo
-caches for avatars inside voice bubbles. Bars are derived synchronously from
-duration as a decorative waveform and colored by local playback position; no new
-network request, audio decoding or cache is needed for them. Audio cache budgets,
-account isolation and invalidation remain unchanged. Verify photo refresh, missing
-photos, reopen/back navigation, offline playback, access revocation and account
-switching on device/browser; this presentation change has not yet been checked there.

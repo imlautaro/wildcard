@@ -248,7 +248,7 @@ The native app (`apps/ios`) implements the same behavior in private chats and gr
   rejected moves to the same **Retry**/**Delete** row and retries with a new UUID.
   Conversation stores holding a failed clip are not evicted from the session LRU.
 - **Bubbles.** `VoiceMessageView` (`VoiceMessageView.swift`) shows play/pause, a
-  waveform of rounded bars, the elapsed time while playing (the duration otherwise), the send
+  waveform of real audio amplitude in rounded bars, the elapsed time while playing (the duration otherwise), the send
   time and the usual receipts. The play button has no circular background. The sender's
   avatar sits inside the bubble: left for your clips, right for incoming clips,
   including groups and pending sends. Outgoing bubbles add the microphone in
@@ -324,7 +324,7 @@ The web app (`apps/web`) implements the same behavior in private chats and group
   pending send, show the outgoing voice bubble with the clock, and offer **Retry**
   (same UUID) or **Delete** after a failure. The composer stays disabled while a send
   is pending, as for text.
-- **Bubbles.** `VoiceMessage.vue` renders a plain play/pause button, rounded waveform bars over a
+- **Bubbles.** `VoiceMessage.vue` renders a plain play/pause button, rounded bars derived from the actual audio over a
   keyboard-accessible seekable range input, sender avatars (yours on the left,
   incoming senders on the right, including groups and pending sends) and the
   elapsed time or duration; outgoing bubbles add the microphone, grey until
@@ -370,15 +370,48 @@ that starts after an uncached download (autoplay policy); the bubble then shows 
 retry button and the next tap plays from the cache. Browsers without
 `MediaRecorder` or `getUserMedia` (or pages served without HTTPS) show no microphone.
 
-### Voice bubble presentation and verification
+## Voice bubble presentation and verification
 
-The waveform in both clients is a stable decorative pattern based on the message
-duration, not measured audio amplitude. Played bars follow the actual playback
-position. Rendering bars requires no audio download, new persisted metadata or
-cache. Sender photos reuse the existing versioned account/contact/group-member
-image caches and placeholders; audio loading, retry and cache lifetimes are unchanged.
+Both clients decode the real WAV/MP3 audio and compute RMS amplitude in 37 equal
+time windows, normalize to the clip's loudest window and apply a 0.65 power curve.
+Silence stays at the minimum bar height. Bars are 3–22 points/pixels tall and at
+most 2.2 wide. The 44-high waveform, play/pause and avatar share one vertical center;
+duration and message metadata live below that row. A 12-wide circular thumb sits
+over the bars. Its entire 44-high track accepts touch and dragging (also keyboard
+on web and VoiceOver on iOS), so the small circle does not limit the hit area.
+Seeking while paused stays paused; seeking before the first play selects the
+starting position without starting audio. During playback, dragging seeks directly.
+The iOS reply-swipe recognizer excludes the slider so scrubbing cannot trigger a reply.
+
+Analysis starts when a bubble enters the viewport, sharing the existing account-owned
+audio download/cache with playback. Pending clips use their local bytes. Until audio
+loads, or if decoding fails, the bubble shows a neutral minimum-height baseline,
+never invented amplitudes; playback/retry remains available independently. Samples
+are immutable for each audio identity, require no API/schema change and also work
+for existing messages. Reopening uses cached samples synchronously, or derives
+them again from cached bytes; it never revalidates immutable audio on every render.
+
+iOS keeps samples in `VoiceAudioCache` (256 KiB cost budget, 512-entry count limit),
+shares concurrent analysis per resource and rejects results from cleared sessions.
+Decoding runs off the main actor in 8,192-frame buffers, using a protected temporary
+file removed on completion/cancellation; files left by interruption are cleaned
+after 15 minutes on cache initialization. Derived samples are memory-only and clear
+with audio on sign-out, account change, deletion/access loss or corrupt-byte removal.
+The original protected audio disk budget/lifetime is unchanged.
+
+Web attaches the decoded samples and in-flight analysis to the existing audio
+entry, adds their numeric bytes to its 32 MiB budget and shares its eviction/reset
+behavior. Offline Web Audio decoding is serialized to avoid simultaneous PCM
+buffers; decoded PCM is released after reduction. No browser persistence is added.
+Both analyzers reject input over 8 MiB, more than eight channels or audio longer
+than ten minutes (web checks decoded duration). Failures are not retained as sample
+results; re-entering the viewport or pressing play retries analysis.
 
 Device/browser verification remains pending: compare incoming, outgoing and pending
 clips in private chats and groups, missing/updated photos, light/dark mode, narrow
 screens and large text; check playback, pause/resume, retry, web seeking with pointer
 and keyboard, receipts, reopening offline, access loss and account switching.
+Also compare real silence/speech peaks in WAV and MP3, seek before first play,
+seek while paused/playing, drag to both ends and verify the thumb, time and sound
+agree, check that scrubbing cannot reply to a message, and check decode/download
+failure and memory eviction.

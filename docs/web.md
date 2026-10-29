@@ -292,9 +292,15 @@ Stop), or press Space/Enter on the microphone for a locked recording.
 `useVoiceRecorder.ts` records with `MediaRecorder` and renders the clip through an
 `OfflineAudioContext` as mono 16-bit PCM WAV at 16 kHz, which is sent with the
 message; nothing is transcribed before sending. `VoiceMessage.vue` plays voice
-bubbles with plain play buttons, decorative waveform bars tracking playback, and
+bubbles with plain play buttons, real-amplitude waveform bars tracking playback, and
 sender avatars inside the bubble (yours on the left, incoming senders on the right)
-in private chats and groups, including pending clips. It loads audio from the memory-only audio cache in `useVoiceAudio.ts` (32 MiB per session),
+in private chats and groups, including pending clips. Bars are smaller (3–22px high,
+up to 2.2px wide), centered with play/pause and the avatar. A circular thumb over the
+bars and a 44px-high range input support touch, pointer and keyboard seeking, even
+before first play; paused audio stays paused. Visible bubbles analyze audio through
+the existing cache, sharing downloads with playback and retaining reduced samples
+in the same entries. See [waveform caching and verification](voice.md#voice-bubble-presentation-and-verification).
+It loads audio from the memory-only audio cache in `useVoiceAudio.ts` (32 MiB per session),
 the message menu offers **View transcript**, and the contact page shows the **Voice**
 section when `features.voiceMessages` is on. The dictation flow (transcribe into an
 editable draft) is removed from the web app. Browser verification is pending; see

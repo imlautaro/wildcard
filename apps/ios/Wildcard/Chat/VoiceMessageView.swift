@@ -25,12 +25,15 @@ struct VoiceMessageView: View {
     @State private var loading = false
     @State private var failed = false
     @State private var loadTask: Task<Void, Never>?
-    @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 36
+    @State private var samples: [Double]?
+    @State private var visible = false
+    @State private var selectedTime: TimeInterval = 0
+    @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 44
 
     private var player: VoicePlayer { VoicePlayer.shared }
     private var key: String { "\(auth.user?.id ?? "")/\(resource.key)" }
     private var isPlaying: Bool { player.isPlaying(key) }
-    private var duration: TimeInterval { Double(voice.durationMs) / 1000 }
+    private var duration: TimeInterval { player.duration(for: key) ?? Double(voice.durationMs) / 1000 }
 
     var body: some View {
         HStack {
@@ -38,32 +41,32 @@ struct VoiceMessageView: View {
             VStack(alignment: .leading, spacing: 6) {
                 if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
                 if let replyQuote { MessageReplyQuoteView(preview: replyQuote, action: onQuoteTap) }
-                HStack(alignment: .center, spacing: 10) {
-                    if fromUser { avatar }
-                    playButton
-                    TimelineView(.animation(minimumInterval: 0.1, paused: !isPlaying)) { _ in
-                        let elapsed = player.currentTime(for: key)
-                        VStack(alignment: .leading, spacing: 6) {
-                            waveform(progress: duration > 0 ? min(1, elapsed / duration) : 0)
-                            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                                if fromUser {
-                                    Image(systemName: "mic.fill")
-                                        .font(.caption2)
-                                        .foregroundStyle(voice.listenedAt != nil ? MessageReceiptView.readColor(colorScheme) : Color.secondary)
-                                        .accessibilityLabel(voice.listenedAt != nil ? "Listened" : "Not listened yet")
-                                }
-                                Text(isPlaying ? VoiceDuration.format(seconds: Int(elapsed)) : VoiceDuration.format(milliseconds: voice.durationMs))
-                                    .manrope(.caption2).monospacedDigit()
-                                    .foregroundStyle(.secondary)
-                                Spacer(minLength: 8)
-                                MessageMetadataView(sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt,
-                                                    isSending: isSending, showsReceipt: showsReceipt)
+                TimelineView(.animation(minimumInterval: 0.05, paused: !isPlaying)) { _ in
+                    let elapsed = player.isCurrent(key) ? player.currentTime(for: key) : selectedTime
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .center, spacing: 10) {
+                            if fromUser { avatar }
+                            playButton
+                            waveform(elapsed: elapsed)
+                            if !fromUser { avatar }
+                        }
+                        HStack(alignment: .lastTextBaseline, spacing: 4) {
+                            if fromUser {
+                                Image(systemName: "mic.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(voice.listenedAt != nil ? MessageReceiptView.readColor(colorScheme) : Color.secondary)
+                                    .accessibilityLabel(voice.listenedAt != nil ? "Listened" : "Not listened yet")
                             }
+                            Text(elapsed > 0 || isPlaying ? VoiceDuration.format(seconds: Int(elapsed)) : VoiceDuration.format(milliseconds: voice.durationMs))
+                                .manrope(.caption2).monospacedDigit()
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 4)
+                            MessageMetadataView(sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt,
+                                                isSending: isSending, showsReceipt: showsReceipt)
                         }
                     }
-                    if !fromUser { avatar }
                 }
-                .frame(maxWidth: 250)
+                .frame(maxWidth: 270)
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
             .foregroundStyle(Color.primary)
@@ -72,6 +75,15 @@ struct VoiceMessageView: View {
             if !fromUser { Spacer(minLength: 40) }
         }
         .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(x: fromUser ? 8 : -8, y: 4)))
+        .onScrollVisibilityChange(threshold: 0.1) { visible = $0 }
+        .task(id: "\(key)/\(visible)") {
+            guard visible else { return }
+            await loadWaveform()
+        }
+        .onChange(of: key) { _, _ in samples = nil; selectedTime = 0 }
+        .onChange(of: player.currentKey) { previous, current in
+            if previous == key && current != key { selectedTime = 0 }
+        }
         .onDisappear { loadTask?.cancel() }
     }
 
@@ -81,24 +93,45 @@ struct VoiceMessageView: View {
         else { ContactAvatar(contact: nil, size: 40) }
     }
 
-    // Stable decorative bars, not decoded recording amplitudes. Progress follows playback.
-    private func waveform(progress: Double) -> some View {
-        GeometryReader { geometry in
-            let count = 27
-            let gap: CGFloat = 2
-            let width = max(1, (geometry.size.width - CGFloat(count - 1) * gap) / CGFloat(count))
-            HStack(spacing: gap) {
-                ForEach(0..<count, id: \.self) { index in
-                    Capsule()
-                        .fill(Double(index) / Double(count) < progress ? Color.accentColor : Color.secondary.opacity(0.4))
-                        .frame(width: width, height: CGFloat(5 + (index * 17 + voice.durationMs % 23) % 24))
+    private func waveform(elapsed: TimeInterval) -> some View {
+        let progress = duration > 0 ? min(1, elapsed / duration) : 0
+        let values = samples ?? auth.images.audio.cachedWaveform(resource) ?? [Double](repeating: 0, count: 37)
+        return GeometryReader { geometry in
+            let trackWidth = max(0, geometry.size.width - 12)
+            let spacing = trackWidth / CGFloat(values.count)
+            ZStack {
+                HStack(spacing: 0) {
+                    ForEach(values.indices, id: \.self) { index in
+                        Capsule()
+                            .fill(Double(index) / Double(values.count) < progress ? Color.accentColor : Color.secondary.opacity(0.4))
+                            .frame(width: min(2.2, max(1, spacing - 1.5)), height: 3 + 19 * values[index])
+                            .frame(width: spacing)
+                    }
                 }
+                .frame(width: trackWidth)
+                VoiceSeekSlider(value: progress, onChange: { fraction in
+                    selectedTime = fraction * duration
+                    player.seek(selectedTime, for: key)
+                })
+                .accessibilityLabel("Playback position")
+                .accessibilityValue("\(VoiceDuration.format(seconds: Int(elapsed))) of \(VoiceDuration.format(seconds: Int(duration)))")
             }
-            .frame(height: 32)
+            .frame(height: 44)
         }
-        .frame(height: 32)
-        .accessibilityLabel("Playback progress")
-        .accessibilityValue("\(Int(progress * 100)) percent")
+        .frame(height: 44)
+    }
+
+    private func loadWaveform() async {
+        let expectedKey = key
+        do {
+            let values = try await auth.images.audio.waveform(resource) {
+                if let localData { return localData }
+                return try await auth.voiceAudio(resource)
+            }
+            try Task.checkCancellation()
+            guard key == expectedKey else { return }
+            samples = values
+        } catch { /* Keep a neutral baseline; playback can still be retried independently. */ }
     }
 
     private var playButton: some View {
@@ -128,6 +161,8 @@ struct VoiceMessageView: View {
         }
         if let localData {
             failed = !player.play(localData, key: key)
+            player.seek(selectedTime, for: key)
+            Task { await loadWaveform() }
             return
         }
         loadTask?.cancel()
@@ -139,9 +174,68 @@ struct VoiceMessageView: View {
                 let data = try await auth.voiceAudio(resource)
                 try Task.checkCancellation()
                 failed = !player.play(data, key: key)
+                player.seek(selectedTime, for: key)
+                if !failed { await loadWaveform() }
                 if failed { await auth.images.audio.remove(resource) }
             } catch is CancellationError { }
             catch { failed = true }
+        }
+    }
+}
+
+/// Native slider keeps a 44-point hit area and touch/VoiceOver tracking over the bars.
+private struct VoiceSeekSlider: UIViewRepresentable {
+    let value: Double
+    let onChange: (Double) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onChange: onChange) }
+
+    func makeUIView(context: Context) -> UISlider {
+        let slider = WaveformSlider()
+        slider.minimumTrackTintColor = .clear
+        slider.maximumTrackTintColor = .clear
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 12, height: 12)).image { context in
+            UIColor.white.setFill()
+            context.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: 12, height: 12))
+        }.withRenderingMode(.alwaysTemplate)
+        slider.setThumbImage(image, for: .normal)
+        slider.setThumbImage(image, for: .highlighted)
+        slider.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .valueChanged)
+        return slider
+    }
+
+    func updateUIView(_ slider: UISlider, context: Context) {
+        context.coordinator.onChange = onChange
+        slider.thumbTintColor = UIColor(Color.accentColor)
+        slider.tintColor = UIColor(Color.accentColor)
+        if !slider.isTracking { slider.value = Float(value) }
+    }
+
+    final class Coordinator: NSObject {
+        var onChange: (Double) -> Void
+        init(onChange: @escaping (Double) -> Void) { self.onChange = onChange }
+        @objc func changed(_ slider: UISlider) { onChange(Double(slider.value)) }
+    }
+
+    private final class WaveformSlider: UISlider {
+        private func move(to touch: UITouch) {
+            let fraction = min(1, max(0, (touch.location(in: self).x - 6) / max(1, bounds.width - 12)))
+            value = Float(fraction)
+            sendActions(for: .valueChanged)
+        }
+
+        override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+            move(to: touch)
+            return true
+        }
+
+        override func continueTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+            move(to: touch)
+            return true
+        }
+
+        override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
+            if let touch { move(to: touch) }
         }
     }
 }
