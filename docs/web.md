@@ -1,5 +1,10 @@
 # Web app
 
+[App branding](branding.md) uses the supplied background-inclusive logo on sign-in
+and registration, plus the supplied favicon in both web and admin. Favicons use
+a content version query to refresh older browser caches. These public assets are
+bundled independently of account data; no session cache changes are needed.
+
 [Web research](web-research.md) is available through ordinary human chat requests,
 with the same limits and permissions as iOS. Failed grounding checks are reported
 separately from pending or uncertain operations. Document cards show **Web research**

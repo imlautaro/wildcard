@@ -564,9 +564,7 @@ details pre {
 /* Sign in */
 .auth { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--md-surface-container); }
 .auth-card { --field-bg: var(--md-surface); width: 100%; max-width: 420px; padding: 32px 24px 24px; border-radius: var(--md-shape-xl); background: var(--md-surface); }
-.auth-card .mark { width: 64px; height: 64px; border-radius: 20px; background: var(--md-primary); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
-.auth-card .mark svg { width: 30px; height: 32px; }
-.auth-card .mark path { fill: var(--md-on-primary); }
+.auth-card .mark { display: block; width: 64px; height: 64px; margin: 0 auto 16px; }
 .auth-card h1 { text-align: center; font-size: 28px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 8px; }
 .auth-card .lead { text-align: center; color: var(--md-on-surface-variant); margin: 0 0 24px; }
 .auth-card .group > * { background: var(--md-surface-container-low); }

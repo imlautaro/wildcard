@@ -16,10 +16,10 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <imageView userInteractionEnabled="NO" contentMode="scaleAspectFit" image="SplashMark" translatesAutoresizingMaskIntoConstraints="NO" id="launch-mark">
-                                <rect key="frame" x="150.25" y="388.5" width="92.5" height="100"/>
+                                <rect key="frame" x="142.75" y="388.5" width="107.5" height="100"/>
                                 <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" constant="92.5" id="mark-width"/>
+                                    <constraint firstAttribute="width" constant="107.5" id="mark-width"/>
                                     <constraint firstAttribute="height" constant="100" id="mark-height"/>
                                 </constraints>
                                 <accessibility key="accessibilityConfiguration" label="Wildcard"/>
@@ -38,7 +38,7 @@
         </scene>
     </scenes>
     <resources>
-        <image name="SplashMark" width="37" height="40"/>
+        <image name="SplashMark" width="43" height="40"/>
         <namedColor name="AccentColor">
             <color red="0.015686" green="0.364706" blue="0.890196" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </namedColor>

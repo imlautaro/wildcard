@@ -28,7 +28,7 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#121318', media: '(prefers-color-scheme: dark)' },
       ],
       link: [
-        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg?v=80154fe8f96b' },
         { rel: 'preload', href: '/fonts/Manrope.ttf', as: 'font', type: 'font/ttf', crossorigin: '' },
       ],
     },

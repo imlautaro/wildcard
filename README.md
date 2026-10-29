@@ -72,7 +72,7 @@ iOS 27.0. For a physical device, select your own signing team and bundle identif
 The app includes sign-up/sign-in, a [first-circle onboarding](docs/onboarding.md), native Chats and Account tabs, Keychain session
 storage, restoration on launch, and logout. Account supports editing your name and
 choosing, cropping, replacing, or removing your own private [profile photo](docs/profile-photos.md#account-profile)
-directly through the centered avatar/name menus shared with contact editing. It preserves the Wildcard Icon Composer
+directly through the centered avatar/name menus shared with contact editing. It uses the updated [Wildcard branding](docs/branding.md), including the Icon Composer
 icon and bundled [Manrope typography](docs/typography.md). Debug and Release
 default to the public API through `WILDCARD_API_URL`; an independent installation must replace that setting. See the auth guide for local
 simulator configuration.

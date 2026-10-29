@@ -14,10 +14,10 @@
               }
             }
           ],
-          "image-name" : "wildcard-icon.svg",
-          "name" : "wildcard-icon",
+          "image-name" : "wildcard_icon.svg",
+          "name" : "wildcard_icon",
           "position" : {
-            "scale" : 17.5,
+            "scale" : 17.52,
             "translation-in-points" : [
               0,
               0
