@@ -33,7 +33,6 @@ const fetched = ref<Contact | null>(null);
 const contact = computed(() => chats.contacts.value.find((item) => item.id === contactID.value) ?? fetched.value);
 const scroller = ref<HTMLElement>();
 const messageContent = ref<HTMLElement>();
-const { positioned, onScroll, scrollToBottom } = useChatScroll(scroller, messageContent, contactID, () => state.value.loaded);
 const composer = ref<{ focus: () => void }>();
 
 useHead({ title: computed(() => contact.value?.name ?? 'Chat') });
@@ -75,6 +74,10 @@ const items = computed<Item[]>(() => {
   }
   return result;
 });
+const { positioned, onScroll, onWheel, onTouchStart, onTouchMove, onKeydown, scrollToBottom } = useChatScroll(
+  scroller, messageContent, contactID, () => state.value.loaded, () => items.value,
+);
+
 const lastTurnID = computed(() => state.value.turns.at(-1)?.id);
 const replying = computed(() => state.value.turns.some((turn) => turn.status === 'queued' || turn.status === 'running'));
 // A task work turn has no human message; say what the contact is working on instead.
@@ -133,37 +136,25 @@ function failureText(turn: ChatTurn) {
   return "The reply to this message couldn't be completed.";
 }
 
-function nearBottom() {
-  const element = scroller.value;
-  return !element || element.scrollHeight - element.scrollTop - element.clientHeight < 120;
-}
 async function refresh() {
-  const stick = nearBottom();
   await Promise.all([load(), remote.refresh(), miniApps.refresh()]);
   if (remote.state.value.loaded && state.value.remoteDeviceID && !remote.state.value.devices.some(d => d.id === state.value.remoteDeviceID)) state.value.remoteDeviceID = null;
-  if (stick) scrollToBottom();
   if (document.visibilityState === 'visible') markRead();
 }
 
 async function earlier() {
-  const element = scroller.value;
-  const previousHeight = element?.scrollHeight ?? 0;
   await loadEarlier();
-  // Preserve the reading position when older history is prepended.
-  nextTick(() => { if (element) element.scrollTop += element.scrollHeight - previousHeight; });
 }
 
 async function onSend(text: string, attachment: DraftAttachment | null) {
   scrollToBottom();
   activity.sent();
   await send(text, attachment);
-  scrollToBottom();
 }
 async function onVoice(clip: DraftVoice) {
   scrollToBottom();
   activity.sent();
   await send('', null, clip);
-  scrollToBottom();
 }
 
 // One-second tick while visible, like the iOS session synchronizer.
@@ -228,7 +219,7 @@ onBeforeUnmount(() => {
         <button v-if="state.remoteDeviceID" type="button" class="link-button danger" @click="revokeRemote">Revoke access</button>
       </div>
     </div>
-    <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" @scroll.passive="onScroll">
+    <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" tabindex="0" @scroll.passive="onScroll" @wheel.passive="onWheel" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @keydown="onKeydown">
       <div ref="messageContent" class="message-content">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">

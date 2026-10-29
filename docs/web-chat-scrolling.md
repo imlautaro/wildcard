@@ -39,3 +39,18 @@ This coordinates responses already observed by the list; separate server reads
 are not an atomic snapshot. Newer activity is reconciled on subsequent polls.
 Pending browser verification: incoming private/group replies with the sidebar
 visible, overlapping refreshes, slow/failing requests, navigation and account reset.
+
+## Keep the reader in control
+
+Refreshes never issue a delayed scroll based on a position captured before a
+network request. Sending opts into following once, when the send starts; completing
+an upload cannot override scrolling that happened during the request. Upward wheel,
+touch and keyboard input immediately detach following. Scrolling back to within
+two pixels of the end reattaches it. Layout-driven following checks the current
+visit and current intent at execution time.
+
+Visible message rows anchor history pagination and message updates before/after
+Vue patches. Browser scroll anchoring is disabled for this viewport to avoid double
+compensation. Delayed media growth while detached never forces the reader down.
+Pending browser verification: scroll up during a slow poll/upload, load earlier
+history while replies arrive, open quotes, and use wheel, touch and keyboard.

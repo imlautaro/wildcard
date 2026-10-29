@@ -9,7 +9,6 @@ const { state, load, loadEarlier, send, submit, discardPending, retryReply, note
 useVisibleConversation(() => `group/${groupID.value}`);
 const scroller = ref<HTMLElement>();
 const messageContent = ref<HTMLElement>();
-const { positioned, onScroll, scrollToBottom } = useChatScroll(scroller, messageContent, groupID, () => state.value.loaded);
 const composer = ref<{ focus: () => void }>();
 
 const group = computed(() => state.value.snapshot?.group ?? chats.groups.value.find((item) => item.id === groupID.value) ?? null);
@@ -50,6 +49,10 @@ const items = computed<Item[]>(() => {
   });
   return result;
 });
+
+const { positioned, onScroll, onWheel, onTouchStart, onTouchMove, onKeydown, scrollToBottom } = useChatScroll(
+  scroller, messageContent, groupID, () => state.value.loaded, () => items.value,
+);
 
 function isMine(message: GroupMessage) {
   return message.userID !== null && message.userID === user.value?.id;
@@ -107,31 +110,21 @@ function attachmentPath(message: { id: string }) {
   return `groups/${groupID.value}/messages/${message.id}/attachment`;
 }
 
-function nearBottom() {
-  const element = scroller.value;
-  return !element || element.scrollHeight - element.scrollTop - element.clientHeight < 120;
-}
 async function refresh() {
-  const stick = nearBottom();
   await load();
-  if (stick) scrollToBottom();
   if (document.visibilityState === 'visible') markRead();
 }
 async function earlier() {
-  const element = scroller.value;
-  const previousHeight = element?.scrollHeight ?? 0;
   await loadEarlier();
-  nextTick(() => { if (element) element.scrollTop += element.scrollHeight - previousHeight; });
 }
+
 async function onSend(text: string, attachment: DraftAttachment | null) {
   scrollToBottom();
   await send(text, attachment);
-  scrollToBottom();
 }
 async function onVoice(clip: DraftVoice) {
   scrollToBottom();
   await send('', null, clip);
-  scrollToBottom();
 }
 // Contact voice messages keep the spoken text as their transcript.
 function transcriptOf(message: GroupMessage) {
@@ -203,7 +196,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
     <NuxtLink to="/" class="button secondary">Back to Chats</NuxtLink>
   </div>
   <template v-else>
-    <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" @scroll.passive="onScroll">
+    <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" tabindex="0" @scroll.passive="onScroll" @wheel.passive="onWheel" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @keydown="onKeydown">
       <div ref="messageContent" class="message-content">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
