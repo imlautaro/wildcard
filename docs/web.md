@@ -656,6 +656,17 @@ their existing message/presence cache. See [loop control](groups.md#ending-ackno
 
 ## Generated chat images
 
+Chat image thumbnails use a square frame with `object-fit: cover`, cropping excess
+edges without distortion. In private chats and groups, clicking a loaded image
+opens a black full-screen modal in the same tab, reusing its existing private
+image cache URL without downloading it again. The viewer fits the complete image;
+Zoom in/Fit image or double-click toggles zoom, with scrolling to inspect it.
+Close or Escape dismisses the modal and restores focus to the thumbnail. Navigation,
+an image source change, or an account change removes the viewer. This web-only
+presentation update follows the existing iOS cover thumbnails and full-screen
+viewer; native pinch/pan and swipe dismissal remain iOS interactions. Browser
+visual and touch verification is pending.
+
 Contacts can generate one contextual image per response and optionally combine up
 to three currently accessible avatars. The first private assistant message can
 carry `attachment`; the private image component uses the authorized attachment

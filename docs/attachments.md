@@ -1,5 +1,17 @@
 # Chat attachments
 
+On the web, private and group chat images (including generated contact images)
+use square cover thumbnails for both optimistic previews and saved messages.
+Clicking a loaded thumbnail opens the full image in a black modal in the same tab.
+The modal provides Close, Escape, Zoom in/Fit image, double-click zoom and scrolling
+when enlarged. It reuses the thumbnail's cached original blob URL without another
+request or a separate cache; pending images reuse their local preview URL.
+Closing restores focus. Source/account changes and navigation dismiss the viewer.
+PDFs retain their separate temporary blob preview. iOS keeps its existing native
+viewer and gestures. Verify portrait/landscape images, captions, generated images,
+small viewports, keyboard focus, zoom, back navigation, offline reopening and
+account switching in a browser; static validation does not confirm these behaviors.
+
 The composer has a paperclip button to the left of Message. Choose Photo library
 or Choose file, inspect the draft thumbnail/name, and remove or replace it before
 sending. A message can contain one attachment, with or without text. Sending

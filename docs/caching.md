@@ -404,7 +404,13 @@ caches.
   blob URLs in a bounded (150 entry) LRU keyed by account ID, access path, and photo
   version or message ID. Evicted and reset entries are revoked. Failed loads are not
   cached. The API's `no-store` header keeps bytes out of the browser disk cache. No
-  private data goes to `localStorage`, IndexedDB, or a service worker. Files open
+  private data goes to `localStorage`, IndexedDB, or a service worker. Chat images
+  open in an in-page full-screen viewer using the same original blob URL as their
+  cover thumbnail, with no additional fetch or cache. Pending images use their
+  existing local preview URL. The viewer is removed on source/account change or
+  component unmount; modal state does not survive navigation. Verify offline
+  reopen, source replacement, navigation and account switching in a browser.
+  PDF files open
   from a temporary blob URL that is revoked after a minute.
 - **Energy.** Creator energy uses up to eight memory-only snapshots reused
   synchronously on entry, with shared in-flight reads, a five-second refresh while
