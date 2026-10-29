@@ -292,6 +292,12 @@ then enable the flag. Rollback: turn the flag off (no release); the code can be
 reverted without a data rollback because the columns are additive and unused by
 older code. Older clients show contact voice messages as text.
 
+On October 29, 2026 the user explicitly authorized a one-time exception: the
+production `ELEVENLABS_API_KEY` was uploaded with `wrangler secret put` (version
+`bb64b9e5`, built from commit `1fc3526`) instead of a Workers Builds variable.
+Releases preserve it. Rotate it through the build variable; do not repeat the
+manual upload without new authorization.
+
 Unverified at implementation time: real ElevenLabs calls, the catalog's `age`
 label values, real Meta transcription of stored clips, and both clients on devices.
 
