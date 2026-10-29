@@ -1,3 +1,4 @@
+import { discardWorkflow } from './cleanup';
 import { enqueueReply } from '../push/delivery';
 import { storedColumns, type StoredTurn } from './data';
 
@@ -25,7 +26,10 @@ export async function dispatchAgent(env: Env, agentID: string) {
     .first<{ id: string; workflowID: string; attempt: number; isGroup: number }>();
   if (!turn) return;
   try {
+    const registered = await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(turn.workflowID).first();
+    if (!registered) return;
     await env.CHAT_WORKFLOW.create({ id: turn.workflowID, params: turn.isGroup ? { kind: 'group', turnID: turn.id, attempt: turn.attempt } : { turnID: turn.id, attempt: turn.attempt } });
+    if (!await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(turn.workflowID).first()) await discardWorkflow(env,turn.workflowID,turn.id);
   } catch {
     try {
       const instance = await env.CHAT_WORKFLOW.get(turn.workflowID);

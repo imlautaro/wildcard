@@ -1,3 +1,4 @@
+import { retainedGroupMemories } from '../chat/retained-memory';
 import { standardModel } from '../lib/model-preference';
 import { isRecord, museCompletion } from '../chat/meta';
 import type { Memory } from '../chat/memory';
@@ -11,7 +12,7 @@ export async function groupMemories(db: D1Database, agentID: string, contributor
     WHERE m.agent_id = ?1 AND member.share_memory = 1 AND NOT EXISTS (SELECT 1 FROM mcp_private_group p WHERE p.group_id = gm.group_id)
     AND EXISTS (SELECT 1 FROM group_agent ga WHERE ga.group_id = gm.group_id AND ga.agent_id = m.agent_id) AND (?2 = 0 OR (member.contributor_consent = 1 AND gm.contributor_consent = 1))
     ORDER BY m.updated_at DESC LIMIT 128`).bind(agentID, contributor ? 1 : 0).all<Memory>();
-  return results;
+  return [...results,...await retainedGroupMemories(db,agentID,contributor)].filter((m,i,all)=>all.findIndex(other=>other.sourceUserID===m.sourceUserID && other.key===m.key)===i);
 }
 
 export async function localGroupMemories(db: D1Database, agentID: string, groupID: string, userID: string, beforeSequence = Number.MAX_SAFE_INTEGER): Promise<Memory[]> {
@@ -26,7 +27,7 @@ export async function localGroupMemories(db: D1Database, agentID: string, groupI
     JOIN mcp_private_group isolated ON isolated.group_id = m.group_id
     WHERE m.agent_id = ?1 AND m.group_id = ?2 AND gm.sequence < ?4 ORDER BY m.updated_at DESC LIMIT 128`)
     .bind(agentID, groupID, userID, beforeSequence).all<Memory>();
-  return results;
+  return [...results,...await retainedGroupMemories(db,agentID,false,{groupID,userID})].filter((m,i,all)=>all.findIndex(other=>other.sourceUserID===m.sourceUserID && other.key===m.key)===i);
 }
 
 export async function rememberGroupMessage(bindings: Env, jobID: string, attempt: number) {

@@ -92,6 +92,6 @@ export async function executeDocumentTool(env: Env, scope: DocumentScope, agentI
     throw error;
   }
   const json = JSON.stringify(result);
-  await env.DB.prepare('INSERT INTO document_mutation (id, result_json, created_at) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING').bind(id, json, Date.now()).run();
+  await env.DB.prepare('INSERT INTO document_mutation (id, result_json, created_at) SELECT ?1, ?2, ?3 WHERE EXISTS(SELECT 1 FROM chat_turn WHERE id=?4) OR EXISTS(SELECT 1 FROM group_reply WHERE id=?4) ON CONFLICT(id) DO NOTHING').bind(id, json, Date.now(), source).run();
   return json;
 }

@@ -14,7 +14,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import chats from './chats';
 import schedules from './schedules';
-import { terminateChats } from '../chat/dispatch';
+import { clearContact, cleanResources } from '../chat/cleanup';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readBearerSession } from '../lib/session';
 import sharing from './sharing';
@@ -22,8 +22,8 @@ import personality from '../personality/routes';
 import generation from '../contacts/generation';
 import { listVoices, voiceRepliesAvailable, type Voice } from '../voice/catalog';
 
-type Contact = { speechAccent: string | null; onboardingChat?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
-const columns = `(SELECT speech_accent FROM contact_agent WHERE id = contact.agent_id) AS speechAccent, onboarding_chat AS onboardingChat, initiative_enabled AS initiativeEnabled, voice_messages_enabled AS voiceMessagesEnabled,
+type Contact = { archivedAt?: number | null; historyRevision?: number; clearing?: number; speechAccent: string | null; onboardingChat?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
+const columns = `archived_at AS archivedAt, history_revision AS historyRevision, clearing, (SELECT speech_accent FROM contact_agent WHERE id = contact.agent_id) AS speechAccent, onboarding_chat AS onboardingChat, initiative_enabled AS initiativeEnabled, voice_messages_enabled AS voiceMessagesEnabled,
   (SELECT voice_id FROM contact_agent WHERE id = contact.agent_id) AS voiceID, (SELECT voice_name FROM contact_agent WHERE id = contact.agent_id) AS voiceName, id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
   CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
 const managesAgent = `EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = contact.user_id)`;
@@ -290,21 +290,43 @@ contacts.delete('/:id', async (c) => {
     .bind(c.req.param('id'), c.get('owner')).first<{ agentID: string; ownerID: string; photoVersion: string | null }>();
   if (!member) return c.json({ error: 'Contact not found' }, 404);
   const isOwner = member.ownerID === c.get('owner');
-  const pending = await c.env.DB.prepare(`SELECT t.workflow_id AS id FROM chat_turn t JOIN contact c ON c.id = t.contact_id
-    WHERE c.agent_id = ?1 AND (?2 = 1 OR c.user_id = ?3) AND t.status IN ('queued','running')`)
-    .bind(member.agentID, isOwner ? 1 : 0, c.get('owner')).all<{ id: string }>();
   if (isOwner) {
-    await c.env.DB.prepare('DELETE FROM contact_agent WHERE id = ? AND owner_id = ?')
-      .bind(member.agentID, c.get('owner')).run();
-    if (member.photoVersion) c.executionCtx.waitUntil(removePhoto(c.env, photoKey(member.ownerID, member.agentID, member.photoVersion)));
+    await c.env.DB.prepare('DELETE FROM contact_agent WHERE id = ? AND owner_id = ?').bind(member.agentID,c.get('owner')).run();
   } else {
-    await c.env.DB.prepare('DELETE FROM contact WHERE id = ? AND user_id = ?')
-      .bind(c.req.param('id'), c.get('owner')).run();
+    await c.env.DB.prepare('DELETE FROM contact WHERE id = ? AND user_id = ?').bind(c.req.param('id'),c.get('owner')).run();
   }
-  c.executionCtx.waitUntil(terminateChats(c.env, pending.results.map((row) => row.id)));
+  c.executionCtx.waitUntil(cleanResources(c.env));
   return c.body(null, 204);
 });
 
+contacts.put('/:id/archive', contactBody, async c => {
+  const body = await c.req.json<Record<string,unknown>>().catch(()=>null);
+  if (!body || Object.keys(body).join(',') !== 'archived' || typeof body.archived !== 'boolean') return c.json({error:'Provide archived as a boolean'},400);
+  const row = await c.env.DB.prepare('UPDATE contact SET archived_at=? WHERE id=? AND user_id=? RETURNING id')
+    .bind(body.archived ? Date.now() : null,c.req.param('id'),c.get('owner')).first();
+  return row ? c.body(null,204) : c.json({error:'Contact not found'},404);
+});
+contacts.post('/:id/clear', contactBody, async c => {
+  const body = await c.req.json<Record<string,unknown>>().catch(()=>null);
+  if (!body || Object.keys(body).sort().join(',') !== 'clearMemory,historyRevision' || (typeof body.clearMemory !== 'boolean' || typeof body.historyRevision !== 'number' || !Number.isSafeInteger(body.historyRevision) || body.historyRevision < 0)) return c.json({error:'Choose whether to clear memory'},400);
+  const row = await c.env.DB.prepare('SELECT id,clearing,history_revision AS revision FROM contact WHERE id=? AND user_id=?').bind(c.req.param('id'),c.get('owner')).first<{id:string;clearing:number;revision:number}>();
+  if (!row) return c.json({error:'Contact not found'},404);
+  if (row.revision>body.historyRevision) {
+    const pending=await c.env.DB.prepare('SELECT 1 FROM resource_cleanup WHERE scope=? LIMIT 1').bind(row.id).first();
+    return c.json({cleared:true,cleanup:pending?'pending':'complete'},202);
+  }
+  if (row.revision!==body.historyRevision) return c.json({error:'Refresh before clearing this chat'},409);
+  const admission=await admitAuthRequest(c.env.DB,c.get('owner'),'chat-clear',6);
+  if (!admission.allowed) return c.json({error:'Too many clear requests. Please wait a minute.'},429);
+  try { if (!row.clearing) await clearContact(c.env,row.id,c.get('owner'),body.clearMemory,body.historyRevision); }
+  catch (error) {
+    const latest=await c.env.DB.prepare('SELECT history_revision AS revision FROM contact WHERE id=?').bind(row.id).first<{revision:number}>();
+    if (!latest || latest.revision<=body.historyRevision) throw error;
+  }
+  c.executionCtx.waitUntil(cleanResources(c.env,row.id));
+  const state=await c.env.DB.prepare('SELECT EXISTS(SELECT 1 FROM resource_cleanup WHERE scope=contact.id) AS pending FROM contact WHERE id=?').bind(c.req.param('id')).first<{pending:number}>();
+  return c.json({cleared:true,cleanup:state?.pending ? 'pending' : 'complete'},202);
+});
 contacts.route('/:id/native-actions', nativeActions);
 contacts.route('/:id/personality', personality);
 contacts.route('/:id/mini-apps', miniAppRoutes('contact'));

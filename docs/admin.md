@@ -73,10 +73,12 @@ it again. The API then:
 2. In one D1 batch, records an `admin_event` and deletes the `user` row. Foreign keys
    cascade through sessions, credentials, contacts, chat turns, memories, schedules,
    tasks, documents, mini apps, connectors, onboarding and group memberships.
-3. Terminates the pending chat workflows, as contact deletion does. In-flight
-   onboarding, contact-generation and group-reply workflows are not terminated,
-   matching the existing group deletion route. How they behave once their rows are
-   gone has not been verified.
+3. Attempts immediate termination of pending private chat workflows. Migration
+   0063 also enqueues registered private/group/initiative workflows, generated
+   contact jobs and published onboarding-contact checkpoints for durable deletion
+   through the [chat lifecycle outbox](chat-lifecycle.md). An account onboarding
+   job with no published contacts is still outside that contact-trigger coverage;
+   its real behavior after account removal remains unverified.
 4. Deletes R2 objects under `users/<id>/`, `contacts/<id>/` and `attachments/<id>/`,
    plus `groups/<group>/` and `group-attachments/<group>/` for groups the account
    owned. If any prefix fails, the response reports `storage: "partial"` and logs

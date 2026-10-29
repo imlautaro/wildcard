@@ -12,6 +12,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { findTurn, publicTurn, storedColumns, turnColumns, type ChatTurn, type StoredTurn } from '../chat/data';
 import { normalizedRecording, transcribeRecording, TranscriptionFailure } from '../chat/transcription';
 import { dispatchChat } from '../chat/dispatch';
+import { registerChatObject, discardChatObject } from '../chat/object-storage';
 import { isVoice, parseVoice } from '../voice/speech';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 
@@ -30,6 +31,9 @@ chats.use('*', async (c, next) => {
   if (!id || !await c.env.DB.prepare('SELECT id FROM contact WHERE id = ? AND user_id = ?')
     .bind(id, c.get('owner')).first()) return c.json({ error: 'Contact not found' }, 404);
   c.set('contactID', id);
+  if (c.req.method !== 'GET' && await c.env.DB.prepare('SELECT id FROM contact WHERE id=? AND clearing=1').bind(id).first()) {
+    return c.json({error:'Chat cleanup is in progress. Please try again shortly.'},409);
+  }
   if (c.req.method === 'POST' && !c.req.path.endsWith('/activity')
     && !await contactModelAllowed(c.env, id, c.get('owner'))) {
     return c.json({ error: 'Accept a new invitation with Contributor model consent before using this contact' }, 403);
@@ -88,6 +92,7 @@ chats.post('/activity', bodyLimit({ maxSize: 1024,
   return c.json({ active: !!visit && !visit.closed && visit.expiresAt > now });
 });
 chats.get('/turns', async (c) => {
+  const epoch = await c.env.DB.prepare('SELECT history_revision AS value FROM contact WHERE id=?').bind(c.get('contactID')).first<{value:number}>();
   const presence = await readPresence(c.env.DB, c.get('contactID'), c.get('owner'));
   const before = c.req.query('before');
   if (before !== undefined && (!/^\d{1,16}$/.test(before) || !Number.isSafeInteger(Number(before)) || Number(before) < 1)) {
@@ -100,7 +105,9 @@ chats.get('/turns', async (c) => {
     .bind(c.get('contactID'), c.get('owner'), before ? Number(before) : Number.MAX_SAFE_INTEGER).all<ChatTurn & { attachmentJSON: string | null; taskTitle: string | null }>();
   const page = results.slice(0, 50);
   const quotes = await privateQuotes(c.env.DB, c.get('contactID'), c.get('owner'), page);
-  return c.json({ presence, turns: page.reverse().map((turn) => ({ ...publicTurn(turn, quotes(turn), quotes), taskTitle: turn.taskTitle })), nextBefore: results.length > 50 ? page[0].sequence : null });
+  const revision = await c.env.DB.prepare('SELECT history_revision AS value FROM contact WHERE id=?').bind(c.get('contactID')).first<{value:number}>();
+  if (!epoch || revision?.value!==epoch.value) return c.json({error:'Chat was cleared. Refresh history.'},409);
+  return c.json({ historyRevision: epoch.value, presence, turns: page.reverse().map((turn) => ({ ...publicTurn(turn, quotes(turn), quotes), taskTitle: turn.taskTitle })), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 // Acknowledge only completed replies actually presented by the client. Never move backwards.
 chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }), async (c) => {
@@ -129,12 +136,15 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
 });
 chats.post('/turns', attachmentBody, async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
-  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'voice', 'replyTo', 'nativeContext', 'remoteDeviceID'].includes(key))
+  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'voice', 'replyTo', 'nativeContext', 'remoteDeviceID', 'historyRevision'].includes(key))
     || (body.timeZone !== undefined && !validTimeZone(body.timeZone))
     || typeof body.id !== 'string' || !uuid.test(body.id) || typeof body.text !== 'string'
     || (!body.text.trim() && body.attachment === undefined && body.voice === undefined) || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
     return c.json({ error: 'Provide an id and a message using 1–4000 characters' }, 400);
   }
+  const epoch = await c.env.DB.prepare('SELECT history_revision AS revision,clearing FROM contact WHERE id=? AND user_id=?')
+    .bind(c.get('contactID'),c.get('owner')).first<{revision:number;clearing:number}>();
+  if (!epoch || epoch.clearing || (body.historyRevision ?? 0)!==epoch.revision) return c.json({error:'Chat was cleared. Refresh before sending a new message.'},409);
   // A voice message is only audio: no caption or file. Its transcript comes later.
   if (body.voice !== undefined && (body.text.trim() || body.attachment !== undefined)) {
     return c.json({ error: 'Send a voice message without text or attachments' }, 400);
@@ -180,18 +190,19 @@ chats.post('/turns', attachmentBody, async (c) => {
   const key = attachment ? `attachments/${c.get('owner')}/${c.get('contactID')}/${id}/${crypto.randomUUID()}` : null;
   const attachmentJSON = attachment && key ? JSON.stringify({ ...attachment.metadata, key }) : null;
   if (attachment && key) {
-    await c.env.DB.prepare('INSERT INTO chat_attachment_object (object_key, created_at) VALUES (?, ?)').bind(key, now).run();
+    await registerChatObject(c.env,key,c.get('contactID'));
     await c.env.CONTACT_PHOTOS.put(key, attachment.bytes, { httpMetadata: { contentType: attachment.metadata.mimeType } });
   }
   const turn = await c.env.DB.prepare(`INSERT INTO chat_turn
     (id, contact_id, user_id, user_text, status, workflow_id, created_at, updated_at, time_zone, attachment_json, reply_to_id, reply_to_side, native_context_json)
     SELECT ?1, ?2, ?3, ?4, 'queued', ?5, ?6, ?6, ?7, ?8, ?9, ?10, ?11
-    WHERE EXISTS (SELECT 1 FROM contact WHERE id = ?2 AND user_id = ?3) AND ${replyTarget}
+    WHERE EXISTS (SELECT 1 FROM contact WHERE id = ?2 AND user_id = ?3 AND history_revision=?12 AND clearing=0) AND ${replyTarget}
       AND (SELECT COUNT(*) FROM chat_turn WHERE user_id = ?3 AND status IN ('queued','running')) < 10
     ON CONFLICT(id) DO NOTHING RETURNING ${storedColumns}`)
     .bind(id, c.get('contactID'), c.get('owner'), text, `chat-${id}-a1`, now, body.timeZone ?? null, attachmentJSON,
-      reply?.messageID ?? null, reply?.side ?? null, nativeJSON).first<StoredTurn>();
+      reply?.messageID ?? null, reply?.side ?? null, nativeJSON,epoch.revision).first<StoredTurn>();
   if (!turn) {
+    if (key) await discardChatObject(c.env,key,c.get('contactID'));
     const duplicate = await findTurn(c.env.DB, id, c.get('contactID'), c.get('owner'));
     if (duplicate && sameText(duplicate) && sameAttachment(duplicate, attachment?.metadata) && sameReply(duplicate, reply)) return c.json({ turn: await quotedTurn(c.env.DB, duplicate), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
     return c.json({ error: 'Too many pending messages or the conversation changed' }, 409);

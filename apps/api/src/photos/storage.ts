@@ -1,3 +1,4 @@
+import { cleanResources } from '../chat/cleanup';
 export const photoKey = (owner: string, contactID: string, version: string) =>
   `contacts/${owner}/${contactID}/${version}.jpg`;
 
@@ -35,8 +36,9 @@ export function validPhoto(bytes: Uint8Array, maxDimension = 1024): boolean {
 }
 
 export async function removePhoto(env: Env, key: string) {
-  try { await env.CONTACT_PHOTOS.delete(key); }
-  catch { console.error(JSON.stringify({ event: 'contact_photo_cleanup_failed' })); }
+  await env.DB.prepare(`INSERT INTO resource_cleanup(kind,resource,scope) VALUES('object',?1,?1)
+    ON CONFLICT(kind,resource) DO UPDATE SET revision=resource_cleanup.revision+1,next_at=0`).bind(key).run();
+  await cleanResources(env,key);
 }
 
 export async function readPhoto(request: Request): Promise<Uint8Array | null> {

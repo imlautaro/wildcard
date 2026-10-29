@@ -410,3 +410,7 @@ fact was extracted. This does not change existing shared-memory consent or expos
 another participant's raw transcript. Group instructions and live SQL access checks
 use the same authorized source roster. Connector-isolated private chats stay
 excluded. See [group permissions and revocation](groups.md#optional-private-text-sharing).
+
+## Memory when clearing history
+
+[Chat lifecycle](chat-lifecycle.md) supports keeping only extracted facts/self preferences while removing transcripts, source quotes, FTS entries and embeddings. Kept rows use live consent/isolation checks and cascade on contact/group/member deletion. Clear with memory removes knowledge sourced in that conversation; persona settings and independently sourced memories elsewhere survive.

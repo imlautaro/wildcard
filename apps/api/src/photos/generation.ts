@@ -1,3 +1,4 @@
+import { registerChatObject, discardChatObject } from '../chat/object-storage';
 import { Buffer } from 'node:buffer';
 import { chatImageInstruction, describeChatImage, parseChatImageReference, resolveChatImage, type ChatImageReference } from './chat-images';
 import { isRecord, type ModelTool } from '../chat/meta';
@@ -139,8 +140,10 @@ export async function generateChatImage(env: Env, scope: ImageScope, args: Recor
     await assertAccess(env, scope);
     for (const ref of refs) if (!await referenceAllowed(env, scope, ref)) throw new Error('IMAGE_REFERENCE_CHANGED');
     const key = `generated/${imageID(scope)}.jpg`;
-    await env.DB.prepare('INSERT INTO chat_attachment_object (object_key, created_at) VALUES (?, ?) ON CONFLICT DO NOTHING').bind(key, Date.now()).run();
+    await registerChatObject(env,key,scope.groupID ?? scope.contactID!);
     await env.CONTACT_PHOTOS.put(key, parsed.bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+    try { await assertAccess(env,scope); }
+    catch { await discardChatObject(env,key,scope.groupID ?? scope.contactID!); throw new Error('IMAGE_ACCESS_CHANGED'); }
     const attachment = { ...parsed.metadata, key };
     await env.DB.prepare(`UPDATE generated_chat_image SET status = 'complete', attachment_json = ? WHERE id = ? AND status = 'pending'`)
       .bind(JSON.stringify(attachment), imageID(scope)).run();

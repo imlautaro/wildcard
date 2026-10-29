@@ -56,6 +56,7 @@ app.route('/api/v1/voices', voices);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 app.onError((_error, c) => {
+  if (_error.message.includes('Chat cleanup is in progress')) return c.json({error:'Chat cleanup is in progress. Please try again shortly.'},409);
   console.error(JSON.stringify({ event: 'unhandled_request_error' }));
   return c.json({ error: 'Internal server error' }, 500);
 });

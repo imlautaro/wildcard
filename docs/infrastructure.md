@@ -2395,6 +2395,16 @@ history is modified. Verify text, voice, text fallback, interrupted synthesis an
 shared-contact/group scoping in an independent account. These runtime/device checks
 have not been performed.
 
+## Chat lifecycle (migration 0063)
+
+Apply `0063_chat_lifecycle.sql` in the existing ordered D1 migration pipeline. It adds archive timestamps, history revisions/clear locks, retained extracted-memory tables, scoped upload metadata, workflow-instance tracking and a durable cleanup outbox with deletion triggers. No new Cloudflare service, bucket, secret, binding or account permission is required: reuse `DB`, `CONTACT_PHOTOS`, `CHAT_WORKFLOW`, `ONBOARDING_WORKFLOW` and the minute Cron. An independent account must provision those existing required resources as described above before applying all migrations locally with `npm run db:migrate:local`. This is the same required production configuration; no separate staging resources are provisioned here.
+
+Production applies migrations only through the automatic API release from committed and pushed source. Release API before relying on the new client actions; older clients without history revisions cannot send into a previously cleared chat. Static binding checks use the installed Wrangler/runtime API for `WorkflowInstance.delete()`. The [official API](https://developers.cloudflare.com/workflows/build/workers-api/#delete) removes stored state and stops running execution; this implementation does not stop at termination alone.
+
+Monitor `resource_cleanup` row counts by kind, due `next_at`, attempts and age, plus `resource_cleanup_deferred` events. Jobs survive parent cascades and failures and retry without a maximum attempt count; workflow jobs release clear locks, while object/prefix jobs retain a five-minute final sweep to catch late uploads. Inspect queue drain and R2 listings in fictional-data release verification; never interpret a 202 clear response as proof that every external resource is already gone. The existing orphan collector covers interrupted legacy/unscoped uploads after its 24-hour grace. See [chat lifecycle](chat-lifecycle.md) for the full resource inventory, cache rules, exceptions, failure scenarios and verification checklist.
+
+Rollback: preserve migration 0063 and the outbox/registry/retained-memory tables. A code rollback would remove Cron cleanup and hide retained knowledge; keep a compatible cleanup consumer running or roll forward before accepting more deletions. Restore-compatible backups cannot resurrect intentionally deleted data without a separate user-authorized recovery. This implementation has only static validation: real Workflow/R2 failures, Cron recovery, release/source verification and device/browser behavior remain unverified.
+
 ## iOS background voice playback
 
 The main app target enables Background Modes in `Wildcard.xcodeproj` and declares

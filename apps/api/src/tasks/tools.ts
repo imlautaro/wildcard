@@ -117,7 +117,7 @@ export async function executeTaskTool(env: Env, scope: TaskScope, agentID: strin
     throw error;
   }
   const json = JSON.stringify(result);
-  await env.DB.prepare('INSERT INTO task_mutation (id, result_json, created_at) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING').bind(id, json, Date.now()).run();
+  await env.DB.prepare('INSERT INTO task_mutation (id, result_json, created_at) SELECT ?1, ?2, ?3 WHERE EXISTS(SELECT 1 FROM chat_turn WHERE id=?4) OR EXISTS(SELECT 1 FROM group_reply WHERE id=?4) ON CONFLICT(id) DO NOTHING').bind(id, json, Date.now(), source).run();
   // New assignments start other contacts' turns now instead of at the next Cron minute.
   // A busy chat or agent simply waits; the Cron retries.
   // Group turns leave it to the Cron (within a minute): an inline Tasks message would land

@@ -45,10 +45,22 @@ export async function readMemories(db: D1Database, scope: MemoryScope, ownOnly =
       AND (?5 = 0 OR source.user_id = ?7 OR source.contributor_consent = 1)
     ORDER BY m.source_sequence DESC, m.id DESC LIMIT 256`)
     .bind(scope.contactID, scope.userID, scope.beforeSequence, ownOnly ? 1 : 0, scope.contributorModel ? 1 : 0, scope.privateConversation ? 1 : 0, scope.processingUserID ?? scope.userID).all<Memory>();
-  if (ownOnly) return results;
+  const {results: retained} = await db.prepare(`SELECT m.user_id AS sourceUserID,u.name AS sourceUserName,
+    m.memory_key AS key,m.kind,m.content,'' AS sourceTurnID,'' AS sourceQuote,0 AS sourceSequence,m.updated_at AS updatedAt
+    FROM retained_contact_memory m JOIN contact source ON source.id=m.contact_id JOIN user u ON u.id=m.user_id
+    JOIN contact current ON current.id=?1 AND current.user_id=?2 JOIN contact_agent a ON a.id=current.agent_id
+    WHERE m.category='human' AND source.agent_id=current.agent_id
+      AND (source.id=current.id OR (?3=0 AND a.memory_shared=1))
+      AND (NOT EXISTS(SELECT 1 FROM mcp_private_contact WHERE contact_id=source.id) OR (?4=1 AND source.id=current.id))
+      AND (?5=0 OR source.user_id=?6 OR source.contributor_consent=1)
+    ORDER BY m.updated_at DESC LIMIT 64`).bind(scope.contactID,scope.userID,ownOnly?1:0,scope.privateConversation?1:0,
+      scope.contributorModel?1:0,scope.processingUserID??scope.userID).all<Memory>();
+  const currentKeys = new Set(results.map(m=>`${m.sourceUserID}:${m.key}`));
+  const combined = [...results,...retained.filter(m=>!currentKeys.has(`${m.sourceUserID}:${m.key}`))];
+  if (ownOnly) return combined;
   const agent = await db.prepare('SELECT agent_id AS id FROM contact WHERE id = ? AND user_id = ?')
     .bind(scope.contactID, scope.userID).first<{ id: string }>();
-  return agent ? [...results, ...await groupMemories(db, agent.id, !!scope.contributorModel)] : results;
+  return agent ? [...combined, ...await groupMemories(db, agent.id, !!scope.contributorModel)] : combined;
 }
 
 export function selectMemories(memories: Memory[], query: string, includePreferences = false): Memory[] {
@@ -139,6 +151,10 @@ export async function maintainMemories(bindings: Env, scope: MemoryScope): Promi
       statements.push(env.DB.prepare(`DELETE FROM contact_memory WHERE contact_id = ?1 AND user_id = ?2 AND memory_key = ?3
         AND EXISTS (SELECT 1 FROM contact_memory_state WHERE contact_id = ?1 AND user_id = ?2 AND last_sequence = ?4)`)
         .bind(scope.contactID, scope.userID, change.key, state.sequence));
+      statements.push(env.DB.prepare(`DELETE FROM retained_contact_memory WHERE contact_id=?1 AND category='human' AND memory_key=?3
+        AND EXISTS(SELECT 1 FROM contact_memory_state WHERE contact_id=?1 AND user_id=?2 AND last_sequence=?4)
+        AND EXISTS(SELECT 1 FROM chat_turn WHERE id=?5 AND contact_id=?1)`)
+        .bind(scope.contactID,scope.userID,change.key,state.sequence,source.id));
       existingKeys.delete(change.key);
       continue;
     }

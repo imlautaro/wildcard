@@ -4,11 +4,11 @@ import { reactionRoutes } from '../reactions/routes';
 import { groupQuotes, parseGroupReply } from '../replies/data';
 import { receiptState } from './receipts';
 import { deliverGroupPush } from './push';
-import media, { groupPhotoKey } from './media';
+import media from './media';
 import { taskRoutes } from '../tasks/routes';
 import { documentRoutes } from '../documents/routes';
-import { removePhoto } from '../photos/storage';
 import { parseAttachment, sameAttachment, publicAttachment, storedAttachment } from '../chat/attachments';
+import { registerChatObject, discardChatObject } from '../chat/object-storage';
 import { isVoice, parseVoice, publicVoice } from '../voice/speech';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -18,6 +18,8 @@ import { photoResponse } from '../photos/storage';
 import { dispatchGroup } from './workflow';
 import { groupSourceAccess } from './request-access';
 import { miniAppRoutes } from '../miniapps/routes';
+
+import { clearGroup, cleanResources } from '../chat/cleanup';
 
 const groups = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 const contributor = (env: Env) => env.META_CHAT_MODEL.includes('contributor');
@@ -36,7 +38,7 @@ function groupPreview(row: GroupSummary) {
 }
 // Task work triggers (task_id set, no sender) are internal: the assignee's own reply is
 // the visible event, so they never count as unread, preview or history.
-const summary = `(SELECT group_concat(label, ', ') FROM (
+const summary = `g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (SELECT group_concat(label, ', ') FROM (
     SELECT a.name || CASE WHEN p.recording_until > unixepoch('subsec') * 1000 THEN ' Recording...' ELSE ' Typing...' END AS label
     FROM group_reply r JOIN agent_attention attention ON attention.turn_id = r.id AND attention.attempt = r.attempt AND attention.agent_id = r.agent_id
     JOIN agent_presence p ON p.agent_id = r.agent_id JOIN contact_agent a ON a.id = r.agent_id
@@ -291,14 +293,43 @@ groups.delete('/:id/agents/:agentID', async (c) => {
     .bind(c.req.param('id'), c.get('owner'), c.req.param('agentID')).first();
   return row ? c.body(null, 204) : c.json({ error: 'Cannot remove this contact' }, 403);
 });
+groups.post('/:id/clear', bodyLimit({maxSize:1024}), async c => {
+  const body=await c.req.json<Record<string,unknown>>().catch(()=>null);
+  if (!body || Object.keys(body).sort().join(',')!=='clearMemory,historyRevision' || (typeof body.clearMemory!=='boolean' || typeof body.historyRevision!=='number' || !Number.isSafeInteger(body.historyRevision) || body.historyRevision<0)) return c.json({error:'Choose whether to clear memory'},400);
+  const group=await c.env.DB.prepare('SELECT id,clearing,history_revision AS revision FROM chat_group WHERE id=? AND owner_id=?').bind(c.req.param('id'),c.get('owner')).first<{id:string;clearing:number;revision:number}>();
+  if (!group) return c.json({error:'Only the owner can clear this group for everyone'},403);
+  if (group.revision>body.historyRevision) {
+    const pending=await c.env.DB.prepare('SELECT 1 FROM resource_cleanup WHERE scope=? LIMIT 1').bind(group.id).first();
+    return c.json({cleared:true,cleanup:pending?'pending':'complete'},202);
+  }
+  if (group.revision!==body.historyRevision) return c.json({error:'Refresh before clearing this chat'},409);
+  const admission=await admitAuthRequest(c.env.DB,c.get('owner'),'chat-clear',6);
+  if (!admission.allowed) return c.json({error:'Too many clear requests. Please wait a minute.'},429);
+  try { if (!group.clearing) await clearGroup(c.env,group.id,body.clearMemory,body.historyRevision); }
+  catch (error) {
+    const latest=await c.env.DB.prepare('SELECT history_revision AS revision FROM chat_group WHERE id=?').bind(group.id).first<{revision:number}>();
+    if (!latest || latest.revision<=body.historyRevision) throw error;
+  }
+  c.executionCtx.waitUntil(cleanResources(c.env,group.id));
+  const state=await c.env.DB.prepare('SELECT EXISTS(SELECT 1 FROM resource_cleanup WHERE scope=chat_group.id) AS pending FROM chat_group WHERE id=?').bind(c.req.param('id')).first<{pending:number}>();
+  return c.json({cleared:true,cleanup:state?.pending ? 'pending' : 'complete'},202);
+});
+groups.put('/:id/archive', bodyLimit({maxSize:1024}), async c => {
+  const body = await c.req.json<Record<string,unknown>>().catch(()=>null);
+  if (!body || Object.keys(body).join(',') !== 'archived' || typeof body.archived !== 'boolean') return c.json({error:'Provide archived as a boolean'},400);
+  const row = await c.env.DB.prepare('UPDATE group_member SET archived_at=? WHERE group_id=? AND user_id=? RETURNING group_id')
+    .bind(body.archived ? Date.now() : null,c.req.param('id'),c.get('owner')).first();
+  return row ? c.body(null,204) : c.json({error:'Group not found'},404);
+});
 groups.delete('/:id', async (c) => {
   const row = await c.env.DB.prepare('DELETE FROM chat_group WHERE id = ? AND owner_id = ? RETURNING photo_version AS photoVersion')
     .bind(c.req.param('id'), c.get('owner')).first<{ photoVersion: string | null }>();
-  if (row?.photoVersion) c.executionCtx.waitUntil(removePhoto(c.env, groupPhotoKey(c.req.param('id'), row.photoVersion)));
+  if (row) c.executionCtx.waitUntil(cleanResources(c.env));
   return row ? c.body(null, 204) : c.json({ error: 'Only the owner can delete this group' }, 403);
 });
 groups.route('/:id/reactions', reactionRoutes(true));
 groups.get('/:id/messages', async (c) => {
+  const epoch=await c.env.DB.prepare('SELECT history_revision AS value FROM chat_group WHERE id=?').bind(c.req.param('id')).first<{value:number}>();
   const before = Number(c.req.query('before') ?? Number.MAX_SAFE_INTEGER);
   if (!Number.isSafeInteger(before) || before < 1) return c.json({ error: 'Invalid history cursor' }, 400);
   const { results } = await c.env.DB.prepare(`SELECT ${receiptState('group_message')} AS receiptState, sequence, id, user_id AS userID, agent_id AS agentID,
@@ -308,7 +339,9 @@ groups.get('/:id/messages', async (c) => {
     .all<{ sequence: number; attachmentJSON: string | null; replyToID: string | null; text: string; agentID: string | null; voiceListenedAt: number | null; voiceTranscribedAt: number | null }>();
   const page = results.slice(0, 50);
   const quotes = await groupQuotes(c.env.DB, c.req.param('id'), page);
-  return c.json({ messages: page.reverse().map(({ attachmentJSON, replyToID, voiceListenedAt, voiceTranscribedAt, ...message }) => {
+  const current=await c.env.DB.prepare('SELECT history_revision AS value FROM chat_group WHERE id=?').bind(c.req.param('id')).first<{value:number}>();
+  if (!epoch || epoch.value!==current?.value) return c.json({error:'Group was cleared. Refresh history.'},409);
+  return c.json({ historyRevision:epoch.value, messages: page.reverse().map(({ attachmentJSON, replyToID, voiceListenedAt, voiceTranscribedAt, ...message }) => {
     // Contacts' voice messages keep their spoken text; people's transcripts stay behind long press.
     const voice = publicVoice(storedAttachment({ attachmentJSON }), message.agentID ? null : voiceListenedAt,
       message.agentID ? message.text : voiceTranscribedAt ? message.text : null);
@@ -373,10 +406,12 @@ groups.post('/:id/messages', async (c) => {
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (typeof b?.id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.id)
     || typeof b.text !== 'string' || (!b.text.trim() && b.attachment === undefined && b.voice === undefined) || b.text.includes('\0')
-    || Array.from(b.text.trim()).length > 4000 || Object.keys(b).some((key) => !['id','text','attachment','voice','replyToID'].includes(key))
+    || Array.from(b.text.trim()).length > 4000 || Object.keys(b).some((key) => !['id','text','attachment','voice','replyToID','historyRevision'].includes(key))
     || (b.voice !== undefined && (b.text.trim() || b.attachment !== undefined))) {
     return c.json({ error: 'Use a message up to 4,000 characters, an attachment or a voice message, with a UUID' }, 400);
   }
+  const epoch=await c.env.DB.prepare('SELECT history_revision AS revision,clearing FROM chat_group WHERE id=?').bind(id).first<{revision:number;clearing:number}>();
+  if (!epoch || epoch.clearing || (b.historyRevision??0)!==epoch.revision) return c.json({error:'Group was cleared. Refresh before sending a new message.'},409);
   b.id = b.id.toLowerCase();
   const replyToID = parseGroupReply(b.replyToID) ?? null;
   if (b.replyToID !== undefined && !replyToID) return c.json({ error: 'Choose a message from this group to reply to' }, 400);
@@ -402,17 +437,17 @@ groups.post('/:id/messages', async (c) => {
   const key = attachment ? `group-attachments/${id}/${owner}/${b.id}/${crypto.randomUUID()}` : null;
   const attachmentJSON = attachment && key ? JSON.stringify({ ...attachment.metadata, key }) : null;
   if (attachment && key) {
-    await c.env.DB.prepare('INSERT INTO chat_attachment_object (object_key, created_at) VALUES (?, ?)').bind(key, now).run();
+    await registerChatObject(c.env,key,id);
     await c.env.CONTACT_PHOTOS.put(key, attachment.bytes, { httpMetadata: { contentType: attachment.metadata.mimeType } });
   }
   // Snapshot the human round. Subsequent bot replies share its bounded exchange.
   await c.env.DB.batch([
     c.env.DB.prepare(`INSERT INTO group_message (id, group_id, user_id, sender_name, text, created_at, contributor_consent, attachment_json, exchange_id, requester_id, reply_to_id)
       SELECT ?3, ?1, u.id, u.name, ?4, ?5, m.contributor_consent, ?7, ?3, ?2, ?8 FROM user u JOIN group_member m ON m.user_id = u.id AND m.group_id = ?1
-      WHERE u.id = ?2 AND (?6 = 0 OR NOT EXISTS (SELECT 1 FROM group_member WHERE group_id = ?1 AND contributor_consent = 0))
+      WHERE u.id = ?2 AND EXISTS(SELECT 1 FROM chat_group WHERE id=?1 AND history_revision=?9 AND clearing=0) AND (?6 = 0 OR NOT EXISTS (SELECT 1 FROM group_member WHERE group_id = ?1 AND contributor_consent = 0))
       AND (?8 IS NULL OR EXISTS (SELECT 1 FROM group_message quoted WHERE quoted.id = ?8 AND quoted.group_id = ?1))
       AND (SELECT COUNT(*) FROM group_reply WHERE group_id = ?1 AND status IN ('queued', 'running')) < 64
-      ON CONFLICT(id) DO NOTHING`).bind(id, owner, b.id, b.text.trim(), now, contributor(c.env) ? 1 : 0, attachmentJSON, replyToID),
+      ON CONFLICT(id) DO NOTHING`).bind(id, owner, b.id, b.text.trim(), now, contributor(c.env) ? 1 : 0, attachmentJSON, replyToID,epoch.revision),
     c.env.DB.prepare(`INSERT INTO group_reply (id, group_id, agent_id, source_id, workflow_id, created_at)
       SELECT 'group-' || gm.id || '-' || ga.agent_id, ga.group_id, ga.agent_id, gm.id,
         'group-' || gm.id || '-' || ga.agent_id || '-1', gm.created_at
@@ -423,6 +458,7 @@ groups.post('/:id/messages', async (c) => {
   ]);
   const saved = await c.env.DB.prepare('SELECT id, text, attachment_json AS attachmentJSON, reply_to_id AS replyToID FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
     .bind(b.id, id, owner).first<{ id: string; text: string; attachmentJSON: string | null; replyToID: string | null }>();
+  if (!saved && key) await discardChatObject(c.env,key,id);
   if (!saved || !sameText(saved) || !sameAttachment(saved, attachment?.metadata) || saved.replyToID !== replyToID) return c.json({ error: 'The group queue is full or model consent is required' }, 409);
   c.executionCtx.waitUntil(dispatchGroup(c.env, id));
   c.executionCtx.waitUntil(deliverGroupPush(c.env, saved.id));

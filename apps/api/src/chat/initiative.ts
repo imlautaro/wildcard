@@ -1,3 +1,4 @@
+import { discardWorkflow } from './cleanup';
 import type { WorkflowStep } from 'cloudflare:workers';
 import { initiativeDelay, personalityContext } from '../personality/engine';
 import { readPersonality } from '../personality/profile';
@@ -66,7 +67,10 @@ export async function dispatchInitiatives(env: Env) {
       .bind(now + 300_000, row.contactID, row.sourceID, row.revision, now).first<{ revision: number }>();
     if (!claimed) return;
     const job: InitiativeJob = { kind: 'initiative', ...row, revision: claimed.revision };
-    await env.CHAT_WORKFLOW.create({ id: `initiative-${row.sourceID}-${job.revision}`, params: job });
+    const workflowID = `initiative-${row.sourceID}-${job.revision}`;
+    if (!await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(workflowID).first()) return;
+    await env.CHAT_WORKFLOW.create({ id: workflowID, params: job });
+    if (!await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(workflowID).first()) await discardWorkflow(env,workflowID,job.contactID);
   }));
   if (outcomes.some(result => result.status === 'rejected')) console.error(JSON.stringify({ event: 'initiative_dispatch_deferred' }));
 }

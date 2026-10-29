@@ -1,3 +1,4 @@
+import { registerChatObject, discardChatObject } from '../chat/object-storage';
 import { speechAccent } from '../../../../shared/voice';
 import { Buffer } from 'node:buffer';
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
@@ -44,12 +45,19 @@ export async function speakMessage(env: Env, input: { agentID: string; turnID: s
       WHERE agent_id = ?2 AND status = 'typing' AND EXISTS (
         SELECT 1 FROM agent_attention WHERE agent_id = ?2 AND turn_id = ?3 AND attempt = ?4)`)
       .bind(recordingUntil, input.agentID, input.turnID, input.attempt).run();
+    const source = await env.DB.prepare(`SELECT contact_id AS scope FROM chat_turn WHERE id=?1 AND attempt=?2
+      UNION ALL SELECT group_id FROM group_reply WHERE id=?1 AND attempt=?2`).bind(input.turnID,input.attempt).first<{scope:string}>();
+    if (!source) return null;
     const existing = await env.CONTACT_PHOTOS.head(input.key);
     const bytes = existing ? Buffer.from(await (await env.CONTACT_PHOTOS.get(input.key))!.arrayBuffer()) : await synthesize(env, input.agentID, input.text);
     if (!bytes) return null;
     if (!existing) {
-      await env.DB.prepare('INSERT INTO chat_attachment_object (object_key, created_at) VALUES (?, ?) ON CONFLICT DO NOTHING').bind(input.key, Date.now()).run();
+      await registerChatObject(env,input.key,source.scope);
       await env.CONTACT_PHOTOS.put(input.key, bytes, { httpMetadata: { contentType: 'audio/mpeg' } });
+    }
+    if (!await env.DB.prepare(`SELECT 1 FROM chat_turn WHERE id=?1 AND attempt=?2
+      UNION ALL SELECT 1 FROM group_reply WHERE id=?1 AND attempt=?2`).bind(input.turnID,input.attempt).first()) {
+      await discardChatObject(env,input.key,source.scope); return null;
     }
     const digest = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
     // mp3_44100_128 is constant bitrate: 16 bytes per millisecond.

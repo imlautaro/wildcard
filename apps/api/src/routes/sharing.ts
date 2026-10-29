@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
-import { terminateChats } from '../chat/dispatch';
+import { cleanResources } from '../chat/cleanup';
 
 const sharing = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 sharing.use('*', bodyLimit({ maxSize: 2048, onError: (c) => c.json({ error: 'Request body too large' }, 413) }));
@@ -171,12 +171,9 @@ sharing.delete('/:id/invitations/:inviteID', async (c) => {
 sharing.delete('/:id/members/:memberID', async (c) => {
   const agent = await ownerAgent(c.env.DB, c.req.param('id'), c.get('owner'));
   if (!agent) return c.json({ error: 'Contact not found' }, 404);
-  const pending = await c.env.DB.prepare(`SELECT workflow_id AS id FROM chat_turn WHERE contact_id = ?
-    AND contact_id IN (SELECT id FROM contact WHERE agent_id = ? AND user_id != ?)
-    AND status IN ('queued','running')`).bind(c.req.param('memberID'), agent.id, c.get('owner')).all<{ id: string }>();
   const removed = await c.env.DB.prepare('DELETE FROM contact WHERE id = ? AND agent_id = ? AND user_id != ? RETURNING id')
     .bind(c.req.param('memberID'), agent.id, c.get('owner')).first();
-  if (removed) c.executionCtx.waitUntil(terminateChats(c.env, pending.results.map((row) => row.id)));
+  if (removed) c.executionCtx.waitUntil(cleanResources(c.env));
   return removed ? c.body(null, 204) : c.json({ error: 'Participant not found' }, 404);
 });
 

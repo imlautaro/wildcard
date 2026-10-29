@@ -1,3 +1,4 @@
+import { retainedGroupSelf } from './retained-memory';
 import { standardModel } from '../lib/model-preference';
 import { byteLength, clipText, keywords } from './memory';
 import { isRecord, museCompletion } from './meta';
@@ -54,7 +55,18 @@ async function readProfile(db: D1Database, agentID: string, contributor: boolean
     AND EXISTS (SELECT e.sequence ${eligibleEvent('?3', scope ? '?4' : undefined)} AND e.sequence = m.source_event_sequence)
     ORDER BY m.source_event_sequence DESC LIMIT 64`)
     .bind(agentID, contributor ? 1 : 0, userID, ...(scope ? [scope] : [])).all<AgentMemory>();
-  return results;
+  const {results: retained} = await db.prepare(`SELECT c.agent_id AS agentID,a.name AS agentName,m.memory_key AS key,m.kind,m.content,
+    0 AS sourceSequence,'' AS sourceQuote,m.updated_at AS updatedAt FROM retained_contact_memory m
+    JOIN contact c ON c.id=m.contact_id JOIN contact_agent a ON a.id=c.agent_id
+    WHERE c.agent_id=?1 AND m.category=?2
+      AND (?3 IS NULL OR ?3='private:'||c.id)
+      AND (?3 IS NULL AND NOT EXISTS(SELECT 1 FROM mcp_private_contact WHERE contact_id=c.id)
+        OR ?3='private:'||c.id AND c.user_id=?4)
+      AND (?5=0 OR c.user_id=?4 OR c.contributor_consent=1)
+    ORDER BY m.updated_at DESC LIMIT 64`).bind(agentID,scope?'local_self':'self',scope,userID,contributor?1:0).all<AgentMemory>();
+  const group = await retainedGroupSelf(db,agentID,contributor,userID,scope);
+  const all = [...results,...retained,...group].sort((a,b)=>b.updatedAt-a.updatedAt);
+  return all.filter((m,i)=>all.findIndex(other=>other.key===m.key)===i).slice(0,64);
 }
 
 export async function readAgentMemories(db: D1Database, agentID: string, contributor: boolean, userID: string | null = null,

@@ -302,6 +302,8 @@ and list previews on iOS and web. Recording covers voice attachment preparation;
 see [voice messages](docs/voice.md#reply-activity-indicators) and
 [migration 0062 setup](docs/infrastructure.md#recording-presence-migration-0062).
 
+Chat rows support [archive, clear with optional memory removal, and contact deletion](docs/chat-lifecycle.md) on iOS and web. Group owners can clear shared history for everyone. Deletion uses a durable D1 outbox for Workflow and R2 cleanup.
+
 Loaded voice messages support [background playback and system media controls](docs/voice.md#background-playback-and-ear-routing).
 iOS includes proximity-based receiver routing on iPhone and a brief startup margin;
 web background support depends on the browser and has no receiver-routing API.
