@@ -20,7 +20,7 @@ struct ChatsView: View {
 
     private var displayedContacts: [Contact] {
         if mode == .chats {
-            return contacts.contacts.map { contacts.preview(for: $0) }.filter { $0.lastMessageAt != nil || $0.lastMessageText != nil }
+            return contacts.contacts.map { contacts.preview(for: $0) }.filter { $0.lastMessageAt != nil || $0.lastMessageText != nil || $0.onboardingChat == 1 }
         }
         return contacts.contacts.sorted {
             let order = $0.name.localizedStandardCompare($1.name)

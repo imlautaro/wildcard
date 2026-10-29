@@ -2,14 +2,14 @@ import type { OnboardingInput, OnboardingStatus, OnboardingOption } from '../../
 type Options = { countries: OnboardingOption[]; languages: OnboardingOption[]; styles: OnboardingOption[] };
 const options = ref<Options | null>(null);
 const snapshot = ref<OnboardingStatus | null>(null);
-const draft = reactive<OnboardingInput>({ name: '', age: null, gender: 'male', language: 'en', country: '', style: 'cartoon', sharedMemoryConsent: false });
+const draft = reactive<OnboardingInput>({ name: '', age: null, gender: 'male', language: 'en', country: '', style: 'cartoon', createGroup: true, circleType: 'friends', occupation: '', sharedMemoryConsent: false });
 let revision = 0;
 let loading: Promise<void> | null = null;
 let submitting: Promise<void> | null = null;
 const busy = ref(false);
 registerSessionReset(() => {
   revision++; loading = null; submitting = null; busy.value = false; options.value = null; snapshot.value = null;
-  Object.assign(draft, { name: '', age: null, gender: 'male', language: 'en', country: '', style: 'cartoon', sharedMemoryConsent: false });
+  Object.assign(draft, { name: '', age: null, gender: 'male', language: 'en', country: '', style: 'cartoon', createGroup: true, circleType: 'friends', occupation: '', sharedMemoryConsent: false });
 });
 async function refresh() {
   if (busy.value) return;
@@ -21,7 +21,7 @@ async function refresh() {
     if (current !== revision) return;
     options.value = choices;
     snapshot.value = state;
-    if (state.input) Object.assign(draft, { age: null }, state.input);
+    if (state.input) Object.assign(draft, { age: null, createGroup: true, circleType: 'friends', occupation: '' }, state.input);
   }).finally(() => { if (current === revision) loading = null; });
   await loading;
 }
@@ -30,10 +30,10 @@ async function submit() {
   const current = ++revision;
   loading = null;
   busy.value = true;
-  submitting = api<OnboardingStatus>('onboarding', { json: { ...draft } }).then(state => {
+  submitting = api<OnboardingStatus>('onboarding', { json: { ...draft, occupation: draft.circleType === 'friends' ? '' : draft.occupation } }).then(state => {
     if (current !== revision) return;
     snapshot.value = state;
-    if (state.input) Object.assign(draft, { age: null }, state.input);
+    if (state.input) Object.assign(draft, { age: null, createGroup: true, circleType: 'friends', occupation: '' }, state.input);
   }).finally(() => { if (current === revision) { submitting = null; busy.value = false; } });
   await submitting;
 }

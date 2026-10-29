@@ -8,7 +8,28 @@ struct OnboardingInput: Codable, Sendable {
     var language = "en"
     var country = ""
     var style = "cartoon"
+    var createGroup = true
+    var circleType = "friends"
+    var occupation = ""
     var sharedMemoryConsent = false
+
+    init() {}
+    private enum CodingKeys: String, CodingKey {
+        case name, age, gender, language, country, style, createGroup, circleType, occupation, sharedMemoryConsent
+    }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        name = try values.decode(String.self, forKey: .name)
+        age = try values.decodeIfPresent(Int.self, forKey: .age)
+        gender = try values.decode(String.self, forKey: .gender)
+        language = try values.decode(String.self, forKey: .language)
+        country = try values.decode(String.self, forKey: .country)
+        style = try values.decode(String.self, forKey: .style)
+        createGroup = try values.decodeIfPresent(Bool.self, forKey: .createGroup) ?? true
+        circleType = try values.decodeIfPresent(String.self, forKey: .circleType) ?? "friends"
+        occupation = try values.decodeIfPresent(String.self, forKey: .occupation) ?? ""
+        sharedMemoryConsent = try values.decode(Bool.self, forKey: .sharedMemoryConsent)
+    }
 }
 struct OnboardingOption: Decodable, Identifiable, Sendable {
     let code: String
@@ -83,7 +104,8 @@ final class OnboardingStore {
         let current = revision
         busy = true
         error = nil
-        let input = draft
+        var input = draft
+        if input.circleType == "friends" { input.occupation = "" }
         defer { if current == revision { busy = false } }
         do {
             let result = try await auth.withSession { api, token in
@@ -107,7 +129,7 @@ struct OnboardingView: View {
             Form {
                 Section {
                     Text("Make yourself at home.").manrope(.largeTitle, weight: .bold)
-                    Text("Five different personalities. One group to bring everyone together.")
+                    Text("Five different personalities. Add a group to bring everyone together if you like.")
                         .foregroundStyle(.secondary)
                 }
                 if let options = store.options {
@@ -131,7 +153,7 @@ struct OnboardingView: View {
                     } header: {
                         Text("About you")
                     } footer: {
-                        Text("Your contacts will have names common in your country and speak your preferred language. Realistic contacts will be within two years of your age. Gender does not determine your contacts’ personalities.")
+                        Text("Your contacts will have names common in your country and speak your preferred language. Contacts in every style will be within two years of your age. Gender does not determine your contacts’ personalities.")
                     }
                     .disabled(store.locked || store.busy)
                     Section("Agent appearance") {
@@ -141,9 +163,23 @@ struct OnboardingView: View {
                     }
                     .disabled(store.locked || store.busy)
                     Section {
+                        Picker("Your circle", selection: $store.draft.circleType) {
+                            Text("Friends").tag("friends")
+                            Text("Study").tag("study")
+                            Text("Work").tag("work")
+                        }
+                        if store.draft.circleType != "friends" {
+                            TextField(store.draft.circleType == "study" ? "What are you studying?" : "What do you do for work?", text: $store.draft.occupation)
+                        }
+                        Toggle("Create a group with my five contacts", isOn: $store.draft.createGroup)
+                    } footer: {
+                        Text("Friends have varied interests. Study and work teams use your field to create complementary contacts.")
+                    }
+                    .disabled(store.locked || store.busy)
+                    Section {
                         Toggle("I agree to create my circle with shared memory", isOn: $store.draft.sharedMemoryConsent)
                     } footer: {
-                        Text("I agree to create a group with my five AI contacts and enable shared memory for them. Group members can read the full group history. Facts shared in private or group chats may become shared memories recalled by these contacts in other chats; private transcripts remain access controlled. Setup uses Meta Standard processing.")
+                        Text("I agree to enable shared memory for my five AI contacts. If I create a group, its members can read the full group history. Facts shared in private or group chats may become shared memories recalled by these contacts in other chats; private transcripts remain access controlled. Setup uses Meta Standard processing.")
                     }
                     .disabled(store.locked || store.busy)
                     Section {
@@ -164,7 +200,9 @@ struct OnboardingView: View {
                             }
                             .disabled(store.busy || store.draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                       || store.draft.name.count > 100 || store.draft.country.isEmpty || !store.draft.sharedMemoryConsent
-                                      || (!store.locked && !(1...120).contains(store.draft.age ?? 0)))
+                                      || (!store.locked && (!(1...120).contains(store.draft.age ?? 0)
+                                          || store.draft.occupation.count > 200
+                                          || (store.draft.circleType != "friends" && store.draft.occupation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))))
                         }
                     }
                 } else {

@@ -727,3 +727,13 @@ captions, public history or media grids. Both iOS and web use the shared API and
 the existing delivered-image viewer/cache; no client format changes are needed.
 See [image references and descriptions](generated-images.md#internal-image-descriptions-and-retrieval)
 for scope, lazy old-history indexing, limits, retention and verification.
+
+### Initial onboarding contacts
+
+The five contacts atomically published by onboarding have `onboardingChat: 1`
+(migration 0049). iOS and web include them in Chats before their first message,
+using **No messages yet**, without unread counts or synthetic messages/receipts.
+Creation time controls initial row order; real activity uses normal ordering and
+pagination. Other empty contacts remain excluded. The marker stays in existing
+session contact snapshots and is removed with the contact, not after opening a
+chat. See [onboarding](onboarding.md) and [caching](caching.md).

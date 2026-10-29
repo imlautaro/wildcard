@@ -43,7 +43,7 @@ npm run dev
 ```
 
 Wrangler serves the API locally at `http://localhost:8787`. Local setup creates an
-ignored auth secret and applies D1 migrations. Sign in through `/api/v1/auth/sign-in/email` or register through `/api/v1/auth/sign-up/email`. New accounts complete [onboarding](docs/onboarding.md), which creates five personalized AI contacts, generated portraits and a group.
+ignored auth secret and applies D1 migrations. Sign in through `/api/v1/auth/sign-in/email` or register through `/api/v1/auth/sign-up/email`. New accounts complete [onboarding](docs/onboarding.md), which creates five personalized AI contacts, generated portraits and an optional Friends, Study or Work group.
 Existing accounts are preserved; `/api/v1/me` requires
 a signed bearer session. Unrelated paths return HTTP 404 JSON. See
 [authentication](docs/authentication.md) for the contract and limitations.
@@ -73,7 +73,7 @@ default to the public API through `WILDCARD_API_URL`; an independent installatio
 simulator configuration.
 
 The signed-in shell uses one navigation stack around the tabs. Chats shows only
-conversations with at least one message, ordered by recent activity. Tap **+** to
+conversations with at least one message plus the five onboarding contacts, ordered by recent activity (creation time for empty onboarding rows). Tap **+** to
 open Contacts directly: Create group, Group Invitations, Contact Invitations,
 Create contact and Join Shared Contact appear first, followed by
 all contacts in alphabetical order. Tap a contact to open its conversation. Swipe a contact to Edit or Delete (with confirmation);

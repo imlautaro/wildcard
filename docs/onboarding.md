@@ -10,7 +10,14 @@ verified; recovery is not configured. No mail provider is added.
 ## Experience
 
 Onboarding asks for a name, age in whole years (1–120), Male/Female, preferred language, country and avatar
-style: Cartoon, Anime, 3D animated movie or Realistic people. The shared catalog
+style: Cartoon, Anime, 3D animated movie or Realistic people. It also asks for a
+Friends, Study or Work circle and offers an independent **Create a group with my
+five contacts** toggle (on by default). The circle purpose shapes contacts even
+when group creation is turned off. Study asks what the user is studying; Work
+asks what they do for work (1–200 characters). Friends hides this field and both
+clients omit its value from submission; the server also clears it and excludes
+it from generation. Study/work context shapes complementary, age-appropriate
+identities, without claiming credentials or forcing every conversation into a role. The shared catalog
 contains ISO 3166-1 country/territory codes and ISO 639-1 languages, with English
 labels from the runtime's Intl display names. Both clients consume the same
 server options. User-entered names can retain their original spelling.
@@ -20,18 +27,19 @@ explains that group members can read the full history and that facts from privat
 and group chats may become shared memories recalled elsewhere. It does not add
 other human participants, send invitations or accept Contributor processing.
 
-The server creates exactly five fictional contacts and a group containing
-the account and those same five agent identities. Muse Spark 1.3 Standard proposes
+The server creates exactly five fictional contacts and optionally a group containing
+the account and those same five agent identities. Group names are deterministic:
+**Friends**, **Study Group**, or **Work Team**; the model does not choose a name. Muse Spark 1.3 Standard proposes
 common given names for the selected country, a mixed-gender cast, distinct
 occupations/interests, English identity descriptions and physical descriptions.
 No external popularity ranking verifies the model's name choices. The user's
 gender does not determine the cast's genders, temperaments or romantic roles.
 Country determines naming context, not stereotyped appearance or behavior.
-For the realistic style, new identity plans must give each contact an integer
+For every avatar style, new identity plans must give each contact an integer
 age within two years of the user's age, clipped to 1–120, and an explicit male
 or female gender. The server validates this range and a mixed-gender cast before
 saving the plan. Descriptions and appearance must match each contact's age and
-life stage. Other styles keep adult contacts (18–80) without age matching. Contact
+life stage. Legacy submissions without age retain the adult fallback (18–80). Contact
 ages are fictional identity text, not inferred calendar birthdays.
 The generated profiles omit the user's name/gender and direct every contact to
 use the selected language by default, including in groups. Replies still depend
@@ -53,9 +61,14 @@ about any subject; the shared personality context discourages forced steering an
 unsupported expertise. These are model directions, not measured capability differences.
 Creators can edit identity and specialties later in **Contact details → Personality**.
 Profiles have no invented calendar birthday. All team-authored descriptions and
-group names are English; contact names retain native spelling. The group starts
-empty and accepts messages immediately after creation; individual contacts appear
-in Contacts and enter Chats after their first message, matching existing behavior.
+group names are English; contact names retain native spelling. An optional group starts
+empty and accepts messages immediately after creation. All five contacts appear
+in Contacts and immediately in Chats, with **No messages yet** and zero unread
+messages. Migration 0049 adds a per-contact `onboarding_chat` marker; only newly
+published onboarding contacts receive it. Other empty contacts remain hidden in
+Chats. No welcome messages, receipt states or unread events are synthesized.
+Rows use creation time until real activity supplies normal ordering; iOS hides
+the message timestamp while empty, and web displays row creation time.
 
 Each avatar is generated with Meta `muse-image-1.0`, not an OpenAI model, through
 `POST https://api.meta.ai/v1/images/generations`. It requests one square JPEG,
@@ -67,7 +80,7 @@ ${identity.age} years old ${identity.gender} social media natural photo taken wi
 ```
 
 It omits the earlier head-and-shoulders, background, clothing, watermark and
-fictional-person boilerplate. Other styles retain their existing prompt.
+fictional-person boilerplate. Other styles explicitly request age-appropriate appearance and the planned age, without the former adult-only instruction.
 Only fictional contact descriptions go into portrait requests, not onboarding personal
 details or existing conversations. Generated bytes are bounded to 8 MiB and a
 square JPEG up to 4096 pixels because Meta's size controls aspect ratio rather
@@ -80,7 +93,10 @@ than guaranteeing dimensions. Manual uploads keep their existing 1024-pixel and
 - `GET /api/v1/onboarding` returns status, saved input, portrait count and final
   group ID, scoped to the current signed account.
 - `POST /api/v1/onboarding` accepts exactly `name`, `age`, `gender`, `language`, `country`,
-  `style`, and `sharedMemoryConsent: true`. Validation and six submissions per
+  `style`, `createGroup` (boolean), `circleType` (`friends`, `study`, `work`),
+  `occupation` (string, required and nonempty for work/study), and
+  `sharedMemoryConsent: true`. The previous seven-field request remains accepted
+  as Friends with group creation enabled, for older installed clients. Validation and six submissions per
   account/minute bound requests. Registration allows five attempts per IP/minute.
 
 New submissions require age. Existing persisted submissions without age remain
@@ -96,7 +112,7 @@ terminal failure. A visible **Retry setup** restarts an errored/terminated insta
 Identity generation persists its plan before portrait work. Five separate steps
 save JPEGs under immutable IDs in the existing private bucket; retries skip
 already stored images. The final D1 batch creates all five contacts, personalities,
-shared agent membership and group, then clears `user.onboarding_required`. It is
+shared agent membership and optional group, then clears `user.onboarding_required`. It is
 atomic and idempotent after completion. The normal contact trigger creates each
 agent, preserving shared identities rather than copies. No welcome message or
 background conversation is invented during setup.
@@ -116,9 +132,9 @@ Each client owns one in-memory setup snapshot, options catalog, draft and pendin
 submission per session. The first read blocks; reopens reuse options, progress
 and even empty/pending results immediately, then revalidate. Unsubmitted drafts
 survive navigation in memory; submitted input resumes from D1 after an app/browser
-restart. There is no local persistence of onboarding personal fields. Age follows the same draft/snapshot/session reset rules as other fields. The D1
-input is explicitly retained with the account setup for resumption; age, gender and
-country are not public profile fields or attached to group-member responses.
+restart. There is no local persistence of onboarding personal fields. Age, circle purpose, group toggle and occupation/studies follow the same draft/snapshot/session reset rules as other fields. The D1
+input is explicitly retained with the account setup for resumption; age, gender,
+country and occupation/studies are not public profile fields or attached to group-member responses. Work/study context is sent to Standard identity generation; generated contacts reflect the field without embedding user personal details.
 
 Reads are deduplicated, pending submissions survive navigation, and revisions
 reject responses from before a mutation or account change. Polling refreshes
@@ -142,7 +158,7 @@ are appropriate without launching the app. Builds and functional tests require
 the user's request under repository agreements.
 
 Device/browser checks still required: new registration, existing-account exemption,
-empty options/error recovery, every selector, age validation and realistic age matching, consent validation, generating each
+empty options/error recovery, every selector, age validation and age matching in all four styles, all three purposes, conditional work/study input, friends ignoring that context, setup with/without a group, simple group names, five empty Chats rows and ordinary empty-contact exclusion, consent validation, generating each
 style, reopen/back navigation, offline draft retention, duplicate submits, failed
 portrait retry, session expiry/account switch, final group roster, editable
 personalities/specialties, distinct strengths without fixed temperament pairings, broad-topic replies without forced steering, preferred-language private/group replies and private avatar access.

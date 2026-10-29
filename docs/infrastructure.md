@@ -1804,7 +1804,7 @@ emotional observations are intentionally not recoverable from this feature.
 
 ## Account onboarding
 
-Registration and the first-circle flow require migration **0041_onboarding.sql**,
+Registration and the first-circle flow require migrations **0041_onboarding.sql** and **0049_onboarding_chats.sql**,
 the existing private `CONTACT_PHOTOS` bucket and runtime `META_API_KEY` with access
 to **muse-spark-1.3** Standard and **muse-image-1.0**. No new secret or external
 account is required. Never print the secret; independent accounts must supply
@@ -1855,6 +1855,22 @@ Rollback can retain these additive JSON fields and existing photos; an older API
 rejects new client requests containing age, so client/API versions must match.
 Use the same commit/push/automatic release process; no remote changes or live
 model calls were performed for the age update.
+
+The optional-group/purpose update adds `createGroup`, `circleType` and `occupation`
+inside `input_json`, retaining the same secrets, services, bindings and resource
+order. Apply all local migrations as above. Migration 0049 adds `contact.onboarding_chat`
+(default 0), set to 1 only in the final onboarding transaction. Production automatic
+release applies it before publishing the API; update iOS/web clients together.
+No backfill or rewrite of completed contacts/plans is performed. Older request
+shapes remain accepted as Friends with a group; saved plans/photos stay frozen.
+Rollback through a compatible pushed commit may retain the additive column and
+JSON fields; an older API ignores the initial Chats marker and always creates a
+group, so preserve the updated Workflow for pending no-group submissions. Do not
+roll back pending submissions to code that ignores their choices. Verify staging
+with fictional work/study fields, Friends, every avatar style, both group toggles,
+null final group ID without a group, atomic publication/retry, list pagination,
+zero synthetic messages/unread counts and ordinary empty-contact exclusion.
+These changes have no live inference, remote migration or device/browser validation.
 
 ## Successive contact messages
 

@@ -1,12 +1,14 @@
 <script setup lang="ts">
+import { circleTypes } from '../../../../shared/onboarding';
 definePageMeta({ layout: false });
 useHead({ title: 'Meet your circle · Wildcard' });
 const { user, refreshProfile, signOut } = useSession();
 const { options, snapshot, draft, busy, refresh, submit } = useOnboarding();
+const circleOptions = circleTypes.map(option => ({ value: option.code, label: option.name }));
 const error = ref<string | null>(null);
 const locked = computed(() => !!snapshot.value?.input);
 const running = computed(() => snapshot.value?.status === 'queued' || snapshot.value?.status === 'generating');
-const ready = computed(() => !!draft.name.trim() && !!draft.country && draft.sharedMemoryConsent && (locked.value || (typeof draft.age === 'number' && Number.isInteger(draft.age) && draft.age >= 1 && draft.age <= 120)));
+const ready = computed(() => !!draft.name.trim() && !!draft.country && draft.sharedMemoryConsent && (locked.value || draft.circleType === 'friends' || !!draft.occupation?.trim()) && (locked.value || (typeof draft.age === 'number' && Number.isInteger(draft.age) && draft.age >= 1 && draft.age <= 120)));
 let disposed = false;
 let updating = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -42,7 +44,7 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
     <form class="auth-card onboarding" @submit.prevent="start">
       <p class="eyebrow">Your Wildcard circle</p>
       <h1>Make yourself at home.</h1>
-      <p class="lead">Five different personalities. One group to bring everyone together.</p>
+      <p class="lead">Five different personalities. Add a group to bring everyone together if you like.</p>
       <template v-if="options">
         <fieldset :disabled="locked || busy" class="onboarding-fields">
           <div class="pair">
@@ -55,12 +57,19 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
           </div>
           <AppSelect v-model="draft.country" label="Country" :disabled="locked || busy" :options="options.countries.map(option => ({ value: option.code, label: option.name }))" />
           <AppSelect v-model="draft.style" label="Agent appearance" :disabled="locked || busy" :options="options.styles.map(option => ({ value: option.code, label: option.name }))" />
+          <AppSelect v-model="draft.circleType" label="Your circle" :disabled="locked || busy" :options="circleOptions" />
+          <label v-if="draft.circleType !== 'friends'" class="text-field">
+            <input v-model="draft.occupation" maxlength="200" placeholder=" " :required="!locked">
+            <span>{{ draft.circleType === 'study' ? 'What are you studying?' : 'What do you do for work?' }}</span>
+          </label>
+          <p class="hint">Friends have varied interests. Study and work teams use your field to create complementary contacts.</p>
+          <label class="check-row"><input v-model="draft.createGroup" type="checkbox"><span>Create a group with my five contacts</span></label>
         </fieldset>
-        <p class="hint">Your contacts will have names common in your country and speak your preferred language. Realistic contacts will be within two years of your age. Gender does not determine your contacts’ personalities.</p>
+        <p class="hint">Your contacts will have names common in your country and speak your preferred language. Contacts in every style will be within two years of your age. Gender does not determine your contacts’ personalities.</p>
         <div class="group consent">
           <label class="check-row">
             <input v-model="draft.sharedMemoryConsent" type="checkbox" :disabled="locked || busy">
-            <span>I agree to create a group with my five AI contacts and enable shared memory for them. Group members can read the full group history. Facts shared in private or group chats may become shared memories recalled by these contacts in other chats; private transcripts remain access controlled. Setup uses Meta Standard processing.</span>
+            <span>I agree to enable shared memory for my five AI contacts. If I create a group, its members can read the full group history. Facts shared in private or group chats may become shared memories recalled by these contacts in other chats; private transcripts remain access controlled. Setup uses Meta Standard processing.</span>
           </label>
         </div>
         <div v-if="running" role="status" aria-live="polite" class="progress">

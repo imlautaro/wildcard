@@ -10,6 +10,7 @@ export type AuthUser = {
 };
 
 export type Contact = {
+  onboardingChat?: number;
   id: string;
   name: string;
   initiativeEnabled?: number;

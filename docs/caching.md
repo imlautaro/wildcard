@@ -977,3 +977,17 @@ With fictional accounts, verify reopen/back, offline viewing and recovery, page
 boundaries with both human/assistant images, indexing failure, deletion, revoked
 membership/consent, connector isolation and account switching on both clients.
 Only API types and SQL preparation were checked for this server-only change.
+
+### Optional onboarding group and initial Chats rows
+
+Circle purpose, group toggle and occupation/studies share the existing session-owned
+onboarding draft, frozen submission, polling and reset/revision rules. Friends
+submissions clear occupation/studies. No additional local persistence or cache is
+introduced. Onboarding-created contacts carry `onboardingChat: 1` through the
+existing contact list/detail snapshots on iOS and web. This server-persisted marker
+keeps their empty Chats rows visible across refresh, navigation and session restart;
+ordinary empty contacts still stay hidden. Real messages take over previews and
+ordering normally. Deletion/access loss/account switching follow existing contact
+cache eviction. Verify completion with/without group, empty-row refresh/reopen,
+first-message ordering, offline recovery, deletion and account switching on devices
+and browsers; static validation does not confirm these flows.

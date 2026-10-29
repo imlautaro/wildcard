@@ -270,7 +270,8 @@ function contactRow(contact: Contact): ChatRow | null {
     return { ...base, preview: latest.assistantText != null ? [...plainMessageMarkdown(latest.assistantText)].slice(0, 500).join('') : turnPreview(latest), at, own: turnFromUser(latest), sending: false,
       readAt: reads.length ? Math.max(...reads) : null };
   }
-  if (contact.lastMessageAt === null) return null;
+  if (contact.lastMessageAt == null) return contact.onboardingChat === 1
+    ? { ...base, preview: 'No messages yet', at: contact.createdAt, own: false, sending: false, readAt: null } : null;
   return { ...base, preview: contact.lastMessagePreview ?? (contact.lastMessageFromUser === 0 ? plainMessageMarkdown(contact.lastMessageText ?? '') : contact.lastMessageText ?? ''), at: contact.lastMessageAt, own: contact.lastMessageFromUser === 1,
     sending: false, readAt: contact.lastMessageReadAt ?? null };
 }

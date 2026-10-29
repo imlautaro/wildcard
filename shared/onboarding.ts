@@ -10,19 +10,30 @@ function labels(codes: string[], type: 'region' | 'language'): OnboardingOption[
   return codes.map(code => ({ code, name: names.of(code) ?? code })).sort((a, b) => a.name.localeCompare(b.name, 'en'));
 }
 export const onboardingOptions = { countries: labels(regions, 'region'), languages: labels(languages, 'language'), styles: avatarStyles };
+export const circleTypes = [
+  { code: 'friends', name: 'Friends' }, { code: 'study', name: 'Study' }, { code: 'work', name: 'Work' },
+] as const;
 export type OnboardingInput = { name: string; age?: number | null; gender: 'male' | 'female'; language: string; country: string;
-  style: typeof avatarStyles[number]['code']; sharedMemoryConsent: boolean };
+  style: typeof avatarStyles[number]['code']; createGroup?: boolean; circleType?: typeof circleTypes[number]['code'];
+  occupation?: string; sharedMemoryConsent: boolean };
 export type OnboardingStatus = { status: 'pending' | 'queued' | 'generating' | 'failed' | 'complete';
   photoCount: number; groupID: string | null; input: OnboardingInput | null };
 export function parseOnboarding(value: unknown): OnboardingInput | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const v = value as Record<string, unknown>;
-  if (Object.keys(v).sort().join(',') !== 'age,country,gender,language,name,sharedMemoryConsent,style'
+  const legacy = Object.keys(v).sort().join(',') === 'age,country,gender,language,name,sharedMemoryConsent,style';
+  if ((!legacy && Object.keys(v).sort().join(',') !== 'age,circleType,country,createGroup,gender,language,name,occupation,sharedMemoryConsent,style')
+    || (!legacy && (typeof v.createGroup !== 'boolean' || !circleTypes.some(t => t.code === v.circleType)
+      || typeof v.occupation !== 'string' || [...v.occupation.trim()].length > 200
+      || /[\u0000-\u001f\u007f-\u009f]/u.test(v.occupation)
+      || (v.circleType !== 'friends' && !v.occupation.trim())))
     || typeof v.age !== 'number' || !Number.isInteger(v.age) || v.age < 1 || v.age > 120
     || typeof v.name !== 'string' || !v.name.trim() || [...v.name.trim()].length > 100
     || /[\u0000-\u001f\u007f-\u009f]/u.test(v.name) || !['male', 'female'].includes(String(v.gender))
     || !regions.includes(String(v.country)) || !languages.includes(String(v.language))
     || !avatarStyles.some(s => s.code === v.style) || v.sharedMemoryConsent !== true) return null;
   return { name: v.name.trim(), age: v.age, gender: v.gender as OnboardingInput['gender'], country: String(v.country),
-    language: String(v.language), style: v.style as OnboardingInput['style'], sharedMemoryConsent: true };
+    language: String(v.language), style: v.style as OnboardingInput['style'], createGroup: legacy ? true : v.createGroup as boolean,
+    circleType: legacy ? 'friends' : v.circleType as OnboardingInput['circleType'],
+    occupation: legacy || v.circleType === 'friends' ? '' : (v.occupation as string).trim(), sharedMemoryConsent: true };
 }

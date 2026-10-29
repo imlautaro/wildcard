@@ -60,7 +60,7 @@ onboarding.post('/', bodyLimit({ maxSize: 4096 }), async c => {
     return c.json(await onboardingStatus(c.env, owner), 202);
   }
   const input = parseOnboarding(body);
-  if (!input) return c.json({ error: 'Enter an age from 1 to 120, complete every field and accept shared memory to create your circle.' }, 422);
+  if (!input) return c.json({ error: 'Enter an age from 1 to 120, complete every field (including your occupation or studies for a work or study circle) and accept shared memory to create your circle.' }, 422);
   // First submission freezes preferences; retries always reuse the original plan.
   await c.env.DB.prepare(`INSERT INTO account_onboarding (user_id, input_json, status, updated_at)
     VALUES (?, ?, 'queued', ?) ON CONFLICT(user_id) DO NOTHING`).bind(owner, JSON.stringify(input), Date.now()).run();

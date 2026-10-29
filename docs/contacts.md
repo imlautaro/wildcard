@@ -42,8 +42,10 @@ substitute for the supplied bearer token on these routes. Responses use
 
 ## iOS flow
 
-Chats shows only conversations with at least one persisted message, including
-attachment-only messages. Empty contacts stay available in Contacts. Chats keeps
+Chats shows conversations with at least one persisted message, including
+attachment-only messages, plus the five onboarding contacts marked `onboardingChat: 1`.
+These initial rows show No messages yet until activity begins; ordinary empty
+contacts stay available only in Contacts. See [onboarding](onboarding.md). Chats keeps
 its recent-message ordering, loads the first page on appearance, refreshes on
 returning to the foreground, and supports pull to refresh and Load more. If a
 page contains only empty contacts, it automatically continues until it finds

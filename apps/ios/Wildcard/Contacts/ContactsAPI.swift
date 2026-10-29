@@ -3,6 +3,7 @@ import Foundation
 struct Contact: Codable, Hashable, Identifiable, Sendable {
     let id: String
     let name: String
+    var onboardingChat: Int? = nil
     var initiativeEnabled: Int? = nil
     var agentID: String? = nil
     var role: String? = nil

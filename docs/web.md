@@ -580,7 +580,7 @@ offline, multi-account, race, and deployed client/model verification remain pend
 New registrations use the same first-circle flow as iOS: `/onboarding` requires a
 name, Male/Female, a language and country dropdown, one of four visual styles and
 explicit shared-memory acceptance. It shows durable progress and retries, then
-opens the normal app with five generated contacts and their group. Existing
+opens the normal app with five generated contacts and an optional group. Friends, Study or Work shapes the cast; Study/Work requires the user’s field. Group creation is a separate toggle, enabled by default, and uses simple names (Friends, Study Group, Work Team). All five onboarding contacts appear immediately in Chats with No messages yet, without fabricated messages or unread counts. Existing
 accounts bypass setup. The session-owned store caches options, progress and drafts,
 deduplicates requests/submissions and rejects late responses on mutation/account
 change. Unsubmitted drafts are memory-only; submitted input resumes from the API.
@@ -599,13 +599,13 @@ guessed. Existing session-owned avatar caches remain unchanged; the inference
 path does not use client caches. See [profile image access](profile-photos.md#profile-images-available-to-contacts)
 for limits, privacy, retention and pending functional checks.
 
-### Age and realistic contact photos
+### Age and contact photos
 
-Onboarding also requires an integer age (1–120), matching iOS. New realistic
-contacts have validated ages within ±2 years, with explicit per-contact gender.
+Onboarding also requires an integer age (1–120), matching iOS. New contacts in all four styles
+have validated ages within ±2 years, with explicit per-contact gender.
 The realistic prompt uses `N years old female|male social media natural photo
 taken with phone. profile picture for social media`, followed by Appearance and Personality cues. Other styles
-retain their portrait prompt. Age uses the existing session draft/cache and D1
+request the planned age and age-appropriate appearance, without an adult-only instruction. Age uses the existing session draft/cache and D1
 input, with no extra local persistence. Legacy saved setups still resume without
 requiring or inventing age; completed photos are preserved. See [onboarding](onboarding.md).
 Pending browser/device checks include numeric input, invalid ages, lower/upper
