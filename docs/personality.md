@@ -125,6 +125,7 @@ numbers and relationship counters never enter the contact's reply prompt.
 | Recovery | Slow to settle | Quick to settle | Emotional half-life |
 | Initiative | Waits for you | Starts conversations | Continued thoughts and timing |
 | Irony | Literal | Wry | Occasional dry wit |
+| Emoji | Rarely | Often | How often emoji appear, and how readily the contact reacts (see [emoji and reactions](#emoji-and-reactions)) |
 
 Traits interact with the current situation, rather than supplying catchphrases.
 For example, an expressive/playful contact can celebrate enthusiastically but
@@ -277,6 +278,44 @@ replaces the original 600-token cap, which exhausted its reasoning allowance
 before emitting classification JSON during the live evaluation. Broad quality,
 cost and latency calibration remains pending.
 
+## Emoji and reactions
+
+People differ in how they use emoji: some put one in almost every message, others
+almost never, and most react to a message only now and then. A general instruction
+("use emoji naturally") made contacts either never use them or use them everywhere,
+and they almost never reacted. `personality/expression.ts` gives each turn one
+concrete, seeded nudge instead, in private replies, group replies and proactive
+messages (emoji only):
+
+- **A personal rate.** The Emoji trait sets the chance that a message carries an
+  emoji, from about 2% at 1 to about 85% at 10. Without an enabled personality, each
+  contact still gets its own stable level (3–8) from its agent ID, so contacts differ.
+  Profiles saved before this trait existed infer it from Expression, Humor, Warmth and
+  Formality; clients that do not send it keep the saved value.
+  Both editors show the new **Emoji** slider. iOS builds from before this change
+  receive 16 traits and their editor validation expects 15, so they cannot save a
+  personality until updated; the web always uses the current shared list.
+- **Mirroring.** The rate moves a little toward how the other people in the
+  conversation write (their share of messages with emoji).
+- **Correction.** The share of the contact's own last eight messages with emoji pulls
+  the next nudge back toward its rate, so it neither drifts into an emoji in every
+  line nor forgets them.
+- **A seeded draw.** The turn ID seeds the draw, so a replayed Workflow step gets the
+  same nudge. The prompt says either "write without emoji" or "one emoji (or, for
+  high levels, a couple) fits if the moment is casual or warm", with a small personal
+  palette of favorites chosen from the contact's traits and ID.
+- **Reactions.** Where `react_to_message` is available (direct private replies and
+  group replies), the same mechanism decides whether this turn invites a reaction to
+  the other person's latest message if it calls for one (good news, a joke, thanks, a
+  photo, something touching). The rate follows Expression, Warmth and Emoji (about
+  12%, 25% and 46% of turns for reserved, middle and effusive profiles in a
+  simulation) and is corrected by the contact's reactions to the last eight messages.
+
+The moment always wins: no emoji in sad, tense, serious or technical replies, and
+only reactions that fit. No numbers reach the prompt. The rates come from a local
+simulation that assumes the model follows each nudge; live model behavior is not
+yet measured.
+
 ## API, permissions and storage
 
 | Method | Path | Contract |
@@ -287,7 +326,7 @@ cost and latency calibration remains pending.
 No profile row means the disabled default and revision zero. Writes use an
 atomic revision comparison; concurrent edits return 409 instead of overwriting.
 Request bodies are limited to 16 KiB. Unknown keys, malformed types, missing
-traits, fractional/out-of-range values, invalid dates and invalid zones return
+traits (except `emoji`, which older clients omit and the server keeps), fractional/out-of-range values, invalid dates and invalid zones return
 400. Missing membership returns 404; member writes return 403. Responses are
 `no-store`. Session identity supplies ownership, never a client-provided owner.
 Creator updates are limited to thirty attempts per minute per account.

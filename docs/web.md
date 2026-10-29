@@ -567,6 +567,9 @@ apply instantly and are reconciled with the server (`useMiniApps`).
 
 ## Contact personality
 
+The personality editor renders the shared trait list, so the new **Emoji** slider
+appears with the others; see [emoji and reactions](personality.md#emoji-and-reactions).
+
 **Contact details → Personality** (`/contacts/:id/personality`) matches the native
 iOS experiment: stable identity, optional specialties (up to 1,000 characters), optional date of birth, birthday time zone,
 computed age and fifteen labeled 1–10 sliders. Only the creator can save; other

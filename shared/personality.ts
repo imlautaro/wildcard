@@ -15,6 +15,7 @@ export const personalityTraits = [
   { key: 'resilience', label: 'Recovery', low: 'Slow to settle', high: 'Quick to settle' },
   { key: 'initiative', label: 'Initiative', low: 'Waits for you', high: 'Starts conversations' },
   { key: 'sarcasm', label: 'Irony', low: 'Literal', high: 'Wry' },
+  { key: 'emoji', label: 'Emoji', low: 'Rarely', high: 'Often' },
 ] as const;
 export type TraitKey = typeof personalityTraits[number]['key'];
 export type Personality = {
@@ -29,6 +30,13 @@ export type PersonalitySnapshot = { personality: Personality; revision: number; 
 export function defaultPersonality(): Personality {
   return { enabled: false, description: '', specialties: '', birthDate: null, timeZone: 'UTC',
     traits: Object.fromEntries(personalityTraits.map(t => [t.key, 5])) as Record<TraitKey, number> };
+}
+
+// Profiles saved before the emoji trait existed, and older clients, omit it. Infer a
+// starting point from the expressive traits instead of a flat middle value.
+export function inferredEmoji(traits: Partial<Record<string, number>>): number {
+  const value = ((traits.expressiveness ?? 5) + (traits.playfulness ?? 5) + (traits.warmth ?? 5) + (11 - (traits.formality ?? 5))) / 4;
+  return Number.isFinite(value) ? Math.max(1, Math.min(10, Math.round(value))) : 5;
 }
 
 export function localDate(at: number, timeZone: string): string {
@@ -67,7 +75,8 @@ export function parsePersonality(value: unknown, now = Date.now()): Personality 
     if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== p.birthDate
       || p.birthDate < '1900-01-01' || p.birthDate > localDate(now, p.timeZone)) return null;
   }
-  const traits = p.traits as Record<string, unknown>;
+  const traits = { ...p.traits } as Record<string, unknown>;
+  if (!Object.hasOwn(traits, 'emoji')) traits.emoji = inferredEmoji(traits as Partial<Record<string, number>>);
   if (Object.keys(traits).length !== personalityTraits.length || personalityTraits.some(t =>
     typeof traits[t.key] !== 'number' || !Number.isInteger(traits[t.key]) || Number(traits[t.key]) < 1 || Number(traits[t.key]) > 10)) return null;
   return { enabled: p.enabled, description: p.description.trim(), specialties: specialties.trim(), birthDate: p.birthDate as string | null,

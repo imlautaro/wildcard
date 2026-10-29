@@ -11,6 +11,8 @@ unread messages, push notifications, bot reply rounds or group energy charges.
 In iOS, hold a sent message to open the emoji popover. Tap an existing badge to
 see who reacted and change/remove your reaction. The same action is exposed to
 accessibility services. Unsaved outgoing messages cannot be reacted to.
+Contacts react on their own according to their personality; see
+[emoji and reactions](personality.md#emoji-and-reactions).
 On the web, hold a message, right-click it, or use its keyboard-focusable reaction
 button. That button and the reply button float beside the message on hover or
 keyboard focus (to the right of incoming messages, to the left of your own), so they

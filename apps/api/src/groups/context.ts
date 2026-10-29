@@ -17,6 +17,8 @@ import { readTaskLists } from '../tasks/data';
 import { taskContext, taskInstruction } from '../tasks/tools';
 import { groupMiniAppInstruction } from '../miniapps/tools';
 import { privateMessageInstruction } from './private-messages';
+import { expressionHabits } from '../personality/expression';
+import { readPersonality } from '../personality/profile';
 import { documentContext, documentInstruction } from '../documents/tools';
 import type { GroupJob } from './workflow';
 
@@ -164,6 +166,11 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
   const messages: ModelMessage[] = [
     { role: 'system', content: `authorizedPrivateSources for this agent and group: ${JSON.stringify(privateSources)}` },
     ...(character ? [{ role: 'system' as const, content: character }] : []),
+    // Others' messages in recent history are the reaction opportunities.
+    { role: 'system', content: expressionHabits({ agentID: row.agentID, personality: (await readPersonality(env.DB, row.agentID)).personality, seed: job.turnID,
+      own: history.filter(m => m.agentID === row.agentID).map(m => m.text), others: [row.text, ...history.filter(m => m.agentID !== row.agentID).map(m => m.text)],
+      reactions: { opportunities: history.filter(m => m.agentID !== row.agentID).length, to: `${row.senderName}'s`,
+        reacted: reactions.filter(r => r.actorID === `agent/${row.agentID}` && r.messageID !== row.sourceID).length } }) },
     { role: 'system', content: `You are ${JSON.stringify(row.name)}, agent ID ${JSON.stringify(row.agentID)}, participating in a group chat named ${JSON.stringify(row.groupName)}.
 ${profilePhotoInstruction}
 ${imageInstruction}
