@@ -741,3 +741,19 @@ ambiguous reply. Clear answers normally omit quotes. Draft review preserves or
 revises the target and publication rechecks group visibility; only the first
 message of a burst quotes it. iOS and web reuse their existing quote presentation
 and navigation. See [replies](replies.md).
+
+## Contextual participation
+
+An ordinary human trigger offers every contact a decision, not a mandatory message.
+The model compares the trigger with earlier replies and recent history before
+choosing reply or skip. An open factual question can be settled by one sufficient
+answer; other contacts should speak only with a useful addition or correction. A
+request for each person's own meal, experience or preference still invites separate
+answers, including coincident preferences. Questions to one named member normally
+leave the others silent. No artificial disagreement is needed to earn a turn.
+Required human-requested opening greetings and designated private-return questions
+keep their existing contracts. A skipped turn costs no energy, creates no message
+or typing indicator, and needs no client cache mutation. This server policy applies
+equally to iOS and web. Validate factual questions, personal round-robin answers,
+named recipients, useful corrections and late/interleaved messages with fictional
+participants; prompt quality is not established by static validation.

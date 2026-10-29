@@ -642,3 +642,8 @@ and default to no quote for obvious answers. Private delivered messages carry th
 own optional `replyTo`; group messages use the existing quote payload. Both use the
 existing quote component and original-message pagination/navigation, matching iOS.
 See [replies](replies.md) for validation and pending verification.
+
+Group contacts can silently skip a human question already answered sufficiently by
+another member, while still giving their own answer when individual perspectives
+are requested. This is shared server behavior with iOS; no placeholder or typing
+is shown for a skipped decision. See [group participation](groups.md#contextual-participation).

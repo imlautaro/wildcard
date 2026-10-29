@@ -869,3 +869,8 @@ quotes from current authorized history; attempt/update-time guards, pagination,
 eviction, access-loss invalidation and account isolation are unchanged. Verify
 quoted replies after reopen, offline recovery, pagination and account switching on
 both clients. A cached quote never grants access to the original.
+
+Contextual group participation reuses existing round and history snapshots on both
+clients. Skips publish no message and expose no draft; existing polling refreshes
+reply status and presence without adding a synthetic bubble or a parallel cache.
+Verify empty/skipped rounds on reopen, offline recovery and account switching.
