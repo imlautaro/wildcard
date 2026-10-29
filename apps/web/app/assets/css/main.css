@@ -283,6 +283,10 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
 .field label { width: 96px; flex: none; color: var(--md-on-surface-variant); font-size: 14px; font-weight: 500; }
 .group > .field:focus-within { box-shadow: inset 0 -2px 0 var(--md-primary); }
 .field:focus-within label { color: var(--md-primary); }
+/* A radio choice with a title and a one-line detail, for option lists in sheets. */
+.choice-row { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 8px 16px; cursor: pointer; }
+.choice-row input { accent-color: var(--md-primary); width: 20px; height: 20px; flex: none; margin: 0; }
+.choice-row > span { display: flex; flex-direction: column; min-width: 0; }
 /* A toggle label with a leading icon and an optional InfoButton. */
 .toggle-label { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .toggle-label > svg { width: 24px; height: 24px; flex: none; color: var(--md-on-surface-variant); }

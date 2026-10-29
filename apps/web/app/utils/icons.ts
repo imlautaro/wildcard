@@ -70,6 +70,8 @@ export const appIcons = {
   camera: ['material-symbols:photo-camera-outline-rounded', 'material-symbols:photo-camera-rounded'],
   initiative: ['material-symbols:forum-outline-rounded', 'material-symbols:forum-rounded'],
   voice: ['material-symbols:record-voice-over-outline-rounded', 'material-symbols:record-voice-over-rounded'],
+  logout: ['material-symbols:logout-rounded', 'material-symbols:logout-rounded'],
+  model: ['material-symbols:smart-toy-outline-rounded', 'material-symbols:smart-toy-rounded'],
 } as const satisfies Record<string, readonly [outline: string, filled: string]>;
 
 export type AppIconName = keyof typeof appIcons;

@@ -30,7 +30,10 @@ can therefore remain without a photo after a network failure.
 
 ## Web editing
 
-Account and existing owned contacts share a manual **Crop Photo** dialog. Selecting
+Account and existing owned contacts use `IdentityEditor` like `ProfileIdentityView`:
+a camera button on the avatar chooses a photo (or, when one exists, opens a sheet with
+**Choose photo** and **Remove photo**), and the name below the avatar opens a **Name**
+sheet that saves immediately. They share a manual **Crop Photo** dialog. Selecting
 a file opens a local preview; drag with a mouse or touch to reposition, pinch or
 use the **Photo zoom** slider (1–4×), and choose **Use Photo** to confirm. Arrow
 keys move the image when the preview is focused; Shift increases the step. The

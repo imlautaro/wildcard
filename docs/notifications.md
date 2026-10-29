@@ -1,8 +1,9 @@
 # Reply push notifications
 
 The iOS app registers with Apple Push Notification service (APNs) after sign-in
-and requests alert/sound/badge permission. Account → Notifications offers a retry
-and a link to system notification settings. Returning to the foreground refreshes
+and requests alert/sound/badge permission. The Account **Notifications** row shows the
+push status and opens a sheet with the badge status, a retry and a link to system
+notification settings. Returning to the foreground refreshes
 registration and permission state. Private-chat foreground banners are suppressed;
 group alerts show a banner when another screen is visible. Foreground sounds are
 selected by the visible conversation, as described below.

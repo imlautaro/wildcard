@@ -180,3 +180,11 @@ MCP-isolated conversations also force Standard for local human/persona extractio
 including contact maintenance started by another account's job. Their local memory
 remains available only in its source private chat/group and never becomes shared
 Contributor input. See [local memory](memory.md#conversation-local-memory-with-mcp).
+
+## Account layout
+
+Account shows **Chat model** as a row with the current choice (Standard or
+Contributor). It opens a sheet listing both options with a one-line summary, the
+Contributor consent switch when switching to Contributor, and Save; the full data-use
+explanation is behind the sheet's info button. Same behavior on iOS and web; see
+[contacts](contacts.md#contact-details-layout) for the shared settings pattern.
