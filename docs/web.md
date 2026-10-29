@@ -484,6 +484,12 @@ auth and contains only public Team/App ID metadata. See [infrastructure](infrast
 
 ## Conversation initiative
 
+Private reply reading, typing and idle pauses share the server's
+[elapsed-deadline handling](chats.md#failed-replies-and-response-recovery) with iOS.
+Slow memory refresh or generation cannot make those pauses request a past time.
+Conversation caches, polling and manual retry rules remain unchanged; verify a
+short message after slow memory refresh in both clients after the API release.
+
 Private contacts use the same server-side [initiative planner](initiative.md) as iOS, including while the browser is closed. Contact details provides the same Conversation initiative switch and copy for owners and shared-contact participants. The existing session-owned contact cache supplies the initial setting; background refresh and mutation responses update it, and generation guards reject late reads and session changes. Messages appear through ordinary conversation/list polling and unread updates; browser push is still unavailable. Migrations 0032–0033 and the API release are required. Verify reopen, refresh, offline/failure recovery, shared access revocation and account switching with fictional accounts; visual/runtime checks remain pending.
 
 The faster cadence is shared by the API with iOS: a first review is due after 30 seconds, followed by minimum gaps of two and ten minutes. One-minute Cron scheduling adds jitter; no browser timer or extra requests are introduced. The planner encourages one short greeting continuation and increases space after unanswered messages, preserving all existing limits. No web bundle change is needed for these server timings; histories, polling and cache invalidation are unchanged. New prompt quality remains pending live verification; see [initiative](initiative.md#faster-cadence-validation).

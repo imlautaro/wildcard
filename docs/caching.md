@@ -1,5 +1,13 @@
 # iOS navigation cache
 
+Private reply timing is managed by the shared API Workflow, with checkpointed
+remaining durations for reading, typing and idle pauses. Elapsed deadlines do not
+create a failed reply. This changes no client cache keys, freshness, invalidation,
+pending submission IDs or retry permissions on iOS or web. After release, verify
+slow memory refresh followed by a short message, reopen/back navigation and
+refresh: the existing pending turn should update through ordinary polling.
+Production recovery and device behavior require runtime verification.
+
 The signed-in HomeView owns ContactsStore, which owns ConversationCache. Views
 reuse the same ChatStore for each contact rather than constructing a new store
 on every navigation. Loaded content stays visible during refresh and network

@@ -19,6 +19,13 @@ import { contactReply } from './context';
 import { maintainMemories } from './memory';
 import { releaseAttention } from './dispatch';
 
+// Checkpoint the remaining delay so replay takes the same branch. Memory work,
+// generation and retries can consume the deadline before the pause is reached.
+async function pauseUntil(step: WorkflowStep, name: string, deadline: number) {
+  const remaining = await step.do(`${name}-remaining`, async () => Math.max(0, deadline - Date.now()));
+  if (remaining > 0) await step.sleep(name, remaining);
+}
+
 export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob | InitiativeJob> {
   async run(event: WorkflowEvent<ChatJob | VisitJob | GroupJob | InitiativeJob>, step: WorkflowStep) {
     if ('kind' in event.payload) {
@@ -59,7 +66,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         const turn = await activeTurn(env.DB, job);
         return readAt + readingDelay(turn?.userText ?? '');
       });
-      await step.sleepUntil('reading-pause', new Date(reading));
+      await pauseUntil(step, 'reading-pause', reading);
       const prepared = await step.do('prepare-reply', {
         retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' },
         timeout: '5 minutes',
@@ -80,7 +87,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         const first = typeof prepared.reply === 'string' ? prepared.reply
           : (Array.isArray(prepared.reply) ? prepared.reply : prepared.reply?.messages)?.[0];
         if (first && typeof prepared.typingAt === 'number') {
-          await step.sleepUntil('typing-pause', new Date(prepared.typingAt + messageDelay(first)));
+          await pauseUntil(step, 'typing-pause', prepared.typingAt + messageDelay(first));
         }
         const hold = await step.do('reply-timing-decision', {
           retries: { limit: 0, delay: '1 second' }, timeout: '1 minute',
@@ -142,7 +149,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       return row?.expiresAt ?? null;
     });
     if (deadline !== null) {
-      await step.sleepUntil('presence-idle', new Date(deadline));
+      await pauseUntil(step, 'presence-idle', deadline);
       await step.do('expire-presence', async () => { await expirePresence(env.DB); });
     }
   }

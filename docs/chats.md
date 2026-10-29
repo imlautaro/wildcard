@@ -511,6 +511,17 @@ AI Gateway spending and pending runtime/device verification.
 
 ## Failed replies and response recovery
 
+Reading, typing and idle-presence pauses checkpoint their remaining duration and
+use relative Workflow sleeps only when time remains. Memory refresh, generation,
+retries or delayed execution may consume the original deadline; an elapsed pause
+continues immediately instead of failing the reply before inference or delivery.
+The checkpoint keeps the sleep decision stable on Workflow replay. This shared
+server behavior applies to iOS and web without changing conversation caches or
+retry permissions. Verify short messages with slow memory refresh, generation
+longer than typing, and resumed Workflows using fictional accounts after release;
+static validation alone does not establish production recovery. Existing failed
+turns retain their status and use the existing latest-turn retry action.
+
 Both clients keep a failed-reply notice directly below the corresponding private
 turn: **The reply to this message couldn't be completed.** A notice stops being
 shown once a later turn in loaded history contains an assistant reply. Failed
