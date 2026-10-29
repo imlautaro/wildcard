@@ -78,7 +78,13 @@ is cached. The session synchronizer polls every second while active and
 revalidates idle visible conversations on the same tick to observe server presence. Returning to a cached conversation
 displays its loaded history immediately. See [client caching](caching.md) for
 lifetime, limits, invalidation, and manual refresh behavior. It offers earlier history, a multiline composer, pending status, and a
-retry action for the latest failed reply. The Chats list shows the last reply or
+retry action for the latest failed reply. The shared iOS composer in private chats
+and groups uses a continuous rounded rectangle with a fixed 22-point corner radius,
+so its corners do not grow as the field expands from one to six lines. Verify
+single-line, wrapped and explicit multiline drafts, including larger Dynamic Type,
+in both chat types on a device; visual behavior has not been device-verified.
+This presentation change does not affect draft storage, caching or network requests.
+The Chats list shows the last reply or
 user message, with a 500-code-point preview.
 
 In private chats and groups, tapping the message history (including empty space)

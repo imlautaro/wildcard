@@ -9,7 +9,7 @@ private struct ChatComposerFieldStyle: ViewModifier {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .frame(minHeight: height)
-            .glassEffect(.regular, in: Capsule())
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
 
