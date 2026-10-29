@@ -1,7 +1,8 @@
 # Web app
 
 [Web research](web-research.md) is available through ordinary human chat requests,
-with the same limits and permissions as iOS. Document cards show **Web research**
+with the same limits and permissions as iOS. Failed grounding checks are reported
+separately from pending or uncertain operations. Document cards show **Web research**
 and cited-source counts; the full-screen viewer expands the original query, check
 date and cited/retrieved source links. Provenance belongs to revision 1 even after
 edits. It shares the existing document caches and five-second refresh, with no

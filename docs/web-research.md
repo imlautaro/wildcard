@@ -84,6 +84,24 @@ cannot recreate it. Budget denial returns without a provider call. Errors and
 uncertainty are returned to the contact for its ordinary chat response; research
 adds no separate job screen or retry button.
 
+Failed operations are reported separately from pending or uncertain reservations.
+`RESEARCH_FAILED` explains when the provider did not complete a search or did not
+return usable URL citations; no report is saved in either case. Older
+`MODEL_RESEARCH_UNGROUNDED` receipts cannot distinguish those two conditions. New
+operations record `MODEL_RESEARCH_NO_SEARCH` or `MODEL_RESEARCH_NO_CITATIONS`.
+The research instructions explicitly request `web_search` even for familiar,
+historically stable questions. Meta only supports automatic tool selection, so
+this instruction cannot guarantee a search; validation still rejects ungrounded
+answers. See [Meta tool selection](https://dev.meta.ai/docs/tool-calling).
+A new human message has an independent attempt, subject to daily limits. A failed
+task still has only its original lifetime attempt. No failed or uncertain operation
+is automatically retried, and no raw provider response is logged or retained.
+
+October 29 diagnosis: the production receipt aggregate contained two failures with
+`MODEL_RESEARCH_UNGROUNDED`. This confirms rejection by grounding validation, not
+whether the missing element was a completed search or a citation. The instruction
+and error-reporting changes remain unverified with live inference.
+
 There is no pause/resume contract for an in-flight HTTP search. Lost access
 prevents publication; a request already sent may still be billed. Disable
 `WEB_RESEARCH_ENABLED` in a future automatic release to stop offering/starting new

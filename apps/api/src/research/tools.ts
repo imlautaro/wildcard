@@ -76,7 +76,7 @@ export function researchAccess(scope: ResearchScope) {
     binds: [scope.turnID, scope.attempt, scope.groupID, scope.userID, scope.agentID] };
 }
 
-type Receipt = { status: 'pending' | 'ready' | 'complete' | 'failed'; documentID: string | null; result: string | null; title: string; model: string; agentID: string; query: string; taskGeneration: number | null };
+type Receipt = { status: 'pending' | 'ready' | 'complete' | 'failed'; errorCode: string | null; documentID: string | null; result: string | null; title: string; model: string; agentID: string; query: string; taskGeneration: number | null };
 type ResearchAdmission = { sourceID: string; taskID: string | null; taskGeneration: number | null; publicQuery: string | null; billingUserID: string };
 const failure = (code: string, message: string) => JSON.stringify({ researched: false, code, error: message });
 
@@ -98,7 +98,7 @@ export async function executeResearchTool(env: Env, scope: ResearchScope, args: 
   const id = active.taskID ? `research-task-${active.taskID}` : `research-${scope.kind}-${active.sourceID}`;
   const groupID = scope.kind === 'group' ? scope.groupID : null;
   const contactID = scope.kind === 'contact' ? scope.contactID : null;
-  const read = () => env.DB.prepare(`SELECT status, document_id AS documentID, result_json AS result, title, model, agent_id AS agentID, query, task_generation AS taskGeneration
+  const read = () => env.DB.prepare(`SELECT status, error_code AS errorCode, document_id AS documentID, result_json AS result, title, model, agent_id AS agentID, query, task_generation AS taskGeneration
     FROM web_research WHERE id = ?`).bind(id).first<Receipt>();
   let receipt = await read();
   if (!receipt) {
@@ -154,6 +154,16 @@ export async function executeResearchTool(env: Env, scope: ResearchScope, args: 
     ? JSON.stringify({ researched: true, documentID: receipt.documentID, title: receipt.title, replayed: true,
       nextStep: 'The original report already exists. Read that document and mention it briefly; do not create a duplicate.' })
     : failure('DOCUMENT_DELETED', 'The original research document was deleted. This request will not recreate it or search again.');
+  if (receipt.status === 'failed') {
+    const reason = receipt.errorCode === 'MODEL_RESEARCH_NO_SEARCH'
+      ? 'The research provider returned an answer without a completed web search.'
+      : receipt.errorCode === 'MODEL_RESEARCH_NO_CITATIONS'
+        ? 'The research provider searched but returned no usable URL citations.'
+        : receipt.errorCode === 'MODEL_RESEARCH_UNGROUNDED'
+          ? 'The research response lacked a completed web search or usable URL citations.'
+          : 'The research operation failed before a sourced report could be saved.';
+    return failure('RESEARCH_FAILED', `${reason} No report was saved. Do not claim this is still running or promise an automatic retry. This message or task has spent its attempt; do not repeat the search for it. A new human message has its own allowance, subject to daily limits; a task does not gain another attempt.`);
+  }
   if (receipt.status !== 'ready' || !receipt.result) return failure('UNAVAILABLE_OR_UNCERTAIN',
     'This request already attempted research. The result is unavailable, still running or uncertain. Do not repeat it or claim research succeeded.');
   if (active.taskID && receipt.taskGeneration !== active.taskGeneration) return failure('WORK_CHANGED',
