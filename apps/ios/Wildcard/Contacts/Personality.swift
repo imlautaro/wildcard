@@ -172,6 +172,13 @@ struct ContactPersonalityView: View {
     @State private var loading = false
     @State private var confirmRefresh = false
     @State private var confirmGenerate = false
+    @State private var showingTemperament = false
+    /// IANA identifiers for the searchable time zone selector, keeping a saved value the system lacks.
+    private var timeZoneOptions: [SearchablePicker.Option] {
+        var identifiers = TimeZone.knownTimeZoneIdentifiers
+        if !identifiers.contains(draft.profile.timeZone) { identifiers.append(draft.profile.timeZone) }
+        return identifiers.sorted().map { SearchablePicker.Option(value: $0, label: $0.replacingOccurrences(of: "_", with: " ")) }
+    }
     private var canEdit: Bool { contacts.contact(id: contactID)?.role == "owner" }
 
     var body: some View {
@@ -179,38 +186,48 @@ struct ContactPersonalityView: View {
             if draft.loaded {
                 if canEdit {
                     Section {
-                        Button(draft.profile.description.isEmpty ? "Generate with AI" : "Regenerate with AI") {
-                            if draft.dirty { confirmGenerate = true } else { Task { await generate() } }
-                        }.disabled(draft.saving || loading)
-                    } footer: {
-                        Text("Generate all personality fields with Meta Standard, then review and save the draft. Your contact name and adult birthday stay the same.")
+                        HStack {
+                            Button(draft.profile.description.isEmpty ? "Generate with AI" : "Regenerate with AI", systemImage: "sparkles") {
+                                if draft.dirty { confirmGenerate = true } else { Task { await generate() } }
+                            }.disabled(draft.saving || loading)
+                            Spacer()
+                            InfoButton(title: "Generate with AI", text: "Generate all personality fields with Meta Standard, then review and save the draft. Your contact name and adult birthday stay the same.")
+                        }
                     }
                 }
                 Section {
-                    Toggle("Personality experiment", isOn: $draft.profile.enabled)
-                } footer: {
-                    Text("One shared character, with a relationship that follows each person across chats and groups. Private conversations stay private. Only its creator can edit these settings.")
+                    HStack {
+                        Toggle(isOn: $draft.profile.enabled) { Label("Personality experiment", systemImage: "theatermasks") }
+                            .disabled(!canEdit || draft.saving)
+                        InfoButton(title: "Personality experiment", text: "One shared character, with a relationship that follows each person across chats and groups. Private conversations stay private. Only its creator can edit these settings.")
+                    }
                 }
-                .disabled(!canEdit || draft.saving)
                 Section {
                     TextEditor(text: $draft.profile.description).frame(minHeight: 120)
                         .accessibilityLabel("Stable identity")
-                } header: { Text("Stable identity") } footer: {
-                    Text("This identity is shared with everyone who talks to the contact. Conversation and mood do not rewrite it. Use fictional information. Saving changes starts a fresh emotional history.")
+                        .disabled(!canEdit || draft.saving)
+                } header: {
+                    HStack {
+                        Text("Stable identity")
+                        InfoButton(title: "Stable identity", text: "This identity is shared with everyone who talks to the contact. Conversation and mood do not rewrite it. Use fictional information. Saving changes starts a fresh emotional history.")
+                    }
                 }
-                .disabled(!canEdit || draft.saving)
                 Section {
                     TextEditor(text: $draft.profile.specialties).frame(minHeight: 100)
                         .accessibilityLabel("Specialties")
-                } header: { Text("Specialties") } footer: {
-                    Text("Things this contact is especially good at. These strengths are shared with everyone and independent of temperament. They can still talk about anything. Optional, up to 1,000 characters.")
+                        .disabled(!canEdit || draft.saving)
+                } header: {
+                    HStack {
+                        Text("Specialties")
+                        InfoButton(title: "Specialties", text: "Things this contact is especially good at. These strengths are shared with everyone and independent of temperament. They can still talk about anything. Optional, up to 1,000 characters.")
+                    }
                 }
-                .disabled(!canEdit || draft.saving)
                 Section {
                     Toggle("Date of birth", isOn: Binding(
                         get: { draft.profile.birthDate != nil },
                         set: { draft.profile.birthDate = $0 ? ContactPersonality.string(ContactPersonality.latestBirthday(timeZone: draft.profile.timeZone)) : nil }
                     ))
+                    .disabled(!canEdit || draft.saving)
                     if draft.profile.birthDate != nil {
                         DatePicker("Date of birth", selection: Binding(
                             get: { draft.profile.birthDate.flatMap(ContactPersonality.date) ?? ContactPersonality.latestBirthday(timeZone: draft.profile.timeZone) },
@@ -218,50 +235,41 @@ struct ContactPersonalityView: View {
                         ), in: (ContactPersonality.date("1900-01-01") ?? .distantPast)...ContactPersonality.latestBirthday(timeZone: draft.profile.timeZone),
                            displayedComponents: .date)
                         .environment(\.timeZone, TimeZone(secondsFromGMT: 0)!)
+                        .disabled(!canEdit || draft.saving)
                     }
-                    TextField("Birthday time zone", text: $draft.profile.timeZone)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    SearchablePicker(title: "Time zone", selection: $draft.profile.timeZone, options: timeZoneOptions)
+                        .disabled(!canEdit || draft.saving)
                     if !draft.dirty, let age = cache.value?.age {
                         LabeledContent("Age", value: "\(age)")
                         if cache.value?.isBirthday == true { Text("Birthday today") }
                     }
-                } header: { Text("Birthday") } footer: {
-                    Text("Age is calculated from the date of birth. February 29 is observed on February 28 in other years.")
-                }
-                .disabled(!canEdit || draft.saving)
-                Section {
-                    ForEach(PersonalityTrait.all) { trait in
-                        VStack(spacing: 10) {
-                            HStack { Text(trait.label); Spacer(); Text("\(draft.profile.traits[trait.key] ?? 5)").foregroundStyle(.secondary).monospacedDigit() }
-                            Slider(value: Binding(
-                                get: { Double(draft.profile.traits[trait.key] ?? 5) },
-                                set: { draft.profile.traits[trait.key] = Int($0) }
-                            ), in: 1...10, step: 1).accessibilityLabel(trait.label)
-                            HStack { Text(trait.low); Spacer(); Text(trait.high) }
-                                .manrope(.caption).foregroundStyle(.secondary)
-                        }.padding(.vertical, 4)
+                } header: {
+                    HStack {
+                        Text("Birthday")
+                        InfoButton(title: "Birthday", text: "Age is calculated from the date of birth in the birthday time zone. February 29 is observed on February 28 in other years.")
                     }
-                } header: { Text("Temperament") } footer: {
-                    Text("The contact expresses tendencies through tone and timing. It does not receive these scores. Feelings settle over time. Its acting direction adapts to each person without exposing private causes. Conversations with connections stay isolated. Follow-ups still respect your initiative switch and delivery limits.")
                 }
-                .disabled(!canEdit || draft.saving)
+                Section {
+                    SheetRow(title: "Temperament", systemImage: "slider.horizontal.3", value: "\(PersonalityTrait.all.count) traits") { showingTemperament = true }
+                }
+            } else if loading { ProgressView("Loading personality…") }
+            if let error = draft.error { Text(error).foregroundStyle(.red).manrope(.footnote) }
+            if draft.loaded {
                 if !draft.profile.isValid {
                     Text("Use a birthday at least 18 years ago, a valid time zone, description up to 2,000 characters, specialties up to 1,000 characters, and whole-number traits from 1 to 10.")
                         .foregroundStyle(.red).manrope(.footnote)
                 }
                 if draft.saved && !draft.dirty { Text("Saved.").foregroundStyle(.secondary) }
-            } else if loading { ProgressView("Loading personality…") }
-            if let error = draft.error { Text(error).foregroundStyle(.red).manrope(.footnote) }
-            Button("Refresh personality") {
-                if draft.dirty { confirmRefresh = true } else { Task { await refresh(discard: true) } }
-            }.disabled(loading || draft.saving)
+            }
         }
+        .refreshable { if draft.dirty { confirmRefresh = true } else { await refresh(discard: true) } }
+        .sheet(isPresented: $showingTemperament) { temperamentSheet }
         .navigationTitle("Personality")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if canEdit {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save personality") { Task { await save() } }
+                    Button("Save") { Task { await save() } }
                         .disabled(!draft.loaded || !draft.dirty || !draft.profile.isValid || draft.saving)
                 }
             }
@@ -277,6 +285,36 @@ struct ContactPersonalityView: View {
             if !draft.loaded, let value = cache.value { draft.apply(value) }
             await refresh()
         }
+    }
+
+    private var temperamentSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    ForEach(PersonalityTrait.all) { trait in
+                        VStack(spacing: 10) {
+                            HStack { Text(trait.label); Spacer(); Text("\(draft.profile.traits[trait.key] ?? 5)").foregroundStyle(.secondary).monospacedDigit() }
+                            Slider(value: Binding(
+                                get: { Double(draft.profile.traits[trait.key] ?? 5) },
+                                set: { draft.profile.traits[trait.key] = Int($0) }
+                            ), in: 1...10, step: 1).accessibilityLabel(trait.label)
+                            HStack { Text(trait.low); Spacer(); Text(trait.high) }
+                                .manrope(.caption).foregroundStyle(.secondary)
+                        }.padding(.vertical, 4)
+                    }
+                }
+                .disabled(!canEdit || draft.saving)
+            }
+            .navigationTitle("Temperament")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    InfoButton(title: "Temperament", text: "The contact expresses tendencies through tone and timing. It does not receive these scores. Feelings settle over time. Its acting direction adapts to each person without exposing private causes. Conversations with connections stay isolated. Follow-ups still respect your initiative switch and delivery limits.")
+                }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { showingTemperament = false } }
+            }
+        }
+        .presentationDetents([.large])
     }
 
     private func refresh(discard: Bool = false) async {

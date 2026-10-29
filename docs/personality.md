@@ -7,6 +7,15 @@ start with the experiment disabled. The creator edits the shared character;
 participants can inspect it read-only. A shared contact remains one agent, with
 relationships that continue across eligible private chats and groups.
 
+**Layout (iOS and web).** Generate with AI and the experiment switch come first;
+Stable identity, Specialties and Birthday follow with their explanations behind info
+buttons. The birthday time zone is a searchable selector of IANA zones (the device's
+or browser's list, plus a saved value it lacks) instead of free text. **Temperament**
+is a row ("N traits") that opens a sheet with the sliders, which edit the same draft
+saved by **Save**. Refresh is pull-to-refresh on iOS and an icon in the web page bar,
+both asking before discarding unsaved changes. Read-only participants can still open
+the info buttons and the temperament sheet.
+
 The description is shared character information, not a place for private human
 data. It stays fixed until its creator edits it. Ordinary chat, mood and extracted
 self memories cannot rewrite it. Saving settings starts a fresh emotional history

@@ -189,7 +189,6 @@ useHead({ title: 'Connections' });
 </template>
 
 <style scoped>
-.button-row-with-info { display: flex; align-items: center; padding-right: 12px; }
 .info-title { display: flex; align-items: center; gap: 4px; }
 .oauth-fields { --field-bg: var(--md-surface-container); padding-top: 12px; }
 </style>
