@@ -110,7 +110,7 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
     WHERE a.id = ? AND c.user_id = a.owner_id AND a.memory_shared = 1`).bind(row.agentID).first<{ id: string; userID: string; voice: number }>();
   if (!contact) throw new Error('SHARED_MEMORY_CONSENT_REQUIRED');
   // Groups speak only single-message replies (docs/voice.md).
-  const spoken = (await voiceInstruction(env, !!contact.voice)).replace('one message per reply', 'a reply that is a single message');
+  const spoken = (await voiceInstruction(env, !!contact.voice, row.agentID)).replace('one message per reply', 'a reply that is a single message');
   const connectorAccess = !contributor && !row.taskID && !row.sourceAgentID && !previous && !!await env.DB.prepare(`SELECT ga.connection_id FROM mcp_group_access ga
     JOIN group_agent member ON member.group_id = ga.group_id AND member.agent_id = ga.agent_id
     WHERE ga.group_id = ? AND ga.agent_id = ? AND ga.user_id = member.added_by LIMIT 1`).bind(row.groupID, row.agentID).first();

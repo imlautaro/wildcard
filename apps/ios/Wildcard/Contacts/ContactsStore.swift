@@ -343,6 +343,12 @@ final class ContactsStore {
         }
     }
 
+    func setSpeechAccent(contactID: String, accent: String, using auth: AuthStore) async throws {
+        try await updateContact(contactID: contactID, using: auth) { api, token in
+            try await api.setContactSpeechAccent(id: contactID, accent: accent, token: token)
+        }
+    }
+
     private func updateContact(contactID: String, using auth: AuthStore,
                                _ operation: (AuthAPI, String) async throws -> Contact) async throws {
         try beginMutation()

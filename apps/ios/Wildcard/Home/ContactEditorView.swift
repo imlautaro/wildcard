@@ -222,6 +222,26 @@ private struct ContactEnergySection: View {
 
 /// Voice replies: each participant's own opt-in, and the shared voice its creator chooses.
 private struct ContactVoiceSection: View {
+    // Keep codes and labels aligned with shared/voice.ts.
+    private let accents: [(code: String, name: String)] = [
+        ("AR", "Argentine"),
+        ("UY", "Uruguayan"),
+        ("MX", "Mexican"),
+        ("ES", "Spanish (Spain)"),
+        ("CL", "Chilean"),
+        ("CO", "Colombian"),
+        ("PE", "Peruvian"),
+        ("VE", "Venezuelan"),
+        ("US", "American"),
+        ("GB", "British"),
+        ("AU", "Australian"),
+        ("IE", "Irish"),
+        ("BR", "Brazilian"),
+        ("PT", "Portuguese (Portugal)"),
+        ("FR", "French"),
+        ("IT", "Italian"),
+        ("DE", "German"),
+    ]
     let contactID: String
     let disabled: Bool
     let report: (String) -> Void
@@ -243,6 +263,21 @@ private struct ContactVoiceSection: View {
                 }
             ))
             .disabled(disabled || contacts.isMutating)
+            Picker("Speech accent", selection: Binding(
+                get: { contact?.speechAccent ?? "" },
+                set: { accent in
+                    guard !contacts.isMutating else { return }
+                    Task {
+                        do { try await contacts.setSpeechAccent(contactID: contactID, accent: accent, using: auth) }
+                        catch is CancellationError { }
+                        catch { report(error.localizedDescription) }
+                    }
+                }
+            )) {
+                Text("Voice default").tag("")
+                ForEach(accents, id: \.code) { accent in Text(accent.name).tag(accent.code) }
+            }
+            .disabled(disabled || contacts.isMutating || contact?.canManage != true)
             if contact?.canManage == true {
                 NavigationLink {
                     ContactVoicePickerView(contactID: contactID, catalog: contacts.voiceCatalog.store(for: "voices"))
@@ -256,7 +291,7 @@ private struct ContactVoiceSection: View {
         } header: {
             Text("Voice")
         } footer: {
-            Text("Let this contact answer you with short voice messages when a reply suits speech. In groups, the creator's setting applies.")
+            Text("Let this contact answer you with short voice messages when a reply suits speech. In groups, the creator's setting applies. Accent applies to new messages for everyone. Results depend on the voice; samples keep their original accent.")
         }
     }
 }

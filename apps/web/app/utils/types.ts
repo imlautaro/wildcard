@@ -17,6 +17,7 @@ export type Contact = {
   name: string;
   initiativeEnabled?: number;
   // The contact's shared voice and this participant's voice-reply opt-in (0 or 1).
+  speechAccent?: string | null;
   voiceID?: string | null;
   voiceName?: string | null;
   voiceMessagesEnabled?: number;

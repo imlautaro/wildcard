@@ -99,7 +99,8 @@ continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the A
 limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1 (including conversation-local memory for MCP chats/groups), selects bounded recent context, and provides shared attributed memories with private history search tools. Each agent also keeps its own stated persona/preferences across chats and can discover common group members and retrieve their attributed group statements through bounded, permission-checked search. An empty draft offers a microphone for
 WhatsApp-style [voice messages](docs/voice.md): hold to record, release to send, slide
 to cancel or lock. They are transcribed after sending, and contacts can answer with
-their own ElevenLabs voice. Navigation reuses a bounded session-scoped [memory cache](docs/caching.md) for
+their own ElevenLabs v4 voice with conversational delivery and a creator-managed
+speech accent preference (migration 0061, including Argentine). Navigation reuses a bounded session-scoped [memory cache](docs/caching.md) for
 private/group chats, group details, schedules and sharing, and
 refreshes loaded content in the background. Recent chat images and avatars share
 a bounded memory/protected disk cache, reducing reloads across navigation and app

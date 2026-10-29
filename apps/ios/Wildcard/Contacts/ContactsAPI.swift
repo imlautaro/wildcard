@@ -8,6 +8,7 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     /// This participant's opt-in to voice replies (0 or 1).
     var voiceMessagesEnabled: Int? = nil
     /// The contact's shared voice; only the creator can change it.
+    var speechAccent: String? = nil
     var voiceID: String? = nil
     var voiceName: String? = nil
     var agentID: String? = nil
@@ -91,6 +92,13 @@ extension AuthAPI {
     func setContactVoice(id: String, voiceID: String, token: String) async throws -> Contact {
         let body = try JSONEncoder().encode(["voiceID": voiceID])
         let (data, _) = try await send(path: "contacts/\(id)/voice", method: "PUT", body: body, token: token)
+        return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
+    }
+
+    func setContactSpeechAccent(id: String, accent: String, token: String) async throws -> Contact {
+        let value: Any = accent.isEmpty ? NSNull() : accent
+        let body = try JSONSerialization.data(withJSONObject: ["speechAccent": value])
+        let (data, _) = try await send(path: "contacts/\(id)/speech-accent", method: "PUT", body: body, token: token)
         return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
     }
 

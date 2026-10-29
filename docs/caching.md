@@ -1123,3 +1123,24 @@ responses, invalidation after account deletion and setting changes, and a full r
 on sign-out or session expiry. Nothing is persisted in the browser. The API reads
 runtime settings from D1 on every use, with no isolate cache. Details:
 [admin panel caching](admin.md#panel-caching). Not verified in a browser.
+
+## Speech accent preference (0061)
+
+The shared accent travels with existing contact responses; iOS `ContactsStore`
+and web `useChats` retain it in the same account-owned memory snapshots as voice ID.
+No separate preference cache or local persistence is introduced. The selector
+reads these snapshots synchronously, uses existing background contact revalidation,
+and updates them only from a successful creator mutation response. Existing
+mutation serialization and account-generation guards reject stale results; failed
+writes retain the saved selection. Other participants observe shared edits on the
+next ordinary contact refresh, without new polling or cross-device push.
+Sign-out, account changes, deletion and confirmed access loss use existing contact
+store invalidation. The server rechecks creator ownership on every write and reads
+the current preference for new audio. Presets are bundled constants, not network data.
+
+Generated MP3s keep their existing immutable message keys. Settings changes neither
+invalidate historical audio nor regenerate catalog previews; the next new voice
+reply gets the new delivery. Existing download deduplication, memory/disk budgets,
+eviction and session rejection rules are unchanged. Pending verification in both
+clients: back/reopen, offline save failure, refresh after another participant edits,
+creator/member restrictions, revocation and account switching during a save.

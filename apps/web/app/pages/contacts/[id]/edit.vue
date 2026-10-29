@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { speechAccents } from '../../../../../../shared/voice';
 import type { ChatMediaItem, Contact, VoiceOption } from '~/utils/types';
 
 const route = useRoute();
@@ -65,6 +66,14 @@ const setVoiceMessages = (event: Event) => run(async () => {
 const chooseVoice = (voiceID: string) => run(async () => {
   if (contact.value?.voiceID === voiceID) return;
   apply((await api<{ contact: Contact }>(`contacts/${id.value}/voice`, { method: 'PUT', json: { voiceID } })).contact);
+});
+const setSpeechAccent = (event: Event) => run(async () => {
+  const input = event.target as HTMLSelectElement;
+  try {
+    apply((await api<{ contact: Contact }>(`contacts/${id.value}/speech-accent`, {
+      method: 'PUT', json: { speechAccent: input.value || null },
+    })).contact);
+  } finally { input.value = contact.value?.speechAccent ?? ''; }
 });
 function toggleVoicePicker() {
   choosingVoice.value = !choosingVoice.value;
@@ -149,6 +158,13 @@ onMounted(() => run(async () => {
             <span>Voice messages</span>
             <input type="checkbox" role="switch" :checked="contact.voiceMessagesEnabled === 1" :disabled="busy" @change="setVoiceMessages">
           </label>
+          <div class="field">
+            <label for="speech-accent">Speech accent</label>
+            <select id="speech-accent" :value="contact.speechAccent ?? ''" :disabled="!canManage || busy" @change="setSpeechAccent">
+              <option value="">Voice default</option>
+              <option v-for="accent in speechAccents" :key="accent.code" :value="accent.code">{{ accent.name }}</option>
+            </select>
+          </div>
           <button v-if="canManage" type="button" class="voice-row" :aria-expanded="choosingVoice" aria-controls="voice-options" @click="toggleVoicePicker">
             <span>Voice</span><span class="muted">{{ contact.voiceName ?? 'Chosen automatically' }}</span><AppIcon name="dropdown" />
           </button>
@@ -177,6 +193,7 @@ onMounted(() => run(async () => {
         </div>
         <p class="group-footer">
           With voice messages on, {{ contact.name }} sometimes answers your private chat with a short voice message.
+          Accent applies to new messages for everyone. Results depend on the voice; samples keep their original accent.
           {{ canManage ? 'Everyone who chats with this contact hears the voice you choose.' : "The contact's creator chooses its voice." }}
         </p>
       </template>

@@ -1,3 +1,4 @@
+import { accentForCountry } from '../../../../shared/voice';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { WorkflowStep } from 'cloudflare:workers';
@@ -122,7 +123,7 @@ export async function runContactGeneration(env: Env, owner: string, id: string, 
       await env.DB.batch([
         env.DB.prepare('INSERT INTO contact (id, user_id, name, photo_version, created_at, updated_at, voice_messages_enabled) VALUES (?, ?, ?, ?, ?, ?, 1)').bind(plan.id, owner, plan.name, plan.id, now, now),
         // The insert trigger created the agent; keep the demographics for its voice.
-        env.DB.prepare('UPDATE contact_agent SET voice_profile_json = ? WHERE id = ?').bind(JSON.stringify({ gender: plan.gender, age: plan.age }), plan.id),
+        env.DB.prepare('UPDATE contact_agent SET voice_profile_json = ?, speech_accent = ? WHERE id = ?').bind(JSON.stringify({ gender: plan.gender, age: plan.age }), accentForCountry(input.country), plan.id),
         env.DB.prepare('INSERT INTO agent_personality (agent_id, profile_json, updated_at) VALUES (?, ?, ?)').bind(plan.id, JSON.stringify(plan.personality), now),
         env.DB.prepare("UPDATE contact_generation SET status = 'complete', contact_id = ?, updated_at = ? WHERE id = ? AND user_id = ?").bind(plan.id, now, id, owner),
       ]);

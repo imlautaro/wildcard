@@ -308,6 +308,29 @@ v4 provider calls have not been verified for this change.
 Unverified at implementation time: real ElevenLabs calls, the catalog's `age`
 label values, real Meta transcription of stored clips, and both clients on devices.
 
+### Casual voice delivery and accent (0061)
+
+Apply `0061_speech_accent.sql` with the normal automatic API release before code
+starts querying `contact_agent.speech_accent`. It adds a nullable, constrained
+shared-agent preference; existing rows remain null and no account data is backfilled.
+The runtime uses the same `ELEVENLABS_API_KEY`, v4 model, endpoint, format and private
+R2 bucket. No new secrets, permissions, bindings or resources are required. Code
+and selectable presets live in `shared/voice.ts` and `apps/api/src/voice/`.
+
+Use the existing commit/push release pipeline; no manual deployment or remote
+migration is needed. Deploy the API before using the new selector on either client.
+Old clients ignore the additive response field and retain the configured preference
+on unrelated edits. Roll back application code without removing the column or
+rewriting the applied migration; stored audio stays playable. A later code rollback
+to before these controls ignores the saved accent and delivery adjustments.
+
+After release, verify creator-only accent writes, member rejection, null reset,
+private/group consistency, and actual new v4 audio in iOS and web. Listen for
+Argentine pronunciation and voseo without exaggerated performance; compare serious
+and casual messages with the same voice. Check provider rejection retains the text
+reply. Catalog previews cannot validate synthesis settings. These live checks,
+provider acceptance and accent fidelity remain unverified for this change.
+
 ## Migrations, compatibility, and verification
 
 `0001_auth.sql` creates the user, session, account, verification, and rate-limit

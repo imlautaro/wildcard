@@ -1,3 +1,4 @@
+import { speechAccent } from '../../../../shared/voice';
 import { Buffer } from 'node:buffer';
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 import { isRecord } from '../chat/meta';
@@ -58,10 +59,17 @@ async function synthesize(env: Env, agentID: string, text: string): Promise<Buff
   const voiceID = await agentVoice(env, agentID);
   const key = elevenLabsKey(env);
   if (!voiceID || !key) return null;
+  const preference = await env.DB.prepare('SELECT speech_accent AS accent FROM contact_agent WHERE id = ?')
+    .bind(agentID).first<{ accent: string | null }>();
+  const accent = speechAccent(preference?.accent);
+  // Delivery tags are server-controlled and never enter transcripts or chat history.
+  const spoken = plainMessageMarkdown(text).replace(/[\[\]]/g, '');
+  const directed = `[casual, conversational delivery]${accent ? ` [${accent.direction}]` : ''} ${spoken}`;
   const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceID)}?output_format=mp3_44100_128`, {
     method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(60_000),
     headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-    body: JSON.stringify({ text: plainMessageMarkdown(text), model_id: 'eleven_v4' }),
+    body: JSON.stringify({ text: directed, model_id: 'eleven_v4',
+      voice_settings: { stability: 0.4, similarity_boost: 0.75 } }),
   });
   if (!response.ok || !response.body) {
     await response.body?.cancel();

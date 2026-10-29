@@ -55,9 +55,15 @@ can repeat a billable request. This is not exactly-once inference billing.
 
 The publish batch also turns on [voice messages](voice.md) for the creator's
 conversation and stores the requested gender and age as the agent's voice profile.
-A separate best-effort step then assigns a matching ElevenLabs voice when the
-feature is available; otherwise the voice is chosen when it is first needed.
-First-circle onboarding contacts get the same profile and opt-in.
+Migration 0061 also initializes a shared speech accent from the explicitly chosen
+bot country when supported by `shared/voice.ts`; other countries use Voice default.
+The creator can change or clear it in contact details on either client. It is a
+speech preference, not a stored nationality. Existing contacts are not backfilled.
+A separate best-effort step then assigns a matching ElevenLabs voice, preferring
+conversational descriptions within the demographic pool when available. When the
+feature is unavailable, the voice is chosen when it is first needed.
+First-circle onboarding contacts get the same profile and opt-in, with no accent
+inferred from the user's country. Personality regeneration preserves the saved accent.
 
 ## Existing personalities
 

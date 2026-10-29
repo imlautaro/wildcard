@@ -1,3 +1,4 @@
+import { speechAccent } from '../../../../shared/voice';
 import { remoteSettings } from '../native/remote-routes';
 import nativeActions from '../native/routes';
 import { miniAppRoutes } from '../miniapps/routes';
@@ -20,8 +21,8 @@ import personality from '../personality/routes';
 import generation from '../contacts/generation';
 import { listVoices, voiceRepliesAvailable, type Voice } from '../voice/catalog';
 
-type Contact = { onboardingChat?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
-const columns = `onboarding_chat AS onboardingChat, initiative_enabled AS initiativeEnabled, voice_messages_enabled AS voiceMessagesEnabled,
+type Contact = { speechAccent: string | null; onboardingChat?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
+const columns = `(SELECT speech_accent FROM contact_agent WHERE id = contact.agent_id) AS speechAccent, onboarding_chat AS onboardingChat, initiative_enabled AS initiativeEnabled, voice_messages_enabled AS voiceMessagesEnabled,
   (SELECT voice_id FROM contact_agent WHERE id = contact.agent_id) AS voiceID, (SELECT voice_name FROM contact_agent WHERE id = contact.agent_id) AS voiceName, id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
   CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
 const managesAgent = `EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = contact.user_id)`;
@@ -184,6 +185,27 @@ contacts.put('/:id/voice', contactBody, async (c) => {
   if (!voice) return c.json({ error: 'Choose an available voice' }, 422);
   await c.env.DB.prepare('UPDATE contact_agent SET voice_id = ?, voice_name = ? WHERE id = ? AND owner_id = ?')
     .bind(voice.id, voice.name, member.agentID, c.get('owner')).run();
+  const contact = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param('id'), c.get('owner')).first<Contact>();
+  return contact ? c.json({ contact: contactPreview(contact) }) : c.json({ error: 'Contact not found' }, 404);
+});
+
+// Accent belongs to the shared agent, never to the listener's account or locale.
+contacts.put('/:id/speech-accent', contactBody, async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!body || Object.keys(body).join(',') !== 'speechAccent'
+    || (body.speechAccent !== null && !speechAccent(body.speechAccent))) {
+    return c.json({ error: 'Choose an available speech accent or null for Voice default' }, 400);
+  }
+  const member = await c.env.DB.prepare(`SELECT agent_id AS agentID, ${managesAgent} AS creator FROM contact WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param('id'), c.get('owner')).first<{ agentID: string; creator: number }>();
+  if (!member) return c.json({ error: 'Contact not found' }, 404);
+  if (!member.creator) return c.json({ error: 'Only the creator can edit this contact' }, 403);
+  const updated = await c.env.DB.prepare(`UPDATE contact_agent SET speech_accent = ?, updated_at = ?
+    WHERE id = ? AND owner_id = ? RETURNING id`)
+    .bind(body.speechAccent, Date.now(), member.agentID, c.get('owner')).first();
+  if (!updated) return c.json({ error: 'Contact no longer available' }, 404);
   const contact = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
     .bind(c.req.param('id'), c.get('owner')).first<Contact>();
   return contact ? c.json({ contact: contactPreview(contact) }) : c.json({ error: 'Contact not found' }, 404);

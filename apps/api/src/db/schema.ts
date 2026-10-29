@@ -55,6 +55,7 @@ export const verification = sqliteTable('verification', {
 }, (table) => [index('verification_identifier_idx').on(table.identifier)]);
 
 export const contactAgent = sqliteTable('contact_agent', {
+  speechAccent: text('speech_accent'),
   energy: integer('energy').notNull().default(50),
   energyUpdatedAt: integer('energy_updated_at').notNull().default(0),
   id: text('id').primaryKey(),

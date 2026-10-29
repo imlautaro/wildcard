@@ -90,6 +90,49 @@ regenerated. Duration is derived from the constant 128 kbps bitrate.
 Real v4 synthesis, account access, voice compatibility and listening quality remain
 unverified for this change. Provider failures retain the existing text fallback.
 
+## Casual delivery and speech accent (0061)
+
+New contact replies use `voice_settings: { stability: 0.4, similarity_boost: 0.75 }`
+with Eleven v4. The conversation prompt favors spontaneous spoken phrasing, varied
+short clauses and context-appropriate tone, preserving the contact's personality
+without forced slang, fillers, laughter or stage directions. There is no extra
+rewrite inference. The server prefixes a delivery-only
+`[casual, conversational delivery]` tag and, when selected, an accent tag.
+Brackets in the plain message are removed from the synthesis input so message text
+cannot introduce additional provider tags. These directions never enter stored
+message text, transcripts, previews, notifications or memory.
+
+**Speech accent** is an optional preference on the shared agent
+(`contact_agent.speech_accent`), independent of nationality, identity claims and the
+listener's language or country. In contact details on iOS and web, the creator can
+choose **Voice default** or one of the regional presets in `shared/voice.ts`,
+including **Argentine**. Other participants see the selection but cannot change it.
+It applies to new private and group replies for everyone. The accent also guides
+natural regional phrasing in voice-enabled conversation prompts; Argentine Spanish
+uses voseo, without changing the requested language or inventing a nationality.
+
+New individually AI-generated contacts initialize this preference from the bot's
+explicit country selection when a matching preset exists. Other countries use
+Voice default. Existing contacts, manual contacts and first-circle onboarding
+contacts default to null; there is no inference from personality prose, account
+country or time zone, and no backfill. Personality regeneration preserves it.
+Changing accent preserves the chosen voice ID; it does not select, clone, remix or
+create a provider voice. No new provider permissions or resources are needed.
+
+Accent tags are experimental delivery hints, not guaranteed accents or a provider
+`nationality` parameter. Their effect depends on the selected voice, language and
+phrase. The provider references are [prompting v4](https://elevenlabs.io/docs/overview/capabilities/text-to-speech/best-practices#prompting-eleven-v4)
+and [v4 voice settings](https://github.com/elevenlabs/skills/blob/main/text-to-speech/references/voice-settings.md).
+Listen to actual generated messages to evaluate the result: catalog samples remain
+pre-recorded and do not demonstrate these settings. Existing messages and their
+immutable cache identities remain unchanged. A synthesis failure still publishes
+text; there is no fallback model or additional synthesis attempt.
+
+Verification pending: real v4 acceptance of the combined delivery/accent tags,
+per-voice naturalness and accent fidelity, serious/neutral/emotional content,
+Spanish voseo and other languages, and creator/member controls on real devices.
+No paid sample generation was performed for this change.
+
 ## Contact voices
 
 Every contact has a voice (`contact_agent.voice_id`), part of its shared identity: all
@@ -99,6 +142,8 @@ participants hear the same voice, and only the creator can change it.
   `young` under 35, `middle_aged` from 35 to 59, `old` from 60. The choice is
   deterministic per contact among matching voices, falling back to the nearest age
   group (old → middle-aged, young → middle-aged), then gender only, then any voice.
+  Within that pool, voices labeled conversational, casual or relaxed in their
+  description are preferred when available. Existing saved voices are preserved.
   The default catalog (21 voices, verified on October 29, 2026) has a single old
   voice (male), so older women get middle-aged voices.
 - **Other contacts** (manual, onboarding) get a voice the first time one is needed,
@@ -123,6 +168,7 @@ All routes use the bearer session and return `no-store` unless noted.
 | GET | `/api/v1/me` | Returns `features: { voiceMessages: boolean }` next to `user` (flag on **and** key configured) |
 | GET | `/api/v1/voices` | `{ voices: [{ id, name, gender, age, accent, description }] }`; 503 when unavailable |
 | GET | `/api/v1/voices/:voiceID/preview` | Sample audio (`audio/mpeg`) proxied from ElevenLabs; 404 for unknown voices |
+| PUT | `/api/v1/contacts/:id/speech-accent` | `{ "speechAccent": "AR" }` or null; creator only, shared agent preference; returns `{ contact }` |
 | PUT | `/api/v1/contacts/:id/voice` | `{ "voiceID": "<catalog id>" }`, creator only (403 otherwise); returns `{ contact }` |
 | PUT | `/api/v1/contacts/:id/voice-messages` | `{ "enabled": true }`, this participant's opt-in; returns `{ contact }` |
 | POST | `/api/v1/contacts/:id/chat/turns` | `{ id, text: "", voice: { data: "<base64 WAV>" } }` sends a voice message |

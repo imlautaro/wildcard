@@ -239,7 +239,6 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
     const result = await groupRequestReply(env, turn, name, model);
     return result ? { messages: [result] } : null;
   }
-  const spoken = await voiceInstruction(env, !!await env.DB.prepare('SELECT 1 FROM contact WHERE id = ? AND voice_messages_enabled = 1').bind(turn.contactID).first());
   // Autonomous tools require task-specific permission; schedules retain no web access.
   const autonomous = !!(turn.scheduleID || turn.taskID);
   const taskResearch = turn.taskID ? await env.DB.prepare('SELECT research_query AS query FROM task WHERE id = ? AND research_user_id = ?')
@@ -261,6 +260,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   const agent = await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ? AND user_id = ?')
     .bind(turn.contactID, turn.userID).first<{ id: string }>();
   if (!agent) throw new Error('CONTACT_UNAVAILABLE');
+  const spoken = await voiceInstruction(env, !!await env.DB.prepare('SELECT 1 FROM contact WHERE id = ? AND voice_messages_enabled = 1').bind(turn.contactID).first(), agent.id);
   const scope = { agentID: agent.id, contactID: turn.contactID, userID: turn.userID, beforeSequence: turn.sequence,
     privateConversation: true, contributorModel: model.includes('contributor') };
   const taskLists = turn.scheduleID ? [] : await readTaskLists(env.DB, { kind: 'contact', contactID: turn.contactID, userID: turn.userID }, false);

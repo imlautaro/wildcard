@@ -1,3 +1,4 @@
+import { speechAccent } from '../../../../shared/voice';
 import { readSetting } from '../admin/settings';
 
 // Optional until the installation configures its own ElevenLabs key (docs/voice.md).
@@ -54,7 +55,10 @@ const ageBuckets = (age: number) => age < 35 ? ['young', 'middle_aged'] : age < 
 export function pickVoice(voices: Voice[], profile: VoiceProfile | null, seed: string): Voice | null {
   const gendered = profile ? voices.filter(voice => voice.gender === profile.gender) : [];
   const aged = profile ? ageBuckets(profile.age).map(age => gendered.filter(voice => voice.age === age)).find(pool => pool.length) ?? [] : [];
-  const pool = aged.length ? aged : gendered.length ? gendered : voices;
+  const matching = aged.length ? aged : gendered.length ? gendered : voices;
+  // Favor a conversational source delivery without changing existing saved voices.
+  const conversational = matching.filter(voice => /\b(conversational|casual|relaxed)\b/i.test(voice.description ?? ''));
+  const pool = conversational.length ? conversational : matching;
   if (!pool.length) return null;
   let hash = 0;
   for (const char of seed) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
@@ -77,9 +81,13 @@ export async function agentVoice(env: Env, agentID: string): Promise<string | nu
 
 // Tell the model the truth about voice, so it never denies sending audio while the
 // app speaks its reply. `optedIn` is the conversation's voice-message opt-in.
-export async function voiceInstruction(env: Env, optedIn: boolean): Promise<string> {
+export async function voiceInstruction(env: Env, optedIn: boolean, agentID: string): Promise<string> {
   if (!await voiceRepliesAvailable(env)) return '';
+  const preference = optedIn ? await env.DB.prepare('SELECT speech_accent AS accent FROM contact_agent WHERE id = ?')
+    .bind(agentID).first<{ accent: string | null }>() : null;
+  const accent = speechAccent(preference?.accent);
+  const direction = accent ? ` Speech accent preference: ${accent.name}.${accent.code === 'AR' ? ' When speaking Spanish, use natural Argentine voseo.' : ''} When appropriate to the language being spoken, use matching everyday phrasing and forms of address. This is a speech preference, not evidence of nationality, background or personality. Do not force slang, caricatures or a language change.` : '';
   return optedIn
-    ? 'Voice messages are on: the app automatically delivers one message per reply as a voice note in your own voice when it is plain conversational prose of 60–600 characters (no links, lists, code, tables or headings). You can send voice notes; never say you cannot send audio. When someone asks for a voice message or audio, write that message as natural spoken prose within that length, without emojis or formatting. Shorter or longer messages arrive as text.'
+    ? 'Voice messages are on: the app automatically delivers one message per reply as a voice note in your own voice when it is plain conversational prose of 60–600 characters (no links, lists, code, tables or headings). You can send voice notes; never say you cannot send audio. When someone asks for a voice message or audio, write that message as natural spoken prose within that length, without emojis or formatting. Shorter or longer messages arrive as text. For voice-suitable replies, write like a spontaneous voice note to the person: conversational phrasing, short clauses, contractions where natural, and varied sentence lengths. Keep your personality and the context, including serious topics; avoid announcer introductions, polished narration and theatrical emphasis. Do not add habitual fillers, laughter, sighs or invented hesitations. Use ordinary punctuation and never write audio tags or stage directions.' + direction
     : 'Voice messages are off in this conversation, so you cannot send audio here. If someone asks for one, say they can turn on Voice messages in your contact details.';
 }

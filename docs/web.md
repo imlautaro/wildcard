@@ -285,6 +285,19 @@ behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.
 
 ## Voice messages
 
+New replies use conversational delivery and moderate stability. Contact details →
+**Voice → Speech accent** lets the creator select a shared regional preference,
+including Argentine, or Voice default; members see it read-only. It applies to
+new private and group audio on both clients. The API requires migration 0061.
+This is an accent preference, independent of nationality; provider fidelity is
+best effort. The existing voice remains selected, and sample buttons keep playing
+their original recording. See [casual delivery](voice.md#casual-delivery-and-speech-accent-0061).
+The selector renders from the session contact store, saves through the existing
+mutation flow and upserts the server response, keeping the previous selection on
+failure. Existing session reset, access-loss invalidation and revalidation rules
+apply; no extra cache, persisted draft or provider request is added.
+Browser playback and accent quality remain unverified for this change.
+
 Contact replies use server-side ElevenLabs `eleven_v4` synthesis, shared with iOS.
 Only new replies use the selected model; existing audio and catalog previews keep
 their original bytes and cache identity. Live v4 generation and listening quality
