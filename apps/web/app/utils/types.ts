@@ -26,6 +26,7 @@ export type Contact = {
   photoVersion?: string | null;
   createdAt: number;
   updatedAt: number;
+  replyActivity?: string | null;
   lastMessagePreview?: string | null;
   lastMessageText: string | null;
   lastMessageAt: number | null;
@@ -89,7 +90,7 @@ export type ChatTurn = {
   voice?: VoiceInfo | null;
 };
 
-export type Presence = { status: 'offline' | 'online' | 'typing'; lastSeenAt: number | null; expiresAt: number | null };
+export type Presence = { status: 'offline' | 'online' | 'typing'; isRecording?: boolean; lastSeenAt: number | null; expiresAt: number | null };
 export type ChatPage = { presence: Presence | null; turns: ChatTurn[]; nextBefore: number | null };
 export type ChatSubmission = { turn: ChatTurn; presence: Presence | null };
 export type ChatReadState = { lastReadSequence: number; totalUnreadCount?: number | null; unreadCount: number };
@@ -100,6 +101,7 @@ export type ChatGroup = {
   ownerID: string;
   createdAt: number;
   updatedAt: number;
+  replyActivity?: string | null;
   lastMessagePreview?: string | null;
   lastMessageText: string | null;
   lastMessageAt: number | null;
@@ -113,7 +115,7 @@ export type ChatGroup = {
 };
 export type GroupMember = { id: string; kind: 'user' | 'agent'; name: string; photoVersion: string | null; canInvite: number; addedBy: string | null };
 // taskID/taskTitle are set when the reply is a task work turn (its trigger is hidden from the transcript).
-export type GroupReply = { isTyping?: number; id: string; agentID: string; name: string; status: string; sourceID?: string; sourceSequence?: number; attempt?: number;
+export type GroupReply = { replyActivity?: string; isTyping?: number; id: string; agentID: string; name: string; status: string; sourceID?: string; sourceSequence?: number; attempt?: number;
   taskID?: string | null; taskTitle?: string | null };
 export type GroupMessage = {
   sequence: number;

@@ -7,6 +7,7 @@ struct ChatGroup: Decodable, Hashable, Identifiable {
     let ownerID: String
     let createdAt: Double
     let updatedAt: Double
+    var replyActivity: String? = nil
     var lastMessagePreview: String? = nil
     var lastMessageText: String?
     var lastMessageAt: Double?
@@ -41,6 +42,7 @@ struct GroupMember: Decodable, Hashable, Identifiable {
 }
 struct GroupReply: Decodable, Identifiable {
     var isTyping: Int? = nil
+    var replyActivity: String? = nil
     let id: String
     let agentID: String
     let name: String

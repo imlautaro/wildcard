@@ -2373,3 +2373,24 @@ contacts use the existing contact/personality/photo contracts. Older clients can
 read them, but this server rejects birthday writes younger than 18. Onboarding input
 continues to be retained privately after setup to personalize generation. Failed
 jobs/portraits have no automatic expiry; see [generation retention and recovery](contact-generation.md).
+
+
+## Recording presence (migration 0062)
+
+Apply `0062_recording_presence.sql` through the existing ordered D1 migrations. It
+adds nullable `agent_presence.recording_until`; no new service, binding, permission
+or secret is required. Fresh independent installations apply it after 0061 with
+all preceding migrations. Local setup uses `npm run db:migrate:local`; production
+applies migrations in the automatic committed/pushed API release before activation.
+Deploy the API migration before using clients that display recording presence.
+Existing rows default to null. Private presence retains the existing `typing`
+status and adds an optional `isRecording` boolean, so older clients remain able to
+decode it and continue displaying typing. New list summary fields are additive.
+
+The synthesis lease is bounded to two minutes and only updates the matching
+agent attention turn/attempt. Cleanup compares its deadline so an earlier execution
+cannot clear a replacement lease. New typing phases reset it. On rollback, restore
+the previous API/client code and leave the additive column in place; no message
+history is modified. Verify text, voice, text fallback, interrupted synthesis and
+shared-contact/group scoping in an independent account. These runtime/device checks
+have not been performed.

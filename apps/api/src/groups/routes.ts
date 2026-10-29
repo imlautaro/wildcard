@@ -36,7 +36,13 @@ function groupPreview(row: GroupSummary) {
 }
 // Task work triggers (task_id set, no sender) are internal: the assignee's own reply is
 // the visible event, so they never count as unread, preview or history.
-const summary = `m.last_read_sequence AS lastReadSequence,
+const summary = `(SELECT group_concat(label, ', ') FROM (
+    SELECT a.name || CASE WHEN p.recording_until > unixepoch('subsec') * 1000 THEN ' Recording...' ELSE ' Typing...' END AS label
+    FROM group_reply r JOIN agent_attention attention ON attention.turn_id = r.id AND attention.attempt = r.attempt AND attention.agent_id = r.agent_id
+    JOIN agent_presence p ON p.agent_id = r.agent_id JOIN contact_agent a ON a.id = r.agent_id
+    WHERE r.group_id = g.id AND r.status = 'running' AND p.status = 'typing' AND p.expires_at > unixepoch('subsec') * 1000
+    ORDER BY r.sequence LIMIT 8)) AS replyActivity,
+  m.last_read_sequence AS lastReadSequence,
   (SELECT COUNT(*) FROM group_message gm WHERE gm.group_id = g.id AND gm.sequence > m.last_read_sequence
     AND gm.user_id IS NOT m.user_id AND gm.task_id IS NULL) AS unreadCount, g.id, g.name, g.owner_id AS ownerID,
   (SELECT id FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageID,
@@ -168,7 +174,8 @@ groups.get('/:id', async (c) => {
     source.task_id AS taskID, (SELECT title FROM task WHERE id = source.task_id) AS taskTitle,
     EXISTS (SELECT 1 FROM agent_attention attention JOIN agent_presence presence ON presence.agent_id = attention.agent_id
       WHERE attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt
-        AND r.status = 'running' AND presence.status = 'typing' AND presence.expires_at > ?2) AS isTyping
+        AND r.status = 'running' AND presence.status = 'typing' AND presence.expires_at > ?2) AS isTyping,
+    (SELECT CASE WHEN p.recording_until > ?2 THEN 'recording' ELSE 'typing' END FROM agent_presence p WHERE p.agent_id = r.agent_id) AS replyActivity
     FROM group_reply r
     JOIN group_message source ON source.id = r.source_id
     JOIN contact_agent a ON a.id = r.agent_id WHERE r.group_id = ?1 AND r.status IN ('queued', 'running', 'failed')

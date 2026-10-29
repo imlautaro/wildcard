@@ -195,7 +195,7 @@ async function markGroupRead(env: Env, job: GroupJob, readers: Reader[]) {
 
 // Presence belongs to the current attempt and its exclusive attention claim.
 async function setGroupPresence(env: Env, job: GroupJob, status: 'online' | 'typing', throughSequence: number | null = null) {
-  const result = await env.DB.prepare(`UPDATE agent_presence SET status = ?3, typing_contact_id = NULL, expires_at = ?4
+  const result = await env.DB.prepare(`UPDATE agent_presence SET status = ?3, recording_until = NULL, typing_contact_id = NULL, expires_at = ?4
     WHERE agent_id IN (SELECT r.agent_id FROM group_reply r JOIN agent_attention attention
       ON attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt
       WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
@@ -275,7 +275,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
               JOIN contact_agent a ON a.id = r.agent_id JOIN contact owner_contact ON owner_contact.agent_id = a.id AND owner_contact.user_id = a.owner_id
               WHERE r.id = ? AND r.attempt = ? AND r.status = 'running' AND owner_contact.voice_messages_enabled = 1`)
               .bind(job.turnID, job.attempt).first<{ agentID: string; groupID: string }>();
-            return scope ? speakMessage(env, { agentID: scope.agentID, text: spokenText,
+            return scope ? speakMessage(env, { turnID: job.turnID, attempt: job.attempt, agentID: scope.agentID, text: spokenText,
               key: `group-attachments/${scope.groupID}/${scope.agentID}/${encodeURIComponent(job.turnID)}/voice-a${job.attempt}-${review}` }) : null;
           }).catch(() => null) : null;
         outcome = await step.do(`group-publish-draft-${review}`, async () => publishGroupDraft(env, job, { ...prepared, text: spokenText }, single, voice));

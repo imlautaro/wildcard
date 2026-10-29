@@ -40,6 +40,7 @@ export function dayLabel(timestamp: number) {
 export function presenceLabel(presence: Presence | null | undefined) {
   if (!presence) return '';
   if (presence.status === 'online') return 'Online';
+  if (presence.status === 'typing' && presence.isRecording) return 'Recording...';
   if (presence.status === 'typing') return 'Typing...';
   if (!presence.lastSeenAt) return 'Offline';
   const delta = dayDelta(presence.lastSeenAt);

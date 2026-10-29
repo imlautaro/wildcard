@@ -178,7 +178,7 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
         if (!current || changedSince(current) || quietUntil(state.timeZone, now) !== now || now < state.anchorAt + characterGap) return false;
         // Typing only follows the check's connection, and never overrides a reply in progress.
         const [, result] = await env.DB.batch([connectAgent(env.DB, state.agentID, now + 60_000),
-          env.DB.prepare(`UPDATE agent_presence SET status = 'typing', typing_contact_id = ?2
+          env.DB.prepare(`UPDATE agent_presence SET status = 'typing', recording_until = NULL, typing_contact_id = ?2
             WHERE agent_id = ?1 AND status = 'online'
               AND NOT EXISTS (SELECT 1 FROM agent_attention WHERE agent_id = ?1)`)
             .bind(state.agentID, state.contactID)]);

@@ -499,3 +499,16 @@ next private/group/local clip at the saved rate, pause/resume and seek, finish/e
 avatar restoration, screen reopen and app/browser restart, separate accounts,
 blocked browser storage, keyboard/VoiceOver, layout and reply-swipe coexistence.
 Static checks do not establish audible timing or touch behavior.
+
+
+## Reply activity indicators
+
+Both clients show Recording... during voice attachment preparation and Typing...
+for text preparation. Private/group list second lines temporarily show that
+activity instead of message previews and receipts, preserving message order,
+timestamps and unread counts. Groups identify each active contact. This reuses the
+existing session-owned summaries, foreground polling, deduplication, pagination,
+account isolation and cache eviction without extra row requests or disk storage.
+See [chat activity](chats.md#reply-activity-indicators) for freshness/failure
+behavior and pending device checks, and [migration 0062](infrastructure.md#recording-presence-migration-0062)
+for reproducible setup and rollback.

@@ -230,7 +230,11 @@ private struct ChatListRow: View {
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
 
+    private var activity: String? {
+        contact.replyActivity == "recording" ? "Recording..." : contact.replyActivity == "typing" ? "Typing..." : nil
+    }
     private var messagePreview: String {
+        if let activity { return activity }
         guard let text = contact.lastMessageText else { return "No messages yet" }
         return (contact.lastMessagePreview ?? (contact.lastMessageFromUser == 0 ? MessageMarkdown.plainText(text) : text)).components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -246,7 +250,7 @@ private struct ChatListRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    if contact.lastMessageFromUser == 1 {
+                    if activity == nil && contact.lastMessageFromUser == 1 {
                         MessageReceiptView(sentAt: contact.lastMessageAt ?? contact.createdAt, readAt: contact.lastMessageReadAt, isSending: contacts.conversations.cachedStore(for: contact.id)?.outgoingMessage != nil)
                     }
                     Text(messagePreview).manrope(.subheadline)
@@ -305,6 +309,7 @@ private struct GroupChatListRow: View {
     @ScaledMetric(relativeTo: .subheadline) private var previewSize: CGFloat = 15
 
     private var messagePreview: AttributedString {
+        if let activity = group.replyActivity { return AttributedString(activity) }
         let source = group.lastMessageText
         let cleaned = group.lastMessagePreview ?? source.map { group.lastMessageUserID == nil ? MessageMarkdown.plainText($0) : $0 }
         let message = cleaned?.components(separatedBy: .newlines)
@@ -321,7 +326,7 @@ private struct GroupChatListRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(group.name).manrope(.body, weight: .semibold).foregroundStyle(.primary).lineLimit(1)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    if own {
+                    if own && group.replyActivity == nil {
                         MessageReceiptView(sentAt: group.lastMessageAt ?? group.createdAt,
                             isSending: groups.conversations.cachedStore(for: group.id).map { $0.pendingID == group.lastMessageID && !$0.pendingAccepted } ?? false,
                             receiptState: group.lastMessageReceiptState ?? "sent")

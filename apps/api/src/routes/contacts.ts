@@ -1,3 +1,4 @@
+import { privatePresenceStatus } from '../chat/presence';
 import { speechAccent } from '../../../../shared/voice';
 import { remoteSettings } from '../native/remote-routes';
 import nativeActions from '../native/routes';
@@ -27,6 +28,7 @@ const columns = `(SELECT speech_accent FROM contact_agent WHERE id = contact.age
   CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
 const managesAgent = `EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = contact.user_id)`;
 const selection = `${columns},
+  (SELECT ${privatePresenceStatus('contact')} FROM agent_presence p WHERE p.agent_id = contact.agent_id) AS replyActivity,
   (SELECT CASE WHEN t.assistant_text IS NULL AND t.schedule_id IS NULL AND t.group_request_id IS NULL AND t.task_id IS NULL THEN 1 ELSE 0 END
     FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageFromUser,
   (SELECT t.read_at FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageReadAt, (SELECT CASE WHEN json_extract(t.assistant_messages_json, '$[#-1].attachment.mimeType') LIKE 'audio/%'

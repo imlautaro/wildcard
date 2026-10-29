@@ -78,13 +78,14 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
 struct ContactPresence: Decodable, Sendable {
     enum Status: String, Decodable, Sendable { case offline, online, typing }
     let status: Status
+    var isRecording: Bool? = nil
     let lastSeenAt: Double?
     let expiresAt: Double?
 
     var label: String {
         switch status {
         case .online: return "Online"
-        case .typing: return "Typing..."
+        case .typing: return isRecording == true ? "Recording..." : "Typing..."
         case .offline:
             guard let lastSeenAt else { return "Offline" }
             let date = Date(timeIntervalSince1970: lastSeenAt / 1000)

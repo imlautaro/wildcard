@@ -295,3 +295,9 @@ New contacts can be created manually or [generated with AI](docs/contact-generat
 on iOS and web, reusing saved onboarding context with bot-only selectors. Creators
 can also regenerate an existing personality as a reviewable draft. Generated
 contacts receive random adult birthdays; birthday edits require age 18 or older.
+
+
+Reply activity now distinguishes Typing... and Recording... in private/group chats
+and list previews on iOS and web. Recording covers voice attachment preparation;
+see [voice messages](docs/voice.md#reply-activity-indicators) and
+[migration 0062 setup](docs/infrastructure.md#recording-presence-migration-0062).

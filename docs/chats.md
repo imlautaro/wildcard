@@ -749,3 +749,34 @@ Creation time controls initial row order; real activity uses normal ordering and
 pagination. Other empty contacts remain excluded. The marker stays in existing
 session contact snapshots and is removed with the contact, not after opening a
 chat. See [onboarding](onboarding.md) and [caching](caching.md).
+
+
+## Reply activity indicators
+
+Private chat headers and incoming reply indicators show **Recording...** while the
+server prepares a voice attachment; inference before the delivery format is known
+continues to show **Typing...**. Groups label each responding contact separately.
+Text fallback restores typing, and a finished turn returns to the normal presence.
+Chat list second lines temporarily replace the last message with **Typing...** or
+**Recording...** (including contact names in groups), hiding the last message's
+sender/checks. Message timestamps, unread counts and ordering do not change. Task
+work bubbles keep their existing task label. This applies to both iOS and web.
+
+Activity comes from the existing session-owned contact/group summaries and the
+existing conversation polling; there are no per-row requests or new disk caches.
+List refreshes run every second in the foreground with existing deduplication,
+account generation checks, pagination and cache eviction. Successful reads replace
+activity even when the last message is unchanged. Existing offline/failure behavior
+retains the latest loaded summary until a successful refresh; activity may therefore
+remain stale while disconnected. A shared contact only exposes private typing or
+recording for the currently attended participant; a group only exposes its own
+attended replies. The server recording overlay expires after at most two minutes,
+is cleared after synthesis (including text fallback), and resets on a new typing
+phase. It does not indicate that the contact is listening to incoming audio.
+
+Requires migration `0062_recording_presence.sql`. Static API/web typechecking,
+Swift syntax parsing and SQL compilation do not validate visible or audible behavior.
+Device/browser verification remains pending: text/voice/fallback replies, multiple
+group contacts, navigation back to the list during synthesis, reopening an empty
+chat, refresh, failed/offline refresh and recovery, revoked access and switching
+accounts. Very fast synthesis may complete between polling ticks.

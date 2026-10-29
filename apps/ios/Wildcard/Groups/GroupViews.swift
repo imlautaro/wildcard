@@ -330,7 +330,7 @@ struct GroupChatView: View {
                     ForEach((store.snapshot?.replies ?? []).filter { $0.taskID == nil && $0.status == "running" && $0.isTyping == 1 }) { reply in
                         HStack(spacing: 6) {
                             Text(reply.name).manrope(.caption, weight: .semibold)
-                            ReplyTypingIndicator()
+                            ReplyTypingIndicator(recording: reply.replyActivity == "recording")
                         }
                     }
                     Color.clear.frame(height: 1)

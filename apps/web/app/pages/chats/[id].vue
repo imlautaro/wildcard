@@ -311,7 +311,7 @@ onBeforeUnmount(() => {
             <div class="work-status" role="status"><span class="typing-dots" aria-hidden="true"><span /><span /><span /></span>{{ workLabel(item.turn) }}</div>
           </div>
           <div v-else-if="item.kind === 'status' && item.turn.status === 'running' && state.presence?.status === 'typing'" class="bubble-row incoming">
-            <div class="typing" aria-label="Typing"><span /><span /><span /></div>
+            <div class="typing" role="status">{{ state.presence?.isRecording ? 'Recording' : 'Typing' }}<span /><span /><span /></div>
           </div>
           <div v-else-if="item.kind === 'status' && item.turn.status === 'failed' && !state.turns.some((later) => later.sequence > item.turn.sequence && later.assistantText !== null)" class="status-line">
             {{ failureText(item.turn) }}

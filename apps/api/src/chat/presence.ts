@@ -2,6 +2,7 @@ import type { ChatJob } from './data';
 
 export type ContactPresence = {
   status: 'offline' | 'online' | 'typing';
+  isRecording?: boolean;
   lastSeenAt: number | null;
   expiresAt: number | null;
 };
@@ -18,16 +19,13 @@ export async function readPresence(db: D1Database, contactID: string, userID: st
   await db.prepare(`UPDATE agent_presence SET status = 'offline', last_seen_at = expires_at, expires_at = NULL
     WHERE agent_id = (SELECT agent_id FROM contact WHERE id = ?1 AND user_id = ?2) AND expires_at <= ?3`)
     .bind(contactID, userID, Date.now()).run();
-  // Typing belongs to the attended conversation (or a follow-up being written
-  // there); connectivity remains global.
-  return await db.prepare(`SELECT CASE WHEN p.status = 'typing' AND p.typing_contact_id IS NOT ?1 AND NOT EXISTS (
-      SELECT 1 FROM agent_attention a JOIN chat_turn t ON t.id = a.turn_id AND t.attempt = a.attempt
-      WHERE a.agent_id = p.agent_id AND t.contact_id = ?1 AND t.user_id = ?2 AND t.status = 'running'
-    ) THEN 'online' ELSE p.status END AS status,
+  const presence = await db.prepare(`SELECT ${privatePresenceStatus('c')} AS status,
     p.last_seen_at AS lastSeenAt, p.expires_at AS expiresAt
     FROM agent_presence p JOIN contact c ON c.agent_id = p.agent_id
     WHERE c.id = ?1 AND c.user_id = ?2`)
-    .bind(contactID, userID).first<ContactPresence>() ?? { status: 'offline', lastSeenAt: null, expiresAt: null };
+    .bind(contactID, userID).first<{ status: ContactPresence['status'] | 'recording'; lastSeenAt: number | null; expiresAt: number | null }>();
+  if (!presence) return { status: 'offline', lastSeenAt: null, expiresAt: null };
+  return { ...presence, status: presence.status === 'recording' ? 'typing' : presence.status, isRecording: presence.status === 'recording' };
 }
 
 // Connect without interrupting typing or shortening a longer lease.
@@ -53,10 +51,20 @@ export async function markRead(db: D1Database, job: ChatJob) {
 }
 
 export async function markTyping(db: D1Database, job: ChatJob) {
-  await db.prepare(`UPDATE agent_presence SET status = 'typing', typing_contact_id = NULL, expires_at = ?1
+  await db.prepare(`UPDATE agent_presence SET status = 'typing', recording_until = NULL, typing_contact_id = NULL, expires_at = ?1
     WHERE EXISTS (SELECT 1 FROM chat_turn t JOIN contact c ON c.id = t.contact_id
       JOIN agent_attention a ON a.agent_id = c.agent_id AND a.turn_id = t.id AND a.attempt = t.attempt
       WHERE t.id = ?2 AND t.attempt = ?3 AND t.status = 'running' AND c.agent_id = agent_presence.agent_id
         AND t.read_at IS NOT NULL)`)
     .bind(Date.now() + 900_000, job.turnID, job.attempt).run();
+}
+
+// Database time keeps list and detail reads consistent without extra per-row requests.
+export function privatePresenceStatus(contact: string) {
+  return `CASE WHEN p.expires_at <= unixepoch('subsec') * 1000 OR p.status = 'offline' THEN 'offline'
+    WHEN p.status = 'typing' AND (p.typing_contact_id = ${contact}.id OR EXISTS (
+      SELECT 1 FROM agent_attention a JOIN chat_turn t ON t.id = a.turn_id AND t.attempt = a.attempt
+      WHERE a.agent_id = p.agent_id AND t.contact_id = ${contact}.id AND t.user_id = ${contact}.user_id AND t.status = 'running'
+    )) THEN CASE WHEN p.recording_until > unixepoch('subsec') * 1000 THEN 'recording' ELSE 'typing' END
+    ELSE 'online' END`;
 }

@@ -36,9 +36,14 @@ export function voiceSuitable(text: string) {
 
 // Speak `text` with the agent's voice, store the MP3 and return its attachment.
 // Any failure returns null so the caller publishes the message as text.
-export async function speakMessage(env: Env, input: { agentID: string; text: string; key: string }): Promise<VoiceAttachment | null> {
+export async function speakMessage(env: Env, input: { agentID: string; turnID: string; attempt: number; text: string; key: string }): Promise<VoiceAttachment | null> {
+  const recordingUntil = Date.now() + 120_000;
   try {
     if (!await voiceRepliesAvailable(env) || !voiceSuitable(input.text)) return null;
+    await env.DB.prepare(`UPDATE agent_presence SET recording_until = ?1
+      WHERE agent_id = ?2 AND status = 'typing' AND EXISTS (
+        SELECT 1 FROM agent_attention WHERE agent_id = ?2 AND turn_id = ?3 AND attempt = ?4)`)
+      .bind(recordingUntil, input.agentID, input.turnID, input.attempt).run();
     const existing = await env.CONTACT_PHOTOS.head(input.key);
     const bytes = existing ? Buffer.from(await (await env.CONTACT_PHOTOS.get(input.key))!.arrayBuffer()) : await synthesize(env, input.agentID, input.text);
     if (!bytes) return null;
@@ -52,6 +57,11 @@ export async function speakMessage(env: Env, input: { agentID: string; text: str
   } catch {
     console.error(JSON.stringify({ event: 'voice_reply_skipped' }));
     return null;
+  } finally {
+    await env.DB.prepare('UPDATE agent_presence SET recording_until = NULL WHERE agent_id = ? AND recording_until = ?')
+      .bind(input.agentID, recordingUntil).run().catch(() => {
+        console.error(JSON.stringify({ event: 'recording_presence_cleanup_deferred' }));
+      });
   }
 }
 

@@ -210,7 +210,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         const turn = await activeTurn(env.DB, job);
         if (!turn || turn.status !== 'running' || !await env.DB.prepare('SELECT 1 FROM contact WHERE id = ? AND voice_messages_enabled = 1').bind(turn.contactID).first()) return null;
         const agent = await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ?').bind(turn.contactID).first<{ id: string }>();
-        return agent ? speakMessage(env, { agentID: agent.id, text: messages[index],
+        return agent ? speakMessage(env, { turnID: job.turnID, attempt: job.attempt, agentID: agent.id, text: messages[index],
           key: `attachments/${turn.userID}/${turn.contactID}/${job.turnID}/voice-a${job.attempt}-${index}` }) : null;
       }).catch(() => null) : null;
       const more = await step.do(`${prefix}-publish-message-${index}`, async () => {

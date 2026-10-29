@@ -289,6 +289,14 @@ function applyRead(kind: 'contact' | 'group', id: string, sequence: number, unre
 }
 
 function contactRow(contact: Contact): ChatRow | null {
+  const row = contactMessageRow(contact);
+  if (row && (contact.replyActivity === 'typing' || contact.replyActivity === 'recording')) {
+    return { ...row, preview: contact.replyActivity === 'recording' ? 'Recording...' : 'Typing...', own: false, sender: null, sending: false, receiptState: null };
+  }
+  return row;
+}
+
+function contactMessageRow(contact: Contact): ChatRow | null {
   const cached = peekConversation(contact.id);
   const base = {
     kind: 'contact' as const, id: contact.id, name: contact.name, photoPath: contactPhotoPath(contact),
@@ -338,9 +346,9 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   }
   const own = !!userID && userID === me;
   return {
-    kind: 'group', id: group.id, name: group.name, photoPath: groupPhotoPath(group), preview,
-    sender: own ? 'You' : sender, at, unread: Math.max(0, group.unreadCount ?? 0),
-    own, sending, readAt: null, receiptState: receiptState ?? 'sent',
+    kind: 'group', id: group.id, name: group.name, photoPath: groupPhotoPath(group), preview: group.replyActivity ?? preview,
+    sender: group.replyActivity ? null : own ? 'You' : sender, at, unread: Math.max(0, group.unreadCount ?? 0),
+    own: group.replyActivity ? false : own, sending, readAt: null, receiptState: receiptState ?? 'sent',
   };
 }
 
