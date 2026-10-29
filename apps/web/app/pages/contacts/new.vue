@@ -15,6 +15,16 @@ async function poll() {
   if (!disposed) timer = setTimeout(poll, running.value ? 3000 : 10000);
 }
 onMounted(() => { void poll(); });
+// A completed generation opens the new contact's chat, like manual creation.
+watch(generation.created, async (id) => {
+  if (!id) return;
+  generation.created.value = null;
+  try {
+    const { contact } = await api<{ contact: Contact }>(`contacts/${id}`);
+    chats.upsertContact(contact);
+  } catch { /* The chat page loads the contact itself. */ }
+  await navigateTo(`/chats/${id}`, { replace: true });
+}, { immediate: true });
 onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
 const name = ref('');
 const busy = ref(false);
@@ -53,7 +63,7 @@ async function create() {
       </form>
       <form v-else @submit.prevent="generation.submit">
         <p class="group-footer">These fields describe your bot. Your saved onboarding preferences are reused without asking for your details again. Generation uses Meta Standard processing.</p>
-        <fieldset :disabled="generation.busy.value || !!job && job.status !== 'complete'" style="border: 0; padding: 0" v-if="options">
+        <fieldset :disabled="generation.busy.value || !!job" style="border: 0; padding: 0" v-if="options">
           <AppSelect v-model="draft.style" label="Visual style" :options="options.styles.map(o => ({ value: o.code, label: o.name }))" />
           <AppSelect v-model="draft.purpose" label="Relationship" :options="[{ value: 'friends', label: 'Friend' }, { value: 'study', label: 'Study partner' }, { value: 'work', label: 'Work colleague' }]" />
           <label class="field">Age<input v-model.number="draft.age" type="number" min="18" max="120" step="1" required></label>
@@ -63,13 +73,9 @@ async function create() {
         </fieldset>
         <p v-else class="group-footer">Loading options…</p>
         <p v-if="running" class="group-footer" role="status">Creating your contact and portrait… You can close the app and return later.</p>
-        <p v-if="job?.status === 'failed'" class="notice">Could not finish generation. Retry to reuse the saved identity and portrait.</p>
+        <p v-if="job?.status === 'failed'" class="notice">Could not finish creating the contact. Create again to reuse the saved identity and portrait.</p>
         <p v-if="generation.error.value" class="notice">{{ generation.error.value }} <button type="button" class="link-button" @click="generation.refresh">Refresh</button></p>
-        <template v-if="job?.status === 'complete'">
-          <NuxtLink v-if="job.contactID" class="button block" :to="`/chats/${job.contactID}`">Open generated contact</NuxtLink>
-          <button type="button" class="button-row" @click="generation.another">Create another contact</button>
-        </template>
-        <button v-else type="submit" class="button block" :disabled="!ready || generation.busy.value || running">{{ job?.status === 'failed' ? 'Retry generation' : 'Generate contact' }}</button>
+        <button type="submit" class="button block" :disabled="!ready || generation.busy.value || running">Create Contact</button>
       </form>
     </div>
   </div>

@@ -4,14 +4,24 @@ const draft = reactive(initial());
 const job = ref<ContactGenerationJob | null>(null);
 const busy = ref(false);
 const error = ref<string | null>(null);
+// The contact a job submitted or watched in this session just created; the form opens its chat.
+const created = ref<string | null>(null);
 let initialized = false, revision = 0;
 let request: Promise<void> | null = null;
 let submissionID: string | null = null;
 let dismissedID: string | null = null;
 registerSessionReset(() => {
   revision++; request = null; initialized = false; submissionID = null; dismissedID = null;
-  Object.assign(draft, initial()); job.value = null; busy.value = false; error.value = null;
+  Object.assign(draft, initial()); job.value = null; busy.value = false; error.value = null; created.value = null;
 });
+// A finished job is never a form state: it opens the new contact when this session
+// submitted or watched it, and otherwise leaves a fresh form for the next contact.
+function adopt(fetched: ContactGenerationJob | null) {
+  if (!fetched || fetched.id === dismissedID) { job.value = null; return; }
+  if (fetched.status !== 'complete') { job.value = fetched; return; }
+  if (job.value?.id === fetched.id || submissionID === fetched.id) created.value = fetched.contactID ?? null;
+  dismissedID = fetched.id; job.value = null; submissionID = null;
+}
 export function useContactGeneration() {
   const onboarding = useOnboarding();
   async function refresh() {
@@ -28,13 +38,8 @@ export function useContactGeneration() {
           if (saved) Object.assign(draft, { language: saved.language, country: saved.country, style: saved.style });
           initialized = true;
         }
-        job.value = result.job?.id === dismissedID ? null : result.job;
-        if (result.job && result.job.status !== 'complete') { Object.assign(draft, result.job.input); submissionID = result.job.id; }
-        if (job.value?.status === 'complete' && job.value.contactID) {
-          const { contact } = await api<{ contact: import('~/utils/types').Contact }>(`contacts/${job.value.contactID}`);
-          if (current !== revision) return;
-          useChats().upsertContact(contact);
-        }
+        adopt(result.job);
+        if (job.value) { Object.assign(draft, job.value.input); submissionID = job.value.id; }
         error.value = null;
       } catch (failure) { if (current === revision) error.value = errorMessage(failure); }
       finally { if (current === revision) request = null; }
@@ -48,10 +53,9 @@ export function useContactGeneration() {
     submissionID ??= crypto.randomUUID();
     try {
       const result = await api<{ job: ContactGenerationJob }>('contacts/generation', { json: { id: submissionID, input: { ...draft } } });
-      if (current === revision) job.value = result.job?.id === dismissedID ? null : result.job;
+      if (current === revision) adopt(result.job);
     } catch (failure) { if (current === revision) error.value = errorMessage(failure); }
     finally { if (current === revision) busy.value = false; }
   }
-  function another() { revision++; request = null; dismissedID = job.value?.id ?? null; submissionID = null; job.value = null; }
-  return { draft, job: readonly(job), busy: readonly(busy), error: readonly(error), options: onboarding.options, refresh, submit, another };
+  return { draft, job: readonly(job), busy: readonly(busy), error: readonly(error), created, options: onboarding.options, refresh, submit };
 }

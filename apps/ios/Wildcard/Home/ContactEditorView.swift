@@ -12,11 +12,14 @@ struct ContactEditorView: View {
     @State private var photoChanged = false
     @State private var editingIdentity = false
     @State private var creationMode = "manual"
+    /// Opens the chat with a contact this editor created.
+    private let onCreated: ((String) -> Void)?
     private var canEdit: Bool { contactID.flatMap { contacts.contact(id: $0) }?.canManage ?? true }
 
-    init(contact: Contact? = nil) {
+    init(contact: Contact? = nil, onCreated: ((String) -> Void)? = nil) {
         _contactID = State(initialValue: contact?.id)
         _name = State(initialValue: contact?.name ?? "")
+        self.onCreated = onCreated
     }
 
     var body: some View {
@@ -30,7 +33,7 @@ struct ContactEditorView: View {
                 }
             }
             if contactID == nil && creationMode == "ai" {
-                ContactGenerationSection()
+                ContactGenerationSection { id in onCreated?(id) ?? dismiss() }
             }
             if contactID != nil || creationMode == "manual" {
             Section {
@@ -115,7 +118,9 @@ struct ContactEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(saving)
         .toolbar {
-            if canEdit && (contactID != nil || creationMode == "manual") {
+            if contactID == nil && creationMode == "ai" {
+                ToolbarItem(placement: .confirmationAction) { ContactGenerationCreateButton() }
+            } else if canEdit {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(contactID == nil ? "Create" : "Save", action: save)
                         .disabled(saving || contacts.isMutating || editingIdentity)
@@ -126,6 +131,7 @@ struct ContactEditorView: View {
 
     private func save() {
         guard canEdit, !saving, !contacts.isMutating, !editingIdentity else { return }
+        let creating = contactID == nil
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.unicodeScalars.count <= 100,
               !trimmed.unicodeScalars.contains(where: { $0.value < 0x20 || (0x7f...0x9f).contains($0.value) }) else {
@@ -147,7 +153,7 @@ struct ContactEditorView: View {
                         return
                     }
                 }
-                dismiss()
+                if creating, let onCreated { onCreated(saved.id) } else { dismiss() }
             } catch is CancellationError {
                 // Navigation/session changes must not report a server error.
             } catch {

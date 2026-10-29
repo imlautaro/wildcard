@@ -68,12 +68,12 @@ alphabetically using localized name comparison, with IDs breaking equal-name tie
 Contacts automatically loads remaining pages, re-sorting as they arrive; errors
 retain loaded rows and offer Retry. Tap a contact to open its chat and return to
 Home when navigating back. Swipe and context-menu Edit/Delete remain available
-in both lists. Choose **Create contact**, enter a name, and tap Create to return
-to Contacts. **Join Shared Contact** accepts a code from a creator; it requires
-sharing consent and opens a new empty private chat. The person-plus button in a creator’s chat opens sharing/access management, including invitations by an existing account’s email. Recipients open **+ → Contacts → Contact Invitations** to accept or decline requests; no mailbox email is sent. Swipe a row for Edit or Delete; a context
+in both lists. Choose **Create contact**, enter a name, and tap Create to open
+the new contact's chat (iOS and web). **Join Shared Contact** accepts a code from a creator; it requires
+sharing consent and opens a new empty private chat. **Share contact** in a creator’s chat (the three-dot menu on iOS) opens sharing/access management, including invitations by an existing account’s email. Recipients open **+ → Contacts → Contact Invitations** to accept or decline requests; no mailbox email is sent. Swipe a row for Edit or Delete; a context
 menu offers the same actions. Edit pushes the editor on the existing shared
 navigation stack. Deletion requires confirmation. Successful mutations update the
-list from the server response; creation dismisses the editor. Failed saves retain
+list from the server response; creation replaces the editor with the new chat. Failed saves retain
 the draft and show an error. A failed delete leaves the row available for retry.
 Deleting a contact already removed on another client removes its stale local row.
 

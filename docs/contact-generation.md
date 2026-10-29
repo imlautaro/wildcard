@@ -1,7 +1,9 @@
 # AI contact creation
 
-Both clients offer **Manually** and **Generate with AI** in Create contact. Manual
-creation keeps the existing name/photo flow. AI creation asks only about the bot:
+Both clients offer **Manually** and **Generate with AI** in Create contact. Both modes
+are one form with the same **Create** action; creating opens the new contact's chat
+(iOS replaces the add-contact screen with it). Manual creation keeps the existing
+name/photo flow. AI creation asks only about the bot:
 visual style (Cartoon, Anime, 3D animated movie, Realistic people), relationship
 (Friend, Study partner, Work colleague), integer age 18–120, gender, preferred
 language and country. Language/country/style initially reuse the saved onboarding
@@ -87,8 +89,11 @@ submission ID: `AuthStore.contactGeneration` on iOS, `useContactGeneration` on w
 Reopens render cached data immediately, then deduplicate/revalidate in the
 background; polling is 3 seconds during generation and 10 seconds otherwise.
 Unsubmitted fields stay in memory only. A submitted job survives process restart
-in D1; creating another contact clears the completed selection in memory and uses
-a fresh ID. The server's single-active-job constraint arbitrates other devices.
+in D1. While it runs, the form shows progress and stays locked. A completed job is
+never shown as a form state: when this session submitted or watched it, the form opens
+the new contact's chat; otherwise (for example after a restart) the form starts fresh
+with a new submission ID. A failed job keeps its inputs, and **Create** retries the same
+job. The server's single-active-job constraint arbitrates other devices.
 Transient failures retain data, offer Refresh/Retry, and revision counters reject
 responses from before a mutation/account reset. Confirmed session loss/account
 switch clears all creation data. The completed contact refreshes the existing

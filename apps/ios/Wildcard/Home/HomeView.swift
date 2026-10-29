@@ -261,7 +261,7 @@ struct HomeView: View {
             .navigationTitle("Contacts")
             .navigationBarTitleDisplayMode(.inline)
         case .addContact:
-            ContactEditorView()
+            ContactEditorView { id in destinations = [.contact(id)] }
         case .joinContact:
             JoinSharedContactView { id in destinations = [.contact(id)] }
         case .contactInvitations:
