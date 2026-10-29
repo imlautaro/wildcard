@@ -16,6 +16,7 @@ apps/
     app/                     # Pages, components, session-owned stores
     server/api/v1/           # Proxy to the API Worker through a service binding
     wrangler.jsonc           # Web Worker configuration
+  admin/                     # Nuxt 4 super admin panel Worker (registration, users, flags)
   ios/
     Wildcard/                # SwiftUI app, auth client, and Icon Composer icon
     Wildcard.xcodeproj/       # Xcode project
@@ -27,6 +28,7 @@ docs/
   infrastructure.md          # Reproducible provisioning and automatic releases
   authentication.md          # Auth contract, session behavior, and limitations
   web.md                     # Web app architecture, features, and limitations
+  admin.md                   # Super admin panel, account deletion, and runtime flags
   mini-apps.md               # Contact-built native mini apps over MCP tools
   tasks.md                   # Shared to-do lists and contact work turns
   persistent-work.md         # Task progress, retained budgets and pause/resume
@@ -147,6 +149,20 @@ available on the web yet. With the API running locally:
 ```sh
 npm run dev:web        # http://localhost:3000
 npm run typecheck:web
+```
+
+## Super admin panel
+
+The optional [admin panel](docs/admin.md) is a separate Nuxt 4 Worker,
+`wildcard-admin`. It reaches a private `AdminAPI` entrypoint of the API through a
+service binding. Super admins, listed by user ID in `SUPER_ADMIN_USER_IDS`, can open
+or close registration, list accounts with their contact counts, delete an account
+with all of its data, and change runtime flags without a release. See
+[infrastructure](docs/infrastructure.md#admin-worker) for provisioning.
+
+```sh
+npm run dev:admin      # http://localhost:3001 (needs ADMIN_LOCAL_ROUTES=true locally)
+npm run typecheck:admin
 ```
 
 ## Group conversations

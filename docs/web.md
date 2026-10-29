@@ -5,8 +5,9 @@ with the same limits and permissions as iOS. Failed grounding checks are reporte
 separately from pending or uncertain operations. Document cards show **Web research**
 and cited-source counts; the full-screen viewer expands the original query, check
 date and cited/retrieved source links. Both clients accept source metadata from
-provider annotations or report Markdown links matched exactly to completed search
-hits; unlinked search hits remain retrieved-only. Provenance belongs to revision 1 even after
+provider annotations or report Markdown/bare links matched to completed search
+hits. Only a default-port HTTP-to-HTTPS upgrade is allowed beyond exact URL
+matching; original hit URLs remain in provenance. Unlinked hits remain retrieved-only. Provenance belongs to revision 1 even after
 edits. It shares the existing document caches and five-second refresh, with no
 search-on-open or separate download. Source links open on a human click. Ordinary bot,
 scheduled and connector-isolated turns cannot research. Assigned tasks may use one
@@ -382,6 +383,11 @@ return; the old callback already consumed its browser binding. Both clients use
 this shared API fix. See [OAuth lifecycle](connectors.md#oauth-setup-and-lifecycle).
 
 ## Account model and closed registration
+
+Registration reopened on October 28, 2026. Super admins can close it again at
+runtime from the [admin panel](admin.md). While it is closed, the web sign-up
+form shows the same message as iOS, mapped from HTTP 403 on
+`auth/sign-up/email` in `utils/api.ts`.
 
 Both clients now sign in existing accounts only. Account offers Muse Spark 1.3 Standard/Contributor, with the same explicit Contributor acceptance and disclosure on iOS/web. The existing session profile caches the preference and web revalidates it in the background on Account mount. Model saves update cached profile/list/group flags and fence older reads without clearing drafts or pending sends.
 

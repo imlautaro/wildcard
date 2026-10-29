@@ -6,8 +6,8 @@ import { contactAccess, groupAccess } from './mcp/access';
 import groups from './groups/routes';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { createAuth } from './lib/auth';
-import { admitAuthRequest } from './lib/auth-rate-limit';
+import { authHandler } from './lib/auth-routes';
+import admin from './admin/routes';
 import me from './routes/me';
 import contacts from './routes/contacts';
 import push from './routes/push';
@@ -27,16 +27,17 @@ app.use('/api/v1/*', async (c, next) => {
 });
 app.use('/api/v1/auth/*', bodyLimit({ maxSize: 16 * 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }));
 
-app.on(['GET', 'POST'], '/api/v1/auth/*', async (c) => {
-  const max = authEndpoints.get(`${c.req.method} ${c.req.path}`);
-  if (!max) return c.json({ error: 'Not found' }, 404);
-  const admission = await admitAuthRequest(c.env.DB, c.req.header('CF-Connecting-IP') ?? 'local', c.req.path, max);
-  if (!admission.allowed) {
-    c.header('Retry-After', String(admission.retryAfter));
-    return c.json({ error: 'Too many attempts. Please try again later.' }, 429);
-  }
-  return createAuth(c.env).handler(c.req.raw);
+app.on(['GET', 'POST'], '/api/v1/auth/*', authHandler(authEndpoints));
+
+// Admin routes are served by the AdminAPI entrypoint (src/admin/app.ts), which only
+// a service binding can reach. `wrangler dev` cannot expose that entrypoint over
+// HTTP, so a local .dev.vars may opt in to mounting them here; never set it in
+// wrangler.jsonc.
+app.use('/api/v1/admin/*', async (c, next) => {
+  if ((c.env as Env & { ADMIN_LOCAL_ROUTES?: string }).ADMIN_LOCAL_ROUTES !== 'true') return c.json({ error: 'Not found' }, 404);
+  await next();
 });
+app.route('/api/v1/admin', admin);
 
 app.route('/api/v1/mcp/oauth', oauthPublic);
 app.route('/api/v1/onboarding', onboarding);

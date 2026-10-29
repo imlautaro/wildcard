@@ -18,6 +18,12 @@ AI_GATEWAY_ID=
 # APNS_TEAM_ID=
 # APNS_TOPIC=
 
+# Local admin panel (docs/admin.md). wrangler dev cannot serve the AdminAPI
+# entrypoint, so this mounts the admin routes on the local public app. Never set it
+# in wrangler.jsonc. Put your local account ID in the roster to sign in.
+# ADMIN_LOCAL_ROUTES=true
+# SUPER_ADMIN_USER_IDS=
+
 # OAuth requires a public HTTPS API in BETTER_AUTH_URL and a public HTTPS web origin.
 # Public/Bearer connections still work with local HTTP; do not put OAuth secrets here.
 # MCP_WEB_ORIGIN=https://your-web-host.example.com

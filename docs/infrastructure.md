@@ -16,6 +16,9 @@
 | Web Worker | `apps/web/wrangler.jsonc`, `wildcard-web` | Nuxt web app and same-origin API proxy; see [Web Worker](#web-worker) |
 | Service binding | `API` → `wildcard-api` | Private web-to-API calls that keep the client IP for rate limits |
 | Workers Builds (web) | Second project on the same repository and branch, root `/` | Automatic web releases |
+| Admin Worker (optional) | `apps/admin/wrangler.jsonc`, `wildcard-admin` | Super admin panel; see [Admin Worker](#admin-worker) |
+| Service binding (admin) | `API` → `wildcard-api`, entrypoint `AdminAPI` | Private admin API, not reachable from the public API origin |
+| Workers Builds (admin, optional) | Third project on the same repository and branch, root `/` | Automatic admin releases |
 
 There are no KV, email service, or staging dependencies. R2 is required for
 [contact profile photos](profile-photos.md). The production bucket was created and verified on October 26, 2026. Chats require
@@ -177,6 +180,57 @@ release never changes the API, its database, or its secrets. API changes must ke
 working for the web client as well as iOS; see [web app](web.md) for the
 endpoints it uses.
 
+## Admin Worker
+
+The [super admin panel](admin.md) is optional and runs as a third Worker,
+`wildcard-admin`, configured in `apps/admin/wrangler.jsonc`. Like the web Worker it
+has no D1, R2, Workflow, Cron or secret. Its only binding is `API`, a service
+binding to the `AdminAPI` named entrypoint exported by `apps/api/src/index.ts`,
+plus `ASSETS` added by Nitro. `npm run build:admin` writes
+`apps/admin/.output/server/wrangler.json`, and the release deploys that file.
+
+The API side needs migration `0059_admin.sql` and the `SUPER_ADMIN_USER_IDS` var
+(comma-separated user IDs, not secret). The var ships empty, so no one has access
+until it is set. Both ship with the API's normal automatic release.
+
+Provisioning, after the API Worker has released a version that exports `AdminAPI`:
+
+1. In `apps/admin/wrangler.jsonc`, replace `account_id`, and also
+   `services[0].service` if your API Worker has another name. Change `name` if
+   `wildcard-admin` is taken.
+2. Create a third Workers Builds project connected to the same repository and
+   production branch: root `/`, build command
+   `npm ci && npm run typecheck:admin && npm run build:admin`, deploy command
+   `npm run release:admin`. Use a credential limited to Workers Scripts edit and
+   account read. Disable preview builds. Optionally set watch paths (`apps/admin/**`,
+   `package.json`, `package-lock.json`, `scripts/release-admin.mjs`), and add
+   `apps/admin/**` to the other projects' excludes.
+3. Push a commit. `scripts/release-admin.mjs` applies the same guards as the web
+   release (Workers Builds only, production branch, clean checkout, HEAD equal to
+   `WORKERS_CI_COMMIT_SHA`) and tags the version with the commit. If the admin
+   build runs before the API release on the same push, the binding may name an
+   entrypoint that doesn't exist yet. Retry the admin build after `wildcard-api`
+   succeeds.
+4. Sign in on the admin origin, copy the user ID that the "Not a super admin"
+   screen shows, add it to `SUPER_ADMIN_USER_IDS`, and push.
+
+Consider limiting the admin origin further with Cloudflare Access in front of
+`wildcard-admin` (optional; not configured in this repository).
+
+Verification: the active `wildcard-admin` version has a `workers/tag` equal to the
+source SHA and lists `API` → `wildcard-api` (entrypoint `AdminAPI`) and `ASSETS`.
+On the public API origin, `GET /api/v1/admin/session` returns 404. On the admin
+origin, an unauthenticated `GET /api/v1/admin/session` returns 401, and
+`/api/v1/me` returns 404 because the proxy does not forward it. Sign-in sets
+`__Host-wildcard_admin_session`. None of this has been verified for this
+installation yet; the third Workers Builds project has not been created.
+
+Rollback: delete or roll back the `wildcard-admin` Worker. It stores no data.
+Clearing `SUPER_ADMIN_USER_IDS` and releasing the API revokes access without
+touching the panel. Pre-0059 API code ignores `app_setting` and `admin_event`, so
+an API rollback reopens registration (the old code has no gate) and keeps the
+tables. To reset a setting, delete its row through the normal migration process.
+
 ## Local setup
 
 ```sh
@@ -185,6 +239,7 @@ npm run auth:setup:local
 npm run typecheck
 npm run dev
 npm run dev:web   # optional web app on http://localhost:3000, proxied to the local API
+npm run dev:admin # optional admin panel on http://localhost:3001; needs ADMIN_LOCAL_ROUTES=true in .dev.vars
 ```
 
 Local setup generates an ignored, owner-only `apps/api/.dev.vars` containing a
@@ -1922,6 +1977,17 @@ Rollback uses another automatic release. To stop checks without code changes, re
 monitors in the task editors (or pause the tasks). Keep the additive columns/tables;
 pre-0056 code ignores them, so returning to it silently stops all checks and change
 turns. Change turns already admitted can still finish and incur inference cost.
+
+### Admin settings and audit (migration 0059)
+
+Apply additive `0059_admin.sql` after 0058. It creates `app_setting` (runtime
+settings, no foreign keys) and `admin_event` (append-only audit, plain IDs so
+entries survive account deletion). No row means every setting uses its code
+default, so registration stays open until a super admin closes it. The new
+`SUPER_ADMIN_USER_IDS` var ships empty. Static validation: every new statement
+prepared on local workerd D1, plus a seeded account-deletion cascade. Live
+verification is listed in [admin](admin.md#verification-status). Rollback: see
+[Admin Worker](#admin-worker).
 
 ### Task collaboration (migration 0058)
 

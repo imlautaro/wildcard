@@ -259,6 +259,10 @@ struct AuthAPI: Sendable {
                 default: break
                 }
             }
+            // Super admins can close registration at runtime (docs/admin.md).
+            if path == "auth/sign-up/email", response.statusCode == 403 {
+                throw Failure.rejected("New accounts are not being accepted right now. Existing accounts can still sign in.")
+            }
             switch response.statusCode {
             case 401: throw Failure.rejected("Incorrect email or password.")
             case 429: throw Failure.rejected("Too many attempts. Please wait a minute and try again.")

@@ -162,6 +162,15 @@ and profile mutations include `user.onboardingRequired`. Migration 0041 exempts
 existing accounts and requires setup for future accounts. Clients reload `/me`
 after authentication instead of trusting Better Auth's narrower response shape.
 
+Super admins can close registration at runtime from the [admin panel](admin.md)
+(`registration_enabled`, no release needed). While it is closed, sign-up returns
+HTTP 403 `REGISTRATION_CLOSED` after the per-IP admission check, and both clients
+show "New accounts are not being accepted right now. Existing accounts can still
+sign in." The create-account option stays visible, because the clients don't
+read settings yet. Sign-in is never affected. Super admins can also delete
+accounts; see [deleting an account](admin.md#deleting-an-account) for what the
+cascade removes.
+
 Account includes a Standard/Contributor selector with explicit Contributor
 acceptance. `GET /me` and profile mutations include `user.chatModel`;
 `PUT /me/model` saves the authenticated account only. See [model settings](model-settings.md)

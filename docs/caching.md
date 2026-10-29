@@ -1053,3 +1053,13 @@ revocation and reassignment remains pending. See [page monitors](monitors.md).
 Task collaboration (0058): deliverable title, revision rounds and feedback travel in
 the same board snapshot; document titles follow the board's refresh, not the document
 cache. No new cache or polling.
+
+## Super admin panel
+
+`apps/admin` keeps session-owned, in-memory caches for the overview, the settings
+list and the current account search, with background revalidation on navigation,
+cached content kept through transient failures, revision counters that reject late
+responses, invalidation after account deletion and setting changes, and a full reset
+on sign-out or session expiry. Nothing is persisted in the browser. The API reads
+runtime settings from D1 on every use, with no isolate cache. Details:
+[admin panel caching](admin.md#panel-caching). Not verified in a browser.

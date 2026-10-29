@@ -15,12 +15,22 @@ import { dispatchSchedules } from './schedules/dispatch';
 import { expirePresence } from './chat/presence';
 import { deliverPush } from './push/delivery';
 import app from './app';
+import adminApp from './admin/app';
+import { WorkerEntrypoint } from 'cloudflare:workers';
 import { recoverChats } from './chat/dispatch';
 import { prunePersonalityEvents } from './personality/engine';
 
 export { OnboardingWorkflow } from './onboarding/workflow';
 
 export { ChatWorkflow } from './chat/workflow';
+
+// Admin API for apps/admin. A named entrypoint is reachable only through a
+// service binding that names it, never from the public workers.dev origin.
+export class AdminAPI extends WorkerEntrypoint<Env> {
+  override fetch(request: Request) {
+    return adminApp.fetch(request, this.env, this.ctx);
+  }
+}
 
 export default {
   fetch: app.fetch,

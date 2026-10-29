@@ -28,7 +28,9 @@
     "META_CHAT_MODEL": "muse-spark-1.3",
     "AI_GATEWAY_ID": "",
     "WEB_RESEARCH_ENABLED": "true",
-    "SEMANTIC_MEMORY_ENABLED": "false"
+    "SEMANTIC_MEMORY_ENABLED": "false",
+    // Comma-separated user IDs allowed into apps/admin. Not secret; see docs/admin.md.
+    "SUPER_ADMIN_USER_IDS": ""
   },
   "d1_databases": [
     {

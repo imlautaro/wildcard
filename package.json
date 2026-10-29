@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "apps/api",
-    "apps/web"
+    "apps/web",
+    "apps/admin"
   ],
   "engines": {
     "node": ">=24"
@@ -11,13 +12,17 @@
   "scripts": {
     "dev": "npm run dev --workspace @wildcard/api",
     "dev:web": "npm run dev --workspace @wildcard/web",
+    "dev:admin": "npm run dev --workspace @wildcard/admin",
     "typecheck": "npm run typecheck --workspace @wildcard/api",
     "typecheck:web": "npm run typecheck --workspace @wildcard/web",
+    "typecheck:admin": "npm run typecheck --workspace @wildcard/admin",
     "build": "npm run build --workspace @wildcard/api",
     "build:web": "npm run build --workspace @wildcard/web",
+    "build:admin": "npm run build --workspace @wildcard/admin",
     "ios": "open apps/ios/Wildcard.xcodeproj",
     "release:ci": "node scripts/release-worker.mjs",
     "release:web": "node scripts/release-web.mjs",
+    "release:admin": "node scripts/release-admin.mjs",
     "infra:provision": "node scripts/provision-d1.mjs",
     "db:migrate:local": "npm run db:migrate:local --workspace @wildcard/api",
     "db:migrate:remote": "npm run db:migrate:remote --workspace @wildcard/api",

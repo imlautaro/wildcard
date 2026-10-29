@@ -67,6 +67,8 @@ function failureMessage(path: string, method: string, status: number, body: unkn
     if (status === 409) return 'A reply is already in progress or the conversation changed. Refresh and try again.';
     if (status === 503) return 'AI replies are temporarily unavailable. Please try again later.';
   }
+  // Super admins can close registration at runtime (docs/admin.md).
+  if (path === 'auth/sign-up/email' && status === 403) return 'New accounts are not being accepted right now. Existing accounts can still sign in.';
   if (status === 401) return 'Incorrect email or password.';
   if (status === 429) return 'Too many attempts. Please wait a minute and try again.';
   if (status === 400 || status === 422) {
