@@ -1742,6 +1742,17 @@ Verified locally on workerd D1: seeded private app, state and ledger rows surviv
 migration, the foreign keys point at the new `mini_app`, and deleting the contact
 still cascades. Remote migration remains pending until the automatic release.
 
+### Private messages from groups (migration 0051)
+
+Apply additive `0051_group_private_messages.sql` after 0050. It adds the nullable
+`chat_turn.origin_group_id` (set null when the group is deleted) and a partial index
+for the daily budget of private messages that contacts send from groups. No service,
+binding or secret is needed; apply it like every migration (local
+`npm run db:migrate:local`, production only through the automatic commit/push
+release). Rollback: older code ignores the column and still shows those turns as
+ordinary assistant messages. Verified locally on workerd D1: a guarded insert reaches
+a member with a private chat and creates nothing for a member without one.
+
 ### Chat documents (migration 0047)
 
 Apply additive `0047_documents.sql` after 0046. It creates `chat_document` (current

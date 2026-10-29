@@ -339,6 +339,37 @@ recipient, background/foreground, a row scrolled offscreen, long/image/PDF messa
 retry, older pages, join/leave/removal and account switching. Confirm no premature
 aggregate check, no Home preview marking read and no claims of push delivery.
 
+## Private messages from a group
+
+A contact in a group can continue a topic one-to-one, in a member's existing private
+chat with it: when the person asks ("Bot 1, let's talk about this privately") or,
+on its own, when something clearly concerns only that person (personal or sensitive,
+a follow-up only they need, a correction meant for them). This is the reverse of
+[private requests to publish in a group](group-requests.md).
+
+- **Who can receive one.** Only a current human member who already has a private
+  chat with that contact: their own contact or a shared one. The group context marks
+  those members with `privateChat`. Nothing is created for anyone else; the tool
+  returns an error and the contact talks in the group instead. Under the Contributor
+  model the private chat needs the same Contributor consent as any private reply.
+- **What is sent.** `message_privately` (in `groups/private-messages.ts`) inserts one
+  complete, assistant-only turn in that private chat, with the text the contact wrote
+  during its group turn, and sends the normal reply notification. The message must
+  stand on its own and say which group and topic it continues, because the person
+  reads it outside the group. Private memories are not consulted when it is written;
+  the person's next private message runs with the full private context.
+- **When it is offered.** Only on the initial draft of a reply to a human's own
+  message (not bot triggers, directed questions or reviews), with the group decision
+  still required: the contact may say in the group that it wrote privately, or skip.
+- **Limits.** One private message per group reply (`<replyID>:private`, so a replayed
+  Workflow step never sends twice), never while that private chat has a reply queued
+  or running, at most three per contact and twelve per account in a rolling 24 hours
+  (`chat_turn.origin_group_id`, migration 0051). It costs no group energy and does not
+  start an [initiative](initiative.md) episode.
+- **Clients.** Both clients already show assistant-only turns (as for initiative), so
+  iOS and web need no change: the message appears as a normal contact message, with
+  the usual unread count, list preview and, on iOS, push notification.
+
 ## Interface and current limits
 
 Other senders have an avatar beside the bubble and their name inside the bubble,

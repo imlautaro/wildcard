@@ -54,7 +54,10 @@ These are implementation defaults that can be adjusted after product evaluation:
   Review delays accept 30–86400 seconds; publication still enforces these minimum
   gaps, even when the AI requests a shorter review.
 - At most three proactive messages per contact and twelve per account in a rolling
-  24-hour window, including across separate episodes.
+  24-hour window, including across separate episodes. Private messages that a
+  contact sends from a group have their own budget with the same numbers
+  ([groups](groups.md#private-messages-from-a-group)); they do not start or advance
+  an episode, because the episode trigger only follows human turns.
 - No proactive sends between 22:00 and 08:00 in the timezone supplied with the
   latest human turn. Quiet-hour reviews defer to morning. Unknown/invalid timezones
   suspend that episode rather than guessing. Travel changes apply on the next turn.

@@ -128,6 +128,8 @@ export const chatTurn = sqliteTable('chat_turn', {
   nativeContextJson: text('native_context_json'),
   groupRequestId: text('group_request_id').references((): AnySQLiteColumn => groupRequest.id, { onDelete: 'cascade' }),
   taskId: text('task_id').references((): AnySQLiteColumn => task.id, { onDelete: 'set null' }),
+  // A private message a contact sent from this group (migration 0051).
+  originGroupId: text('origin_group_id').references((): AnySQLiteColumn => chatGroup.id, { onDelete: 'set null' }),
   replyToId: text('reply_to_id').references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'set null' }),
   replyToSide: text('reply_to_side'),
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
@@ -159,6 +161,7 @@ export const chatTurn = sqliteTable('chat_turn', {
   index('chat_recovery_idx').on(table.status, table.checkedAt),
   index('chat_user_status_idx').on(table.userId, table.status),
   index('initiative_budget_idx').on(table.userId, table.updatedAt).where(sql`${table.initiativeSourceId} IS NOT NULL`),
+  index('group_private_message_budget_idx').on(table.userId, table.updatedAt).where(sql`${table.originGroupId} IS NOT NULL`),
   uniqueIndex('chat_turn_source_idx').on(table.id, table.contactId, table.userId),
 ]);
 

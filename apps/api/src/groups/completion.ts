@@ -15,6 +15,7 @@ import { groupSourceAccess } from './request-access';
 import { executeTaskTool, taskToolNames, taskTools } from '../tasks/tools';
 import { documentToolNames, documentTools, executeDocumentTool } from '../documents/tools';
 import { executeGroupMiniAppTool, groupMiniAppTools } from '../miniapps/tools';
+import { messagePrivately, privateMessageTool } from './private-messages';
 
 // Bound cost and latency independently of catalog size. A sequential search,
 // schema lookup and execution must not compete for just two model rounds.
@@ -77,7 +78,7 @@ async function modelMessages(env: Env, input: GroupInput, messages: ModelMessage
 
 async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: number): Promise<string> {
   const permitted = [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, ...chatImageTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
-    ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canBuildMiniApps ? groupMiniAppTools : [])];
+    ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canBuildMiniApps ? groupMiniAppTools : []), ...(input.canMessagePrivately ? [privateMessageTool] : [])];
   if (!permitted.some(tool => tool.function.name === call.function.name)) return toolError('This tool is not permitted in this turn.');
   let args: unknown;
   try { args = JSON.parse(call.function.arguments); }
@@ -99,6 +100,10 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
     }
     if (documentToolNames.has(call.function.name)) {
       return await executeDocumentTool(env, { kind: 'group', groupID: input.scope.groupID }, input.scope.agentID, input.scope.reactionJob.turnID, call.function.name, args);
+    }
+    if (call.function.name === privateMessageTool.function.name) {
+      return await messagePrivately(env, { groupID: input.scope.groupID, agentID: input.scope.agentID, turnID: input.scope.reactionJob.turnID,
+        attempt: input.scope.reactionJob.attempt, contributor: input.scope.contributor }, args);
     }
     if (groupMiniAppTools.some(tool => tool.function.name === call.function.name)) {
       return await executeGroupMiniAppTool(env, { groupID: input.scope.groupID, agentID: input.scope.agentID,
@@ -148,7 +153,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
             role: 'system', content: `Evidence-gathering phase. Use tools only when needed for the current trigger. You have ${executionLimit - executions} executions remaining. Do not produce a JSON decision or announce future work. Use real tools to obtain missing evidence. When ready, call finish_group_research alone, including when no tools are needed or data is unavailable. A final tool-free decision phase follows. Do not claim success without receipts.`,
           }]), env.META_CHAT_MODEL, { maxTokens: input.canBuildMiniApps ? 8192 : 4096,
             tools: [...(input.canGenerateImage ? [imageTool] : []), ...groupRetrievalTools, ...chatImageTools, profilePhotoTool, reactionTool, ...(input.scope.mcp ? mcpTools : []),
-              ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canBuildMiniApps ? groupMiniAppTools : []), finishTool] });
+              ...(input.previous ? [] : [...taskTools, ...documentTools]), ...(input.canBuildMiniApps ? groupMiniAppTools : []), ...(input.canMessagePrivately ? [privateMessageTool] : []), finishTool] });
         } catch (error) {
           const code = safeErrorCode(error);
           if (['MODEL_INCOMPLETE_RESPONSE', 'MODEL_INVALID_TOOL_CALLS', 'MODEL_TOOL_TEXT_TOO_LARGE', 'MODEL_EMPTY_RESPONSE'].includes(code)) {

@@ -505,6 +505,13 @@ Private contacts use the same server-side [initiative planner](initiative.md) as
 The faster cadence is shared by the API with iOS: a first review is due after 30 seconds, followed by minimum gaps of two and ten minutes. One-minute Cron scheduling adds jitter; no browser timer or extra requests are introduced. The planner encourages one short greeting continuation and increases space after unanswered messages, preserving all existing limits. No web bundle change is needed for these server timings; histories, polling and cache invalidation are unchanged. New prompt quality remains pending live verification; see [initiative](initiative.md#faster-cadence-validation).
 
 
+### Private messages from groups
+
+A contact can write to a group member in their private chat ([groups](groups.md#private-messages-from-a-group)).
+The message is an ordinary assistant-only turn, so the chat page, list previews and
+unread counts already show it through the existing polling and caches; no web change
+was needed, as on iOS. Browser push remains unavailable.
+
 ### Consecutive private messages
 
 The private composer permits typing during the HTTP submission and another send
