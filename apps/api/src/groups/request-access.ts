@@ -55,11 +55,18 @@ export function groupSourceAccess(reply: string, contributor: boolean) {
   const continuedAccess = `${source} AND source.agent_id IS NOT NULL AND source.request_id IS NULL
     AND requester.share_memory = 1 AND agent.memory_shared = 1
     ${contributor ? 'AND requester.contributor_consent = 1 AND root.contributor_consent = 1' : ''}`;
+  // D1 allows at most five compound SELECT terms (`too many terms in compound SELECT`),
+  // so task notices share the human-author and human-root branches instead of adding
+  // their own: a Tasks message (no sender, task_id set) is authored by its requester.
+  const taskAuthor = (message: string) => `COALESCE(${message}.user_id,
+    CASE WHEN ${message}.task_id IS NOT NULL AND ${message}.agent_id IS NULL THEN ${message}.requester_id END)`;
   return `EXISTS (
     SELECT 1 FROM group_message source JOIN group_member author
-      ON author.group_id = source.group_id AND author.user_id = source.user_id
+      ON author.group_id = source.group_id AND author.user_id = ${taskAuthor('source')}
     WHERE ${source} AND author.share_memory = 1
       ${contributor ? 'AND author.contributor_consent = 1' : ''}
+      AND (source.task_id IS NULL OR EXISTS (SELECT 1 FROM task JOIN task_list ON task_list.id = task.list_id
+        WHERE task.id = source.task_id AND task_list.group_id = source.group_id))
     UNION ALL
     SELECT 1 FROM group_message source JOIN group_request request
       ON request.id = source.request_id AND request.id = source.id AND request.group_id = source.group_id
@@ -67,15 +74,7 @@ export function groupSourceAccess(reply: string, contributor: boolean) {
     WHERE ${source} AND source.user_id IS NULL AND request.status = 'waiting'
       AND request.expires_at > unixepoch() * 1000 AND ${groupRequestAccess('request', contributor)}
     UNION ALL
-    SELECT 1 FROM group_message source JOIN group_member requester
-      ON requester.group_id = source.group_id AND requester.user_id = source.requester_id
-      JOIN task ON task.id = source.task_id JOIN task_list ON task_list.id = task.list_id AND task_list.group_id = source.group_id
-    WHERE ${source} AND source.user_id IS NULL AND source.agent_id IS NULL AND requester.share_memory = 1
-      ${contributor ? 'AND requester.contributor_consent = 1' : ''}
-    UNION ALL
-    SELECT 1 ${continuation} WHERE ${continuedAccess} AND root.user_id = source.requester_id
-    UNION ALL
-    SELECT 1 ${continuation} WHERE ${continuedAccess} AND root.task_id IS NOT NULL AND root.user_id IS NULL AND root.agent_id IS NULL
+    SELECT 1 ${continuation} WHERE ${continuedAccess} AND ${taskAuthor('root')} = source.requester_id
     UNION ALL
     SELECT 1 ${continuation} JOIN group_post post ON post.id = root.id
     WHERE ${continuedAccess} AND post.status = 'published' AND ${groupPublicationAccess('post', contributor)}

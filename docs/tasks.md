@@ -145,6 +145,14 @@ revalidate it every five seconds while it is visible.
 
 ## Verification
 
+D1 rejects compound SELECTs with more than five terms (`too many terms in compound
+SELECT`), unlike local SQLite. The first release added two `UNION ALL` branches to
+`groupSourceAccess`, which made every group reply and **Retry reply** fail in
+production. Task notices now share the existing human-author and human-root
+branches. Every statement of a full two-contact group turn (81) and all task and
+document statements (93) were then prepared on the local workerd D1 engine
+(`wrangler d1 execute --local`), which enforces the production limits.
+
 Static only: API/web TypeScript, full iOS Simulator Swift typecheck, and SQL
 preparation of 43 captured task statements (including the new group access
 branches) against all migrations with D1's expression-depth limit. Not verified:
