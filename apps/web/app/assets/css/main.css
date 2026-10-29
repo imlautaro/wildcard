@@ -505,8 +505,12 @@ details pre {
 .meter.low > span { background: var(--warning); }
 .bubble .meta { display: flex; justify-content: flex-end; gap: 4px; font-size: 11px; color: var(--md-on-surface-variant); margin-top: 2px; white-space: nowrap; }
 .bubble.media { padding: 4px; overflow: hidden; }
-.chat-image-thumbnail { display: block; width: 260px; max-width: 100%; aspect-ratio: 1; padding: 0; overflow: hidden; border-radius: 16px; background: var(--hover); cursor: zoom-in; }
-.chat-image-thumbnail .chat-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Photo bubbles keep a fixed width so a caption wraps under the photo instead of widening the bubble. */
+.bubble.media:has(> .chat-image-thumbnail) { width: 300px; max-width: 100%; }
+.chat-image-thumbnail { display: block; width: 100%; padding: 0; overflow: hidden; border-radius: 16px; background: var(--hover); cursor: zoom-in; }
+/* Full bubble width at the photo's own ratio, clamped to a height range and cropped with cover. */
+.chat-image-thumbnail .chat-image { display: block; width: 100%; height: auto; min-height: 160px; max-height: 360px; object-fit: cover; }
+.chat-image-thumbnail > .center { height: 240px; }
 .bubble.media .caption { padding: 6px 8px 2px; }
 .file { display: flex; align-items: center; gap: 10px; color: inherit; padding: 4px 2px; }
 .file svg { width: 28px; height: 28px; color: var(--md-primary); flex: none; }

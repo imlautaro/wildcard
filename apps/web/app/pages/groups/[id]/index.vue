@@ -102,6 +102,11 @@ function nearBottom() {
   const element = scroller.value;
   return !element || element.scrollHeight - element.scrollTop - element.clientHeight < 120;
 }
+// Photos size themselves when they load, after the first scroll to the bottom;
+// keep the view pinned while they grow if the reader was already at the end.
+let pinned = true;
+function onScroll() { pinned = nearBottom(); }
+function onMediaLoad() { if (pinned) scrollToBottom(); }
 function scrollToBottom() {
   nextTick(() => { if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight; });
 }
@@ -181,7 +186,7 @@ onBeforeUnmount(() => {
     <NuxtLink to="/" class="button secondary">Back to Chats</NuxtLink>
   </div>
   <template v-else>
-    <div ref="scroller" class="messages" aria-live="polite">
+    <div ref="scroller" class="messages" aria-live="polite" @scroll.passive="onScroll" @load.capture="onMediaLoad">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
         <button class="link-button" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</button>

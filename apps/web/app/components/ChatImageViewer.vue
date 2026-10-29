@@ -19,7 +19,7 @@ onBeforeUnmount(() => { dialog.value?.close(); });
     <dialog ref="dialog" class="chat-image-viewer" :aria-label="`Image: ${name}`" @cancel.prevent="emit('close')">
       <div class="image-toolbar">
         <button type="button" class="viewer-button" :aria-pressed="zoomed" @click="toggleZoom">{{ zoomed ? 'Fit image' : 'Zoom in' }}</button>
-        <button type="button" class="viewer-button" autofocus @click="emit('close')">Close</button>
+        <button type="button" class="viewer-button close" aria-label="Close image" autofocus @click="emit('close')"><AppIcon name="close" /></button>
       </div>
       <div ref="viewport" class="image-viewport" @dblclick.prevent="toggleZoom" @click.self="emit('close')">
         <div class="image-stage" :class="{ zoomed }" @click.self="emit('close')">
@@ -35,6 +35,8 @@ onBeforeUnmount(() => { dialog.value?.close(); });
 .chat-image-viewer::backdrop { background: #000; }
 .image-toolbar { position: absolute; top: 0; left: 0; right: 0; z-index: 1; display: flex; justify-content: flex-end; gap: 12px; padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px; background: linear-gradient(#000b, transparent); }
 .viewer-button { min-height: 44px; padding: 8px 16px; border: 1px solid #ffffff80; border-radius: 24px; background: #222; color: #fff; cursor: pointer; }
+.viewer-button.close { width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.viewer-button.close svg { width: 22px; height: 22px; }
 .viewer-button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .image-viewport { width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; }
 .image-stage { display: grid; place-items: center; width: 100%; height: 100%; padding: calc(72px + env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }

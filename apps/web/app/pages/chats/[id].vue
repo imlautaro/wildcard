@@ -119,6 +119,11 @@ function nearBottom() {
   const element = scroller.value;
   return !element || element.scrollHeight - element.scrollTop - element.clientHeight < 120;
 }
+// Photos size themselves when they load, after the first scroll to the bottom;
+// keep the view pinned while they grow if the reader was already at the end.
+let pinned = true;
+function onScroll() { pinned = nearBottom(); }
+function onMediaLoad() { if (pinned) scrollToBottom(); }
 function scrollToBottom() {
   nextTick(() => {
     const element = scroller.value;
@@ -210,7 +215,7 @@ onBeforeUnmount(() => {
         <button v-if="state.remoteDeviceID" type="button" class="link-button danger" @click="revokeRemote">Revoke access</button>
       </div>
     </div>
-    <div ref="scroller" class="messages" aria-live="polite">
+    <div ref="scroller" class="messages" aria-live="polite" @scroll.passive="onScroll" @load.capture="onMediaLoad">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
         <button class="link-button" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</button>
