@@ -799,3 +799,16 @@ input requires a whole age from 1–120; legacy input missing age decodes as emp
 retains its immutable saved setup and can retry. Mutations/account changes reject
 late snapshots, and neither client adds local disk retention of age. Saved plans
 and portraits are reused rather than regenerated after an age-prompt update.
+
+## Delivered reply sequences
+
+Private delivered parts live inside the existing cached ChatTurn on iOS and web.
+Stable part IDs and timestamps render separate bubbles; the aggregate text remains
+available for previews/legacy compatibility. Existing attempt/update-time guards,
+request deduplication, turn pagination and session eviction apply unchanged. No
+unsent model output, client timer or extra disk copy enters these caches. Reopen
+shows the cached delivered prefix immediately and sync appends newer parts; access
+loss and account changes invalidate it with the parent conversation. Group parts
+use normal message rows and the existing group cache. Check reopen/back navigation,
+empty/legacy history, offline recovery, new input during a burst, late responses,
+revocation and account switching as described in [successive messages](reply-messages.md).

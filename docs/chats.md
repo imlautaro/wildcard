@@ -637,3 +637,12 @@ both iOS and web without attaching the image manually. Other people's photos
 are unavailable through private calls. Reads revalidate access and photo version
 before model inference; see [profile photos](profile-photos.md#profile-images-available-to-contacts)
 for image budgets, model processing, caching and pending validation.
+
+## Successive messages
+
+A contact can choose one reply bubble or a short sequence, delivered durably with
+brief pauses. Both iOS and web render each delivered part with its server timestamp
+and keep typing visible while the turn runs. A new human message stops the unsent
+tail. Private reactions, quotes, sounds, unread counts and push retain turn-level
+identity. See [successive contact messages](reply-messages.md) for limits, recovery,
+legacy history, cache behavior and verification steps.

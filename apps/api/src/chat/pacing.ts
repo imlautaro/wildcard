@@ -40,6 +40,7 @@ export function batchStatement(env: Env, job: ChatJob) {
   return env.DB.prepare(`UPDATE chat_turn SET status = 'failed',
     error_code = 'MESSAGE_BATCHED', updated_at = ?3
     WHERE id = ?1 AND attempt = ?2 AND status IN ('queued', 'running') AND tools_started = 0
+    AND assistant_text IS NULL
     AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)
     AND schedule_id IS NULL AND group_request_id IS NULL AND initiative_source_id IS NULL
     AND attachment_json IS NULL AND reply_to_id IS NULL

@@ -433,3 +433,11 @@ have not been reverified.
 ## Initiative replies
 
 Private [initiative](initiative.md) messages reuse completed assistant turns and the transactional APNs outbox, including Markdown-clean previews, contact identity and unread badges. Read acknowledgements suppress queued notifications normally. Disabling initiative prevents future publication and preserves already-published messages and their usual delivery semantics. Browser push remains unavailable; device delivery has not been newly verified.
+
+## Reply sequences
+
+Private multi-message replies keep one unread item, sound and push alert per
+completed response turn, using its joined delivered text. A stopped burst preserves
+its delivered prefix. Group parts use individual message notifications, receipts
+and unread counts. See [successive messages](reply-messages.md) for limitations and
+fictional-data device verification; static checks do not establish APNs delivery.

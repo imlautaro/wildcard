@@ -13,6 +13,12 @@ struct MessageReplyQuote: Codable, Equatable, Sendable {
     let attachment: ChatAttachment?
 }
 
+struct AssistantMessage: Decodable, Equatable, Sendable, Identifiable {
+    let id: String
+    let text: String
+    let createdAt: Double
+}
+
 struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     enum Status: String, Decodable, Sendable { case queued, running, complete, failed }
     let attachment: ChatAttachment?
@@ -23,6 +29,7 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     let id: String
     let userText: String
     let assistantText: String?
+    var assistantMessages: [AssistantMessage]? = nil
     let status: Status
     let attempt: Int
     let createdAt: Double

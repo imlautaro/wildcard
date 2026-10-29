@@ -641,3 +641,12 @@ the current group, current consent and current photo version; no private contact
 or account edit permission is granted. Bytes are loaded inside inference steps,
 while tool checkpoints retain references only. See [profile photos](profile-photos.md#profile-images-available-to-contacts)
 for budgets, revocation behavior and pending functional checks.
+
+## Successive response messages
+
+An ordinary contact response may contain several separately delivered group
+messages. Each has its own receipt/quote/reaction identity and costs one energy
+point. Intervening messages, changed access or exhausted energy stop the remaining
+parts. Directed answers returned privately stay cohesive in one message. Both
+clients reuse their existing group message caches and polling. See
+[successive contact messages](reply-messages.md) for delivery and verification.

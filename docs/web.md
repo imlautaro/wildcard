@@ -529,3 +529,15 @@ input, with no extra local persistence. Legacy saved setups still resume without
 requiring or inventing age; completed photos are preserved. See [onboarding](onboarding.md).
 Pending browser/device checks include numeric input, invalid ages, lower/upper
 bounds, draft restoration, legacy retry and actual model adherence.
+
+## Successive contact messages
+
+Private chats render the delivered `assistantMessages` prefix as stable,
+independently timestamped bubbles, falling back to `assistantText` for old history.
+The existing one-second visible-chat polling and session cache reconcile parts;
+there is no browser timer for delivery. Typing remains visible while the reply
+runs. Mini apps appear only once. Private quotes/reactions and unread/push identity
+remain per response turn, matching iOS. Group parts are ordinary cached messages
+with independent receipts and energy charges. See
+[successive messages](reply-messages.md) for interruption, limits, rollout and
+fictional-data checks on both clients.

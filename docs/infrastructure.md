@@ -1825,3 +1825,26 @@ Rollback can retain these additive JSON fields and existing photos; an older API
 rejects new client requests containing age, so client/API versions must match.
 Use the same commit/push/automatic release process; no remote changes or live
 model calls were performed for the age update.
+
+## Successive contact messages
+
+Apply migration **0042_reply_messages.sql** before publishing the updated API.
+It adds the nullable delivered-message JSON column to the existing D1 `chat_turn`
+table. Keep the existing DB, CHAT_WORKFLOW, Cron and optional APNs configuration;
+there are no new resources, secrets, account replacements or permissions.
+Provision the baseline infrastructure above in an independent account first.
+
+For local development, use `npm run db:migrate:local` (or the complete
+`npm run auth:setup:local` setup). Releases follow the existing automatic process:
+commit and push the intended source, let Workers Builds apply migrations and
+publish, then verify the deployed source commit and pending migration list. Never
+apply a manual deployment as a workaround. This change has not been migrated or
+published remotely during implementation.
+
+The migration is additive. Retain its column on rollback: old code and clients
+continue using joined `assistant_text`; old rows render as a single message in new
+clients. Stop/drain in-flight new Workflows before rolling code back, since older
+code cannot resume a partially published burst safely. Verify actual single and
+multiple-message inference and client delivery using fictional data after release;
+static type/SQL checks do not establish provider JSON support or device behavior.
+See [successive messages](reply-messages.md) for the delivery and cache contracts.

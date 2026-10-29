@@ -106,13 +106,13 @@ struct ChatView: View {
                             .messageHighlight(highlightedMessage == "\(turn.id)/user")
                             .id("\(turn.id)/user")
                         }
-                        if item.kind == .assistant, let reply = turn.assistantText {
-                            MessageBubbleView(text: reply, sentAt: turn.updatedAt, fromUser: false, formatsMarkdown: true)
+                        if item.kind == .assistant, let reply = item.message?.text ?? turn.assistantText {
+                            MessageBubbleView(text: reply, sentAt: item.timestamp, fromUser: false, formatsMarkdown: true)
                                 .swipeToReply(enabled: canReply) { self.reply(to: turn, side: "assistant") }
                                 .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "assistant", fromUser: false,
                                                   onReply: canReply ? { self.reply(to: turn, side: "assistant") } : nil)
                                 .messageHighlight(highlightedMessage == "\(turn.id)/assistant")
-                                .id("\(turn.id)/assistant")
+                                .id(item.message?.id == "\(turn.id)/assistant/0" || item.message == nil ? "\(turn.id)/assistant" : item.id)
                                 .task {
                                     guard chat.newReplyIDs.contains(turn.id) else { return }
                                     // Wait until the insertion/scroll animation has finished.
@@ -127,7 +127,7 @@ struct ChatView: View {
                                         replyIsVisible: true
                                     )
                                 }
-                            ForEach(contacts.miniApps.apps(contactID: contactID, turnID: turn.id)) { app in
+                            ForEach(item.message == nil || item.message?.id == "\(turn.id)/assistant/0" ? contacts.miniApps.apps(contactID: contactID, turnID: turn.id) : []) { app in
                                 MiniAppCardView(app: app, contactID: contactID)
                             }
                         } else if item.kind == .status && turn.status == .running && chat.presence?.status == .typing {

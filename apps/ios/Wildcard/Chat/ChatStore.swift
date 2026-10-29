@@ -18,7 +18,8 @@ final class ChatStore {
         let turn: ChatTurn
         let kind: Kind
         let timestamp: Double
-        var id: String { "\(turn.id)/\(kind.rawValue)" }
+        var message: AssistantMessage? = nil
+        var id: String { message?.id ?? "\(turn.id)/\(kind.rawValue)" }
     }
 
     // Turns remain ordered by server sequence for pagination/cache reconciliation.
@@ -28,9 +29,12 @@ final class ChatStore {
         let latestTimestamp = displayed.map { max($0.createdAt, $0.updatedAt) }.max() ?? 0
         return displayed.flatMap { turn -> [TimelineItem] in
             var items = [TimelineItem(turn: turn, kind: .user, timestamp: turn.createdAt)]
-            if turn.assistantText != nil {
+            if let messages = turn.assistantMessages, !messages.isEmpty {
+                items += messages.map { TimelineItem(turn: turn, kind: .assistant, timestamp: $0.createdAt, message: $0) }
+            } else if turn.assistantText != nil {
                 items.append(TimelineItem(turn: turn, kind: .assistant, timestamp: turn.updatedAt))
-            } else if turn.isPending || turn.status == .failed {
+            }
+            if turn.isPending || turn.status == .failed {
                 items.append(TimelineItem(turn: turn, kind: .status, timestamp: latestTimestamp + 1))
             }
             return items

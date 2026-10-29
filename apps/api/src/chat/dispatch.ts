@@ -1,3 +1,4 @@
+import { enqueueReply } from '../push/delivery';
 import { storedColumns, type StoredTurn } from './data';
 
 export async function dispatchChat(env: Env, turn: StoredTurn) {
@@ -55,9 +56,11 @@ export async function recoverChats(env: Env) {
         const instance = await env.CHAT_WORKFLOW.get(claim.workflowID);
         const { status } = await instance.status();
         if (['complete', 'errored', 'terminated'].includes(status)) {
-          await env.DB.prepare(`UPDATE chat_turn SET status = 'failed', error_code = 'GENERATION_INTERRUPTED', updated_at = ?
+          await env.DB.prepare(`UPDATE chat_turn SET status = CASE WHEN assistant_text IS NULL THEN 'failed' ELSE 'complete' END,
+            error_code = CASE WHEN assistant_text IS NULL THEN 'GENERATION_INTERRUPTED' ELSE NULL END, updated_at = ?
             WHERE id = ? AND attempt = ? AND status IN ('queued', 'running')`)
             .bind(now, claim.turnID, claim.attempt).run();
+          await enqueueReply(env.DB, claim.turnID, claim.attempt, now).run();
           await env.DB.prepare(`UPDATE group_reply SET status = 'failed' WHERE id = ? AND attempt = ? AND status IN ('queued','running')`)
             .bind(claim.turnID, claim.attempt).run();
           await releaseAttention(env, claim);
@@ -80,9 +83,11 @@ export async function recoverChats(env: Env) {
         const instance = await env.CHAT_WORKFLOW.get(turn.workflowID);
         const { status } = await instance.status();
         if (status === 'complete' || status === 'errored' || status === 'terminated') {
-          await env.DB.prepare(`UPDATE chat_turn SET status = 'failed', error_code = 'GENERATION_INTERRUPTED', updated_at = ?1
+          await env.DB.prepare(`UPDATE chat_turn SET status = CASE WHEN assistant_text IS NULL THEN 'failed' ELSE 'complete' END,
+            error_code = CASE WHEN assistant_text IS NULL THEN 'GENERATION_INTERRUPTED' ELSE NULL END, updated_at = ?1
             WHERE id = ?2 AND attempt = ?3 AND status IN ('queued', 'running')`)
             .bind(now, turn.id, turn.attempt).run();
+          await enqueueReply(env.DB, turn.id, turn.attempt, now).run();
           await releaseAttention(env, { turnID: turn.id, attempt: turn.attempt });
         }
       } catch {

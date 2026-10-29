@@ -1,3 +1,4 @@
+import { messageDelay } from '../chat/messages';
 import { safeErrorCode } from '../chat/meta';
 import { jobAccountID, jobModel } from '../lib/model-preference';
 import { groupEnergyAvailable } from './energy';
@@ -28,6 +29,7 @@ type PublishOutcome = 'published' | 'skipped' | 'changed' | 'inactive';
 // eligibility at publication, not just before a potentially slow model request.
 const publicationAccess = (contributor: boolean) => `EXISTS (SELECT 1 FROM agent_attention attention
     WHERE attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt)
+  AND EXISTS (SELECT 1 FROM group_agent member WHERE member.group_id = r.group_id AND member.agent_id = r.agent_id)
   AND ${groupSourceAccess('r', contributor)}
   AND EXISTS (SELECT 1 FROM contact_agent agent JOIN contact owner_contact
     ON owner_contact.agent_id = agent.id AND owner_contact.user_id = agent.owner_id
@@ -37,7 +39,7 @@ const publicationAccess = (contributor: boolean) => `EXISTS (SELECT 1 FROM agent
 const unchangedHistory = `NOT EXISTS (SELECT 1 FROM group_message newer
   WHERE newer.group_id = r.group_id AND newer.sequence > ?6)`;
 
-async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft): Promise<PublishOutcome> {
+async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, final = true): Promise<PublishOutcome> {
   const access = publicationAccess(env.META_CHAT_MODEL.includes('contributor'));
   const bindings = [job.turnID, job.attempt, draft.text, Date.now(), env.META_CHAT_MODEL.includes('contributor') ? 1 : 0,
     draft.throughSequence];
@@ -49,19 +51,50 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft): Pr
       FROM group_reply r JOIN contact_agent a ON a.id = r.agent_id JOIN group_message source ON source.id = r.source_id
       WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND ?3 IS NOT NULL
       AND ${access} AND ${unchangedHistory} AND ${groupEnergyAvailable('r')} ON CONFLICT(id) DO NOTHING`).bind(...bindings),
-    env.DB.prepare(`UPDATE group_reply AS r SET status = 'complete' WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
+    env.DB.prepare(`UPDATE group_reply AS r SET status = CASE WHEN ?7 = 0 AND EXISTS (SELECT 1 FROM group_message saved WHERE saved.id = r.id) THEN 'running' ELSE 'complete' END WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
       AND (EXISTS (SELECT 1 FROM group_message saved WHERE saved.id = r.id)
         OR (NOT (${groupEnergyAvailable('r')}))
-        OR (?3 IS NULL AND ${access} AND ${unchangedHistory}))`).bind(...bindings),
+        OR (?3 IS NULL AND ${access} AND ${unchangedHistory}))`).bind(...bindings, final ? 1 : 0),
     env.DB.prepare(`SELECT r.status, EXISTS (SELECT 1 FROM group_message WHERE id = r.id) AS published,
       EXISTS (SELECT 1 FROM group_message newer WHERE newer.group_id = r.group_id AND newer.sequence > ?3) AS changed
       FROM group_reply r WHERE r.id = ?1 AND r.attempt = ?2`).bind(job.turnID, job.attempt, draft.throughSequence),
   ]);
   const state = results[2].results[0] as { status: string; published: number; changed: number } | undefined;
   if (!state || state.status === 'failed' || state.status === 'queued') return 'inactive';
-  if (state.status === 'complete') return state.published ? 'published' : 'skipped';
+  if (state.published) return 'published';
+  if (state.status === 'complete') return 'skipped';
   if (state.changed) return 'changed';
   throw new Error('GROUP_UNAVAILABLE_OR_CONSENT_REQUIRED');
+}
+
+async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep, messages: string[]) {
+  for (let index = 1; index < messages.length; index++) {
+    await step.sleep(`group-message-pause-${index}`, messageDelay(messages[index]));
+    const id = `${job.turnID}/part/${index}`;
+    const previousID = index === 1 ? job.turnID : `${job.turnID}/part/${index - 1}`;
+    const published = await step.do(`group-publish-message-${index}`, async () => {
+      const contributor = env.META_CHAT_MODEL.includes('contributor');
+      // Stop the unsent tail if anyone else speaks. Previously delivered messages
+      // remain intact, and the new input has its own reply opportunity.
+      await env.DB.prepare(`INSERT INTO group_message
+        (id, group_id, agent_id, sender_name, text, created_at, contributor_consent, exchange_id, requester_id)
+        SELECT ?7, r.group_id, r.agent_id, agent.name, ?3, ?4, ?5, source.exchange_id, source.requester_id
+        FROM group_reply r JOIN contact_agent agent ON agent.id = r.agent_id
+        JOIN group_message source ON source.id = r.source_id
+        JOIN group_message previous ON previous.id = ?8 AND previous.group_id = r.group_id
+        WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
+          AND ${publicationAccess(contributor)} AND ${groupEnergyAvailable('r')}
+          AND NOT EXISTS (SELECT 1 FROM group_message newer WHERE newer.group_id = r.group_id AND newer.sequence > previous.sequence)
+          AND ?6 = 0 ON CONFLICT(id) DO NOTHING`)
+        .bind(job.turnID, job.attempt, messages[index], Date.now(), contributor ? 1 : 0, 0, id, previousID).run();
+      return !!await env.DB.prepare('SELECT id FROM group_message WHERE id = ?').bind(id).first();
+    });
+    if (!published) break;
+    await step.do(`group-push-message-${index}`, async () => {
+      try { await deliverGroupPush(env, id); }
+      catch { console.error(JSON.stringify({ event: 'group_push_deferred' })); }
+    });
+  }
 }
 
 export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep) {
@@ -108,7 +141,20 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
         draft = 'draft' in preparation ? preparation.draft
           : await completeGroupDraft(env, preparation.input, step, `group-draft-${review}`);
         const prepared = draft;
-        outcome = await step.do(`group-publish-draft-${review}`, async () => publishGroupDraft(env, job, prepared));
+        outcome = await step.do(`group-publish-draft-${review}`, async () => publishGroupDraft(env, job, { ...prepared, text: prepared.messages?.[0] ?? prepared.text }, (prepared.messages?.length ?? 1) <= 1));
+        if (outcome === 'published' && prepared.messages && prepared.messages.length > 1) {
+          await step.do('group-push-first-message', async () => {
+            try { await deliverGroupPush(env, job.turnID); }
+            catch { console.error(JSON.stringify({ event: 'group_push_deferred' })); }
+          });
+          await publishGroupMessages(env, job, step, prepared.messages);
+          await step.do('group-complete-message-burst', async () => {
+            await env.DB.prepare(`UPDATE group_reply SET status = 'complete'
+              WHERE id = ?1 AND attempt = ?2 AND status = 'running'
+              AND EXISTS (SELECT 1 FROM group_message WHERE id = ?1)`)
+              .bind(job.turnID, job.attempt).run();
+          });
+        }
         if (outcome !== 'changed') break;
       }
       if (outcome === 'changed') {

@@ -32,7 +32,7 @@ const composer = ref<{ focus: () => void }>();
 
 useHead({ title: computed(() => contact.value?.name ?? 'Chat') });
 
-type MessageItem = { kind: 'user' | 'assistant' | 'status'; key: string; turn: ChatTurn; timestamp: number };
+type MessageItem = { kind: 'user' | 'assistant' | 'status'; key: string; turn: ChatTurn; timestamp: number; text?: string; first?: boolean };
 type PendingItem = { kind: 'pending'; key: string; timestamp: number };
 type Item = { kind: 'day'; key: string; label: string } | MessageItem | PendingItem;
 
@@ -45,10 +45,12 @@ const items = computed<Item[]>(() => {
     ...((turn.scheduleID === null && (!!turn.userText || !!turn.attachment))
       || remote.state.value.actions.some(action => action.turnID === turn.id)
       ? [{ kind: 'user' as const, key: `${turn.id}-user`, turn, timestamp: turn.createdAt }] : []),
-    ...(turn.assistantText !== null
-      ? [{ kind: 'assistant' as const, key: `${turn.id}-assistant`, turn, timestamp: turn.updatedAt }]
-      : turn.status === 'queued' || turn.status === 'running' || turn.status === 'failed'
-        ? [{ kind: 'status' as const, key: `${turn.id}-status`, turn, timestamp: latestTimestamp + 1 }] : []),
+    ...(turn.assistantMessages?.length
+      ? turn.assistantMessages.map((message, index) => ({ kind: 'assistant' as const, key: message.id, turn, timestamp: message.createdAt, text: message.text, first: index === 0 }))
+      : turn.assistantText !== null
+        ? [{ kind: 'assistant' as const, key: `${turn.id}-assistant`, turn, timestamp: turn.updatedAt, text: turn.assistantText, first: true }] : []),
+    ...(turn.status === 'queued' || turn.status === 'running' || turn.status === 'failed'
+      ? [{ kind: 'status' as const, key: `${turn.id}-status`, turn, timestamp: latestTimestamp + 1 }] : []),
   ]);
   if (state.value.pending) messages.push({ kind: 'pending', key: state.value.pending.id, timestamp: state.value.pending.createdAt });
   const rank = { user: 0, pending: 0, assistant: 1, status: 2 };
@@ -264,10 +266,10 @@ onBeforeUnmount(() => {
             </MessageReactions>
           </div>
           <div
-            v-if="item.kind === 'assistant' && item.turn.assistantText" :id="`message-${item.turn.id}-assistant`"
+            v-if="item.kind === 'assistant' && item.turn.assistantText" :id="item.first ? `message-${item.turn.id}-assistant` : item.key"
             class="bubble-row incoming" :class="{ highlighted: highlighted === `${item.turn.id}-assistant` }"
           >
-            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply" @reply="startReply(item.turn, 'assistant')"><div class="bubble"><MessageMarkdown :text="item.turn.assistantText" /><div class="meta">{{ messageTime(item.turn.updatedAt) }}</div></div></MessageReactions>
+            <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply" @reply="startReply(item.turn, 'assistant')"><div class="bubble"><MessageMarkdown :text="item.text ?? item.turn.assistantText" /><div class="meta">{{ messageTime(item.timestamp) }}</div></div></MessageReactions>
           </div>
           <div v-else-if="item.kind === 'status' && item.turn.status === 'running' && state.presence?.status === 'typing'" class="bubble-row incoming">
             <div class="typing" aria-label="Typing"><span /><span /><span /></div>
@@ -279,7 +281,7 @@ onBeforeUnmount(() => {
               class="link-button" :disabled="state.retrying || replying || !!state.pending" @click="retryReply(item.turn)"
             >Retry reply</button>
           </div>
-          <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => item.kind === 'assistant' && a.turnID === item.turn.id)" :key="app.id" :app="app" :contact-id="contactID" />
+          <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => item.kind === 'assistant' && item.first && a.turnID === item.turn.id)" :key="app.id" :app="app" :contact-id="contactID" />
           <div v-for="action in remote.state.value.actions.filter(a => item.kind === 'user' && a.turnID === item.turn.id)" :key="action.id" class="native-receipt" :class="remoteTone(action.status)">
             <span class="native-glyph" :data-kind="action.kind"><AppIcon :name="action.kind === 'alarm' ? 'alarm' : 'timer'" /></span>
             <div>

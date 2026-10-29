@@ -134,6 +134,7 @@ export const chatTurn = sqliteTable('chat_turn', {
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   userText: text('user_text').notNull(),
   assistantText: text('assistant_text'),
+  assistantMessagesJson: text('assistant_messages_json'),
   status: text('status', { enum: ['queued', 'running', 'complete', 'failed'] }).notNull(),
   attempt: integer('attempt').notNull().default(1),
   workflowId: text('workflow_id').notNull().unique(),

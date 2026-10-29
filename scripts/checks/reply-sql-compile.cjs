@@ -20,7 +20,7 @@ for(const contributor of [false,true]) {
   const context=vm.createContext({input:{scope:{contributor}},c:{env:{}},contributor:()=>contributor});
   vm.runInContext(ts.transpile(helpers.join('\n')),context);
   context.resultAllowed=vm.runInContext(`groupRequestTurnAllowed('chat_turn',${contributor})`,context);
-  for(const file of ['groups/routes.ts','groups/completion.ts','chat/workflow.ts']) {
+  for(const file of ['groups/routes.ts','groups/completion.ts']) {
     const text=read(file), tree=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true);
     function visit(node) {
       if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)&&node.expression.name.text==='prepare') {
@@ -40,3 +40,6 @@ for(const contributor of [false,true]) {
 const result=spawnSync('python3',['scripts/checks/sql-depth.py'],{cwd:root,input:JSON.stringify([...queries.values()]),encoding:'utf8'});
 if(result.status!==0)throw Error(result.stderr||result.error||'SQL preparation failed');
 console.log(`Compiled ${queries.size} reply/recovery SQL variants against an empty migrated schema at expression depth 100.`);
+
+// Reply publication now includes conditional delivery guards and is compiled separately.
+require('./reply-messages-sql.cjs');

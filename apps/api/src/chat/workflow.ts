@@ -1,3 +1,5 @@
+import { contactModelAllowed } from './consent';
+import { messageDelay } from './messages';
 import { batchStatement, batchIntoNext, shouldHoldReply, waitForComposer } from './pacing';
 import { runInitiative, type InitiativeJob } from './initiative';
 import { jobAccountID, jobModel } from '../lib/model-preference';
@@ -10,7 +12,7 @@ import { runVisit, type VisitJob } from './visits';
 import { expirePresence, markTyping } from './presence';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { enqueueReply, deliverPush } from '../push/delivery';
-import { activeTurn, type ChatJob } from './data';
+import { activeTurn, type AssistantMessage, type ChatJob } from './data';
 import { safeErrorCode } from './meta';
 import { contactReply } from './context';
 import { maintainMemories } from './memory';
@@ -65,9 +67,9 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       if (prepared) {
         const hold = await step.do('reply-timing-decision', {
           retries: { limit: 0, delay: '1 second' }, timeout: '1 minute',
-        }, () => shouldHoldReply(env, job, prepared.reply)).catch(() => false);
+        }, () => shouldHoldReply(env, job, typeof prepared.reply === 'string' ? prepared.reply : prepared.reply?.join('\n\n') ?? null)).catch(() => false);
         if (hold) await waitForComposer(env, job, step, 'before-publish', 3);
-        await step.do('save-prepared-reply', () => this.saveReply(env, job, prepared.reply));
+        await this.publishMessages(env, job, step, prepared.reply);
       }
     } catch (error) {
       const code = safeErrorCode(error);
@@ -77,25 +79,29 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         'MODEL_INVALID_JSON', 'MODEL_INVALID_RESPONSE', 'MODEL_INVALID_TOOL_CALLS', 'MODEL_TOOL_TEXT_TOO_LARGE',
         'MODEL_RESPONSE_TOO_LARGE', 'MODEL_TOOL_BUDGET_EXCEEDED', 'REQUEST_TIMEOUT'].includes(code)) {
         try {
-          recovered = await step.do('recover-response', { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' }, async () => {
+          const recovery = await step.do('recover-response', { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' }, async () => {
             const turn = await activeTurn(env.DB, job);
-            if (!turn || turn.status !== 'running' || turn.scheduleID || turn.groupRequestID) return false;
+            if (!turn || turn.status !== 'running' || turn.assistantText || turn.scheduleID || turn.groupRequestID) return null;
             const contact = await env.DB.prepare('SELECT name FROM contact WHERE id = ? AND user_id = ?')
               .bind(turn.contactID, turn.userID).first<{ name: string }>();
-            if (!contact) return false;
+            if (!contact) return null;
             const reply = await contactReply(env, turn, contact.name, code);
-            await this.saveReply(env, job, reply);
-            console.log(JSON.stringify({ event: 'chat_reply_recovered', code }));
-            return true;
+            return { reply };
           });
+          if (recovery) {
+            await this.publishMessages(env, job, step, recovery.reply, 'recovery');
+            recovered = true;
+          }
         } catch (recoveryError) {
           console.error(JSON.stringify({ event: 'chat_reply_recovery_failed', code: safeErrorCode(recoveryError) }));
         }
       }
       if (!recovered) await step.do('save-failure', { retries: { limit: 3, delay: '5 seconds', backoff: 'exponential' } }, async () => {
-        await env.DB.prepare(`UPDATE chat_turn SET status = 'failed', error_code = ?4, updated_at = ?1
+        await env.DB.prepare(`UPDATE chat_turn SET status = CASE WHEN assistant_text IS NULL THEN 'failed' ELSE 'complete' END,
+            error_code = CASE WHEN assistant_text IS NULL THEN ?4 ELSE NULL END, updated_at = ?1
           WHERE id = ?2 AND attempt = ?3 AND status IN ('queued', 'running')`)
           .bind(Date.now(), job.turnID, job.attempt, code).run();
+        await enqueueReply(env.DB, job.turnID, job.attempt, Date.now()).run();
         return true;
       });
     }
@@ -124,17 +130,45 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
     }
   }
 
-  private async saveReply(env: Env, job: ChatJob, reply: string | null) {
-    const now = Date.now();
-    const resultAllowed = groupRequestTurnAllowed('chat_turn', env.META_CHAT_MODEL.includes('contributor'));
-    await env.DB.batch([batchStatement(env, job), env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, status = 'complete', error_code = NULL, updated_at = ?2
-      WHERE id = ?3 AND attempt = ?4 AND status = 'running' AND ${scheduleAllowed('chat_turn')} AND ${resultAllowed}`)
-      .bind(reply, now, job.turnID, job.attempt),
-      env.DB.prepare(`UPDATE chat_turn SET status = 'failed', error_code = 'GROUP_REQUEST_CANCELLED', updated_at = ?1
-        WHERE id = ?2 AND attempt = ?3 AND status = 'running' AND NOT (${resultAllowed})`)
-        .bind(now, job.turnID, job.attempt),
-      enqueueReply(env.DB, job.turnID, job.attempt, now),
-    ]);
+  private async publishMessages(env: Env, job: ChatJob, step: WorkflowStep, reply: string[] | string | null, prefix = 'reply') {
+    // Null is an intentional reaction-only turn. Old checkpoints contain prose.
+    const messages = typeof reply === 'string' ? [reply] : reply ?? [];
+    for (let index = 0; index < Math.max(1, messages.length); index++) {
+      if (index) await step.sleep(`${prefix}-message-pause-${index}`, messageDelay(messages[index]));
+      const more = await step.do(`${prefix}-publish-message-${index}`, async () => {
+        const now = Date.now();
+        const resultAllowed = groupRequestTurnAllowed('chat_turn', env.META_CHAT_MODEL.includes('contributor'));
+        const delivered = await activeTurn(env.DB, job);
+        if (!delivered || delivered.status !== 'running') return false;
+        if (!await contactModelAllowed(env, delivered.contactID, delivered.userID)) throw new Error('MODEL_CONSENT_REQUIRED');
+        const previous: AssistantMessage[] = delivered.assistantMessagesJSON ? JSON.parse(delivered.assistantMessagesJSON) : [];
+        // A crash after the transaction but before its checkpoint must not append twice.
+        if (previous.length > index) return true;
+        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${index}`, text: messages[index], createdAt: now }] : previous;
+        const interrupted = `EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = chat_turn.contact_id
+          AND newer.user_id = chat_turn.user_id AND newer.sequence > chat_turn.sequence)`;
+        const text = next.length ? next.map(message => message.text).join('\n\n') : null;
+        await env.DB.batch([
+          ...(index === 0 ? [batchStatement(env, job)] : []),
+          env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, assistant_messages_json = ?5,
+            status = CASE WHEN ?6 = 1 THEN 'complete' ELSE 'running' END, error_code = NULL, updated_at = ?2
+            WHERE id = ?3 AND attempt = ?4 AND status = 'running'
+            AND json_array_length(COALESCE(assistant_messages_json, '[]')) = ?7
+            AND ${scheduleAllowed('chat_turn')} AND ${resultAllowed}
+            AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?3 AND attempt = ?4)
+            ${index ? `AND NOT (${interrupted})` : ''}`)
+            .bind(text, now, job.turnID, job.attempt, JSON.stringify(next), index === messages.length - 1 || !messages.length ? 1 : 0, index),
+          env.DB.prepare(`UPDATE chat_turn SET status = CASE WHEN assistant_text IS NULL THEN 'failed' ELSE 'complete' END,
+            error_code = CASE WHEN assistant_text IS NULL THEN 'GROUP_REQUEST_CANCELLED' ELSE NULL END, updated_at = ?1
+            WHERE id = ?2 AND attempt = ?3 AND status = 'running'
+            AND (NOT (${resultAllowed}) OR NOT (${scheduleAllowed('chat_turn')})
+              ${index ? `OR (${interrupted})` : ''})`).bind(now, job.turnID, job.attempt),
+          enqueueReply(env.DB, job.turnID, job.attempt, now),
+        ]);
+        return (await activeTurn(env.DB, job))?.status === 'running';
+      });
+      if (!more) break;
+    }
   }
 
   private async refreshAgentMemory(env: Env, job: ChatJob, step: WorkflowStep, name: string) {

@@ -224,7 +224,7 @@ chats.post('/turns/:turnID/retry', messageBody, async (c) => {
     return c.json({ error: 'Too many messages' }, 429);
   }
   const turn = await c.env.DB.prepare(`UPDATE chat_turn SET status = 'queued', attempt = attempt + 1,
-    workflow_id = ?1, error_code = NULL, assistant_text = NULL, updated_at = ?2, checked_at = 0
+    workflow_id = ?1, error_code = NULL, assistant_text = NULL, assistant_messages_json = NULL, updated_at = ?2, checked_at = 0
     WHERE id = ?3 AND user_id = ?4 AND contact_id = ?5 AND status = 'failed' AND attempt = ?6
     AND sequence = (SELECT MAX(sequence) FROM chat_turn WHERE contact_id = ?5 AND user_id = ?4)
     AND NOT EXISTS (SELECT 1 FROM chat_turn WHERE contact_id = ?5 AND status IN ('queued','running'))
