@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SplashView: View {
     var body: some View {
-        Image("SplashMark")
+        Image("WildcardLaunchMark")
             .resizable()
             .renderingMode(.template)
             .scaledToFit()

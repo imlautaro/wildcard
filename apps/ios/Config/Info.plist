@@ -32,7 +32,7 @@
 		<string>Manrope.ttf</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
+	<string>WildcardLaunch</string>
 	<key>WildcardAPIURL</key>
 	<string>$(WILDCARD_API_URL)</string>
 	<key>WildcardAppGroup</key>

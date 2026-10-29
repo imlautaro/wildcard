@@ -4,6 +4,9 @@
 and registration, plus the supplied favicon in both web and admin. Favicons use
 a content version query to refresh older browser caches. These public assets are
 bundled independently of account data; no session cache changes are needed.
+iOS uses a PNG image set for native launch and the matching vector in SwiftUI; see the
+[native launch refresh and device verification](branding.md#native-launch-resource-refresh).
+This system launch concern has no browser equivalent.
 
 [Web research](web-research.md) is available through ordinary human chat requests,
 with the same limits and permissions as iOS. Failed grounding checks are reported
