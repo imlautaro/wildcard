@@ -862,3 +862,7 @@ account isolation and cache eviction without extra row requests or disk storage.
 See [chat activity](chats.md#reply-activity-indicators) for freshness/failure
 behavior and pending device checks, and [migration 0062](infrastructure.md#recording-presence-migration-0062)
 for reproducible setup and rollback.
+
+## Archive and clear
+
+Each member can Archive/Unarchive independently. The owner can Clear chat for everyone, keeping or deleting memory learned in the group. Membership, photo and archive preferences survive. [Chat lifecycle](chat-lifecycle.md) documents permissions, cascading work/media removal, history revisions, cache invalidation and pending real-device/cloud verification.

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChatsView: View {
-    enum Mode { case chats, contacts }
+    enum Mode { case chats, contacts, archived }
     var mode: Mode = .chats
     let openContact: (Contact) -> Void
     let editContact: (Contact) -> Void
@@ -11,6 +11,9 @@ struct ChatsView: View {
     @Environment(GroupsStore.self) private var groups
     @Environment(ContactInvitationsStore.self) private var invitations
     @Environment(\.scenePhase) private var scenePhase
+    @State private var clearContact: Contact?
+    @State private var clearGroup: ChatGroup?
+    @State private var lifecycleBusy = false
     @State private var deletion: Contact?
     @State private var mutationError: String?
 
@@ -19,8 +22,10 @@ struct ChatsView: View {
     }
 
     private var displayedContacts: [Contact] {
-        if mode == .chats {
-            return contacts.contacts.map { contacts.preview(for: $0) }.filter { $0.lastMessageAt != nil || $0.lastMessageText != nil || $0.onboardingChat == 1 }
+        if mode != .contacts {
+            return contacts.contacts.map { contacts.preview(for: $0) }.filter {
+                ($0.archivedAt != nil) == (mode == .archived) && ($0.lastMessageAt != nil || $0.lastMessageText != nil || $0.onboardingChat == 1 || $0.clearing == 1 || mode == .archived)
+            }
         }
         return contacts.contacts.sorted {
             let order = $0.name.localizedStandardCompare($1.name)
@@ -37,7 +42,7 @@ struct ChatsView: View {
         // This avoids putting them ahead of newer private chats on unloaded pages.
         let boundary = contacts.nextCursor?.split(separator: ":", maxSplits: 1).first.flatMap { Double($0) }
         entries += groups.groups.map { groups.preview(for: $0) }.filter { group in
-            boundary.map { (group.lastMessageAt ?? group.updatedAt) >= $0 } ?? true
+            (group.archivedAt != nil) == (mode == .archived) && (boundary.map { (group.lastMessageAt ?? group.updatedAt) >= $0 } ?? true)
         }.map(ChatListEntry.group)
         return entries.sorted {
             let first = $0.timestamp(using: contacts)
@@ -48,7 +53,7 @@ struct ChatsView: View {
 
     private func contactRow(_ contact: Contact) -> some View {
         Button { openContact(contact) } label: {
-            if mode == .chats {
+            if mode != .contacts {
                 ChatListRow(contact: contact)
             } else {
                 HStack(spacing: 12) {
@@ -63,9 +68,15 @@ struct ChatsView: View {
         // Only conflicting mutations wait; rows stay openable while a change finishes.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button("Delete", role: .destructive) { deletion = contact }.disabled(contacts.isMutating)
+            if mode != .contacts {
+                Button(contact.archivedAt == nil ? "Archive" : "Unarchive") { archive(contact) }.tint(.indigo)
+                Button("Clear chat", role: .destructive) { clearContact = contact }
+            }
             if contact.canManage { Button("Edit") { editContact(contact) }.tint(.accentColor) }
         }
         .contextMenu {
+            Button(contact.archivedAt == nil ? "Archive" : "Unarchive") { archive(contact) }
+            Button("Clear chat", role: .destructive) { clearContact = contact }
             if contact.canManage { Button("Edit") { editContact(contact) } }
             Button("Delete", role: .destructive) { deletion = contact }.disabled(contacts.isMutating)
         }
@@ -75,6 +86,14 @@ struct ChatsView: View {
         let entries = chatEntries
         List {
             if mode == .chats {
+                Section {
+                    NavigationLink {
+                        ChatsView(mode: .archived, openContact: openContact, editContact: editContact, openGroup: openGroup)
+                            .navigationTitle("Archived")
+                    } label: { Label("Archived", systemImage: "archivebox") }
+                }
+            }
+            if mode != .contacts {
                 if let error = groups.error {
                     Text(error).manrope(.footnote).foregroundStyle(.red)
                     Button("Refresh groups") { Task { await groups.refresh(using: auth) } }
@@ -124,7 +143,10 @@ struct ChatsView: View {
                     Button("Dismiss") { self.mutationError = nil }
                 }
             }
-            if mode == .chats && !entries.isEmpty {
+            if mode == .chats && entries.isEmpty && contacts.hasLoaded && groups.hasLoaded && contacts.nextCursor == nil {
+                Section { Text("No chats yet. Tap + to choose a contact.").foregroundStyle(.secondary) }
+            }
+            if mode != .contacts && !entries.isEmpty {
                 Section {
                     ForEach(entries) { entry in
                         Group {
@@ -134,6 +156,14 @@ struct ChatsView: View {
                             case .group(let group):
                                 Button { openGroup(group) } label: { GroupChatListRow(group: group) }
                                     .buttonStyle(.plain)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button(group.archivedAt == nil ? "Archive" : "Unarchive") { archive(group) }.tint(.indigo)
+                                        if group.ownerID == auth.user?.id { Button("Clear chat", role: .destructive) { clearGroup = group } }
+                                    }
+                                    .contextMenu {
+                                        Button(group.archivedAt == nil ? "Archive" : "Unarchive") { archive(group) }
+                                        if group.ownerID == auth.user?.id { Button("Clear chat", role: .destructive) { clearGroup = group } }
+                                    }
                             }
                         }
                         .listRowSeparator(entry.id == entries.first?.id ? .hidden : .visible, edges: .top)
@@ -152,7 +182,7 @@ struct ChatsView: View {
                 }
                 .listSectionSeparator(.hidden, edges: .all)
             }
-            if contacts.nextCursor != nil && mode == .chats && !entries.isEmpty {
+            if contacts.nextCursor != nil && mode != .contacts && !entries.isEmpty {
                 Button("Load more") { Task { await contacts.loadMore(using: auth) } }
                     .disabled(contacts.isLoadingMore || contacts.isMutating)
             }
@@ -165,12 +195,12 @@ struct ChatsView: View {
         }
         .listStyle(.plain)
         .overlay {
-            if mode == .chats && entries.isEmpty && groups.error == nil && contacts.error == nil && mutationError == nil {
+            if mode != .contacts && entries.isEmpty && groups.error == nil && contacts.error == nil && mutationError == nil {
                 if !contacts.hasLoaded || !groups.hasLoaded || contacts.nextCursor != nil {
                     ProgressView("Loading chats…")
-                } else {
+                } else if mode == .archived {
                     ContentUnavailableView {
-                        Label("No chats yet", systemImage: "bubble.left.and.bubble.right")
+                        Label(mode == .archived ? "No archived chats" : "No chats yet", systemImage: "bubble.left.and.bubble.right")
                             .manrope(.title2, weight: .semibold)
                     } description: {
                         Text("Tap + to choose a contact and start a conversation.").manrope()
@@ -188,7 +218,7 @@ struct ChatsView: View {
             await contacts.refresh(using: auth, force: false)
         }
         .task {
-            if mode == .chats { await groups.refresh(using: auth) }
+            if mode != .contacts { await groups.refresh(using: auth) }
         }
         .task(id: "\(contacts.nextCursor ?? "")-\(contacts.isLoading)-\(contacts.isMutating)") {
             // Load the complete directory, or skip empty pages until Chats has rows.
@@ -202,6 +232,26 @@ struct ChatsView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await contacts.refresh(using: auth) } }
+        }
+        .disabled(lifecycleBusy)
+        .confirmationDialog("Clear private chat?", isPresented: Binding(get: { clearContact != nil }, set: { if !$0 { clearContact = nil } }), titleVisibility: .visible) {
+            if let contact = clearContact {
+                Button("Clear chat, keep memory", role: .destructive) { clear(contact, memory: false) }
+                Button("Clear chat and memory", role: .destructive) { clear(contact, memory: true) }
+                Button("Delete contact and data", role: .destructive) { deletion = contact; clearContact = nil }
+            }
+            Button("Cancel", role: .cancel) { clearContact = nil }
+        } message: {
+            Text("Permanently remove messages, files, tasks, documents, mini apps, and scheduled work from your private conversation. Keep the extracted memories or delete memory learned here too. Other people's chats are unaffected.")
+        }
+        .confirmationDialog("Clear group for everyone?", isPresented: Binding(get: { clearGroup != nil }, set: { if !$0 { clearGroup = nil } }), titleVisibility: .visible) {
+            if let group = clearGroup {
+                Button("Clear chat, keep memory", role: .destructive) { clear(group, memory: false) }
+                Button("Clear chat and memory", role: .destructive) { clear(group, memory: true) }
+            }
+            Button("Cancel", role: .cancel) { clearGroup = nil }
+        } message: {
+            Text("Permanently remove the shared messages, files, tasks, documents, mini apps, and pending work for every group member. Keep the extracted memories or delete memory learned here too.")
         }
         .alert("Delete contact?", isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } })) {
             Button("Delete", role: .destructive) {
@@ -219,10 +269,36 @@ struct ChatsView: View {
             if deletion?.canManage == false {
                 Text("This removes your access and deletes your private chat, schedules, and contributed memories. Other participants keep the contact.")
             } else {
-                Text("This permanently deletes \(deletion?.name ?? "this contact") for everyone, including all participants' chats, schedules, and memories.")
+                Text("This permanently deletes \(deletion?.name ?? "this contact") for everyone, including all participants' chats, schedules, memories, and this contact's group messages and work.")
             }
         }
     }
+    private func perform(_ operation: @escaping @MainActor () async throws -> Void) {
+        guard !lifecycleBusy else { return }
+        lifecycleBusy = true
+        mutationError = nil
+        Task {
+            defer { lifecycleBusy = false }
+            do { try await operation() }
+            catch is CancellationError { }
+            catch { mutationError = error.localizedDescription }
+        }
+    }
+    private func archive(_ contact: Contact) {
+        perform { try await contacts.archive(contact, archived: contact.archivedAt == nil, using: auth) }
+    }
+    private func archive(_ group: ChatGroup) {
+        perform { try await groups.archive(group, archived: group.archivedAt == nil, using: auth) }
+    }
+    private func clear(_ contact: Contact, memory: Bool) {
+        clearContact = nil
+        perform { try await contacts.clear(contact, clearMemory: memory, using: auth) }
+    }
+    private func clear(_ group: ChatGroup, memory: Bool) {
+        clearGroup = nil
+        perform { try await groups.clear(group, clearMemory: memory, using: auth) }
+    }
+
 }
 
 private struct ChatListRow: View {
@@ -234,6 +310,7 @@ private struct ChatListRow: View {
         contact.replyActivity == "recording" ? "Recording..." : contact.replyActivity == "typing" ? "Typing..." : nil
     }
     private var messagePreview: String {
+        if contact.clearing == 1 { return "Cleaning up..." }
         if let activity { return activity }
         guard let text = contact.lastMessageText else { return "No messages yet" }
         return (contact.lastMessagePreview ?? (contact.lastMessageFromUser == 0 ? MessageMarkdown.plainText(text) : text)).components(separatedBy: .newlines)
@@ -309,6 +386,7 @@ private struct GroupChatListRow: View {
     @ScaledMetric(relativeTo: .subheadline) private var previewSize: CGFloat = 15
 
     private var messagePreview: AttributedString {
+        if group.clearing == 1 { return AttributedString("Cleaning up...") }
         if let activity = group.replyActivity { return AttributedString(activity) }
         let source = group.lastMessageText
         let cleaned = group.lastMessagePreview ?? source.map { group.lastMessageUserID == nil ? MessageMarkdown.plainText($0) : $0 }

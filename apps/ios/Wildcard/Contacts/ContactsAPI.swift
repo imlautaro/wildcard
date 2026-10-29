@@ -3,6 +3,9 @@ import Foundation
 struct Contact: Codable, Hashable, Identifiable, Sendable {
     let id: String
     let name: String
+    var archivedAt: Double? = nil
+    var historyRevision: Int? = nil
+    var clearing: Int? = nil
     var onboardingChat: Int? = nil
     var initiativeEnabled: Int? = nil
     /// This participant's opt-in to voice replies (0 or 1).
@@ -129,5 +132,16 @@ extension AuthAPI {
 
     func deleteContact(id: String, token: String) async throws {
         _ = try await send(path: "contacts/\(id)", method: "DELETE", token: token)
+    }
+}
+
+extension AuthAPI {
+    func archiveChat(id: String, group: Bool, archived: Bool, token: String) async throws {
+        let body = try JSONEncoder().encode(["archived": archived])
+        _ = try await send(path: "\(group ? "groups" : "contacts")/\(id)/archive", method: "PUT", body: body, token: token)
+    }
+    func clearChat(id: String, group: Bool, clearMemory: Bool, historyRevision: Int, token: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["clearMemory": clearMemory, "historyRevision": historyRevision])
+        _ = try await send(path: "\(group ? "groups" : "contacts")/\(id)/clear", method: "POST", body: body, token: token)
     }
 }

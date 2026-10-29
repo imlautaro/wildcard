@@ -91,6 +91,7 @@ final class NativeExperiments {
         }
     }
     func forget(contactID: String) {
+        if speakingContactID == contactID { speaker.stop() }
         remoteEnabled.remove(contactID)
         if let userID { UserDefaults.standard.set(Array(remoteEnabled).sorted(), forKey: "native-remote.\(userID)") }
         publishRemoteSettings()

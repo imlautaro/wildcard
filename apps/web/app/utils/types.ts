@@ -12,6 +12,9 @@ export type AuthUser = {
 export type Features = { voiceMessages: boolean };
 
 export type Contact = {
+  archivedAt?: number | null;
+  historyRevision?: number;
+  clearing?: number;
   onboardingChat?: number;
   id: string;
   name: string;
@@ -91,11 +94,14 @@ export type ChatTurn = {
 };
 
 export type Presence = { status: 'offline' | 'online' | 'typing'; isRecording?: boolean; lastSeenAt: number | null; expiresAt: number | null };
-export type ChatPage = { presence: Presence | null; turns: ChatTurn[]; nextBefore: number | null };
+export type ChatPage = { historyRevision?: number; presence: Presence | null; turns: ChatTurn[]; nextBefore: number | null };
 export type ChatSubmission = { turn: ChatTurn; presence: Presence | null };
 export type ChatReadState = { lastReadSequence: number; totalUnreadCount?: number | null; unreadCount: number };
 
 export type ChatGroup = {
+  archivedAt?: number | null;
+  historyRevision?: number;
+  clearing?: number;
   id: string;
   name: string;
   ownerID: string;
@@ -133,7 +139,7 @@ export type GroupMessage = {
 };
 export type GroupPrivateSharing = { agentID: string; enabled: number; available: number };
 export type GroupSnapshot = { privateSharing?: GroupPrivateSharing[]; group: ChatGroup; members: GroupMember[]; replies: GroupReply[]; canInvite: boolean; contributorModel: boolean };
-export type GroupMessagesPage = { messages: GroupMessage[]; nextBefore: number | null };
+export type GroupMessagesPage = { historyRevision?: number; messages: GroupMessage[]; nextBefore: number | null };
 export type GroupInvitation = { id: string; groupName: string; senderName: string; expiresAt: number };
 
 export type ContactSharing = {

@@ -912,3 +912,7 @@ account isolation and cache eviction without extra row requests or disk storage.
 See [chat activity](chats.md#reply-activity-indicators) for freshness/failure
 behavior and pending device checks, and [migration 0062](infrastructure.md#recording-presence-migration-0062)
 for reproducible setup and rollback.
+
+## Chat lifecycle
+
+Chat list Manage offers Archive/Unarchive, Clear chat with an optional memory-removal checkbox, and Delete contact and data. Archived is a view of the existing list cache. Clear group is owner-only and explicitly affects everyone. Behavior, copy, cascade, history fencing and cache rules match iOS; see [chat lifecycle](chat-lifecycle.md). No browser execution/build validation has been performed for these actions.

@@ -281,7 +281,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
     <ChatScrollDown v-if="positioned && !pinned" @click="scrollToBottom" />
     </div>
     <ChatComposer
-      ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded" :reply="replyTarget"
+      ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded || state.snapshot?.group.clearing === 1" :reply="replyTarget"
       :voice-key="groupID" @send="onSend" @voice="onVoice" @cancel-reply="state.replyTo = null"
     />
   </template>

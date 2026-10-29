@@ -518,6 +518,10 @@ See [chat activity](chats.md#reply-activity-indicators) for freshness/failure
 behavior and pending device checks, and [migration 0062](infrastructure.md#recording-presence-migration-0062)
 for reproducible setup and rollback.
 
+## Lifecycle cleanup
+
+[Chat lifecycle](chat-lifecycle.md) includes human and synthesized voice bytes, pending clips, playback, waveform/object URLs and protected iOS audio caches. Archive keeps voice history. Late synthesis results recheck the source and enqueue invalid objects for retryable cleanup.
+
 ## Background playback and ear routing
 
 On iOS, an already loaded private/group voice message (including a local pending

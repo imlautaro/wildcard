@@ -103,3 +103,7 @@ preparation of 38 captured document statements against all migrations with D1's
 expression-depth limit. Not verified: model behavior, concurrent contact edits,
 conflict handling in both editors, cards inside group replies, and rendering on a
 device or browser.
+
+## Clearing the containing chat
+
+[Chat lifecycle](chat-lifecycle.md) removes chat documents and every revision together with their mutation receipts and source cards. Both clients invalidate document caches. Archive preserves documents and collaborative editing.

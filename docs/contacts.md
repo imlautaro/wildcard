@@ -247,3 +247,7 @@ Contacts expose `voiceID`, `voiceName` and the participant's `voiceMessagesEnabl
 The voice belongs to the shared agent (creator-only `PUT /:id/voice`); the opt-in is
 per participant (`PUT /:id/voice-messages`). Contact details show these controls only
 when `GET /me` reports `features.voiceMessages`. See [voice messages](voice.md).
+
+## Lifecycle actions
+
+Both clients expose [archive, clear and delete](chat-lifecycle.md). A clear affects only this participant's private conversation, optionally keeping extracted knowledge. Creator deletion now also removes the agent's authored group messages/media and assigned work; member deletion keeps other participants' access. External deletion failures are durably retried.

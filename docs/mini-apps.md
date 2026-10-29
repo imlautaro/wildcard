@@ -406,3 +406,7 @@ iOS full-screen presentation, tab bar, composer, Charts and form presentation on
 device; web layout, bottom tab bar and composer on narrow screens;
 grant invalidation after tool changes; and cache behavior across navigation, account
 switching and access revocation.
+
+## Clearing the containing chat
+
+[Clear/delete](chat-lifecycle.md) remove chat-owned mini apps, state and actions and invalidate iOS/web snapshots. Completed external connector effects cannot be undone by deleting their local receipts. Archive preserves mini apps.

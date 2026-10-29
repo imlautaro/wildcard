@@ -334,7 +334,7 @@ onBeforeUnmount(() => {
     <ChatScrollDown v-if="positioned && !pinned" @click="scrollToBottom" />
     </div>
     <ChatComposer
-      ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable" :sending="!!state.pending" :reply="replyTarget"
+      ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable || contact?.clearing === 1" :sending="!!state.pending" :reply="replyTarget"
       :voice-key="contactID" @send="onSend" @voice="onVoice" @typing="activity.typing()" @cancel-reply="state.replyTo = null"
     />
   </template>

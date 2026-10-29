@@ -39,16 +39,18 @@ struct ChatView: View {
     @ScaledMetric(relativeTo: .body) private var composerHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .body) private var sendIconSize: CGFloat = 20
 
+    private var isClearing: Bool { contacts.contact(id: contactID)?.clearing == 1 }
+
     private var canSend: Bool {
         (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachment != nil) && draft.unicodeScalars.count <= 4000
-            && chat.hasLoaded && !chat.isSending && !chat.isUnavailable
+            && chat.hasLoaded && !chat.isSending && !chat.isUnavailable && !isClearing
             && !voice.isBusy && !isLoadingAttachment
     }
 
     private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachment == nil }
     /// A failed voice message must be retried or deleted before recording another.
     private var canUseMicrophone: Bool {
-        voice.isBusy || (chat.hasLoaded && !chat.isUnavailable && !chat.isSending && !isLoadingAttachment && chat.failedVoice == nil)
+        voice.isBusy || (!isClearing && chat.hasLoaded && !chat.isUnavailable && !chat.isSending && !isLoadingAttachment && chat.failedVoice == nil)
     }
     private var canReply: Bool { chat.hasLoaded && !chat.isUnavailable }
 
@@ -220,6 +222,7 @@ struct ChatView: View {
             }
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 composer
+                    .disabled(isClearing)
                     .onGeometryChange(for: CGFloat.self) { geometry in
                         geometry.size.height
                     } action: { height in

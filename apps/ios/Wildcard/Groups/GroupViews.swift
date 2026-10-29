@@ -186,15 +186,17 @@ struct GroupChatView: View {
     @ScaledMetric(relativeTo: .body) private var composerControlHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .caption2) private var memberLineHeight: CGFloat = 16
 
+    private var isClearing: Bool { store.snapshot?.group.clearing == 1 }
+
     private var canSend: Bool {
         (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachment != nil) && draft.unicodeScalars.count <= 4000
-            && !store.isSending && store.pendingID == nil && store.snapshot != nil
+            && !store.isSending && store.pendingID == nil && store.snapshot != nil && !isClearing
             && !voice.isBusy && !isLoadingAttachment
     }
     private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachment == nil }
     /// A pending or failed voice message must be resolved before recording another.
     private var canUseMicrophone: Bool {
-        voice.isBusy || (store.snapshot != nil && !store.isSending && store.pendingID == nil && store.failedVoice == nil && !isLoadingAttachment)
+        voice.isBusy || (!isClearing && store.snapshot != nil && !store.isSending && store.pendingID == nil && store.failedVoice == nil && !isLoadingAttachment)
     }
     private var workingReplies: [GroupReply] {
         (store.snapshot?.replies ?? []).filter { $0.taskID != nil && ($0.status == "queued" || $0.status == "running") }
@@ -359,6 +361,7 @@ struct GroupChatView: View {
             }
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 composer(proxy: proxy)
+                    .disabled(isClearing)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerBarHeight = $0 }
             }
             .overlay(alignment: .bottomTrailing) {

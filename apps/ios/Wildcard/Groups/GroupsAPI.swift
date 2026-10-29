@@ -4,6 +4,9 @@ import Observation
 struct ChatGroup: Decodable, Hashable, Identifiable {
     let id: String
     let name: String
+    var archivedAt: Double? = nil
+    var historyRevision: Int? = nil
+    var clearing: Int? = nil
     let ownerID: String
     let createdAt: Double
     let updatedAt: Double
@@ -83,6 +86,7 @@ struct GroupSnapshot: Decodable {
     let contributorModel: Bool
 }
 struct GroupMessagesPage: Decodable {
+    var historyRevision: Int? = nil
     let messages: [GroupMessage]
     let nextBefore: Int?
 }
@@ -129,6 +133,38 @@ final class GroupsStore {
     private var warmingTask: Task<Void, Never>?
     private var queuedWarmGroups: [ChatGroup]?
     private var refreshRequest: (id: UUID, task: Task<Void, Never>)?
+
+    func archive(_ group: ChatGroup, archived: Bool, using auth: AuthStore) async throws {
+        let ownerID = auth.user?.id
+        readRevision += 1
+        try await auth.withSession { api, token in
+            try await api.archiveChat(id: group.id, group: true, archived: archived, token: token)
+        }
+        guard ownerID == auth.user?.id else { return }
+        readRevision += 1
+        if let index = groups.firstIndex(where: { $0.id == group.id }) {
+            groups[index].archivedAt = archived ? Date().timeIntervalSince1970 * 1000 : nil
+        }
+        await refreshRequest?.task.value
+        await refresh(using: auth, refreshInvitations: false)
+    }
+
+    func clear(_ group: ChatGroup, clearMemory: Bool, using auth: AuthStore) async throws {
+        let ownerID = auth.user?.id
+        readRevision += 1
+        try await auth.withSession { api, token in
+            try await api.clearChat(id: group.id, group: true, clearMemory: clearMemory, historyRevision: group.historyRevision ?? 0, token: token)
+        }
+        guard ownerID == auth.user?.id else { return }
+        readRevision += 1
+        conversations.remove(id: group.id)
+        readAcknowledgements.remove(id: group.id)
+        VoicePlayer.shared.stop()
+        await auth.images.clear(deactivate: false)
+        guard ownerID == auth.user?.id else { return }
+        await refreshRequest?.task.value
+        await refresh(using: auth, refreshInvitations: false)
+    }
 
     func refreshInbox(using auth: AuthStore) async {
         guard !isRefreshingInbox else { return }
@@ -210,6 +246,12 @@ final class GroupsStore {
             }
             if !removed.isEmpty { await auth.images.clear(deactivate: false) }
             guard revision == readRevision else { return }
+            let cleared = list.groups.filter { incoming in
+                groups.contains { $0.id == incoming.id && ($0.historyRevision ?? 0) != (incoming.historyRevision ?? 0) }
+            }
+            for group in cleared { conversations.remove(id: group.id); readAcknowledgements.remove(id: group.id) }
+            if !cleared.isEmpty { VoicePlayer.shared.stop(); await auth.images.clear(deactivate: false) }
+            guard revision == readRevision else { return }
             let previous = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
             groups = list.groups.map { group in
                 var result = group
@@ -279,7 +321,8 @@ final class GroupsStore {
 
 @MainActor @Observable
 final class GroupChatStore {
-    let reactions = MessageReactionStore()
+    private(set) var reactions = MessageReactionStore()
+    private var historyRevision = 0
     private(set) var snapshot: GroupSnapshot?
     private(set) var messages: [GroupMessage] = []
     private(set) var hasLoadedMessages = false
@@ -411,7 +454,7 @@ final class GroupChatStore {
         }
     }
 
-    private var pending: (id: String, text: String, attachment: DraftAttachment?, voice: VoiceClip?, sentAt: Double, replyTo: MessageReplyQuote?)?
+    private var pending: (historyRevision: Int, id: String, text: String, attachment: DraftAttachment?, voice: VoiceClip?, sentAt: Double, replyTo: MessageReplyQuote?)?
     /// A voice message the server rejected; kept until the person retries (with a new ID) or discards it.
     private(set) var failedVoice: (clip: VoiceClip, replyTo: MessageReplyQuote?)?
     func discardFailedVoice() { failedVoice = nil }
@@ -495,12 +538,22 @@ final class GroupChatStore {
                                            query: [URLQueryItem(name: "before", value: String(before))])
                     }
                     let older = try JSONDecoder().decode(GroupMessagesPage.self, from: data)
+                    guard (older.historyRevision ?? 0) == (page.historyRevision ?? 0) else { return }
                     incoming.insert(contentsOf: older.messages, at: 0)
                     guard older.nextBefore != cursor else { break }
                     cursor = older.nextBefore
                 }
             }
             guard !invalidated, epoch == accessEpoch, let state = snapshot else { return }
+            guard (page.historyRevision ?? 0) >= historyRevision else { return }
+            if historyRevision != (page.historyRevision ?? 0) {
+                reactions.invalidate(); reactions = MessageReactionStore()
+                messages = []; pending = nil; failedVoice = nil; nextBefore = nil; newIncomingMessageIDs = []
+                VoicePlayer.shared.stop()
+                await auth.images.clear(deactivate: false)
+                guard !invalidated, epoch == accessEpoch else { return }
+            }
+            historyRevision = page.historyRevision ?? 0
             if messages.isEmpty { nextBefore = cursor }
             let knownIDs = Set(messages.map(\.id))
             newIncomingMessageIDs.formUnion(incoming.filter {
@@ -575,6 +628,7 @@ final class GroupChatStore {
             }
             let page = try JSONDecoder().decode(GroupMessagesPage.self, from: data)
             guard !invalidated, epoch == accessEpoch, nextBefore == before else { return }
+            guard (page.historyRevision ?? 0) == historyRevision else { return }
             merge(page.messages)
             await reactions.refresh(path: "groups/\(id)/reactions", ids: messages.map(\.id), auth: auth)
             guard !invalidated, epoch == accessEpoch else { return }
@@ -599,7 +653,7 @@ final class GroupChatStore {
         isSending = true
         if voice != nil { failedVoice = nil }
         if pending == nil {
-            pending = (UUID().uuidString.lowercased(), text, attachment, voice, Date.now.timeIntervalSince1970 * 1000, replyTo)
+            pending = (historyRevision, UUID().uuidString.lowercased(), text, attachment, voice, Date.now.timeIntervalSince1970 * 1000, replyTo)
             pendingAccepted = false
             pendingSender = auth.user.map { ($0.id, $0.name) }
         }
@@ -608,7 +662,7 @@ final class GroupChatStore {
         let submitted = pending!
         do {
             try await auth.withSession { api, token in
-                try await api.sendGroupMessage(groupID: id, id: submitted.id, text: submitted.text, attachment: submitted.attachment,
+                try await api.sendGroupMessage(groupID: id, historyRevision: submitted.historyRevision, id: submitted.id, text: submitted.text, attachment: submitted.attachment,
                                                voice: submitted.voice, replyToID: submitted.replyTo?.messageID, token: token)
             }
             guard !invalidated, epoch == accessEpoch else { return false }

@@ -3,7 +3,7 @@ import Observation
 
 @Observable @MainActor
 final class ChatStore {
-    let reactions = MessageReactionStore()
+    private(set) var reactions = MessageReactionStore()
     struct OutgoingMessage {
         let turn: ChatTurn
         let attachment: DraftAttachment?
@@ -67,7 +67,8 @@ final class ChatStore {
     var isRetained = false
     private var invalidated = false
     private var revision = 0
-    private var submission: (id: String, text: String, contentID: UUID?, replyKey: String?, nativeContext: NativeContext?)?
+    private var historyRevision = 0
+    private var submission: (historyRevision: Int, id: String, text: String, contentID: UUID?, replyKey: String?, nativeContext: NativeContext?)?
     var hasPendingReply: Bool { turns.contains(where: \.isPending) }
 
     func clearPresence() { presence = nil }
@@ -144,6 +145,7 @@ final class ChatStore {
                     let older = try await auth.withSession { api, token in
                         try await api.chatTurns(contactID: contactID, before: before, token: token)
                     }
+                    guard (older.historyRevision ?? 0) == (page.historyRevision ?? 0) else { return }
                     incoming.insert(contentsOf: older.turns, at: 0)
                     guard older.nextBefore != cursor else { break }
                     cursor = older.nextBefore
@@ -151,6 +153,15 @@ final class ChatStore {
             }
             try Task.checkCancellation()
             guard started == revision else { return }
+            guard (page.historyRevision ?? 0) >= historyRevision else { return }
+            if historyRevision != (page.historyRevision ?? 0) {
+                reactions.invalidate(); reactions = MessageReactionStore()
+                turns = []; submission = nil; outgoingMessage = nil; failedVoice = nil; nextBefore = nil
+                newReplyIDs = []
+                VoicePlayer.shared.stop()
+                await auth.images.clear(deactivate: false)
+                guard !invalidated, started == revision else { return }
+            }
             if auth.user != nil {
                 let completed = Set(turns.filter { $0.assistantText != nil }.map(\.id))
                 for turn in incoming where turn.assistantText != nil && !completed.contains(turn.id) {
@@ -161,6 +172,7 @@ final class ChatStore {
             merge(incoming)
             await reactions.refresh(path: "contacts/\(contactID)/chat/reactions", ids: turns.map(\.id), auth: auth)
             guard !invalidated, started == revision else { return }
+            historyRevision = page.historyRevision ?? 0
             presence = page.presence
             hasLoaded = true
             refreshedAt = .now
@@ -199,6 +211,7 @@ final class ChatStore {
             }
             try Task.checkCancellation()
             guard started == revision else { return }
+            guard (page.historyRevision ?? 0) == historyRevision else { return }
             merge(page.turns)
             nextBefore = page.nextBefore
             await reactions.refresh(path: "contacts/\(contactID)/chat/reactions", ids: turns.map(\.id), auth: auth)
@@ -223,7 +236,7 @@ final class ChatStore {
         let replyKey = replyTo.map { "\($0.messageID)/\($0.side)" }
         let contentID = voice?.id ?? attachment?.id
         if submission?.text != text || submission?.contentID != contentID || submission?.replyKey != replyKey {
-            do { submission = (UUID().uuidString.lowercased(), text, contentID, replyKey, try NativeExperiments.shared.context(contactID: contactID)) }
+            do { submission = (historyRevision, UUID().uuidString.lowercased(), text, contentID, replyKey, try NativeExperiments.shared.context(contactID: contactID)) }
             catch {
                 self.error = error.localizedDescription
                 if let voice { failedVoice = (voice, replyTo) }
@@ -253,7 +266,7 @@ final class ChatStore {
         }
         do {
             let turn = try await auth.withSession { api, token in
-                try await api.sendMessage(contactID: contactID, id: submission.id, text: text, attachment: attachment, voice: voice,
+                try await api.sendMessage(contactID: contactID, historyRevision: submission.historyRevision, id: submission.id, text: text, attachment: attachment, voice: voice,
                                           replyTo: replyTo, nativeContext: submission.nativeContext, token: token)
             }
             revision += 1

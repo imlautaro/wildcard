@@ -1211,3 +1211,7 @@ account isolation and cache eviction without extra row requests or disk storage.
 See [chat activity](chats.md#reply-activity-indicators) for freshness/failure
 behavior and pending device checks, and [migration 0062](infrastructure.md#recording-presence-migration-0062)
 for reproducible setup and rollback.
+
+## Chat lifecycle invalidation
+
+[Clear/delete](chat-lifecycle.md) purge conversations, pending submissions, reactions and secondary resource snapshots, stop playback, and clear existing image/audio caches (including iOS protected disk storage). Server history revisions reset other devices' caches and fence pagination/offline sends. Archive uses the existing session list cache and pagination; unread totals still include archived chats. Device/browser failure-recovery verification remains pending.

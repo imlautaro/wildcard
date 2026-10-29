@@ -103,7 +103,7 @@ const savePhoto = (photo: Blob | null) => run(async () => {
 
 const remove = () => run(async () => {
   const message = canManage.value
-    ? `This permanently deletes ${contact.value?.name ?? 'this contact'} for everyone, including all participants' chats, schedules, and memories.`
+    ? `This permanently deletes ${contact.value?.name ?? 'this contact'} for everyone, including all participants' chats, schedules, memories, and this contact's group messages and work.`
     : 'This removes your access and deletes your private chat, schedules, and contributed memories. Other participants keep the contact.';
   if (!window.confirm(message)) return;
   await api(`contacts/${id.value}`, { method: 'DELETE' });

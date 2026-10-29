@@ -197,3 +197,7 @@ captions, public history or media grids. Both iOS and web use the shared API and
 the existing delivered-image viewer/cache; no client format changes are needed.
 See [image references and descriptions](generated-images.md#internal-image-descriptions-and-retrieval)
 for scope, lazy old-history indexing, limits, retention and verification.
+
+## History cleanup
+
+[Clear/delete](chat-lifecycle.md) register immutable image/PDF/voice keys and generated media for durable R2 deletion, with a final delayed sweep for in-flight uploads. Source indexes and client media/image/audio caches are invalidated. Archive preserves files. Live R2 failure/retry verification is pending.

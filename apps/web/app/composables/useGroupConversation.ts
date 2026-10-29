@@ -4,7 +4,7 @@ import type { DraftAttachment, DraftVoice, GroupMessage, GroupMessagesPage, Grou
 // Session cache of group conversations, mirroring useConversation. A pending send
 // becomes `accepted` (Sent) on HTTP acceptance, before the follow-up history
 // request; history then replaces it by UUID.
-export type GroupPending = { id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; replyTo: ReplyQuote | null; failed: string | null; accepted: boolean; createdAt: number };
+export type GroupPending = { historyRevision: number; id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; replyTo: ReplyQuote | null; failed: string | null; accepted: boolean; createdAt: number };
 export type GroupConversation = {
   reactions: ReactionCache;
   snapshot: GroupSnapshot | null;
@@ -84,7 +84,11 @@ function receiptsFor(id: string): Receipts {
 
 export function forgetGroup(id: string) {
   const removed = groups.get(id);
-  if (removed) { clearReactionCache(removed.reactions); removed.snapshot = null; removed.revision += 1; }
+  if (removed) {
+    clearReactionCache(removed.reactions); removed.snapshot = null; removed.revision += 1;
+    if (removed.pending?.attachment?.previewURL) URL.revokeObjectURL(removed.pending.attachment.previewURL);
+    removed.messages = []; removed.pending = null;
+  }
   groups.delete(id);
   receipts.delete(id);
   detailsRequests.delete(id);
@@ -198,11 +202,19 @@ async function fetchGroupConversation(id: string, visible: boolean) {
     const overlaps = () => fetched.some((message) => known.has(message.id));
     for (let pages = 0; known.size && cursor !== null && !overlaps() && pages < catchUpPages; pages += 1) {
       const earlier = await api<GroupMessagesPage>(`groups/${id}/messages`, { query: { before: cursor } });
+      if ((earlier.historyRevision ?? 0)!==(page.historyRevision ?? 0)) return;
       fetched = [...earlier.messages, ...fetched];
       cursor = earlier.nextBefore;
     }
     if (revision !== entry.revision || groups.get(id) !== entry) return;
     if (known.size && cursor !== null && !overlaps()) entry.messages = [];
+    const previousEpoch = entry.snapshot?.group.historyRevision ?? 0;
+    if ((page.historyRevision ?? 0)<previousEpoch || (page.historyRevision ?? 0)!==(snapshot.group.historyRevision ?? 0)) return;
+    if (previousEpoch!==(page.historyRevision ?? 0)) {
+      if (entry.pending?.attachment?.previewURL) URL.revokeObjectURL(entry.pending.attachment.previewURL);
+      entry.messages=[]; entry.pending=null; entry.draft=''; entry.replyTo=null;
+      clearReactionCache(entry.reactions); clearPrivateImages(); clearVoiceAudio();
+    }
     const hadOlder = entry.messages.some((message) => message.sequence < (fetched[0]?.sequence ?? -Infinity));
     const wasLoaded = entry.loaded;
     entry.messages = mergeMessages(entry.messages, fetched);
@@ -263,7 +275,9 @@ async function fetchGroupConversation(id: string, visible: boolean) {
 export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
   const chats = useChats();
   const state = shallowRef(entryFor(toValue(groupID)));
-  watch(() => toValue(groupID), (id) => { state.value = entryFor(id); });
+  watch(() => [toValue(groupID), groups.get(toValue(groupID))] as const, ([id,cached]) => {
+    if (cached !== state.value) state.value = entryFor(id);
+  });
 
   const load = () => loadGroupConversation(toValue(groupID), true);
 
@@ -274,6 +288,7 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
     entry.loadingEarlier = true;
     try {
       const page = await api<GroupMessagesPage>(`groups/${id}/messages`, { query: { before: entry.nextBefore } });
+      if ((page.historyRevision ?? 0)!==(entry.snapshot?.group.historyRevision ?? 0)) return;
       entry.messages = mergeMessages(entry.messages, page.messages);
       entry.nextBefore = page.nextBefore;
       await refreshReactions(entry.reactions, `groups/${id}/reactions`, entry.messages.map((message) => message.id));
@@ -294,7 +309,7 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
       ? { name: pending.attachment.name, mimeType: pending.attachment.mimeType, data: pending.attachment.data }
       : undefined;
     try {
-      await api<{ id: string }>(`groups/${id}/messages`, { json: { id: pending.id, text: pending.text, attachment,
+      await api<{ id: string }>(`groups/${id}/messages`, { json: { historyRevision: pending.historyRevision, id: pending.id, text: pending.text, attachment,
         voice: pending.voice ? { data: pending.voice.data } : undefined, replyToID: pending.replyTo?.messageID } });
       if (entry.pending?.id !== pending.id) return;
       // Seed before history loads, so the accepted voice bubble plays without a download.
@@ -312,7 +327,7 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
   async function send(text: string, attachment: DraftAttachment | null, voice: DraftVoice | null = null) {
     const entry = state.value;
     if (entry.pending) return;
-    entry.pending = { id: crypto.randomUUID(), text: voice ? '' : text.trim(), attachment: voice ? null : attachment, voice, replyTo: entry.replyTo, failed: null, accepted: false, createdAt: Date.now() };
+    entry.pending = { historyRevision: entry.snapshot?.group.historyRevision ?? 0, id: crypto.randomUUID(), text: voice ? '' : text.trim(), attachment: voice ? null : attachment, voice, replyTo: entry.replyTo, failed: null, accepted: false, createdAt: Date.now() };
     if (!voice) entry.draft = '';
     entry.replyTo = null;
     await submit();

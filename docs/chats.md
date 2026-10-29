@@ -780,3 +780,7 @@ Device/browser verification remains pending: text/voice/fallback replies, multip
 group contacts, navigation back to the list during synthesis, reopening an empty
 chat, refresh, failed/offline refresh and recovery, revoked access and switching
 accounts. Very fast synthesis may complete between polling ticks.
+
+## Clearing and archiving
+
+See [chat lifecycle](chat-lifecycle.md) for private history removal with optional memory retention, Archive/Unarchive, creator/member deletion, history revision fencing and retryable resource cleanup. Clear cancels chat-owned schedules and task/monitor work as well as replies.

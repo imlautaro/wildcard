@@ -4,8 +4,9 @@ import type { ChatPage, ChatReadState, ChatSubmission, ChatTurn, DraftAttachment
 // Session cache of private conversations, keyed by contact. Pending sends keep
 // their UUID across navigation and failures so a retry can never duplicate them.
 // A voice message keeps its recorded clip in memory until the API accepts it.
-export type PendingSend = { id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; replyTo: ReplyQuote | null; failed: string | null; createdAt: number; remoteDeviceID: string | null; timeZone: string };
+export type PendingSend = { historyRevision: number; id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; replyTo: ReplyQuote | null; failed: string | null; createdAt: number; remoteDeviceID: string | null; timeZone: string };
 export type Conversation = {
+  historyRevision: number;
   remoteDeviceID: string | null;
   reactions: ReactionCache;
   turns: ChatTurn[];
@@ -40,7 +41,12 @@ function revokePreview(attachment: DraftAttachment | null | undefined) {
 
 export function forgetConversation(id: string) {
   const entry = conversations.get(id);
-  if (entry) clearReactionCache(entry.reactions);
+  if (entry) {
+    clearReactionCache(entry.reactions);
+    revokePreview(entry.pending?.attachment);
+    entry.revision += 1;
+    entry.turns = []; entry.pending = null; entry.draft = ''; entry.replyTo = null; entry.loaded = false;
+  }
   conversations.delete(id);
   forgetRemoteNative(id);
   forgetMiniApps(`contacts/${id}`);
@@ -66,7 +72,7 @@ function conversation(id: string): Conversation {
     remoteDeviceID: null,
     reactions: createReactionCache(),
     turns: [], nextBefore: null, presence: null, loaded: false, error: null, unavailable: false,
-    pending: null, draft: '', replyTo: null, loadingEarlier: false, retrying: false, revision: 0,
+    historyRevision: 0, pending: null, draft: '', replyTo: null, loadingEarlier: false, retrying: false, revision: 0,
   });
   conversations.set(id, entry);
   // Evict the least recently opened conversations without pending sends.
@@ -114,10 +120,19 @@ async function fetchConversation(id: string) {
     // drop the disconnected cache instead of showing a hole.
     for (let pages = 0; known.size && cursor !== null && !overlaps() && pages < catchUpPages; pages += 1) {
       const earlier = await api<ChatPage>(`contacts/${id}/chat/turns`, { query: { before: cursor } });
+      if ((earlier.historyRevision ?? 0)!==(page.historyRevision ?? 0)) return;
       fetched = [...earlier.turns, ...fetched];
       cursor = earlier.nextBefore;
     }
     if (revision !== entry.revision || conversations.get(id) !== entry) return;
+    if ((page.historyRevision ?? 0)<entry.historyRevision) return;
+    if (entry.historyRevision !== (page.historyRevision ?? 0)) {
+      revokePreview(entry.pending?.attachment);
+      entry.turns=[]; entry.pending=null; entry.draft=''; entry.replyTo=null;
+      clearReactionCache(entry.reactions);
+      clearPrivateImages(); clearVoiceAudio();
+    }
+    entry.historyRevision = page.historyRevision ?? 0;
     if (known.size && cursor !== null && !overlaps()) entry.turns = [];
     const hadOlder = entry.turns.some((turn) => turn.sequence < (fetched[0]?.sequence ?? -Infinity));
     const replied = new Set(entry.turns.filter((turn) => turn.assistantText != null).map((turn) => turn.id));
@@ -148,7 +163,9 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
   const chats = useChats();
   // Resolve the entry outside a computed: lookup reorders the LRU map.
   const state = shallowRef(conversation(toValue(contactID)));
-  watch(() => toValue(contactID), (id) => { state.value = conversation(id); });
+  watch(() => [toValue(contactID), conversations.get(toValue(contactID))] as const, ([id, cached]) => {
+    if (cached !== state.value) state.value = conversation(id);
+  });
 
   const load = () => loadConversation(toValue(contactID));
 
@@ -159,6 +176,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
     entry.loadingEarlier = true;
     try {
       const page = await api<ChatPage>(`contacts/${id}/chat/turns`, { query: { before: entry.nextBefore } });
+      if ((page.historyRevision ?? 0)!==entry.historyRevision) return;
       entry.turns = mergeInto(entry.turns, page.turns);
       entry.nextBefore = page.nextBefore;
       await refreshReactions(entry.reactions, `contacts/${id}/chat/reactions`, entry.turns.map((turn) => turn.id));
@@ -180,7 +198,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
       : undefined;
     try {
       const result = await api<ChatSubmission>(`contacts/${id}/chat/turns`, {
-        json: { id: pending.id, text: pending.text, timeZone: pending.timeZone, attachment, voice: pending.voice ? { data: pending.voice.data } : undefined,
+        json: { historyRevision: pending.historyRevision, id: pending.id, text: pending.text, timeZone: pending.timeZone, attachment, voice: pending.voice ? { data: pending.voice.data } : undefined,
           remoteDeviceID: pending.remoteDeviceID ?? undefined,
           replyTo: pending.replyTo ? { messageID: pending.replyTo.messageID, side: pending.replyTo.side } : undefined },
       });
@@ -200,7 +218,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
   async function send(text: string, attachment: DraftAttachment | null, voice: DraftVoice | null = null) {
     const entry = state.value;
     if (entry.pending) return;
-    entry.pending = { id: crypto.randomUUID(), text: voice ? '' : text.trim(), attachment: voice ? null : attachment, voice, replyTo: entry.replyTo, failed: null, createdAt: Date.now(), remoteDeviceID: entry.remoteDeviceID, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+    entry.pending = { historyRevision: entry.historyRevision, id: crypto.randomUUID(), text: voice ? '' : text.trim(), attachment: voice ? null : attachment, voice, replyTo: entry.replyTo, failed: null, createdAt: Date.now(), remoteDeviceID: entry.remoteDeviceID, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
     if (!voice) entry.draft = '';
     entry.replyTo = null;
     await submit();

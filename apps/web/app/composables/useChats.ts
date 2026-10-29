@@ -8,6 +8,9 @@ import type { ChatGroup, Contact, ContactsPage, GroupInvitation, ReceivedContact
 // at least as recent as the server summary, like the iOS Home list.
 export type ChatRow = {
   kind: 'contact' | 'group';
+  archived: boolean;
+  canClear: boolean;
+  canDelete: boolean;
   id: string;
   name: string;
   photoPath: string | null;
@@ -152,6 +155,14 @@ async function refreshLists() {
       api<{ groups: ChatGroup[]; contributorModel: boolean }>('groups'),
     ]);
     if (started !== generation) return;
+    if (page.status === 'fulfilled') for (const contact of page.value.contacts) {
+      const old = contacts.value.find(item => item.id === contact.id);
+      if (old && (old.historyRevision ?? 0) !== (contact.historyRevision ?? 0)) purgeHistory('contact',contact.id);
+    }
+    if (groupList.status === 'fulfilled') for (const group of groupList.value.groups) {
+      const old = groups.value.find(item => item.id === group.id);
+      if (old && (old.historyRevision ?? 0) !== (group.historyRevision ?? 0)) purgeHistory('group',group.id);
+    }
     // Hydrate the open conversation before publishing a newer sidebar summary.
     // Other chats keep their existing bounded background warming behavior.
     const visible = visibleConversationKey();
@@ -258,6 +269,7 @@ function upsertContact(contact: Contact) {
 }
 
 function removeContact(id: string) {
+  generation += 1;
   clearPrivateImages(); clearVoiceAudio();
   forgetPersonality(id);
   forgetConversation(id);
@@ -271,6 +283,7 @@ function updateGroup(id: string, changes: Partial<ChatGroup>) {
 }
 
 function removeGroup(id: string) {
+  generation += 1;
   clearPrivateImages(); clearVoiceAudio();
   forgetGroup(id);
   groups.value = groups.value.filter((group) => group.id !== id);
@@ -301,7 +314,7 @@ function contactRow(contact: Contact): ChatRow | null {
 function contactMessageRow(contact: Contact): ChatRow | null {
   const cached = peekConversation(contact.id);
   const base = {
-    kind: 'contact' as const, id: contact.id, name: contact.name, photoPath: contactPhotoPath(contact),
+    kind: 'contact' as const, archived: contact.archivedAt != null, canClear: true, canDelete: true, id: contact.id, name: contact.name, photoPath: contactPhotoPath(contact),
     sender: null, unread: Math.max(0, contact.unreadCount ?? 0), receiptState: null,
   };
   const pending = cached?.pending;
@@ -316,8 +329,8 @@ function contactMessageRow(contact: Contact): ChatRow | null {
     return { ...base, preview: latest.assistantText != null ? [...plainMessageMarkdown(latest.assistantText)].slice(0, 500).join('') : turnPreview(latest), at, own: turnFromUser(latest), sending: false,
       readAt: reads.length ? Math.max(...reads) : null };
   }
-  if (contact.lastMessageAt == null) return contact.onboardingChat === 1
-    ? { ...base, preview: 'No messages yet', at: contact.createdAt, own: false, sending: false, readAt: null } : null;
+  if (contact.lastMessageAt == null) return contact.onboardingChat === 1 || contact.archivedAt != null || contact.clearing === 1
+    ? { ...base, preview: contact.clearing === 1 ? 'Cleaning up...' : 'No messages yet', at: contact.createdAt, own: false, sending: false, readAt: null } : null;
   return { ...base, preview: contact.lastMessagePreview ?? (contact.lastMessageFromUser === 0 ? plainMessageMarkdown(contact.lastMessageText ?? '') : contact.lastMessageText ?? ''), at: contact.lastMessageAt, own: contact.lastMessageFromUser === 1,
     sending: false, readAt: contact.lastMessageReadAt ?? null };
 }
@@ -348,7 +361,7 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   }
   const own = !!userID && userID === me;
   return {
-    kind: 'group', id: group.id, name: group.name, photoPath: groupPhotoPath(group), preview: group.replyActivity ?? preview,
+    kind: 'group', archived: group.archivedAt != null, canClear: group.ownerID === me, canDelete: false, id: group.id, name: group.name, photoPath: groupPhotoPath(group), preview: group.clearing===1 ? 'Cleaning up...' : group.replyActivity ?? preview,
     sender: group.replyActivity ? null : own ? 'You' : sender, at, unread: Math.max(0, group.unreadCount ?? 0),
     own: group.replyActivity ? false : own, sending, readAt: null, receiptState: receiptState ?? 'sent',
   };
@@ -357,7 +370,7 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
 const loaded = computed(() => contactsLoaded.value && groupsLoaded.value);
 const error = computed(() => contactsError.value ?? groupsError.value);
 
-const rows = computed<ChatRow[]>(() => {
+const allRows = computed<ChatRow[]>(() => {
   // Publish the mixed list only after both sources load, unless one failed:
   // then show whatever rows are available alongside the retry control.
   if (!loaded.value && !error.value) return [];
@@ -367,14 +380,71 @@ const rows = computed<ChatRow[]>(() => {
   return [...contactRows, ...groupRows].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id));
 });
 
+const rows = computed(() => allRows.value.filter(row => !row.archived));
+const archivedRows = computed(() => allRows.value.filter(row => row.archived));
 const directory = computed(() => [...contacts.value].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })));
-const totalUnread = computed(() => rows.value.reduce((sum, row) => sum + row.unread, 0));
+const totalUnread = computed(() => allRows.value.reduce((sum, row) => sum + row.unread, 0));
 const invitationCount = computed(() => contactInvitations.value.length + groupInvitations.value.length);
 
 export function useChats() {
   return {
-    contacts, groups, rows, directory, totalUnread, nextCursor, loaded, contactsLoaded, groupsLoaded, allContactsLoaded, error,
+    contacts, groups, rows, archivedRows, directory, totalUnread, nextCursor, loaded, contactsLoaded, groupsLoaded, allContactsLoaded, error,
     contactInvitations, groupInvitations, invitationCount, contributorModel,
-    refresh, refreshLists, refreshInvitations, loadMore, loadAllContacts, setInitiative, upsertContact, removeContact, updateGroup, removeGroup, applyRead,
+    archiveChat, clearChat, deleteChatContact, refresh, refreshLists, refreshInvitations, loadMore, loadAllContacts, setInitiative, upsertContact, removeContact, updateGroup, removeGroup, applyRead,
   };
+}
+
+function purgeHistory(kind: 'contact' | 'group', id: string) {
+  if (kind === 'contact') { forgetConversation(id); forgetPersonality(id); }
+  else forgetGroup(id);
+  readGuards.delete(`${kind}:${id}`);
+  clearPrivateImages(); clearVoiceAudio();
+}
+
+let lifecycleBusy = false;
+async function lifecycleMutation(operation: () => Promise<void>) {
+  if (lifecycleBusy) throw new Error('Please wait for the current change to finish.');
+  const owner = useSession().user.value?.id;
+  lifecycleBusy = true;
+  generation += 1;
+  try {
+    await operation();
+    if (useSession().user.value?.id !== owner) return;
+    generation += 1;
+    // An older shared refresh must settle before starting the replacement.
+    await refreshingLists;
+    await refreshLists();
+  } finally { lifecycleBusy = false; }
+}
+async function archiveChat(kind: 'contact' | 'group', id: string, archived: boolean) {
+  await lifecycleMutation(async () => {
+    const owner = useSession().user.value?.id;
+    await api(`${kind === 'contact' ? 'contacts' : 'groups'}/${id}/archive`,{method:'PUT',json:{archived}});
+    if (useSession().user.value?.id !== owner) return;
+    const archivedAt = archived ? Date.now() : null;
+    if (kind === 'contact') {
+      const contact = contacts.value.find(item=>item.id===id);
+      if (contact) upsertContact({...contact,archivedAt});
+    } else updateGroup(id,{archivedAt});
+  });
+}
+async function clearChat(kind: 'contact' | 'group', id: string, clearMemory: boolean) {
+  await lifecycleMutation(async () => {
+    const owner = useSession().user.value?.id;
+    const historyRevision = (kind==='contact' ? contacts.value.find(item=>item.id===id) : groups.value.find(item=>item.id===id))?.historyRevision ?? 0;
+    await api(`${kind === 'contact' ? 'contacts' : 'groups'}/${id}/clear`,{method:'POST',json:{clearMemory,historyRevision}});
+    if (useSession().user.value?.id !== owner) return;
+    purgeHistory(kind,id);
+    if (kind === 'contact') {
+      const result = await api<{contact:Contact}>(`contacts/${id}`);
+      if (useSession().user.value?.id === owner) upsertContact(result.contact);
+    }
+  });
+}
+async function deleteChatContact(id: string) {
+  await lifecycleMutation(async () => {
+    const owner = useSession().user.value?.id;
+    await api(`contacts/${id}`,{method:'DELETE'});
+    if (useSession().user.value?.id === owner) removeContact(id);
+  });
 }

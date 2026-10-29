@@ -259,3 +259,7 @@ Migration 0056 lets a person attach a public URL to a contact's task. Code check
 on a fixed interval and gives the contact a separate change turn (3 per day, 20 per
 task) only when the text changes and matches optional keywords. See
 [page monitors](monitors.md).
+
+## Clearing the containing chat
+
+[Clear chat](chat-lifecycle.md) removes its boards, tasks, dependencies, work receipts, research and monitors/checks, and deletes reply workflows. It does not pause-and-retain tasks. Group clearing is owner-only and shared by all members. Archive preserves ongoing work.

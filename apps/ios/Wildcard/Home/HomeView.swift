@@ -217,6 +217,7 @@ struct HomeView: View {
             CreateGroupView { id in destinations = [.group(id)] }
         case .group(let id):
             GroupChatView(groupID: id, store: groups.conversations.store(for: id))
+                .id("\(id):\(groups.groups.first(where: { $0.id == id })?.historyRevision ?? 0)")
         case .groupDetails(let id):
             GroupMembersView(groupID: id, store: groups.conversations.store(for: id))
         case .groupInviteUser(let id):

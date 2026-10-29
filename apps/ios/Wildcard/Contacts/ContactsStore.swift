@@ -171,6 +171,13 @@ final class ContactsStore {
         do {
             let page = try await auth.withSession { api, token in try await api.contacts(token: token) }
             guard request == generation, readSnapshot == readRevision, !Task.isCancelled else { return }
+            let clearedIDs = page.contacts.filter { incoming in
+                guard let old = knownContacts[incoming.id] else { return false }
+                return (old.historyRevision ?? 0) != (incoming.historyRevision ?? 0)
+            }.map(\.id)
+            for id in clearedIDs { forgetHistory(id: id) }
+            if !clearedIDs.isEmpty { await auth.images.clear(deactivate: false) }
+            guard request == generation else { return }
             let previousContacts = knownContacts
             let changedReplies = page.contacts.filter { contact in
                 guard let previous = knownContacts[contact.id] else { return false }
@@ -379,6 +386,48 @@ final class ContactsStore {
         refreshedAt = nil
     }
 
+    private func forgetHistory(id: String) {
+        conversations.remove(contactID: id)
+        NativeExperiments.shared.forget(contactID: id)
+        scheduleSnapshots.remove(id: id)
+        forgetPersonality(id: id)
+        miniApps.forget(base: "contacts/\(id)")
+        mediaSnapshots.forget(.contact(id))
+        taskSnapshots.remove(id: "contacts/\(id)")
+        documentCaches.forget("contacts/\(id)")
+        readAcknowledgements.remove(id: id)
+        messageTimestamps.removeValue(forKey: id)
+        VoicePlayer.shared.stop()
+    }
+
+    func archive(_ contact: Contact, archived: Bool, using auth: AuthStore) async throws {
+        try await updateContact(contactID: contact.id, using: auth) { api, token in
+            try await api.archiveChat(id: contact.id, group: false, archived: archived, token: token)
+            return try await api.contact(id: contact.id, token: token)
+        }
+    }
+
+    func clear(_ contact: Contact, clearMemory: Bool, using auth: AuthStore) async throws {
+        try beginMutation()
+        let request = generation
+        let ownerID = auth.user?.id
+        defer { if request == generation { isMutating = false } }
+        try await auth.withSession { api, token in
+            try await api.clearChat(id: contact.id, group: false, clearMemory: clearMemory, historyRevision: contact.historyRevision ?? 0, token: token)
+        }
+        guard request == generation, ownerID == auth.user?.id else { return }
+        forgetHistory(id: contact.id)
+        await auth.images.clear(deactivate: false)
+        guard request == generation, ownerID == auth.user?.id else { return }
+        let saved = try await auth.withSession { api, token in try await api.contact(id: contact.id, token: token) }
+        guard request == generation, ownerID == auth.user?.id else { return }
+        totalUnreadCount = max(0, totalUnreadCount - (knownContacts[contact.id]?.unreadCount ?? 0))
+        knownContacts[contact.id] = saved
+        if let index = contacts.firstIndex(where: { $0.id == contact.id }) { contacts[index] = saved }
+        refreshedAt = nil
+        sortContacts()
+    }
+
     func delete(_ contact: Contact, using auth: AuthStore) async throws {
         try beginMutation()
         do {
@@ -424,6 +473,11 @@ final class ContactsStore {
         do {
             let contact = try await auth.withSession { api, token in try await api.contact(id: id, token: token) }
             guard request == generation, readSnapshot == readRevision, !Task.isCancelled else { return }
+            if let old = knownContacts[id], (old.historyRevision ?? 0) != (contact.historyRevision ?? 0) {
+                forgetHistory(id: id)
+                await auth.images.clear(deactivate: false)
+                guard request == generation else { return }
+            }
             knownContacts[id] = contact
             contactRefreshedAt[id] = .now
             if let index = contacts.firstIndex(where: { $0.id == id }) { contacts[index] = contact }
