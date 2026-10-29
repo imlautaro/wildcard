@@ -8,6 +8,7 @@ const { user } = useSession();
 const { state, load, loadEarlier, send, submit, discardPending, retryReply, noteSeen, markRead } = useGroupConversation(groupID);
 useVisibleConversation(() => `group/${groupID.value}`);
 const scroller = ref<HTMLElement>();
+const { positioned } = useChatScroll(scroller, groupID, () => state.value.loaded);
 const composer = ref<{ focus: () => void }>();
 
 const group = computed(() => state.value.snapshot?.group ?? chats.groups.value.find((item) => item.id === groupID.value) ?? null);
@@ -162,7 +163,7 @@ watch(items, () => nextTick(observeRows));
 
 // One-second tick while visible, like the iOS session synchronizer.
 const { now: pollNow } = usePolling(refresh, () => 1000);
-watch(groupID, async () => { stopVoicePlayback(); scrollToBottom(); rescan(); await pollNow(); });
+watch(groupID, async () => { stopVoicePlayback(); rescan(); await pollNow(); });
 onMounted(async () => {
   observer = new IntersectionObserver((entries) => {
     if (document.visibilityState !== 'visible') return;
@@ -170,7 +171,6 @@ onMounted(async () => {
   }, { root: scroller.value, threshold: 0.5 });
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('focus', markRead);
-  scrollToBottom();
   await pollNow();
   nextTick(observeRows);
   composer.value?.focus();
@@ -210,7 +210,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
     <NuxtLink to="/" class="button secondary">Back to Chats</NuxtLink>
   </div>
   <template v-else>
-    <div ref="scroller" class="messages" aria-live="polite" @scroll.passive="onScroll" @load.capture="onMediaLoad">
+    <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" @scroll.passive="onScroll" @load.capture="onMediaLoad">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
         <button class="link-button" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</button>

@@ -32,6 +32,7 @@ async function revokeRemote() {
 const fetched = ref<Contact | null>(null);
 const contact = computed(() => chats.contacts.value.find((item) => item.id === contactID.value) ?? fetched.value);
 const scroller = ref<HTMLElement>();
+const { positioned } = useChatScroll(scroller, contactID, () => state.value.loaded);
 const composer = ref<{ focus: () => void }>();
 
 useHead({ title: computed(() => contact.value?.name ?? 'Chat') });
@@ -182,13 +183,11 @@ const { now: pollNow } = usePolling(refresh, () => 1000);
 watch(contactID, async () => {
   stopVoicePlayback();
   fetched.value = null;
-  scrollToBottom();
   await pollNow();
 });
 
 onMounted(async () => {
   window.addEventListener('focus', markRead);
-  scrollToBottom();
   await pollNow();
   if (!contact.value) {
     try { fetched.value = (await api<{ contact: Contact }>(`contacts/${contactID.value}`)).contact; }
@@ -240,7 +239,7 @@ onBeforeUnmount(() => {
         <button v-if="state.remoteDeviceID" type="button" class="link-button danger" @click="revokeRemote">Revoke access</button>
       </div>
     </div>
-    <div ref="scroller" class="messages" aria-live="polite" @scroll.passive="onScroll" @load.capture="onMediaLoad">
+    <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" @scroll.passive="onScroll" @load.capture="onMediaLoad">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
         <button class="link-button" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</button>
