@@ -422,7 +422,13 @@ request type, store or notification.
 ## MCP Connections
 
 **Account → Connections** configures public/Bearer/OAuth Streamable HTTP connectors
-once and manages schemas and tool approvals. Contact details → Connections is a
+once and manages schemas and tool approvals. On iOS and web it lists servers as rows
+with their state ("3/5 tools" or "Needs authorization"); a row opens a sheet with the
+URL, access, Authorize/Configure OAuth, Enable all, Refresh tools, the searchable tool
+switches (each tool's description and input schema behind an info button) and
+Disconnect. **Add server** opens the form in a sheet; the data-use text that consent
+covers stays visible beside the consent switch, while other explanations are behind
+info buttons. Refresh is pull-to-refresh on iOS and an icon button on web. Contact details → Connections is a
 simple assignment list for that account's connectors. Group details → Connections
 lets each bot owner/adder explicitly grant its assigned connectors to that bot in
 that group. Any human member can then request enabled tools; resulting responses

@@ -14,13 +14,19 @@ struct InfoButton: View {
         .buttonStyle(.borderless)
         .accessibilityLabel("About \(title)")
         .popover(isPresented: $presented) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title).manrope(.headline, weight: .semibold)
-                Text(text).manrope(.subheadline).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            // Long explanations, such as a tool's input schema, scroll inside the popover.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title).manrope(.headline, weight: .semibold)
+                    Text(text).manrope(.subheadline).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(16)
-            .frame(idealWidth: 300, maxWidth: 340, alignment: .leading)
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(idealWidth: 320, maxWidth: 360, maxHeight: 420)
             .presentationCompactAdaptation(.popover)
         }
     }

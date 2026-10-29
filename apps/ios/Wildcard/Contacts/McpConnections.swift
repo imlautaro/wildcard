@@ -100,107 +100,216 @@ struct McpConnectionsView: View {
     @State private var pendingPermission: (String, McpTool)?
     @State private var pendingEnableAll: McpConnection?
     @State private var pendingDisconnect: String?
+    @State private var sheet: SheetKind?
     private let notice = "Configure a connector once, then grant contacts access from their Connections screen. Tool approvals apply to every contact and group you authorize. Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard."
+    private let supported = "Remote Streamable HTTP servers with public access, a Bearer token, or OAuth. Legacy SSE and local command servers are not supported yet."
+
+    /// One sheet at a time: switching from a server's details to its OAuth form replaces it.
+    private enum SheetKind: Identifiable {
+        case detail(String), form
+        var id: String { if case .detail(let id) = self { "detail:\(id)" } else { "form" } }
+    }
 
     var body: some View {
         Form {
             Section {
-                Text(notice).font(.footnote)
-                Text("Remote Streamable HTTP servers with public access, a Bearer token, or OAuth. Legacy SSE and local command servers are not supported yet.").font(.footnote)
-                Button("Refresh connections") { Task { await refresh() } }.disabled(busy)
-                if let error { Text(error).foregroundStyle(.red) }
                 if cache.value == nil { ProgressView("Loading connections…") }
-                else if cache.value?.isEmpty == true { Text("No connections yet.") }
-            }
-            if (cache.value ?? []).contains(where: { !$0.tools.isEmpty }) {
-                Section { TextField("Search tools", text: $toolQuery).textInputAutocapitalization(.never).autocorrectionDisabled() }
-            }
-            ForEach(cache.value ?? []) { connection in
-                Section(connection.name) {
-                    Text(connection.url).font(.footnote).textSelection(.enabled)
-                    Text(connection.authType == "oauth" ? (connection.authenticated ? "OAuth connected" : "Authorization required") : connection.authenticated ? "Bearer token" : "Public access").foregroundStyle(.secondary)
-                    Text("\(connection.tools.count) tools loaded · \(connection.tools.filter(\.allowed).count) enabled").font(.footnote)
-                    if !toolQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { Text("\(visibleTools(connection).count) matching").font(.footnote) }
-                    if let issuer = connection.oauthIssuer { Text("Issuer: \(issuer)\nRequested scopes: \(connection.oauthScope ?? "")").font(.footnote).textSelection(.enabled) }
-                    if connection.authType == "oauth" {
-                        Text("Reauthorizing clears existing tool permissions. Review and enable them again afterward.").font(.footnote)
-                        if connection.oauthConfigured {
-                            Button("Authorize / Reauthorize") { Task { await authorize(connection.id) } }.disabled(busy)
-                        }
-                        Button("Configure OAuth") { configure(connection) }.disabled(busy)
-                    }
-                    if !connection.tools.isEmpty {
-                        Button("Enable all tools") { pendingEnableAll = connection }
-                            .disabled(busy || connection.tools.allSatisfy(\.allowed) || (connection.authType == "oauth" && !connection.authenticated))
-                    }
-                    ForEach(visibleTools(connection)) { tool in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(tool.name).font(.headline)
-                            Text(tool.description).font(.footnote)
-                            DisclosureGroup("Input schema") { Text(tool.inputSchema.text).font(.caption.monospaced()).textSelection(.enabled) }
-                            Button(tool.allowed ? "Disable tool" : "Allow without asking again") {
-                                if tool.allowed { Task { await permission(connection.id, tool, false) } }
-                                else { pendingPermission = (connection.id, tool) }
-                            }.disabled(busy)
-                        }
-                    }
-                    Button("Refresh tools") { Task { await mutate("/\(connection.id)/refresh", "POST") } }.disabled(busy)
-                    Button("Disconnect", role: .destructive) { pendingDisconnect = connection.id }.disabled(busy)
+                else if cache.value?.isEmpty == true { Text("No connections yet.").foregroundStyle(.secondary) }
+                ForEach(cache.value ?? []) { connection in
+                    SheetRow(title: connection.name, systemImage: "link", value: summary(connection)) { sheet = .detail(connection.id) }
+                }
+                Button("Add server", systemImage: "plus") {
+                    if configureID != nil { configureID = nil; name = ""; url = ""; clientSecret = "" }
+                    sheet = .form
+                }
+            } header: {
+                HStack {
+                    Text("Servers")
+                    InfoButton(title: "Connections", text: "\(notice)\n\n\(supported)")
                 }
             }
-            Section(configureID == nil ? "Add MCP server" : "Configure OAuth") {
-                if configureID == nil { Button("Use Gmail settings") { gmail() } }
-                TextField("Name", text: $name).disabled(configureID != nil)
-                TextField("HTTPS endpoint", text: $url).disabled(configureID != nil).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                Picker("Authentication", selection: $authType) {
-                    Text("Public access").tag("none")
-                    Text("Bearer token").tag("bearer")
-                    Text("OAuth").tag("oauth")
-                }.disabled(configureID != nil)
-                if authType == "bearer" { SecureField("Bearer token (optional)", text: $token).textInputAutocapitalization(.never).autocorrectionDisabled() }
-                if authType == "oauth" {
-                    if callbackURL == nil { Text("OAuth requires a public HTTPS API configuration.").font(.footnote) }
-                    Text("Wildcard discovers the OAuth settings and opens the provider's sign-in page. Authorizing an account does not enable tools.").font(.footnote)
-                    DisclosureGroup("Advanced OAuth settings (optional)", isExpanded: $advancedOAuth) {
-                        TextField("Authorization server (automatic when empty)", text: $issuer).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                        TextField("Scopes (automatic when empty)", text: $scope).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        TextField("Client ID (only if required by the provider)", text: $clientID).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        SecureField("Client secret (if required)", text: $clientSecret).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        if let callbackURL { Text("OAuth redirect URI: \(callbackURL)").font(.footnote).textSelection(.enabled) }
-                        Text("Most servers need no manual settings. If you use your own client credentials, enter their trusted authorization server too. Google requires your own registered Web OAuth client marked for an AI-powered agent and Workspace preview access.").font(.footnote)
-                    }
-                }
-                Toggle("I understand and accept the data access and privacy changes described above.", isOn: $consent)
-                Button(authType == "oauth" ? "Continue to authorization" : "Connect") { Task { await connect() } }.disabled(busy || !consent || name.trimmingCharacters(in: .whitespaces).isEmpty || url.isEmpty)
-                if configureID != nil { Button("Cancel configuration") { configureID = nil; clientSecret = ""; name = ""; url = "" } }
-            }
+            if let error, sheet == nil { Section { Text(error).foregroundStyle(.red) } }
         }
         .disabled(busy)
+        .refreshable { await refresh() }
         .navigationTitle("Connections")
-        .alert("Allow without asking again?", isPresented: Binding(get: { pendingPermission != nil }, set: { if !$0 { pendingPermission = nil } })) {
-            Button("Allow") { if let (id, tool) = pendingPermission { Task { await permission(id, tool, true) } } }
-            Button("Cancel", role: .cancel) { pendingPermission = nil }
-        } message: { Text("This tool may read, change, or send external data. Only enable tools you understand and trust.") }
-        .alert("Enable all tools?", isPresented: Binding(get: { pendingEnableAll != nil }, set: { if !$0 { pendingEnableAll = nil } })) {
-            Button("Enable all tools") {
-                if let connection = pendingEnableAll {
-                    Task { await mutate("/\(connection.id)", "PATCH", ["fingerprints": connection.tools.map(\.fingerprint), "allowed": true]) }
-                }
-                pendingEnableAll = nil
-            }
-            Button("Cancel", role: .cancel) { pendingEnableAll = nil }
-        } message: {
-            if let connection = pendingEnableAll {
-                Text("Enable all \(connection.tools.count) tools for \(connection.name) without asking again? This includes tools hidden by search. These tools may read, change, or send external data. Only enable tools you understand and trust.")
+        .sheet(item: $sheet) { kind in
+            switch kind {
+            case .detail(let id): detailSheet(id)
+            case .form: formSheet
             }
         }
-        .confirmationDialog("Disconnect this server?", isPresented: Binding(get: { pendingDisconnect != nil }, set: { if !$0 { pendingDisconnect = nil } }), titleVisibility: .visible) {
-            Button("Disconnect", role: .destructive) { if let id = pendingDisconnect { Task { await mutate("/\(id)", "DELETE") } } }
-        } message: { Text("Future calls will be blocked. Actions already started may finish. Historical messages remain private.") }
         .task(id: scenePhase) { if scenePhase == .active { await refresh() } }
         .onAppear { isVisible = true }
         .onDisappear { isVisible = false; token = ""; clientSecret = ""; browser.cancel() }
     }
+
+    private func authLabel(_ connection: McpConnection) -> String {
+        connection.authType == "oauth" ? (connection.authenticated ? "OAuth connected" : "Authorization required")
+            : connection.authenticated ? "Bearer token" : "Public access"
+    }
+    private func summary(_ connection: McpConnection) -> String {
+        let state = connection.authType == "oauth" && !connection.authenticated ? "Needs authorization" : "\(connection.tools.filter(\.allowed).count)/\(connection.tools.count) tools"
+        return state
+    }
+
+    private func detailSheet(_ id: String) -> some View {
+        NavigationStack {
+            Group {
+                if let connection = cache.value?.first(where: { $0.id == id }) {
+                    Form {
+                        Section {
+                            LabeledContent("Access", value: authLabel(connection))
+                            Text(connection.url).font(.footnote).foregroundStyle(.secondary).textSelection(.enabled)
+                            if let issuer = connection.oauthIssuer {
+                                Text("Issuer: \(issuer)\nRequested scopes: \(connection.oauthScope ?? "")").font(.footnote).foregroundStyle(.secondary).textSelection(.enabled)
+                            }
+                        }
+                        Section {
+                            if connection.authType == "oauth" {
+                                if connection.oauthConfigured {
+                                    HStack {
+                                        Button(connection.authenticated ? "Reauthorize" : "Authorize", systemImage: "key") { Task { await authorize(connection.id) } }
+                                        Spacer()
+                                        InfoButton(title: "Reauthorize", text: "Reauthorizing clears existing tool permissions. Review and enable them again afterward.")
+                                    }
+                                }
+                                Button("Configure OAuth", systemImage: "gearshape") { configure(connection); sheet = .form }
+                            }
+                            if !connection.tools.isEmpty {
+                                Button("Enable all tools", systemImage: "checkmark.circle") { pendingEnableAll = connection }
+                                    .disabled(connection.tools.allSatisfy(\.allowed) || (connection.authType == "oauth" && !connection.authenticated))
+                            }
+                            Button("Refresh tools", systemImage: "arrow.clockwise") { Task { await mutate("/\(connection.id)/refresh", "POST") } }
+                        }
+                        if !connection.tools.isEmpty {
+                            Section("Tools") {
+                                if visibleTools(connection).isEmpty { Text("No matches").foregroundStyle(.secondary) }
+                                ForEach(visibleTools(connection)) { tool in
+                                    Toggle(isOn: Binding(get: { tool.allowed }, set: { allowed in
+                                        if allowed { pendingPermission = (connection.id, tool) }
+                                        else { Task { await permission(connection.id, tool, false) } }
+                                    })) {
+                                        HStack(alignment: .firstTextBaseline) {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(tool.name)
+                                                Text(tool.allowed ? "Runs without asking" : "Asks before running").font(.caption).foregroundStyle(.secondary)
+                                            }
+                                            InfoButton(title: tool.name, text: "\(tool.description)\n\nInput schema\n\(tool.inputSchema.text)")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Section {
+                            Button("Disconnect", systemImage: "xmark.circle", role: .destructive) { pendingDisconnect = connection.id }
+                        }
+                        if let error { Section { Text(error).foregroundStyle(.red) } }
+                    }
+                    .searchable(text: $toolQuery, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search tools")
+                    .navigationTitle(connection.name)
+                } else {
+                    ContentUnavailableView("Connection unavailable", systemImage: "link")
+                }
+            }
+            .disabled(busy)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { sheet = nil } } }
+            .alert("Allow without asking again?", isPresented: Binding(get: { pendingPermission != nil }, set: { if !$0 { pendingPermission = nil } })) {
+                Button("Allow") { if let (id, tool) = pendingPermission { Task { await permission(id, tool, true) } } }
+                Button("Cancel", role: .cancel) { pendingPermission = nil }
+            } message: { Text("This tool may read, change, or send external data. Only enable tools you understand and trust.") }
+            .alert("Enable all tools?", isPresented: Binding(get: { pendingEnableAll != nil }, set: { if !$0 { pendingEnableAll = nil } })) {
+                Button("Enable all tools") {
+                    if let connection = pendingEnableAll {
+                        Task { await mutate("/\(connection.id)", "PATCH", ["fingerprints": connection.tools.map(\.fingerprint), "allowed": true]) }
+                    }
+                    pendingEnableAll = nil
+                }
+                Button("Cancel", role: .cancel) { pendingEnableAll = nil }
+            } message: {
+                if let connection = pendingEnableAll {
+                    Text("Enable all \(connection.tools.count) tools for \(connection.name) without asking again? This includes tools hidden by search. These tools may read, change, or send external data. Only enable tools you understand and trust.")
+                }
+            }
+            .confirmationDialog("Disconnect this server?", isPresented: Binding(get: { pendingDisconnect != nil }, set: { if !$0 { pendingDisconnect = nil } }), titleVisibility: .visible) {
+                Button("Disconnect", role: .destructive) {
+                    if let id = pendingDisconnect { Task { if await mutate("/\(id)", "DELETE") { sheet = nil } } }
+                }
+            } message: { Text("Future calls will be blocked. Actions already started may finish. Historical messages remain private.") }
+        }
+        .presentationDetents([.large])
+    }
+
+    private var formSheet: some View {
+        NavigationStack {
+            Form {
+                if configureID == nil {
+                    Section { Button("Use Gmail settings", systemImage: "envelope") { gmail() } }
+                }
+                Section {
+                    TextField("Name", text: $name).disabled(configureID != nil)
+                    TextField("HTTPS endpoint", text: $url).disabled(configureID != nil).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                    Picker("Authentication", selection: $authType) {
+                        Text("Public access").tag("none")
+                        Text("Bearer token").tag("bearer")
+                        Text("OAuth").tag("oauth")
+                    }.disabled(configureID != nil)
+                    if authType == "bearer" { SecureField("Bearer token (optional)", text: $token).textInputAutocapitalization(.never).autocorrectionDisabled() }
+                } header: {
+                    HStack {
+                        Text("Server")
+                        InfoButton(title: "Supported servers", text: supported)
+                    }
+                }
+                if authType == "oauth" {
+                    Section {
+                        if callbackURL == nil { Text("OAuth requires a public HTTPS API configuration.").font(.footnote).foregroundStyle(.red) }
+                        DisclosureGroup("Advanced (optional)", isExpanded: $advancedOAuth) {
+                            TextField("Authorization server (automatic when empty)", text: $issuer).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                            TextField("Scopes (automatic when empty)", text: $scope).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            TextField("Client ID (only if required by the provider)", text: $clientID).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            SecureField("Client secret (if required)", text: $clientSecret).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            if let callbackURL { Text("OAuth redirect URI: \(callbackURL)").font(.footnote).textSelection(.enabled) }
+                        }
+                    } header: {
+                        HStack {
+                            Text("OAuth")
+                            InfoButton(title: "OAuth", text: "Wildcard discovers the OAuth settings and opens the provider's sign-in page. Authorizing an account does not enable tools. Most servers need no manual settings. If you use your own client credentials, enter their trusted authorization server too. Google requires your own registered Web OAuth client marked for an AI-powered agent and Workspace preview access.")
+                        }
+                    }
+                }
+                Section {
+                    // Consent covers this text, so it stays visible beside the switch.
+                    Text(notice).font(.footnote).foregroundStyle(.secondary)
+                    Toggle("I accept these data access and privacy terms", isOn: $consent)
+                }
+                if let error { Section { Text(error).foregroundStyle(.red) } }
+            }
+            .disabled(busy)
+            .navigationTitle(configureID == nil ? "Add server" : "Configure OAuth")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        if configureID != nil { configureID = nil; clientSecret = ""; name = ""; url = "" }
+                        sheet = nil
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(authType == "oauth" ? "Continue" : "Connect") {
+                        Task {
+                            await connect()
+                            if error == nil { sheet = nil }
+                        }
+                    }
+                    .disabled(busy || !consent || name.trimmingCharacters(in: .whitespaces).isEmpty || url.isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
     private func visibleTools(_ connection: McpConnection) -> [McpTool] {
         let query = toolQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return connection.tools.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) || $0.description.localizedCaseInsensitiveContains(query) }
@@ -332,26 +441,40 @@ struct McpAccessView: View {
     var body: some View {
         Form {
             Section {
-                Text(group
-                     ? "Grant your bots access to their assigned connectors in this group. Other members can request tools; responses are visible to everyone. Only the bot owner who added it can grant access."
-                     : "Configure connectors once in Account, then grant this contact access. Tool approvals are managed in Account.").font(.footnote)
-                NavigationLink("Manage account connections") { McpConnectionsView(contactID: "account", cache: contacts.mcpSnapshots.store(for: "account")) }
-                Button("Refresh connections") { Task { await refresh() } }
-                if let error { Text(error).foregroundStyle(.red) }
                 if cache.value == nil { ProgressView("Loading connections…") }
                 else if cache.value?.isEmpty == true {
                     Text(group ? "Assign a connector to one of your bots in its contact details first." : "No account connections yet.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(cache.value ?? [], id: \.identity) { item in
+                    Toggle(isOn: Binding(get: { item.granted != 0 }, set: { _ in
+                        if item.granted == 0 { pending = item }
+                        else { Task { await save(item) } }
+                    })) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.name)
+                                if let agentName = item.agentName { Text(agentName).font(.caption).foregroundStyle(.secondary) }
+                            }
+                        } icon: { Image(systemName: "link") }
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Access")
+                    InfoButton(title: "Connections", text: group
+                        ? "Grant your bots access to their assigned connectors in this group. Other members can request tools; responses are visible to everyone. Only the bot owner who added it can grant access."
+                        : "Configure connectors once in Account, then grant this contact access. Tool approvals are managed in Account.")
                 }
             }
-            ForEach(cache.value ?? [], id: \.identity) { item in
-                Toggle(item.agentName.map { "\($0) · \(item.name)" } ?? item.name,
-                       isOn: Binding(get: { item.granted != 0 }, set: { _ in
-                    if item.granted == 0 { pending = item }
-                    else { Task { await save(item) } }
-                }))
+            if let error { Section { Text(error).foregroundStyle(.red) } }
+            Section {
+                NavigationLink { McpConnectionsView(contactID: "account", cache: contacts.mcpSnapshots.store(for: "account")) }
+                    label: { Label("Manage account connections", systemImage: "gearshape") }
             }
         }
         .disabled(busy)
+        .refreshable { await refresh() }
         .navigationTitle("Connections")
         .task(id: scenePhase) { if scenePhase == .active { await refresh() } }
         .alert("Grant connector access?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } })) {
