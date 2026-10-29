@@ -97,7 +97,7 @@ const cancelList = (list: TaskList) => run(async () => {
                 <AppIcon :name="task.status === 'done' ? 'check' : task.status === 'canceled' ? 'block' : task.blocked ? 'clock' : 'circle'" :filled="task.status === 'done'" />
               </button>
               <button type="button" class="task-copy link-button" :disabled="list.status === 'canceled'" @click="edit(task)">
-                <span class="task-title">{{ task.title }}</span>
+                <span class="task-title">{{ task.title }}<span v-if="task.assigneeKind === 'agent' && task.status === 'in_progress'" class="chip primary task-working"><span class="live-dot" aria-hidden="true" />Working</span></span>
                 <span class="small muted">{{ detail(list, task) }}</span>
                 <span v-if="task.result" class="small task-result">{{ task.result }}</span>
               </button>

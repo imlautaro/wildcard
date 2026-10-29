@@ -60,9 +60,11 @@ Matching iOS:
   attachments up to 5 MB.
 - **Documents** (`/contacts/:id/documents/:documentID`, `/groups/:id/documents/:documentID`,
   `DocumentScreen`): viewer, Write/Preview editor, revisions, conflicts and delete;
-  cards under replies and the Docs tab in details, matching iOS. See [documents](documents.md).
+  cards inside the sender's reply bubble and the Docs tab in details, matching iOS. See [documents](documents.md).
 - **Tasks** (`/contacts/:id/tasks`, `/groups/:id/tasks`, `TaskBoard`), opened from the
-  chat bar or details, matching iOS. See [tasks](tasks.md).
+  chat bar or details, matching iOS. A contact on a task work turn shows a "Working on
+  “…”" row in the chat and in the header; the board marks contact tasks in progress with
+  **Working**. See [tasks](tasks.md#seeing-the-work).
 - **Shared in this chat** on contact details (`/contacts/:id/edit`) and group details
   (`/groups/:id/members`): Media and Docs tabs (`ChatMediaTabs`). See
   [attachments](attachments.md#shared-in-this-chat).

@@ -57,6 +57,8 @@ export type ChatTurn = {
   attachment?: Attachment | null;
   scheduleID: string | null;
   taskID?: string | null;
+  // Title of the task a work turn is for, so the chat can say what the contact is working on.
+  taskTitle?: string | null;
   groupRequestID: string | null;
   errorCode: string | null;
   sequence: number;
@@ -95,7 +97,9 @@ export type ChatGroup = {
   lastReadSequence?: number | null;
 };
 export type GroupMember = { id: string; kind: 'user' | 'agent'; name: string; photoVersion: string | null; canInvite: number; addedBy: string | null };
-export type GroupReply = { isTyping?: number; id: string; agentID: string; name: string; status: string; sourceID?: string; sourceSequence?: number; attempt?: number };
+// taskID/taskTitle are set when the reply is a task work turn (its trigger is hidden from the transcript).
+export type GroupReply = { isTyping?: number; id: string; agentID: string; name: string; status: string; sourceID?: string; sourceSequence?: number; attempt?: number;
+  taskID?: string | null; taskTitle?: string | null };
 export type GroupMessage = {
   sequence: number;
   id: string;

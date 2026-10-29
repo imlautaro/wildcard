@@ -735,6 +735,11 @@ iOS and web require this explicit flag; missing fields from older API snapshots
 show no indicator. The web subtitle follows the same rule. Retry availability
 continues to consider all queued/running jobs. No migration or new service is needed.
 
+Replies that are task work turns carry `replies[].taskID` and `taskTitle`. Both clients
+show them as a "Working on “…”" row in the contact's name (queued or running, with or
+without typing) and add "<names> working…" to the header subtitle. See
+[tasks](tasks.md#seeing-the-work).
+
 The existing session snapshot and one-second visible polling carry this state;
 there is no client prediction or draft disclosure. Existing cache invalidation and
 late-response guards remain in place. Live checks are pending on both clients:

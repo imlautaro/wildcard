@@ -524,6 +524,14 @@ details pre {
 .typing span:nth-child(3) { animation-delay: 0.3s; }
 @keyframes typing { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .typing span { animation: none; } }
+/* A contact working on a task: the typing dots with what it is working on. */
+.work-status { display: inline-flex; align-items: center; gap: 10px; max-width: min(560px, 78%); padding: 10px 14px; border-radius: 20px; border-bottom-left-radius: var(--md-shape-xs); background: var(--incoming); color: var(--md-on-surface-variant); font-size: 14px; overflow-wrap: anywhere; }
+.work-status strong { color: var(--md-on-surface); font-weight: 700; }
+.typing-dots { display: inline-flex; gap: 3px; flex: none; }
+.typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--md-primary); animation: typing 1.2s infinite ease-in-out; }
+.typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+@media (prefers-reduced-motion: reduce) { .typing-dots span { animation: none; } }
 
 .composer { padding: 8px 12px calc(12px + env(safe-area-inset-bottom)); background: var(--md-surface); }
 .composer form { display: flex; align-items: flex-end; gap: 4px; }
@@ -627,6 +635,9 @@ details pre {
 .mini-app-card .copy span { font-size: 13px; color: var(--md-on-surface-variant); }
 .mini-app-card.review .copy span { color: var(--warning); font-weight: 600; }
 .mini-app-card .chevron { width: 20px; height: 20px; color: var(--md-on-surface-variant); flex: none; }
+/* Inside the sender's bubble the card reads as part of that message, like an attachment. */
+.bubble .mini-app-card { width: auto; min-width: min(260px, 100%); margin: 8px -6px 2px; padding: 10px; white-space: normal; background: color-mix(in srgb, var(--md-surface) 70%, transparent); box-shadow: none; }
+.bubble .mini-app-glyph { width: 36px; height: 36px; }
 .mini-app-glyph { width: 40px; height: 40px; border-radius: var(--md-shape-m); flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--md-on-primary); background: var(--md-primary); }
 .mini-app-glyph svg { width: 22px; height: 22px; }
 .mini-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 8px; }
@@ -805,6 +816,10 @@ details pre {
 .task-title { font-weight: 600; overflow-wrap: anywhere; }
 .task-row.finished .task-title { text-decoration: line-through; color: var(--md-on-surface-variant); }
 .task-result { white-space: pre-wrap; color: var(--md-on-surface); }
+.task-working { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; vertical-align: 1px; font-size: 11px; }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: live 1.6s infinite ease-in-out; }
+@keyframes live { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
 .task-editor { padding: 4px 4px 12px 44px; display: flex; flex-direction: column; gap: 4px; }
 .task-editor textarea { width: 100%; resize: vertical; font: inherit; }
 .task-blockers { border: 0; padding: 4px 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }

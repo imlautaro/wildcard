@@ -13,6 +13,8 @@ struct MessageBubbleView: View {
     var senderColor: Color? = nil
     var replyQuote: MessageReplyPreview? = nil
     var onQuoteTap: (() -> Void)? = nil
+    /// Documents and mini apps the sender shared with this message, shown inside the bubble.
+    var accessory: AnyView? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -24,11 +26,13 @@ struct MessageBubbleView: View {
                         if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
                         MessageReplyQuoteView(preview: replyQuote, action: onQuoteTap)
                         MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true, formatsMarkdown: formatsMarkdown)
+                        if let accessory { accessory }
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
                         if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
                         MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, formatsMarkdown: formatsMarkdown)
+                        if let accessory { accessory.padding(.top, 4) }
                     }
                 }
             }

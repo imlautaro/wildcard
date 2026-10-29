@@ -41,6 +41,40 @@ struct ReplyTypingIndicator: View {
     }
 }
 
+/// A contact working on a task: animated dots with what it is working on, in an incoming bubble.
+struct TaskWorkIndicator: View {
+    var name: String? = nil
+    let title: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    private var label: String { title.map { "Working on “\($0)”" } ?? "Working on a task" }
+
+    var body: some View {
+        HStack {
+            HStack(spacing: 10) {
+                TimelineView(.animation(minimumInterval: 0.1, paused: reduceMotion || scenePhase != .active)) { context in
+                    HStack(spacing: 3) {
+                        ForEach(0..<3) { index in
+                            let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2)
+                            let wave = reduceMotion ? 1 : (sin((phase / 1.2 - Double(index) * 0.16) * 2 * .pi) + 1) / 2
+                            Circle().frame(width: 6, height: 6).opacity(0.3 + 0.7 * wave)
+                        }
+                    }
+                    .foregroundStyle(Color.accentColor)
+                }
+                (name.map { Text("\($0) · ").fontWeight(.bold).foregroundStyle(.primary) } ?? Text("")) + Text(label).foregroundStyle(.secondary)
+            }
+            .manrope(.subheadline)
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Color(uiColor: .secondarySystemBackground), in: MessageBubbleShape(fromUser: false))
+            Spacer(minLength: 40)
+        }
+        .transition(.opacity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([name, label].compactMap { $0 }.joined(separator: ", "))
+    }
+}
+
 private struct AnimatedTypingLabel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase

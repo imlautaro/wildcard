@@ -27,6 +27,8 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     let scheduleID: String?
     /// Set on contact work turns for a task; they cannot be retried manually.
     var taskID: String? = nil
+    /// Title of the task a work turn is for, so the chat can say what the contact is working on.
+    var taskTitle: String? = nil
     let groupRequestID: String?
     let errorCode: String?
     let sequence: Int

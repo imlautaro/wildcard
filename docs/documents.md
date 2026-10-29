@@ -12,8 +12,9 @@ contacts, and device/browser presentation have not been verified yet.
 ## Using it
 
 - **Ask in the chat**: "Write up the trip plan as a document", "Ana and Leo, draft the
-  report together". The contact calls `create_document`; a card appears under its
-  reply (private chats and groups) and opens the document.
+  report together". The contact calls `create_document`; a card appears inside its
+  reply bubble, as part of that contact's message (private chats and groups; on iOS a
+  photo reply keeps it just below the photo, where the photo bubble has no room), and opens the document.
 - **Chat details → Shared in this chat → Docs** lists the chat's documents first,
   then shared files, with **New document**.
 - The viewer renders the Markdown (headings, lists, quotes, code, tables, links) with
@@ -54,7 +55,7 @@ of every initial group draft.
 | --- | --- |
 | `list_documents` | IDs, titles, revision, size and last editor |
 | `read_document` | Up to 12,000 characters from `offset`, plus recent revision summaries |
-| `create_document` | Title and Markdown; the card shows under this reply |
+| `create_document` | Title and Markdown; the card shows inside this reply |
 | `edit_document` | `edits: [{find, replace}]` (up to 20) or `markdown` with `baseRevision`; optional `title`; `summary` required |
 
 Mutations store receipts in `document_mutation`, keyed by the turn (or group reply)
@@ -91,5 +92,5 @@ and [caching](caching.md#chat-documents).
 Static only: API/web TypeScript, full iOS Simulator Swift typecheck, and SQL
 preparation of 38 captured document statements against all migrations with D1's
 expression-depth limit. Not verified: model behavior, concurrent contact edits,
-conflict handling in both editors, cards under group replies, and rendering on a
+conflict handling in both editors, cards inside group replies, and rendering on a
 device or browser.

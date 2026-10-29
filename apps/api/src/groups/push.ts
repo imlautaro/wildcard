@@ -11,9 +11,10 @@ export async function deliverGroupPush(env: PushEnvironment, messageID?: string)
     OR NOT EXISTS (SELECT 1 FROM push_device d JOIN session s ON s.id = d.session_id
       WHERE d.id = group_push_delivery.device_id AND d.session_id = group_push_delivery.session_id
         AND s.user_id = group_push_delivery.user_id AND s.expires_at > ?1)
+    -- Task work triggers are internal and never notify.
     OR NOT EXISTS (SELECT 1 FROM group_message gm JOIN group_member m ON m.group_id = gm.group_id
       WHERE gm.id = group_push_delivery.message_id AND gm.group_id = group_push_delivery.group_id
-        AND m.user_id = group_push_delivery.user_id AND gm.user_id IS NOT m.user_id AND gm.sequence > m.last_read_sequence)`)
+        AND m.user_id = group_push_delivery.user_id AND gm.user_id IS NOT m.user_id AND gm.sequence > m.last_read_sequence AND gm.task_id IS NULL)`)
     .bind(now).run();
   if (!env.APNS_PRIVATE_KEY || !env.APNS_KEY_ID || !env.APNS_TEAM_ID || !env.APNS_TOPIC) return;
   const { results } = await env.DB.prepare(`SELECT p.message_id AS messageID, p.group_id AS groupID, p.user_id AS userID,
@@ -38,7 +39,7 @@ export async function deliverGroupPush(env: PushEnvironment, messageID?: string)
         JOIN group_member m ON m.group_id = gm.group_id AND m.user_id = ?2
         JOIN session s ON s.id = ?3 AND s.user_id = m.user_id AND s.expires_at > ?4
         JOIN push_device d ON d.id = ?5 AND d.session_id = s.id
-        WHERE gm.id = ?1 AND gm.group_id = ?6 AND gm.user_id IS NOT m.user_id AND gm.sequence > m.last_read_sequence`)
+        WHERE gm.id = ?1 AND gm.group_id = ?6 AND gm.user_id IS NOT m.user_id AND gm.sequence > m.last_read_sequence AND gm.task_id IS NULL`)
         .bind(item.messageID, item.userID, item.sessionID, Date.now(), item.deviceID, item.groupID)
         .first<{ groupName: string; senderName: string; agentID: string | null; text: string; sentAt: number; sequence: number }>();
       if (!alert) return;
@@ -51,7 +52,7 @@ export async function deliverGroupPush(env: PushEnvironment, messageID?: string)
         JOIN session s ON s.id = p.session_id AND s.user_id = p.user_id AND s.expires_at > ?4
         JOIN push_device d ON d.id = p.device_id AND d.session_id = s.id
         WHERE p.message_id = ?1 AND p.device_id = ?2 AND p.session_id = ?3
-          AND gm.user_id IS NOT m.user_id AND gm.sequence > m.last_read_sequence`)
+          AND gm.user_id IS NOT m.user_id AND gm.sequence > m.last_read_sequence AND gm.task_id IS NULL`)
         .bind(item.messageID, item.deviceID, item.sessionID, Date.now()).first();
       if (!eligible) return;
       const response = await sendAPNS(env, jwt, { ...item, collapseID }, groupMessagePayload({ ...item, ...alert, unreadCount }));

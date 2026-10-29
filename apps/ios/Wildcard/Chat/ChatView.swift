@@ -112,6 +112,10 @@ struct ChatView: View {
                             .id("\(turn.id)/user")
                         }
                         if item.kind == .assistant, let reply = item.message?.text ?? turn.assistantText {
+                            // Mini apps and documents from this reply show inside its first bubble.
+                            let isFirst = item.message == nil || item.message?.id == "\(turn.id)/assistant/0"
+                            let apps = isFirst ? contacts.miniApps.apps(contactID: contactID, turnID: turn.id) : []
+                            let documents = isFirst ? (contacts.documentCaches.list("contacts/\(contactID)").value ?? []).filter { $0.sourceID == turn.id } : []
                             Group {
                                 if let attachment = item.message?.attachment {
                                     ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id,
@@ -122,7 +126,11 @@ struct ChatView: View {
                                 } else {
                                     MessageBubbleView(text: reply, sentAt: item.timestamp, fromUser: false, formatsMarkdown: true,
                                                       replyQuote: item.message?.replyTo.map(replyPreview),
-                                                      onQuoteTap: { if let quote = item.message?.replyTo { showQuoted(quote, proxy: proxy) } })
+                                                      onQuoteTap: { if let quote = item.message?.replyTo { showQuoted(quote, proxy: proxy) } },
+                                                      accessory: apps.isEmpty && documents.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 6) {
+                                                          ForEach(apps) { MiniAppCardView(app: $0, contactID: contactID, embedded: true) }
+                                                          ForEach(documents) { DocumentCardView(document: $0, base: "contacts/\(contactID)", caches: contacts.documentCaches, embedded: true) }
+                                                      }))
                                 }
                             }
                                 .swipeToReply(enabled: canReply) { self.reply(to: turn, side: "assistant") }
@@ -144,13 +152,13 @@ struct ChatView: View {
                                         replyIsVisible: true
                                     )
                                 }
-                            ForEach(item.message == nil || item.message?.id == "\(turn.id)/assistant/0" ? contacts.miniApps.apps(contactID: contactID, turnID: turn.id) : []) { app in
-                                MiniAppCardView(app: app, contactID: contactID)
+                            // A reply with a photo keeps its cards under the photo bubble.
+                            if item.message?.attachment != nil {
+                                ForEach(apps) { MiniAppCardView(app: $0, contactID: contactID) }
+                                ForEach(documents) { DocumentCardView(document: $0, base: "contacts/\(contactID)", caches: contacts.documentCaches) }
                             }
-                            ForEach(item.message == nil || item.message?.id == "\(turn.id)/assistant/0"
-                                    ? (contacts.documentCaches.list("contacts/\(contactID)").value ?? []).filter { $0.sourceID == turn.id } : []) { document in
-                                DocumentCardView(document: document, base: "contacts/\(contactID)", caches: contacts.documentCaches)
-                            }
+                        } else if item.kind == .status && turn.taskID != nil && (turn.status == .queued || turn.status == .running) {
+                            TaskWorkIndicator(title: turn.taskTitle)
                         } else if item.kind == .status && turn.status == .running && chat.presence?.status == .typing {
                             ReplyTypingIndicator()
                         } else if item.kind == .status && turn.status == .failed && !chat.turns.contains(where: { $0.sequence > turn.sequence && $0.assistantText != nil }) {

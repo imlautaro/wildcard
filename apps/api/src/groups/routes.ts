@@ -32,16 +32,18 @@ function groupPreview(row: GroupSummary) {
   return { ...row,
     lastMessagePreview: source == null ? null : [...(row.lastMessageUserID == null ? plainMessageMarkdown(source) : source)].slice(0, 500).join('') };
 }
+// Task work triggers (task_id set, no sender) are internal: the assignee's own reply is
+// the visible event, so they never count as unread, preview or history.
 const summary = `m.last_read_sequence AS lastReadSequence,
   (SELECT COUNT(*) FROM group_message gm WHERE gm.group_id = g.id AND gm.sequence > m.last_read_sequence
-    AND gm.user_id IS NOT m.user_id) AS unreadCount, g.id, g.name, g.owner_id AS ownerID,
-  (SELECT id FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageID,
-  (SELECT user_id FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageUserID,
-  (SELECT ${receiptState('gm')} FROM group_message gm WHERE gm.group_id = g.id ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageReceiptState, g.created_at AS createdAt, g.photo_version AS photoVersion,
-  (SELECT CASE WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
-  (SELECT created_at FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageAt,
-  (SELECT sender_name FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1) AS lastMessageSenderName,
-  COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt`;
+    AND gm.user_id IS NOT m.user_id AND gm.task_id IS NULL) AS unreadCount, g.id, g.name, g.owner_id AS ownerID,
+  (SELECT id FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageID,
+  (SELECT user_id FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageUserID,
+  (SELECT ${receiptState('gm')} FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageReceiptState, g.created_at AS createdAt, g.photo_version AS photoVersion,
+  (SELECT CASE WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
+  (SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageAt,
+  (SELECT sender_name FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageSenderName,
+  COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt`;
 
 groups.use('*', async (c, next) => {
   const session = await readBearerSession(c.env, c.req.raw.headers);
@@ -73,7 +75,7 @@ groups.get('/', async (c) => {
     g.name AS groupName, gm.sender_name AS senderName, gm.agent_id AS agentID, gm.created_at AS sentAt,
     CASE WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END AS text
     FROM group_message gm JOIN group_member m ON m.group_id = gm.group_id JOIN chat_group g ON g.id = gm.group_id
-    WHERE m.user_id = ? AND gm.sequence > m.last_read_sequence AND gm.user_id IS NOT m.user_id
+    WHERE m.user_id = ? AND gm.sequence > m.last_read_sequence AND gm.user_id IS NOT m.user_id AND gm.task_id IS NULL
     ORDER BY gm.sequence DESC LIMIT 50`).bind(c.get('owner')).all<Record<string, unknown> & { text: string; agentID: string | null }>();
   return c.json({ groups: results.map(groupPreview), activity: activity.map((item) => ({ ...item,
     text: [...item.text].slice(0, 500).join(''), previewText: [...(item.agentID ? plainMessageMarkdown(item.text) : item.text)].slice(0, 500).join('') })), contributorModel: contributor(c.env) });
@@ -161,6 +163,7 @@ groups.get('/:id', async (c) => {
     JOIN contact_agent a ON a.id = ga.agent_id WHERE ga.group_id = ?`).bind(id, id).all();
   const { results: replies } = await c.env.DB.prepare(`SELECT r.id, r.agent_id AS agentID, a.name, r.status,
     r.source_id AS sourceID, source.sequence AS sourceSequence, r.attempt,
+    source.task_id AS taskID, (SELECT title FROM task WHERE id = source.task_id) AS taskTitle,
     EXISTS (SELECT 1 FROM agent_attention attention JOIN agent_presence presence ON presence.agent_id = attention.agent_id
       WHERE attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt
         AND r.status = 'running' AND presence.status = 'typing' AND presence.expires_at > ?2) AS isTyping
@@ -291,7 +294,7 @@ groups.get('/:id/messages', async (c) => {
   if (!Number.isSafeInteger(before) || before < 1) return c.json({ error: 'Invalid history cursor' }, 400);
   const { results } = await c.env.DB.prepare(`SELECT ${receiptState('group_message')} AS receiptState, sequence, id, user_id AS userID, agent_id AS agentID,
     sender_name AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON, reply_to_id AS replyToID FROM group_message
-    WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before).all<{ sequence: number; attachmentJSON: string | null; replyToID: string | null }>();
+    WHERE group_id = ? AND sequence < ? AND task_id IS NULL ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before).all<{ sequence: number; attachmentJSON: string | null; replyToID: string | null }>();
   const page = results.slice(0, 50);
   const quotes = await groupQuotes(c.env.DB, c.req.param('id'), page);
   return c.json({ messages: page.reverse().map(({ attachmentJSON, replyToID, ...message }) => ({ ...message,
@@ -346,7 +349,7 @@ groups.put('/:id/read', async (c) => {
     SELECT id FROM group_message WHERE group_id = ? AND sequence <= ?)`)
     .bind(id, owner, id, member.lastReadSequence).run();
   const unread = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM group_message WHERE group_id = ?
-    AND sequence > ? AND user_id IS NOT ?`).bind(id, member.lastReadSequence, owner).first<{ count: number }>();
+    AND sequence > ? AND user_id IS NOT ? AND task_id IS NULL`).bind(id, member.lastReadSequence, owner).first<{ count: number }>();
   return c.json({ ...member, unreadCount: unread?.count ?? 0 });
 });
 groups.post('/:id/messages', async (c) => {

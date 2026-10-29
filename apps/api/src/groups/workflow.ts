@@ -67,7 +67,7 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
     env.DB.prepare(`INSERT INTO group_message (id, group_id, agent_id, sender_name, text, created_at, contributor_consent, exchange_id, requester_id, reply_to_id, attachment_json)
       SELECT r.id, r.group_id, r.agent_id, a.name, ?3, ?4, ?5, source.exchange_id, source.requester_id,
         (SELECT gm.id FROM group_message gm WHERE gm.id = ?7 AND gm.group_id = r.group_id
-          AND gm.sequence <= ?6 AND ${visibleMessage.replaceAll('?3', '?5')}), ?8
+          AND gm.sequence <= ?6 AND gm.task_id IS NULL AND ${visibleMessage.replaceAll('?3', '?5')}), ?8
       FROM group_reply r JOIN contact_agent a ON a.id = r.agent_id JOIN group_message source ON source.id = r.source_id
       WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND ?3 IS NOT NULL
       AND ${access} AND ${unchangedHistory} AND ${groupEnergyAvailable('r')} ON CONFLICT(id) DO NOTHING`).bind(...bindings, draft.replyToID ?? null, attachment ? JSON.stringify(attachment) : null),

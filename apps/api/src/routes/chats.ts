@@ -92,12 +92,14 @@ chats.get('/turns', async (c) => {
   if (before !== undefined && (!/^\d{1,16}$/.test(before) || !Number.isSafeInteger(Number(before)) || Number(before) < 1)) {
     return c.json({ error: 'Invalid cursor' }, 400);
   }
-  const { results } = await c.env.DB.prepare(`SELECT ${turnColumns}, attachment_json AS attachmentJSON FROM chat_turn
+  // Task work turns carry the task title so clients can say what the contact is working on.
+  const { results } = await c.env.DB.prepare(`SELECT ${turnColumns}, attachment_json AS attachmentJSON,
+    (SELECT title FROM task WHERE task.id = chat_turn.task_id) AS taskTitle FROM chat_turn
     WHERE contact_id = ?1 AND user_id = ?2 AND sequence < ?3 ORDER BY sequence DESC LIMIT 51`)
-    .bind(c.get('contactID'), c.get('owner'), before ? Number(before) : Number.MAX_SAFE_INTEGER).all<ChatTurn & { attachmentJSON: string | null }>();
+    .bind(c.get('contactID'), c.get('owner'), before ? Number(before) : Number.MAX_SAFE_INTEGER).all<ChatTurn & { attachmentJSON: string | null; taskTitle: string | null }>();
   const page = results.slice(0, 50);
   const quotes = await privateQuotes(c.env.DB, c.get('contactID'), c.get('owner'), page);
-  return c.json({ presence, turns: page.reverse().map((turn) => publicTurn(turn, quotes(turn), quotes)), nextBefore: results.length > 50 ? page[0].sequence : null });
+  return c.json({ presence, turns: page.reverse().map((turn) => ({ ...publicTurn(turn, quotes(turn), quotes), taskTitle: turn.taskTitle })), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 // Acknowledge only completed replies actually presented by the client. Never move backwards.
 chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }), async (c) => {

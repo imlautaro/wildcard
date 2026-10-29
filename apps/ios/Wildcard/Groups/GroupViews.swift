@@ -198,6 +198,14 @@ struct GroupChatView: View {
         if voice.phase == .recording { return true }
         return draftIsEmpty ? canUseMicrophone : canSend
     }
+    private var workingReplies: [GroupReply] {
+        (store.snapshot?.replies ?? []).filter { $0.taskID != nil && ($0.status == "queued" || $0.status == "running") }
+    }
+    private var subtitle: String {
+        let names = workingReplies.map(\.name).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        if !names.isEmpty { return "\(names.joined(separator: ", ")) working…" }
+        return store.snapshot?.members.map(\.name).joined(separator: ", ") ?? "Loading..."
+    }
     private func failedReplies(for message: GroupMessage) -> [GroupReply] {
         (store.snapshot?.replies ?? []).filter { reply in
             reply.status == "failed" && reply.sourceID == message.id &&
@@ -266,6 +274,7 @@ struct GroupChatView: View {
                     }
                     ForEach(store.messages) { message in
                         GroupMessageRow(message: message, groupID: groupID, members: store.snapshot?.members ?? [],
+                                        documents: (groups.conversations.documents.list("groups/\(groupID)").value ?? []).filter { $0.sourceID == message.id },
                                         isNew: store.newIncomingMessageIDs.contains(message.id),
                                         replyQuote: message.replyTo.map(replyPreview),
                                         canReply: store.snapshot != nil,
@@ -273,10 +282,6 @@ struct GroupChatView: View {
                                         onReply: { reply(to: message) })
                             .messageHighlight(highlightedMessage == message.id)
                             .id(message.id)
-                        ForEach((groups.conversations.documents.list("groups/\(groupID)").value ?? []).filter { $0.sourceID == message.id }) { document in
-                            DocumentCardView(document: document, base: "groups/\(groupID)", caches: groups.conversations.documents)
-                                .padding(.leading, 8)
-                        }
                         ForEach(failedReplies(for: message)) { reply in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("\(reply.name) couldn't finish replying to this message.")
@@ -310,7 +315,14 @@ struct GroupChatView: View {
                                               replyQuote: store.pendingAttachment == nil ? pendingQuote : nil)
                         }
                     }
-                    ForEach((store.snapshot?.replies ?? []).filter { $0.status == "running" && $0.isTyping == 1 }) { reply in
+                    // Task work turns say what the contact is working on; other replies show typing.
+                    ForEach(workingReplies) { reply in
+                        HStack(alignment: .bottom, spacing: 8) {
+                            GroupAvatar(member: store.snapshot?.members.first { $0.kind == "agent" && $0.id == reply.agentID }, groupID: groupID, size: 30)
+                            TaskWorkIndicator(name: reply.name, title: reply.taskTitle)
+                        }
+                    }
+                    ForEach((store.snapshot?.replies ?? []).filter { $0.taskID == nil && $0.status == "running" && $0.isTyping == 1 }) { reply in
                         HStack(spacing: 6) {
                             Text(reply.name).manrope(.caption, weight: .semibold)
                             ReplyTypingIndicator()
@@ -378,7 +390,7 @@ struct GroupChatView: View {
                                 .manrope(.headline, weight: .semibold)
                                 .foregroundStyle(Color(uiColor: .label))
                                 .lineLimit(1)
-                            GroupMarquee(text: store.snapshot?.members.map(\.name).joined(separator: ", ") ?? "Loading...")
+                            GroupMarquee(text: subtitle)
                                 .frame(width: 160, height: memberLineHeight)
                         }
                     }
@@ -387,7 +399,7 @@ struct GroupChatView: View {
                 }
                 .tint(Color(uiColor: .label))
                 .accessibilityLabel(store.snapshot?.group.name ?? "Group details")
-                .accessibilityValue(store.snapshot?.members.map(\.name).joined(separator: ", ") ?? "Loading...")
+                .accessibilityValue(subtitle)
             }
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection, matching: .images, preferredItemEncoding: .compatible)
@@ -657,6 +669,8 @@ private struct GroupMessageRow: View {
     let message: GroupMessage
     let groupID: String
     let members: [GroupMember]
+    /// Documents this message created, shown inside its bubble.
+    var documents: [ChatDocumentSummary] = []
     let isNew: Bool
     let replyQuote: MessageReplyPreview?
     let canReply: Bool
@@ -690,7 +704,13 @@ private struct GroupMessageRow: View {
                 if !message.text.isEmpty && message.attachment?.isImage != true {
                     MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, receiptState: message.receiptState ?? "sent", showsReceipt: own, formatsMarkdown: message.agentID != nil,
                                       senderName: own ? nil : (sender?.name ?? message.senderName),
-                                      senderColor: senderColor, replyQuote: message.attachment == nil ? replyQuote : nil, onQuoteTap: onQuoteTap)
+                                      senderColor: senderColor, replyQuote: message.attachment == nil ? replyQuote : nil, onQuoteTap: onQuoteTap,
+                                      accessory: documents.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 6) {
+                                          ForEach(documents) { DocumentCardView(document: $0, base: "groups/\(groupID)", caches: groups.conversations.documents, embedded: true) }
+                                      }))
+                }
+                if message.text.isEmpty || message.attachment?.isImage == true {
+                    ForEach(documents) { DocumentCardView(document: $0, base: "groups/\(groupID)", caches: groups.conversations.documents) }
                 }
             }
         }

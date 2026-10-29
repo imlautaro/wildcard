@@ -73,6 +73,9 @@ const items = computed<Item[]>(() => {
 });
 const lastTurnID = computed(() => state.value.turns.at(-1)?.id);
 const replying = computed(() => state.value.turns.some((turn) => turn.status === 'queued' || turn.status === 'running'));
+// A task work turn has no human message; say what the contact is working on instead.
+const working = computed(() => state.value.turns.find((turn) => turn.taskID && (turn.status === 'queued' || turn.status === 'running')));
+const workLabel = (turn: ChatTurn) => turn.taskTitle ? `Working on “${turn.taskTitle}”` : 'Working on a task';
 
 function replyPreview(quote: ReplyQuote) {
   return quote.side === 'user'
@@ -189,7 +192,7 @@ onBeforeUnmount(() => {
         <AppAvatar :name="contact?.name ?? ''" :path="contact ? contactPhotoPath(contact) : null" :size="36" />
         <div>
           <div class="name">{{ contact?.name ?? 'Chat' }}</div>
-          <div class="subtitle">{{ presenceLabel(state.presence) }}</div>
+          <div class="subtitle">{{ working ? `${workLabel(working)}…` : presenceLabel(state.presence) }}</div>
         </div>
       </NuxtLink>
     </template>
@@ -280,9 +283,16 @@ onBeforeUnmount(() => {
                 <MessageReplyQuote v-if="item.first && item.turn.assistantMessages?.[0]?.replyTo" :preview="replyPreview(item.turn.assistantMessages[0].replyTo)" interactive @open="showQuoted(item.turn.assistantMessages[0].replyTo)" />
                 <MessageAttachment v-if="item.first && item.turn.assistantMessages?.[0]?.attachment" :attachment="item.turn.assistantMessages[0].attachment" :path="`contacts/${contactID}/chat/turns/${item.turn.id}/attachment?side=assistant`" />
                 <div :class="{ caption: item.first && item.turn.assistantMessages?.[0]?.attachment }"><MessageMarkdown :text="item.text ?? item.turn.assistantText" /></div>
+                <template v-if="item.first">
+                  <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => a.turnID === item.turn.id)" :key="app.id" :app="app" :contact-id="contactID" />
+                  <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.turn.id)" :key="doc.id" :document="doc" :to="`/contacts/${contactID}/documents/${doc.id}`" />
+                </template>
                 <div class="meta">{{ messageTime(item.timestamp) }}</div>
               </div>
             </MessageReactions>
+          </div>
+          <div v-else-if="item.kind === 'status' && item.turn.taskID && (item.turn.status === 'queued' || item.turn.status === 'running')" class="bubble-row incoming">
+            <div class="work-status" role="status"><span class="typing-dots" aria-hidden="true"><span /><span /><span /></span>{{ workLabel(item.turn) }}</div>
           </div>
           <div v-else-if="item.kind === 'status' && item.turn.status === 'running' && state.presence?.status === 'typing'" class="bubble-row incoming">
             <div class="typing" aria-label="Typing"><span /><span /><span /></div>
@@ -294,8 +304,6 @@ onBeforeUnmount(() => {
               class="link-button" :disabled="state.retrying || replying || !!state.pending" @click="retryReply(item.turn)"
             >Retry reply</button>
           </div>
-          <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => item.kind === 'assistant' && item.first && a.turnID === item.turn.id)" :key="app.id" :app="app" :contact-id="contactID" />
-          <DocumentCard v-for="doc in documents.state.value.items.filter(d => item.kind === 'assistant' && item.first && d.sourceID === item.turn.id)" :key="doc.id" :document="doc" :to="`/contacts/${contactID}/documents/${doc.id}`" />
           <div v-for="action in remote.state.value.actions.filter(a => item.kind === 'user' && a.turnID === item.turn.id)" :key="action.id" class="native-receipt" :class="remoteTone(action.status)">
             <span class="native-glyph" :data-kind="action.kind"><AppIcon :name="action.kind === 'alarm' ? 'alarm' : 'timer'" /></span>
             <div>

@@ -15,7 +15,11 @@ useHead({ title: computed(() => group.value?.name ?? 'Group') });
 const members = computed(() => new Map((state.value.snapshot?.members ?? []).map((member) => [`${member.kind}/${member.id}`, member])));
 const memberLine = computed(() => (state.value.snapshot?.members ?? []).map((member) => member.kind === 'user' && member.id === user.value?.id ? 'You' : member.name).join(', '));
 const activeReplies = computed(() => (state.value.snapshot?.replies ?? []).filter((reply) => reply.status === 'queued' || reply.status === 'running'));
-const typingReplies = computed(() => activeReplies.value.filter((reply) => reply.status === 'running' && reply.isTyping === 1));
+// Task work turns show what the contact is working on; other replies show typing dots.
+const workingReplies = computed(() => activeReplies.value.filter((reply) => reply.taskID));
+const typingReplies = computed(() => activeReplies.value.filter((reply) => !reply.taskID && reply.status === 'running' && reply.isTyping === 1));
+const subtitle = computed(() => typingReplies.value.length ? `${typingReplies.value.map((reply) => reply.name).join(', ')} typing…`
+  : workingReplies.value.length ? `${[...new Set(workingReplies.value.map((reply) => reply.name))].join(', ')} working…` : memberLine.value);
 function failedRepliesFor(message: GroupMessage) {
   return (state.value.snapshot?.replies ?? []).filter((reply) => reply.status === 'failed' && reply.sourceID === message.id
     && !state.value.messages.some((later) => later.agentID === reply.agentID && later.sequence > message.sequence));
@@ -51,7 +55,9 @@ function senderOf(message: GroupMessage): GroupMember | undefined {
   return message.agentID ? members.value.get(`agent/${message.agentID}`) : members.value.get(`user/${message.userID}`);
 }
 function senderPhoto(message: GroupMessage) {
-  const member = senderOf(message);
+  return memberPhoto(senderOf(message));
+}
+function memberPhoto(member: GroupMember | undefined) {
   return member?.photoVersion
     ? `groups/${groupID.value}/photos/${member.kind}/${member.id}?version=${encodeURIComponent(member.photoVersion)}`
     : null;
@@ -177,7 +183,7 @@ watch(() => state.value.messages.at(-1)?.id, () => documents.refresh(), { immedi
         <AppAvatar :name="group?.name ?? ''" :path="group ? groupPhotoPath(group) : null" :size="36" />
         <div>
           <div class="name">{{ group?.name ?? 'Group' }}</div>
-          <div class="subtitle">{{ typingReplies.length ? `${typingReplies.map((reply) => reply.name).join(', ')} typing…` : memberLine }}</div>
+          <div class="subtitle">{{ subtitle }}</div>
         </div>
       </NuxtLink>
     </template>
@@ -224,6 +230,7 @@ watch(() => state.value.messages.at(-1)?.id, () => documents.refresh(), { immedi
             <MessageReplyQuote v-if="item.message.replyTo" :preview="replyPreview(item.message.replyTo)" interactive @open="showQuoted(item.message.replyTo)" />
             <MessageAttachment v-if="item.message.attachment" :attachment="item.message.attachment" :path="attachmentPath(item.message)" />
             <div v-if="item.message.text" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }"><MessageMarkdown v-if="item.message.agentID" :text="item.message.text" /><template v-else>{{ item.message.text }}</template></div>
+            <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.message.id)" :key="doc.id" :document="doc" :to="`/groups/${groupID}/documents/${doc.id}`" />
             <div class="meta" :style="item.message.attachment?.mimeType.startsWith('image/') ? 'padding: 0 6px 2px' : ''">
               {{ messageTime(item.message.createdAt) }}<MessageReceipt v-if="isMine(item.message)" :receipt-state="item.message.receiptState ?? 'sent'" />
             </div>
@@ -231,7 +238,6 @@ watch(() => state.value.messages.at(-1)?.id, () => documents.refresh(), { immedi
           </MessageReactions>
         </div>
         <template v-if="item.kind === 'message'">
-          <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.message.id)" :key="doc.id" :document="doc" :to="`/groups/${groupID}/documents/${doc.id}`" />
           <div v-for="reply in failedRepliesFor(item.message)" :key="reply.id" class="status-line" role="status">
             {{ reply.name }} couldn't finish replying to this message.
             <button class="link-button" :disabled="activeReplies.length > 0" @click="retryReply(reply.id)">Retry reply</button>
@@ -257,6 +263,10 @@ watch(() => state.value.messages.at(-1)?.id, () => documents.refresh(), { immedi
         </div>
       </template>
 
+      <div v-for="reply in workingReplies" :key="reply.id" class="bubble-row incoming">
+        <div class="avatar-slot"><AppAvatar :name="reply.name" :path="memberPhoto(members.get(`agent/${reply.agentID}`))" :size="28" /></div>
+        <div class="work-status" role="status"><span class="typing-dots" aria-hidden="true"><span /><span /><span /></span><span><strong>{{ reply.name }}</strong> · {{ reply.taskTitle ? `Working on “${reply.taskTitle}”` : 'Working on a task' }}</span></div>
+      </div>
       <div v-for="reply in typingReplies" :key="reply.id" class="bubble-row incoming">
         <div class="avatar-slot" />
         <div class="typing" :aria-label="`${reply.name} is typing`"><span /><span /><span /></div>

@@ -28,7 +28,8 @@ servers and device presentation have not been verified yet.
 3. Apps over connected data need a connector assigned to the contact with the
    relevant tools enabled (see [MCP connections](connectors.md)). The contact calls
    `list_mcp_tools`, inspects one real result with `call_mcp_tool`, then calls
-   `create_mini_app`. A card appears under the reply. Open it to review the tools:
+   `create_mini_app`. A card appears inside the reply bubble, as part of the
+   contact's message. Open it to review the tools:
    **Runs each time you open or refresh** (reads) and **Only when you tap and
    confirm** (writes). Choose **Enable mini app**. Until then nothing loads.
 4. Opening an enabled app runs its reads, applies its transforms and shows the

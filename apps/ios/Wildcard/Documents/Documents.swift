@@ -65,11 +65,13 @@ final class DocumentCaches {
     }
 }
 
-/// Entry point under the message that created a document.
+/// Entry point in the message that created a document.
 struct DocumentCardView: View {
     let document: ChatDocumentSummary
     let base: String
     let caches: DocumentCaches
+    /// Inside the sender's message bubble instead of on its own.
+    var embedded = false
     @State private var presented = false
 
     var body: some View {
@@ -84,13 +86,13 @@ struct DocumentCardView: View {
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .frame(maxWidth: 340, alignment: .leading)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.horizontal, embedded ? 10 : 12).padding(.vertical, 10)
+            .frame(minWidth: embedded ? 220 : nil, maxWidth: embedded ? 300 : 340, alignment: .leading)
+            .background(embedded ? Color(.systemBackground).opacity(0.7) : Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: embedded ? 12 : 16, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: embedded ? nil : .infinity, alignment: .leading)
         .accessibilityLabel("\(document.title), document")
         .fullScreenCover(isPresented: $presented) { DocumentScreen(base: base, documentID: document.id, caches: caches) }
     }

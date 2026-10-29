@@ -21,7 +21,26 @@ have not been verified yet.
   assignee, notes and what it waits for. **Cancel list** cancels the list and every
   unfinished task. On iOS, swipe a task to cancel it.
 - Each task row shows the assignee, its status, what it is waiting for (a clock icon
-  while blocked) and the result the contact recorded.
+  while blocked) and the result the contact recorded. Contact tasks in progress show a
+  **Working** chip.
+
+## Seeing the work
+
+Contacts announce and report tasks themselves, in their own messages. There is no
+"Tasks" sender in the chat.
+
+- While a contact's task work turn is queued or running, the chat shows a row in that
+  contact's name with animated dots: "Working on “Book the hotel”" (private chats and
+  groups, iOS and web). The header subtitle says the same in private chats, and
+  "Ana, Leo working…" in groups (on web, a contact typing a normal reply takes
+  precedence; the iOS group subtitle never showed typing).
+- Private turns carry `taskTitle` in `GET /contacts/:id/chat/turns`; group snapshot
+  replies carry `taskID` and `taskTitle`. Both come from the polls the clients already
+  run, so there is no new cache.
+- When a contact creates or assigns tasks, the prompt asks it to say so in its own reply
+  (who does what); the assignee's work turn then reports back in the assignee's name.
+  The group work prompt tells the assignee never to mention the internal notice or a
+  "Tasks" sender. This is model guidance, not enforced.
 
 ## Contact work turns
 
@@ -50,13 +69,13 @@ if the turn was created.
 Known gaps:
 - A failed task turn shows its failure without **Retry reply** (turns carry `taskID`);
   the next review tries again.
-- The Tasks message notifies every group member and counts as unread, like other
-  group messages.
+- The hidden group trigger still counts as a newer message for other contacts' drafts
+  in flight (the history-unchanged guard), as before.
 - Proactive reviews do not follow the initiative's quiet hours (22:00–08:00), so a
   review can post, and push, at night.
-- The Tasks message does not repeat the human-message check that every group member
+- The task trigger does not repeat the human-message check that every group member
   consented to the Contributor model. Under Contributor without full consent the
-  reply fails, and each review leaves another Tasks message until the six-turn
+  reply fails, and each review adds another hidden trigger until the six-turn
   budget is spent.
 
 - **Private chats**: a queued `chat_turn` with empty `user_text` and `task_id`,
@@ -67,8 +86,11 @@ Known gaps:
   update to the person. It is never batched or manually retried, and a task that was
   finished, canceled or reassigned before the turn runs completes without a message.
   The chat list shows "Working on a task" while it is queued.
-- **Groups**: a visible **Tasks** message ("Task assigned to Ana: Book the hotel")
-  with no member as sender, and one reply opportunity for the assignee. It names a
+- **Groups**: an internal trigger message ("Task assigned to Ana: Book the hotel",
+  `task_id` set, no member as sender) and one reply opportunity for the assignee. The
+  trigger is hidden from people: the message list, chat-list preview, unread counts,
+  badges and push all skip `group_message` rows with `task_id`, and a contact's reply
+  cannot quote it. Contacts still see it in their context as the turn's trigger. It names a
   responsible human (task creator, list creator or group owner) as `requester_id`, so
   the existing membership, shared-memory and Contributor consent checks apply.
   `groupSourceAccess` admits it structurally (a task of this group's lists), so the
@@ -160,3 +182,9 @@ live model behavior (creating sensible lists, assigning, reporting without
 repetition), private and group work turns end to end, blocker hand-offs between
 contacts, energy interaction, the proactive review cadence, and both UIs on a device
 or browser.
+
+Work visibility and hidden triggers (October 29, 2026): API and web TypeScript, a full
+iOS Simulator Swift typecheck, and the 11 changed statements (group list, activity,
+messages, unread, snapshot replies, total unread, three push queries, the reply-quote
+guard and private turns), with the real receipt fragment, prepared on local workerd D1. Not verified on a device or
+browser, or against live task turns.

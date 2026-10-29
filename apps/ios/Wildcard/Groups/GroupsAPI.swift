@@ -48,6 +48,9 @@ struct GroupReply: Decodable, Identifiable {
     var sourceID: String? = nil
     var sourceSequence: Int? = nil
     var attempt: Int? = nil
+    /// Set when the reply is a task work turn; its trigger is hidden from the transcript.
+    var taskID: String? = nil
+    var taskTitle: String? = nil
 }
 struct GroupMessage: Decodable, Identifiable, Equatable {
     let sequence: Int

@@ -154,8 +154,18 @@ struct TasksView: View {
             .accessibilityLabel(task.status == "done" ? "Mark \(task.title) not done" : "Mark \(task.title) done")
             Button { if list.isActive { editing = task } } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(task.title).manrope(.body, weight: .semibold)
-                        .strikethrough(task.isFinished).foregroundStyle(task.isFinished ? .secondary : .primary)
+                    HStack(spacing: 6) {
+                        Text(task.title).manrope(.body, weight: .semibold)
+                            .strikethrough(task.isFinished).foregroundStyle(task.isFinished ? .secondary : .primary)
+                        // A contact actively working on this task.
+                        if task.assigneeKind == "agent" && task.status == "in_progress" {
+                            Label("Working", systemImage: "circle.fill").labelStyle(.titleAndIcon)
+                                .manrope(.caption2, weight: .semibold).imageScale(.small)
+                                .foregroundStyle(Color.accentColor)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Color.accentColor.opacity(0.15), in: Capsule())
+                        }
+                    }
                     Text(detail(task, in: list)).manrope(.caption).foregroundStyle(.secondary)
                     if let result = task.result { Text(result).manrope(.footnote) }
                 }
