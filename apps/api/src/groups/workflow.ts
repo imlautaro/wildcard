@@ -24,6 +24,13 @@ export async function recoverGroups(env: Env) {
   for (const group of results) await dispatchGroup(env, group.id);
 }
 
+// The insert trigger offers other bots a turn. Close only opportunities created
+// by this terminal message, in the same transaction, before dispatch can see them.
+const closeTerminalContinuations = (db: D1Database, messageID: string) => db.prepare(`UPDATE group_reply SET status = 'complete'
+  WHERE source_id = ?1 AND status = 'queued'
+    AND EXISTS (SELECT 1 FROM group_message WHERE id = ?1 AND agent_id IS NOT NULL)`)
+  .bind(messageID);
+
 type PublishOutcome = 'published' | 'skipped' | 'changed' | 'inactive';
 // Recheck attention, source-author access, shared-agent consent and Contributor
 // eligibility at publication, not just before a potentially slow model request.
@@ -60,6 +67,7 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
     env.DB.prepare(`SELECT r.status, EXISTS (SELECT 1 FROM group_message WHERE id = r.id) AS published,
       EXISTS (SELECT 1 FROM group_message newer WHERE newer.group_id = r.group_id AND newer.sequence > ?3) AS changed
       FROM group_reply r WHERE r.id = ?1 AND r.attempt = ?2`).bind(job.turnID, job.attempt, draft.throughSequence),
+    ...(draft.invitesReply === false ? [closeTerminalContinuations(env.DB, job.turnID)] : []),
   ]);
   const state = results[2].results[0] as { status: string; published: number; changed: number } | undefined;
   if (!state || state.status === 'failed' || state.status === 'queued') return 'inactive';
@@ -69,7 +77,7 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
   throw new Error('GROUP_UNAVAILABLE_OR_CONSENT_REQUIRED');
 }
 
-async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep, messages: string[]) {
+async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep, messages: string[], invitesReply?: boolean) {
   for (let index = 1; index < messages.length; index++) {
     await step.sleep(`group-message-pause-${index}`, messageDelay(messages[index]));
     const id = `${job.turnID}/part/${index}`;
@@ -78,7 +86,7 @@ async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep,
       const contributor = env.META_CHAT_MODEL.includes('contributor');
       // Stop the unsent tail if anyone else speaks. Previously delivered messages
       // remain intact, and the new input has its own reply opportunity.
-      await env.DB.prepare(`INSERT INTO group_message
+      await env.DB.batch([env.DB.prepare(`INSERT INTO group_message
         (id, group_id, agent_id, sender_name, text, created_at, contributor_consent, exchange_id, requester_id)
         SELECT ?7, r.group_id, r.agent_id, agent.name, ?3, ?4, ?5, source.exchange_id, source.requester_id
         FROM group_reply r JOIN contact_agent agent ON agent.id = r.agent_id
@@ -88,7 +96,9 @@ async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep,
           AND ${publicationAccess(contributor)} AND ${groupEnergyAvailable('r')}
           AND NOT EXISTS (SELECT 1 FROM group_message newer WHERE newer.group_id = r.group_id AND newer.sequence > previous.sequence)
           AND ?6 = 0 ON CONFLICT(id) DO NOTHING`)
-        .bind(job.turnID, job.attempt, messages[index], Date.now(), contributor ? 1 : 0, 0, id, previousID).run();
+        .bind(job.turnID, job.attempt, messages[index], Date.now(), contributor ? 1 : 0, 0, id, previousID),
+        ...(invitesReply === false ? [closeTerminalContinuations(env.DB, id)] : []),
+      ]);
       return !!await env.DB.prepare('SELECT id FROM group_message WHERE id = ?').bind(id).first();
     });
     if (!published) break;
@@ -169,7 +179,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
             try { await deliverGroupPush(env, job.turnID); }
             catch { console.error(JSON.stringify({ event: 'group_push_deferred' })); }
           });
-          await publishGroupMessages(env, job, step, prepared.messages);
+          await publishGroupMessages(env, job, step, prepared.messages, prepared.invitesReply);
           await step.do('group-complete-message-burst', async () => {
             await env.DB.prepare(`UPDATE group_reply SET status = 'complete'
               WHERE id = ?1 AND attempt = ?2 AND status = 'running'

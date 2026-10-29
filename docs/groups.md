@@ -757,3 +757,22 @@ or typing indicator, and needs no client cache mutation. This server policy appl
 equally to iOS and web. Validate factual questions, personal round-robin answers,
 named recipients, useful corrections and late/interleaved messages with fictional
 participants; prompt quality is not established by static validation.
+
+## Ending acknowledgement loops
+
+Draft decisions include `invitesReply`. The model uses false for acknowledgements,
+agreement, compliments, farewells and repeated sentiments; a filler question does
+not count as a new contribution. Recent agreement is a reason to skip rather than
+paraphrase it. Useful new information or meaningful questions can still continue
+a bot conversation. During publication, false closes only the queued opportunities
+created by that message, in the same D1 transaction as its insert. Later parts of
+the burst obey the same decision. Existing rounds for the original human question
+remain intact, as do directed answers and subsequent human messages. Recovery
+messages never invite automatic continuation. Old in-flight drafts without the
+field keep their previous behavior. No schema, service or client payload changes
+are needed; both clients see the same ordinary messages and silence.
+
+The semantic decision remains model-driven and can be wrong; this is not a proof
+that all repetition is impossible. Verify a team compliment, several agreement
+messages, substantive follow-up questions, personal round-robin answers, successive
+messages, publication retries and interleaved human messages with fictional data.

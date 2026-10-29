@@ -647,3 +647,8 @@ Group contacts can silently skip a human question already answered sufficiently 
 another member, while still giving their own answer when individual perspectives
 are requested. This is shared server behavior with iOS; no placeholder or typing
 is shown for a skipped decision. See [group participation](groups.md#contextual-participation).
+
+Acknowledgements and closing group replies can end automatic bot continuations.
+The shared server transaction closes the opportunities created by that reply;
+original human questions and new human messages remain eligible. iOS and web use
+their existing message/presence cache. See [loop control](groups.md#ending-acknowledgement-loops).

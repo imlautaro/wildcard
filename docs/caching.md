@@ -874,3 +874,9 @@ Contextual group participation reuses existing round and history snapshots on bo
 clients. Skips publish no message and expose no draft; existing polling refreshes
 reply status and presence without adding a synthetic bubble or a parallel cache.
 Verify empty/skipped rounds on reopen, offline recovery and account switching.
+
+Terminal group replies close their own queued bot continuations atomically at
+publication. No client cache entries, synthetic messages or new polling are used.
+Existing group snapshots revalidate queue/presence changes on iOS and web. Confirm
+that terminal replies remain stable across navigation/offline recovery and that
+fresh human traffic still updates the conversation after it has gone quiet.
