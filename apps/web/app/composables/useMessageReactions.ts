@@ -38,15 +38,21 @@ export async function setMessageReaction(cache: ReactionCache, path: string, mes
   cache.pending[key] = { messageID, side, emoji };
   cache.revision++;
   delete cache.errors[key];
+  // Optimistic: show the choice at once and restore the previous one if the write fails.
+  const own = (row: MessageReaction) => row.messageID === messageID && row.side === side && row.actorID === actorID;
+  const replaceOwn = (row: MessageReaction | undefined) => { cache.rows = [...cache.rows.filter((value) => !own(value)), ...(row ? [row] : [])]; };
+  const previous = cache.rows.find(own);
+  replaceOwn(emoji === null ? undefined : { messageID, side, actorID, name: user.value?.name ?? 'You', emoji });
   try {
     await api(path, { method: 'PUT', json: { messageID, side, emoji } });
     if (cache.invalidated || account !== user.value?.id) return;
-    cache.rows = cache.rows.filter((row) => !(row.messageID === messageID && row.side === side && row.actorID === actorID));
-    if (emoji !== null) cache.rows.push({ messageID, side, actorID, name: user.value?.name ?? 'You', emoji });
     delete cache.pending[key];
   } catch (error) {
     if (error instanceof ApiError && [401, 403, 404].includes(error.status)) clearReactionCache(cache);
-    else if (!cache.invalidated && account === user.value?.id) cache.errors[key] = errorMessage(error);
+    else if (!cache.invalidated && account === user.value?.id) {
+      replaceOwn(previous);
+      cache.errors[key] = errorMessage(error);
+    }
   } finally {
     cache.revision++;
     cache.busy = cache.busy.filter((value) => value !== key);

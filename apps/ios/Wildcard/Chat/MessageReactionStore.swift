@@ -62,11 +62,16 @@ final class MessageReactionStore {
         let key = "\(messageID)/\(side)"
         guard !invalidated, !busy.contains(key), let user = auth.user else { return }
         let input = Input(messageID: messageID, side: side, emoji: emoji)
+        let actorID = "user/\(user.id)"
         busy.insert(key)
         pending[key] = input
         revision += 1
         errors.removeValue(forKey: key)
         defer { busy.remove(key); revision += 1 }
+        // Optimistic: show the choice at once and restore the previous one if the write fails.
+        let previous = rows.first { $0.messageID == messageID && $0.side == side && $0.actorID == actorID }
+        replaceOwn(messageID: messageID, side: side, actorID: actorID,
+                   with: emoji.map { MessageReaction(messageID: messageID, side: side, actorID: actorID, name: user.name, emoji: $0) })
         do {
             // encodeIfPresent would omit null; the API requires an explicit removal.
             let body = try JSONSerialization.data(withJSONObject: ["messageID": messageID, "side": side, "emoji": emoji as Any? ?? NSNull()])
@@ -74,15 +79,18 @@ final class MessageReactionStore {
                 try await api.send(path: path, method: "PUT", body: body, token: token)
             }
             guard !invalidated, auth.user?.id == user.id else { return }
-            let actorID = "user/\(user.id)"
-            rows.removeAll { $0.messageID == messageID && $0.side == side && $0.actorID == actorID }
-            if let emoji { rows.append(MessageReaction(messageID: messageID, side: side, actorID: actorID, name: user.name, emoji: emoji)) }
             pending.removeValue(forKey: key)
         } catch AuthAPI.Failure.notFound { invalidate() }
         catch AuthAPI.Failure.unauthorized { invalidate() }
         catch {
             guard !invalidated, auth.user?.id == user.id else { return }
+            replaceOwn(messageID: messageID, side: side, actorID: actorID, with: previous)
             errors[key] = error.localizedDescription
         }
+    }
+
+    private func replaceOwn(messageID: String, side: String, actorID: String, with row: MessageReaction?) {
+        rows.removeAll { $0.messageID == messageID && $0.side == side && $0.actorID == actorID }
+        if let row { rows.append(row) }
     }
 }

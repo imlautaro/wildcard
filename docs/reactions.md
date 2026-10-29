@@ -80,10 +80,11 @@ existing conversation budgets (eight iOS entries, twenty web entries); in-flight
 or failed reaction writes protect an entry from eviction until retried or its
 conversation/session is explicitly removed.
 
-Refresh requests deduplicate. A mutation increments a revision so an older refresh
-cannot overwrite its acknowledgement. A write is shown after server acceptance;
-failures preserve the previous snapshot and the exact pending absolute operation
-for Retry reaction across navigation. Permissions failures clear reaction state;
+Refresh requests deduplicate. A mutation increments a revision before and after
+the write so a refresh that overlaps it cannot overwrite it. Both clients apply the
+user's own reaction optimistically as soon as it is chosen; a failed write restores
+the user's previous reaction and keeps the exact pending absolute operation for
+Retry reaction across navigation. Permissions failures clear reaction state;
 conversation deletion, confirmed access loss and account changes discard caches
 and reject late results. Transient refresh failures keep usable badges and retry
 on subsequent foreground synchronization. An explicit chat refresh also refreshes
