@@ -12,7 +12,11 @@ In iOS, hold a sent message to open the emoji popover. Tap an existing badge to
 see who reacted and change/remove your reaction. The same action is exposed to
 accessibility services. Unsaved outgoing messages cannot be reacted to.
 On the web, hold a message, right-click it, or use its keyboard-focusable reaction
-button. Pointer movement cancels the hold, preserving scrolling. Badges show counts;
+button. That button and the reply button float beside the message on hover or
+keyboard focus (to the right of incoming messages, to the left of your own), so they
+take no space in the conversation. The selector floats over the conversation, above
+the message when there is room and below it otherwise, and closes on scroll, resize,
+Escape or a click outside. Pointer movement cancels the hold, preserving scrolling. Badges show counts;
 opening the selector shows participant names. Both clients use the same emoji set,
 selection, replacement, removal and explicit retry behavior.
 

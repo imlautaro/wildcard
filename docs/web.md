@@ -266,7 +266,11 @@ behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.
 See [message reactions](reactions.md) for the shared iOS/web selector, actor and
 message identity, agent tools, permissions, mutation retries, session cache freshness
 and verification steps. Reactions use existing conversation synchronization and
-add no unread messages or push alerts.
+add no unread messages or push alerts. The hover reply/reaction buttons and the
+selector float over the conversation instead of taking space under the message
+(`MessageReactions.vue`; the selector is teleported to `body` with fixed
+positioning). Checked on a static headless Chrome mock with the real CSS; the live
+app is not visually verified.
 
 ## Message replies
 
