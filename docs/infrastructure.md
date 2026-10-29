@@ -2034,3 +2034,28 @@ Rollback: older code ignores the additive column. Restoring visit-based Online
 requires re-creating the dropped trigger from migration 0013 deliberately; older
 code would also resume dispatching visit jobs. Read timestamps written earlier in
 the turn by this version remain valid for older code.
+
+## AI contact generation
+
+Apply migration `0052_contact_generation.sql` through the normal automatic release
+pipeline after existing migrations. It adds the account-scoped generation job table,
+indexes and a contact link cleared on deletion; no new service, binding, secret,
+external account or permission is required. Provision the existing D1 database,
+private `CONTACT_PHOTOS` R2 bucket, Standard Meta key and `ONBOARDING_WORKFLOW`
+before enabling this feature in an independent account. Replace the repository's
+account IDs, names and domains using the existing setup instructions. The same
+onboarding Workflow class supports the optional generation-ID payload, and the
+existing Cron recovers generation dispatches. iOS and web use the same signed API
+and private image routes. Local setup applies all migrations through the normal
+local setup command and uses an ignored `.dev.vars` Meta key for authorized
+inference; static validation requires no key.
+
+Commit and push to release automatically; never publish manually. Verify the pushed
+source commit, automatic migrations, binding access and fictional-data generation
+on both clients after an authorized release. This implementation has no live
+provider/device/browser verification. Rollback code can leave the additive table in
+place; do not remove it while generation Workflow instances are active. Completed
+contacts use the existing contact/personality/photo contracts. Older clients can
+read them, but this server rejects birthday writes younger than 18. Onboarding input
+continues to be retained privately after setup to personalize generation. Failed
+jobs/portraits have no automatic expiry; see [generation retention and recovery](contact-generation.md).

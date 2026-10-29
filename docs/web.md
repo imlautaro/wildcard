@@ -741,3 +741,16 @@ captions, public history or media grids. Both iOS and web use the shared API and
 the existing delivered-image viewer/cache; no client format changes are needed.
 See [image references and descriptions](generated-images.md#internal-image-descriptions-and-retrieval)
 for scope, lazy old-history indexing, limits, retention and verification.
+
+## AI creation and personality drafts
+
+Both iOS and web support [AI contact creation](contact-generation.md), alongside
+manual creation, with persisted onboarding context and bot-only selectors. Creation
+uses a session-owned draft/pending ID and a durable D1 job on the existing onboarding
+Workflow; navigation reuses cached state, then revalidates. New generated contacts
+receive random adult birthdays. Birthday edits must keep contacts at least 18.
+Existing creators can generate/regenerate all personality fields into the existing
+session draft, review them, and save with revision conflict protection. Generation
+preserves the name and adult birthday. Account changes/access loss discard cached
+private state; existing photo caches remain authoritative for bytes. See the linked
+guide for recovery, retention, rate limits, cache details and pending device checks.

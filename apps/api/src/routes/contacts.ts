@@ -17,6 +17,7 @@ import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readBearerSession } from '../lib/session';
 import sharing from './sharing';
 import personality from '../personality/routes';
+import generation from '../contacts/generation';
 
 type Contact = { onboardingChat?: number; initiativeEnabled: number; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
 const columns = `onboarding_chat AS onboardingChat, initiative_enabled AS initiativeEnabled, id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
@@ -99,6 +100,8 @@ contacts.post('/', contactBody, async (c) => {
     .bind(result.id, c.get('owner')).first<Contact>();
   return c.json({ contact: created }, 201);
 });
+
+contacts.route('/generation', generation);
 
 contacts.get('/:id', async (c) => {
   const result = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ?1 AND user_id = ?2`)

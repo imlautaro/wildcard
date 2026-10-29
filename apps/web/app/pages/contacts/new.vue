@@ -3,6 +3,19 @@ import type { Contact } from '~/utils/types';
 
 useHead({ title: 'New Contact' });
 const chats = useChats();
+const mode = ref('manual');
+const generation = useContactGeneration();
+const { draft, job, options } = generation;
+const running = computed(() => ['queued', 'generating'].includes(job.value?.status ?? ''));
+const ready = computed(() => !!draft.country && Number.isInteger(draft.age) && draft.age >= 18 && draft.age <= 120);
+let timer: ReturnType<typeof setTimeout> | undefined;
+let disposed = false;
+async function poll() {
+  await generation.refresh();
+  if (!disposed) timer = setTimeout(poll, running.value ? 3000 : 10000);
+}
+onMounted(() => { void poll(); });
+onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
 const name = ref('');
 const busy = ref(false);
 const error = ref<string | null>(null);
@@ -27,14 +40,37 @@ async function create() {
 <template>
   <PageBar title="New Contact" back="/contacts" always-back />
   <div class="page">
-    <form class="page-inner" @submit.prevent="create">
-      <IdentityEditor :name="name || '?'" :path="null" />
-      <div class="group">
-        <div class="field"><input v-model="name" type="text" placeholder="Name" aria-label="Name" maxlength="100" autofocus></div>
-      </div>
-      <p class="group-footer">Each contact is an AI agent with its own memory. You can add a photo after creating it.</p>
-      <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
-      <button type="submit" class="button block" :disabled="!valid || busy">Create Contact</button>
-    </form>
+    <div class="page-inner">
+      <AppSelect v-model="mode" label="Create contact" :options="[{ value: 'manual', label: 'Manually' }, { value: 'ai', label: 'Generate with AI' }]" />
+      <form v-if="mode === 'manual'" @submit.prevent="create">
+        <IdentityEditor :name="name || '?'" :path="null" />
+        <div class="group">
+          <div class="field"><input v-model="name" type="text" placeholder="Name" aria-label="Name" maxlength="100" autofocus></div>
+        </div>
+        <p class="group-footer">Each contact is an AI agent with its own memory. You can add a photo after creating it.</p>
+        <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
+        <button type="submit" class="button block" :disabled="!valid || busy">Create Contact</button>
+      </form>
+      <form v-else @submit.prevent="generation.submit">
+        <p class="group-footer">These fields describe your bot. Your saved onboarding preferences are reused without asking for your details again. Generation uses Meta Standard processing.</p>
+        <fieldset :disabled="generation.busy.value || !!job && job.status !== 'complete'" style="border: 0; padding: 0" v-if="options">
+          <AppSelect v-model="draft.style" label="Visual style" :options="options.styles.map(o => ({ value: o.code, label: o.name }))" />
+          <AppSelect v-model="draft.purpose" label="Relationship" :options="[{ value: 'friends', label: 'Friend' }, { value: 'study', label: 'Study partner' }, { value: 'work', label: 'Work colleague' }]" />
+          <label class="field">Age<input v-model.number="draft.age" type="number" min="18" max="120" step="1" required></label>
+          <AppSelect v-model="draft.gender" label="Gender" :options="[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]" />
+          <AppSelect v-model="draft.language" label="Preferred language" :options="options.languages.map(o => ({ value: o.code, label: o.name }))" />
+          <AppSelect v-model="draft.country" label="Country" :options="options.countries.map(o => ({ value: o.code, label: o.name }))" />
+        </fieldset>
+        <p v-else class="group-footer">Loading options…</p>
+        <p v-if="running" class="group-footer" role="status">Creating your contact and portrait… You can close the app and return later.</p>
+        <p v-if="job?.status === 'failed'" class="notice">Could not finish generation. Retry to reuse the saved identity and portrait.</p>
+        <p v-if="generation.error.value" class="notice">{{ generation.error.value }} <button type="button" class="link-button" @click="generation.refresh">Refresh</button></p>
+        <template v-if="job?.status === 'complete'">
+          <NuxtLink v-if="job.contactID" class="button block" :to="`/chats/${job.contactID}`">Open generated contact</NuxtLink>
+          <button type="button" class="button-row" @click="generation.another">Create another contact</button>
+        </template>
+        <button v-else type="submit" class="button block" :disabled="!ready || generation.busy.value || running">{{ job?.status === 'failed' ? 'Retry generation' : 'Generate contact' }}</button>
+      </form>
+    </div>
   </div>
 </template>

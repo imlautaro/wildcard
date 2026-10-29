@@ -153,7 +153,7 @@ struct OnboardingView: View {
                     } header: {
                         Text("About you")
                     } footer: {
-                        Text("Your contacts will have names common in your country and speak your preferred language. Contacts in every style will be within two years of your age. Gender does not determine your contacts’ personalities.")
+                        Text("Your contacts will have names common in your country and speak your preferred language. Contacts in every style are adults, usually within two years of your age, with a minimum age of 18. Gender does not determine your contacts’ personalities.")
                     }
                     .disabled(store.locked || store.busy)
                     Section("Agent appearance") {

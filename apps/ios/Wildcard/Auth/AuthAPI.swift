@@ -156,7 +156,11 @@ struct AuthAPI: Sendable {
                 }
                 throw Failure.rejected("Setup is temporarily unavailable. Please try again.")
             }
-            if path.hasSuffix("/personality") {
+            if path == "contacts/generation" {
+                let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
+                throw Failure.rejected(message ?? "Contact generation is temporarily unavailable. Please try again.")
+            }
+            if path.contains("/personality") {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
                 throw Failure.rejected(message ?? "Personality is temporarily unavailable. Please try again.")

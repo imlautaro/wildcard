@@ -65,7 +65,7 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
           <p class="hint">Friends have varied interests. Study and work teams use your field to create complementary contacts.</p>
           <label class="check-row"><input v-model="draft.createGroup" type="checkbox"><span>Create a group with my five contacts</span></label>
         </fieldset>
-        <p class="hint">Your contacts will have names common in your country and speak your preferred language. Contacts in every style will be within two years of your age. Gender does not determine your contacts’ personalities.</p>
+        <p class="hint">Your contacts will have names common in your country and speak your preferred language. Contacts in every style are adults, usually within two years of your age, with a minimum age of 18. Gender does not determine your contacts’ personalities.</p>
         <div class="group consent">
           <label class="check-row">
             <input v-model="draft.sharedMemoryConsent" type="checkbox" :disabled="locked || busy">

@@ -46,9 +46,32 @@ struct ContactPersonality: Codable, Equatable, Sendable {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: timeZone)
         formatter.dateFormat = "yyyy-MM-dd"
-        return birthDate <= formatter.string(from: .now)
+        let today = formatter.string(from: .now)
+        guard let year = Int(today.prefix(4)), let birthYear = Int(birthDate.prefix(4)) else { return false }
+        var anniversary = String(birthDate.suffix(5))
+        if anniversary == "02-29", Self.date("\(year)-02-29") == nil { anniversary = "02-28" }
+        let age = year - birthYear - (String(today.suffix(5)) < anniversary ? 1 : 0)
+        return age >= 18
     }
 
+    static func latestBirthday(timeZone: String) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let formatter = dateFormatter()
+        formatter.timeZone = TimeZone(identifier: timeZone) ?? TimeZone(secondsFromGMT: 0)
+        let today = date(formatter.string(from: .now)) ?? .now
+        var candidate = calendar.date(byAdding: .year, value: -18, to: today) ?? today
+        var profile = ContactPersonality()
+        profile.timeZone = TimeZone(identifier: timeZone)?.identifier ?? "UTC"
+        profile.birthDate = string(candidate)
+        while !profile.isValid {
+            candidate = calendar.date(byAdding: .day, value: -1, to: candidate)!
+            profile.birthDate = string(candidate)
+        }
+        let next = calendar.date(byAdding: .day, value: 1, to: candidate)!
+        profile.birthDate = string(next)
+        return profile.isValid ? next : candidate
+    }
     static func date(_ value: String) -> Date? {
         let formatter = dateFormatter()
         return formatter.date(from: value)
@@ -118,10 +141,17 @@ final class PersonalityDraft {
     }
 }
 
+struct GeneratedPersonality: Decodable, Sendable { let personality: ContactPersonality; let revision: Int }
+
 extension AuthAPI {
     func contactPersonality(id: String, token: String) async throws -> ContactPersonalitySnapshot {
         let (data, _) = try await send(path: "contacts/\(id)/personality", token: token)
         return try JSONDecoder().decode(ContactPersonalitySnapshot.self, from: data)
+    }
+
+    func generatePersonality(id: String, token: String) async throws -> GeneratedPersonality {
+        let (data, _) = try await send(path: "contacts/\(id)/personality/generate", method: "POST", body: Data("{}".utf8), token: token, timeout: 90)
+        return try JSONDecoder().decode(GeneratedPersonality.self, from: data)
     }
 
     func savePersonality(id: String, personality: ContactPersonality, revision: Int, token: String) async throws -> ContactPersonalitySnapshot {
@@ -141,11 +171,21 @@ struct ContactPersonalityView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var loading = false
     @State private var confirmRefresh = false
+    @State private var confirmGenerate = false
     private var canEdit: Bool { contacts.contact(id: contactID)?.role == "owner" }
 
     var body: some View {
         Form {
             if draft.loaded {
+                if canEdit {
+                    Section {
+                        Button(draft.profile.description.isEmpty ? "Generate with AI" : "Regenerate with AI") {
+                            if draft.dirty { confirmGenerate = true } else { Task { await generate() } }
+                        }.disabled(draft.saving || loading)
+                    } footer: {
+                        Text("Generate all personality fields with Meta Standard, then review and save the draft. Your contact name and adult birthday stay the same.")
+                    }
+                }
                 Section {
                     Toggle("Personality experiment", isOn: $draft.profile.enabled)
                 } footer: {
@@ -169,13 +209,13 @@ struct ContactPersonalityView: View {
                 Section {
                     Toggle("Date of birth", isOn: Binding(
                         get: { draft.profile.birthDate != nil },
-                        set: { draft.profile.birthDate = $0 ? ContactPersonality.string(.now) : nil }
+                        set: { draft.profile.birthDate = $0 ? ContactPersonality.string(ContactPersonality.latestBirthday(timeZone: draft.profile.timeZone)) : nil }
                     ))
                     if draft.profile.birthDate != nil {
                         DatePicker("Date of birth", selection: Binding(
-                            get: { draft.profile.birthDate.flatMap(ContactPersonality.date) ?? .now },
+                            get: { draft.profile.birthDate.flatMap(ContactPersonality.date) ?? ContactPersonality.latestBirthday(timeZone: draft.profile.timeZone) },
                             set: { draft.profile.birthDate = ContactPersonality.string($0) }
-                        ), in: (ContactPersonality.date("1900-01-01") ?? .distantPast)...Date.now,
+                        ), in: (ContactPersonality.date("1900-01-01") ?? .distantPast)...ContactPersonality.latestBirthday(timeZone: draft.profile.timeZone),
                            displayedComponents: .date)
                         .environment(\.timeZone, TimeZone(secondsFromGMT: 0)!)
                     }
@@ -206,7 +246,7 @@ struct ContactPersonalityView: View {
                 }
                 .disabled(!canEdit || draft.saving)
                 if !draft.profile.isValid {
-                    Text("Use a valid date, time zone, description up to 2,000 characters, specialties up to 1,000 characters, and whole-number traits from 1 to 10.")
+                    Text("Use a birthday at least 18 years ago, a valid time zone, description up to 2,000 characters, specialties up to 1,000 characters, and whole-number traits from 1 to 10.")
                         .foregroundStyle(.red).manrope(.footnote)
                 }
                 if draft.saved && !draft.dirty { Text("Saved.").foregroundStyle(.secondary) }
@@ -228,6 +268,9 @@ struct ContactPersonalityView: View {
         }
         .confirmationDialog("Discard your unsaved personality changes?", isPresented: $confirmRefresh) {
             Button("Discard and refresh", role: .destructive) { Task { await refresh(discard: true) } }
+        }
+        .confirmationDialog("Replace your unsaved personality draft with AI generation?", isPresented: $confirmGenerate) {
+            Button("Generate draft", role: .destructive) { Task { await generate() } }
         }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
@@ -251,6 +294,24 @@ struct ContactPersonalityView: View {
             contacts.forgetPersonality(id: contactID)
             draft.error = "This contact is no longer available."
         } catch { draft.error = error.localizedDescription }
+    }
+
+    private func generate() async {
+        guard canEdit, !draft.saving, !loading, draft.loaded else { return }
+        draft.saving = true; draft.error = nil
+        let accountID = auth.user?.id, expectedRevision = draft.revision
+        defer { draft.saving = false }
+        do {
+            let result = try await auth.withSession { api, token in try await api.generatePersonality(id: contactID, token: token) }
+            guard auth.user?.id == accountID, draft.loaded else { return }
+            guard result.revision == expectedRevision else {
+                draft.error = "Personality changed. Refresh before generating again."
+                return
+            }
+            draft.profile = result.personality; draft.saved = false
+        } catch is CancellationError { }
+        catch AuthAPI.Failure.notFound { contacts.forgetPersonality(id: contactID) }
+        catch { if auth.user?.id == accountID { draft.error = error.localizedDescription } }
     }
 
     private func save() async {

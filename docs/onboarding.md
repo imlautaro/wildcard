@@ -36,11 +36,10 @@ No external popularity ranking verifies the model's name choices. The user's
 gender does not determine the cast's genders, temperaments or romantic roles.
 Country determines naming context, not stereotyped appearance or behavior.
 For every avatar style, new identity plans must give each contact an integer
-age within two years of the user's age, clipped to 1–120, and an explicit male
+age within two years of the user's age, clipped to 18–120, and an explicit male
 or female gender. The server validates this range and a mixed-gender cast before
 saving the plan. Descriptions and appearance must match each contact's age and
-life stage. Legacy submissions without age retain the adult fallback (18–80). Contact
-ages are fictional identity text, not inferred calendar birthdays.
+life stage. Legacy submissions without age retain the adult fallback (18–80). The server assigns each generated contact a random calendar birthday matching its planned age, with a minimum of 18.
 The generated profiles omit the user's name/gender and direct every contact to
 use the selected language by default, including in groups. Replies still depend
 on the model following that direction; language is not a translation filter.
@@ -60,7 +59,7 @@ are preserved; they are not automatically rewritten. Every contact can still tal
 about any subject; the shared personality context discourages forced steering and
 unsupported expertise. These are model directions, not measured capability differences.
 Creators can edit identity and specialties later in **Contact details → Personality**.
-Profiles have no invented calendar birthday. All team-authored descriptions and
+Profiles have random fictional calendar birthdays matching their generated adult ages. All team-authored descriptions and
 group names are English; contact names retain native spelling. An optional group starts
 empty and accepts messages immediately after creation. All five contacts appear
 in Contacts and immediately in Chats, with **No messages yet** and zero unread
@@ -133,7 +132,7 @@ submission per session. The first read blocks; reopens reuse options, progress
 and even empty/pending results immediately, then revalidate. Unsubmitted drafts
 survive navigation in memory; submitted input resumes from D1 after an app/browser
 restart. There is no local persistence of onboarding personal fields. Age, circle purpose, group toggle and occupation/studies follow the same draft/snapshot/session reset rules as other fields. The D1
-input is explicitly retained with the account setup for resumption; age, gender,
+input is explicitly retained with the account setup for resumption and [AI contact generation](contact-generation.md); age, gender,
 country and occupation/studies are not public profile fields or attached to group-member responses. Work/study context is sent to Standard identity generation; generated contacts reflect the field without embedding user personal details.
 
 Reads are deduplicated, pending submissions survive navigation, and revisions
@@ -171,3 +170,5 @@ Provider contracts checked October 28, 2026:
 [Meta models](https://dev.meta.ai/docs/models),
 [image generation schema](https://dev.meta.ai/docs/api-reference/images/schemas),
 [Cloudflare Workflow rules](https://developers.cloudflare.com/workflows/build/rules-of-workflows/).
+
+AI creation reuses these persisted preferences without asking for the user profile again. Unfinished legacy plans containing minors are replaced with adult plans before publication; prior unpublished photos can remain in R2 for operator cleanup. Completed circles are not automatically regenerated.

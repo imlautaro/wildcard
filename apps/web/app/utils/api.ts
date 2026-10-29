@@ -27,7 +27,8 @@ function serverMessage(body: unknown): string | null {
 
 function failureMessage(path: string, method: string, status: number, body: unknown): string {
   if (path.startsWith('onboarding')) return serverMessage(body) ?? 'Setup is temporarily unavailable. Please try again.';
-  if (path.endsWith('/personality')) return serverMessage(body) ?? 'Personality is temporarily unavailable. Please try again.';
+  if (path === 'contacts/generation') return serverMessage(body) ?? 'Contact generation is temporarily unavailable. Please try again.';
+  if (path.includes('/personality')) return serverMessage(body) ?? 'Personality is temporarily unavailable. Please try again.';
   const code = body && typeof body === 'object' && 'code' in body ? (body as { code: unknown }).code : null;
   if (path.includes('/mcp')) return serverMessage(body) ?? 'Connections are temporarily unavailable. Please try again.';
   if (path.includes('/mini-apps')) return serverMessage(body) ?? 'Mini apps are temporarily unavailable. Please try again.';

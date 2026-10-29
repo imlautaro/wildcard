@@ -460,3 +460,18 @@ The following behavior needs authorized functional/model/device verification:
 7. Evaluate retry/review/discard publication paths and verify no duplicate effects.
 
 Provisioning and rollback are in [infrastructure](infrastructure.md#contact-personality).
+
+## AI creation and personality drafts
+
+Both iOS and web support [AI contact creation](contact-generation.md), alongside
+manual creation, with persisted onboarding context and bot-only selectors. Creation
+uses a session-owned draft/pending ID and a durable D1 job on the existing onboarding
+Workflow; navigation reuses cached state, then revalidates. New generated contacts
+receive random adult birthdays. Birthday edits must keep contacts at least 18.
+Existing creators can generate/regenerate all personality fields into the existing
+session draft, review them, and save with revision conflict protection. Generation
+preserves the name and adult birthday. Account changes/access loss discard cached
+private state; existing photo caches remain authoritative for bytes. See the linked
+guide for recovery, retention, rate limits, cache details and pending device checks.
+
+The server calendar-derived age takes precedence over age text in generated identities as birthdays pass.

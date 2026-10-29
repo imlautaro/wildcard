@@ -11,6 +11,7 @@ struct ContactEditorView: View {
     @State private var photoData: Data?
     @State private var photoChanged = false
     @State private var editingIdentity = false
+    @State private var creationMode = "manual"
     private var canEdit: Bool { contactID.flatMap { contacts.contact(id: $0) }?.canManage ?? true }
 
     init(contact: Contact? = nil) {
@@ -20,6 +21,18 @@ struct ContactEditorView: View {
 
     var body: some View {
         Form {
+            if contactID == nil {
+                Section {
+                    Picker("Create contact", selection: $creationMode) {
+                        Text("Manually").tag("manual")
+                        Text("Generate with AI").tag("ai")
+                    }
+                }
+            }
+            if contactID == nil && creationMode == "ai" {
+                ContactGenerationSection()
+            }
+            if contactID != nil || creationMode == "manual" {
             Section {
                 ProfileIdentityView(
                     name: name,
@@ -39,6 +52,7 @@ struct ContactEditorView: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+            }
             }
             if let contactID, contacts.contact(id: contactID)?.role == "owner" {
                 ContactEnergySection(contactID: contactID, cache: contacts.energySnapshots.store(for: contactID))
@@ -95,7 +109,7 @@ struct ContactEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(saving)
         .toolbar {
-            if canEdit {
+            if canEdit && (contactID != nil || creationMode == "manual") {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(contactID == nil ? "Create" : "Save", action: save)
                         .disabled(saving || contacts.isMutating || editingIdentity)

@@ -11,6 +11,7 @@ final class AuthStore {
     var error: String?
     let images = PrivateImageCache()
     let onboarding = OnboardingStore()
+    let contactGeneration = ContactGenerationStore()
     private let api = AuthAPI()
     private var token: String?
 
@@ -22,19 +23,19 @@ final class AuthStore {
         defer { isBusy = false }
         do {
             guard let savedToken = try SessionKeychain.load() else {
-                onboarding.reset()
+                onboarding.reset(); contactGeneration.reset()
                 await images.clear()
                 state = .signedOut
                 return
             }
             token = savedToken
             let restoredUser = try await api.currentUser(token: savedToken)
-            if user?.id != restoredUser.id { onboarding.reset() }
+            if user?.id != restoredUser.id { onboarding.reset(); contactGeneration.reset() }
             user = restoredUser
             images.activate(userID: restoredUser.id)
             state = .signedIn
         } catch AuthAPI.Failure.unauthorized {
-            onboarding.reset()
+            onboarding.reset(); contactGeneration.reset()
             await images.clear()
             do {
                 try SessionKeychain.delete()
@@ -65,7 +66,7 @@ final class AuthStore {
                 throw error
             }
             token = newToken
-            if user?.id != newUser.id { onboarding.reset() }
+            if user?.id != newUser.id { onboarding.reset(); contactGeneration.reset() }
             var profile = newUser
             profile.onboardingRequired = true
             do { profile = try await api.currentUser(token: newToken) }
@@ -117,7 +118,7 @@ final class AuthStore {
         do {
             do { try await api.signOut(token: token) }
             catch AuthAPI.Failure.unauthorized { /* The session is already invalid. */ }
-            onboarding.reset()
+            onboarding.reset(); contactGeneration.reset()
             await images.clear()
             try SessionKeychain.delete()
             self.token = nil
@@ -137,7 +138,7 @@ final class AuthStore {
         } catch {
             guard token == credential else { throw CancellationError() }
             if case AuthAPI.Failure.unauthorized = error {
-                onboarding.reset()
+                onboarding.reset(); contactGeneration.reset()
                 await images.clear()
                 do {
                     try SessionKeychain.delete()

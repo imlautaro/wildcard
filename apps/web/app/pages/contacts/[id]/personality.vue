@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { birthdayFacts, parsePersonality, personalityTraits } from '../../../../../../shared/personality';
+import { birthdayFacts, latestAdultBirthDate, parsePersonality, personalityTraits } from '../../../../../../shared/personality';
 import type { Contact } from '~/utils/types';
 
 const route = useRoute();
@@ -9,7 +9,7 @@ const session = useSession();
 const accountID = session.user.value?.id;
 const contact = ref<Contact | null>(chats.contacts.value.find(c => c.id === id.value) ?? null);
 definePageMeta({ key: route => route.fullPath });
-const { value, busy, error, refresh, save, editor } = usePersonality(id);
+const { value, busy, error, refresh, save, generate, editor } = usePersonality(id);
 const { draft, baseline, revision, saved } = toRefs(editor);
 const loadError = ref<string | null>(null);
 const canEdit = computed(() => contact.value?.role === 'owner');
@@ -17,6 +17,14 @@ const dirty = computed(() => JSON.stringify(draft.value) !== baseline.value);
 const valid = computed(() => !!parsePersonality(draft.value));
 const facts = computed(() => valid.value ? birthdayFacts(draft.value, Date.now()) : null);
 useHead({ title: 'Personality' });
+const latestBirthday = computed(() => {
+  try { return latestAdultBirthDate(Date.now(), draft.value.timeZone); }
+  catch { return latestAdultBirthDate(); }
+});
+async function generateDraft() {
+  if (dirty.value && !window.confirm('Replace your unsaved personality draft with AI generation?')) return;
+  await generate();
+}
 
 function apply() {
   if (!value.value || session.user.value?.id !== accountID) return;
@@ -64,6 +72,8 @@ onMounted(async () => {
     <template v-if="value">
       <p class="group-footer">One shared character, with a relationship that follows each person across chats and groups. Private conversations stay private. Only its creator can edit these settings.</p>
       <fieldset :disabled="!canEdit || busy" class="personality-fields">
+        <button v-if="canEdit" type="button" class="button-row" @click="generateDraft">{{ draft.description ? 'Regenerate with AI' : 'Generate with AI' }}</button>
+        <p class="group-footer">Generate all personality fields with Meta Standard, then review and save the draft. Your contact name and adult birthday stay the same.</p>
         <div class="group"><label class="toggle"><span>Personality experiment</span><input v-model="draft.enabled" type="checkbox" role="switch"></label></div>
         <div class="group">
           <label class="field personality-field">Stable identity<textarea v-model="draft.description" rows="5" placeholder="Background, values, interests, and things this contact always knows about itself." /></label>
@@ -74,7 +84,7 @@ onMounted(async () => {
         </div>
         <p class="group-footer">Things this contact is especially good at. These strengths are shared with everyone and independent of temperament. They can still talk about anything. Optional, up to 1,000 characters.</p>
         <div class="group">
-          <label class="field personality-field">Date of birth<input :value="draft.birthDate ?? ''" type="date" min="1900-01-01" @input="draft.birthDate = ($event.target as HTMLInputElement).value || null"></label>
+          <label class="field personality-field">Date of birth<input :value="draft.birthDate ?? ''" type="date" min="1900-01-01" :max="latestBirthday" @input="draft.birthDate = ($event.target as HTMLInputElement).value || null"></label>
           <label class="field personality-field">Birthday time zone<input v-model="draft.timeZone" type="text" placeholder="America/Argentina/Buenos_Aires" spellcheck="false"></label>
         </div>
         <p class="group-footer">{{ facts?.age == null ? 'Age is calculated from the date of birth.' : `Age: ${facts.age}${facts.isBirthday ? ' · Birthday today' : ''}` }}. February 29 is observed on February 28 in other years.</p>
@@ -87,7 +97,7 @@ onMounted(async () => {
         </div>
       </fieldset>
       <p class="group-footer">The contact expresses tendencies through tone and timing. It does not receive these scores. Feelings settle over time. Its acting direction adapts to each person without exposing private causes. Conversations with connections stay isolated. Follow-ups still respect your initiative switch and delivery limits.</p>
-      <p v-if="!valid" class="notice">Use a valid date, time zone, description up to 2,000 characters, specialties up to 1,000 characters, and whole-number traits from 1 to 10.</p>
+      <p v-if="!valid" class="notice">Use a birthday at least 18 years ago, a valid time zone, description up to 2,000 characters, specialties up to 1,000 characters, and whole-number traits from 1 to 10.</p>
       <p v-if="saved && !dirty" class="group-footer" role="status">Saved.</p>
       <button v-if="canEdit" type="submit" class="button block" :disabled="busy || !valid || !dirty">Save personality</button>
       <button type="button" class="button-row" :disabled="busy" @click="discardAndRefresh">Refresh personality</button>

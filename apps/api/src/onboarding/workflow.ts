@@ -1,11 +1,13 @@
+import { generatePortrait } from '../contacts/portrait';
+import { runContactGeneration } from '../contacts/generation';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
 import { museCompletion, isRecord } from '../chat/meta';
-import { photoKey, validPhoto } from '../photos/storage';
-import { defaultPersonality } from '../../../../shared/personality';
+import { photoKey } from '../photos/storage';
+import { defaultPersonality, randomBirthDate } from '../../../../shared/personality';
 import { onboardingOptions, type OnboardingInput } from '../../../../shared/onboarding';
 
-type Identity = { id: string; name: string; description: string; specialties?: string; portrait: string; age?: number; gender?: 'male' | 'female' };
+type Identity = { id: string; name: string; description: string; specialties?: string; portrait: string; age?: number; gender?: 'male' | 'female'; birthDate?: string };
 type Plan = { groupID: string; groupName: string; contacts: Identity[] };
 // Contrasting temperaments keep the generated identities behaviorally distinct.
 const temperaments = [
@@ -29,8 +31,8 @@ async function createPlan(env: Env, input: OnboardingInput): Promise<Plan> {
   const language = onboardingOptions.languages.find(l => l.code === input.language)!.name;
   const country = onboardingOptions.countries.find(c => c.code === input.country)!.name;
   const ageMatched = typeof input.age === 'number';
-  const minimumAge = ageMatched ? Math.max(1, input.age! - 2) : 18;
-  const maximumAge = ageMatched ? Math.min(120, input.age! + 2) : 80;
+  const minimumAge = ageMatched ? Math.max(18, input.age! - 2) : 18;
+  const maximumAge = ageMatched ? Math.max(18, Math.min(120, input.age! + 2)) : 80;
   const circleType = input.circleType ?? 'friends';
   const purpose = {
     friends: 'Create a circle of friends with varied everyday interests. Do not use or infer the user occupation or studies to shape these contacts.',
@@ -56,60 +58,17 @@ async function createPlan(env: Env, input: OnboardingInput): Promise<Plan> {
     if (!isRecord(c) || typeof c.age !== 'number' || !Number.isInteger(c.age) || c.age < minimumAge || c.age > maximumAge
       || (c.gender !== 'male' && c.gender !== 'female') || !text(c.name, 100) || !text(c.description, 1300) || !text(c.portrait, 700)
       || contacts.some(p => p.name.toLocaleLowerCase() === String(c.name).toLocaleLowerCase())) throw new Error('MODEL_INVALID_ONBOARDING');
-    contacts.push({ id: crypto.randomUUID(), name: c.name.trim(), specialties: specialties[i]!, age: c.age, gender: c.gender,
+    contacts.push({ id: crypto.randomUUID(), name: c.name.trim(), specialties: specialties[i]!, age: c.age, gender: c.gender, birthDate: randomBirthDate(c.age),
       description: `${c.age} years old ${c.gender}. ${c.description.trim()}\nDefault conversation language: ${language}. Use it in private chats and groups unless the user asks for another language.`, portrait: c.portrait.trim() });
   }
   if (new Set(contacts.map(c => c.gender)).size !== 2) throw new Error('MODEL_INVALID_ONBOARDING');
   return { groupID: crypto.randomUUID(), groupName: { friends: 'Friends', study: 'Study Group', work: 'Work Team' }[circleType], contacts };
 }
 
-async function generatePortrait(env: Env, identity: Identity, input: OnboardingInput): Promise<Uint8Array> {
-  const style = { cartoon: 'original 2D cartoon illustration', anime: 'original anime illustration',
-    '3d': 'original cinematic 3D animated movie character', realistic: `${identity.age !== undefined && identity.gender ? `${identity.age} years old ${identity.gender} ` : ''}social media natural photo taken with phone` }[input.style];
-  const response = await fetch('https://api.meta.ai/v1/images/generations', {
-    method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(180_000),
-    headers: { Authorization: `Bearer ${env.META_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'muse-image-1.0', n: 1, size: '1024x1024', output_format: 'jpeg',
-      response_format: 'b64_json', reasoning_strength: 'low',
-      tool_enablement: { enable_image_search: false, enable_web_search: false, enable_shell: false },
-      prompt: input.style === 'realistic'
-        ? `${style}. profile picture for social media. Appearance: ${identity.portrait}. Personality cues: ${identity.description}.`
-        : `Create one square profile avatar in this style: ${style}. Head and shoulders, centered face, uncluttered background, natural expression, fully clothed, age-appropriate appearance${identity.age !== undefined ? `, ${identity.age} years old` : ''}, no text or watermark. Original fictional identity, never a real person or existing character. Appearance: ${identity.portrait}. Personality cues: ${identity.description}.` }),
-  });
-  if (!response.ok) {
-    await response.body?.cancel();
-    if (response.status === 429 || response.status >= 500) throw new Error('MODEL_IMAGE_UNAVAILABLE');
-    throw new NonRetryableError('MODEL_IMAGE_REJECTED');
-  }
-  // Bound provider JSON before buffering; never persist image bytes in Workflow state.
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('MODEL_IMAGE_EMPTY');
-  let json = '', size = 0;
-  const decoder = new TextDecoder();
-  try {
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      size += chunk.value.byteLength;
-      if (size > 12 * 1024 * 1024) throw new NonRetryableError('MODEL_IMAGE_TOO_LARGE');
-      json += decoder.decode(chunk.value, { stream: true });
-    }
-    json += decoder.decode();
-  } finally { await reader.cancel(); }
-  const result: unknown = JSON.parse(json);
-  if (!isRecord(result) || !Array.isArray(result.data) || result.data.length !== 1
-    || !isRecord(result.data[0]) || typeof result.data[0].b64_json !== 'string') throw new Error('MODEL_IMAGE_INVALID');
-  const binary = atob(result.data[0].b64_json);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  // Meta treats size as aspect ratio, so generated images can exceed 1024 pixels.
-  if (bytes.length > 8 * 1024 * 1024 || !validPhoto(bytes, 4096)) throw new Error('MODEL_IMAGE_INVALID');
-  return bytes;
-}
-
-export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string }> {
-  async run(event: WorkflowEvent<{ owner: string }>, step: WorkflowStep) {
+export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string; generationID?: string }> {
+  async run(event: WorkflowEvent<{ owner: string; generationID?: string }>, step: WorkflowStep) {
     const owner = event.payload.owner;
+    if (event.payload.generationID) return runContactGeneration(this.env, owner, event.payload.generationID, step);
     try {
       const saved = await step.do('load-preferences', async () => {
         const row = await this.env.DB.prepare(`SELECT o.input_json, o.status FROM account_onboarding o JOIN user u ON u.id = o.user_id
@@ -120,7 +79,7 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string 
         return JSON.parse(row.input_json) as OnboardingInput;
       });
       if (!saved) return;
-      const plan = await step.do('generate-identities', { retries: { limit: 2, delay: '10 seconds', backoff: 'exponential' }, timeout: '2 minutes' }, async () => {
+      const originalPlan = await step.do('generate-identities', { retries: { limit: 2, delay: '10 seconds', backoff: 'exponential' }, timeout: '2 minutes' }, async () => {
         const row = await this.env.DB.prepare('SELECT plan_json FROM account_onboarding WHERE user_id = ?').bind(owner).first<{ plan_json: string | null }>();
         if (!row) throw new NonRetryableError('MODEL_ACCOUNT_UNAVAILABLE');
         if (row.plan_json) return JSON.parse(row.plan_json) as Plan;
@@ -131,9 +90,18 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string 
         if (!stored) throw new NonRetryableError('MODEL_ACCOUNT_UNAVAILABLE');
         return JSON.parse(stored.plan_json) as Plan;
       });
+      // A separate checkpoint also validates plans replayed from older Workflow code.
+      const plan = await step.do('adult-birthday-plan', { retries: { limit: 2, delay: '10 seconds' }, timeout: '2 minutes' }, async () => {
+        const replaced = originalPlan.contacts.some(c => c.age !== undefined && c.age < 18);
+        const plan = replaced ? await createPlan(this.env, saved) : originalPlan;
+        for (const identity of plan.contacts) identity.birthDate ??= randomBirthDate(Math.max(18, identity.age ?? 25));
+        await this.env.DB.prepare('UPDATE account_onboarding SET plan_json = ?, photo_count = CASE WHEN ? = 1 THEN 0 ELSE photo_count END, updated_at = ? WHERE user_id = ? AND status != ?')
+          .bind(JSON.stringify(plan), replaced ? 1 : 0, Date.now(), owner, 'complete').run();
+        return plan;
+      });
       for (let i = 0; i < plan.contacts.length; i++) {
         const identity = plan.contacts[i]!;
-        await step.do(`portrait-${i + 1}`, { retries: { limit: 2, delay: '15 seconds', backoff: 'exponential' }, timeout: '4 minutes' }, async () => {
+        await step.do(`adult-portrait-${i + 1}-${identity.id}`, { retries: { limit: 2, delay: '15 seconds', backoff: 'exponential' }, timeout: '4 minutes' }, async () => {
           const active = await this.env.DB.prepare('SELECT user_id FROM account_onboarding WHERE user_id = ? AND status != ?').bind(owner, 'complete').first();
           if (!active) return;
           const key = photoKey(owner, identity.id, identity.id);
@@ -161,6 +129,7 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string 
           const profile = defaultPersonality();
           profile.enabled = true;
           profile.description = identity.description;
+          profile.birthDate = identity.birthDate ?? randomBirthDate(Math.max(18, identity.age ?? 25));
           profile.specialties = identity.specialties ?? ''; // Legacy saved plans keep their original identities.
           Object.assign(profile.traits, temperaments[i]!.traits);
           statements.push(

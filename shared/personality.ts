@@ -56,7 +56,35 @@ export function birthdayFacts(profile: Personality, at: number) {
     isBirthday: today.slice(5) === anniversary };
 }
 
-export function parsePersonality(value: unknown, now = Date.now()): Personality | null {
+// Match the February 29 aging rule when setting the editor's upper date bound.
+export function latestAdultBirthDate(now = Date.now(), timeZone = 'UTC'): string {
+  const today = localDate(now, timeZone);
+  const date = new Date(`${today}T12:00:00Z`);
+  date.setUTCFullYear(date.getUTCFullYear() - 18);
+  const age = (value: Date) => birthdayFacts({ ...defaultPersonality(), birthDate: value.toISOString().slice(0, 10), timeZone }, now).age!;
+  while (age(date) < 18) date.setUTCDate(date.getUTCDate() - 1);
+  const next = new Date(date.getTime() + 86_400_000);
+  if (age(next) >= 18) return next.toISOString().slice(0, 10);
+  return date.toISOString().slice(0, 10);
+}
+
+// Randomly choose among valid civil birthdays that give the requested age today.
+export function randomBirthDate(age: number, now = Date.now(), timeZone = 'UTC'): string {
+  if (!Number.isInteger(age) || age < 18 || age > 120) throw new Error('Invalid contact age');
+  const today = localDate(now, timeZone), year = Number(today.slice(0, 4));
+  const dates: string[] = [];
+  const leap = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
+  for (let y = year - age - 1; y <= year - age; y++) {
+    for (let at = Date.UTC(y, 0, 1); at < Date.UTC(y + 1, 0, 1); at += 86_400_000) {
+      const date = new Date(at).toISOString().slice(0, 10);
+      const anniversary = date.slice(5) === '02-29' && !leap ? '02-28' : date.slice(5);
+      if (year - y - (today.slice(5) < anniversary ? 1 : 0) === age) dates.push(date);
+    }
+  }
+  return dates[crypto.getRandomValues(new Uint32Array(1))[0]! % dates.length]!;
+}
+
+export function parsePersonality(value: unknown, now = Date.now(), allowLegacyMinor = false): Personality | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const p = value as Record<string, unknown>;
   const keys = Object.keys(p).filter(key => key !== 'specialties').sort().join(',');
@@ -74,6 +102,7 @@ export function parsePersonality(value: unknown, now = Date.now()): Personality 
     const date = new Date(`${p.birthDate}T12:00:00Z`);
     if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== p.birthDate
       || p.birthDate < '1900-01-01' || p.birthDate > localDate(now, p.timeZone)) return null;
+    if (!allowLegacyMinor && birthdayFacts({ ...defaultPersonality(), birthDate: p.birthDate, timeZone: p.timeZone }, now).age! < 18) return null;
   }
   const traits = { ...p.traits } as Record<string, unknown>;
   if (!Object.hasOwn(traits, 'emoji')) traits.emoji = inferredEmoji(traits as Partial<Record<string, number>>);

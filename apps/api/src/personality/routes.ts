@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { parsePersonality } from '../../../../shared/personality';
+import { generateIdentity } from '../contacts/generation';
 import { readPersonality } from './profile';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 
@@ -15,6 +16,26 @@ routes.get('/', async c => {
   if (!agent) return c.json({ error: 'Contact not found' }, 404);
   return c.json(await readPersonality(c.env.DB, agent.agentID));
 });
+routes.post('/generate', bodyLimit({ maxSize: 1024 }), async c => {
+  const owner = c.get('owner');
+  const agent = await access(c.env.DB, c.req.param('id')!, owner);
+  if (!agent) return c.json({ error: 'Contact not found' }, 404);
+  if (agent.ownerID !== owner) return c.json({ error: 'Only the creator can generate personality' }, 403);
+  const admission = await admitAuthRequest(c.env.DB, owner, 'personality-generate', 6);
+  if (!admission.allowed) return c.json({ error: 'Too many attempts. Please try again later.' }, 429);
+  const snapshot = await readPersonality(c.env.DB, agent.agentID);
+  const contact = await c.env.DB.prepare('SELECT name FROM contact_agent WHERE id = ?').bind(agent.agentID).first<{ name: string }>();
+  if (!contact) return c.json({ error: 'Contact not found' }, 404);
+  try {
+    const plan = await generateIdentity(c.env, owner, null, { name: contact.name, personality: snapshot.personality });
+    const current = await access(c.env.DB, c.req.param('id')!, owner);
+    if (!current || current.ownerID !== owner) return c.json({ error: 'Contact not found' }, 404);
+    if ((await readPersonality(c.env.DB, agent.agentID)).revision !== snapshot.revision) return c.json({ error: 'Personality changed. Refresh before generating again.' }, 409);
+    return c.json({ personality: plan.personality, revision: snapshot.revision });
+  } catch {
+    return c.json({ error: 'Could not generate personality. Your saved personality is unchanged. Please try again.' }, 502);
+  }
+});
 routes.put('/', bodyLimit({ maxSize: 16_384, onError: c => c.json({ error: 'Personality is too large' }, 413) }), async c => {
   const agent = await access(c.env.DB, c.req.param('id')!, c.get('owner'));
   if (!agent) return c.json({ error: 'Contact not found' }, 404);
@@ -28,7 +49,7 @@ routes.put('/', bodyLimit({ maxSize: 16_384, onError: c => c.json({ error: 'Pers
   const profile = parsePersonality(body?.personality);
   if (!body || Object.keys(body).sort().join(',') !== 'personality,revision' || !profile
     || !Number.isSafeInteger(body.revision) || Number(body.revision) < 0) {
-    return c.json({ error: 'Provide a valid personality and revision' }, 400);
+    return c.json({ error: 'Provide a valid personality and revision. Contacts must be at least 18 years old.' }, 400);
   }
   // Older clients omit specialties; preserve the current value under the same revision check.
   const sent = body.personality as { traits?: object };

@@ -74,5 +74,27 @@ export function usePersonality(contactID: MaybeRefOrGetter<string>) {
       return null;
     } finally { current.saving = false; busy.value = false; }
   }
-  return { value, busy: computed(() => busy.value || !!entry.value?.saving || !!entry.value?.request), error, refresh, save, editor };
+  async function generate() {
+    const id = toValue(contactID), current = snapshot(id);
+    if (current.saving || current.request || !current.value) return;
+    current.saving = true;
+    current.revision++;
+    current.request = null;
+    const mutation = current.revision;
+    const baselineRevision = current.editor.revision;
+    error.value = null;
+    try {
+      const result = await api<{ personality: Personality; revision: number }>(`contacts/${id}/personality/generate`, { json: {} });
+      if (snapshots.get(id) !== current || current.revision !== mutation) return;
+      if (result.revision !== baselineRevision) throw new Error('Personality changed. Refresh before generating again.');
+      current.editor.draft = result.personality;
+      current.editor.saved = false;
+    } catch (failure) {
+      if (snapshots.get(id) === current) {
+        if (failure instanceof ApiError && [403, 404].includes(failure.status)) forgetPersonality(id);
+        error.value = errorMessage(failure);
+      }
+    } finally { current.saving = false; }
+  }
+  return { value, busy: computed(() => busy.value || !!entry.value?.saving || !!entry.value?.request), error, refresh, save, generate, editor };
 }
