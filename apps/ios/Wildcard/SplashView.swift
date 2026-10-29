@@ -7,7 +7,7 @@ struct SplashView: View {
             .renderingMode(.template)
             .scaledToFit()
             .foregroundStyle(.white)
-            .frame(width: 107.5, height: 100)
+            .frame(width: 100.0 * 56.0 / 53.0, height: 100)
             .accessibilityLabel("Wildcard")
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {

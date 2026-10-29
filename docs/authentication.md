@@ -83,16 +83,15 @@ iOS uses `Wildcard/WildcardLaunch.storyboard` through the explicit
 `UILaunchStoryboardName = WildcardLaunch` entry in `Config/Info.plist` in both Debug
 and Release. The synchronized app group includes the storyboard as a resource.
 Automatic empty launch-screen generation is disabled. The native screen uses the
-same `AccentColor` background as SwiftUI and the white `WildcardNativeLaunchMark`
-PNG asset, with
-a 107.5 × 100 point aspect-fit image centered in the safe area. The blue background
+same `AccentColor` background as SwiftUI and the white `WildcardLaunchIsotype.png`
+bundle resource, with an approximately 105.66 × 100 point aspect-fit image centered in the safe area. The blue background
 covers the entire screen in both appearances; sharing the assets and alignment
 avoids a color, size, or position jump when SwiftUI takes over.
 
 After native launch, the app displays a full-screen `#045DE3` splash with the white Wildcard
-mark centered at 107.5 × 100 points while loading its Keychain token and fetching
-`/me`. SwiftUI uses the vector `WildcardLaunchMark`; the native launch uses PNG
-renditions of that same source. See [app branding](branding.md). Light and dark modes
+mark centered at 105.66 × 100 points while loading its Keychain token and fetching
+`/me`. SwiftUI uses the vector `WildcardLaunchMark`; the native launch uses direct-bundle PNG
+renditions of that same source, exported from the supplied `isotype.svg`. See [app branding](branding.md). Light and dark modes
 use the same blue background. There is no artificial delay; restoration selects
 the signed-out, signed-in, or retry screen as soon as it completes.
 These launch changes were checked statically (storyboard XML, asset references,
