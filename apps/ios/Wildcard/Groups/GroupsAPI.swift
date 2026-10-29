@@ -626,6 +626,8 @@ final class GroupConversationCache {
     /// Shared task boards; dropped with the group's conversation.
     @ObservationIgnored let tasks = NavigationSnapshotCache<TaskBoard>()
     @ObservationIgnored let documents = DocumentCaches()
+    /// Shared group mini apps, keyed by `groups/<id>`; dropped with the group's conversation.
+    @ObservationIgnored let miniApps = MiniAppStore()
     @ObservationIgnored private var access: UInt64 = 0
     @ObservationIgnored private var lastAccess: [String: UInt64] = [:]
 
@@ -653,5 +655,6 @@ final class GroupConversationCache {
         media.forget(.group(id))
         tasks.remove(id: "groups/\(id)")
         documents.forget("groups/\(id)")
+        miniApps.forget(base: "groups/\(id)")
     }
 }

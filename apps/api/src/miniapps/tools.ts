@@ -74,20 +74,25 @@ export const miniAppTools: ModelTool[] = [{ type: 'function', function: {
   parameters: { type: 'object', properties: {}, additionalProperties: false },
 } }];
 
+// Full specs only while they fit the tool budget; older apps are summarized.
+function summarize(results: MiniAppRow[]) {
+  const miniApps = results.map(app => ({ id: app.id, title: app.title, revision: app.revision, enabled: app.approvedRevision === app.revision,
+    lastLoadIssues: app.lastError ? JSON.parse(app.lastError) : [] as unknown, spec: JSON.parse(app.specJSON) as unknown }));
+  let budget = 20000;
+  for (const app of miniApps) {
+    const cost = JSON.stringify(app).length;
+    if (cost <= budget) budget -= cost;
+    else { delete (app as { spec?: unknown }).spec; budget = Math.max(0, budget - JSON.stringify(app).length); }
+  }
+  return miniApps;
+}
+
 export async function executeMiniAppTool(env: Env, turn: StoredTurn, name: string, args: Record<string, unknown>): Promise<string> {
   if (turn.scheduleID || turn.groupRequestID) return JSON.stringify({ error: 'Mini apps require a direct private human request.' });
   if (name === 'list_mini_apps') {
     const { results } = await env.DB.prepare(`SELECT ${miniAppColumns} FROM mini_app WHERE contact_id = ? AND user_id = ? ORDER BY updated_at DESC LIMIT 20`)
       .bind(turn.contactID, turn.userID).all<MiniAppRow>();
-    // Full specs only while they fit the tool budget; older apps are summarized.
-    const miniApps = results.map(app => ({ id: app.id, title: app.title, revision: app.revision, enabled: app.approvedRevision === app.revision,
-      lastLoadIssues: app.lastError ? JSON.parse(app.lastError) : [] as unknown, spec: JSON.parse(app.specJSON) as unknown }));
-    let budget = 20000;
-    for (const app of miniApps) {
-      const cost = JSON.stringify(app).length;
-      if (cost <= budget) budget -= cost;
-      else { delete (app as { spec?: unknown }).spec; budget = Math.max(0, budget - JSON.stringify(app).length); }
-    }
+    const miniApps = summarize(results);
     return JSON.stringify({ miniApps, specsOmitted: miniApps.some(app => !('spec' in app)) ? 'Some specs were omitted for size; pass their miniAppID with a complete new spec to change them.' : undefined });
   }
   if (Object.keys(args).some(key => !['miniAppID', 'spec'].includes(key)) || (args.miniAppID !== undefined && typeof args.miniAppID !== 'string')) return JSON.stringify({ error: 'Provide spec and optionally miniAppID.' });
@@ -122,6 +127,66 @@ export async function executeMiniAppTool(env: Env, turn: StoredTurn, name: strin
     verified: { testsPassed: verification.testsPassed, warnings: verification.warnings.slice(0, 8) },
     nextStep: enabled ? 'Tell the person the mini app card is in this chat and opens immediately. Saved values are kept across revisions when ids and types match.'
       : 'Tell the person the mini app card is in this chat: they must review the listed tools and tap Enable before it loads. Do not claim it shows data yet.' });
+}
+
+// Group apps are shared: every member opens the same app and sees the same saved state.
+// They use saved state only, so one member's connectors never load data for the whole group.
+export const groupMiniAppInstruction = 'When someone in the group asks for an app, tool, counter, tracker, checklist, scoreboard or reusable view, build a native mini app with create_mini_app instead of describing one or writing code. '
+  + 'Group mini apps are shared: every member opens the same app and sees and edits the same saved values (a shared shopping list, a game scoreboard, a trip budget). They cannot use connectors or external tools. '
+  + 'create_mini_app verifies each app and saves it only if it passes; its card appears under your next message. Mention a mini app only when create_mini_app returned its miniAppID. '
+  + 'If it keeps failing, or the request needs something group mini apps cannot do, say plainly which part could not be built and offer the closest version.';
+
+export const groupMiniAppTools: ModelTool[] = [{ type: 'function', function: {
+  name: 'create_mini_app',
+  description: 'Build or update a native mini app shared by THIS group when someone asks for an app, tool, counter, tracker, checklist, scoreboard, dashboard or reusable view. '
+    + 'Every member opens the same app and shares its saved state. Only state, inputs, const data and local actions are allowed: no mcp steps, no remote actions, no connectionIDs. '
+    + 'The app opens immediately; its card appears under the message you publish next. Pass miniAppID to replace an existing group app. '
+    + 'Before saving, the server verifies the app (every action reachable and runnable, lists that can grow, no step failing on first open) and runs your tests. '
+    + 'A failing app is NOT saved; you get the problems to fix. Never create placeholder, probe or test apps. Only promise what the catalog below can do. ' + specGuide,
+  parameters: miniAppTools[0]!.function.parameters,
+} }, { type: 'function', function: {
+  name: 'list_mini_apps',
+  description: 'List the mini apps of THIS group with their spec and revision. Use it to repair or update an app.',
+  parameters: { type: 'object', properties: {}, additionalProperties: false },
+} }];
+
+export type GroupMiniAppScope = { groupID: string; agentID: string; turnID: string; attempt: number };
+export async function executeGroupMiniAppTool(env: Env, scope: GroupMiniAppScope, name: string, args: Record<string, unknown>): Promise<string> {
+  if (name === 'list_mini_apps') {
+    const { results } = await env.DB.prepare(`SELECT ${miniAppColumns} FROM mini_app WHERE group_id = ? ORDER BY updated_at DESC LIMIT 20`)
+      .bind(scope.groupID).all<MiniAppRow>();
+    const miniApps = summarize(results);
+    return JSON.stringify({ miniApps, specsOmitted: miniApps.some(app => !('spec' in app)) ? 'Some specs were omitted for size; pass their miniAppID with a complete new spec to change them.' : undefined });
+  }
+  if (Object.keys(args).some(key => !['miniAppID', 'spec'].includes(key)) || (args.miniAppID !== undefined && typeof args.miniAppID !== 'string')) return JSON.stringify({ error: 'Provide spec and optionally miniAppID.' });
+  const prepared = prepareMiniApp(args.spec, 'UTC', new Map());
+  if ('response' in prepared) return JSON.stringify(prepared.response);
+  const { parsed, verification } = prepared;
+  if (parsed.tools.length) return JSON.stringify({ error: 'Group mini apps use saved state only. Remove every mcp step and remote action, then call create_mini_app again.' });
+  const now = Date.now(), specJSON = JSON.stringify(parsed.spec);
+  // Only this agent's running reply in this group can create or replace an app.
+  const live = `EXISTS (SELECT 1 FROM group_reply r JOIN agent_attention a ON a.turn_id = r.id AND a.attempt = r.attempt
+    WHERE r.id = ?3 AND r.attempt = ?4 AND r.status = 'running' AND r.group_id = ?1 AND r.agent_id = ?2)`;
+  let row: { id: string; revision: number } | null;
+  if (typeof args.miniAppID === 'string') {
+    row = await env.DB.prepare(`UPDATE mini_app SET revision = revision + 1, title = ?5, spec_json = ?6, approved_revision = revision + 1,
+        last_error = NULL, reply_id = ?3, agent_id = ?2, updated_at = ?7 WHERE id = ?8 AND group_id = ?1 AND ${live} RETURNING id, revision`)
+      .bind(scope.groupID, scope.agentID, scope.turnID, scope.attempt, parsed.spec.title, specJSON, now, args.miniAppID).first();
+    if (!row) return JSON.stringify({ error: 'Mini app not found in this group. Use list_mini_apps.' });
+  } else {
+    // One new app per reply: a replayed Workflow step returns the original instead of a copy.
+    const id = `${scope.turnID}:app`;
+    const existing = await env.DB.prepare('SELECT id, revision FROM mini_app WHERE id = ? AND group_id = ?').bind(id, scope.groupID).first<{ id: string; revision: number }>();
+    if (existing) return JSON.stringify({ miniAppID: existing.id, revision: existing.revision, error: 'A mini app was already created for this message. Pass this miniAppID to change it.' });
+    row = await env.DB.prepare(`INSERT INTO mini_app (id, group_id, reply_id, agent_id, title, spec_json, tools_json, approved_revision, created_at, updated_at)
+        SELECT ?8, ?1, ?3, ?2, ?5, ?6, '[]', 1, ?7, ?7 WHERE ${live} AND (SELECT COUNT(*) FROM mini_app WHERE group_id = ?1) < 20
+        ON CONFLICT(id) DO NOTHING RETURNING id, revision`)
+      .bind(scope.groupID, scope.agentID, scope.turnID, scope.attempt, parsed.spec.title, specJSON, now, id).first();
+    if (!row) return JSON.stringify({ error: 'Could not create the mini app. Each group supports 20; replace one with miniAppID.' });
+  }
+  return JSON.stringify({ miniAppID: row.id, revision: row.revision, enabled: true,
+    verified: { testsPassed: verification.testsPassed, warnings: verification.warnings.slice(0, 8) },
+    nextStep: 'Publish a message now: the shared mini app card appears under it and opens immediately for every member. Saved values are kept across revisions when ids and types match.' });
 }
 
 // Parsing plus offline verification, shared with scripts/checks/mini-app-eval.mjs.

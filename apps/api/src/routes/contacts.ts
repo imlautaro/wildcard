@@ -1,6 +1,6 @@
 import { remoteSettings } from '../native/remote-routes';
 import nativeActions from '../native/routes';
-import miniApps from '../miniapps/routes';
+import { miniAppRoutes } from '../miniapps/routes';
 import { taskRoutes } from '../tasks/routes';
 import { documentRoutes } from '../documents/routes';
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
@@ -241,7 +241,7 @@ contacts.delete('/:id', async (c) => {
 
 contacts.route('/:id/native-actions', nativeActions);
 contacts.route('/:id/personality', personality);
-contacts.route('/:id/mini-apps', miniApps);
+contacts.route('/:id/mini-apps', miniAppRoutes('contact'));
 contacts.route('/:id/tasks', taskRoutes('contact'));
 contacts.route('/:id/documents', documentRoutes('contact'));
 contacts.route('/:id/native-remote', remoteSettings);

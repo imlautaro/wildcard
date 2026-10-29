@@ -114,7 +114,7 @@ struct ChatView: View {
                         if item.kind == .assistant, let reply = item.message?.text ?? turn.assistantText {
                             // Mini apps and documents from this reply show inside its first bubble.
                             let isFirst = item.message == nil || item.message?.id == "\(turn.id)/assistant/0"
-                            let apps = isFirst ? contacts.miniApps.apps(contactID: contactID, turnID: turn.id) : []
+                            let apps = isFirst ? contacts.miniApps.apps(base: "contacts/\(contactID)", turnID: turn.id) : []
                             let documents = isFirst ? (contacts.documentCaches.list("contacts/\(contactID)").value ?? []).filter { $0.sourceID == turn.id } : []
                             Group {
                                 if let attachment = item.message?.attachment {
@@ -128,7 +128,7 @@ struct ChatView: View {
                                                       replyQuote: item.message?.replyTo.map(replyPreview),
                                                       onQuoteTap: { if let quote = item.message?.replyTo { showQuoted(quote, proxy: proxy) } },
                                                       accessory: apps.isEmpty && documents.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 6) {
-                                                          ForEach(apps) { MiniAppCardView(app: $0, contactID: contactID, embedded: true) }
+                                                          ForEach(apps) { MiniAppCardView(app: $0, base: "contacts/\(contactID)", embedded: true) }
                                                           ForEach(documents) { DocumentCardView(document: $0, base: "contacts/\(contactID)", caches: contacts.documentCaches, embedded: true) }
                                                       }))
                                 }
@@ -154,7 +154,7 @@ struct ChatView: View {
                                 }
                             // A reply with a photo keeps its cards under the photo bubble.
                             if item.message?.attachment != nil {
-                                ForEach(apps) { MiniAppCardView(app: $0, contactID: contactID) }
+                                ForEach(apps) { MiniAppCardView(app: $0, base: "contacts/\(contactID)") }
                                 ForEach(documents) { DocumentCardView(document: $0, base: "contacts/\(contactID)", caches: contacts.documentCaches) }
                             }
                         } else if item.kind == .status && turn.taskID != nil && (turn.status == .queued || turn.status == .running) {
@@ -232,7 +232,7 @@ struct ChatView: View {
         }
         .task(id: chat.turns.map(\.updatedAt).max()) {
             await native.refresh(contactID: contactID, using: auth)
-            await contacts.miniApps.refresh(contactID: contactID, using: auth)
+            await contacts.miniApps.refresh(base: "contacts/\(contactID)", using: auth)
             await contacts.documentCaches.refresh("contacts/\(contactID)", auth: auth)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection, matching: .images, preferredItemEncoding: .compatible)

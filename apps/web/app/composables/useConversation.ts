@@ -42,7 +42,7 @@ export function forgetConversation(id: string) {
   if (entry) clearReactionCache(entry.reactions);
   conversations.delete(id);
   forgetRemoteNative(id);
-  forgetMiniApps(id);
+  forgetMiniApps(`contacts/${id}`);
   forgetChatMedia(`contacts/${id}/chat`);
   forgetTasks(`contacts/${id}`);
   forgetDocuments(`contacts/${id}`);

@@ -715,10 +715,14 @@ account switching require runtime verification; static type/SQL checks passed.
 
 ## Mini apps
 
-[Mini apps](mini-apps.md) use one session-owned list per contact (bounded to 20
-contacts, five-second freshness, revalidated by visible chat polling and contact
-details) and one resolved view per app (bounded to 16, oldest-load eviction) on iOS
-(`MiniAppStore` inside `ContactsStore`) and web (`useMiniApps`). A view is reused for
+[Mini apps](mini-apps.md) use one session-owned list per base, `contacts/<id>` or
+`groups/<id>` (bounded to 20 lists, five-second freshness, revalidated by visible
+chat polling and contact or group details) and one resolved view per app (bounded
+to 16, oldest-load eviction) on iOS (`MiniAppStore` inside `ContactsStore` for
+private apps and inside `GroupConversationCache` for group apps) and web
+(`useMiniApps`). A group chat forces a list refresh whenever its latest message
+changes, because a shared app is created just before the message that shows its
+card. Leaving, deleting or losing access to a group drops its list and views. A view is reused for
 60 seconds because each load runs the app's remote reads. Local state actions in
 apps without remote reads return the updated view, which replaces the cached view
 unless a newer load started; otherwise a completed action forces a reload. Explicit refresh, pull to

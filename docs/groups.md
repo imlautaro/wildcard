@@ -13,7 +13,9 @@ its explicit memory/Contributor consent screen before addition. Returning to the
 list refreshes membership badges. Details also manage identity and permissions,
 and show the group's photos and files under **Shared in this chat** (see
 [attachments](attachments.md#shared-in-this-chat)). Groups also keep shared
-[task lists](tasks.md) that can assign work to contacts and humans.
+[task lists](tasks.md) that can assign work to contacts and humans, and shared
+[mini apps](mini-apps.md#group-mini-apps) that a contact builds when someone asks;
+every member sees and edits the same saved values. Details → **Mini apps** lists them.
 Invitations appear in **+ → Contacts → Group Invitations**, with a pending count.
 The Contacts screen also includes **Contact Invitations**.
 They are in-app invitations; the server does not send email.

@@ -544,7 +544,10 @@ grouped lists, SVG bar/line/area/donut charts, progress bars and rings, text,
 notices and action forms that confirm with the action's text. `MiniAppLesson.vue`
 shows a lesson card and opens the lesson flow in a full-window overlay with the same
 rules as iOS. Values are formatted with
-`Intl` in the viewer's locale. Behavior, copy and limits match iOS; see
+`Intl` in the viewer's locale. Group chats show [group mini app](mini-apps.md#group-mini-apps)
+cards inside the message that built them; `/groups/:id/mini-apps` lists them (linked
+from group details) and `/groups/:id/mini-apps/:appID` opens one. Both routes reuse
+`MiniAppList.vue` and `MiniAppScreen.vue` with a `groups/<id>` base. Behavior, copy and limits match iOS; see
 [mini apps](mini-apps.md) and [caching](caching.md#mini-apps). Browser layout and live
 loads have not been verified.
 Saved state, checklists, toggles, choices, inputs, progress bars, timers and button

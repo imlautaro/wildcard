@@ -16,6 +16,7 @@ import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { photoResponse } from '../photos/storage';
 import { dispatchGroup } from './workflow';
 import { groupSourceAccess } from './request-access';
+import { miniAppRoutes } from '../miniapps/routes';
 
 const groups = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 const contributor = (env: Env) => env.META_CHAT_MODEL.includes('contributor');
@@ -437,5 +438,6 @@ groups.get('/:id/photos/:kind/:memberID', async (c) => {
 });
 groups.route('/:id/tasks', taskRoutes('group'));
 groups.route('/:id/documents', documentRoutes('group'));
+groups.route('/:id/mini-apps', miniAppRoutes('group'));
 groups.route('/:id', media);
 export default groups;

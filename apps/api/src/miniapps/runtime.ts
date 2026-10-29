@@ -3,8 +3,10 @@ import { catalog, connectionColumns, remote, size, validator, type Connection, t
 import { applyUpdates, directUpdate, evaluate, normalizeState, parseSpec, present, resolvedAction, StepError, toolData, transform, type Context, type ResolvedAction, type ResolvedComponent, type ResolvedTab, type Spec, type ToolUse } from './spec';
 
 export type GrantedTool = ToolUse & { fingerprint: string };
-export type MiniAppRow = { id: string; contactID: string; userID: string; turnID: string | null; revision: number; title: string; specJSON: string; toolsJSON: string; approvedRevision: number | null; lastError: string | null; createdAt: number; updatedAt: number };
-export const miniAppColumns = `id, contact_id AS contactID, user_id AS userID, turn_id AS turnID, revision, title, spec_json AS specJSON,
+// A private app has contactID + userID; a group app has groupID, and replyID is its card's group message.
+export type MiniAppRow = { id: string; contactID: string | null; userID: string | null; groupID: string | null; replyID: string | null; agentID: string | null;
+  turnID: string | null; revision: number; title: string; specJSON: string; toolsJSON: string; approvedRevision: number | null; lastError: string | null; createdAt: number; updatedAt: number };
+export const miniAppColumns = `id, contact_id AS contactID, user_id AS userID, group_id AS groupID, reply_id AS replyID, agent_id AS agentID, turn_id AS turnID, revision, title, spec_json AS specJSON,
   tools_json AS toolsJSON, approved_revision AS approvedRevision, last_error AS lastError, created_at AS createdAt, updated_at AS updatedAt`;
 
 // Current connectors assigned to this contact with their approved tool catalogs.
@@ -61,7 +63,7 @@ export function validInputs(spec: Spec, raw: unknown): Record<string, string> | 
   return isRecord(raw) && Object.keys(raw).some(key => !spec.inputs.some(i => i.id === key)) ? null : values;
 }
 
-// Saved state is per app and person (the app row is already person-scoped).
+// Saved state is per app: per person for private apps, shared by every member for group apps.
 async function readState(db: D1Database, app: MiniAppRow, spec: Spec) {
   const row = await db.prepare('SELECT values_json AS valuesJSON, version FROM mini_app_state WHERE app_id = ?').bind(app.id).first<{ valuesJSON: string; version: number }>();
   return { values: normalizeState(spec, row ? JSON.parse(row.valuesJSON) : null), version: row?.version ?? null };

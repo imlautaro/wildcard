@@ -66,7 +66,7 @@ struct ContactEditorView: View {
                         ContactPersonalityView(contactID: contactID, cache: contacts.personalitySnapshot(id: contactID),
                                                draft: contacts.personalityDraft(id: contactID))
                     }
-                    NavigationLink("Mini apps") { MiniAppListView(contactID: contactID) }
+                    NavigationLink("Mini apps") { MiniAppListView(base: "contacts/\(contactID)") }
                     NavigationLink("Tasks") { TasksView(base: "contacts/\(contactID)", snapshot: contacts.taskSnapshots.store(for: "contacts/\(contactID)")) }
                 }
                 ChatMediaSection(scope: .contact(contactID), cache: contacts.mediaSnapshots, documents: contacts.documentCaches)

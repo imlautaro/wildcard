@@ -133,7 +133,8 @@ export type MiniAppInput = { id: string; type: 'segmented'; label: string; optio
   | { id: string; type: 'text' | 'number'; label: string; default: string };
 export type MiniAppField = { id: string; label: string; kind: 'text' | 'number' | 'date' | 'toggle'; required: boolean };
 export type MiniApp = {
-  id: string; turnID: string | null; revision: number; title: string; subtitle: string | null; icon: string;
+  // turnID anchors a private app's card; replyID is the group message that shows a group app's card.
+  id: string; turnID: string | null; replyID: string | null; revision: number; title: string; subtitle: string | null; icon: string;
   status: 'needs_review' | 'enabled' | 'needs_reapproval'; inputs: MiniAppInput[];
   tools: { connectionID: string; connectionName: string; toolName: string; role: 'read' | 'write' }[];
   tabs?: { id: string; title: string; icon: string }[];

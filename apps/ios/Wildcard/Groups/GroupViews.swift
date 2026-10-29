@@ -275,6 +275,7 @@ struct GroupChatView: View {
                     ForEach(store.messages) { message in
                         GroupMessageRow(message: message, groupID: groupID, members: store.snapshot?.members ?? [],
                                         documents: (groups.conversations.documents.list("groups/\(groupID)").value ?? []).filter { $0.sourceID == message.id },
+                                        apps: groups.conversations.miniApps.apps(base: "groups/\(groupID)", replyID: message.id),
                                         isNew: store.newIncomingMessageIDs.contains(message.id),
                                         replyQuote: message.replyTo.map(replyPreview),
                                         canReply: store.snapshot != nil,
@@ -482,7 +483,12 @@ struct GroupChatView: View {
             quoteTask?.cancel()
         }
         // Document cards appear under the reply that created them; refresh when messages arrive.
-        .task(id: store.messages.last?.id) { await groups.conversations.documents.refresh("groups/\(groupID)", auth: auth) }
+        .task(id: store.messages.last?.id) {
+            // Shared mini apps are created before the message that shows their card is published.
+            async let apps: Void = groups.conversations.miniApps.refresh(base: "groups/\(groupID)", using: auth, force: true)
+            await groups.conversations.documents.refresh("groups/\(groupID)", auth: auth)
+            await apps
+        }
         .task(id: "\(groupID)-\(isVisible)-\(scenePhase)-\(store.messages.last?.id ?? "")") {
             guard isVisible, scenePhase == .active else { return }
             sync.request(.group(groupID))
@@ -671,6 +677,8 @@ private struct GroupMessageRow: View {
     let members: [GroupMember]
     /// Documents this message created, shown inside its bubble.
     var documents: [ChatDocumentSummary] = []
+    /// Shared mini apps built with this message, shown inside its bubble.
+    var apps: [MiniApp] = []
     let isNew: Bool
     let replyQuote: MessageReplyPreview?
     let canReply: Bool
@@ -705,11 +713,13 @@ private struct GroupMessageRow: View {
                     MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, receiptState: message.receiptState ?? "sent", showsReceipt: own, formatsMarkdown: message.agentID != nil,
                                       senderName: own ? nil : (sender?.name ?? message.senderName),
                                       senderColor: senderColor, replyQuote: message.attachment == nil ? replyQuote : nil, onQuoteTap: onQuoteTap,
-                                      accessory: documents.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 6) {
+                                      accessory: documents.isEmpty && apps.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 6) {
+                                          ForEach(apps) { MiniAppCardView(app: $0, base: "groups/\(groupID)", embedded: true) }
                                           ForEach(documents) { DocumentCardView(document: $0, base: "groups/\(groupID)", caches: groups.conversations.documents, embedded: true) }
                                       }))
                 }
                 if message.text.isEmpty || message.attachment?.isImage == true {
+                    ForEach(apps) { MiniAppCardView(app: $0, base: "groups/\(groupID)") }
                     ForEach(documents) { DocumentCardView(document: $0, base: "groups/\(groupID)", caches: groups.conversations.documents) }
                 }
             }

@@ -22,7 +22,9 @@ struct MiniAppTabInfo: Decodable, Hashable, Sendable {
 }
 struct MiniApp: Decodable, Identifiable, Hashable, Sendable {
     let id: String
+    /// Anchors a private app's card to its reply; `replyID` is the group message that shows a group app's card.
     let turnID: String?
+    let replyID: String?
     let revision: Int
     let title: String
     let subtitle: String?
@@ -312,36 +314,36 @@ extension AuthAPI {
     private struct ListEnvelope: Decodable { let miniApps: [MiniApp] }
     private struct AppEnvelope: Decodable { let miniApp: MiniApp }
     struct MiniAppOutcome: Decodable, Sendable { let status: String; let resolution: MiniAppResolution? }
-    func miniApps(contactID: String, token: String) async throws -> [MiniApp] {
-        let (data, _) = try await send(path: "contacts/\(contactID)/mini-apps", token: token)
+    func miniApps(base: String, token: String) async throws -> [MiniApp] {
+        let (data, _) = try await send(path: "\(base)/mini-apps", token: token)
         return try JSONDecoder().decode(ListEnvelope.self, from: data).miniApps
     }
-    func approveMiniApp(contactID: String, appID: String, revision: Int, allowed: Bool, token: String) async throws -> MiniApp {
+    func approveMiniApp(base: String, appID: String, revision: Int, allowed: Bool, token: String) async throws -> MiniApp {
         struct Input: Encodable { let revision: Int; let allowed: Bool }
-        let (data, _) = try await send(path: "contacts/\(contactID)/mini-apps/\(appID)/approval", method: "POST", body: try JSONEncoder().encode(Input(revision: revision, allowed: allowed)), token: token)
+        let (data, _) = try await send(path: "\(base)/mini-apps/\(appID)/approval", method: "POST", body: try JSONEncoder().encode(Input(revision: revision, allowed: allowed)), token: token)
         return try JSONDecoder().decode(AppEnvelope.self, from: data).miniApp
     }
-    func deleteMiniApp(contactID: String, appID: String, token: String) async throws {
-        _ = try await send(path: "contacts/\(contactID)/mini-apps/\(appID)", method: "DELETE", token: token)
+    func deleteMiniApp(base: String, appID: String, token: String) async throws {
+        _ = try await send(path: "\(base)/mini-apps/\(appID)", method: "DELETE", token: token)
     }
-    func resolveMiniApp(contactID: String, appID: String, inputs: [String: String], token: String) async throws -> MiniAppResolution {
+    func resolveMiniApp(base: String, appID: String, inputs: [String: String], token: String) async throws -> MiniAppResolution {
         struct Input: Encodable { let inputs: [String: String]; let timeZone: String }
         let body = try JSONEncoder().encode(Input(inputs: inputs, timeZone: TimeZone.current.identifier))
-        let (data, _) = try await send(path: "contacts/\(contactID)/mini-apps/\(appID)/resolve", method: "POST", body: body, token: token, timeout: 60)
+        let (data, _) = try await send(path: "\(base)/mini-apps/\(appID)/resolve", method: "POST", body: body, token: token, timeout: 60)
         return try JSONDecoder().decode(MiniAppResolution.self, from: data)
     }
     /// A direct edit from a component bound to state (toggle, choice, input, checklist row).
-    func editMiniAppState(contactID: String, appID: String, executionID: UUID, revision: Int, inputs: [String: String], update: MiniAppUpdate, token: String) async throws -> MiniAppOutcome {
+    func editMiniAppState(base: String, appID: String, executionID: UUID, revision: Int, inputs: [String: String], update: MiniAppUpdate, token: String) async throws -> MiniAppOutcome {
         struct Input: Encodable { let executionID: String; let revision: Int; let inputs: [String: String]; let timeZone: String; let update: MiniAppUpdate }
         let body = try JSONEncoder().encode(Input(executionID: executionID.uuidString.lowercased(), revision: revision, inputs: inputs, timeZone: TimeZone.current.identifier, update: update))
-        let (data, _) = try await send(path: "contacts/\(contactID)/mini-apps/\(appID)/state", method: "POST", body: body, token: token, timeout: 60)
+        let (data, _) = try await send(path: "\(base)/mini-apps/\(appID)/state", method: "POST", body: body, token: token, timeout: 60)
         return try JSONDecoder().decode(MiniAppOutcome.self, from: data)
     }
-    func runMiniAppAction(contactID: String, appID: String, actionID: String, executionID: UUID, revision: Int, inputs: [String: String],
+    func runMiniAppAction(base: String, appID: String, actionID: String, executionID: UUID, revision: Int, inputs: [String: String],
                           fields: [String: MiniAppFieldValue], token: String) async throws -> MiniAppOutcome {
         struct Input: Encodable { let executionID: String; let revision: Int; let inputs: [String: String]; let fields: [String: MiniAppFieldValue]; let timeZone: String }
         let body = try JSONEncoder().encode(Input(executionID: executionID.uuidString.lowercased(), revision: revision, inputs: inputs, fields: fields, timeZone: TimeZone.current.identifier))
-        let (data, _) = try await send(path: "contacts/\(contactID)/mini-apps/\(appID)/actions/\(actionID)", method: "POST", body: body, token: token, timeout: 60)
+        let (data, _) = try await send(path: "\(base)/mini-apps/\(appID)/actions/\(actionID)", method: "POST", body: body, token: token, timeout: 60)
         return try JSONDecoder().decode(MiniAppOutcome.self, from: data)
     }
 }

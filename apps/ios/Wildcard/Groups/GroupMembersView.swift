@@ -39,6 +39,7 @@ struct GroupMembersView: View {
                 }
                 Section {
                     NavigationLink("Connections") { McpAccessView(path: "groups/\(groupID)/mcp", group: true, cache: contacts.mcpAccessSnapshots.store(for: "group:\(groupID)")) }
+                    NavigationLink("Mini apps") { MiniAppListView(base: "groups/\(groupID)") }
                     NavigationLink("Tasks") { TasksView(base: "groups/\(groupID)", snapshot: groups.conversations.tasks.store(for: "groups/\(groupID)")) }
                 }
                 ChatMediaSection(scope: .group(groupID), cache: groups.conversations.media, documents: groups.conversations.documents)

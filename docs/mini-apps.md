@@ -22,7 +22,7 @@ servers and device presentation have not been verified yet.
 
 1. In any direct private chat, ask the contact for an app, counter, tracker or
    dashboard. Mini app tools are offered for direct human messages, not for
-   schedules or group work.
+   schedules. In a group, see [group mini apps](#group-mini-apps).
 2. Apps that use only **state**, inputs, constant data and local actions (a
    counter with a **+** button) are enabled when created and open immediately.
 3. Apps over connected data need a connector assigned to the contact with the
@@ -237,9 +237,10 @@ because it would add inference cost and nondeterminism to every load.
   failures are `failed`; anything after the call starts that does not return a
   result is `unknown` and is never retried automatically. As with chat tools, this
   is not an exactly-once guarantee from the provider.
-- **Data scope.** Mini apps belong to one participant's private chat with the
-  contact. They use that participant's connectors. Shared contacts never expose
-  them to other participants, and groups have none. Resolved data goes only to the
+- **Data scope.** Private mini apps belong to one participant's private chat with
+  the contact. They use that participant's connectors. Shared contacts never expose
+  them to other participants. [Group mini apps](#group-mini-apps) belong to the
+  group, share their saved state with every member and cannot use connectors. Resolved data goes only to the
   requesting client. It is not stored in D1, not sent to the model, and not
   extracted into memory. Only step IDs and error codes are kept (`last_error`), so
   `list_mini_apps` can help the contact repair a spec. Its output is bounded to about
@@ -249,10 +250,44 @@ because it would add inference cost and nondeterminism to every load.
   at most 5,000 rows per transform, 100 groups, 100 list rows, 60 chart points and
   160 KB of resolved views across all tabs.
 
+## Group mini apps
+
+In a group, a contact can build a mini app for everyone ("make us a shared shopping
+list", "keep score of tonight's game"). The app belongs to the group, not to one
+person: every member opens the same app and sees and edits the same saved state, so
+one member's tap shows up for the others on their next load. Group mini apps can
+only use saved state, inputs, constant data and local actions. `create_mini_app`
+rejects `mcp` steps and remote actions, because a group app would otherwise load one
+member's connector data for everyone; there is nothing to review, so a group app is
+enabled when created.
+
+- **When the tools are offered.** `create_mini_app` and `list_mini_apps` (the group
+  variants in `groupMiniAppTools`) are offered only on the initial draft of a reply
+  to a human's own message, like image generation: not for bot triggers, directed
+  questions or draft reviews. The exploration round then allows 8,192 completion
+  tokens, as in private chats.
+- **Card.** The app stores the reply that built it (`reply_id`). The group message
+  published by that reply has the same ID, so clients show the card inside that
+  message's bubble (`replyID` in the API). Replacing an app with `miniAppID` moves
+  the card to the new reply. If the contact's draft is skipped or superseded after
+  creating the app, no message shows the card; the app still appears in group
+  details → **Mini apps**.
+- **Limits.** 20 apps per group and one new app per reply (`<replyID>:app`), so a
+  replayed Workflow step returns the original. Creation and replacement require the
+  replying contact's running reply with its attention claim.
+- **Permissions.** Any current member can open, use, disable or delete a group app,
+  the same as shared task lists and documents. Leaving the group removes access;
+  deleting the group deletes its apps, saved state and action ledgers. Removing the
+  contact that built it keeps the app.
+- **Verification.** The server verifier and the model's tests run exactly as for
+  private apps, in UTC because a group has no single time zone.
+
 ## API
 
 All routes require the bearer session and an owned contact:
-`/api/v1/contacts/:id/mini-apps`.
+`/api/v1/contacts/:id/mini-apps`. The same routes exist for groups under
+`/api/v1/groups/:id/mini-apps` and require current group membership; a group app's
+summary has `replyID` instead of `turnID`.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
@@ -285,8 +320,8 @@ the model that the app is disabled until reviewed, so it does not claim to show 
 
 ## Cache
 
-Both clients keep session-owned caches: one app list per contact (up to 20 contacts,
-five-second freshness, refreshed by visible chat polling) and one resolved view per
+Both clients keep session-owned caches: one app list per base (`contacts/<id>` or
+`groups/<id>`, up to 20 lists, five-second freshness, refreshed by visible chat polling) and one resolved view per
 app (up to 16). A resolved view is reused for 60 seconds on navigation because each
 load runs remote reads. Explicit refresh, pull to refresh, changing an input and a
 completed action bypass that window. Requests are deduplicated, and responses

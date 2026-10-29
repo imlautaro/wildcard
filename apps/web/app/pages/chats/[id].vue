@@ -7,7 +7,7 @@ const chats = useChats();
 const { state, load, loadEarlier, send, submit, discardPending, retryReply, markRead } = useConversation(contactID);
 const activity = useChatActivity(contactID);
 const remote = useRemoteNative(contactID);
-const miniApps = useMiniApps(contactID);
+const miniApps = useMiniApps(() => `contacts/${contactID.value}`);
 const documents = useDocuments(() => `contacts/${contactID.value}`);
 // Cards appear under the reply that created a document; refresh when new replies arrive.
 watch(() => state.value.turns.at(-1)?.assistantMessages?.length, () => documents.refresh(), { immediate: true });
@@ -284,7 +284,7 @@ onBeforeUnmount(() => {
                 <MessageAttachment v-if="item.first && item.turn.assistantMessages?.[0]?.attachment" :attachment="item.turn.assistantMessages[0].attachment" :path="`contacts/${contactID}/chat/turns/${item.turn.id}/attachment?side=assistant`" />
                 <div :class="{ caption: item.first && item.turn.assistantMessages?.[0]?.attachment }"><MessageMarkdown :text="item.text ?? item.turn.assistantText" /></div>
                 <template v-if="item.first">
-                  <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => a.turnID === item.turn.id)" :key="app.id" :app="app" :contact-id="contactID" />
+                  <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => a.turnID === item.turn.id)" :key="app.id" :app="app" :base="`contacts/${contactID}`" />
                   <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.turn.id)" :key="doc.id" :document="doc" :to="`/contacts/${contactID}/documents/${doc.id}`" />
                 </template>
                 <div class="meta">{{ messageTime(item.timestamp) }}</div>

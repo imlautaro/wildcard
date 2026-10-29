@@ -583,16 +583,23 @@ export const nativeAction = sqliteTable('native_action', {
   index('native_action_remote_pending').on(t.status, t.pushNextAt).where(sql`${t.remoteDeviceId} IS NOT NULL`)]);
 
 // Mini app specs and grants; resolved connector data is never stored (migration 0037).
+// A row belongs to one private chat (contact + user) or to a group (migration 0050).
 export const miniApp = sqliteTable('mini_app', {
   id: text('id').primaryKey(),
-  contactId: text('contact_id').notNull().references(() => contact.id, { onDelete: 'cascade' }),
-  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  contactId: text('contact_id').references(() => contact.id, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+  groupId: text('group_id').references(() => chatGroup.id, { onDelete: 'cascade' }),
+  replyId: text('reply_id').references(() => groupReply.id, { onDelete: 'set null' }),
+  agentId: text('agent_id').references(() => contactAgent.id, { onDelete: 'set null' }),
   turnId: text('turn_id').references(() => chatTurn.id, { onDelete: 'set null' }),
   revision: integer('revision').notNull().default(1), title: text('title').notNull(),
   specJson: text('spec_json').notNull(), toolsJson: text('tools_json').notNull(),
   approvedRevision: integer('approved_revision'), lastError: text('last_error'),
   createdAt: date('created_at').notNull(), updatedAt: date('updated_at').notNull(),
-}, t => [check('mini_app_revision', sql`${t.revision} >= 1`), index('mini_app_contact').on(t.contactId, t.userId, t.updatedAt)]);
+}, t => [check('mini_app_revision', sql`${t.revision} >= 1`), index('mini_app_contact').on(t.contactId, t.userId, t.updatedAt),
+  index('mini_app_group').on(t.groupId, t.updatedAt).where(sql`${t.groupId} IS NOT NULL`),
+  check('mini_app_owner', sql`(${t.groupId} IS NULL AND ${t.contactId} IS NOT NULL AND ${t.userId} IS NOT NULL)
+    OR (${t.groupId} IS NOT NULL AND ${t.contactId} IS NULL AND ${t.userId} IS NULL AND ${t.toolsJson} = '[]')`)]);
 export const miniAppAction = sqliteTable('mini_app_action', {
   id: text('id').primaryKey(),
   appId: text('app_id').notNull().references(() => miniApp.id, { onDelete: 'cascade' }),

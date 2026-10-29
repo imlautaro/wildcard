@@ -15,10 +15,11 @@ struct MiniAppGlyph: View {
     }
 }
 
-/// Compact entry point in the contact's reply; opens the mini app full screen, like an app.
+/// Compact entry point in the reply that built it; opens the mini app full screen, like an app.
+/// `base` is `contacts/<id>` (a private app) or `groups/<id>` (shared by the group).
 struct MiniAppCardView: View {
     let app: MiniApp
-    let contactID: String
+    let base: String
     /// Inside the contact's message bubble instead of on its own.
     var embedded = false
     @State private var presented = false
@@ -44,17 +45,18 @@ struct MiniAppCardView: View {
         .buttonStyle(.plain)
         .frame(maxWidth: embedded ? nil : .infinity, alignment: .leading)
         .accessibilityLabel("\(app.title), mini app")
-        .fullScreenCover(isPresented: $presented) { MiniAppScreen(contactID: contactID, appID: app.id) }
+        .fullScreenCover(isPresented: $presented) { MiniAppScreen(base: base, appID: app.id) }
     }
 }
 
 /// A full-screen mini app: one navigation stack, or a native tab bar with one stack per tab.
 /// Each stack has a close button and the app's ⋯ menu; a composer is pinned above the tab bar.
 struct MiniAppScreen: View {
-    let contactID: String
+    let base: String
     let appID: String
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
+    @Environment(GroupsStore.self) private var groups
     @Environment(\.dismiss) private var dismiss
     @State private var busy = false
     @State private var error: String?
@@ -67,9 +69,9 @@ struct MiniAppScreen: View {
     /// An uncertain submission keeps its execution ID so a retry can never run twice.
     @State private var execution: (actionID: String, fields: [String: MiniAppFieldValue], id: UUID)?
 
-    private var store: MiniAppStore { contacts.miniApps }
-    private var app: MiniApp? { store.app(contactID: contactID, id: appID) }
-    private var key: String { "\(contactID)/\(appID)" }
+    private var store: MiniAppStore { MiniAppStore.store(for: base, contacts: contacts, groups: groups) }
+    private var app: MiniApp? { store.app(base: base, id: appID) }
+    private var key: String { "\(base)/\(appID)" }
 
     var body: some View {
         Group {
@@ -90,10 +92,10 @@ struct MiniAppScreen: View {
                     Group {
                         if let app {
                             if app.isEnabled { enabled(app, components: store.views[key]?.view, first: true) } else { review(app) }
-                        } else if store.apps[contactID] == nil {
+                        } else if store.apps[base] == nil {
                             ProgressView()
                         } else {
-                            ContentUnavailableView("Mini app unavailable", systemImage: "square.dashed", description: Text(store.errors[contactID] ?? "It may have been deleted."))
+                            ContentUnavailableView("Mini app unavailable", systemImage: "square.dashed", description: Text(store.errors[base] ?? "It may have been deleted."))
                         }
                     }
                     .navigationTitle(app?.title ?? "Mini app")
@@ -110,8 +112,8 @@ struct MiniAppScreen: View {
             Button("Continue") { Task { await run(action.id, label: action.label, local: action.local, fields: action.fields) } }
         } message: { action in Text(action.confirm) }
         .task {
-            await store.refresh(contactID: contactID, using: auth)
-            if let app, app.isEnabled { await store.resolve(app, contactID: contactID, using: auth) }
+            await store.refresh(base: base, using: auth)
+            if let app, app.isEnabled { await store.resolve(app, base: base, using: auth) }
         }
     }
 
@@ -135,7 +137,7 @@ struct MiniAppScreen: View {
                         }
                     }
                     Section {
-                        Button { Task { await store.resolve(app, contactID: contactID, force: true, using: auth) } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                        Button { Task { await store.resolve(app, base: base, force: true, using: auth) } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                         Button { Task { await approve(app, allowed: false) } } label: { Label("Disable", systemImage: "pause.circle") }
                         Button(role: .destructive) { confirmDelete = true } label: { Label("Delete mini app", systemImage: "trash") }
                     }
@@ -148,7 +150,7 @@ struct MiniAppScreen: View {
     /// Literal local taps apply instantly; anything else goes through the confirmed path.
     private func perform(_ action: MiniAppComponent, app: MiniApp) {
         guard case .action(let id, let local, let label, let confirm, _, _, let updates) = action else { return }
-        if local, confirm == nil, let updates { store.tap(app, contactID: contactID, actionID: id, updates: updates, using: auth) }
+        if local, confirm == nil, let updates { store.tap(app, base: base, actionID: id, updates: updates, using: auth) }
         else { request(id, local: local, label: label, confirm: confirm, fields: [:]) }
     }
     private func request(_ id: String, local: Bool, label: String, confirm: String?, fields: [String: MiniAppFieldValue]) {
@@ -166,7 +168,7 @@ struct MiniAppScreen: View {
         if let append = composer.append, composer.confirm == nil, !composer.remote {
             var item = append.item
             if case .number(let number) = value { item[append.key] = .number(number) } else { item[append.key] = .text(String(text.prefix(500))) }
-            store.tap(app, contactID: contactID, actionID: composer.action, updates: [MiniAppUpdate(state: append.state, op: "append", value: .list([item]))], fields: fields, using: auth)
+            store.tap(app, base: base, actionID: composer.action, updates: [MiniAppUpdate(state: append.state, op: "append", value: .list([item]))], fields: fields, using: auth)
         } else { request(composer.action, local: !composer.remote, label: composer.label, confirm: composer.confirm, fields: fields) }
     }
 
@@ -221,13 +223,13 @@ struct MiniAppScreen: View {
                         if input.type == "segmented", let options = input.options {
                             Picker(input.label, selection: Binding(
                                 get: { store.inputs[key]?[input.id] ?? input.default },
-                                set: { value in Task { await store.resolve(app, contactID: contactID, inputs: (store.inputs[key] ?? [:]).merging([input.id: value]) { $1 }, using: auth) } }
+                                set: { value in Task { await store.resolve(app, base: base, inputs: (store.inputs[key] ?? [:]).merging([input.id: value]) { $1 }, using: auth) } }
                             )) { ForEach(options, id: \.value) { Text($0.label).tag($0.value) } }
                             .pickerStyle(.segmented)
                             .listRowBackground(Color.clear).listRowInsets(EdgeInsets())
                         } else {
                             MiniAppTextInput(label: input.label, initial: store.inputs[key]?[input.id] ?? input.default, number: input.type == "number") { value in
-                                Task { await store.resolve(app, contactID: contactID, inputs: (store.inputs[key] ?? [:]).merging([input.id: value]) { $1 }, using: auth) }
+                                Task { await store.resolve(app, base: base, inputs: (store.inputs[key] ?? [:]).merging([input.id: value]) { $1 }, using: auth) }
                             }
                         }
                     }
@@ -237,16 +239,16 @@ struct MiniAppScreen: View {
             if let message = error ?? store.viewErrors[key] {
                 Section {
                     Label(message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                    Button("Retry") { Task { await store.resolve(app, contactID: contactID, force: true, using: auth) } }
+                    Button("Retry") { Task { await store.resolve(app, base: base, force: true, using: auth) } }
                 }
             }
             if let view = store.views[key], let components {
                 MiniAppRenderer(components: components, state: store.displayState(key: key), runningAction: runningAction) { id, local, label, confirm, fields in
                     request(id, local: local, label: label, confirm: confirm, fields: fields)
                 } onTap: { id, updates in
-                    store.tap(app, contactID: contactID, actionID: id, updates: updates, using: auth)
+                    store.tap(app, base: base, actionID: id, updates: updates, using: auth)
                 } onEdit: { update in
-                    store.tap(app, contactID: contactID, actionID: nil, updates: [update], using: auth)
+                    store.tap(app, base: base, actionID: nil, updates: [update], using: auth)
                 } onSelectTab: { tab in selectedTab = tab }
                 // Only connector data can be stale; saved state is always current.
                 if view.remote == true && first {
@@ -260,7 +262,7 @@ struct MiniAppScreen: View {
         }
         .listStyle(.insetGrouped)
         .scrollDismissesKeyboard(.interactively)
-        .refreshable { await store.resolve(app, contactID: contactID, force: true, using: auth) }
+        .refreshable { await store.resolve(app, base: base, force: true, using: auth) }
         .safeAreaInset(edge: .bottom) {
             if let composer { MiniAppComposerBar(composer: composer, running: runningAction == composer.action) { submit(composer, text: $0, app: app) } }
         }
@@ -271,15 +273,15 @@ struct MiniAppScreen: View {
         busy = true; error = nil
         defer { busy = false }
         do {
-            try await store.approve(app, contactID: contactID, allowed: allowed, using: auth)
-            if allowed, let updated = self.app, updated.isEnabled { await store.resolve(updated, contactID: contactID, force: true, using: auth) }
+            try await store.approve(app, base: base, allowed: allowed, using: auth)
+            if allowed, let updated = self.app, updated.isEnabled { await store.resolve(updated, base: base, force: true, using: auth) }
         } catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }
 
     private func delete() async {
         guard let app else { return }
-        do { try await store.delete(app, contactID: contactID, using: auth); dismiss() }
+        do { try await store.delete(app, base: base, using: auth); dismiss() }
         catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }
@@ -291,7 +293,7 @@ struct MiniAppScreen: View {
         runningAction = actionID; notice = nil; error = nil
         defer { runningAction = nil }
         do {
-            let status = try await store.run(app, contactID: contactID, actionID: actionID, executionID: id, fields: fields, using: auth)
+            let status = try await store.run(app, base: base, actionID: actionID, executionID: id, fields: fields, using: auth)
             execution = nil
             // Local state changes show up in the view itself; only external writes report an outcome.
             guard !local else { return }
@@ -1128,17 +1130,19 @@ enum MiniAppFormat {
     }
 }
 
-/// Contact details list of this person's mini apps for the contact.
+/// Contact or group details list of its mini apps.
 struct MiniAppListView: View {
-    let contactID: String
+    let base: String
+    private var isGroup: Bool { base.hasPrefix("groups/") }
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
+    @Environment(GroupsStore.self) private var groups
     @State private var selected: MiniApp?
 
     var body: some View {
-        let store = contacts.miniApps
+        let store = MiniAppStore.store(for: base, contacts: contacts, groups: groups)
         List {
-            if let apps = store.apps[contactID], !apps.isEmpty {
+            if let apps = store.apps[base], !apps.isEmpty {
                 Section {
                     ForEach(apps) { app in
                         Button { selected = app } label: {
@@ -1151,19 +1155,19 @@ struct MiniAppListView: View {
                             }
                         }
                     }
-                } footer: { Text("Mini apps use this contact’s connections and are visible only to you.") }
+                } footer: { Text(isGroup ? "Group mini apps are shared: every member sees and edits the same saved values. They cannot use connections." : "Mini apps use this contact’s connections and are visible only to you.") }
             }
-            if let error = store.errors[contactID] { Section { Text(error).foregroundStyle(.red) } }
+            if let error = store.errors[base] { Section { Text(error).foregroundStyle(.red) } }
         }
         .overlay {
-            if store.apps[contactID]?.isEmpty == true {
+            if store.apps[base]?.isEmpty == true {
                 ContentUnavailableView("No mini apps yet", systemImage: "square.grid.2x2",
-                                       description: Text("Ask this contact in chat to build one from your connections, for example “Make me a mini app for last week’s expenses.”"))
-            } else if store.apps[contactID] == nil && store.errors[contactID] == nil { ProgressView() }
+                                       description: Text(isGroup ? "Ask a contact in this group to build one, for example “Make us a shared shopping list.”" : "Ask this contact in chat to build one from your connections, for example “Make me a mini app for last week’s expenses.”"))
+            } else if store.apps[base] == nil && store.errors[base] == nil { ProgressView() }
         }
         .navigationTitle("Mini apps")
-        .task { await store.refresh(contactID: contactID, using: auth, force: true) }
-        .refreshable { await store.refresh(contactID: contactID, using: auth, force: true) }
-        .fullScreenCover(item: $selected) { app in MiniAppScreen(contactID: contactID, appID: app.id) }
+        .task { await store.refresh(base: base, using: auth, force: true) }
+        .refreshable { await store.refresh(base: base, using: auth, force: true) }
+        .fullScreenCover(item: $selected) { app in MiniAppScreen(base: base, appID: app.id) }
     }
 }

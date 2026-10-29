@@ -72,7 +72,7 @@ const remove = () => run(async () => {
   forgetContactEnergy(id.value);
   forgetPersonality(id.value);
   forgetMcpConnections(id.value);
-  forgetMiniApps(id.value);
+  forgetMiniApps(`contacts/${id.value}`);
   forgetRead(`contact:${id.value}`);
   await navigateTo('/', { replace: true });
 });

@@ -1727,6 +1727,21 @@ execution ID so that the action ledger commits in the same transaction. It casca
 with its app. There are no new services or secrets. Keep the table on rollback; older
 code ignores it, but specs with `state` would then fail validation in older code.
 
+Migration `0050_group_mini_apps.sql` (apply after 0049) lets a mini app belong to
+a group. SQLite cannot relax `NOT NULL`, so it rebuilds `mini_app`, `mini_app_state`
+and `mini_app_action`, copying every row: the new children reference the new parent
+while the old tables are dropped, then the renames repoint their foreign keys, so no
+cascade deletes saved state. `contact_id` and `user_id` become nullable and a check
+requires either both of them or `group_id` (which cascades with the group, with
+`tools_json = '[]'`). `reply_id` (set null with its group reply) anchors the card and
+`agent_id` records the builder. No new service, binding or secret is needed. Apply it
+like every migration (local `npm run db:migrate:local`; production only through the
+automatic commit/push release). Rollback: older code reads private rows unchanged and
+ignores group rows, whose `NULL` contact makes them invisible to private queries.
+Verified locally on workerd D1: seeded private app, state and ledger rows survive the
+migration, the foreign keys point at the new `mini_app`, and deleting the contact
+still cascades. Remote migration remains pending until the automatic release.
+
 ### Chat documents (migration 0047)
 
 Apply additive `0047_documents.sql` after 0046. It creates `chat_document` (current

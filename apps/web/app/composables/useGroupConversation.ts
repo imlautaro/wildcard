@@ -91,6 +91,7 @@ export function forgetGroup(id: string) {
   forgetChatMedia(`groups/${id}`);
   forgetTasks(`groups/${id}`);
   forgetDocuments(`groups/${id}`);
+  forgetMiniApps(`groups/${id}`);
   forgetRead(`group:${id}`);
 }
 
