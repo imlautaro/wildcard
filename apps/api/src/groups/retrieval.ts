@@ -1,3 +1,4 @@
+import { privateSharingTools, searchAuthorizedPrivateMessages } from './private-sharing';
 import { readAgentMemories, selectAgentMemories } from '../chat/agent-memory';
 import { groupMemories, localGroupMemories } from './memory';
 import { byteLength, clipText, keywords, selectMemories } from '../chat/memory';
@@ -5,6 +6,7 @@ import { isRecord, type ModelTool, type ToolCall } from '../chat/meta';
 
 export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; contactID?: string; beforeSequence?: number; reactionJob?: { turnID: string; attempt: number }; mcp?: { id: string; attempt: number; contactID: string; userID: string; groupID: string; agentID: string } };
 export const groupRetrievalTools: ModelTool[] = [
+  ...privateSharingTools,
   { type: 'function', function: { name: 'search_group_memories',
     description: 'Search attributed human memories available to this agent. In a group this includes that group’s local memories; local memories never leave their source group. Uses lexical matching.',
     parameters: { type: 'object', additionalProperties: false, required: ['query'], properties: { query: { type: 'string' } } } } },
@@ -142,6 +144,9 @@ export async function executeGroupRetrieval(db: D1Database, scope: GroupRetrieva
   const args: unknown = JSON.parse(call.function.arguments);
   if (!isRecord(args) || (args.query !== undefined && (typeof args.query !== 'string' || byteLength(args.query) > 256))) {
     return JSON.stringify({ error: 'Provide an optional query of at most 256 UTF-8 bytes.' });
+  }
+  if (call.function.name === 'search_authorized_private_messages') {
+    return JSON.stringify(await searchAuthorizedPrivateMessages(db, scope, args));
   }
   if (call.function.name === 'get_group_excerpt') {
     if (Object.keys(args).some((k) => !['messageID', 'offset'].includes(k)) || typeof args.messageID !== 'string'

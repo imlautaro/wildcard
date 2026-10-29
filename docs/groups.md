@@ -650,3 +650,53 @@ point. Intervening messages, changed access or exhausted energy stop the remaini
 parts. Directed answers returned privately stay cohesive in one message. Both
 clients reuse their existing group message caches and polling. See
 [successive contact messages](reply-messages.md) for delivery and verification.
+
+## Optional private text sharing
+
+In **Group details → Discuss my private chats**, each human can allow an individual
+contact to discuss that human's entire past and future private text conversation
+with everyone in this group. Each switch is off by default and enabling it requires
+an explicit disclosure/confirmation on iOS and web. The permission is scoped to
+human + agent + group; even a group owner cannot authorize someone else's chat.
+The audience includes future members of that group. No raw history is granted in
+other groups or to another agent. Existing attributed shared-memory rules remain
+unchanged; switching off raw history access is not a full memory privacy switch.
+
+`PUT /api/v1/groups/:id/private-sharing/:agentID` accepts `{ "enabled": boolean }`.
+The server resolves the authenticated human's private contact, current memberships,
+shared-memory consent and applicable Contributor consent. Group detail snapshots
+return only the caller's `privateSharing` settings with agent ID, enabled and
+availability. A missing private contact or permanent MCP isolation disables granting.
+
+The group model receives eligible source identities and the read-only
+`search_authorized_private_messages` tool. It can search completed ordinary private
+turns by lexical query, request recent turns without a query, select user ID,
+paginate by sequence, and read a specific returned turn with character offsets.
+Results attribute the human and distinguish user/assistant text and dates. Up to
+four turns fit a 3,600-byte payload with clipped text and continuation metadata.
+This includes temporary plans omitted by durable memory extraction. It is bounded
+retrieval, not guaranteed exhaustive recall. Text may discuss or summarize files;
+file bytes, scheduled turns, private group-result relays and permanently isolated
+connector conversations are excluded. Existing model processing rules still apply.
+
+Every read checks live access. Removing permission atomically completes pending,
+running and failed group replies for that agent, preventing old tool checkpoints,
+drafts, retries and unsent successive messages from publishing after revocation.
+Leaving/removing the source human, removing the agent, deleting the private contact,
+or adding private connector isolation cascades removal. Rejoining/readding requires
+a new grant. Changing private Contributor consent also completes affected attempts.
+Previously sent group messages, copies and provider processing cannot be recalled.
+New messages can start fresh reply rounds normally.
+
+Both clients reuse their session-owned group snapshot. Successful changes update
+cached switches immediately and invalidate older requests before revalidation;
+transient refresh failure retains that confirmed state. Reopening shows cached
+settings immediately with background refresh; pull to refresh on iOS and Refresh
+details on web fetch current state. Cached permissions never authorize retrieval.
+See [cache rules](caching.md) and [migration setup](infrastructure.md#group-private-text-sharing).
+
+Static checks cover API/web types, Swift types and SQL preparation. Runtime/device,
+provider recall, authorization races and visual behavior require verification with
+fictional accounts: pizza plans with on/off permissions, other humans/groups/agents,
+revoke during research and successive delivery, regrant/rejoin, MCP isolation,
+Contributor consent changes, pagination, offline navigation and account switching.

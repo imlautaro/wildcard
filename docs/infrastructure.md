@@ -1848,3 +1848,30 @@ code cannot resume a partially published burst safely. Verify actual single and
 multiple-message inference and client delivery using fictional data after release;
 static type/SQL checks do not establish provider JSON support or device behavior.
 See [successive messages](reply-messages.md) for the delivery and cache contracts.
+
+## Group private text sharing
+
+Migration `0043_group_private_sharing.sql` adds an opt-in human/agent/group grant
+table with membership and private-contact foreign keys, plus revocation/isolation/
+consent triggers that complete affected group attempts. It reuses D1, FTS5 and the
+existing group Workflow; no resource, binding, secret or external account setup
+changes are required. All existing installations start with no grants.
+
+Independent installs follow the existing auth/contact/group prerequisites, then
+apply all migrations locally with `npm run db:migrate:local`. Static SQL preparation
+is available through `node scripts/checks/private-sharing-sql.cjs`; it compiles
+queries against an empty fully migrated schema without executing product requests.
+For production, commit and push the intended source; the automatic release applies
+0043 before Worker publication. Never publish or migrate manually to bypass that
+pipeline. Verify the automatic source tag and migration status after authorized
+release, then exercise fictional private/group accounts as described in
+[groups](groups.md#optional-private-text-sharing).
+
+The additive snapshot field is optional for older clients; they cannot manage the
+new setting. Old API code does not expose the private-history retrieval tool, so
+rollback through a committed/pushed revert can retain the table/triggers without
+dropping data. If turning off the feature, revoke grants first to cancel affected
+in-flight drafts; reverting application code alone cannot recall already running
+Workflow checkpoints. Already delivered group text and provider data remain.
+No remote migration, release, live-model or device verification was performed for
+this implementation.

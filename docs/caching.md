@@ -812,3 +812,18 @@ loss and account changes invalidate it with the parent conversation. Group parts
 use normal message rows and the existing group cache. Check reopen/back navigation,
 empty/legacy history, offline recovery, new input during a burst, late responses,
 revocation and account switching as described in [successive messages](reply-messages.md).
+
+## Group private text permissions
+
+Private-sharing settings live inside existing group snapshots: iOS GroupChatStore
+and the web's session-owned 20-group conversation cache. Empty permission arrays
+are reusable loaded results. Group details renders cached content immediately and
+revalidates on entry/explicit refresh. Concurrent details requests share one request;
+mutation invalidation rejects earlier completions and successful grants/revocations
+update cached switches before revalidation. Offline/failure keeps usable content.
+Existing store eviction, access-loss clearing and account reset apply. No extra
+disk retention or raw private transcript cache is introduced in either client.
+Server authorization is live on every retrieval; revocation cancels affected
+pending group attempts to invalidate model checkpoint contents as well. Validate
+reopen/back, empty state, failed refresh after mutation, revocation and account
+switching on device/browser; static checks alone do not establish these behaviors.

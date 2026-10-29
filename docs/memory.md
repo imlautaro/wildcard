@@ -353,3 +353,13 @@ identity facts and must not be exported to another audience. Configured identity
 and current calendar facts take precedence over inconsistent historical self
 statements. User factual memory and conversation transcripts retain their existing
 rules; saving personality settings only clears personality observations.
+
+## Explicit private text access in a group
+
+A participant can optionally grant one agent access to their own private text
+history in one group through **Group details → Discuss my private chats**. The
+agent can then answer about temporary remarks such as today's meal even when no
+fact was extracted. This does not change existing shared-memory consent or expose
+another participant's raw transcript. Group instructions and live SQL access checks
+use the same authorized source roster. Connector-isolated private chats stay
+excluded. See [group permissions and revocation](groups.md#optional-private-text-sharing).

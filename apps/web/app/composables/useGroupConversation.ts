@@ -27,6 +27,7 @@ type Receipts = { received: Set<string>; read: Set<string>; pendingRead: Set<str
 
 const groups = shallowReactive(new Map<string, GroupConversation>());
 const receipts = new Map<string, Receipts>();
+const detailsRequests = new Map<string, Promise<void>>();
 const retained = 20;
 const catchUpPages = 10;
 const batch = 100;
@@ -34,8 +35,10 @@ const batch = 100;
 registerSessionReset(() => {
   for (const group of groups.values()) if (group.pending?.attachment?.previewURL) URL.revokeObjectURL(group.pending.attachment.previewURL);
   for (const entry of groups.values()) clearReactionCache(entry.reactions);
+  for (const entry of groups.values()) { entry.snapshot = null; entry.revision += 1; }
   groups.clear();
   receipts.clear();
+  detailsRequests.clear();
 });
 
 registerModelChange((contributor) => {
@@ -81,10 +84,48 @@ function receiptsFor(id: string): Receipts {
 
 export function forgetGroup(id: string) {
   const removed = groups.get(id);
-  if (removed) clearReactionCache(removed.reactions);
+  if (removed) { clearReactionCache(removed.reactions); removed.snapshot = null; removed.revision += 1; }
   groups.delete(id);
   receipts.delete(id);
+  detailsRequests.delete(id);
   forgetRead(`group:${id}`);
+}
+
+export function updateGroupPrivateSharing(id: string, agentID: string, enabled: boolean) {
+  invalidateGroupDetails(id);
+  const entry = groups.get(id);
+  if (entry?.snapshot) entry.snapshot = { ...entry.snapshot,
+    privateSharing: entry.snapshot.privateSharing?.map(permission => permission.agentID === agentID
+      ? { ...permission, enabled: enabled ? 1 : 0 } : permission) };
+}
+
+export function invalidateGroupDetails(id: string) {
+  const entry = groups.get(id);
+  if (entry) entry.revision += 1;
+  detailsRequests.delete(id);
+}
+
+// Share the conversation snapshot with group details, including empty permissions.
+export async function loadGroupDetails(id: string): Promise<void> {
+  const active = detailsRequests.get(id);
+  if (active) return active;
+  const entry = entryFor(id);
+  const revision = ++entry.revision;
+  const request = (async () => {
+    try {
+      const snapshot = await api<GroupSnapshot>(`groups/${id}`);
+      if (groups.get(id) !== entry || revision !== entry.revision) return;
+      entry.snapshot = snapshot;
+      entry.error = null;
+    } catch (error) {
+      if (groups.get(id) !== entry || revision !== entry.revision) return;
+      if (error instanceof ApiError && (error.status === 403 || error.status === 404)) forgetGroup(id);
+      throw error;
+    }
+  })();
+  detailsRequests.set(id, request);
+  try { await request; }
+  finally { if (detailsRequests.get(id) === request) detailsRequests.delete(id); }
 }
 
 function mergeMessages(existing: GroupMessage[], incoming: GroupMessage[]) {
@@ -188,6 +229,7 @@ export async function loadGroupConversation(id: string, visible = false) {
     if (error instanceof ApiError && error.status === 404) {
       clearReactionCache(entry.reactions);
       entry.unavailable = true;
+      entry.snapshot = null;
       chats.removeGroup(id);
       receipts.delete(id);
       forgetRead(`group:${id}`);

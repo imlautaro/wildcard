@@ -164,8 +164,39 @@ groups.get('/:id', async (c) => {
     AND (r.status != 'failed' OR NOT EXISTS (SELECT 1 FROM group_message later
       WHERE later.group_id = r.group_id AND later.agent_id = r.agent_id AND later.sequence > source.sequence))
     ORDER BY (r.status = 'failed'), r.sequence DESC LIMIT 80`).bind(id).all();
-  return c.json({ group: group ? groupPreview(group) : group, members, replies, canInvite: member.canInvite === 1 || member.ownerID === owner, contributorModel: contributor(c.env) });
+  const { results: privateSharing } = await c.env.DB.prepare(`SELECT ga.agent_id AS agentID,
+    EXISTS (SELECT 1 FROM group_private_sharing s WHERE s.group_id = ga.group_id
+      AND s.agent_id = ga.agent_id AND s.user_id = ?2) AS enabled,
+    (c.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = c.id)) AS available
+    FROM group_agent ga LEFT JOIN contact c ON c.agent_id = ga.agent_id AND c.user_id = ?2
+    WHERE ga.group_id = ?1 ORDER BY ga.agent_id`).bind(id, owner).all();
+  return c.json({ group: group ? groupPreview(group) : group, members, replies, privateSharing, canInvite: member.canInvite === 1 || member.ownerID === owner, contributorModel: contributor(c.env) });
 });
+// A group owner cannot grant another participant's private conversation.
+groups.put('/:id/private-sharing/:agentID', async (c) => {
+  const b = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (typeof b?.enabled !== 'boolean') return c.json({ error: 'Provide enabled' }, 400);
+  const id = c.req.param('id'), agentID = c.req.param('agentID'), userID = c.get('owner');
+  if (!b.enabled) {
+    await c.env.DB.prepare('DELETE FROM group_private_sharing WHERE group_id = ? AND agent_id = ? AND user_id = ?')
+      .bind(id, agentID, userID).run();
+    return c.body(null, 204);
+  }
+  const saved = await c.env.DB.prepare(`INSERT INTO group_private_sharing (group_id, agent_id, user_id, contact_id, created_at)
+    SELECT ga.group_id, ga.agent_id, c.user_id, c.id, ?4 FROM group_agent ga
+    JOIN group_member m ON m.group_id = ga.group_id AND m.user_id = ?3 AND m.share_memory = 1
+    JOIN contact c ON c.agent_id = ga.agent_id AND c.user_id = m.user_id
+    JOIN contact_agent a ON a.id = c.agent_id AND a.memory_shared = 1
+    WHERE ga.group_id = ?1 AND ga.agent_id = ?2
+      AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = c.id)
+      AND (?5 = 0 OR (m.contributor_consent = 1 AND (c.user_id = a.owner_id OR c.contributor_consent = 1)))
+    ON CONFLICT(group_id, agent_id, user_id) DO NOTHING`)
+    .bind(id, agentID, userID, Date.now(), contributor(c.env) ? 1 : 0).run();
+  const exists = saved.meta.changes || await c.env.DB.prepare(`SELECT 1 FROM group_private_sharing
+    WHERE group_id = ? AND agent_id = ? AND user_id = ?`).bind(id, agentID, userID).first();
+  return exists ? c.body(null, 204) : c.json({ error: 'An eligible private conversation and current sharing consent are required' }, 403);
+});
+
 groups.patch('/:id', async (c) => {
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (!validName(b?.name)) return c.json({ error: 'Use a name with 1–100 characters' }, 400);

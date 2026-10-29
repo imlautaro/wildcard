@@ -105,7 +105,8 @@ export type GroupMessage = {
   receiptState?: string | null;
   replyTo?: ReplyQuote | null;
 };
-export type GroupSnapshot = { group: ChatGroup; members: GroupMember[]; replies: GroupReply[]; canInvite: boolean; contributorModel: boolean };
+export type GroupPrivateSharing = { agentID: string; enabled: number; available: number };
+export type GroupSnapshot = { privateSharing?: GroupPrivateSharing[]; group: ChatGroup; members: GroupMember[]; replies: GroupReply[]; canInvite: boolean; contributorModel: boolean };
 export type GroupMessagesPage = { messages: GroupMessage[]; nextBefore: number | null };
 export type GroupInvitation = { id: string; groupName: string; senderName: string; expiresAt: number };
 

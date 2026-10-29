@@ -16,6 +16,7 @@ struct GroupMembersView: View {
     @State private var confirmingDelete = false
     @State private var confirmingLeave = false
     @State private var removal: GroupMember?
+    @State private var sharingAgent: String?
     private var owner: Bool { snapshot?.group.ownerID == auth.user?.id }
     var body: some View {
         Form {
@@ -38,6 +39,18 @@ struct GroupMembersView: View {
                 }
                 Section {
                     NavigationLink("Connections") { McpAccessView(path: "groups/\(groupID)/mcp", group: true, cache: contacts.mcpAccessSnapshots.store(for: "group:\(groupID)")) }
+                }
+                Section {
+                    ForEach(snapshot.privateSharing ?? []) { permission in
+                        let name = snapshot.members.first { $0.kind == "agent" && $0.id == permission.agentID }?.name ?? "Contact"
+                        Toggle(name, isOn: Binding(get: { permission.enabled == 1 }, set: { enabled in
+                            if enabled { sharingAgent = permission.agentID }
+                            else { mutate("private-sharing/\(permission.agentID)", method: "PUT", input: ["enabled": false], sharing: (permission.agentID, false)) }
+                        }))
+                        .disabled(permission.available != 1 && permission.enabled != 1)
+                    }
+                } header: { Text("Discuss my private chats") } footer: {
+                    Text("Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat.")
                 }
                 Section("Members") {
                     ForEach(snapshot.members, id: \.identity) { member in
@@ -91,6 +104,16 @@ struct GroupMembersView: View {
         .onDisappear { store.didLeave() }
         .task { await reload() }
         .refreshable { await reload() }
+        .alert("Allow private chat sharing?", isPresented: Binding(get: { sharingAgent != nil }, set: { if !$0 { sharingAgent = nil } })) {
+            Button("Allow") {
+                guard let agentID = sharingAgent else { return }
+                sharingAgent = nil
+                mutate("private-sharing/\(agentID)", method: "PUT", input: ["enabled": true], sharing: (agentID, true))
+            }
+            Button("Cancel", role: .cancel) { sharingAgent = nil }
+        } message: {
+            Text("This contact may discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. You can turn this off later, but messages already sent remain visible.")
+        }
         .alert("Delete group?", isPresented: $confirmingDelete) {
             Button("Delete", role: .destructive) { mutate("", method: "DELETE", close: true) }
             Button("Cancel", role: .cancel) { }
@@ -122,7 +145,7 @@ struct GroupMembersView: View {
         catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }
-    private func mutate(_ suffix: String, method: String, input: [String: Any]? = nil, close: Bool = false) {
+    private func mutate(_ suffix: String, method: String, input: [String: Any]? = nil, close: Bool = false, sharing: (String, Bool)? = nil) {
         guard !busy, !editingIdentity else { return }
         busy = true
         error = nil
@@ -130,6 +153,7 @@ struct GroupMembersView: View {
             defer { busy = false }
             do {
                 _ = try await GroupService.data(groupID + (suffix.isEmpty ? "" : "/\(suffix)"), method: method, input: input, auth: auth)
+                if let sharing { store.updatePrivateSharing(agentID: sharing.0, enabled: sharing.1) }
                 store.invalidateDetails()
                 if close { groups.conversations.remove(id: groupID) }
                 await groups.refresh(using: auth)

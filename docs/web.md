@@ -541,3 +541,20 @@ remain per response turn, matching iOS. Group parts are ordinary cached messages
 with independent receipts and energy charges. See
 [successive messages](reply-messages.md) for interruption, limits, rollout and
 fictional-data checks on both clients.
+
+## Private text sharing in groups
+
+Group details includes **Discuss my private chats**, matching iOS. Each switch
+permits that contact to discuss the signed-in person's past and future private text
+with everyone in this group after explicit confirmation. It defaults off, is
+revocable, and cannot authorize another person's conversation. File bytes,
+scheduled turns and connector-isolated conversations are excluded. Existing
+shared-memory rules continue separately. See [group behavior](groups.md#optional-private-text-sharing).
+
+Details now shares the session-owned group conversation snapshot (20-group cache),
+including empty permission lists, synchronous reopen and background refresh.
+Details requests are deduplicated. Successful mutations immediately update switches,
+invalidate stale requests and refresh; transient refresh errors preserve usable
+confirmed state. Refresh details explicitly revalidates. Access loss and session
+changes clear snapshots and reject late results; no new private disk storage.
+Browser/device behavior and real-model recall remain unverified.

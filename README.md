@@ -158,7 +158,7 @@ discourage repeated formulas and closing questions. Before publication, an atomi
 history check sends a stale draft through up to two reviews; canceled, superseded
 or continuously changing turns can finish without a message. See the
 [reply policy and review limits](docs/groups.md#reply-rounds-and-exclusive-attention).
-Groups support editable avatars,
+Participants can optionally allow a contact to [discuss their private text](docs/groups.md#optional-private-text-sharing) in one group from Group details, with per-person consent and revocation. Groups support editable avatars,
 image/PDF attachments with native previews, voice dictation with an editable
 transcript, and foreground polling. Chats interleaves groups and individual
 conversations by latest message, with dates and a bold sender prefix on group

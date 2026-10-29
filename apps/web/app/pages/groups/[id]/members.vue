@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { GroupMember, GroupSnapshot } from '~/utils/types';
+import type { GroupMember, GroupPrivateSharing } from '~/utils/types';
 
 const route = useRoute();
 const id = computed(() => String(route.params.id));
 const chats = useChats();
 const { user } = useSession();
-const snapshot = ref<GroupSnapshot | null>(null);
+const { state } = useGroupConversation(id);
+const snapshot = computed(() => state.value.snapshot);
 const email = ref('');
 const contactID = ref('');
 const shareMemory = ref(false);
@@ -30,16 +31,18 @@ function canRemove(member: GroupMember) {
 }
 
 async function load() {
-  snapshot.value = await api<GroupSnapshot>(`groups/${id.value}`);
+  await loadGroupDetails(id.value);
 }
 
 async function run(task: () => Promise<void>) {
   if (busy.value) return;
+  const accountID = user.value?.id;
+  const groupID = id.value;
   busy.value = true;
   error.value = null;
   notice.value = null;
   try { await task(); }
-  catch (failure) { error.value = errorMessage(failure); }
+  catch (failure) { if (accountID === user.value?.id && groupID === id.value) error.value = errorMessage(failure); }
   finally { busy.value = false; }
 }
 
@@ -64,6 +67,17 @@ const remove = (member: GroupMember) => run(async () => {
 const togglePermission = (member: GroupMember) => run(async () => {
   await api(`groups/${id.value}/members/${member.id}`, { method: 'PATCH', json: { canInvite: !member.canInvite } });
   await load();
+});
+
+const togglePrivateSharing = (permission: GroupPrivateSharing) => run(async () => {
+  const groupID = id.value;
+  const accountID = user.value?.id;
+  const enabled = !permission.enabled;
+  if (enabled && !window.confirm('This contact may discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. You can turn this off later, but messages already sent remain visible.')) return;
+  await api(`groups/${groupID}/private-sharing/${permission.agentID}`, { method: 'PUT', json: { enabled } });
+  if (accountID !== user.value?.id || groupID !== id.value) return;
+  updateGroupPrivateSharing(groupID, permission.agentID, enabled);
+  await loadGroupDetails(groupID);
 });
 
 const leave = () => run(async () => {
@@ -92,6 +106,17 @@ onMounted(() => run(async () => {
       <div v-if="!snapshot && busy" class="center"><span class="spinner" /> Loading…</div>
       <template v-if="snapshot">
         <IdentityEditor :name="snapshot.group.name" :path="groupPhotoPath(snapshot.group)" />
+
+        <div class="group-title">Discuss my private chats</div>
+        <div class="group">
+          <label v-for="permission in snapshot.privateSharing ?? []" :key="permission.agentID" class="field">
+            <span style="flex: 1">{{ snapshot.members.find(member => member.kind === 'agent' && member.id === permission.agentID)?.name ?? 'Contact' }}</span>
+            <input type="checkbox" :checked="!!permission.enabled" :disabled="busy || (!permission.available && !permission.enabled)" @change="togglePrivateSharing(permission)">
+          </label>
+          <div v-if="!snapshot.privateSharing?.length" class="text-block">Add a contact to manage private chat sharing.</div>
+        </div>
+        <p class="group-footer">Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat.</p>
+        <button type="button" class="link-button" :disabled="busy" @click="run(load)">Refresh details</button>
 
         <div class="group-title">Members</div>
         <div class="group">

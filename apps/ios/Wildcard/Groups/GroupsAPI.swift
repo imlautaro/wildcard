@@ -60,10 +60,17 @@ struct GroupMessage: Decodable, Identifiable, Equatable {
     let attachment: ChatAttachment?
     var replyTo: MessageReplyQuote? = nil
 }
+struct GroupPrivateSharing: Decodable, Identifiable {
+    let agentID: String
+    let enabled: Int
+    let available: Int
+    var id: String { agentID }
+}
 struct GroupSnapshot: Decodable {
     let group: ChatGroup
     let members: [GroupMember]
     let replies: [GroupReply]
+    var privateSharing: [GroupPrivateSharing]? = nil
     let canInvite: Bool
     let contributorModel: Bool
 }
@@ -324,6 +331,15 @@ final class GroupChatStore {
         readIDs.formIntersection(retained)
         newIncomingMessageIDs.formIntersection(retained)
         pendingReadIDs.formIntersection(retained)
+    }
+
+    func updatePrivateSharing(agentID: String, enabled: Bool) {
+        invalidateDetails()
+        snapshot?.privateSharing = snapshot?.privateSharing?.map { permission in
+            permission.agentID == agentID
+                ? GroupPrivateSharing(agentID: agentID, enabled: enabled ? 1 : 0, available: permission.available)
+                : permission
+        }
     }
 
     func refreshDetails(id: String, auth: AuthStore) async throws {
