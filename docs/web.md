@@ -285,6 +285,11 @@ behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.
 
 ## Voice messages
 
+Contact replies use server-side ElevenLabs `eleven_v4` synthesis, shared with iOS.
+Only new replies use the selected model; existing audio and catalog previews keep
+their original bytes and cache identity. Live v4 generation and listening quality
+remain unverified for this model change. See [voice messages](voice.md).
+
 Private and group composers show a microphone instead of the send button while the
 draft is empty and has no attachment, as on iOS ([voice messages](voice.md#web)):
 hold to record and release to send, slide left to cancel, slide up to lock (Delete or

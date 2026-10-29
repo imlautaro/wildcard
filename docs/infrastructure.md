@@ -277,7 +277,7 @@ new bucket, binding or Cron is needed.
   Meta project must permit `muse-voice-transcribe-1.0`. Transcription runs in the
   chat Workflow after sending; the stored WAV is read from R2.
 - **Speech and the voice catalog (optional):** an ElevenLabs API key with access to
-  text to speech and voices, stored as the runtime secret `ELEVENLABS_API_KEY`. It is
+  `eleven_v4` text to speech and voices, stored as the runtime secret `ELEVENLABS_API_KEY`. It is
   not in `secrets.required`, so releases succeed without it. In production, add it as
   an encrypted build variable of the API's Workers Builds project; the release script
   copies it to the runtime secret, like `META_API_KEY`, and preserves an existing
@@ -297,6 +297,13 @@ production `ELEVENLABS_API_KEY` was uploaded with `wrangler secret put` (version
 `bb64b9e5`, built from commit `1fc3526`) instead of a Workers Builds variable.
 Releases preserve it. Rotate it through the build variable; do not repeat the
 manual upload without new authorization.
+
+The speech model is versioned in `apps/api/src/voice/speech.ts`; release model
+changes by commit and push through the existing automatic API deployment. No new
+resources or migration are needed. Reverting the model selection affects only new
+replies; stored audio remains compatible with both clients. After release, verify
+account access to v4, the selected voices, and playback quality on iOS and web;
+v4 provider calls have not been verified for this change.
 
 Unverified at implementation time: real ElevenLabs calls, the catalog's `age`
 label values, real Meta transcription of stored clips, and both clients on devices.

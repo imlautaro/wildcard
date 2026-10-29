@@ -82,8 +82,13 @@ Thresholds live in `apps/api/src/voice/speech.ts` (`voiceSuitable`). Synthesis f
 never fails the reply: the message is published as text.
 
 Speech uses `POST https://api.elevenlabs.io/v1/text-to-speech/:voiceID` with model
-`eleven_multilingual_v2` (it follows the contact's language) and `mp3_44100_128`
-output. Duration is derived from the constant 128 kbps bitrate.
+`eleven_v4` and `mp3_44100_128` output, matching the provider's
+[Text to Speech quickstart](https://elevenlabs.io/docs/eleven-api/quickstart).
+Both iOS and web receive the same server-generated audio. The model change applies
+only to newly synthesized replies; stored audio and voice previews are not
+regenerated. Duration is derived from the constant 128 kbps bitrate.
+Real v4 synthesis, account access, voice compatibility and listening quality remain
+unverified for this change. Provider failures retain the existing text fallback.
 
 ## Contact voices
 

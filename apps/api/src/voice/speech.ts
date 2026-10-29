@@ -61,7 +61,7 @@ async function synthesize(env: Env, agentID: string, text: string): Promise<Buff
   const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceID)}?output_format=mp3_44100_128`, {
     method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(60_000),
     headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-    body: JSON.stringify({ text: plainMessageMarkdown(text), model_id: 'eleven_multilingual_v2' }),
+    body: JSON.stringify({ text: plainMessageMarkdown(text), model_id: 'eleven_v4' }),
   });
   if (!response.ok || !response.body) {
     await response.body?.cancel();
