@@ -28,8 +28,9 @@ pause/revoke controls. Monitors, semantic memory and broader grants remain futur
 - Queries must be self-contained public questions. Prompts forbid sending secrets,
   connector results, private transcripts, memories or personal details to search.
   This is model guidance, not a semantic data-loss-prevention classifier. The
-  research subrequest receives only the bounded question and fixed instructions;
-  it receives no chat history, attachments, memories or connector tools.
+  search subrequest receives only the bounded question and fixed instructions;
+  it receives no chat history, attachments, memories or connector tools. An optional
+  tool-free synthesis additionally receives only returned public search hits.
 - Research uses the turn's Spark Standard/Contributor mode, subject to current
   access and Contributor consent. Ownership, current group membership,
   shared-memory consent, all-member Contributor consent, active attempt and agent
@@ -49,9 +50,10 @@ Implementation defaults in `apps/api/src/research/model.ts`:
 | Research requests | One per human message, shared across group contacts; one per authorized task lifetime |
 | Rolling 24-hour account / installation limit | 10 / 100 reservations |
 | Question / title | 600 / 200 UTF-16 code units |
-| Responses output | 4,096 tokens including reasoning |
+| Provider calls per reservation | One search POST, plus at most one tool-free synthesis POST when citations are unusable |
+| Output per provider call | 4,096 tokens including reasoning |
 | Built-in tool calls | At most 3 through `max_tool_calls` |
-| Provider deadline / response body | 60 seconds / 256 KiB |
+| Shared operation deadline / body per provider call | 60 seconds total / 256 KiB each |
 | Saved report / source index | 24,000 UTF-16 code units / 20 sources |
 
 Research consumes one of the existing six tool executions. It does not increase
@@ -68,7 +70,7 @@ from admission after 24 hours; up to 200 expired events are pruned during each
 subsequent admission. If no more admissions occur, old events remain stored until
 one does. No query, source or report content is retained in that usage table.
 
-The paid POST has no transport retry. A crash after reservation can leave a
+Neither paid POST has a transport retry. A crash after reservation can leave a
 `pending` outcome; retries return uncertainty without sending another search for
 that message. A `failed` result is also not retried. A completed, grounded response
 becomes a `ready` draft. Publication creates the document, revision 1 and `complete`
@@ -114,10 +116,14 @@ see [task permissions](persistent-work.md#public-research-permission-0055).
 The parser requires a completed Responses result, at least one completed
 `web_search_call`, a bounded answer and a usable citation. A citation can be a
 provider `url_citation` annotation or a parsed Markdown link whose normalized URL
-exactly matches a result of a completed search in the same response. Matching
-preserves paths, query strings and fragments; a common domain alone is not enough.
-Bare URL text, code, image URLs and raw HTML anchors do not count as Markdown
-citations. Retrieved hits without a matching link remain retrieved-only. If Meta skips
+matches a result of a completed search in the same response. Explicit bare URLs
+are recognized as links too. A report may upgrade a retrieved default-port HTTP
+URL to HTTPS; downgrades and non-default-port upgrades are rejected. Matching
+preserves hosts, paths, query strings and fragments; a common domain alone is not
+enough. Code, image URLs and raw HTML anchors do not count as citations. Search
+hit URLs remain the saved provenance, including their original scheme. The prompt
+asks for complete Markdown links copied exactly from search results, rather than
+guessed canonical paths or homepages. Retrieved hits without a matching link remain retrieved-only. If Meta skips
 search, returns no citations, refuses, truncates or times out, no research document
 is published. Cited sources take priority over merely retrieved sources. Each
 output section gets links from those accepted citations; commentary-phase messages
@@ -125,6 +131,25 @@ are excluded from the saved report. The immutable
 source panel preserves titles/URLs and the cited/retrieved distinction. Source-page
 content and search snippets are not stored separately. Citation correctness and
 coverage depend on Meta; citations are not independent verification.
+
+If completed search hits exist but no usable citations can be parsed, the operation
+may make one additional **tool-free Chat Completions synthesis** call. It receives
+only the public question and at most 20 returned source URLs/titles with bounded
+snippets, not chat history, memory, task notes or the original ungrounded draft.
+Current access, task generation and model consent are rechecked before admission.
+Both calls share the 60-second deadline and the existing durable reservation;
+replays never repeat either call. This can increase inference cost per operation,
+but never runs another search or refunds an attempt. Failure remains failed or
+uncertain under the existing receipt rules.
+
+The synthesis schema uses sections with numeric source IDs from the returned list.
+The server validates each ID, rejects model-authored links, and constructs citation
+URLs from the search hits. It records `synthesisCalls: 1` and combined token usage
+in provenance when usage is available. Search hits without snippets permit only
+source discovery; the instructions require that limitation to be explicit. A report
+can be preliminary and need further work. Contacts are instructed to read the
+saved report and its limitations before describing the outcome. This fallback
+does not establish that a source supports every claim or that pages were read.
 
 Client renderers escape HTML and suppress remote Markdown images. Source-panel
 URLs accept credential-free HTTP(S) domain links, rejecting literal IPs and
@@ -183,6 +208,37 @@ empty annotation arrays. The annotation-only parser rejected it. Only structural
 counts were printed; the raw response was not saved and no document was published.
 The Markdown/retrieved-hit compatibility fix was implemented afterward; a second
 live request and end-to-end publication have not been verified.
+
+Later that day, the user authorized up to three additional public RSS/Atom requests
+and offline parser checks. The first request passed the previous parser only via
+a secondary source: the official RSS hit used HTTP while the report used HTTPS,
+and several other links were replaced with homepages or alternative RFC paths.
+Replaying it with the new matcher also recognizes the official RSS source. The
+second request passed with the updated prompt and matcher. The third request,
+using the final matcher, failed correctly: the model supplied official IETF URLs
+absent from all returned search hits, with empty annotations. The citations claimed
+retrieval that the returned evidence did not establish. Do not treat this change
+as a reliable end-to-end research fix or relax matching to accept those links.
+Public provider output
+was saved temporarily outside the repository for offline diagnosis; credentials,
+private chat history and encrypted reasoning were excluded. No documents were
+published by these diagnostic calls.
+
+`node scripts/checks/research-response.cjs` covers 23 offline cases, including
+structured citations, Markdown/reference/bare links, HTTP upgrades, downgrade and
+port rejection, exact path/query/fragment matching, commentary, retrieved-only
+answers, guessed official URLs absent from search hits, incomplete searches, code,
+images, HTML and unsafe hosts. API TypeScript
+also passes. These checks do not establish production document publication.
+
+The user then authorized up to three more requests for explicit-source synthesis.
+One synthesis call on the previously rejected public response passed. A fresh
+full operation used two calls (search plus synthesis) and passed with 20 returned
+sources, 15 cited by validated IDs. The resulting report explicitly disclosed empty
+snippets, missing evidence and preliminary status. Six additional offline cases
+cover synthesis admission, token aggregation, valid IDs, invalid/missing IDs and
+model-authored links. No production report was created; end-to-end database
+publication and iOS/web presentation still need verification after release.
 
 Live Meta research, citation quality, billing, uncertain-outcome replay, concurrent
 budget admission, model/consent changes while running and client presentation

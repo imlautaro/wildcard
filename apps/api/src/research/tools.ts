@@ -135,7 +135,8 @@ export async function executeResearchTool(env: Env, scope: ResearchScope, args: 
         // No retry around this paid POST. A pending reservation means its outcome
         // may already be billed, even if the process died before saving the result.
         if (!await env.DB.prepare(access.sql).bind(...access.binds).first()) throw new Error('MODEL_RESEARCH_ACCESS_CHANGED');
-        const result = await researchWeb(env, query.trim(), model);
+        const result = await researchWeb(env, query.trim(), model,
+          async () => Boolean(await env.DB.prepare(access.sql).bind(...access.binds).first()));
         const saved = await env.DB.prepare(`UPDATE web_research SET status = 'ready', result_json = ?
           WHERE id = ? AND status = 'pending' AND EXISTS (${access.sql})`)
           .bind(JSON.stringify(result), id, ...access.binds).run();
@@ -152,7 +153,7 @@ export async function executeResearchTool(env: Env, scope: ResearchScope, args: 
   if (active.taskID && receipt.query !== query.trim()) return failure('QUERY_CHANGED', 'This task already spent its research attempt on an earlier public query. Read the existing report; no new search is authorized.');
   if (receipt.status === 'complete') return receipt.documentID
     ? JSON.stringify({ researched: true, documentID: receipt.documentID, title: receipt.title, replayed: true,
-      nextStep: 'The original report already exists. Read that document and mention it briefly; do not create a duplicate.' })
+      nextStep: 'The original report already exists. Read its contents and limitations before describing it. It may be preliminary; do not claim the objective is fully verified. Do not create a duplicate.' })
     : failure('DOCUMENT_DELETED', 'The original research document was deleted. This request will not recreate it or search again.');
   if (receipt.status === 'failed') {
     const reason = receipt.errorCode === 'MODEL_RESEARCH_NO_SEARCH'
@@ -196,6 +197,6 @@ export async function executeResearchTool(env: Env, scope: ResearchScope, args: 
   receipt = await read();
   return receipt?.status === 'complete' && receipt.documentID ? JSON.stringify({ researched: true, documentID: receipt.documentID, title: receipt.title,
     sources: result.provenance.sources.filter(source => source.cited), checkedAt: result.provenance.checkedAt,
-    nextStep: 'The report is saved. Read it if needed, then mention the document briefly. Do not create another report.' })
+    nextStep: 'The report is saved. Read its contents and limitations before describing it. If evidence is insufficient, say the report is preliminary rather than claiming full completion. Do not create another report.' })
     : failure('PUBLICATION_BLOCKED', 'The report draft was saved, but access changed or this chat reached its document limit. No additional search will be sent on retry.');
 }

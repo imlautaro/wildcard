@@ -22,7 +22,12 @@ eight-minute Workflow timeout and retries. These are not per-job token budgets.
 
 Existing task/document mutation receipts, MCP reservation ledgers, image receipts,
 agent attention and publication guards remain in place. A new research receipt
-reserves before its paid POST and keeps uncertain outcomes from being retried.
+reserves before its paid POSTs and keeps uncertain outcomes from being retried.
+One reservation may cover a search POST plus one tool-free synthesis POST when
+the search response has hits but no usable citations. Synthesis rechecks current
+access, receives only the public query and returned hits, and uses validated source
+IDs rather than model-authored URLs. Both calls share the 60-second deadline;
+each allows 4,096 output tokens. This raises potential inference cost per attempt.
 Its separate atomic usage ledger survives content deletion, enforcing 10 requests
 per account and 100 per installation per rolling day. See
 [research budgets and retention](web-research.md#budgets-and-receipts).

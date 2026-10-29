@@ -1816,6 +1816,15 @@ a member with a private chat and creates nothing for a member without one.
 
 ### Web research (migration 0053)
 
+Citation recovery uses the same `META_API_KEY` for an optional tool-free
+`/v1/chat/completions` synthesis call after `/v1/responses` returns search hits
+without usable citations. No new service, secret, binding or migration is needed.
+Both calls share one reservation and deadline, with an access/consent check between
+them; a crash does not permit repeating paid calls. See the updated
+[research budgets and source validation](web-research.md). Independent accounts
+must permit both Meta endpoints. Rollback removes this fallback without refunding
+consumed attempts or deleting existing reports.
+
 [Web research](web-research.md) reuses `DB`, `CHAT_WORKFLOW`, agent attention and the
 existing encrypted `META_API_KEY`. No new service, binding, bucket, dependency or
 Cron is required. Independent installations follow the existing D1/Meta/Workers
