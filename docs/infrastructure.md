@@ -222,8 +222,14 @@ source SHA and lists `API` → `wildcard-api` (entrypoint `AdminAPI`) and `ASSET
 On the public API origin, `GET /api/v1/admin/session` returns 404. On the admin
 origin, an unauthenticated `GET /api/v1/admin/session` returns 401, and
 `/api/v1/me` returns 404 because the proxy does not forward it. Sign-in sets
-`__Host-wildcard_admin_session`. None of this has been verified for this
-installation yet; the third Workers Builds project has not been created.
+`__Host-wildcard_admin_session`.
+
+The production Workers Builds project was connected to `imlautaro/wildcard` on
+October 29, 2026: branch `main`, root `/`, the build and release commands above,
+preview builds disabled, all paths included, no exclusions, build cache enabled,
+and the existing `wildcard-web-builds-scoped` deployment token reused. It has no
+build variables or secrets. The initial build and live checks were still pending
+when this configuration was recorded. The super admin roster remains empty.
 
 Rollback: delete or roll back the `wildcard-admin` Worker. It stores no data.
 Clearing `SUPER_ADMIN_USER_IDS` and releasing the API revokes access without
