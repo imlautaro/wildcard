@@ -33,11 +33,12 @@ import { documentContext, documentInstruction } from '../documents/tools';
 import { researchInstruction, taskResearchInstruction } from '../research/tools';
 import { recentResearchContext } from '../research/context';
 import type { GroupJob } from './workflow';
-import { foldedHumanMessages, type RoundRole } from './planning';
+import { foldedHumanMessages, type RoundDepth, type RoundRole } from './planning';
 
 export type GroupLearningFence = { person: number; audience: number };
 export type GroupDraft = { responseRequired?: boolean; deferActions?: boolean; learningQuestion?: LearningQuestion | null; learningFence?: GroupLearningFence; includeImage?: boolean; attachment?: Attachment | null; invitesReply?: boolean; replyToID?: string | null; messages?: string[]; text: string | null; throughSequence: number; typingSince?: number | null };
-export type GroupPlan = { rank: number; size: number; role: RoundRole; angle: string; tools: boolean; humanTrigger: boolean };
+export type GroupPlan = { rank: number; size: number; role: RoundRole; angle: string; tools: boolean; humanTrigger: boolean;
+  depth?: RoundDepth; team?: { name: string; role: RoundRole; angle: string }[] };
 export type GroupInput = {
   plan?: GroupPlan;
   typingSince?: number;
@@ -68,7 +69,7 @@ type GroupContextRow = {
   attachmentJSON: string | null; text: string; userID: string; sourceAgentID: string | null;
   opening: number; laterHuman: number; directed: number; requesterName: string; senderName: string; name: string; groupName: string;
   replyToID: string | null; taskID: string | null; createdAt: number;
-  planRank: number | null; planRole: RoundRole | null; planAngle: string | null; planTools: number; planSize: number;
+  planRank: number | null; planRole: RoundRole | null; planAngle: string | null; planTools: number; planSize: number; planJSON: string | null;
 };
 type GroupContextMessage = {
   sequence: number; id: string; attachmentJSON: string | null; name: string;
@@ -116,7 +117,8 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
     (gm.request_id IS NOT NULL) AS directed, gm.agent_id AS sourceAgentID, requester.name AS requesterName, gm.sender_name AS senderName, a.name, g.name AS groupName,
     gm.reply_to_id AS replyToID, gm.task_id AS taskID, gm.created_at AS createdAt,
     r.plan_rank AS planRank, r.plan_role AS planRole, r.plan_angle AS planAngle, r.plan_tools AS planTools,
-    (SELECT COUNT(*) FROM group_reply peer WHERE peer.source_id = r.source_id AND peer.plan_rank IS NOT NULL) AS planSize
+    (SELECT COUNT(*) FROM group_reply peer WHERE peer.source_id = r.source_id AND peer.plan_rank IS NOT NULL) AS planSize,
+    (SELECT plan_json FROM group_round WHERE source_id = r.source_id AND status = 'planned') AS planJSON
     FROM group_reply r JOIN group_message gm ON gm.id = r.source_id JOIN contact_agent a ON a.id = r.agent_id
     JOIN chat_group g ON g.id = r.group_id JOIN agent_attention attention ON attention.turn_id = r.id AND attention.attempt = r.attempt
     LEFT JOIN group_request request ON request.id = gm.request_id
@@ -161,7 +163,8 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
     ? await monitorChanges(env.DB, workTask.task.id, row.sourceID) : null;
   const taskReplyRequired = !!workTask && !previous && !row.laterHuman;
   const plan: GroupPlan | undefined = row.planRank === null ? undefined : { rank: row.planRank, size: row.planSize,
-    role: row.planRole ?? 'answer', angle: row.planAngle ?? '', tools: !!row.planTools, humanTrigger: !row.sourceAgentID };
+    role: row.planRole ?? 'answer', angle: row.planAngle ?? '', tools: !!row.planTools, humanTrigger: !row.sourceAgentID,
+    ...roundTeam(row.planJSON) };
   // The coordinator chose the first speaker of a human round to answer it.
   const plannedAnswer = !!plan && plan.rank === 1 && plan.humanTrigger && !row.laterHuman;
   const replyRequired = openingReplyRequired || taskReplyRequired || plannedAnswer || !!(previous?.responseRequired && !row.laterHuman) || !!row.directed;
@@ -328,12 +331,31 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
   } };
 }
 
+// Names come from the stored plan; agent IDs are not exposed to speakers.
+function roundTeam(planJSON: string | null): Pick<GroupPlan, 'depth' | 'team'> {
+  try {
+    const value: unknown = planJSON ? JSON.parse(planJSON) : null;
+    if (!isRecord(value) || !Array.isArray(value.speakers)) return {};
+    return { depth: value.depth === 'deep' || value.depth === 'project' ? value.depth : 'quick', team: value.speakers.flatMap(item =>
+      isRecord(item) && typeof item.name === 'string' && typeof item.role === 'string' && typeof item.angle === 'string'
+        ? [{ name: item.name, role: item.role as RoundRole, angle: item.angle }] : []) };
+  } catch { return {}; }
+}
+
 // The coordinator's choice is guidance for this speaker, not a script.
 function roundPlanInstruction(plan: GroupPlan) {
+  const deep = plan.depth === 'deep' || plan.depth === 'project';
+  const team = deep && plan.team?.length ? ` The team for this investigation: ${JSON.stringify(plan.team)}.` : '';
+  if (plan.role === 'research' && deep) {
+    return `Round plan: this is a thorough group investigation split across members.${team} Your part is speaker ${plan.rank}: research only your own sub-question (internal angle ${JSON.stringify(plan.angle)}) with research_web, delivery conversation. ${plan.rank === 1 ? 'Your announcement tells the group in one or two sentences how the work is split, naming who covers what.' : 'Do not announce; the first researcher already told the group.'} Then post one short message with your key findings and figures (light Markdown, named source links). Do not write the full report: another member compiles it. Never mention the plan, coordinator, rank or angle.`;
+  }
+  if (plan.role === 'compile') {
+    return `Round plan: this is a thorough group investigation.${team} You are the compiler and speak last. The researchers' findings and messages are in peerRepliesThisRound and the earlier research evidence. Use create_document once to write a well-structured shared Markdown document in the humans' language: a short summary first, then sections per sub-question with figures, dates and named source links, practical next steps and stated uncertainty; use the humans' known situation from shared memories when relevant.${plan.depth === 'project' ? ' Then one create_task_list call with its next steps inline (at most six tasks, no separate add_task calls): assign to a contact only work it can do with its own tools without new web research, assign actions only a person can take to that person, and leave the rest unassigned.' : ''} Finally post one short chat message with the two or three key takeaways and that the document is ready. Do not research again. Never mention the plan, coordinator, rank or angle.`;
+  }
   const role = plan.role === 'spark'
     ? 'Your part is to keep the conversation alive: add a hook in your own character, such as a concrete opinion, a small detail from your persona, a playful proposal or a specific question to another member or the group. Set invitesReply true when your message offers something to engage with.'
     : plan.role === 'research'
-      ? 'Your part is to look this up with research_web before answering, then share what you found in your own voice.'
+      ? 'Your part is to look this up with research_web before answering, then share what you found in your own voice. If the topic is broad or the person may want more, end by briefly offering a deeper investigation with the group and a shared document, without asking anything else.'
       : plan.role === 'react'
         ? 'Your part is a brief reaction that adds something new, not a repeat of what others said.'
         : 'Your part is to answer the trigger directly and usefully.';

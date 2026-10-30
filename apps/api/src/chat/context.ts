@@ -395,7 +395,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       messageInstruction, quoteInstruction, imageInstruction,
       ...(spoken ? [spoken] : []),
       'For a final answer without tool calls, return only JSON {"messages":["first message","optional next message"],"replyTo":null,"learningQuestion":null}. When a quote helps, replyTo is {"messageID":"actual turn ID","side":"user" or "assistant"}; otherwise null. Tool calls retain their normal format.',
-      'Avoid unnecessary introductions, recaps, lists, repeated explanations, and automatic follow-up questions.',
+      'Avoid unnecessary introductions, recaps, repeated explanations, and automatic follow-up questions. Use lists only when they make a longer answer easier to read.',
       'Give a longer response when requested or required; do not sacrifice accuracy or usefulness for brevity.',
       'You can consult this agent’s shared stored memories, the current speaker’s private conversation, and manage schedules only for the current speaker through the listed tools. Other participants’ transcripts, attachments, and schedules are inaccessible.',
       'Use the validated time zone in conversation timing for local dates. If it is unknown, ask before scheduling local times.',

@@ -1198,3 +1198,17 @@ open chat, lingering presence, Typing during inference for voice-capable contact
 the 15-second typing cap and group round planning are server-side and apply to both
 clients. See [chats](chats.md#responsive-orchestration-2026-10-30) and
 [groups](groups.md#round-coordinator-migration-0071).
+
+## Clickable links in messages (2026-10-30)
+
+Both clients make bare `http(s)` URLs, `www.` hosts and email addresses actionable
+in people's messages and captions as well as in contact Markdown, with matching
+detection rules; see [bot message Markdown](chats.md#bot-message-markdown). Web
+renders literal text through `LinkifiedText` (no HTML), opening links in a new tab.
+No cache or API change.
+
+## Link cards (migration 0073)
+
+Web shows one link card per bubble (`LinkPreviewCard`) using `useLinkPreviews`, a
+memory-only session cache, and the private image blob cache for the API's copy of
+the image, matching iOS. See [link previews](link-previews.md).

@@ -2820,3 +2820,29 @@ deployed latency, device behavior, concurrent Workflow interleavings and model
 quality across languages. See [groups](groups.md#round-coordinator-migration-0071),
 [chats](chats.md#responsive-orchestration-2026-10-30) and
 [web research](web-research.md#announced-research-and-grounded-answers-migration-0071).
+
+## Split group research (migration 0072)
+
+`0072_split_group_research.sql` rebuilds the leaf table `web_research` (nothing
+references it) to drop the UNIQUE constraint on `group_source_id`, adding a unique
+partial index on `group_reply_id` and a plain index on `group_source_id`; existing
+rows are copied unchanged. No new resource, secret or binding. Apply through the
+automatic API release (local: `npm run db:migrate:local --workspace @wildcard/api`).
+Validated locally by applying 0001–0071, seeding a private and a group receipt,
+applying 0072, inserting a second receipt for the same group message, and checking
+row counts, `pragma_foreign_key_list` and the cascade from `group_message`. Rollback:
+an older API still works with the rebuilt table, but would allow at most one receipt
+per message only through its own ID scheme; do not recreate the old UNIQUE constraint
+while rows with several receipts per message exist.
+
+
+## Link previews (migration 0073)
+
+`0073_link_previews.sql` adds the shared `link_preview` cache table. Images use the
+existing `CONTACT_PHOTOS` R2 bucket under the `link-previews/` prefix; the minute
+Cron deletes expired rows and images. Outbound page fetches rely on the existing
+`global_fetch_strictly_public` compatibility flag. No new resource, secret, binding
+or permission. Apply through the automatic API release (local:
+`npm run db:migrate:local --workspace @wildcard/api`). Rollback: older APIs ignore
+the table; the `link-previews/` objects can be deleted with the table. See
+[link previews](link-previews.md).

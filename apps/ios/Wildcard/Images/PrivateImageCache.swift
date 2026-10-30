@@ -11,6 +11,7 @@ enum CachedImageResource: Hashable, Sendable {
     case groupAttachment(groupID: String, messageID: String)
     case assistantAttachment(contactID: String, turnID: String)
     case attachment(contactID: String, turnID: String)
+    case linkPreview(hash: String, version: Int)
 
     var key: String {
         switch self {
@@ -21,6 +22,7 @@ enum CachedImageResource: Hashable, Sendable {
         case let .groupAttachment(id, message): return "group/\(id)/attachment/\(message)"
         case let .assistantAttachment(id, turn): return "contact/\(id)/assistant-attachment/\(turn)"
         case let .attachment(id, turn): return "contact/\(id)/attachment/\(turn)"
+        case let .linkPreview(hash, version): return "link/\(hash)/\(version)"
         }
     }
 }
@@ -34,6 +36,8 @@ final class PrivateImageCache {
     /// Voice message audio shares this cache's account lifecycle, so every activation,
     /// sign-out, account switch and access-loss clear also drops cached audio.
     let audio = VoiceAudioCache()
+    /// Link card metadata shares the same account lifecycle (docs/link-previews.md).
+    let linkPreviews = LinkPreviewCache()
     private var userID: String?
     private var session = UUID()
     private struct Request {
@@ -49,6 +53,7 @@ final class PrivateImageCache {
 
     func activate(userID: String) {
         audio.activate(userID: userID)
+        linkPreviews.activate(userID: userID)
         guard self.userID != userID else { return }
         resetMemory()
         self.userID = userID
@@ -59,6 +64,7 @@ final class PrivateImageCache {
         let previousSession = session
         resetMemory()
         if deactivate { userID = nil }
+        linkPreviews.clear(deactivate: deactivate)
         await audio.clear(deactivate: deactivate)
         await disk.clear(userID: previousUser, session: previousSession)
     }
@@ -240,6 +246,7 @@ extension AuthStore {
                 case let .groupAttachment(id, message): return try await api.groupAttachment(groupID: id, messageID: message, token: token)
                 case let .assistantAttachment(id, turn): return try await api.chatAttachment(contactID: id, turnID: turn, assistant: true, token: token)
                 case let .attachment(id, turn): return try await api.chatAttachment(contactID: id, turnID: turn, token: token)
+                case let .linkPreview(hash, _): return try await api.send(path: "link-previews/\(hash)/image", token: token).0
                 }
             }
         }

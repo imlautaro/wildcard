@@ -3,7 +3,7 @@ import { isRecord } from '../chat/meta';
 import { validChatModel } from '../lib/model-preference';
 
 export const researchLimits = {
-  accountDaily: 10, globalDaily: 100, query: 600, outputTokens: 4096,
+  accountDaily: 30, globalDaily: 300, query: 600, outputTokens: 4096,
   builtInCalls: 3, timeoutMs: 60_000, responseBytes: 256 * 1024, reportCharacters: 24_000, sources: 20,
 } as const;
 

@@ -247,12 +247,12 @@ onBeforeUnmount(() => {
           <div class="bubble media">
             <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
             <MessageAttachment :attachment="state.pending.attachment" :path="null" :local-url="state.pending.attachment.previewURL" />
-            <div v-if="state.pending.text && state.pending.attachment.previewURL" class="caption">{{ state.pending.text }}</div>
+            <div v-if="state.pending.text && state.pending.attachment.previewURL" class="caption"><LinkifiedText :text="state.pending.text" /></div>
             <div class="meta" style="padding: 0 6px 2px">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div>
           </div>
         </div>
         <div v-if="state.pending.text && !state.pending.attachment?.previewURL" class="bubble-row outgoing">
-          <div class="bubble"><MessageReplyQuote v-if="state.pending.replyTo && !state.pending.attachment" :preview="replyPreview(state.pending.replyTo)" />{{ state.pending.text }}<div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div></div>
+          <div class="bubble"><MessageReplyQuote v-if="state.pending.replyTo && !state.pending.attachment" :preview="replyPreview(state.pending.replyTo)" /><LinkifiedText :text="state.pending.text" /><div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div></div>
         </div>
         <div v-if="state.pending.failed" class="status-line outgoing error">
           {{ state.pending.failed }}
@@ -277,10 +277,10 @@ onBeforeUnmount(() => {
                 <div v-if="item.turn.attachment" class="bubble media">
                   <MessageReplyQuote v-if="item.turn.replyTo" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />
                   <MessageAttachment :attachment="item.turn.attachment" :path="attachmentPath(item.turn)" />
-                  <div v-if="item.turn.userText && item.turn.attachment.mimeType.startsWith('image/')" class="caption">{{ item.turn.userText }}</div>
+                  <div v-if="item.turn.userText && item.turn.attachment.mimeType.startsWith('image/')" class="caption"><LinkifiedText :text="item.turn.userText" /></div>
                   <div class="meta" style="padding: 0 6px 2px">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
                 </div>
-                <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble"><MessageReplyQuote v-if="item.turn.replyTo && !item.turn.attachment" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />{{ item.turn.userText }}<div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
+                <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble"><MessageReplyQuote v-if="item.turn.replyTo && !item.turn.attachment" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" /><LinkifiedText :text="item.turn.userText" /><LinkPreviewCard :url="previewLink(item.turn.userText, false)" /><div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
                 </template>
               </div>
             </MessageReactions>
@@ -295,7 +295,7 @@ onBeforeUnmount(() => {
                 <MessageReplyQuote v-if="item.first && item.turn.assistantMessages?.[0]?.replyTo" :preview="replyPreview(item.turn.assistantMessages[0].replyTo)" interactive @open="showQuoted(item.turn.assistantMessages[0].replyTo)" />
                 <MessageAttachment v-if="item.first && item.turn.assistantMessages?.[0]?.attachment" :attachment="item.turn.assistantMessages[0].attachment" :path="`contacts/${contactID}/chat/turns/${item.turn.id}/attachment?side=assistant`" />
                 <VoiceMessage v-if="assistantVoice(item)" :voice="assistantVoice(item)!" :path="assistantVoicePath(item)" :sender-name="contact?.name" :sender-photo="contact ? contactPhotoPath(contact) : null" />
-                <div v-else :class="{ caption: item.first && item.turn.assistantMessages?.[0]?.attachment }"><MessageMarkdown :text="item.text ?? item.turn.assistantText" /></div>
+                <div v-else :class="{ caption: item.first && item.turn.assistantMessages?.[0]?.attachment }"><MessageMarkdown :text="item.text ?? item.turn.assistantText" /><LinkPreviewCard :url="previewLink(item.text ?? item.turn.assistantText, true)" /></div>
                 <template v-if="item.first">
                   <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => a.turnID === item.turn.id)" :key="app.id" :app="app" :base="`contacts/${contactID}`" />
                   <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.turn.id)" :key="doc.id" :document="doc" :to="`/contacts/${contactID}/documents/${doc.id}`" />

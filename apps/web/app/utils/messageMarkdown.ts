@@ -1,1 +1,1 @@
-export { renderMessageMarkdown, plainMessageMarkdown } from '../../../../shared/messageMarkdown';
+export { renderMessageMarkdown, plainMessageMarkdown, linkSegments } from '../../../../shared/messageMarkdown';

@@ -15,6 +15,7 @@ import { recoverGroups } from './groups/workflow';
 import { cleanAttachments } from './chat/attachments';
 import { dispatchSchedules } from './schedules/dispatch';
 import { expirePresence } from './chat/presence';
+import { expireLinkPreviews } from './links/preview';
 import { deliverPush } from './push/delivery';
 import app from './app';
 import adminApp from './admin/app';
@@ -52,6 +53,7 @@ export default {
     ctx.waitUntil(recoverGroups(env));
     ctx.waitUntil(dispatchGroupRequests(env));
     ctx.waitUntil(expirePresence(env.DB));
+    ctx.waitUntil(expireLinkPreviews(env).catch(() => console.error(JSON.stringify({ event: 'link_preview_expiry_deferred' }))));
     ctx.waitUntil(deliverPush(env));
     ctx.waitUntil(deliverRemoteNative(env));
     ctx.waitUntil(deliverGroupPush(env));

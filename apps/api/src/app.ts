@@ -1,3 +1,4 @@
+import links from './links/routes';
 import onboarding from './onboarding/routes';
 import { remoteExecution } from './native/remote-routes';
 import { oauthPublic } from './mcp/oauth';
@@ -53,6 +54,7 @@ app.route('/api/v1/push', push);
 app.route('/api/v1/native-execution', remoteExecution);
 app.route('/api/v1/push-photos', pushPhotos);
 app.route('/api/v1/voices', voices);
+app.route('/api/v1/link-previews', links);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 app.onError((_error, c) => {

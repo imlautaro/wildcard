@@ -52,7 +52,7 @@ struct MessageMarkdown {
         guard let parsed = try? AttributedString(markdown: source, options: .init(
             allowsExtendedAttributes: false, interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible
         )), !parsed.characters.isEmpty else {
-            blocks = [Block(id: 0, text: AttributedString(source), intents: [])]
+            blocks = [Block(id: 0, text: Self.linkingBareURLs(AttributedString(source)), intents: [])]
             return
         }
         var result: [Block] = []
@@ -69,7 +69,46 @@ struct MessageMarkdown {
                 result.append(Block(id: id, text: span, intents: intents))
             }
         }
-        blocks = result
+        blocks = result.map { block in
+            var linked = block
+            if !block.isCode { linked.text = Self.linkingBareURLs(block.text) }
+            return linked
+        }
+    }
+
+    /// Links in text: http(s) URLs with a scheme or www. host, and email addresses.
+    static func linkMatches(_ string: String) -> [(Range<String.Index>, URL)] {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return [] }
+        return detector.matches(in: string, range: NSRange(string.startIndex..., in: string)).compactMap { match in
+            guard var url = match.url, safeLink(url), var range = Range(match.range, in: string),
+                  url.scheme?.lowercased() == "mailto"
+                    || string[range].range(of: #"^(https?://|www\.)"#, options: [.regularExpression, .caseInsensitive]) != nil else { return nil }
+            // A link inside parentheses keeps only balanced closing parentheses, as on web.
+            while string[range].hasSuffix(")"), string[range].filter({ $0 == ")" }).count > string[range].filter({ $0 == "(" }).count {
+                range = range.lowerBound..<string.index(before: range.upperBound)
+                guard let trimmed = URL(string: url.absoluteString.hasSuffix(")") ? String(url.absoluteString.dropLast()) : url.absoluteString) else { return nil }
+                url = trimmed
+            }
+            return (range, url)
+        }
+    }
+
+    static func detectedLinks(_ text: String) -> [URL] { linkMatches(text).map(\.1) }
+
+    /// Bare http(s) URLs, www. hosts and email addresses become links, matching web
+    /// (shared/messageMarkdown.ts). Explicit links and inline code are untouched.
+    static func linkingBareURLs(_ source: AttributedString) -> AttributedString {
+        var result = source
+        let string = String(source.characters)
+        for (range, url) in linkMatches(string) {
+            guard let lower = AttributedString.Index(range.lowerBound, within: result),
+                  let upper = AttributedString.Index(range.upperBound, within: result) else { continue }
+            let span = result[lower..<upper]
+            if span.runs.contains(where: { $0.link != nil || $0.inlinePresentationIntent?.contains(.code) == true }) { continue }
+            result[lower..<upper].link = url
+            result[lower..<upper].underlineStyle = .single
+        }
+        return result
     }
 
     static func plainText(_ source: String) -> String {

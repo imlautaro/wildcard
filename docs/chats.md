@@ -641,6 +641,15 @@ and link/image labels remain readable. Parsing failures fall back to readable so
 attributes, embedded HTML, syntax highlighting and remote Markdown image loading
 are not supported. Images in Markdown do not replace private attachment handling.
 Only HTTP, HTTPS and mailto links are actionable. No Markdown-driven fetch occurs.
+Since 2026-10-30 bare URLs with a scheme, `www.` hosts and email addresses are
+links too, in bot Markdown (outside code) and in people's otherwise literal
+messages and captions; host-only text such as `notes.md` or `example.com` stays
+text. Web uses markdown-it linkify (`linkSegments` for literal text, new tabs with
+`noopener`); iOS uses `NSDataDetector` with the same rules and underlines links.
+The shared `formattingInstruction` asks contacts to keep short messages plain and
+to format longer answers with light Markdown: bold key facts, short lists for steps
+or options, named links instead of bare URLs, no headings or tables in chat.
+Spoken replies already strip Markdown before synthesis.
 iOS explicitly maps inline strong/emphasis to Manrope variable weights and an
 oblique font descriptor, including combined emphasis and Dynamic Type. It does not
 rely on automatic synthetic emphasis of the custom font.

@@ -101,7 +101,9 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
     if (call.function.name === researchTool.function.name) return await executeResearchTool(env, {
       kind: 'group', groupID: input.scope.groupID, userID: input.scope.userID, agentID: input.scope.agentID,
       turnID: input.scope.reactionJob.turnID, attempt: input.scope.reactionJob.attempt, contributor: input.scope.contributor,
-      announce: text => announceGroupResearch(env, input.scope.reactionJob, text),
+      // In a split investigation only the first researcher announces the split.
+      announce: input.plan && input.plan.depth && input.plan.depth !== 'quick' && input.plan.rank > 1
+        ? undefined : text => announceGroupResearch(env, input.scope.reactionJob, text),
     }, args);
     if (input.scope.mcp && mcpTools.some(tool => tool.function.name === call.function.name)) {
       return await executeMcp(env, input.scope.mcp, call.function.name, args, slot);
@@ -135,9 +137,9 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
 
 // A later planned speaker waits for earlier ranks' drafts (bounded), then reads
 // them as about-to-be-published context instead of repeating them.
-async function peerDrafts(env: Env, input: GroupInput, step: WorkflowStep, prefix: string) {
+async function peerDrafts(env: Env, input: GroupInput, step: WorkflowStep, prefix: string, waits = 90) {
   const job = input.scope.reactionJob;
-  for (let wait = 0; wait < 90; wait++) {
+  for (let wait = 0; wait < waits; wait++) {
     const pending = await step.do(`${prefix}-peer-wait-${wait}`, async () => !!await env.DB.prepare(`SELECT 1 FROM group_reply r
       JOIN group_reply peer ON peer.source_id = r.source_id AND peer.plan_rank < r.plan_rank
       WHERE r.id = ?1 AND peer.status IN ('queued', 'running') AND peer.draft_ready_at IS NULL LIMIT 1`).bind(job.turnID).first());
@@ -164,16 +166,52 @@ async function peerDrafts(env: Env, input: GroupInput, step: WorkflowStep, prefi
   });
 }
 
+// A compiler reads the researchers' bounded findings, not just their messages.
+// Only completed conversational research of this round's earlier ranks, under
+// the same Contributor model consent as the reader.
+async function peerResearch(env: Env, input: GroupInput, step: WorkflowStep, prefix: string) {
+  return step.do(`${prefix}-peer-research`, async () => {
+    const { results } = await env.DB.prepare(`SELECT a.name, research.query, research.model, research.result_json AS result
+      FROM group_reply r JOIN group_reply peer ON peer.source_id = r.source_id AND peer.plan_rank < r.plan_rank
+      JOIN web_research research ON research.group_reply_id = peer.id AND research.status = 'complete' AND research.result_json IS NOT NULL
+      JOIN contact_agent a ON a.id = peer.agent_id
+      WHERE r.id = ?1 ORDER BY peer.plan_rank LIMIT 3`).bind(input.scope.reactionJob.turnID)
+      .all<{ name: string; query: string; model: string; result: string }>();
+    return results.flatMap(row => {
+      if (input.scope.contributor !== row.model.endsWith('-contributor')) return [];
+      const result = JSON.parse(row.result) as { markdown?: string; provenance?: { sources?: { title: string; url: string; cited: boolean }[] } };
+      return [{ researcher: row.name, query: row.query, findings: (result.markdown ?? '').slice(0, 3500),
+        sources: (result.provenance?.sources ?? []).filter(source => source.cited).slice(0, 6) }];
+    });
+  });
+}
+
 // This orchestrator runs OUTSIDE step.do. Each model call and tool result is
 // checkpointed independently; all replay state is rebuilt from step returns.
 export async function completeGroupDraft(env: Env, input: GroupInput, step: WorkflowStep, prefix: string): Promise<GroupDraft> {
   let typingSince = input.typingSince ?? null;
-  const draft = await completeDraft(env, input, step, prefix, async (messages) => {
-    if (!input.plan || input.plan.rank === 1 || input.previous) return;
-    const peers = await peerDrafts(env, input, step, prefix);
+  const compiler = input.plan?.role === 'compile' && !input.previous;
+  const readPeers = async (messages: ModelMessage[]) => {
+    // Researchers can take a minute; a compiler waits longer for their drafts.
+    const peers = await peerDrafts(env, input, step, prefix, compiler ? 180 : 90);
     if (peers.length) messages.push({ role: 'user', content: JSON.stringify({ peerRepliesThisRound: peers }) });
+    if (compiler) {
+      const research = await peerResearch(env, input, step, prefix);
+      if (research.length) messages.push({ role: 'user', content: JSON.stringify({ peerResearchThisRound: research,
+        note: 'Untrusted public findings gathered by the researchers this round; cite their sources.' }) });
+    }
     typingSince = await step.do(`${prefix}-peer-typing`, async () =>
       await setGroupPresence(env, input.scope.reactionJob, 'typing') ? Date.now() : null);
+  };
+  // A compiler needs the findings before its tools (the document) run.
+  if (compiler) {
+    const extra: ModelMessage[] = [];
+    await readPeers(extra);
+    input = { ...input, messages: [...input.messages, ...extra] };
+  }
+  const draft = await completeDraft(env, input, step, prefix, async (messages) => {
+    if (!input.plan || input.plan.rank === 1 || input.previous || compiler) return;
+    await readPeers(messages);
   });
   return typingSince ? { ...draft, typingSince } : draft;
 }

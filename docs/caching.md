@@ -1440,3 +1440,15 @@ scope/history manifest is checked again before saving. This remains a live expor
 not a transaction snapshot. Browser checks for navigation, empty/archived histories,
 offline recovery, access revocation, clear, cancellation and account switching are
 pending; see the feature guide for the full fictional-data checklist.
+
+## Link preview cards
+
+Both clients keep link card metadata in a memory-only, account-keyed session cache
+(web `useLinkPreviews`, iOS `LinkPreviewCache` owned by `PrivateImageCache`) of at
+most 200 URLs. Cached previews render synchronously on reopen and navigation;
+requests for one URL are deduplicated; a server `failed` result is kept for the
+session and transport failures retry on the next render. Session reset, sign-out,
+account switch and access loss drop the cache, and late responses from an earlier
+session are discarded. Images reuse the private image caches with the preview fetch
+time as version. Server-side previews expire after seven days (failed after six
+hours). See [link previews](link-previews.md).

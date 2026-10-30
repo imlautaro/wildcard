@@ -1065,7 +1065,7 @@ a single call; deeper history is left to speakers it gives tools, who can search
 and read group history), up to 16 visible messages (same author/Contributor filter
 as replies; voice messages are marked and represented by their transcripts), and each candidate's name, persona summary,
 specialties, energy, recent activity and Researching state. It returns at most
-three ordered speakers, each with a role (`answer`, `research`, `react`, `spark`),
+three ordered speakers (four for a deep or project round, see [research depth](#research-depth-quick-deep-and-project-migration-0072)), each with a role (`answer`, `research`, `react`, `spark`),
 a one-line internal angle and whether tools are needed. Human questions, requests,
 greetings and news get at least one speaker; name-addressed contacts and called-out
 silent contacts speak; social openings get two or three distinct angles with one
@@ -1116,3 +1116,29 @@ first slot of the round starts, which now happens within about two seconds, and 
 first speaker types right after planning. Planning adds a model call per eligible
 trigger but removes the silent drafts; it does not guarantee that every contact
 answers, and the model can still choose poorly.
+
+## Research depth: quick, deep and project (migration 0072)
+
+The coordinator also returns a round `depth`. **Quick** (default) keeps at most one
+researcher; when the topic is broad, that researcher ends by offering a deeper group
+investigation with a shared document instead of asking a clarifying question first.
+**Deep** is chosen only for an explicit request for a thorough, better or
+comparative investigation, a report, or acceptance of that offer: two or three
+contacts take `research` with distinct sub-questions as their angles and one other
+contact takes `compile` last (up to four speakers). **Project** (a plan, roadmap or
+work split) is deep plus a task list.
+
+Each planned researcher has its own research receipt
+(`research-group-<message>-<agent>`; migration 0072 rebuilds `web_research` so one
+group message can have several receipts, unique per reply). Only the first
+researcher announces, describing who covers what; each researcher then posts one
+short finding. The compiler waits (at most 180 one-second durable polls) for the
+researchers' drafts before using any tool, receives their drafts and their bounded
+research findings with cited sources (same Contributor model consent), writes one
+group document with `create_document`, and posts the key takeaways. For a project
+it also creates a task list: contacts get only work they can do with their own
+tools without new web research (agent-assigned tasks start the existing
+[persistent task work](persistent-work.md)), people get actions only they can take.
+Account research budgets rose to 30 per day (global 300) because a deep round uses
+two or three searches. Live checks (Contributor model) chose deep for "can you do a
+better research about this", quick for a plain lookup and project for a moving plan.

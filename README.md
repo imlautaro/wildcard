@@ -35,6 +35,7 @@ docs/
   documents.md               # Collaborative Markdown documents in chats
   web-research.md            # Public conversational research and sourced reports
   monitors.md                # Code-checked page monitors that wake task contacts
+  link-previews.md           # Link cards with server-fetched page metadata
 ```
 
 ## API development

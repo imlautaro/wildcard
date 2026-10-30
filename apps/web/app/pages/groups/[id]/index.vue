@@ -231,7 +231,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
             <MessageReplyQuote v-if="item.message.replyTo" :preview="replyPreview(item.message.replyTo)" interactive @open="showQuoted(item.message.replyTo)" />
             <VoiceMessage v-if="item.message.voice" :voice="item.message.voice" :path="attachmentPath(item.message)" :outgoing="isMine(item.message)" :sender-name="item.message.senderName" :sender-photo="senderPhoto(item.message)" />
             <MessageAttachment v-else-if="item.message.attachment" :attachment="item.message.attachment" :path="attachmentPath(item.message)" />
-            <div v-if="item.message.text && !item.message.voice" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }"><MessageMarkdown v-if="item.message.agentID" :text="item.message.text" /><template v-else>{{ item.message.text }}</template></div>
+            <div v-if="item.message.text && !item.message.voice" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }"><MessageMarkdown v-if="item.message.agentID" :text="item.message.text" /><template v-else><LinkifiedText :text="item.message.text" /></template><LinkPreviewCard :url="previewLink(item.message.text, !!item.message.agentID)" /></div>
             <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => a.replyID === item.message.id)" :key="app.id" :app="app" :base="`groups/${groupID}`" />
             <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.message.id)" :key="doc.id" :document="doc" :to="`/groups/${groupID}/documents/${doc.id}`" />
             <div class="meta" :style="item.message.attachment?.mimeType.startsWith('image/') ? 'padding: 0 6px 2px' : ''">
@@ -254,7 +254,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
             <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
             <VoiceMessage v-if="state.pending.voice" :voice="{ durationMs: state.pending.voice.durationMs, listenedAt: null, transcript: null }" :path="attachmentPath(state.pending)" :blob="state.pending.voice.blob" outgoing />
             <MessageAttachment v-if="state.pending.attachment" :attachment="state.pending.attachment" :path="null" :local-url="state.pending.attachment.previewURL" />
-            <div v-if="state.pending.text" :class="{ caption: state.pending.attachment?.previewURL }">{{ state.pending.text }}</div>
+            <div v-if="state.pending.text" :class="{ caption: state.pending.attachment?.previewURL }"><LinkifiedText :text="state.pending.text" /></div>
             <div class="meta" :style="state.pending.attachment?.previewURL ? 'padding: 0 6px 2px' : ''">
               {{ messageTime(state.pending.createdAt) }}<MessageReceipt :sending="!state.pending.accepted" receipt-state="sent" />
             </div>

@@ -346,3 +346,9 @@ list and group replies expose `replyActivity: "researching"`, and group summarie
 label the contact **Researching...**. Group contacts receive the names and topics of
 members researching right now. iOS and web show **Researching...** in headers, list
 previews and the incoming indicator; older clients fall back to Typing.
+
+**Split investigations (migration 0072).** Planned researchers of a deep or project
+group round each get their own receipt and budget slot; the per-message sharing rule
+still applies to everyone else. Daily limits are now 30 per account and 300 globally.
+See [groups](groups.md#research-depth-quick-deep-and-project-migration-0072).
+

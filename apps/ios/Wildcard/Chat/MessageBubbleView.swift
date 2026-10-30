@@ -16,6 +16,8 @@ struct MessageBubbleView: View {
     /// Documents and mini apps the sender shared with this message, shown inside the bubble.
     var accessory: AnyView? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Contact messages are the Markdown-formatted ones.
+    private var previewLink: String? { LinkPreviewCache.previewLink(text, fromContact: formatsMarkdown) }
 
     var body: some View {
         HStack {
@@ -26,12 +28,14 @@ struct MessageBubbleView: View {
                         if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
                         MessageReplyQuoteView(preview: replyQuote, action: onQuoteTap)
                         MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true, formatsMarkdown: formatsMarkdown)
+                        if let link = previewLink { LinkPreviewCardView(url: link) }
                         if let accessory { accessory }
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
                         if let senderName { MessageSenderNameView(name: senderName, color: senderColor) }
                         MessageTextContentView(text: text, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, formatsMarkdown: formatsMarkdown)
+                        if let link = previewLink { LinkPreviewCardView(url: link).padding(.top, 4) }
                         if let accessory { accessory.padding(.top, 4) }
                     }
                 }
@@ -97,7 +101,9 @@ struct MessageTextContentView: View {
         } else if let markdown {
             MessageMarkdownView(markdown: markdown)
         } else {
-            Text(text).manrope().multilineTextAlignment(.leading).textSelection(.enabled)
+            // People's messages stay literal; only detected links become actionable.
+            Text(MessageMarkdown.linkingBareURLs(AttributedString(text))).manrope().multilineTextAlignment(.leading).textSelection(.enabled)
+                .environment(\.openURL, OpenURLAction { url in MessageMarkdown.safeLink(url) ? .systemAction : .discarded })
         }
     }
 }

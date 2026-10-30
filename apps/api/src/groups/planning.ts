@@ -12,15 +12,20 @@ import { isVoice } from '../voice/speech';
 // only its speakers and later human messages are not stuck behind silent turns.
 // Planning is an optimization: any failure falls back to per-contact decisions.
 
-export type RoundRole = 'answer' | 'research' | 'react' | 'spark';
+export type RoundRole = 'answer' | 'research' | 'react' | 'spark' | 'compile';
+// quick: one researcher at most. deep: two or three researchers split the topic
+// and a final compiler writes a shared document. project: deep plus a task list.
+export type RoundDepth = 'quick' | 'deep' | 'project';
 export type RoundSlot =
   | { kind: 'unplanned' }
   | { kind: 'skip' }
   | { kind: 'planned'; rank: number; size: number; role: RoundRole; angle: string; tools: boolean };
 
 type Speaker = { agentID: string; role: RoundRole; angle: string; tools: boolean };
-const roles: RoundRole[] = ['answer', 'research', 'react', 'spark'];
+const roles: RoundRole[] = ['answer', 'research', 'react', 'spark', 'compile'];
+const depths: RoundDepth[] = ['quick', 'deep', 'project'];
 const maxSpeakers = 3;
+const maxDeepSpeakers = 4;
 const claimWaitSeconds = 20;
 
 type Source = { sourceID: string; groupID: string; sequence: number; text: string; senderName: string; replyToID: string | null; attachmentJSON: string | null;
@@ -148,6 +153,7 @@ async function createPlan(env: Env, job: GroupJob) {
       messagesInLast20: agent.recentMessages, researchingNow: !!agent.researching };
   });
   let speakers: Speaker[] = [];
+  let depth: RoundDepth = 'quick';
   if (members.length) {
     const ids = members.map(member => member.agentID);
     const answer = await museCompletion(env, [
@@ -157,8 +163,9 @@ async function createPlan(env: Env, job: GroupJob) {
         'Human trigger: a question, request, greeting, news, opinion or invitation gets at least one speaker. Put the best-suited contact first. Name-addressed contacts must speak; when the human asks everyone or calls out silent contacts, include each of them. Plain acknowledgements such as "ok" or "thanks" may get zero or one brief speaker.',
         'Social messages and greetings: choose two or three speakers with different angles. At least one takes role spark: adds a hook that keeps the conversation going, such as a concrete opinion, a small detail from their own persona, a playful proposal or a specific question to another contact or the group. Avoid three near-identical replies.',
         'Requests to look something up, current facts, news or anything needing public web information: exactly one contact takes role research (tools true) and goes first. Others may follow only with a distinct, useful addition; nobody else researches the same thing. Contacts marked researchingNow are already busy researching.',
+        'depth: quick for ordinary turns and plain research requests. Choose deep only when the human explicitly wants a thorough, better, deeper or comparative investigation, a report or write-up, or accepts an earlier offer to go deeper. Choose project when they ask for a plan, project, roadmap or work split across members. For deep and project: two or three contacts take role research, each with a distinct sub-question as its angle (for example timelines, ways to speed it up, the human\'s own situation), then exactly one other contact takes role compile last (tools true) to write the shared document from their findings; up to four speakers. Depth quick never uses compile.',
         'Bot trigger (a contact spoke): choose zero or one speaker. Continue only when the message invites engagement, asks or addresses a contact, or a genuinely different perspective adds something. Choose zero for agreement, acknowledgements, farewells and closures.',
-        'Rotate fairly: prefer contacts who spoke less recently and whose persona fits. Never choose more than three speakers.',
+        'Rotate fairly: prefer contacts who spoke less recently and whose persona fits. Never choose more than three speakers, except four for deep or project.',
         'tools is true only when the speaker needs tools: web research, searching older group history, documents, tasks, images, mini apps or private messages. Ordinary conversation needs no tools.',
         'role answer: responds to the trigger. role react: a short reaction or agreement with something new. role spark: moves the conversation forward. angle: one short internal sentence in English describing what this speaker contributes; never script exact wording.',
         'foldedEarlierMessages are earlier human messages in this round that nobody answered yet; treat them as part of the trigger.',
@@ -179,8 +186,9 @@ async function createPlan(env: Env, job: GroupJob) {
             attachment: kind(message.attachmentJSON) })),
       }) },
     ], env.META_CHAT_MODEL, { maxTokens: 2048, reasoning: 'minimal', responseFormat: { type: 'json_schema', json_schema: { name: 'group_round_plan', strict: true, schema: {
-      type: 'object', additionalProperties: false, required: ['speakers'], properties: {
-        speakers: { type: 'array', maxItems: Math.min(maxSpeakers, ids.length), items: {
+      type: 'object', additionalProperties: false, required: ['depth', 'speakers'], properties: {
+        depth: { type: 'string', enum: depths },
+        speakers: { type: 'array', maxItems: Math.min(maxDeepSpeakers, ids.length), items: {
           type: 'object', additionalProperties: false, required: ['agentID', 'role', 'angle', 'tools'], properties: {
             agentID: { type: 'string', enum: ids }, role: { type: 'string', enum: roles },
             angle: { type: 'string' }, tools: { type: 'boolean' },
@@ -194,11 +202,20 @@ async function createPlan(env: Env, job: GroupJob) {
       speakers.push({ agentID: item.agentID, role: item.role as RoundRole,
         angle: typeof item.angle === 'string' ? clipText(item.angle.trim(), 300) : '', tools: item.tools === true || item.role === 'research' });
     }
-    speakers = speakers.slice(0, maxSpeakers);
-    // At most one contact researches a trigger; research-capable turns are shared.
-    const researcher = speakers.findIndex(speaker => speaker.role === 'research');
-    if (researcher > 0) speakers.unshift(...speakers.splice(researcher, 1));
-    speakers = speakers.map((speaker, index) => index && speaker.role === 'research' ? { ...speaker, role: 'answer' } : speaker);
+    depth = depths.includes(parsed.depth as RoundDepth) ? parsed.depth as RoundDepth : 'quick';
+    const researchers = speakers.filter(speaker => speaker.role === 'research');
+    const compiler = speakers.find(speaker => speaker.role === 'compile');
+    if (depth !== 'quick' && researchers.length >= 2 && compiler) {
+      // Researchers first (each searches its own sub-question), one compiler last.
+      speakers = [...researchers.slice(0, 3), { ...compiler, tools: true }];
+    } else {
+      depth = 'quick';
+      speakers = speakers.map((speaker): Speaker => speaker.role === 'compile' ? { ...speaker, role: 'answer' } : speaker).slice(0, maxSpeakers);
+      // At most one contact researches a quick trigger; research turns are shared.
+      const researcher = speakers.findIndex(speaker => speaker.role === 'research');
+      if (researcher > 0) speakers.unshift(...speakers.splice(researcher, 1));
+      speakers = speakers.map((speaker, index): Speaker => index && speaker.role === 'research' ? { ...speaker, role: 'answer' } : speaker);
+    }
     // A human question or request must never end in silence because of a
     // coordinator choice; only short acknowledgements may go unanswered.
     if (!speakers.length && source.humanTrigger && (/[?？]/u.test(source.text) || Array.from(source.text.trim()).length >= 15)) {
@@ -210,7 +227,8 @@ async function createPlan(env: Env, job: GroupJob) {
   const planned = await env.DB.batch([
     env.DB.prepare(`UPDATE group_round SET status = 'planned', plan_json = ?3, planned_at = ?4
       WHERE source_id = ?1 AND claimed_by = ?2 AND status = 'planning'`)
-      .bind(source.sourceID, job.turnID, JSON.stringify({ speakers }), now),
+      .bind(source.sourceID, job.turnID, JSON.stringify({ depth, speakers: speakers.map(speaker =>
+        ({ ...speaker, name: candidates.find(agent => agent.id === speaker.agentID)?.name ?? '' })) }), now),
     ...speakers.map((speaker, index) => env.DB.prepare(`UPDATE group_reply SET plan_rank = ?3, plan_role = ?4, plan_angle = ?5, plan_tools = ?6
       WHERE source_id = ?1 AND agent_id = ?2 AND status IN ('queued', 'running')
         AND EXISTS (SELECT 1 FROM group_round WHERE source_id = ?1 AND claimed_by = ?7 AND status = 'planned')`)
@@ -221,7 +239,7 @@ async function createPlan(env: Env, job: GroupJob) {
       .bind(source.sourceID, job.turnID),
   ]);
   console.log(JSON.stringify({ event: 'group_round_planned', speakers: speakers.length, candidates: candidates.length,
-    roles: speakers.map(speaker => speaker.role), applied: planned[0]!.meta.changes > 0 }));
+    depth, roles: speakers.map(speaker => speaker.role), applied: planned[0]!.meta.changes > 0 }));
 }
 
 // Earlier unanswered human messages folded into this round by supersession.
