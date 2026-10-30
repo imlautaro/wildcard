@@ -145,10 +145,15 @@ async function earlier() {
   await loadEarlier();
 }
 
-async function onSend(text: string, attachment: DraftAttachment | null) {
+async function onSend(text: string, attachments: DraftAttachment[]) {
   scrollToBottom();
   activity.sent();
-  await send(text, attachment);
+  // One message per attachment, text on the first; stop if one fails so the error stays visible.
+  const queue = attachments.length ? attachments : [null];
+  for (const [index, attachment] of queue.entries()) {
+    await send(index === 0 ? text : '', attachment);
+    if (state.value.pending?.failed) { for (const rest of queue.slice(index + 1)) if (rest?.previewURL) URL.revokeObjectURL(rest.previewURL); break; }
+  }
 }
 async function onVoice(clip: DraftVoice) {
   scrollToBottom();
@@ -308,7 +313,7 @@ onBeforeUnmount(() => {
             <div class="work-status" role="status"><span class="typing-dots" aria-hidden="true"><span /><span /><span /></span>{{ workLabel(item.turn) }}</div>
           </div>
           <div v-else-if="item.kind === 'status' && item.turn.status === 'running' && state.presence?.status === 'typing'" class="bubble-row incoming">
-            <div class="typing" role="status">{{ state.presence?.isResearching ? 'Researching' : state.presence?.isRecording ? 'Recording' : 'Typing' }}<span /><span /><span /></div>
+            <div class="typing"><ActivityIndicator :activity="state.presence?.isResearching ? 'researching' : state.presence?.isRecording ? 'recording' : 'typing'" :name="contact?.name" /></div>
           </div>
           <div v-else-if="item.kind === 'status' && item.turn.status === 'failed' && !state.turns.some((later) => later.sequence > item.turn.sequence && later.assistantText !== null)" class="status-line">
             {{ failureText(item.turn) }}

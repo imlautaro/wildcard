@@ -2,23 +2,25 @@
 import type { DraftAttachment, DraftVoice } from '~/utils/types';
 import type { ReplyPreview } from '~/utils/replies';
 
-// Text plus one optional image/PDF attachment, matching the API's 4,000 character limit.
+// Text plus optional image/PDF attachments (picked, dropped in the picker or pasted), sent as
+// one message each with the text on the first, matching the API's 4,000 character limit.
 // The parent owns the reply target so it survives navigation with the draft.
 // With `voiceKey` (the conversation identity), an empty draft shows a microphone for
 // voice messages (docs/voice.md): hold to record and release to send, slide left to
 // cancel, slide up to lock. Changing the key discards an active recording.
 const props = defineProps<{ disabled?: boolean; sending?: boolean; placeholder?: string; reply?: ReplyPreview | null; voiceKey?: string | null }>();
 const draft = defineModel<string>({ required: true });
-const emit = defineEmits<{ send: [text: string, attachment: DraftAttachment | null]; voice: [clip: DraftVoice]; typing: []; cancelReply: [] }>();
+const emit = defineEmits<{ send: [text: string, attachments: DraftAttachment[]]; voice: [clip: DraftVoice]; typing: []; cancelReply: [] }>();
 
-const attachment = ref<DraftAttachment | null>(null);
+const maxAttachments = 10;
+const attachments = ref<DraftAttachment[]>([]);
 const preparing = ref(false);
 const problem = ref<string | null>(null);
 const textarea = ref<HTMLTextAreaElement>();
 const picker = ref<HTMLInputElement>();
 const micButton = ref<HTMLButtonElement>();
 const length = computed(() => [...draft.value.trim()].length);
-const canSend = computed(() => !props.disabled && !props.sending && !preparing.value && length.value <= 4000 && (length.value > 0 || !!attachment.value));
+const canSend = computed(() => !props.disabled && !props.sending && !preparing.value && length.value <= 4000 && (length.value > 0 || attachments.value.length > 0));
 const recorder = useVoiceRecorder((clip) => {
   if (props.disabled || props.sending) return;
   emit('voice', clip);
@@ -28,7 +30,7 @@ onMounted(() => { supportsVoice.value = voiceRecordingSupported(); });
 const recording = computed(() => recorder.phase.value !== 'idle');
 // The microphone replaces the send button while there is nothing to send.
 const showsMicrophone = computed(() => recording.value
-  || (supportsVoice.value && !!props.voiceKey && !length.value && !attachment.value && !preparing.value));
+  || (supportsVoice.value && !!props.voiceKey && !length.value && !attachments.value.length && !preparing.value));
 const clock = (ms: number) => {
   const seconds = Math.floor(ms / 1000);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
@@ -116,31 +118,53 @@ watch(draft, () => {
   recorder.notice.value = null;
 });
 
-async function choose(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0];
-  (event.target as HTMLInputElement).value = '';
-  if (!file) return;
+async function addFiles(files: File[]) {
+  if (!files.length) return;
   preparing.value = true;
   problem.value = null;
   try {
-    clearAttachment();
-    attachment.value = await draftAttachment(file);
-  } catch (error) {
-    problem.value = errorMessage(error);
+    for (const file of files) {
+      if (attachments.value.length >= maxAttachments) { problem.value = `Attach up to ${maxAttachments} files per message.`; break; }
+      try {
+        attachments.value.push(await draftAttachment(file));
+      } catch (error) {
+        problem.value = errorMessage(error);
+      }
+    }
   } finally {
     preparing.value = false;
   }
 }
-function clearAttachment() {
-  if (attachment.value?.previewURL) URL.revokeObjectURL(attachment.value.previewURL);
-  attachment.value = null;
+async function choose(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = [...input.files ?? []];
+  input.value = '';
+  await addFiles(files);
+}
+// Pasted images (screenshots, copied images) and files become attachments. Plain text
+// pastes, including rich content that also carries text, keep the browser's behavior.
+function onPaste(event: ClipboardEvent) {
+  const data = event.clipboardData;
+  if (!data || props.disabled || data.types.includes('text/plain')) return;
+  const files = [...data.files];
+  if (!files.length) return;
+  event.preventDefault();
+  void addFiles(files.map((file) => file.name ? file : new File([file], `pasted-image.${file.type.split('/')[1] ?? 'png'}`, { type: file.type })));
+}
+function removeAttachment(item: DraftAttachment) {
+  if (item.previewURL) URL.revokeObjectURL(item.previewURL);
+  attachments.value = attachments.value.filter((candidate) => candidate !== item);
+}
+function clearAttachments() {
+  for (const item of attachments.value) if (item.previewURL) URL.revokeObjectURL(item.previewURL);
+  attachments.value = [];
 }
 function submit() {
   if (recording.value) return;
   if (!canSend.value) return;
   // Ownership of the preview URL moves to the pending send.
-  emit('send', draft.value, attachment.value);
-  attachment.value = null;
+  emit('send', draft.value, attachments.value);
+  attachments.value = [];
   problem.value = null;
   nextTick(() => textarea.value?.focus());
 }
@@ -157,7 +181,7 @@ function dismissKeyboardOutside(event: PointerEvent) {
 onMounted(() => document.addEventListener('pointerdown', dismissKeyboardOutside, { passive: true }));
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', dismissKeyboardOutside);
-  clearAttachment();
+  clearAttachments();
 });
 defineExpose({ focus: () => textarea.value?.focus() });
 </script>
@@ -174,26 +198,26 @@ defineExpose({ focus: () => textarea.value?.focus() });
         <span v-else class="voice-slide">Recording</span>
       </div>
       <template v-else>
-        <button type="button" class="icon-button" aria-label="Attach an image or PDF" :disabled="disabled || preparing" @click="picker?.click()">
+        <button type="button" class="icon-button" aria-label="Attach images or PDFs" :disabled="disabled || preparing" @click="picker?.click()">
           <AppIcon name="attach" />
         </button>
       </template>
-      <input ref="picker" type="file" class="visually-hidden" :accept="attachmentTypes.join(',')" tabindex="-1" @change="choose">
+      <input ref="picker" type="file" multiple class="visually-hidden" :accept="attachmentTypes.join(',')" tabindex="-1" @change="choose">
       <div v-show="!recording" class="input">
         <div v-if="reply" class="draft-reply">
           <MessageReplyQuote :preview="reply" />
           <button type="button" class="icon-button" aria-label="Cancel reply" :disabled="disabled" @click="emit('cancelReply')"><AppIcon name="close" /></button>
         </div>
-        <div v-if="attachment" class="draft-attachment">
-          <img v-if="attachment.previewURL" :src="attachment.previewURL" alt="">
+        <div v-for="item in attachments" :key="item.previewURL ?? item.name + item.size" class="draft-attachment">
+          <img v-if="item.previewURL" :src="item.previewURL" alt="">
           <AppIcon v-else name="file" style="width: 28px; height: 28px; color: var(--accent)" />
-          <span class="name">{{ attachment.name }} · {{ fileSize(attachment.size) }}</span>
-          <button type="button" class="icon-button" aria-label="Remove attachment" @click="clearAttachment"><AppIcon name="close" /></button>
+          <span class="name">{{ item.name }} · {{ fileSize(item.size) }}</span>
+          <button type="button" class="icon-button" :aria-label="`Remove ${item.name}`" @click="removeAttachment(item)"><AppIcon name="close" /></button>
         </div>
-        <div v-else-if="preparing" class="draft-attachment muted"><span class="spinner" /> Preparing attachment…</div>
+        <div v-if="preparing" class="draft-attachment muted"><span class="spinner" /> Preparing attachment…</div>
         <textarea
           ref="textarea" v-model="draft" rows="1" :placeholder="placeholder ?? 'Message'" aria-label="Message"
-          @keydown="onKey" @input="emit('typing')"
+          @keydown="onKey" @input="emit('typing')" @paste="onPaste"
         />
       </div>
       <div v-if="showsMicrophone" class="mic-slot">

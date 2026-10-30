@@ -56,6 +56,12 @@ function down(event: PointerEvent) {
   start = { x: event.clientX, y: event.clientY };
   timer = setTimeout(() => { held = true; open.value = true; }, 450);
 }
+// Right-clicking a link keeps the browser's own menu (open, copy address, ...).
+function contextMenu(event: MouseEvent) {
+  if ((event.target as HTMLElement).closest('a[href]')) return;
+  event.preventDefault();
+  open.value = true;
+}
 function click(event: MouseEvent) {
   if (held) { held = false; event.preventDefault(); event.stopPropagation(); }
 }
@@ -74,7 +80,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="reaction-message" :class="{ active: open }" @click.capture="click" @pointerdown="down" @pointermove="move" @pointerup="cancel" @pointercancel="cancel" @contextmenu.prevent="open = true" @keydown.esc="open = false">
+  <div ref="root" class="reaction-message" :class="{ active: open }" @click.capture="click" @pointerdown="down" @pointermove="move" @pointerup="cancel" @pointercancel="cancel" @contextmenu="contextMenu" @keydown.esc="open = false">
     <slot />
     <!-- Hover actions float beside the message, so they take no space in the conversation. -->
     <div class="message-actions">
