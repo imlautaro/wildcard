@@ -41,12 +41,16 @@ export default defineEventHandler(async (event) => {
   if (token && !isCredentialRequest) headers.set('Authorization', `Bearer ${token}`);
   const clientIP = getRequestHeader(event, 'cf-connecting-ip');
   if (clientIP) headers.set('CF-Connecting-IP', clientIP);
-  const raw = method === 'GET' ? undefined : await readRawBody(event, false);
-  const body = raw ? Uint8Array.from(raw) : undefined;
-
   const binding = event.context.cloudflare?.env?.API as { fetch: typeof fetch } | undefined;
   let upstream: Response;
   try {
+    // Nitro's Cloudflare adapter buffers POST/PUT/PATCH, but not DELETE. Reading
+    // DELETE through H3's mock Node stream can wait forever; use the original
+    // platform Request, whose body is still unread, including an empty body.
+    const platformRequest = event.context.cloudflare?.request as Request | undefined;
+    const raw = method === 'GET' ? undefined : method === 'DELETE' && platformRequest
+      ? new Uint8Array(await platformRequest.arrayBuffer()) : await readRawBody(event, false);
+    const body = raw?.byteLength ? Uint8Array.from(raw) : undefined;
     if (import.meta.dev) {
       // `nuxt dev` talks to `npm run dev` (wrangler dev) over HTTP. Node's fetch
       // always adds `Sec-Fetch-Mode`, which makes Better Auth require an Origin,

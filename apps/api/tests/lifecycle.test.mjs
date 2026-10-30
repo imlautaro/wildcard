@@ -496,3 +496,65 @@ test('a failed late workflow deletion remains visible to its original conversati
   assert.equal((await rows('SELECT scope FROM resource_cleanup WHERE resource=?',id))[0].scope,ids.contact);
   await drain();assert.equal((await invoke({action:'workflow-status',id})).status,500);
 });
+
+test('admin deletion removes account data and retries external cleanup after failures',async()=>{
+  await fixture();await memoryFixture();await secondaryResources();
+  const group='fixture-peer-group';
+  await run('INSERT INTO chat_group(id,owner_id,name,created_at) VALUES(?,?,?,?)',group,ids.member,'Fictional peer group',now);
+  for(const user of [ids.owner,ids.member])await run('INSERT INTO group_member(group_id,user_id,share_memory,joined_at) VALUES(?,?,1,?)',group,user,now);
+  const key=`group-attachments/${group}/fictional-owned.jpg`;
+  const media=await attachment(key,group);
+  await run('INSERT INTO group_message(id,group_id,user_id,sender_name,text,attachment_json,created_at) VALUES(?,?,?,?,?,?,?)','fixture-owned-message',group,ids.owner,'Fictional removed person','Fictional text',media,now);
+  await run('INSERT INTO group_message(id,group_id,user_id,sender_name,text,created_at) VALUES(?,?,?,?,?,?)','fixture-peer-message',group,ids.member,'Fictional peer','Keep this fictional text',now);
+  const photo=`users/${ids.owner}/fictional.jpg`;
+  await bucket.put(photo,'Fictional profile');
+  const workflow=`onboarding-${ids.owner}`;
+  await run("INSERT INTO account_onboarding(user_id,input_json,status,updated_at) VALUES(?,'{}','complete',?)",ids.owner,now);
+  await invoke({action:'workflow-create',id:workflow,userID:ids.owner,generation:true,complete:true});
+  const path=`admin/users/${ids.owner}`;
+  assert.equal((await api(path,ids.member,'DELETE',{email:`${ids.owner}@example.test`})).status,403);
+  assert.equal((await api(path,ids.outsider,'DELETE',{email:'wrong@example.test'})).status,422);
+  const result=await api(path,ids.outsider,'DELETE',{email:`${ids.owner}@example.test`},{lists:[`users/${ids.owner}/`],workflows:[workflow]});
+  assert.equal(result.status,202,JSON.stringify(result.body));assert.equal(result.body.cleanup,'pending');
+  for(const table of ['chat_turn','contact_memory','task_list','task','chat_document','account_onboarding'])assert.equal(await count(table),0,table);
+  assert.equal(await count('user','WHERE id=?',ids.owner),0);
+  assert.equal(await count('session','WHERE user_id=?',ids.owner),0);
+  assert.equal(await count('contact','WHERE id=?',ids.shared),0);
+  assert.equal(await count('contact','WHERE id=?',ids.other),1);
+  assert.equal(await count('chat_group','WHERE id=?',group),1);
+  assert.equal(await count('group_message','WHERE id=?','fixture-owned-message'),0);
+  assert.equal(await count('group_message','WHERE id=?','fixture-peer-message'),1);
+  assert.equal(await count('resource_cleanup',"WHERE resource=?",`generation:${workflow}`),1);
+  assert.equal(await count('resource_cleanup',"WHERE resource=?",`users/${ids.owner}/`),1);
+  const event=(await rows("SELECT details_json FROM admin_event WHERE action='user.delete' AND target=? ORDER BY created_at DESC LIMIT 1",ids.owner))[0];
+  assert.ok(event);assert.ok(!event.details_json.includes('@'));
+  await drain();assert.equal(await bucket.head(photo),null);assert.equal(await bucket.head(key),null);
+  assert.equal((await invoke({action:'workflow-status',id:workflow,generation:true})).status,500);
+});
+
+test('account deletion before contacts publish queues onboarding and unpublished portraits',async()=>{
+  await fixture();
+  await run("INSERT INTO account_onboarding(user_id,input_json,status,updated_at) VALUES(?,'{}','generating',?)",ids.member,now);
+  await run("INSERT INTO contact_generation(id,user_id,input_json,plan_json,status,updated_at) VALUES(?,?,'{}',?,'generating',?)",'fixture-unpublished-job',ids.member,JSON.stringify({id:'fixture-unpublished-contact'}),now);
+  const portrait=`contacts/${ids.member}/fixture-unpublished-contact/portrait.jpg`;
+  await bucket.put(portrait,'Fictional unpublished portrait');
+  await run('DELETE FROM user WHERE id=?',ids.member);
+  for(const resource of [`generation:onboarding-${ids.member}`,'generation:contact-generation-fixture-unpublished-job']) {
+    assert.equal(await count('resource_cleanup','WHERE resource=?',resource),1);
+  }
+  await drain();assert.equal(await bucket.head(portrait),null);
+  assert.equal(await count('user','WHERE id=?',ids.owner),1);
+});
+
+test('generation dispatch cannot leave checkpoints after racing account deletion, including a lost acknowledgement',async()=>{
+  for(const generation of [false,true])for(const fail of [false,true]) {
+    await fixture();const job='fixture-dispatch-job';
+    if(generation)await run("INSERT INTO contact_generation(id,user_id,input_json,status,updated_at) VALUES(?,?,'{}','queued',?)",job,ids.member,now);
+    else await run("INSERT INTO account_onboarding(user_id,input_json,status,updated_at) VALUES(?,'{}','queued',?)",ids.member,now);
+    const result=await invoke({action:generation?'dispatch-generation':'dispatch-onboarding',id:job,userID:ids.member},{accountCreateRace:{user:ids.member,fail}});
+    assert.equal(result.status,200,JSON.stringify(result));
+    await drain();
+    const workflow=generation?`contact-generation-${job}`:`onboarding-${ids.member}`;
+    assert.equal((await invoke({action:'workflow-status',id:workflow,generation:true})).status,500);
+  }
+});

@@ -58,11 +58,17 @@ A final atomic batch publishes one contact, its personality and the completed jo
 The contact trigger creates one agent; sharing later grants access to that same
 agent. New contacts retain ordinary memory-sharing defaults; no group, consent,
 welcome message or unread event is invented. Published photos reuse private R2
-routes and existing image caches. Deleting a contact clears the job's contact link.
-Completed job/plan rows and failed unpublished portraits are retained with the
-account/job, with no automatic expiry. Account deletion cascades job rows; private
-R2 cleanup for abandoned/deleted accounts remains an operator responsibility,
-as for failed onboarding assets. A provider success followed by storage failure
+routes and existing image caches. Deleting a generated contact removes its job and
+queues its Workflow checkpoints for deletion. Completed job/plan rows and failed
+unpublished portraits remain with a live account/job without automatic expiry.
+Migration 0069 registers unpublished portrait prefixes on job deletion and account
+prefixes/onboarding checkpoints on account deletion in the durable cleanup outbox.
+Dispatch rechecks job existence after creation or restart, including a lost create
+acknowledgement. Portrait steps recheck after generation and after upload and queue
+late bytes for removal. External failures retry through Cron; account deletion
+acceptance does not imply immediate R2/Workflow completion. See
+[admin cleanup](admin.md#deleting-an-account). Abandoned jobs on accounts that still
+exist retain their normal retry state. A provider success followed by storage failure
 can repeat a billable request. This is not exactly-once inference billing.
 
 The publish batch also turns on [voice messages](voice.md) for the creator's

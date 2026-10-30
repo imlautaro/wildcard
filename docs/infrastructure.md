@@ -2715,3 +2715,53 @@ session was executed. Use fictional private/group conversations to check intent,
 no unsolicited artifacts, follow-up reuse, full Docs list, bounded replay without
 another paid call, task/legacy reports, contributor/access loss, clear/delete,
 background/offline recovery and account isolation. See [web research](web-research.md).
+
+
+## Account deletion cleanup (migration 0069)
+
+Apply `0069_account_cleanup.sql` after 0068 through the API's ordered migration
+pipeline. It adds account/onboarding deletion triggers, extends generation cleanup
+to unpublished portrait prefixes and requeues known historical omissions from
+content-free admin audit IDs. It also removes account-attributed messages and
+shared work before their attribution disappears. See [admin deletion scope and
+recovery limits](admin.md#deleting-an-account). No new service, secret, resource,
+binding, account-specific identifier or permission is introduced. Independent
+accounts use the existing required D1 database, private R2 bucket, both Workflow
+bindings and minute Cron. Existing provisioning order, staging isolation and
+permissions described above apply unchanged.
+
+For local setup, install the locked dependencies with `npm ci`, initialize local
+auth, and apply all migrations with `npm run db:migrate:local`. Do not run local
+checks against remote bindings. Static checks are API/admin/web typechecks and
+preparing the deletion SQL with foreign keys enabled against all migrations.
+The lifecycle suite contains new fictional-data regression cases for account
+cleanup but was not run for this change. Optional authorized verification:
+`npm run typecheck:lifecycle` and `npm run test:lifecycle`.
+
+Release API, admin and web together by committing/pushing to the configured
+production branch and observing Workers Builds; never deploy manually. API
+release applies 0069 automatically before publication. Verify successful builds,
+matching source SHA/version tags, the recorded migration, and a fictional admin
+DELETE reaching AdminAPI rather than hanging in the admin proxy. Verify email
+confirmation/roster protection and a 202 pending response, revoked sessions, D1
+cascade integrity, unaffected peer data, then queue drain, absent R2 keys and
+missing Workflow instances (including completed onboarding and generation
+instances). Inject storage/Workflow outages locally to verify jobs survive and
+drain on recovery; race deletion with creation/upload and lost acknowledgements.
+Both Nuxt proxies use the original platform Request for DELETE bodies because the
+installed Nitro adapter buffers only POST/PUT/PATCH. iOS uses direct API requests.
+
+Monitor `resource_cleanup` counts, attempts, due times, age and
+`resource_cleanup_deferred`; work/prefix jobs survive the deleted account and
+retry with bounded backoff, while R2 uses a five-minute final sweep. The response
+is acceptance, not completion. Completed service actions, provider logs/backups,
+content-free audit/budget records and independent copies have separate retention.
+No real account was deleted and no production cleanup was run during this fix.
+
+Rollback code through the normal committed/pushed release workflow. Keep migration
+0069 and its triggers/outbox: they are additive and compatible with prior account
+DELETE code, whose best-effort storage pass may overlap safely with queued jobs.
+Old admin clients may describe pending work as partial storage cleanup. Rollback
+cannot restore deleted content; removing the triggers would reopen the cleanup
+omissions. Historical orphan recovery is limited to recorded IDs/prefixes; never
+purge an entire bucket or shared Workflow to compensate for missing ownership.

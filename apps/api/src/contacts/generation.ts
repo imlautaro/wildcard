@@ -10,7 +10,8 @@ import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { birthdayFacts, parsePersonality, personalityTraits, randomBirthDate, type Personality } from '../../../../shared/personality';
 import { parseContactGeneration, type ContactGenerationInput } from '../../../../shared/contact-generation';
 import { type OnboardingInput } from '../../../../shared/onboarding';
-import { photoKey } from '../photos/storage';
+import { photoKey, removePhoto } from '../photos/storage';
+import { discardWorkflow } from '../chat/cleanup';
 import { generatePortrait } from './portrait';
 import { agentVoice, voiceRepliesAvailable } from '../voice/catalog';
 
@@ -53,6 +54,7 @@ export async function generateIdentity(env: Env, owner: string, input: ContactGe
 type JobRow = { id: string; status: string; contact_id: string | null; input_json: string };
 const present = (row: JobRow) => ({ id: row.id, status: row.status, contactID: row.contact_id, input: JSON.parse(row.input_json) });
 export async function dispatchContactGeneration(env: Env, owner: string, id: string, retry = false) {
+  if (!await env.DB.prepare('SELECT id FROM contact_generation WHERE id=? AND user_id=?').bind(id, owner).first()) return;
   const workflowID = `contact-generation-${id}`;
   try { await env.ONBOARDING_WORKFLOW.create({ id: workflowID, params: { owner, generationID: id } }); }
   catch {
@@ -61,6 +63,10 @@ export async function dispatchContactGeneration(env: Env, owner: string, id: str
     if (['errored', 'terminated'].includes(state.status)) {
       if (retry) await instance.restart();
       else await env.DB.prepare("UPDATE contact_generation SET status = 'failed', updated_at = ? WHERE id = ? AND user_id = ? AND status != 'complete'").bind(Date.now(), id, owner).run();
+    }
+  } finally {
+    if (!await env.DB.prepare('SELECT id FROM contact_generation WHERE id=? AND user_id=?').bind(id, owner).first()) {
+      await discardWorkflow(env, `generation:${workflowID}`, owner);
     }
   }
 }
@@ -120,7 +126,14 @@ export async function runContactGeneration(env: Env, owner: string, id: string, 
       if (!await env.DB.prepare('SELECT id FROM contact_generation WHERE id = ? AND user_id = ?').bind(id, owner).first()) return;
       if (!await env.CONTACT_PHOTOS.head(key)) {
         const photo = await generatePortrait(env, plan, { ...input, name: '', sharedMemoryConsent: false });
-        await env.CONTACT_PHOTOS.put(key, photo, { httpMetadata: { contentType: 'image/jpeg' } });
+        if (!await env.DB.prepare('SELECT id FROM contact_generation WHERE id=? AND user_id=?').bind(id, owner).first()) return;
+        try {
+          await env.CONTACT_PHOTOS.put(key, photo, { httpMetadata: { contentType: 'image/jpeg' } });
+        } finally {
+          if (!await env.DB.prepare('SELECT id FROM contact_generation WHERE id=? AND user_id=?').bind(id, owner).first()) {
+            await removePhoto(env, key);
+          }
+        }
       }
     });
     await step.do('contact-publish', async () => {

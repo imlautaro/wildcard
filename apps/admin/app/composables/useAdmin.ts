@@ -94,10 +94,10 @@ async function saveSetting(key: string, value: boolean) {
   void loadOverview();
 }
 
-// Resolves to whether every stored file was removed. The account itself is gone
-// once this resolves, so the row leaves the cache either way.
+// Acceptance commits D1 removal and durable external cleanup. Remove the row
+// immediately; Workflow/R2 cleanup continues independently with automatic retries.
 async function deleteUser(user: UserSummary, email: string) {
-  const result = await api<{ deleted: true; storage: 'complete' | 'partial' }>(`admin/users/${encodeURIComponent(user.id)}`, {
+  await api<{ deleted: true; cleanup: 'pending' }>(`admin/users/${encodeURIComponent(user.id)}`, {
     method: 'DELETE', json: { email },
   });
   revisions.users += 1;
@@ -106,7 +106,6 @@ async function deleteUser(user: UserSummary, email: string) {
   revisions.overview += 1;
   delete inflight.overview;
   void loadOverview();
-  return result.storage === 'complete';
 }
 
 export function useAdmin() {

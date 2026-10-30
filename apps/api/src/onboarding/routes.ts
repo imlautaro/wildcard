@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
+import { discardWorkflow } from '../chat/cleanup';
 import { onboardingOptions, parseOnboarding, type OnboardingStatus } from '../../../../shared/onboarding';
 
 export type OnboardingRow = { input_json: string; status: OnboardingStatus['status']; photo_count: number; group_id: string | null };
@@ -25,6 +26,11 @@ export async function dispatchOnboarding(env: Env, owner: string, retry = false)
     else if (['errored', 'terminated'].includes(state.status)) {
       await env.DB.prepare("UPDATE account_onboarding SET status = 'failed', updated_at = ? WHERE user_id = ? AND status != 'complete'")
         .bind(Date.now(), owner).run();
+    }
+  } finally {
+    // Deletion can win after the admission read or a lost create acknowledgement.
+    if (!await env.DB.prepare('SELECT user_id FROM account_onboarding WHERE user_id=?').bind(owner).first()) {
+      await discardWorkflow(env, `generation:${id}`, owner);
     }
   }
 }

@@ -9,6 +9,17 @@ replace SQL with canned responses or replace successful Workflow deletion with a
 no-op. Sleeping, paused and completed fixture instances execute a checkpoint
 before their stored state is deleted.
 
+On October 30, 2026, three additional account-cleanup regression cases were
+added, covering the actual admin route's roster/email checks and pending response,
+shared/private data removal, R2/Workflow failure recovery, unpublished generation
+assets, and onboarding/generation creation racing account deletion (with and
+without a lost acknowledgement). The fixture exposes AdminAPI only with a fixed
+fictional super admin and uses no production credentials. The fixture/application
+types and JavaScript syntax pass static checks; these added runtime cases have
+**not been run**. The 38-test result above is historical and does not validate
+migration 0069. The Nuxt DELETE body fix additionally needs verification through
+the deployed adapter or an explicitly authorized local production-adapter run.
+
 ## Reproduce
 
 From the repository root, with the supported Node.js version and npm:

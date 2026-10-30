@@ -129,6 +129,13 @@ the plan and any completed images for retry. Partial images are private and not
 exposed as contacts before final publication. There is no automatic expiration
 of failed setup: operators must account for retained rows/images when managing
 storage. Normal contact deletion removes published photos through existing paths.
+Account deletion now queues account photo prefixes and the onboarding Workflow,
+even when no contact was ever published or setup already completed (migration
+0069). Dispatch rechecks the parent after creation/restart and portrait steps
+recheck around upload, durably queuing late instances/bytes when deletion wins.
+The existing outbox/Cron retries external failures; see
+[account cleanup](admin.md#deleting-an-account). These changes add no client cache
+or setup UI and need fictional-data runtime verification.
 
 ## Cache and account isolation
 

@@ -1,6 +1,9 @@
 // Local test entrypoint only. Never referenced by a production Wrangler config.
 import '../src/lib/schema-runtime';
 import app from '../src/app';
+import adminApp from '../src/admin/app';
+import { dispatchOnboarding } from '../src/onboarding/routes';
+import { dispatchContactGeneration } from '../src/contacts/generation';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { clearContact, clearGroup, cleanResources } from '../src/chat/cleanup';
 import { dispatchInitiatives } from '../src/chat/initiative';
@@ -13,6 +16,7 @@ import { discardChatObject } from '../src/chat/object-storage';
 type Faults = {
   objects?: string[]; lists?: string[]; workflows?: string[];
   createRace?: { contact: string; user: string; fail?: boolean };
+  accountCreateRace?: { user: string; fail?: boolean };
   requeue?: { key: string; scope: string; fail?: boolean };
 };
 function failingEnvironment(env: Env, faults: Faults): Env {
@@ -40,8 +44,9 @@ function failingEnvironment(env: Env, faults: Faults): Env {
   const workflows = <P,>(binding: Workflow<P>) => wrap(binding, {
     async create(options: Parameters<Workflow<P>['create']>[0]) {
       if (faults.createRace) await clearContact(env,faults.createRace.contact,faults.createRace.user,true,0);
+      if (faults.accountCreateRace) await env.DB.prepare('DELETE FROM user WHERE id=?').bind(faults.accountCreateRace.user).run();
       const instance = await binding.create(options);
-      if (faults.createRace?.fail) throw new Error('Injected lost Workflow create acknowledgement');
+      if (faults.createRace?.fail || faults.accountCreateRace?.fail) throw new Error('Injected lost Workflow create acknowledgement');
       return instance;
     },
     async get(id: string) {
@@ -75,7 +80,9 @@ export default {
         if (key === 'waitUntil') return (promise: Promise<unknown>) => { pending.push(promise); ctx.waitUntil(promise); };
         const value = Reflect.get(target,key); return typeof value === 'function' ? value.bind(target) : value;
       } });
-      const response = await app.fetch(request, wrapped, tracked);
+      const response = url.pathname.startsWith('/api/v1/admin/')
+        ? await adminApp.fetch(request, { ...wrapped, SUPER_ADMIN_USER_IDS: 'fixture-outsider' }, tracked)
+        : await app.fetch(request, wrapped, tracked);
       await Promise.allSettled(pending);
       return response;
     }
@@ -83,6 +90,8 @@ export default {
     try {
       if (body.action === 'initiative') await dispatchInitiatives({ ...wrapped, META_API_KEY: 'fictional-test-key-no-network' });
       if (body.action === 'dispatch') await dispatchAgent(wrapped,body.id);
+      if (body.action === 'dispatch-onboarding') await dispatchOnboarding(wrapped,body.userID!);
+      if (body.action === 'dispatch-generation') await dispatchContactGeneration(wrapped,body.userID!,body.id);
       if (body.action === 'memories') return Response.json({
         human: body.group ? await retainedGroupMemories(env.DB,body.id,body.contributor??false,{groupID: 'fixture-group',userID:body.userID!})
           : await readMemories(env.DB,{contactID:body.id,userID:body.userID!,beforeSequence:Number.MAX_SAFE_INTEGER,privateConversation:true,contributorModel:body.contributor,processingUserID:body.userID}),

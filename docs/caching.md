@@ -1192,7 +1192,13 @@ cached content kept through transient failures, revision counters that reject la
 responses, invalidation after account deletion and setting changes, and a full reset
 on sign-out or session expiry. Nothing is persisted in the browser. The API reads
 runtime settings from D1 on every use, with no isolate cache. Details:
-[admin panel caching](admin.md#panel-caching). Not verified in a browser.
+[admin panel caching](admin.md#panel-caching). A 202 account-deletion response
+removes the account row and invalidates Overview immediately, while the server
+continues durable R2/Workflow cleanup. This creates no new client cache, storage
+or polling. Reopening the list, transient failures, late list responses and account
+switching retain the existing revision guards. Other iOS/web sessions clear private
+snapshots on confirmed session expiry/access loss; offline downloaded copies are
+not remotely recalled. Browser/device verification of the correction is pending.
 
 ## Speech accent preference (0061)
 

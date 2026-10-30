@@ -15,12 +15,10 @@ watch(search, (value) => {
   debounce = window.setTimeout(() => loadUsers(value.trim()), 250);
 });
 
-function deleted(storageComplete: boolean) {
+function deleted() {
   const name = deleting.value?.email;
   deleting.value = null;
-  message.value = storageComplete
-    ? `Deleted ${name} and all of its data.`
-    : `Deleted ${name}. Some stored files couldn't be removed yet; see the API logs.`;
+  message.value = `Deleted ${name}. File and background workflow cleanup is queued and retried automatically.`;
 }
 </script>
 

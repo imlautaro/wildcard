@@ -144,6 +144,18 @@ an onboarding contact removes its identity from the saved circle plan and queues
 the original onboarding Workflow's stored checkpoints for deletion. Other
 onboarding contacts and the account's own saved preferences remain.
 
+Account deletion adds [migration 0069](admin.md#deleting-an-account): account R2
+prefixes and onboarding checkpoints are queued transactionally, including jobs
+with no published contact. Account-authored/requested messages in surviving peer
+groups are deleted before their author FK becomes null, along with their scoped
+media, source-backed memory and reply workflows. Account-attributed shared
+boards/tasks/documents/revisions also have explicit cleanup where attribution is
+polymorphic rather than a foreign key. Generation dispatch/upload rechecks close
+late-create and late-portrait races. Existing shared group ownership and other
+people's content remain; see the admin guide for the destructive scope, retained
+operational records and limits on historical recovery. Admin acceptance returns
+pending cleanup, without claiming that Workflows or R2 are already empty.
+
 ## Cache behavior and limits
 
 Both clients keep archive state in the existing session chat lists, without a

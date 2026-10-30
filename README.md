@@ -160,7 +160,9 @@ The optional [admin panel](docs/admin.md) is a separate Nuxt 4 Worker,
 `wildcard-admin`. It reaches a private `AdminAPI` entrypoint of the API through a
 service binding. Super admins, listed by user ID in `SUPER_ADMIN_USER_IDS`, can open
 or close registration, list accounts with their contact counts, delete an account
-with all of its data, and change runtime flags without a release. See
+with its owned data and durable asynchronous R2/Workflow cleanup, and change runtime
+flags without a release. Account deletion requires migration
+[0069](docs/infrastructure.md#account-deletion-cleanup-migration-0069). See
 [infrastructure](docs/infrastructure.md#admin-worker) for provisioning.
 
 ```sh

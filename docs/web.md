@@ -44,6 +44,17 @@ presentation and functional research remain unverified.
 migrations, or data. The API Worker stays the only owner of D1, R2, Workflows,
 and every credential.
 
+Account deletion by an operator uses the shared API cascade and durable external
+cleanup described in [admin](admin.md#deleting-an-account) (migration 0069). iOS
+and web lose account access through existing session checks and clear their
+session-owned caches on confirmed loss. Other people's surviving shared groups
+refresh through existing polling; independently copied content remains theirs.
+The admin action itself is available only in the operator panel. The web proxy
+also reads DELETE directly from the original Cloudflare Request to avoid Nitro's
+unbuffered mock-Node-body hang; native iOS calls the API directly and needs no
+transport change. Both empty DELETE requests and JSON-bearing requests need
+runtime verification after release. No new cache or local persistence is added.
+
 ## Architecture
 
 ```text

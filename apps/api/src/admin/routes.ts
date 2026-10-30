@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
-import { terminateChats } from '../chat/dispatch';
+import { cleanResources } from '../chat/cleanup';
 import { isSettingKey, listSettings, readSetting } from './settings';
 
 type UserRow = {
@@ -83,10 +83,8 @@ admin.get('/users', async (c) => {
   });
 });
 
-// Deletes the account and everything that cascades from it in D1, then its private
-// R2 objects. Cascades also remove groups the user owns and agents they share
-// with others; their messages in other people's groups stay with no author.
-// Chat attachments are reclaimed by cleanAttachments once unreferenced.
+// D1 deletion and external cleanup registration commit together. The outbox
+// survives account deletion and retries R2/Workflow failures through Cron.
 admin.delete('/users/:id', bodyLimit({ maxSize: 1024 }), async (c) => {
   const actor = c.get('admin');
   const admission = await admitAuthRequest(c.env.DB, actor, 'admin-user-delete', 10);
@@ -105,27 +103,18 @@ admin.delete('/users/:id', bodyLimit({ maxSize: 1024 }), async (c) => {
     return c.json({ error: 'Remove this account from SUPER_ADMIN_USER_IDS before deleting it.' }, 409);
   }
 
-  const [pending, owned, counts] = await c.env.DB.batch([
-    c.env.DB.prepare(`SELECT t.workflow_id AS id FROM chat_turn t JOIN contact c ON c.id = t.contact_id
-      JOIN contact_agent a ON a.id = c.agent_id WHERE (c.user_id = ?1 OR a.owner_id = ?1) AND t.status IN ('queued', 'running')`).bind(id),
-    c.env.DB.prepare('SELECT id FROM chat_group WHERE owner_id = ?').bind(id),
-    c.env.DB.prepare(`SELECT (SELECT COUNT(*) FROM contact WHERE user_id = ?1) AS contacts,
+  const counts = await c.env.DB.prepare(`SELECT (SELECT COUNT(*) FROM contact WHERE user_id = ?1) AS contacts,
       (SELECT COUNT(*) FROM contact_agent WHERE owner_id = ?1) AS ownedAgents,
-      (SELECT COUNT(*) FROM chat_group WHERE owner_id = ?1) AS ownedGroups`).bind(id),
-  ]);
-  const groupIDs = (owned?.results ?? []).map((row) => (row as { id: string }).id);
+      (SELECT COUNT(*) FROM chat_group WHERE owner_id = ?1) AS ownedGroups`).bind(id).first();
   await c.env.DB.batch([
     c.env.DB.prepare('INSERT INTO admin_event (id, actor_id, action, target, details_json, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(crypto.randomUUID(), actor, 'user.delete', id, JSON.stringify(counts?.results[0] ?? {}), Date.now()),
+      .bind(crypto.randomUUID(), actor, 'user.delete', id, JSON.stringify(counts ?? {}), Date.now()),
     c.env.DB.prepare('DELETE FROM user WHERE id = ?').bind(id),
   ]);
 
-  c.executionCtx.waitUntil(terminateChats(c.env, (pending?.results ?? []).map((row) => (row as { id: string }).id)));
-  const prefixes = [`users/${id}/`, `contacts/${id}/`, `attachments/${id}/`,
-    ...groupIDs.flatMap((groupID) => [`groups/${groupID}/`, `group-attachments/${groupID}/`])];
-  const storage = (await Promise.all(prefixes.map((prefix) => removePrefix(c.env, prefix)))).every(Boolean) ? 'complete' : 'partial';
-  if (storage === 'partial') console.error(JSON.stringify({ event: 'admin_user_storage_cleanup_partial' }));
-  return c.json({ deleted: true, storage });
+  c.executionCtx.waitUntil(cleanResources(c.env));
+  // A committed account deletion is distinct from asynchronous external erasure.
+  return c.json({ deleted: true, cleanup: 'pending' }, 202);
 });
 
 admin.get('/settings', async (c) => c.json({ settings: await listSettings(c.env.DB) }));
@@ -145,21 +134,5 @@ admin.put('/settings/:key', bodyLimit({ maxSize: 1024 }), async (c) => {
   ]);
   return c.json({ settings: await listSettings(c.env.DB) });
 });
-
-// Lists and deletes every object under the prefix. Returns false instead of
-// throwing so the account deletion, already committed, still reports success.
-async function removePrefix(env: Env, prefix: string): Promise<boolean> {
-  try {
-    let cursor: string | undefined;
-    do {
-      const page = await env.CONTACT_PHOTOS.list({ prefix, cursor, limit: 1000 });
-      if (page.objects.length) await env.CONTACT_PHOTOS.delete(page.objects.map((object) => object.key));
-      cursor = page.truncated ? page.cursor : undefined;
-    } while (cursor);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export default admin;

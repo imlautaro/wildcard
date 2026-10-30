@@ -6,7 +6,7 @@ import { runContactGeneration } from '../contacts/generation';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
 import { museCompletion, isRecord } from '../chat/meta';
-import { photoKey } from '../photos/storage';
+import { photoKey, removePhoto } from '../photos/storage';
 import { defaultPersonality, randomBirthDate } from '../../../../shared/personality';
 import { onboardingOptions, type OnboardingInput } from '../../../../shared/onboarding';
 
@@ -114,7 +114,14 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string;
           const key = photoKey(owner, identity.id, identity.id);
           if (!await this.env.CONTACT_PHOTOS.head(key)) {
             const bytes = await generatePortrait(this.env, identity, saved);
-            await this.env.CONTACT_PHOTOS.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+            if (!await this.env.DB.prepare('SELECT user_id FROM account_onboarding WHERE user_id=?').bind(owner).first()) return;
+            try {
+              await this.env.CONTACT_PHOTOS.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+            } finally {
+              if (!await this.env.DB.prepare('SELECT user_id FROM account_onboarding WHERE user_id=?').bind(owner).first()) {
+                await removePhoto(this.env, key);
+              }
+            }
           }
           await this.env.DB.prepare('UPDATE account_onboarding SET photo_count = MAX(photo_count, ?), updated_at = ? WHERE user_id = ?')
             .bind(i + 1, Date.now(), owner).run();

@@ -4,7 +4,7 @@ import type { UserSummary } from '~/utils/types';
 // Destructive confirmation: the operator retypes the account's email, which the
 // API checks again. The copy spells out what the cascade removes for others.
 const props = defineProps<{ user: UserSummary }>();
-const emit = defineEmits<{ close: []; deleted: [storageComplete: boolean] }>();
+const emit = defineEmits<{ close: []; deleted: [] }>();
 const { deleteUser } = useAdmin();
 const dialog = ref<HTMLDialogElement | null>(null);
 const email = ref('');
@@ -19,7 +19,8 @@ async function confirm() {
   busy.value = true;
   error.value = null;
   try {
-    emit('deleted', await deleteUser(props.user, email.value.trim()));
+    await deleteUser(props.user, email.value.trim());
+    emit('deleted');
   } catch (failure) {
     error.value = errorMessage(failure);
   } finally {
@@ -43,8 +44,10 @@ function cancel(event?: Event) {
         <li>{{ plural(user.contacts, 'contact') }} and their chats, memories, tasks, documents and mini apps.</li>
         <li v-if="user.ownedAgents">{{ plural(user.ownedAgents, 'agent') }} they created, including for anyone they shared one with.</li>
         <li>Groups they own, with every member's messages in them.</li>
-        <li>Their photo, attachments and sessions. Messages they sent in other people's groups stay, still showing their name, but are no longer linked to the account.</li>
+        <li>Their photo, attachments, sessions and messages they sent or requested in other people's groups.</li>
+        <li>Shared task lists they created, tasks they created, were assigned or authorized for research/monitoring, documents they created or last edited, and their document revisions.</li>
       </ul>
+      <p>Files and background workflows are removed asynchronously, with automatic retries if a service is unavailable.</p>
       <label class="text-field">
         <input v-model="email" type="email" autocomplete="off" placeholder=" " :disabled="busy" required>
         <span>Type the email to confirm</span>

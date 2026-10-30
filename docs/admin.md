@@ -54,7 +54,7 @@ the `AdminAPI` binding.
 | GET | `/api/v1/admin/session` | `{ user }`. 401 without a session; 403 `NOT_SUPER_ADMIN` with `userID` for accounts not on the roster |
 | GET | `/api/v1/admin/overview` | Totals (accounts, new in 7 days, contacts, groups), registration state, last 20 admin events |
 | GET | `/api/v1/admin/users?q=&before=` | 50 accounts per page, newest first. `q` matches name or email; `before` is the previous page's `next` cursor |
-| DELETE | `/api/v1/admin/users/:id` | Body `{ "email": "<the account's email>" }`. Returns `{ deleted, storage: "complete" \| "partial" }` |
+| DELETE | `/api/v1/admin/users/:id` | Body `{ "email": "<the account's email>" }`. 202 `{ deleted: true, cleanup: "pending" }`; D1 deletion committed, external cleanup queued |
 | GET | `/api/v1/admin/settings` | Every declared setting with its value, default and last change |
 | PUT | `/api/v1/admin/settings/:key` | Body `{ "value": true \| false }`. Saves the value and records an event |
 
@@ -69,36 +69,67 @@ about a day.
 The dialog asks the operator to retype the account's email, and the API checks
 it again. The API then:
 
-1. Reads the account's queued or running chat workflows and the groups it owns.
-2. In one D1 batch, records an `admin_event` and deletes the `user` row. Foreign keys
-   cascade through sessions, credentials, contacts, chat turns, memories, schedules,
-   tasks, documents, mini apps, connectors, onboarding and group memberships.
-3. Attempts immediate termination of pending private chat workflows. Migration
-   0063 also enqueues registered private/group/initiative workflows, generated
-   contact jobs and published onboarding-contact checkpoints for durable deletion
-   through the [chat lifecycle outbox](chat-lifecycle.md). An account onboarding
-   job with no published contacts is still outside that contact-trigger coverage;
-   its real behavior after account removal remains unverified.
-4. Deletes R2 objects under `users/<id>/`, `contacts/<id>/` and `attachments/<id>/`,
-   plus `groups/<group>/` and `group-attachments/<group>/` for groups the account
-   owned. If any prefix fails, the response reports `storage: "partial"` and logs
-   `admin_user_storage_cleanup_partial`; the account stays deleted. Remaining
-   unreferenced chat attachments and generated images are registered in
-   `chat_attachment_object`, and `cleanAttachments` removes them after 24 hours.
+1. In one D1 batch, records a content-free `admin_event` and deletes the `user`
+   row. Foreign keys remove sessions, credentials, private contacts/turns/memories,
+   schedules, tasks, documents, mini apps, connectors, onboarding and memberships.
+2. Migration 0069 registers the account's `users/<id>/`, `contacts/<id>/` and
+   `attachments/<id>/` R2 prefixes, plus its onboarding Workflow, in the durable
+   `resource_cleanup` outbox **inside that deletion transaction**. This covers
+   completed checkpoints and onboarding with no published contact. Existing
+   contact/group/turn triggers queue owned group prefixes, all registered chat
+   attempts/initiative workflows, generation jobs and generated media keys.
+3. Returns 202 `{ deleted: true, cleanup: "pending" }`. The account is gone and its
+   sessions are invalid. A `waitUntil` cleanup pass and the minute Cron drain the
+   outbox with bounded concurrency, durable backoff and a final R2 sweep. Service
+   failures never discard the retry plan. Acceptance does not claim immediate
+   external erasure; the panel states that cleanup is queued and retried.
 
-**Effects on other people.** Groups the account owned are deleted for every member,
-along with all their messages. Agents it created disappear for everyone they were
-shared with, along with those people's chats with them. Messages it sent in groups
-owned by others stay in those groups with no author (`user_id` set to null), but
-keep their text and the stored `sender_name`. The dialog states these
-consequences. Audit events store only the deleted account's ID and counts, never
-its email or name.
+Cleanup calls Workflow **delete**, which stops execution and removes stored
+checkpoints, rather than just terminating active instances. Onboarding and contact
+creation recheck their parent after dispatch, including ambiguous create results;
+if deletion won, the late instance is queued again. Portrait generation rechecks
+before and after upload and durably queues a late object. Unpublished generation
+portraits also have their planned prefix queued when their job is removed.
 
-The cascade, with a shared agent, an owned group, a membership in another
-person's group and a reply to the deleted user's message, was checked on local
-workerd D1. There were no foreign-key violations, and the results matched the
-list above. R2 cleanup and workflow termination have not been exercised against
-real bindings.
+**Effects on other people.** Owned groups disappear for every member. Agents the
+account created disappear for everyone they were shared with, including those
+people's private chats. Migration 0069 removes messages the person authored or
+requested in groups owned by others while their attribution still exists; it no
+longer leaves their text/name/media behind through `SET NULL`. Other people's
+messages and groups remain. Shared lists the person created, tasks they created,
+were assigned, or authorized for research/monitoring, and documents they created
+or last edited are removed; their revisions in other documents are removed too.
+The confirmation dialog discloses these effects. Independent copies or content
+another person subsequently incorporated into their own work cannot be recalled.
+
+Audit events retain only IDs and counts, never the target's email/name. Content-free
+rate/paid-usage records, platform logs/backups and completed external actions keep
+their documented retention; see [chat lifecycle](chat-lifecycle.md). Deleting an
+account never deletes shared Cloudflare infrastructure or unrelated users' files.
+
+Migration 0069 requeues known account prefixes/onboarding instances from earlier
+`user.delete` audit events whose account is absent. It cannot reconstruct old
+attribution already erased by `SET NULL`, unregistered historical Workflow IDs,
+or prefixes of previously removed groups that were never durably recorded.
+
+### DELETE proxy correction (October 30, 2026)
+
+Production logs showed `wildcard-admin` canceling the DELETE request because it
+would never generate a response, with no corresponding AdminAPI request. The
+installed Nitro Cloudflare adapter buffers only POST/PUT/PATCH; H3's raw body
+reader then waits on a mock Node stream for DELETE with a body. Both admin and
+web proxies now read DELETE from the original
+`event.context.cloudflare.request`, including empty requests. Other methods keep
+using Nitro's buffered body; local development retains H3's real Node reader.
+The email confirmation, same-origin checks and service-binding allowlist remain
+in force. Body read errors use the proxy's existing JSON error response.
+
+API/admin/web types and SQL preparation can validate contracts statically; they
+cannot prove end-to-end deletion. Regression cases were added for admin admission,
+confirmation, D1 cascades, R2/Workflow failure/retry, unpublished onboarding/media,
+and generation creation racing deletion (including lost acknowledgements). They
+have not been executed for this change. Production deletion was not retried and
+no account was removed during diagnosis. Verify with fictional data after release.
 
 ## Runtime settings and feature flags
 
@@ -148,11 +179,9 @@ Infrastructure, release and rollback steps are in
 
 ## Verification status
 
-Static checks only: API, admin and web typechecks, the iOS Swift typecheck, and all
-new SQL prepared on local workerd D1, including the cascade above. The panel has
-not been built or run, and neither the `AdminAPI` binding nor the R2 cleanup has
-been exercised. After the first release, verify the following with a fictional
-account:
+The earlier panel validation predates the October 30 correction above. Current
+static checks do not establish runtime deletion or external erasure. After the
+automatic release, verify the following with a fictional account:
 
 - a non-roster account sees its ID and gets 403;
 - `GET https://wildcard-api…/api/v1/admin/session` returns 404 on the public origin;
