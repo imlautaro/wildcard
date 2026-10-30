@@ -21,19 +21,24 @@ for (const file of ['tasks/access.ts', 'groups/request-access.ts', 'groups/energ
     if (ts.isVariableStatement(node) && node.declarationList.declarations.some(d => d.name.getText(tree) === 'energyPoints')) helpers.push(node.getText(tree).replace(/^export /, ''));
   });
 }
+const workflowSource = read('groups/workflow.ts');
+const workflowTree = ts.createSourceFile('workflow.ts', workflowSource, ts.ScriptTarget.Latest, true);
+workflowTree.forEachChild(node => {
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'groupLearningUnchanged') helpers.push(node.getText(workflowTree));
+});
 const groupContext = read('groups/context.ts');
 const groupTree = ts.createSourceFile('context.ts', groupContext, ts.ScriptTarget.Latest, true);
 groupTree.forEachChild(node => {
   if (ts.isVariableStatement(node) && node.declarationList.declarations.some(d => d.name.getText(groupTree) === 'visibleMessage')) helpers.push(node.getText(groupTree).replace(/^export /, ''));
 });
 const queries = new Map();
-for (const contributor of [false, true]) for (const index of [0, 1]) {
-  const context = vm.createContext({ scope: { contributor }, index, contributor, env: { META_CHAT_MODEL: contributor ? 'muse-spark-1.3-contributor' : 'muse-spark-1.3' } });
+for (const contributor of [false, true]) for (const index of [0, 1]) for (const sourceTable of ['chat_turn', 'group_reply']) {
+  const context = vm.createContext({ source: sourceTable, scope: { contributor }, index, contributor, draft: { learningFence: { person: 0, audience: 0 } }, learningFence: { person: 0, audience: 0 }, env: { META_CHAT_MODEL: contributor ? 'muse-spark-1.3-contributor' : 'muse-spark-1.3' } });
   vm.runInContext(ts.transpile(helpers.join('\n')), context);
   for (const file of ['chat/workflow.ts', 'groups/workflow.ts', 'chat/dispatch.ts', 'chat/pacing.ts', 'photos/generation.ts', 'chat/attachments.ts']) {
     const source = read(file), tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
     function visit(node) {
-      if (ts.isVariableDeclaration(node) && ['publicationAccess', 'unchangedHistory', 'interrupted'].includes(node.name.getText(tree))) {
+      if (ts.isVariableDeclaration(node) && ['publicationAccess', 'unchangedHistory', 'interrupted', 'learningUnchanged'].includes(node.name.getText(tree))) {
         vm.runInContext(ts.transpile(`var ${node.name.getText(tree)} = ${node.initializer.getText(tree)}`), context);
       }
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'prepare') {

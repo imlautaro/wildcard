@@ -6,6 +6,7 @@ import { miniAppRoutes } from '../miniapps/routes';
 import { taskRoutes } from '../tasks/routes';
 import { documentRoutes } from '../documents/routes';
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
+import { learningRoutes } from '../chat/learning-routes';
 import { accountEnvironment } from '../lib/model-preference';
 import { readEnergy } from '../groups/energy';
 import { photoKey, photoResponse, removePhoto, validPhoto, readPhoto } from '../photos/storage';
@@ -340,6 +341,7 @@ contacts.route('/:id/personality', personality);
 contacts.route('/:id/mini-apps', miniAppRoutes('contact'));
 contacts.route('/:id/tasks', taskRoutes('contact'));
 contacts.route('/:id/documents', documentRoutes('contact'));
+contacts.route('/:id/learning', learningRoutes('contact'));
 contacts.route('/:id/native-remote', remoteSettings);
 contacts.route('/sharing', sharing);
 

@@ -1,4 +1,5 @@
 import { embodiedIdentityInstruction } from '../personality/identity';
+import { learningContext, learningQuestionInstruction } from './learning';
 import { assistantEvents, eventTime, temporalContext, temporalInstruction } from './temporal';
 import { privateTaskAccess } from '../tasks/access';
 import { chatImageTools, executeChatImageTool, indexRecentChatImage, withChatImages } from '../photos/chat-images';
@@ -234,6 +235,8 @@ async function executeTool(env: Env, scope: MemoryScope & { agentID: string }, c
 }
 
 export async function contactReply(env: Env, turn: StoredTurn, name: string, recoveryCode?: string): Promise<ContactResponse | null> {
+  const learningRevision = (await env.DB.prepare('SELECT learning_revision AS revision FROM contact WHERE id = ? AND user_id = ?')
+    .bind(turn.contactID, turn.userID).first<{ revision: number }>())?.revision;
   if (turn.taskID && !await env.DB.prepare(`SELECT id FROM chat_turn WHERE id = ? AND ${privateTaskAccess('chat_turn')}`).bind(turn.id).first()) return null;
   const isolated = await privateContact(env.DB, turn.contactID);
   const model = isolated ? 'muse-spark-1.3' : env.META_CHAT_MODEL;
@@ -340,6 +343,8 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   const messages: ModelMessage[] = [
     { role: 'system', content: [
       embodiedIdentityInstruction,
+      ...(!autonomous && !recoveryCode ? [await learningContext({ ...env, META_CHAT_MODEL: model },
+        { kind: 'contact', id: turn.contactID, agentID: agent.id, userID: turn.userID }, turn.sequence), learningQuestionInstruction] : []),
       temporalInstruction,
       temporalContext({ now: Date.now(), arrivalAt: Math.min(turn.createdAt,
         ...results.filter(row => batch.includes(row.id)).map(row => row.createdAt)),
@@ -377,7 +382,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       'Default to a short, direct reply, usually one to three sentences.',
       messageInstruction, quoteInstruction, imageInstruction,
       ...(spoken ? [spoken] : []),
-      'For a final answer without tool calls, return only JSON {"messages":["first message","optional next message"],"replyTo":null}. When a quote helps, replyTo is {"messageID":"actual turn ID","side":"user" or "assistant"}; otherwise null. Tool calls retain their normal format.',
+      'For a final answer without tool calls, return only JSON {"messages":["first message","optional next message"],"replyTo":null,"learningQuestion":null}. When a quote helps, replyTo is {"messageID":"actual turn ID","side":"user" or "assistant"}; otherwise null. Tool calls retain their normal format.',
       'Avoid unnecessary introductions, recaps, lists, repeated explanations, and automatic follow-up questions.',
       'Give a longer response when requested or required; do not sacrifice accuracy or usefulness for brevity.',
       'You can consult this agent’s shared stored memories, the current speaker’s private conversation, and manage schedules only for the current speaker through the listed tools. Other participants’ transcripts, attachments, and schedules are inaccessible.',
@@ -447,7 +452,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
         .bind(response.replyTo.messageID, turn.contactID, turn.userID, turn.sequence, response.replyTo.side).first()) {
         throw new Error('MODEL_INVALID_RESPONSE');
       }
-      return { ...response, attachment: autonomous ? null : await generatedImage(env,
+      return { ...response, learningRevision, attachment: autonomous ? null : await generatedImage(env,
         { ...imageScope, turnID: turn.id, attempt: turn.attempt }) };
     }
     messages.push(answer);

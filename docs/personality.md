@@ -532,3 +532,12 @@ private state; existing photo caches remain authoritative for bytes. See the lin
 guide for recovery, retention, rate limits, cache details and pending device checks.
 
 The server calendar-derived age takes precedence over age text in generated identities as birthdays pass.
+
+## Learned conversational expression
+
+[Conversation learning](conversation-learning.md) can supply one small audience-local
+behavioral adjustment and fallible observations about the current human. Configured
+identity and current explicit instructions take priority; learning cannot rewrite the
+shared personality, manufacture a human routine or require agreement. Questions remain
+optional, and a practical interaction can end without a social closer. This applies
+to private/group replies and bounded private initiative on both clients.

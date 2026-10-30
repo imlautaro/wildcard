@@ -315,3 +315,12 @@ See [iOS setup](docs/infrastructure.md#ios-background-voice-playback). Physical-
 and browser playback verification remains pending.
 
 Run [lifecycle integration checks](docs/chat-lifecycle-testing.md) with `npm run test:lifecycle` (local fictional D1/R2/Workflow data only). Migration 0064 fixes cascade ordering, generated-media ownership, lost Workflow acknowledgements, retry revisions, linked chat scopes, and memory isolation with embeddings.
+
+## Conversation learning
+
+[Conversation learning](docs/conversation-learning.md) reviews recent direct human
+exchanges silently, keeping audience-local interaction observations, small behavioral
+adjustments and optional questions. Private/group replies on iOS and web use the same
+API behavior; private initiative uses it within existing outreach limits. Both clients
+provide per-person inspection, disable and reset controls. Migration 0067 uses the
+existing D1, Workflows and minute Cron; no new service or secret is required.

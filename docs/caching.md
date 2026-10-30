@@ -1294,3 +1294,23 @@ replies ending in audio versus text, activity overrides, dark mode, screen reade
 failed decoding, seek-only interaction and waveform loading without playback.
 Also check offline playback/retry, empty chats, explicit refresh, cache eviction,
 clear/delete, membership revocation and account switching during a receipt request.
+
+## Conversation learning
+
+[Conversation learning](conversation-learning.md) uses a session-owned eight-entry
+`NavigationSnapshotCache` in iOS contact and group stores; entry and explicit refresh
+revalidate without hiding loaded or empty content. The web session map holds eight
+snapshots, with thirty-second freshness and explicit Refresh. Reads are deduplicated;
+mutation revisions and entry identity reject stale completions, including account
+switches. Transient refresh failures preserve usable content. Confirmed access loss,
+history clear and contact/group removal drop affected snapshots. Local group consent
+or membership mutations invalidate group learning. No disk persistence, pagination
+or added chat polling is required; each API response contains at most eight bounded
+agent profiles and is marked no-store.
+
+Server learning expires on read and minute-Cron cleanup, retaining only a small
+watermark after profile expiry. Reset/disable advances a source floor and epoch;
+late inference and unpublished drafts cannot restore older learning. Ordinary factual
+memory follows its own retention controls. Verify reopen/back, empty results, explicit
+refresh, offline/failure recovery, reset during a request, history clear, remote
+revocation and account switching on both clients; device/browser checks are pending.

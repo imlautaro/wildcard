@@ -1,6 +1,7 @@
 import type { Attachment } from './attachments';
+import { parseLearningQuestion, type LearningQuestion } from './learning';
 import { parsePrivateReply, type ReplyTarget } from '../replies/data';
-export type ContactResponse = { messages: string[]; attachment?: Attachment | null; replyTo?: ReplyTarget | null };
+export type ContactResponse = { messages: string[]; attachment?: Attachment | null; replyTo?: ReplyTarget | null; learningRevision?: number; learningQuestion?: LearningQuestion | null };
 export const quoteInstruction = 'Quote an earlier message only when it clarifies which message you are answering: overlapping topics, several unanswered messages, or returning to an older point. Default to no quote when the context is obvious. A shared question such as what everyone ate does not need a quote on each answer. Use actual supplied message IDs, never copied quote text or invented IDs. Quote only once at the start of your response, not on every successive message.';
 
 // A turn may be one cohesive message or a short conversational burst.
@@ -15,12 +16,13 @@ export function validMessages(value: unknown): value is string[] {
 export function parseMessages(content: string): ContactResponse {
   let value: unknown;
   try { value = JSON.parse(content); } catch { throw new Error('MODEL_INVALID_RESPONSE'); }
-  if (!value || typeof value !== 'object' || !('messages' in value) || Object.keys(value).some(key => !['messages', 'replyTo'].includes(key)) || !validMessages(value.messages)) {
+  if (!value || typeof value !== 'object' || !('messages' in value) || Object.keys(value).some(key => !['messages', 'replyTo', 'learningQuestion'].includes(key)) || !validMessages(value.messages)) {
     throw new Error('MODEL_INVALID_RESPONSE');
   }
   const target = 'replyTo' in value && value.replyTo !== null ? parsePrivateReply(value.replyTo) : undefined;
   if (target === null) throw new Error('MODEL_INVALID_RESPONSE');
-  return { messages: value.messages.map(text => text.trim()), replyTo: target ?? null };
+  return { messages: value.messages.map(text => text.trim()), replyTo: target ?? null,
+    learningQuestion: parseLearningQuestion('learningQuestion' in value ? value.learningQuestion : null, value.messages) };
 }
 
 // Deterministic timing survives Workflow replay; no client timers reveal drafts.

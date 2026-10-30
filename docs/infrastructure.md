@@ -2569,3 +2569,43 @@ Those runtime checks have not yet been performed for this change. Rollback can l
 this additive schema in place; older clients ignore the new optional response fields.
 New clients require the new API for persisted incoming receipts. Existing audio starts
 unlistened because previous human playback cannot be reconstructed from read receipts.
+
+## Conversation learning (migration 0067)
+
+[Conversation learning](conversation-learning.md) reuses the existing API Worker,
+D1 `DB`, `ChatWorkflow`, minute Cron and selected Meta account model. No new account,
+resource, binding, secret, OAuth scope or deployment permission is required. Each
+review may consume up to 6,000 completion tokens, with source/count/time budgets;
+ordinary replies use bounded learned context without another inference call. The
+minute Cron only removes expired items from up to one hundred profiles, without
+model calls. Existing attention, model consent, permanent connector isolation and
+private initiative limits remain mandatory.
+
+For an independent account, follow the base provisioning order (D1 and existing
+Worker/Workflow/Cron bindings, authentication, Meta model secret, then clients),
+replace account-specific IDs and URLs as documented above, and apply migrations
+through `0067_conversation_learning.sql`. Locally use the existing
+`npm run db:migrate:local --workspace @wildcard/api`. Production applies migrations
+through the committed/pushed automatic release pipeline; never apply a manual
+deployment. Verify the pushed SHA, successful automatic builds, active Worker tags
+and the 0067 migration record before claiming release. No remote migration or
+deployment has been performed for this change.
+
+The additive migration adds conversation/member learning settings, source floors,
+revocable epochs and `conversation_learning`, with private/group/source/member/agent
+cleanup triggers and foreign keys. It does not copy historical messages into learning
+or modify factual memory. Existing conversations default enabled; review starts
+lazily at a later direct human exchange, using a bounded recent window. In staging
+use separate existing bindings and fictional users under the same configuration;
+there is no staging-specific bypass of consent or isolation. Both clients expose
+inspection, disable and reset. Browser push and native installation retain their
+existing platform limitations.
+
+Verification: static API/web types, Swift parsing, schema and SQL preparation, and
+diff checks. The opt-in conversation-learning regression is authored but unexecuted;
+model judgments, replay/reset races in the platform, costs, group/private behavior
+and both clients require functional verification. Disable learning per conversation
+while diagnosing a problem. Prefer a forward compatible fix; additive columns/tables
+may remain on rollback. Drain/fence active Workflows before rolling back to code that
+rejects the new internal question metadata. Do not remove migration 0067 or restore
+older code against unapplied schema assumptions.

@@ -18,6 +18,7 @@ final class ContactsStore {
     let mcpAccessSnapshots = NavigationSnapshotCache<[McpAccess]>()
     let mcpSnapshots = NavigationSnapshotCache<[McpConnection]>()
     let energySnapshots = NavigationSnapshotCache<ContactEnergy>()
+    let learningSnapshots = NavigationSnapshotCache<ConversationLearningSnapshot>()
     /// The account-independent voice catalog for the contact voice picker, cached for the session.
     let voiceCatalog = NavigationSnapshotCache<[VoiceOption]>()
     let personalitySnapshots = NavigationSnapshotCache<ContactPersonalitySnapshot>()
@@ -210,6 +211,7 @@ final class ContactsStore {
                 scheduleSnapshots.remove(id: contact.id)
                 sharingSnapshots.remove(id: contact.id)
                 energySnapshots.remove(id: contact.id)
+                learningSnapshots.remove(id: contact.id)
                 forgetPersonality(id: contact.id)
                 mcpAccessSnapshots.remove(id: "contact:\(contact.id)")
                 miniApps.forget(base: "contacts/\(contact.id)")
@@ -388,6 +390,7 @@ final class ContactsStore {
     }
 
     private func forgetHistory(id: String) {
+        learningSnapshots.remove(id: id)
         conversations.remove(contactID: id)
         NativeExperiments.shared.forget(contactID: id)
         scheduleSnapshots.remove(id: id)
@@ -442,6 +445,7 @@ final class ContactsStore {
             scheduleSnapshots.remove(id: contact.id)
             sharingSnapshots.remove(id: contact.id)
             energySnapshots.remove(id: contact.id)
+            learningSnapshots.remove(id: contact.id)
             forgetPersonality(id: contact.id)
             mcpAccessSnapshots.remove(id: "contact:\(contact.id)")
             miniApps.forget(base: "contacts/\(contact.id)")
@@ -492,6 +496,7 @@ final class ContactsStore {
                 scheduleSnapshots.remove(id: id)
                 sharingSnapshots.remove(id: id)
                 energySnapshots.remove(id: id)
+                learningSnapshots.remove(id: id)
                 forgetPersonality(id: id)
                 mcpAccessSnapshots.remove(id: "contact:\(id)")
                 miniApps.forget(base: "contacts/\(id)")

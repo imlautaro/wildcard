@@ -67,6 +67,9 @@ export const contactAgent = sqliteTable('contact_agent', {
 }, (table) => [check('agent_energy_range', sql`${table.energy} BETWEEN 0 AND 50`), check('agent_memory_shared', sql`${table.memoryShared} IN (0, 1)`)]);
 
 export const contact = sqliteTable('contact', {
+  learningEnabled: integer('learning_enabled', { mode: 'boolean' }).notNull().default(true),
+  learningRevision: integer('learning_revision').notNull().default(0),
+  learningSince: integer('learning_since').notNull().default(0),
   initiativeEnabled: integer('initiative_enabled', { mode: 'boolean' }).notNull().default(true),
   initiativePaused: integer('initiative_paused', { mode: 'boolean' }).notNull().default(false),
   lastReplyReadAt: date('last_reply_read_at'),
@@ -300,6 +303,7 @@ export const scheduleMutation = sqliteTable('schedule_mutation', {
 // Schedule cursor and cancellation triggers are maintained by SQL migrations.
 
 export const chatGroup = sqliteTable('chat_group', {
+  learningRevision: integer('learning_revision').notNull().default(0),
   photoVersion: text('photo_version'),
   id: text('id').primaryKey(),
   ownerId: text('owner_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
@@ -307,6 +311,9 @@ export const chatGroup = sqliteTable('chat_group', {
   createdAt: date('created_at').notNull(),
 }, (t) => [check('group_name_length', sql`length(${t.name}) BETWEEN 1 AND 100`)]);
 export const groupMember = sqliteTable('group_member', {
+  learningEnabled: integer('learning_enabled', { mode: 'boolean' }).notNull().default(true),
+  learningRevision: integer('learning_revision').notNull().default(0),
+  learningSince: integer('learning_since').notNull().default(0),
   lastReadSequence: integer('last_read_sequence').notNull().default(0),
   groupId: text('group_id').notNull().references(() => chatGroup.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
@@ -324,6 +331,30 @@ export const groupAgent = sqliteTable('group_agent', {
   joinedAt: date('joined_at').notNull(),
 }, (t) => [primaryKey({ columns: [t.groupId, t.agentId] }),
   foreignKey({ columns: [t.groupId, t.addedBy], foreignColumns: [groupMember.groupId, groupMember.userId] }).onDelete('cascade')]);
+export const conversationLearning = sqliteTable('conversation_learning', {
+  scopeKey: text('scope_key').notNull(),
+  agentId: text('agent_id').notNull().references(() => contactAgent.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  contactId: text('contact_id').references(() => contact.id, { onDelete: 'cascade' }),
+  groupId: text('group_id').references(() => chatGroup.id, { onDelete: 'cascade' }),
+  revision: integer('revision').notNull().default(0),
+  throughSequence: integer('through_sequence').notNull().default(0),
+  attemptedAt: integer('attempted_at').notNull().default(0),
+  reviewedAt: integer('reviewed_at').notNull().default(0),
+  isolated: integer('isolated').notNull(),
+  contributorEligible: integer('contributor_eligible').notNull().default(0),
+  profileJSON: text('profile_json').notNull().default('[]'),
+}, t => [primaryKey({ columns: [t.scopeKey, t.agentId, t.userId] }),
+  index('conversation_learning_contact').on(t.contactId), index('conversation_learning_group').on(t.groupId),
+  foreignKey({ columns: [t.groupId, t.agentId], foreignColumns: [groupAgent.groupId, groupAgent.agentId] }).onDelete('cascade'),
+  foreignKey({ columns: [t.groupId, t.userId], foreignColumns: [groupMember.groupId, groupMember.userId] }).onDelete('cascade'),
+  check('learning_scope', sql`(${t.contactId} IS NOT NULL AND ${t.groupId} IS NULL AND ${t.scopeKey} = 'contact:' || ${t.contactId})
+    OR (${t.groupId} IS NOT NULL AND ${t.contactId} IS NULL AND ${t.scopeKey} = 'group:' || ${t.groupId})`),
+  check('learning_profile_json', sql`json_valid(${t.profileJSON})`),
+  check('learning_isolated', sql`${t.isolated} IN (0, 1)`),
+  check('learning_contributor_eligible', sql`${t.contributorEligible} IN (0, 1)`),
+]);
+
 export const groupInvite = sqliteTable('group_invite', {
   id: text('id').primaryKey(),
   groupId: text('group_id').notNull().references(() => chatGroup.id, { onDelete: 'cascade' }),

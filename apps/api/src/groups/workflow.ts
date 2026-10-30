@@ -1,4 +1,5 @@
 import { generatedImage } from '../photos/generation';
+import { learnFromReply, recordLearningQuestion } from '../chat/learning';
 import { messageDelay } from '../chat/messages';
 import { safeErrorCode } from '../chat/meta';
 import { jobAccountID, jobModel } from '../lib/model-preference';
@@ -51,9 +52,18 @@ const publicationAccess = (contributor: boolean) => `EXISTS (SELECT 1 FROM agent
 const unchangedHistory = `NOT EXISTS (SELECT 1 FROM group_message newer
   WHERE newer.group_id = r.group_id AND newer.sequence > ?6)`;
 
+function groupLearningUnchanged(draft: GroupDraft) {
+  const f = draft.learningFence;
+  if (!f) return '1'; // Legacy checkpoints contain no learned context.
+  if (!Number.isSafeInteger(f.person) || !Number.isSafeInteger(f.audience)) return '0';
+  return `EXISTS (SELECT 1 FROM chat_group g JOIN group_member m ON m.group_id = g.id
+    JOIN group_message source ON source.id = r.source_id AND source.user_id = m.user_id
+    WHERE g.id = r.group_id AND g.learning_revision = ${f.audience} AND m.learning_revision = ${f.person})`;
+}
+
 async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, final = true, voice: Attachment | null = null): Promise<PublishOutcome> {
   const contributor = env.META_CHAT_MODEL.includes('contributor');
-  const access = publicationAccess(contributor);
+  const access = `(${publicationAccess(contributor)}) AND (${groupLearningUnchanged(draft)})`;
   let attachment: Attachment | null = voice;
   if (draft.attachment && draft.text) {
     const scope = await env.DB.prepare(`SELECT r.agent_id AS agentID, r.group_id AS groupID,
@@ -67,6 +77,8 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
   // The watermark guard and insert run in the same transaction. If a message
   // arrived after review, neither publication nor a skip can complete this slot.
   const results = await env.DB.batch([
+    env.DB.prepare(`UPDATE group_reply AS r SET status = 'failed' WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
+      AND NOT (${groupLearningUnchanged(draft)})`).bind(job.turnID, job.attempt),
     env.DB.prepare(`INSERT INTO group_message (id, group_id, agent_id, sender_name, text, created_at, contributor_consent, exchange_id, requester_id, reply_to_id, attachment_json)
       SELECT r.id, r.group_id, r.agent_id, a.name, ?3, ?4, ?5, source.exchange_id, source.requester_id,
         (SELECT gm.id FROM group_message gm WHERE gm.id = ?7 AND gm.group_id = r.group_id
@@ -82,8 +94,9 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
       EXISTS (SELECT 1 FROM group_message newer WHERE newer.group_id = r.group_id AND newer.sequence > ?3) AS changed
       FROM group_reply r WHERE r.id = ?1 AND r.attempt = ?2`).bind(job.turnID, job.attempt, draft.throughSequence),
     ...(draft.invitesReply === false ? [closeTerminalContinuations(env.DB, job.turnID)] : []),
+    ...recordLearningQuestion(env.DB, 'group', job.turnID, draft.learningQuestion, Date.now()),
   ]);
-  const state = results[2].results[0] as { status: string; published: number; changed: number } | undefined;
+  const state = results[3].results[0] as { status: string; published: number; changed: number } | undefined;
   if (!state || state.status === 'failed' || state.status === 'queued') return 'inactive';
   if (state.published) return 'published';
   if (state.status === 'complete') return 'skipped';
@@ -91,7 +104,7 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
   throw new Error('GROUP_UNAVAILABLE_OR_CONSENT_REQUIRED');
 }
 
-async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep, messages: string[], invitesReply?: boolean) {
+async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep, messages: string[], invitesReply?: boolean, learningFence?: GroupDraft['learningFence'], learningQuestion?: GroupDraft['learningQuestion']) {
   for (let index = 1; index < messages.length; index++) {
     await step.sleep(`group-message-pause-${index}`, messageDelay(messages[index]));
     const id = `${job.turnID}/part/${index}`;
@@ -107,11 +120,12 @@ async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep,
         JOIN group_message source ON source.id = r.source_id
         JOIN group_message previous ON previous.id = ?8 AND previous.group_id = r.group_id
         WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
-          AND ${publicationAccess(contributor)} AND ${groupEnergyAvailable('r')}
+          AND ${publicationAccess(contributor)} AND ${groupLearningUnchanged({ text: null, throughSequence: 0, learningFence })} AND ${groupEnergyAvailable('r')}
           AND NOT EXISTS (SELECT 1 FROM group_message newer WHERE newer.group_id = r.group_id AND newer.sequence > previous.sequence)
           AND ?6 = 0 ON CONFLICT(id) DO NOTHING`)
         .bind(job.turnID, job.attempt, messages[index], Date.now(), contributor ? 1 : 0, 0, id, previousID),
         ...(invitesReply === false ? [closeTerminalContinuations(env.DB, id)] : []),
+        ...recordLearningQuestion(env.DB, 'group', job.turnID, learningQuestion, Date.now()),
       ]);
       return !!await env.DB.prepare('SELECT id FROM group_message WHERE id = ?').bind(id).first();
     });
@@ -268,7 +282,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
         });
         if (!preparation) { outcome = 'inactive'; break; }
         draft = 'draft' in preparation ? preparation.draft
-          : await completeGroupDraft(env, preparation.input, step, `group-draft-${review}`);
+          : { ...await completeGroupDraft(env, preparation.input, step, `group-draft-${review}`), learningFence: preparation.input.learningFence };
         const prepared = draft;
         const firstMessage = prepared.messages?.[0] ?? prepared.text;
         const single = (prepared.messages?.length ?? 1) <= 1;
@@ -296,7 +310,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
             try { await deliverGroupPush(env, job.turnID); }
             catch { console.error(JSON.stringify({ event: 'group_push_deferred' })); }
           });
-          await publishGroupMessages(env, job, step, prepared.messages, prepared.invitesReply);
+          await publishGroupMessages(env, job, step, prepared.messages, prepared.invitesReply, prepared.learningFence, prepared.learningQuestion);
           await step.do('group-complete-message-burst', async () => {
             await env.DB.prepare(`UPDATE group_reply SET status = 'complete'
               WHERE id = ?1 AND attempt = ?2 AND status = 'running'
@@ -338,6 +352,10 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
   const published = await step.do('group-has-publication', async () => !!await env.DB.prepare(
     'SELECT id FROM group_message WHERE id = ?').bind(job.turnID).first());
   if (published) await refreshSelfMemory(env, job, step, 'group-remember-self-reply');
+  try {
+    await step.do('group-review-conversation-learning', { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' },
+      () => learnFromReply(env, job.turnID, job.attempt, true));
+  } catch { console.error(JSON.stringify({ event: 'conversation_learning_deferred' })); }
   await step.do('group-release-attention', async () => {
     const task = await env.DB.prepare('SELECT group_id AS groupID FROM group_reply WHERE id = ?').bind(job.turnID).first<{ groupID: string }>();
     await env.DB.prepare(`UPDATE agent_presence SET status = 'online', expires_at = ?3

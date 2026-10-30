@@ -45,6 +45,7 @@ function canRemove(member: GroupMember) {
 }
 
 async function load() {
+  forgetConversationLearning(`groups/${id.value}`);
   await loadGroupDetails(id.value);
 }
 
@@ -132,6 +133,7 @@ onMounted(() => run(async () => {
             <AppIcon name="chat" />Discuss my private chats<span class="row-value">{{ sharingSummary }}</span>
           </button>
           <NuxtLink :to="`/groups/${id}/connections`" class="button-row"><AppIcon name="link" />Connections</NuxtLink>
+          <NuxtLink :to="`/groups/${id}/learning`" class="button-row"><AppIcon name="person" />Conversation learning</NuxtLink>
           <NuxtLink :to="`/groups/${id}/mini-apps`" class="button-row"><AppIcon name="grid" />Mini apps</NuxtLink>
           <NuxtLink :to="`/groups/${id}/tasks`" class="button-row"><AppIcon name="tasks" />Tasks</NuxtLink>
         </div>

@@ -890,3 +890,14 @@ for reproducible setup and rollback.
 ## Archive and clear
 
 Each member can Archive/Unarchive independently. The owner can Clear chat for everyone, keeping or deleting memory learned in the group. Membership, photo and archive preferences survive. [Chat lifecycle](chat-lifecycle.md) documents permissions, cascading work/media removal, history revisions, cache invalidation and pending real-device/cloud verification.
+
+## Conversation learning
+
+Each agent can learn about each human from that human’s direct messages and its own
+replies in this group. [Conversation learning](conversation-learning.md) never imports
+private interaction patterns or another audience’s questions. Group details on iOS
+and web show only the signed-in human’s profiles, with per-person disable/reset.
+Membership/consent changes and source deletion invalidate derived state. Questions
+remain optional contributions under existing reply/skip, energy and publication
+limits; this feature adds no group initiative. Migration 0067 is required; model
+quality and device behavior need functional validation.

@@ -46,6 +46,8 @@ struct GroupMembersView: View {
                 }
                 Section {
                     SheetRow(title: "Discuss my private chats", systemImage: "bubble.left.and.bubble.right", value: sharingSummary) { showingSharing = true }
+                    NavigationLink { ConversationLearningView(base: "groups/\(groupID)", cache: groups.conversations.learning.store(for: groupID)) }
+                        label: { Label("Conversation learning", systemImage: "lightbulb") }
                     NavigationLink { McpAccessView(path: "groups/\(groupID)/mcp", group: true, cache: contacts.mcpAccessSnapshots.store(for: "group:\(groupID)")) }
                         label: { Label("Connections", systemImage: "link") }
                     NavigationLink { MiniAppListView(base: "groups/\(groupID)") } label: { Label("Mini apps", systemImage: "square.grid.2x2") }
@@ -214,6 +216,7 @@ struct GroupMembersView: View {
             defer { busy = false }
             do {
                 _ = try await GroupService.data(groupID + (suffix.isEmpty ? "" : "/\(suffix)"), method: method, input: input, auth: auth)
+                groups.conversations.learning.remove(id: groupID)
                 if let sharing { store.updatePrivateSharing(agentID: sharing.0, enabled: sharing.1) }
                 store.invalidateDetails()
                 if close { groups.conversations.remove(id: groupID) }

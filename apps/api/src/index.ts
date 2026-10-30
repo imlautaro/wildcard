@@ -1,6 +1,7 @@
 // Initialize schema constructors before imports that transitively load auth or MCP.
 import './lib/schema-runtime';
 import { cleanResources } from './chat/cleanup';
+import { pruneLearning } from './chat/learning';
 import { dispatchTasks } from './tasks/dispatch';
 import { dispatchMonitors } from './monitors/dispatch';
 import { recoverContactGeneration } from './contacts/generation';
@@ -40,6 +41,7 @@ export default {
     ctx.waitUntil(recoverContactGeneration(env));
     ctx.waitUntil(cleanOAuthFlows(env));
     ctx.waitUntil(prunePersonalityEvents(env.DB));
+    ctx.waitUntil(pruneLearning(env.DB));
     ctx.waitUntil(cleanResources(env));
     ctx.waitUntil(cleanAttachments(env));
     ctx.waitUntil(dispatchSchedules(env));

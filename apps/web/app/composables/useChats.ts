@@ -282,6 +282,7 @@ function upsertContact(contact: Contact) {
 }
 
 function removeContact(id: string) {
+  forgetConversationLearning(`contacts/${id}`);
   generation += 1;
   clearPrivateImages(); clearVoiceAudio();
   forgetPersonality(id);
@@ -414,6 +415,7 @@ export function useChats() {
 }
 
 function purgeHistory(kind: 'contact' | 'group', id: string) {
+  forgetConversationLearning(`${kind === 'contact' ? 'contacts' : 'groups'}/${id}`);
   if (kind === 'contact') { forgetConversation(id); forgetPersonality(id); }
   else forgetGroup(id);
   readGuards.delete(`${kind}:${id}`);

@@ -1,4 +1,5 @@
 import { privateTaskAccess } from '../tasks/access';
+import { learnFromReply, recordLearningQuestion } from './learning';
 import { privateContact } from '../mcp/client';
 import { generatedImage } from '../photos/generation';
 import { contactModelAllowed } from './consent';
@@ -161,6 +162,10 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
     });
     await this.refreshMemory(env, job, step, 'remember-completed-turn', true);
     await this.refreshAgentMemory(env, job, step, 'remember-agent-self-reply');
+    try {
+      await step.do('review-conversation-learning', { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' },
+        () => learnFromReply(env, job.turnID, job.attempt, false));
+    } catch { console.error(JSON.stringify({ event: 'conversation_learning_deferred' })); }
     await step.do('release-attention', async () => { await releaseAttention(env, job); });
     await step.do('dispatch-group-results', async () => {
       try { await dispatchGroupRequests(env); }
@@ -252,6 +257,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         const interrupted = `EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = chat_turn.contact_id
           AND newer.user_id = chat_turn.user_id AND newer.sequence > chat_turn.sequence)`;
         const text = next.length ? next.map(message => message.text).join('\n\n') : null;
+        const learningUnchanged = `(?8 IS NULL OR EXISTS (SELECT 1 FROM contact c WHERE c.id = chat_turn.contact_id AND c.learning_revision = ?8))`;
         await env.DB.batch([
           ...(index === 0 ? [batchStatement(env, job)] : []),
           env.DB.prepare(`UPDATE chat_turn SET assistant_text = ?1, assistant_messages_json = ?5,
@@ -259,17 +265,20 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
             WHERE id = ?3 AND attempt = ?4 AND status = 'running'
             AND json_array_length(COALESCE(assistant_messages_json, '[]')) = ?7
             AND ${scheduleAllowed('chat_turn')} AND ${resultAllowed} AND ${workAllowed}
+            AND ${learningUnchanged}
             AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?3 AND attempt = ?4)
             ${index ? `AND NOT (${interrupted})` : ''}`)
-            .bind(text, now, job.turnID, job.attempt, JSON.stringify(next), index === messages.length - 1 || !messages.length ? 1 : 0, index),
+            .bind(text, now, job.turnID, job.attempt, JSON.stringify(next), index === messages.length - 1 || !messages.length ? 1 : 0, index, response?.learningRevision ?? null),
           // Stopped task generations have no reply. The schema requires text for
           // completion; end them as failed so publication retries cannot hold attention.
           env.DB.prepare(`UPDATE chat_turn SET status = CASE WHEN assistant_text IS NOT NULL THEN 'complete' ELSE 'failed' END,
-            error_code = CASE WHEN assistant_text IS NOT NULL THEN NULL WHEN task_id IS NOT NULL THEN 'GENERATION_INTERRUPTED' ELSE 'GROUP_REQUEST_CANCELLED' END, updated_at = ?1
+            error_code = CASE WHEN assistant_text IS NOT NULL THEN NULL WHEN task_id IS NOT NULL OR NOT (${learningUnchanged.replaceAll('?8', '?4')}) THEN 'GENERATION_INTERRUPTED' ELSE 'GROUP_REQUEST_CANCELLED' END, updated_at = ?1
             WHERE id = ?2 AND attempt = ?3 AND status = 'running'
             AND (NOT (${resultAllowed}) OR NOT (${scheduleAllowed('chat_turn')}) OR NOT (${workAllowed})
-              ${index ? `OR (${interrupted})` : ''})`).bind(now, job.turnID, job.attempt),
+              OR NOT (${learningUnchanged.replaceAll('?8', '?4')})
+              ${index ? `OR (${interrupted})` : ''})`).bind(now, job.turnID, job.attempt, response?.learningRevision ?? null),
           enqueueReply(env.DB, job.turnID, job.attempt, now),
+          ...recordLearningQuestion(env.DB, 'contact', job.turnID, response?.learningQuestion, now),
         ]);
         return (await activeTurn(env.DB, job))?.status === 'running';
       });

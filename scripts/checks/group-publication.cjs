@@ -66,6 +66,8 @@ function fixture() {
     scheduleTools: [], groupRetrievalTools: [],
     reactionTool: {function:{name:'react_to_message'}}, nativeTools: [], mcpTools: [], miniAppTools: [], miniAppInstruction: '',
     personalityContext: async () => '',
+    learningContext: async () => '', learningQuestionInstruction: '', parseLearningQuestion: () => null,
+    recordLearningQuestion: () => [], learnFromReply: async () => {},
     nativeActions: {}, remoteSettings: {}, miniApps: {}, personality: {},
     jobModel: async env => env.META_CHAT_MODEL, jobAccountID: async () => 'human', maintainAgentMemories: async () => {},
     fetch: async (url, request) => {

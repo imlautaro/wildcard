@@ -6,7 +6,7 @@ const { source } = require('./group-publication.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
-function fixture(version = 65) {
+function fixture(version = 67) {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
   const migrations = path.resolve(__dirname, '../../apps/api/migrations');
@@ -40,7 +40,7 @@ function fixture(version = 65) {
 }
 let checks = 0;
 const initialNow = Date.UTC(2026, 9, 28, 12);
-async function check(name, run, version = 65) {
+async function check(name, run, version = 67) {
   const f = fixture(version);
   let now = initialNow;
   const calls = [];
@@ -51,6 +51,7 @@ async function check(name, run, version = 65) {
     privateContact: async () => false,
     readPersonality: async () => ({personality:{enabled:false},revision:0}),
     personalityContext: async () => '', initiativeDelay: () => 30,
+    learningContext:async()=>'', learningQuestionInstruction:'', parseLearningQuestion:()=>null, recordLearningQuestion:()=>[],
     readMemories: async () => [], selectMemories: () => [], readAgentMemories: async () => [],
     rankMemories: async (_env, memories) => memories, expressionHabits: () => '', embodiedIdentityInstruction: '',
     messageDelay: () => '1 second',

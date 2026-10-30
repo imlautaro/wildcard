@@ -88,6 +88,8 @@ struct ContactEditorView: View {
                         ContactPersonalityView(contactID: contactID, cache: contacts.personalitySnapshot(id: contactID),
                                                draft: contacts.personalityDraft(id: contactID))
                     } label: { Label("Personality", systemImage: "person") }
+                    NavigationLink { ConversationLearningView(base: "contacts/\(contactID)", cache: contacts.learningSnapshots.store(for: contactID)) }
+                        label: { Label("Conversation learning", systemImage: "lightbulb") }
                     NavigationLink { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) }
                         label: { Label("Connections", systemImage: "link") }
                     NavigationLink { MiniAppListView(base: "contacts/\(contactID)") } label: { Label("Mini apps", systemImage: "square.grid.2x2") }

@@ -1,4 +1,5 @@
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
+import { learningRoutes } from '../chat/learning-routes';
 import { accountEnvironment } from '../lib/model-preference';
 import { reactionRoutes } from '../reactions/routes';
 import { groupQuotes, parseGroupReply } from '../replies/data';
@@ -502,6 +503,7 @@ groups.get('/:id/photos/:kind/:memberID', async (c) => {
 });
 groups.route('/:id/tasks', taskRoutes('group'));
 groups.route('/:id/documents', documentRoutes('group'));
+groups.route('/:id/learning', learningRoutes('group'));
 groups.route('/:id/mini-apps', miniAppRoutes('group'));
 groups.route('/:id', media);
 export default groups;

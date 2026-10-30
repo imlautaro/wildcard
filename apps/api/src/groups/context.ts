@@ -1,4 +1,5 @@
 import { embodiedIdentityInstruction } from '../personality/identity';
+import { learningContext, learningQuestionInstruction, parseLearningQuestion, type LearningQuestion } from '../chat/learning';
 import { eventTime, temporalContext, temporalInstruction } from '../chat/temporal';
 import { imageInstruction } from '../photos/generation';
 import type { Attachment } from '../chat/attachments';
@@ -29,8 +30,10 @@ import { documentContext, documentInstruction } from '../documents/tools';
 import { researchInstruction, taskResearchInstruction } from '../research/tools';
 import type { GroupJob } from './workflow';
 
-export type GroupDraft = { includeImage?: boolean; attachment?: Attachment | null; invitesReply?: boolean; replyToID?: string | null; messages?: string[]; text: string | null; throughSequence: number };
+export type GroupLearningFence = { person: number; audience: number };
+export type GroupDraft = { learningQuestion?: LearningQuestion | null; learningFence?: GroupLearningFence; includeImage?: boolean; attachment?: Attachment | null; invitesReply?: boolean; replyToID?: string | null; messages?: string[]; text: string | null; throughSequence: number };
 export type GroupInput = {
+  learningFence?: GroupLearningFence;
   messages: ModelMessage[];
   scope: GroupRetrievalScope & { groupID: string; reactionJob: GroupJob };
   attachment: { attachmentJSON: string | null; userText: string } | null;
@@ -48,6 +51,7 @@ export type GroupInput = {
 };
 export type GroupPreparation = { draft: GroupDraft } | { input: GroupInput };
 type GroupContextRow = {
+  learningRevision: number; groupLearningRevision: number;
   groupID: string; agentID: string; sourceID: string; sourceSequence: number; throughSequence: number;
   attachmentJSON: string | null; text: string; userID: string; sourceAgentID: string | null;
   opening: number; laterHuman: number; directed: number; requesterName: string; senderName: string; name: string; groupName: string;
@@ -90,6 +94,7 @@ function contextMessage({ attachmentJSON, replyToID, ...message }: GroupContextM
 export async function prepareGroupInput(env: Env, job: GroupJob, previous?: GroupDraft): Promise<GroupPreparation> {
   const contributor = env.META_CHAT_MODEL.includes('contributor') ? 1 : 0;
   const row = await env.DB.prepare(`SELECT r.group_id AS groupID, r.agent_id AS agentID, gm.id AS sourceID,
+    author.learning_revision AS learningRevision, g.learning_revision AS groupLearningRevision,
     gm.sequence AS sourceSequence, (SELECT COALESCE(MAX(sequence), 0) FROM group_message WHERE group_id = r.group_id) AS throughSequence,
     (gm.id = gm.exchange_id AND EXISTS (SELECT 1 FROM group_post post WHERE post.id = gm.id AND post.status = 'published')) AS opening,
     EXISTS (SELECT 1 FROM group_message newer WHERE newer.group_id = r.group_id
@@ -108,6 +113,9 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
       SELECT 1 FROM group_member WHERE group_id = r.group_id AND (?3 = 1 AND contributor_consent = 0))`)
     .bind(job.turnID, job.attempt, contributor).first<GroupContextRow>();
   if (!row) throw new Error('GROUP_UNAVAILABLE_OR_CONSENT_REQUIRED');
+  const learningFence = !row.sourceAgentID && !row.taskID
+    ? { person: row.learningRevision, audience: row.groupLearningRevision } : undefined;
+  if (previous?.learningFence && JSON.stringify(previous.learningFence) !== JSON.stringify(learningFence)) throw new Error('GROUP_LEARNING_CHANGED');
   const contact = await env.DB.prepare(`SELECT c.id, c.user_id AS userID, c.voice_messages_enabled AS voice FROM contact c JOIN contact_agent a ON a.id = c.agent_id
     WHERE a.id = ? AND c.user_id = a.owner_id AND a.memory_shared = 1`).bind(row.agentID).first<{ id: string; userID: string; voice: number }>();
   if (!contact) throw new Error('SHARED_MEMORY_CONSENT_REQUIRED');
@@ -185,6 +193,9 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
   const privateSources = await privateSharingSources(env.DB, row.groupID, row.agentID, !!contributor);
   const messages: ModelMessage[] = [
     { role: 'system', content: embodiedIdentityInstruction },
+    ...(!row.sourceAgentID && !row.taskID ? [{ role: 'system' as const, content: await learningContext(env,
+      { kind: 'group', id: row.groupID, agentID: row.agentID, userID: row.userID }, row.throughSequence + 1) }] : []),
+    { role: 'system', content: learningQuestionInstruction },
     { role: 'system', content: [temporalInstruction,
       'This is a group with potentially different local time zones. No recipient local zone is supplied; use UTC only to understand elapsed time, not to infer anyone’s morning or evening. Group silence does not establish that a particular member ignored you. Mention only loose ends visible in this group, never private read gaps or private conversations.',
       temporalContext({ now: Date.now(), arrivalAt: row.createdAt, timeZone: null,
@@ -239,6 +250,7 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
   const file = isFile(row.attachmentJSON) ? { attachmentJSON: row.attachmentJSON!, text: row.text, name: row.senderName }
     : history.find((message) => isFile(message.attachmentJSON));
   return { input: {
+    learningFence,
     messages,
     scope: { agentID: row.agentID, userID: row.userID, groupID: row.groupID,
       reactionJob: job, ...(connectorAccess ? { mcp: { id: job.turnID, attempt: job.attempt, contactID: contact.id,
@@ -259,7 +271,8 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
 
 export function groupDecisionFormat(input: GroupInput): Record<string, unknown> {
   return { type: 'json_schema', json_schema: { name: 'group_turn_decision', strict: true, schema: {
-    type: 'object', additionalProperties: false, required: ['action', 'messages', 'replyToID', 'invitesReply', 'includeImage'], properties: {
+    type: 'object', additionalProperties: false, required: ['action', 'messages', 'replyToID', 'invitesReply', 'includeImage', 'learningQuestion'], properties: {
+      learningQuestion: { type: ['object', 'null'], additionalProperties: false, required: ['key', 'quote'], properties: { key: { type: 'string' }, quote: { type: 'string' } } },
       includeImage: { type: 'boolean' }, invitesReply: { type: 'boolean' }, replyToID: { type: ['string', 'null'] }, action: { type: 'string', enum: input.allowedActions }, messages: { type: 'array', items: { type: 'string' }, maxItems: 8 },
     },
   } } };
@@ -276,7 +289,7 @@ export function parseGroupDecision(answer: string, input: GroupInput): GroupDraf
   try { decision = JSON.parse(answer); }
   catch { return invalid('invalid_json'); }
   if (!isRecord(decision) || typeof decision.action !== 'string'
-    || !Array.isArray(decision.messages) || Object.keys(decision).some(key => !['action', 'messages', 'replyToID', 'invitesReply', 'includeImage'].includes(key))) {
+    || !Array.isArray(decision.messages) || Object.keys(decision).some(key => !['action', 'messages', 'replyToID', 'invitesReply', 'includeImage', 'learningQuestion'].includes(key))) {
     return invalid('invalid_shape');
   }
   if (typeof decision.invitesReply !== 'boolean' || typeof decision.includeImage !== 'boolean') return invalid('invalid_shape');
@@ -287,6 +300,8 @@ export function parseGroupDecision(answer: string, input: GroupInput): GroupDraf
   const messages = validMessages(decision.messages) ? decision.messages.map(text => text.trim()) : [];
   if (!empty && !messages.length) return invalid('invalid_text');
   const text = messages.join('\n\n');
+  const learningQuestion = parseLearningQuestion(decision.learningQuestion, messages);
+  if (['skip', 'keep'].includes(decision.action) && learningQuestion) return invalid('invalid_shape');
   if (decision.action === 'skip' && input.openingReplyRequired) throw new Error('GROUP_OPENING_REPLY_REQUIRED');
   if (!input.allowedActions.includes(decision.action)) return invalid('invalid_action');
   if (decision.action === 'skip' && !text) return { text: null, throughSequence: input.throughSequence };
@@ -294,5 +309,5 @@ export function parseGroupDecision(answer: string, input: GroupInput): GroupDraf
   if (decision.action !== (input.previous ? 'revise' : 'reply') || !text || Array.from(text).length > 20_000) {
     return invalid('invalid_text');
   }
-  return { text, replyToID, includeImage: decision.includeImage, invitesReply: decision.invitesReply, messages: input.directed ? [text] : messages, throughSequence: input.throughSequence };
+  return { text, replyToID, learningQuestion, includeImage: decision.includeImage, invitesReply: decision.invitesReply, messages: input.directed ? [text] : messages, throughSequence: input.throughSequence };
 }

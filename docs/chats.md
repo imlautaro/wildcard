@@ -840,3 +840,13 @@ accounts. Very fast synthesis may complete between polling ticks.
 ## Clearing and archiving
 
 See [chat lifecycle](chat-lifecycle.md) for private history removal with optional memory retention, Archive/Unarchive, creator/member deletion, history revision fencing and retryable resource cleanup. Clear cancels chat-owned schedules and task/monitor work as well as replies.
+
+## Conversation learning
+
+Private replies use [conversation learning](conversation-learning.md) to apply grounded
+interaction observations, one small behavioral adjustment and optional contextual
+questions. Direct human exchanges periodically trigger silent durable reviews;
+schedules, task work and group-result delivery do not train them. Both clients offer
+inspection, disable and reset from contact details. Ordinary factual memory and the
+configured personality remain separate. Migration 0067 is required; model/device
+validation remains pending.

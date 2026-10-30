@@ -159,6 +159,7 @@ const voiceChoiceInfo = computed(() => `Accent applies to new messages for every
 
       <div class="group" style="margin-top: 20px">
         <NuxtLink :to="`/contacts/${id}/personality`" class="button-row"><AppIcon name="person" />Personality</NuxtLink>
+        <NuxtLink :to="`/contacts/${id}/learning`" class="button-row"><AppIcon name="person" />Conversation learning</NuxtLink>
         <NuxtLink :to="`/contacts/${id}/connections`" class="button-row"><AppIcon name="link" />Connections</NuxtLink>
         <NuxtLink :to="`/contacts/${id}/mini-apps`" class="button-row"><AppIcon name="grid" />Mini apps</NuxtLink>
         <NuxtLink :to="`/contacts/${id}/tasks`" class="button-row"><AppIcon name="tasks" />Tasks</NuxtLink>

@@ -1017,3 +1017,14 @@ which paints the row background behind sent text, attachment and voice bubbles.
 This web-only CSS correction changes no iOS behavior, API, migrations or cache
 policy. Verify private/group sent and pending messages in light/dark mode after
 release; static selector inspection does not establish rendered browser appearance.
+
+## Conversation learning
+
+Contact details and group details link to **Conversation learning**, backed by the
+same API as iOS. The screen shows only the current human’s per-agent observations,
+adjustments, optional questions, answers and source evidence, plus participation and
+reset controls. Learning does not enable spontaneous messaging. An eight-entry
+session cache retains empty/loaded content, deduplicates reads and revalidates after
+thirty seconds or explicit Refresh; mutations fence older reads. Clear, removal and
+account switching invalidate it. No disk storage or extra polling is introduced.
+See [behavior and limitations](conversation-learning.md) and [cache rules](caching.md#conversation-learning).

@@ -27,7 +27,7 @@ const DB = { prepare(query) { return { args: [], bind(...args) {this.args=args;r
  async all(){const [s,p]=this.exec();return {results:s.all(...p)};}};}};
 class Router { constructor(){this.handlers=new Map();} use(){return this;} route(){return this;} }
 for(const method of ['get','post','put','delete','patch']) Router.prototype[method]=function(p,f){this.handlers.set(method+' '+p,f);return this;};
-const context=vm.createContext({Hono:Router, media:{}, reactionRoutes:()=>({}), Date, JSON, Number, Array, String, Set,
+const context=vm.createContext({Hono:Router, media:{}, reactionRoutes:()=>({}), learningRoutes:()=>({}), Date, JSON, Number, Array, String, Set,
  groupQuotes:async()=>()=>null,
  publicAttachment:()=>null, admitAuthRequest:async()=>({allowed:true})});
 vm.runInContext(source('groups/receipts.ts'),context);
@@ -218,7 +218,7 @@ async function check(name,fn){await fn(); count++; console.log('PASS '+name);}
   } finally {f.sqlite.close();}
  });
  await check('private Home receipt fields follow the same latest turn as the preview',async()=>{
-  const priv=vm.createContext({Hono:Router,bodyLimit:()=>()=>{},chats:{},schedules:{},sharing:{},
+  const priv=vm.createContext({Hono:Router,bodyLimit:()=>()=>{},chats:{},schedules:{},sharing:{},learningRoutes:()=>({}),
    nativeActions:{},remoteSettings:{},miniApps:{},personality:{},
    plainMessageMarkdown:text=>text,
    totalUnreadReplies:async()=>0});

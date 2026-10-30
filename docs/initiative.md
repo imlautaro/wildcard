@@ -192,3 +192,13 @@ The six scenarios previously run for migration 0033 established the earlier
 cadence with a simulated model. They do not validate migration 0065, adaptive
 classification, current windows or current clients. Earlier live-model evaluations
 also predate this behavior. Preserve that distinction when reporting validation.
+
+## Conversation learning integration (migration 0067)
+
+The planner receives eligible [conversation learning](conversation-learning.md) from
+this private agent/human audience, including observed preferences, one behavioral
+adjustment and optional curiosity records. A curiosity alone cannot justify outreach
+or override a pause, task-only pattern, unanswered-message suppression, quiet hours,
+consent or budget. Actual question publication records an asked status atomically.
+Reset/disable advances an epoch that rejects stale initiative drafts. Initiative does
+not itself trigger a learning review or enable group initiative.

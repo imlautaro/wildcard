@@ -709,6 +709,7 @@ final class GroupConversationCache {
     @ObservationIgnored let media = NavigationSnapshotCache<ChatMediaPage>()
     /// Shared task boards; dropped with the group's conversation.
     @ObservationIgnored let tasks = NavigationSnapshotCache<TaskBoard>()
+    @ObservationIgnored let learning = NavigationSnapshotCache<ConversationLearningSnapshot>()
     @ObservationIgnored let documents = DocumentCaches()
     /// Shared group mini apps, keyed by `groups/<id>`; dropped with the group's conversation.
     @ObservationIgnored let miniApps = MiniAppStore()
@@ -734,6 +735,7 @@ final class GroupConversationCache {
     }
 
     func remove(id: String) {
+        learning.remove(id: id)
         lastAccess.removeValue(forKey: id)
         entries.removeValue(forKey: id)?.invalidate()
         media.forget(.group(id))

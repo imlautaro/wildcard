@@ -83,6 +83,7 @@ function receiptsFor(id: string): Receipts {
 }
 
 export function forgetGroup(id: string) {
+  forgetConversationLearning(`groups/${id}`);
   const removed = groups.get(id);
   if (removed) {
     clearReactionCache(removed.reactions); removed.snapshot = null; removed.revision += 1;
