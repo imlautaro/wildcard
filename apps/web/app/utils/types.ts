@@ -94,7 +94,7 @@ export type ChatTurn = {
   voice?: VoiceInfo | null;
 };
 
-export type Presence = { status: 'offline' | 'online' | 'typing'; isRecording?: boolean; lastSeenAt: number | null; expiresAt: number | null };
+export type Presence = { status: 'offline' | 'online' | 'typing'; isRecording?: boolean; isResearching?: boolean; lastSeenAt: number | null; expiresAt: number | null };
 export type ChatPage = { historyRevision?: number; presence: Presence | null; turns: ChatTurn[]; nextBefore: number | null };
 export type ChatSubmission = { turn: ChatTurn; presence: Presence | null };
 export type ChatReadState = { lastReadSequence: number; totalUnreadCount?: number | null; unreadCount: number };

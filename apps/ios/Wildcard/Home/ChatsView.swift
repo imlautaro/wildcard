@@ -299,7 +299,8 @@ private struct ChatListRow: View {
     @Environment(ContactsStore.self) private var contacts
 
     private var activity: String? {
-        contact.replyActivity == "recording" ? "Recording..." : contact.replyActivity == "typing" ? "Typing..." : nil
+        contact.replyActivity == "researching" ? "Researching..."
+            : contact.replyActivity == "recording" ? "Recording..." : contact.replyActivity == "typing" ? "Typing..." : nil
     }
     private var messagePreview: String {
         if contact.clearing == 1 { return "Cleaning up..." }

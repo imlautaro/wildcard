@@ -17,11 +17,16 @@ import { connectAgent, markRecording } from '../chat/presence';
 import { voiceRepliesAvailable } from '../voice/catalog';
 import { storedAttachment, type Attachment } from '../chat/attachments';
 import { speakMessage, transcribeVoice, voiceSuitable } from '../voice/speech';
+import { planRound } from './planning';
+import { earlierTurn, newerGroupMessage, setGroupPresence } from './presence';
+import { claimPublication, closeTerminalContinuations, publicationAccess, releasePublication } from './lane';
 
 export type GroupJob = { kind: 'group'; turnID: string; attempt: number };
 export async function dispatchGroup(env: Env, groupID: string) {
+  // A planned round runs its speakers concurrently (rank orders publication);
+  // keep in sync with the group admission bound in chat/dispatch.ts.
   const { results } = await env.DB.prepare(`SELECT agent_id AS id FROM group_reply WHERE group_id = ?
-    AND status IN ('queued', 'running') ORDER BY sequence LIMIT 2`).bind(groupID).all<{ id: string }>();
+    AND status IN ('queued', 'running') ORDER BY sequence LIMIT 4`).bind(groupID).all<{ id: string }>();
   // Admissions are atomic in dispatchAgent, including concurrent dispatch/recovery.
   await Promise.all(results.map(row => dispatchAgent(env, row.id)));
 }
@@ -31,50 +36,9 @@ export async function recoverGroups(env: Env) {
   for (const group of results) await dispatchGroup(env, group.id);
 }
 
-// The insert trigger offers other bots a turn. Close only opportunities created
-// by this terminal message, in the same transaction, before dispatch can see them.
-const closeTerminalContinuations = (db: D1Database, messageID: string) => db.prepare(`UPDATE group_reply SET status = 'complete'
-  WHERE source_id = ?1 AND status = 'queued'
-    AND EXISTS (SELECT 1 FROM group_message WHERE id = ?1 AND agent_id IS NOT NULL)`)
-  .bind(messageID);
-
 type PublishOutcome = 'published' | 'skipped' | 'changed' | 'inactive';
 
-async function claimPublication(env: Env, job: GroupJob) {
-  // A terminated/failed attempt must not strand the group's publication lane.
-  await env.DB.batch([
-    env.DB.prepare(`DELETE FROM group_publication WHERE group_id = (SELECT group_id FROM group_reply WHERE id = ?1)
-      AND NOT EXISTS (SELECT 1 FROM group_reply r JOIN agent_attention a ON a.turn_id = r.id AND a.attempt = r.attempt
-        WHERE r.id = group_publication.turn_id AND r.attempt = group_publication.attempt AND r.status = 'running')`)
-      .bind(job.turnID),
-    env.DB.prepare(`INSERT INTO group_publication(group_id, turn_id, attempt, acquired_at)
-      SELECT r.group_id, r.id, r.attempt, ?3 FROM group_reply r JOIN agent_attention a ON a.turn_id = r.id AND a.attempt = r.attempt
-      WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' ON CONFLICT DO NOTHING`)
-      .bind(job.turnID, job.attempt, Date.now()),
-  ]);
-  return !!await env.DB.prepare('SELECT 1 FROM group_publication WHERE turn_id = ? AND attempt = ?')
-    .bind(job.turnID, job.attempt).first();
-}
-
-async function releasePublication(env: Env, job: GroupJob) {
-  await env.DB.prepare('DELETE FROM group_publication WHERE turn_id = ? AND attempt = ?')
-    .bind(job.turnID, job.attempt).run();
-}
-
-// Recheck attention, source-author access, shared-agent consent and Contributor
-// eligibility at publication, not just before a potentially slow model request.
-const publicationAccess = (contributor: boolean) => `EXISTS (SELECT 1 FROM group_publication lane
-    WHERE lane.turn_id = r.id AND lane.attempt = r.attempt AND lane.group_id = r.group_id) AND EXISTS (SELECT 1 FROM agent_attention attention
-    WHERE attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt)
-  AND EXISTS (SELECT 1 FROM group_agent member WHERE member.group_id = r.group_id AND member.agent_id = r.agent_id)
-  AND ${groupSourceAccess('r', contributor)}
-  AND EXISTS (SELECT 1 FROM contact_agent agent JOIN contact owner_contact
-    ON owner_contact.agent_id = agent.id AND owner_contact.user_id = agent.owner_id
-    WHERE agent.id = r.agent_id AND agent.memory_shared = 1)
-  AND NOT EXISTS (SELECT 1 FROM group_member member WHERE member.group_id = r.group_id
-    AND ?5 = 1 AND member.contributor_consent = 0)`;
-const unchangedHistory = `NOT EXISTS (SELECT 1 FROM group_message newer
-  WHERE newer.group_id = r.group_id AND newer.sequence > ?6)`;
+const unchangedHistory = `NOT EXISTS (${newerGroupMessage('?6')})`;
 
 function groupLearningUnchanged(draft: GroupDraft) {
   const f = draft.learningFence;
@@ -115,7 +79,7 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
         OR (NOT (${groupEnergyAvailable('r')}))
         OR (?3 IS NULL AND ${access} AND ${unchangedHistory}))`).bind(...bindings, final ? 1 : 0),
     env.DB.prepare(`SELECT r.status, EXISTS (SELECT 1 FROM group_message WHERE id = r.id) AS published,
-      EXISTS (SELECT 1 FROM group_message newer WHERE newer.group_id = r.group_id AND newer.sequence > ?3) AS changed
+      EXISTS (${newerGroupMessage('?3')}) AS changed
       FROM group_reply r WHERE r.id = ?1 AND r.attempt = ?2`).bind(job.turnID, job.attempt, draft.throughSequence),
     ...(draft.invitesReply === false ? [closeTerminalContinuations(env.DB, job.turnID)] : []),
     ...recordLearningQuestion(env.DB, 'group', job.turnID, draft.learningQuestion, Date.now()),
@@ -257,18 +221,6 @@ function groupVoiceScope(env: Env, job: GroupJob) {
     .bind(job.turnID, job.attempt).first<{ agentID: string; groupID: string }>();
 }
 
-// Presence belongs to the current attempt and its exclusive attention claim.
-async function setGroupPresence(env: Env, job: GroupJob, status: 'online' | 'typing', throughSequence: number | null = null) {
-  const result = await env.DB.prepare(`UPDATE agent_presence SET status = ?3, recording_until = NULL, typing_contact_id = NULL, expires_at = ?4
-    WHERE agent_id IN (SELECT r.agent_id FROM group_reply r JOIN agent_attention attention
-      ON attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt
-      WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
-        AND (?5 IS NULL OR NOT EXISTS (SELECT 1 FROM group_message newer
-          WHERE newer.group_id = r.group_id AND newer.sequence > ?5)))`)
-    .bind(job.turnID, job.attempt, status, Date.now() + 900_000, throughSequence).run();
-  return result.meta.changes > 0;
-}
-
 export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep) {
   const model = await step.do('group-select-account-model', () => jobModel(bindings, job.turnID, true));
   const env: Env = { ...bindings, META_CHAT_MODEL: model };
@@ -297,7 +249,13 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
       await step.do('group-mark-read', () => markGroupRead(env, job, readers));
     }
     await listenGroup(env, job, step);
-    const canSpeak = await step.do('group-energy-admission', async () => {
+    // The round coordinator picks speakers; an unselected slot ends here quietly.
+    const slot = await planRound(env, job, step);
+    if (slot.kind === 'skip') {
+      await step.do('group-round-skip', () => env.DB.prepare(`UPDATE group_reply SET status = 'complete'
+        WHERE id = ? AND attempt = ? AND status = 'running'`).bind(job.turnID, job.attempt).run().then(() => true));
+    }
+    const canSpeak = slot.kind !== 'skip' && await step.do('group-energy-admission', async () => {
       const row = await env.DB.prepare(`UPDATE group_reply AS r SET status = 'complete'
         WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND NOT (${groupEnergyAvailable('r')})
         RETURNING id`).bind(job.turnID, job.attempt).first();
@@ -317,9 +275,13 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
           const task = await env.DB.prepare('SELECT status FROM group_reply WHERE id = ? AND attempt = ?')
             .bind(job.turnID, job.attempt).first<{ status: string }>();
           if (!task || task.status !== 'running') return null;
-          // Research and deciding whether to speak are not visible typing.
-          await setGroupPresence(env, job, 'online');
-          return prepareGroupInput(env, job, previous);
+          // Deciding whether to speak is not visible typing. A first planned
+          // speaker is answering, so it types while its reply is generated.
+          const typingSince = slot.kind === 'planned' && slot.rank === 1 && !previous
+            && await setGroupPresence(env, job, 'typing') ? Date.now() : null;
+          if (!typingSince) await setGroupPresence(env, job, 'online');
+          const prepared = await prepareGroupInput(env, job, previous);
+          return 'input' in prepared && typingSince ? { input: { ...prepared.input, typingSince } } : prepared;
         });
         if (!preparation) { outcome = 'inactive'; break; }
         let completed = 'draft' in preparation ? preparation.draft
@@ -331,7 +293,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
           for (let wait = 0; wait < 180; wait++) {
             ready = await step.do(`group-action-lane-${review}-${wait}`, async () => !await env.DB.prepare(`SELECT 1
               FROM group_reply current JOIN group_reply prior ON prior.group_id = current.group_id
-              WHERE current.id = ? AND prior.sequence < current.sequence
+              WHERE current.id = ? AND ${earlierTurn}
                 AND prior.status IN ('queued','running') LIMIT 1`).bind(job.turnID).first());
             if (ready) break;
             await step.sleep(`group-action-wait-${review}-${wait}`, '5 seconds');
@@ -343,6 +305,12 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
           if (completed.deferActions) throw new Error('GROUP_ACTION_LANE_CHANGED');
         }
         draft = { ...completed, ...('input' in preparation ? { learningFence: preparation.input.learningFence } : {}) };
+        // Later-ranked speakers of a planned round read this draft before deciding.
+        const readyDraft = draft;
+        await step.do(`group-draft-ready-${review}`, () => env.DB.prepare(`UPDATE group_reply SET draft_json = ?3, draft_ready_at = ?4
+          WHERE id = ?1 AND attempt = ?2 AND plan_rank IS NOT NULL`).bind(job.turnID, job.attempt,
+          JSON.stringify({ messages: readyDraft.messages ?? (readyDraft.text ? [readyDraft.text] : []),
+            contributor: env.META_CHAT_MODEL.includes('contributor') }), Date.now()).run().then(() => true));
         // Ready drafts acquire the publication lane in readiness order. The
         // other agent keeps preparing, but cannot invalidate this draft's review
         // or execute shared actions out of order. Human traffic can still interrupt.
@@ -357,8 +325,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
         }
         if (!publicationReady) throw new Error('GROUP_PUBLICATION_WAIT_EXPIRED');
         const stale = await step.do(`group-ready-history-${review}`, async () => !!await env.DB.prepare(`SELECT 1
-          FROM group_message WHERE group_id = (SELECT group_id FROM group_reply WHERE id = ?1)
-            AND sequence > ?2 LIMIT 1`).bind(job.turnID, draft!.throughSequence).first());
+          FROM group_reply r WHERE r.id = ?1 AND EXISTS (${newerGroupMessage('?2')})`).bind(job.turnID, draft!.throughSequence).first());
         if (stale) { outcome = 'changed'; continue; }
         const prepared = draft;
         const firstMessage = prepared.messages?.[0] ?? prepared.text;
@@ -369,13 +336,17 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
         if (firstMessage) {
           const recording = await step.do(`group-composition-mode-${review}`, async () =>
             !!(spoken && await groupVoiceScope(env, job) && await voiceRepliesAvailable(env)));
-          // A reply that will be spoken shows Recording from the start, never Typing first.
+          // Recording replaces Typing for a spoken reply (a first planned speaker
+          // already typed during generation).
           const typing = await step.do(`group-mark-typing-${review}`, async () => {
             const marked = await setGroupPresence(env, job, 'typing', prepared.throughSequence);
             if (marked && recording) await markRecording(env.DB, job.turnID, job.attempt);
             return marked;
           });
-          if (typing) await step.sleep(`group-first-message-pause-${review}`, recording ? recordingDelay(firstMessage) : messageDelay(firstMessage, job.turnID));
+          // Typing already visible during generation counts toward the pause.
+          if (typing) await pauseGroupUntil(step, `group-first-message-pause-${review}`, recording
+            ? Date.now() + recordingDelay(firstMessage)
+            : (prepared.typingSince ?? Date.now()) + messageDelay(firstMessage, job.turnID));
         }
         const voice = spoken && spokenText
           ? await step.do(`group-voice-message-${review}`, { retries: { limit: 0, delay: '1 second' }, timeout: '2 minutes' }, async () => {

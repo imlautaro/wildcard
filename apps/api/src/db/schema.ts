@@ -118,6 +118,8 @@ export const agentPresence = sqliteTable('agent_presence', {
   lastSeenAt: date('last_seen_at'),
   expiresAt: date('expires_at'),
   recordingUntil: date('recording_until'),
+  researchingUntil: date('researching_until'),
+  researchingTopic: text('researching_topic'),
   typingContactId: text('typing_contact_id').references(() => contact.id, { onDelete: 'set null' }),
 }, (table) => [index('agent_presence_expiry_idx').on(table.expiresAt),
   check('agent_presence_status', sql`${table.status} IN ('offline', 'online', 'typing')`)]);
@@ -399,6 +401,12 @@ export const groupReply = sqliteTable('group_reply', {
   attempt: integer('attempt').notNull().default(1),
   workflowId: text('workflow_id').notNull().unique(),
   createdAt: date('created_at').notNull(),
+  planRank: integer('plan_rank'),
+  planRole: text('plan_role'),
+  planAngle: text('plan_angle'),
+  planTools: integer('plan_tools').notNull().default(1),
+  draftJson: text('draft_json'),
+  draftReadyAt: date('draft_ready_at'),
 }, (t) => [foreignKey({ columns: [t.groupId, t.agentId], foreignColumns: [groupAgent.groupId, groupAgent.agentId] }).onDelete('cascade'),
   uniqueIndex('group_reply_source_agent_idx').on(t.sourceId, t.agentId), index('group_reply_pending_idx').on(t.status, t.createdAt, t.sequence),
   check('group_reply_status', sql`${t.status} IN ('queued', 'running', 'complete', 'failed')`)]);

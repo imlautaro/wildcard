@@ -5,7 +5,7 @@ import { parsePrivateReply, privateQuotes, privateTarget } from '../replies/data
 import { mediaPage, parseAttachment, sameAttachment, storedAttachment, type Attachment } from '../chat/attachments';
 import { contactModelAllowed } from '../chat/consent';
 import { validTimeZone } from '../schedules/data';
-import { readPresence } from '../chat/presence';
+import { lingerInChat, readPresence } from '../chat/presence';
 import { totalUnreadReplies } from '../lib/unread';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -93,8 +93,11 @@ chats.post('/activity', bodyLimit({ maxSize: 1024,
 });
 chats.get('/turns', async (c) => {
   const epoch = await c.env.DB.prepare('SELECT history_revision AS value FROM contact WHERE id=?').bind(c.get('contactID')).first<{value:number}>();
-  const presence = await readPresence(c.env.DB, c.get('contactID'), c.get('owner'));
   const before = c.req.query('before');
+  // Only the visible chat polls its latest page; that poll keeps an open visit
+  // and an ongoing conversation's contact online (chat/presence.ts).
+  if (before === undefined) await c.env.DB.batch(lingerInChat(c.env.DB, c.get('contactID'), c.get('owner')));
+  const presence = await readPresence(c.env.DB, c.get('contactID'), c.get('owner'));
   if (before !== undefined && (!/^\d{1,16}$/.test(before) || !Number.isSafeInteger(Number(before)) || Number(before) < 1)) {
     return c.json({ error: 'Invalid cursor' }, 400);
   }

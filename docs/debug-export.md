@@ -71,3 +71,7 @@ that accounts cannot export each other's private conversations. Check cancellati
 navigation/reopen, failed/offline requests and retry, the size-limit error, group
 removal/history clear during export, session expiry and account switching. Confirm
 normal page caches survive export failures and no download occurs after cancel.
+
+Since migration 0071 the export also includes each group reply's plan (`plan_rank`,
+`plan_role`, `plan_angle`, `plan_tools`, `draft_ready_at`) and the `group_round`
+coordinator rows, so a report shows who was chosen to speak and why others stayed silent.

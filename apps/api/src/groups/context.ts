@@ -33,10 +33,14 @@ import { documentContext, documentInstruction } from '../documents/tools';
 import { researchInstruction, taskResearchInstruction } from '../research/tools';
 import { recentResearchContext } from '../research/context';
 import type { GroupJob } from './workflow';
+import { foldedHumanMessages, type RoundRole } from './planning';
 
 export type GroupLearningFence = { person: number; audience: number };
-export type GroupDraft = { responseRequired?: boolean; deferActions?: boolean; learningQuestion?: LearningQuestion | null; learningFence?: GroupLearningFence; includeImage?: boolean; attachment?: Attachment | null; invitesReply?: boolean; replyToID?: string | null; messages?: string[]; text: string | null; throughSequence: number };
+export type GroupDraft = { responseRequired?: boolean; deferActions?: boolean; learningQuestion?: LearningQuestion | null; learningFence?: GroupLearningFence; includeImage?: boolean; attachment?: Attachment | null; invitesReply?: boolean; replyToID?: string | null; messages?: string[]; text: string | null; throughSequence: number; typingSince?: number | null };
+export type GroupPlan = { rank: number; size: number; role: RoundRole; angle: string; tools: boolean; humanTrigger: boolean };
 export type GroupInput = {
+  plan?: GroupPlan;
+  typingSince?: number;
   conversationDirection?: string;
   memberNames?: string[];
   deliveryAudience?: 'group' | 'individual';
@@ -64,6 +68,7 @@ type GroupContextRow = {
   attachmentJSON: string | null; text: string; userID: string; sourceAgentID: string | null;
   opening: number; laterHuman: number; directed: number; requesterName: string; senderName: string; name: string; groupName: string;
   replyToID: string | null; taskID: string | null; createdAt: number;
+  planRank: number | null; planRole: RoundRole | null; planAngle: string | null; planTools: number; planSize: number;
 };
 type GroupContextMessage = {
   sequence: number; id: string; attachmentJSON: string | null; name: string;
@@ -109,7 +114,9 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
       AND newer.sequence > gm.sequence AND newer.user_id IS NOT NULL) AS laterHuman,
     gm.attachment_json AS attachmentJSON, gm.text, COALESCE(gm.user_id, gm.requester_id, request.requester_id) AS userID,
     (gm.request_id IS NOT NULL) AS directed, gm.agent_id AS sourceAgentID, requester.name AS requesterName, gm.sender_name AS senderName, a.name, g.name AS groupName,
-    gm.reply_to_id AS replyToID, gm.task_id AS taskID, gm.created_at AS createdAt
+    gm.reply_to_id AS replyToID, gm.task_id AS taskID, gm.created_at AS createdAt,
+    r.plan_rank AS planRank, r.plan_role AS planRole, r.plan_angle AS planAngle, r.plan_tools AS planTools,
+    (SELECT COUNT(*) FROM group_reply peer WHERE peer.source_id = r.source_id AND peer.plan_rank IS NOT NULL) AS planSize
     FROM group_reply r JOIN group_message gm ON gm.id = r.source_id JOIN contact_agent a ON a.id = r.agent_id
     JOIN chat_group g ON g.id = r.group_id JOIN agent_attention attention ON attention.turn_id = r.id AND attention.attempt = r.attempt
     LEFT JOIN group_request request ON request.id = gm.request_id
@@ -153,7 +160,11 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
   const pageChanges = workTask && (await env.DB.prepare('SELECT reason FROM task_work WHERE id = ?').bind(row.sourceID).first<{ reason: string }>())?.reason === 'monitor'
     ? await monitorChanges(env.DB, workTask.task.id, row.sourceID) : null;
   const taskReplyRequired = !!workTask && !previous && !row.laterHuman;
-  const replyRequired = openingReplyRequired || taskReplyRequired || !!(previous?.responseRequired && !row.laterHuman) || !!row.directed;
+  const plan: GroupPlan | undefined = row.planRank === null ? undefined : { rank: row.planRank, size: row.planSize,
+    role: row.planRole ?? 'answer', angle: row.planAngle ?? '', tools: !!row.planTools, humanTrigger: !row.sourceAgentID };
+  // The coordinator chose the first speaker of a human round to answer it.
+  const plannedAnswer = !!plan && plan.rank === 1 && plan.humanTrigger && !row.laterHuman;
+  const replyRequired = openingReplyRequired || taskReplyRequired || plannedAnswer || !!(previous?.responseRequired && !row.laterHuman) || !!row.directed;
   const allowedActions = previous
     ? (replyRequired ? (previous.text === null ? ['revise'] : ['keep', 'revise']) : ['keep', 'revise', 'skip'])
     : (replyRequired ? ['reply'] : ['reply', 'skip']);
@@ -217,6 +228,11 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
       : appraisal.engagement === 'self' && appraisal.replyTargets.length ? 'individual' as const : undefined
     : undefined;
   const privateSources = await privateSharingSources(env.DB, row.groupID, row.agentID, !!contributor);
+  const folded = plan?.humanTrigger ? await foldedHumanMessages(env.DB, row.groupID, row.sourceSequence, !!contributor) : [];
+  const { results: researching } = await env.DB.prepare(`SELECT a.name, p.researching_topic AS topic FROM group_agent ga
+    JOIN contact_agent a ON a.id = ga.agent_id JOIN agent_presence p ON p.agent_id = a.id
+    WHERE ga.group_id = ?1 AND ga.agent_id != ?2 AND p.researching_until > ?3`).bind(row.groupID, row.agentID, Date.now())
+    .all<{ name: string; topic: string | null }>();
   const messages: ModelMessage[] = [
     { role: 'system', content: embodiedIdentityInstruction },
     ...(!row.sourceAgentID && !row.taskID ? [{ role: 'system' as const, content: await learningContext(env,
@@ -241,6 +257,8 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
       own: history.filter(m => m.agentID === row.agentID).map(m => m.text), names: members.filter(m => m.id !== row.agentID).map(m => m.name) }) },
     { role: 'system', content: conversationDirection },
     ...(researchContext ? [{ role: 'system' as const, content: researchContext }] : []),
+    ...(plan ? [{ role: 'system' as const, content: roundPlanInstruction(plan) }] : []),
+    ...(researching.length ? [{ role: 'system' as const, content: `Members researching right now (untrusted labels): ${JSON.stringify(researching)}. Do not start the same research or answer as if their findings were known; you may mention that they are looking into it.` }] : []),
     { role: 'system', content: `You are ${JSON.stringify(row.name)}, agent ID ${JSON.stringify(row.agentID)}, participating in a group chat named ${JSON.stringify(row.groupName)}.
 ${profilePhotoInstruction}
 ${spoken}
@@ -269,7 +287,7 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
       participation: groupParticipation(members, [...history, ...roundReplies], row.sourceSequence),
       selfProfile: JSON.parse(agentMemoryContext(selfMemories, row.text)), sharedMemories: memories,
       tasks: taskContext(lists), documents,
-      round: { openingReplyRequired, taskReplyRequired, trigger: { id: row.sourceID, sequence: row.sourceSequence, userID: row.sourceAgentID ? null : row.userID,
+      round: { openingReplyRequired, taskReplyRequired, ...(folded.length ? { foldedEarlierMessages: folded } : {}), trigger: { id: row.sourceID, sequence: row.sourceSequence, userID: row.sourceAgentID ? null : row.userID,
         agentID: row.sourceAgentID, directed: !!row.directed, requestedBy: row.sourceAgentID ? { userID: row.userID, name: row.requesterName } : null,
         name: row.senderName, text: row.text, createdAt: row.createdAt, sentTime: eventTime({ messageID: row.sourceID, at: row.createdAt }, null), ...(workTask ? { task: { taskID: workTask.task.id, listID: workTask.list.id, list: workTask.list.title, title: workTask.task.title, notes: workTask.task.notes, status: workTask.task.status, result: workTask.task.result, nextStep: workTask.task.nextStep, evidence: workTask.task.evidence, workUsed: workTask.task.workUsed, workLimit: workTask.task.workLimit, researchQuery: workTask.task.researchQuery, researchUsed: workTask.task.researchUsed, researchStatus: workTask.task.researchStatus, documentID: workTask.task.documentID, documentTitle: workTask.task.documentTitle, reviewFeedback: workTask.task.reviewFeedback, reviewRounds: workTask.task.reviewRounds,
           monitor: workTask.task.monitorURL ? { url: workTask.task.monitorURL, keywords: workTask.task.monitorKeywords, changeTurnsUsed: workTask.task.monitorTurnsUsed, changeTurnLimit: workTask.task.monitorTurnLimit } : null,
@@ -286,6 +304,7 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
   const file = isFile(row.attachmentJSON) ? { attachmentJSON: row.attachmentJSON!, text: row.text, name: row.senderName }
     : history.find((message) => isFile(message.attachmentJSON));
   return { input: {
+    ...(plan ? { plan } : {}),
     conversationDirection,
     memberNames: members.map(m => m.name),
     deliveryAudience,
@@ -307,6 +326,18 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
     throughSequence: row.throughSequence, directed: !!row.directed, openingReplyRequired: replyRequired, allowedActions, previous: previous ?? null,
     contextMessageIDs: [...new Set([row.sourceID, ...history.map(m => m.id), ...roundReplies.map(m => m.id)])],
   } };
+}
+
+// The coordinator's choice is guidance for this speaker, not a script.
+function roundPlanInstruction(plan: GroupPlan) {
+  const role = plan.role === 'spark'
+    ? 'Your part is to keep the conversation alive: add a hook in your own character, such as a concrete opinion, a small detail from your persona, a playful proposal or a specific question to another member or the group. Set invitesReply true when your message offers something to engage with.'
+    : plan.role === 'research'
+      ? 'Your part is to look this up with research_web before answering, then share what you found in your own voice.'
+      : plan.role === 'react'
+        ? 'Your part is a brief reaction that adds something new, not a repeat of what others said.'
+        : 'Your part is to answer the trigger directly and usefully.';
+  return `Round plan: the group coordinator chose you as speaker ${plan.rank} of ${plan.size} for this trigger. ${role} Internal angle: ${JSON.stringify(plan.angle)}. ${plan.rank > 1 ? 'Earlier speakers of this round go first; their replies (published or about to be) appear as earlierRepliesInRound or peerRepliesThisRound. Build on them; never repeat them. Skip only if they already covered your part.' : 'You speak first in this round.'} ${plan.humanTrigger && plan.rank === 1 ? 'Answer every foldedEarlierMessages item too if still unanswered.' : ''} Never mention the plan, coordinator, rank or angle.`;
 }
 
 export function groupDecisionFormat(input: GroupInput): Record<string, unknown> {

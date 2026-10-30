@@ -5,6 +5,7 @@ import { documentLimits } from '../documents/data';
 import { researchLimits, researchWeb, type ResearchResult } from './model';
 
 export const researchInstruction = 'For a current human request needing public web information, use research_web with a focused, self-contained public question. '
+  + 'Its announcement is a short message in your own voice and the conversation language, sent before the search starts, telling them you are looking it up now (for example that you will check and be right back). Research takes a little while; the announcement keeps them informed. After the results arrive, never repeat the announcement: continue with what you found. '
   + 'Research can fill a knowledge gap so you can follow what the person is talking about, understand an unfamiliar reference or continue a discussion. By default use delivery conversation: learn from the returned public evidence and continue naturally in your own voice, with only the useful detail and appropriate source links or uncertainty. When they want you to catch up on a topic, acknowledge what you understand and pick up their point rather than turning it into an unsolicited lesson. Asking you to look into something or asking what it is does not by itself request a report, document or formal summary. Do not announce a deliverable or paste the internal research briefing into chat. '
   + 'Use delivery document only when the current human request actually asks for a report, saved document, shareable write-up or other lasting research deliverable. Then mention only the confirmed document briefly. Do not create_document to turn conversational background research into an unsolicited artifact. Reuse relevant supplied earlier research evidence and its limitations rather than researching the same basics again. Research is conversation-local evidence, not a claim of permanent learning or facts about the human. '
   + 'Never include secrets, connector data, private messages, shared memories or personal details in a search query; ask for a public formulation when needed. '
@@ -14,8 +15,9 @@ export const researchInstruction = 'For a current human request needing public w
 
 export const researchTool: ModelTool = { type: 'function', function: {
   name: 'research_web', description: 'Look up focused public information to understand a topic and continue the conversation. Default delivery conversation returns evidence without a document. Use delivery document only for a human-requested lasting report. One request per human message, shared across group contacts. Never send private or connector data.',
-  parameters: { type: 'object', additionalProperties: false, required: ['query', 'title'], properties: {
+  parameters: { type: 'object', additionalProperties: false, required: ['query', 'title', 'announcement'], properties: {
     query: { type: 'string', minLength: 1, maxLength: researchLimits.query },
+    announcement: { type: 'string', minLength: 1, maxLength: 300, description: 'Short message in your own voice, sent right away before searching, saying you are looking it up now.' },
     title: { type: 'string', minLength: 1, maxLength: documentLimits.title, description: 'Internal topic label for conversational research; document title only when a lasting report is requested.' },
     delivery: { type: 'string', enum: ['conversation', 'document'], description: 'Default conversation. Document requires a requested lasting research deliverable; merely asking to research or learn about something is not that request.' },
   } },
@@ -32,7 +34,10 @@ export const taskResearchTool: ModelTool = { type: 'function', function: {
   } },
 } };
 
-export type ResearchScope = { turnID: string; attempt: number; agentID: string; userID: string; contributor: boolean }
+// announce publishes the contact's short "looking it up" message before a new
+// paid search starts; it returns whether the message was delivered.
+export type ResearchScope = { turnID: string; attempt: number; agentID: string; userID: string; contributor: boolean;
+  announce?: (text: string) => Promise<boolean> }
   & ({ kind: 'contact'; contactID: string } | { kind: 'group'; groupID: string });
 
 // This guard is also embedded in reservation/publication statements: a cached
@@ -83,6 +88,21 @@ type ResearchAdmission = { sourceID: string; taskID: string | null; taskGenerati
 const failure = (code: string, message: string) => JSON.stringify({ researched: false, code, error: message });
 
 export async function executeResearchTool(env: Env, scope: ResearchScope, args: Record<string, unknown>): Promise<string> {
+  const state = { announced: false };
+  const outcome = await researchToolResult(env, scope, args, () => { state.announced = true; });
+  if (!state.announced) return outcome;
+  const result = JSON.parse(outcome) as Record<string, unknown>;
+  return JSON.stringify({ ...result, announcementDelivered: true,
+    announcementNote: 'Your announcement was already sent to the conversation before searching. Do not repeat or rephrase it; continue directly with the outcome.' });
+}
+
+// Researching overlays the contact's presence while a search runs (bounded).
+export function markResearching(db: D1Database, agentID: string, topic: string | null) {
+  return db.prepare(`UPDATE agent_presence SET researching_until = ?2, researching_topic = ?3 WHERE agent_id = ?1`)
+    .bind(agentID, topic ? Date.now() + researchLimits.timeoutMs + 30_000 : null, topic ? topic.slice(0, 200) : null).run();
+}
+
+async function researchToolResult(env: Env, scope: ResearchScope, args: Record<string, unknown>, onAnnounced: () => void): Promise<string> {
   if (env.WEB_RESEARCH_ENABLED !== 'true') return failure('DISABLED', 'Web research is currently disabled.');
   const access = researchAccess(scope);
   const active = await env.DB.prepare(access.sql).bind(...access.binds).first<ResearchAdmission>();
@@ -91,7 +111,9 @@ export async function executeResearchTool(env: Env, scope: ResearchScope, args: 
   // is an exact human-supplied query, not permission to export task/chat context.
   const query = active.taskID ? active.publicQuery : args.query;
   const delivery = active.taskID ? 'document' : args.delivery ?? 'conversation';
-  const keys = active.taskID ? ['title'] : ['query', 'title', 'delivery'];
+  const keys = active.taskID ? ['title'] : ['query', 'title', 'delivery', 'announcement'];
+  const announcement = typeof args.announcement === 'string' && args.announcement.trim() && !args.announcement.includes('\0')
+    ? args.announcement.trim().slice(0, 300) : null;
   if (Object.keys(args).some(key => !keys.includes(key)) || typeof query !== 'string' || typeof args.title !== 'string'
     || !query.trim() || query.trim().length > researchLimits.query || !args.title.trim()
     || args.title.trim().length > documentLimits.title || query.includes('\0') || args.title.includes('\0')
@@ -139,8 +161,14 @@ export async function executeResearchTool(env: Env, scope: ResearchScope, args: 
         // No retry around this paid POST. A pending reservation means its outcome
         // may already be billed, even if the process died before saving the result.
         if (!await env.DB.prepare(access.sql).bind(...access.binds).first()) throw new Error('MODEL_RESEARCH_ACCESS_CHANGED');
+        // Tell the person first, then show Researching while the search runs.
+        if (announcement && scope.announce && !active.taskID) {
+          try { if (await scope.announce(announcement)) onAnnounced(); }
+          catch { console.error(JSON.stringify({ event: 'web_research_announcement_deferred' })); }
+        }
+        await markResearching(env.DB, scope.agentID, args.title.trim());
         const result = await researchWeb(env, query.trim(), model,
-          async () => Boolean(await env.DB.prepare(access.sql).bind(...access.binds).first()));
+          async () => Boolean(await env.DB.prepare(access.sql).bind(...access.binds).first())).finally(() => markResearching(env.DB, scope.agentID, null));
         const saved = await env.DB.prepare(`UPDATE web_research SET status = 'ready', result_json = ?
           WHERE id = ? AND status = 'pending' AND EXISTS (${access.sql})`)
           .bind(JSON.stringify(result), id, ...access.binds).run();

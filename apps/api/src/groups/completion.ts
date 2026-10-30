@@ -19,6 +19,8 @@ import { documentToolNames, documentTools, executeDocumentTool } from '../docume
 import { executeResearchTool, researchTool, taskResearchTool } from '../research/tools';
 import { executeGroupMiniAppTool, groupMiniAppTools } from '../miniapps/tools';
 import { messagePrivately, privateMessageTool } from './private-messages';
+import { earlierTurn, setGroupPresence } from './presence';
+import { announceGroupResearch } from './lane';
 
 // Bound cost and latency independently of catalog size. A sequential search,
 // schema lookup and execution must not compete for just two model rounds.
@@ -99,6 +101,7 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
     if (call.function.name === researchTool.function.name) return await executeResearchTool(env, {
       kind: 'group', groupID: input.scope.groupID, userID: input.scope.userID, agentID: input.scope.agentID,
       turnID: input.scope.reactionJob.turnID, attempt: input.scope.reactionJob.attempt, contributor: input.scope.contributor,
+      announce: text => announceGroupResearch(env, input.scope.reactionJob, text),
     }, args);
     if (input.scope.mcp && mcpTools.some(tool => tool.function.name === call.function.name)) {
       return await executeMcp(env, input.scope.mcp, call.function.name, args, slot);
@@ -130,9 +133,53 @@ async function executeTool(env: Env, input: GroupInput, call: ToolCall, slot: nu
   }
 }
 
+// A later planned speaker waits for earlier ranks' drafts (bounded), then reads
+// them as about-to-be-published context instead of repeating them.
+async function peerDrafts(env: Env, input: GroupInput, step: WorkflowStep, prefix: string) {
+  const job = input.scope.reactionJob;
+  for (let wait = 0; wait < 90; wait++) {
+    const pending = await step.do(`${prefix}-peer-wait-${wait}`, async () => !!await env.DB.prepare(`SELECT 1 FROM group_reply r
+      JOIN group_reply peer ON peer.source_id = r.source_id AND peer.plan_rank < r.plan_rank
+      WHERE r.id = ?1 AND peer.status IN ('queued', 'running') AND peer.draft_ready_at IS NULL LIMIT 1`).bind(job.turnID).first());
+    if (!pending) break;
+    await step.sleep(`${prefix}-peer-pause-${wait}`, 1000);
+  }
+  return step.do(`${prefix}-peer-drafts`, async () => {
+    // Unpublished drafts pass the same author and Contributor filter as messages.
+    const { results } = await env.DB.prepare(`SELECT a.id AS agentID, a.name, peer.draft_json AS draft,
+        EXISTS (SELECT 1 FROM group_message gm WHERE gm.id = peer.id) AS published
+      FROM group_reply r JOIN group_reply peer ON peer.source_id = r.source_id AND peer.plan_rank < r.plan_rank
+      JOIN contact_agent a ON a.id = peer.agent_id JOIN group_agent ga ON ga.group_id = r.group_id AND ga.agent_id = peer.agent_id
+      WHERE r.id = ?1 AND peer.draft_json IS NOT NULL AND peer.status != 'failed' ORDER BY peer.plan_rank`)
+      .bind(job.turnID).all<{ agentID: string; name: string; draft: string; published: number }>();
+    return results.flatMap(row => {
+      const draft = JSON.parse(row.draft) as { messages?: unknown; contributor?: unknown };
+      const texts = Array.isArray(draft.messages) ? draft.messages.filter((text): text is string => typeof text === 'string') : [];
+      // This speaker's input was built before earlier ranks published, so
+      // published peers are included too; they are not in its history yet.
+      if (!texts.length || (input.scope.contributor && draft.contributor !== true)) return [];
+      return [{ agentID: row.agentID, name: row.name, messages: texts,
+        status: row.published ? 'already published' : 'about to be published before you' }];
+    });
+  });
+}
+
 // This orchestrator runs OUTSIDE step.do. Each model call and tool result is
 // checkpointed independently; all replay state is rebuilt from step returns.
 export async function completeGroupDraft(env: Env, input: GroupInput, step: WorkflowStep, prefix: string): Promise<GroupDraft> {
+  let typingSince = input.typingSince ?? null;
+  const draft = await completeDraft(env, input, step, prefix, async (messages) => {
+    if (!input.plan || input.plan.rank === 1 || input.previous) return;
+    const peers = await peerDrafts(env, input, step, prefix);
+    if (peers.length) messages.push({ role: 'user', content: JSON.stringify({ peerRepliesThisRound: peers }) });
+    typingSince = await step.do(`${prefix}-peer-typing`, async () =>
+      await setGroupPresence(env, input.scope.reactionJob, 'typing') ? Date.now() : null);
+  });
+  return typingSince ? { ...draft, typingSince } : draft;
+}
+
+async function completeDraft(env: Env, input: GroupInput, step: WorkflowStep, prefix: string,
+  beforeDecision: (messages: ModelMessage[]) => Promise<void>): Promise<GroupDraft> {
   if (!input.previous) {
     try {
       await step.do(`${prefix}-index-image`, { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' },
@@ -155,7 +202,9 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
     processedResults = [];
   };
   try {
-    gathering: for (let round = 0; !input.previous && round < toolRoundLimit && executions < executionLimit; round++) {
+    // A planned conversational turn needs no tools: go straight to its decision.
+    const gather = !input.previous && !(input.plan && !input.plan.tools);
+    gathering: for (let round = 0; gather && round < toolRoundLimit && executions < executionLimit; round++) {
       const admitted = await step.do(`${prefix}-admit-${round}`, async () => Date.now() < deadline);
       if (!admitted) break;
       const answer = await step.do(`${prefix}-explore-${round}`, modelStep, async () => {
@@ -213,7 +262,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
           if (!readOnly) {
             const blocked = await step.do(`${prefix}-action-admission-${round}-${index}`, async () => !!await env.DB.prepare(`SELECT 1
               FROM group_reply current JOIN group_reply prior ON prior.group_id = current.group_id
-              WHERE current.id = ? AND prior.sequence < current.sequence
+              WHERE current.id = ? AND ${earlierTurn}
                 AND prior.status IN ('queued','running') LIMIT 1`).bind(input.scope.reactionJob.turnID).first());
             if (blocked) return { text: null, throughSequence: input.throughSequence, deferActions: true };
           }
@@ -233,6 +282,7 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
         messages.push({ role: 'tool', tool_call_id: call.id, content });
       }
     }
+    await beforeDecision(messages);
     for (let attempt = 0; attempt < 2; attempt++) {
       const result = await step.do(`${prefix}-decision-${attempt}`, modelStep, async () => {
         await assertCurrentAccess(env, input);
@@ -264,7 +314,8 @@ export async function completeGroupDraft(env: Env, input: GroupInput, step: Work
       if ('recoveryRequired' in result && result.recoveryRequired) throw new NonRetryableError(result.code!);
       if (result.draft) {
         const draft = result.draft;
-        if (!needsDeliveryReview(draft.text, input.memberNames)) return draft;
+        // A planned speaker already has a distinct angle; review only vocatives.
+        if (!needsDeliveryReview(input.plan ? draft.text?.replace(/[?？]/gu, '') ?? null : draft.text, input.memberNames)) return draft;
         // One optional wording review, no tools, action replay or new opportunity
         // to speak. Publication still checks access and the history watermark.
         try {

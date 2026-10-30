@@ -908,7 +908,7 @@ Like iOS, group bubbles and the member subtitle use the snapshot's explicit
 `replies[].isTyping === 1` only for running replies. Queued work, research and
 silent decisions show no typing. A completed nonempty draft starts a durable
 length-aware typing wait before each text publication, matching iOS. Every part
-has its own composition budget, capped at 60 seconds; later parts cannot reuse the
+has its own composition budget, capped at 15 seconds; later parts cannot reuse the
 first part's generation time. Short replies stay as one bubble unless context
 justifies a burst; longer replies may split into a few complete ideas for readability.
 Voice preparation keeps its short Recording lead-in. See
@@ -1149,7 +1149,7 @@ remain to be verified with fictional conversations.
 
 ## Group preparation and message information
 
-The shared API admits two group preparers, coordinates publication and enforces
+The shared API admits two group preparers (four since migration 0071), coordinates publication and enforces
 directed participation as described in [groups](groups.md#concurrent-preparation-and-directed-participation-migration-0070).
 Both iOS and web use this behavior. Web right click or long press opens the message
 menu with **Message info**, including first read times and recipients still unread.
@@ -1186,3 +1186,15 @@ before saving. It bypasses navigation caches and clears temporary data on cancel
 unmount or session reset. See [debug export](debug-export.md) for contents, limitations,
 setup and pending browser verification. iOS has no export UI in this explicitly
 web-scoped feature.
+
+## Researching indicator and responsive replies (2026-10-30)
+
+Both clients show **Researching...** when private presence has `isResearching`
+(header and incoming indicator) and when a contact list row or group reply has
+`replyActivity: "researching"` (list preview, web group subtitle and the incoming
+indicator on both clients). The announcement bubble and offset reply bubbles use the
+existing successive-message rendering; no client cache changes. Faster reads in an
+open chat, lingering presence, Typing during inference for voice-capable contacts,
+the 15-second typing cap and group round planning are server-side and apply to both
+clients. See [chats](chats.md#responsive-orchestration-2026-10-30) and
+[groups](groups.md#round-coordinator-migration-0071).

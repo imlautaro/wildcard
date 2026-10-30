@@ -14,12 +14,13 @@ latency ceiling, not a target.
 ## Delivery
 
 The existing ChatWorkflow checkpoints the prepared response and publishes each
-part separately. Every text part has a composition budget of 1.1 seconds plus its
-Unicode character count at 8–12 characters per second, with 0.45 seconds per blank-line
-paragraph break (at most four). The total is capped at 60 seconds per message.
+part separately. Every text part has a composition budget of 0.9 seconds plus its
+Unicode character count at 12–16 characters per second, with 0.3 seconds per blank-line
+paragraph break (at most four). The total is capped at 15 seconds per message
+(60 seconds before 2026-10-30, which made long answers wait minutes).
 The turn ID deterministically varies the speed; replay keeps the same choice.
-For example, 100 characters take about 9–14 seconds, 300 about 26–39 seconds,
-and 600 about 51–60 seconds, before scheduling/network overhead. These are product
+For example, 100 characters take about 7–9 seconds and 300 or more reach the
+15-second cap, before scheduling/network overhead. These are product
 pacing choices, not measurements of human typing speed.
 
 Only the first private text part credits time already spent visibly typing during

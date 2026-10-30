@@ -322,8 +322,10 @@ The Workflow waits one second durably (three seconds before migration 0045) befo
 marking the turn running and atomically connecting the agent as Online. Already-online contacts stay connected;
 queue acceptance does not extend their lease. This wait also applies to retries
 and continues with iOS closed.
-The Workflow marks the message read, maintains prior memories, waits a short
-reading pause and sets Typing immediately before reply generation. Saving a reply or failure atomically sets Online with a 30-second
+The Workflow marks the message read, maintains prior memories and starts reply
+generation at once; the short reading pause runs concurrently, and Typing starts
+when it ends while the model is still working (see
+[responsive orchestration](#responsive-orchestration-2026-10-30)). Saving a reply or failure atomically sets Online with a 30-second
 idle deadline. Workflow sleep/expiry and the existing minute Cron persist Offline
 and `lastSeenAt` equal to that deadline even if iOS is closed. Late expiry uses a
 conditional deadline predicate so it cannot disconnect a newer message. History
@@ -413,13 +415,13 @@ before Online, or Typing before Online and Read, from the server state.
 - Private chats: one second after attention is claimed the turn becomes `running`,
   which connects the agent. After another second `markRead` records `readAt` on the
   turn and its earlier batched messages, only while the agent is connected. Memory
-  maintenance and a reading pause (`readingDelay`, 0.4–2.5 seconds by length) follow;
-  `markTyping` then requires the stored `readAt`. A fast generation still shows
+  maintenance follows; generation then starts while the reading pause (`readingDelay`,
+  0.4–2.5 seconds by length) elapses, and `markTyping` requires the stored `readAt`. A fast generation still shows
   typing for at least the length-aware composition budget before the first text
   bubble, crediting generation time already spent typing. Each successive text
   message starts its own wait with Typing visible; recovery uses the same path.
-  Text budgets grow at 8–12 Unicode characters per second plus a small lead-in
-  and paragraph pauses, capped at 60 seconds per bubble. Voice retains a separate
+  Text budgets grow at 12–16 Unicode characters per second plus a small lead-in
+  and paragraph pauses, capped at 15 seconds per bubble. Voice retains a separate
   short Recording lead-in. See [successive messages](reply-messages.md) for details.
 - Opening a chat or editing a draft never connects the contact. Visit activity only
   paces replies and follow-ups (see [visiting a chat](#visiting-a-chat-and-composing-a-draft)).
@@ -817,12 +819,12 @@ chat. See [onboarding](onboarding.md) and [caching](caching.md).
 ## Reply activity indicators
 
 Private chat headers and incoming reply indicators show **Recording...** for a reply
-that will be a voice note, from the start of its composing pause through synthesis,
-and never **Typing...** first. When a contact's replies may be spoken (flag, provider
-key and opt-in), inference shows the contact online without an indicator, because
-the delivery format is unknown until the reply exists; afterwards it shows Typing...
-or Recording... for that message. Contacts without voice keep Typing... during
-inference. Group contacts already stay online during inference and now start with
+that will be a voice note, from the start of its composing pause through synthesis.
+Since 2026-10-30 every contact shows **Typing...** during inference, including
+contacts whose replies may be spoken: showing only Online after Read while the
+model worked looked like being ignored. Recording... replaces Typing once the
+spoken message is known. **Researching...** replaces both while a web search runs
+(`isResearching` on presence; older clients keep showing Typing...). Group contacts already stay online during inference and now start with
 Recording... when their single-message reply will be spoken. Groups label each responding contact separately.
 Text fallback restores typing, and a finished turn returns to the normal presence.
 Chat list second lines temporarily replace the last message with **Typing...** or
@@ -876,3 +878,32 @@ Scheduled/task replies and private initiative use the same style direction withi
 their existing permissions. No client cache or response contract is added.
 Private delivery guidance is reinforced at final generation without another call;
 group replies can use the bounded optional review described in the linked guide. Existing messages are unchanged; model/device verification is pending.
+
+
+## Responsive orchestration (2026-10-30)
+
+The visible lifecycle (delivered, Online, Read, Typing/Recording, message) is
+unchanged, but its pauses now overlap the work instead of preceding it:
+
+- **Generation starts at the read.** `prepare-reply` launches `contactReply` and,
+  concurrently, waits out the remaining reading pause before `markTyping`. The
+  first bubble's composition budget credits the time Typing was visible, so a
+  reply is usually published as soon as it exists. Composer waits and message
+  batching still happen before generation, so typing humans cause no wasted calls.
+- **An attended chat reads at once.** When the person has the chat open (an open
+  `chat_visit`) and the contact is still Online, the connect and read beats are
+  0.3 seconds instead of one second each: the contact is "in the chat", so the
+  message goes almost straight to Read.
+- **Contacts stay while you talk.** The visible chat polls `GET /turns` every
+  second. That poll renews the open visit and, when the contact is already Online
+  and the conversation had a message within the last three minutes, extends its
+  presence lease by 20 seconds (throttled to one write per ten seconds). It never
+  connects an Offline contact. Leaving the chat stops the poll and the lease
+  expires normally; idle conversations still go Offline after three minutes.
+  Visit consumers key on `typing_at`, so longer visits do not change pacing or
+  initiative.
+- **Research is announced.** See [web research](web-research.md#announced-research-and-grounded-answers-migration-0071):
+  the contact first sends a short "looking it up" bubble (`<turn>/assistant/0`),
+  shows Researching... while the search runs, and then continues with what it found.
+  Later bubbles are offset after the announcement. A turn whose only bubble is the
+  announcement can still use response recovery.

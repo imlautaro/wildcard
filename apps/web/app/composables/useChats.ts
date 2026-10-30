@@ -320,8 +320,8 @@ function applyRead(kind: 'contact' | 'group', id: string, sequence: number, unre
 function contactRow(contact: Contact): ChatRow | null {
   const row = contactMessageRow(contact);
   if (row && contact.clearing === 1) return { ...row, voice: null, preview: 'Cleaning up...' };
-  if (row && (contact.replyActivity === 'typing' || contact.replyActivity === 'recording')) {
-    return { ...row, voice: null, preview: contact.replyActivity === 'recording' ? 'Recording...' : 'Typing...', own: false, sender: null, sending: false, receiptState: null };
+  if (row && (contact.replyActivity === 'typing' || contact.replyActivity === 'recording' || contact.replyActivity === 'researching')) {
+    return { ...row, voice: null, preview: contact.replyActivity === 'researching' ? 'Researching...' : contact.replyActivity === 'recording' ? 'Recording...' : 'Typing...', own: false, sender: null, sending: false, receiptState: null };
   }
   return row;
 }

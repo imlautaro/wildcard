@@ -553,7 +553,8 @@ Static checks do not establish audible timing or touch behavior.
 ## Reply activity indicators
 
 Both clients show Recording... during voice attachment preparation and Typing...
-for text preparation. Text messages use the shared length-aware composition budget
+for text preparation. Inference itself shows Typing... for every contact (since
+2026-10-30); Recording... replaces it when the reply turns out to be spoken. Text messages use the shared length-aware composition budget
 before each bubble; voice notes keep the short Recording preparation lead-in.
 A text part following a spoken part explicitly clears the earlier Recording
 overlay and shows Typing during its own wait. See [successive messages](reply-messages.md).

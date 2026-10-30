@@ -7,7 +7,7 @@ export type ModelMessage =
   | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] }
   | { role: 'tool'; content: string; tool_call_id: string };
 export type ModelTool = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } };
-type ModelOptions = { tools?: ModelTool[]; responseFormat?: Record<string, unknown>; maxTokens?: number };
+type ModelOptions = { tools?: ModelTool[]; responseFormat?: Record<string, unknown>; maxTokens?: number; reasoning?: 'minimal' | 'low' };
 
 // Only emit bounded diagnostic codes, never exception text, provider bodies,
 // SQL parameters or conversation content. Unknown errors stay deliberately vague.
@@ -33,7 +33,7 @@ export async function museCompletion(env: Env, messages: ModelMessage[], configu
     throw new NonRetryableError('MODEL_NOT_CONFIGURED');
   }
   const query = { model, messages, max_completion_tokens: options.maxTokens ?? 4096,
-    reasoning_effort: 'low', stream: false,
+    reasoning_effort: options.reasoning ?? 'low', stream: false,
     ...(options.tools?.length ? { tools: options.tools, tool_choice: 'auto' } : {}),
     ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
   };

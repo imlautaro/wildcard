@@ -138,9 +138,10 @@ admission threshold. Leaving does not erase history; the UI explains this.
 ## Reply rounds and exclusive attention
 
 Each accepted human message snapshots the current contacts into a finite round:
-at most one response per contact. Up to two contacts prepare concurrently. Admission
-uses the oldest two unfinished slots, with a single atomic attention claim per agent
-and a two-claim group cap; publication follows readiness rather than insertion order. New human messages can queue
+at most one response per contact. A [round coordinator](#round-coordinator-migration-0071)
+chooses which contacts actually speak. Up to four contacts prepare concurrently.
+Admission uses the oldest four unfinished slots, with a single atomic attention claim
+per agent and a four-claim group cap; publication follows plan rank, then readiness. New human messages can queue
 while contacts respond. Published bot messages can enqueue other contacts in the
 same exchange, subject to [shared energy and finite conversation limits](energy.md).
 A human can privately [ask an agent to post in the group](group-requests.md),
@@ -242,12 +243,12 @@ Implementation references: [Meta structured output](https://dev.meta.ai/docs/str
 [Cloudflare Workflow rules](https://developers.cloudflare.com/workflows/build/rules-of-workflows/).
 
 `agent_attention` remains the single unique lock per agent. Dispatch chooses the
-oldest eligible job across private chats and group rounds. A group admits at most two preparing agents, and each waits for its own work in
-other chats. Group research and
-the decision to reply or skip remain Online. Only a nonempty completed draft
-starts Typing, followed by a durable length-aware composition wait before first
+oldest eligible job across private chats and group rounds. A group admits at most four preparing agents (two before migration 0071), and each waits for its own work in
+other chats. An unplanned decision to reply or skip remains Online, and web
+research shows Researching. Planned speakers type during generation; otherwise only
+a nonempty completed draft starts Typing, followed by a durable length-aware composition wait before first
 text publication. Each subsequent part refreshes Typing and receives its own wait,
-scaled to that part's Unicode length and capped at 60 seconds. The server checks
+scaled to that part's Unicode length and capped at 15 seconds (60 before 2026-10-30). The server checks
 that the preceding message is still current before starting each later wait and
 rechecks publication access/history afterward. Voice notes retain the short
 Recording lead-in. See [successive messages](reply-messages.md) for timing details. A context review returns
@@ -807,7 +808,9 @@ Contributor consent changes, pagination, offline navigation and account switchin
 
 The group snapshot adds numeric `replies[].isTyping` (0 or 1), derived from a
 running reply, its current attempt's exclusive attention claim, and an unexpired
-Typing presence. Queued replies and silent decisions never imply typing. Both
+Typing presence or a running web search (`replyActivity: "researching"`). Queued
+replies and silent decisions never imply typing; planned speakers type while their
+reply is generated (see [round coordinator](#round-coordinator-migration-0071)). Both
 iOS and web require this explicit flag; missing fields from older API snapshots
 show no indicator. The web subtitle follows the same rule. Retry availability
 continues to consider all queued/running jobs. No migration or new service is needed.
@@ -889,8 +892,8 @@ for scope, lazy old-history indexing, limits, retention and verification.
 
 ## Reply activity indicators
 
-Both clients show Recording... during voice attachment preparation and Typing...
-for text preparation. Private/group list second lines temporarily show that
+Both clients show Recording... during voice attachment preparation, Typing...
+for text preparation and Researching... during a web search. Private/group list second lines temporarily show that
 activity instead of message previews and receipts, preserving message order,
 timestamps and unread counts. Groups identify each active contact. This reuses the
 existing session-owned summaries, foreground polling, deduplication, pagination,
@@ -978,7 +981,7 @@ that contacts both contribute and leave space without repeated greetings/questio
 
 ## Concurrent preparation and directed participation (migration 0070)
 
-Two agents can prepare drafts and retrieve context simultaneously. The atomic
+Two agents (four since migration 0071) can prepare drafts and retrieve context simultaneously. The atomic
 `agent_attention` insertion enforces the group cap, including concurrent dispatch
 and recovery. One agent still attends only one private/group turn at a time.
 A ready draft acquires `group_publication`, a D1 reservation held through
@@ -1043,3 +1046,66 @@ Device/browser and real model validation remain pending: check two concurrent
 preparers, a third waiting, earlier work blocking effects, publication races and
 replay, cancellation/revocation, directed/silent-member requests, legacy/empty
 read lists, reopen/back, offline recovery, refresh, clear and account switching.
+
+
+## Round coordinator (migration 0071)
+
+A debug export from 2026-10-30 showed 137 reply slots for 17 human messages:
+every contact prepared a full draft (personality appraisal, evidence round,
+decision and review) for every message and bot reply, 104 of them only to stay
+silent, two at a time. Human messages waited three to eight minutes behind that
+queue, and answers arrived for messages long superseded.
+
+**Planning.** The first admitted slot of an eligible trigger claims `group_round`
+and makes one coordinator call (`groups/planning.ts`, minimal reasoning, about
+3–8 seconds). The coordinator sees the trigger, up to 16 visible messages (same
+author/Contributor filter as replies), and each candidate's name, persona summary,
+specialties, energy, recent activity and Researching state. It returns at most
+three ordered speakers, each with a role (`answer`, `research`, `react`, `spark`),
+a one-line internal angle and whether tools are needed. Human questions, requests,
+greetings and news get at least one speaker; name-addressed contacts and called-out
+silent contacts speak; social openings get two or three distinct angles with one
+`spark` that adds a hook (opinion, persona detail, proposal or question). Requests
+for current or public information get exactly one `research` speaker, first. Bot
+triggers get zero or one continuer, so acknowledgement chains end. A human
+question never ends with zero speakers. Directed requests, task notices and
+requested openings keep their designated responders and are not planned.
+
+**Applying the plan.** Selected slots store `plan_rank`, `plan_role`, `plan_angle`
+and `plan_tools`; unselected queued slots complete immediately without starting a
+Workflow, and an unselected running slot completes after the plan is known.
+Other slots wait at most 20 one-second durable polls; a failed or expired plan
+marks the round `failed` and every slot falls back to the per-contact decision
+described above, so the group never goes silent because of the coordinator.
+
+**Speaking.** The plan is a system instruction for the speaker (never mentioned to
+people). Rank 1 of a human round must reply and shows Typing from the start of its
+generation; its first-message pause credits that time. A planned turn without
+tools skips the evidence round and goes straight to its decision; planned drafts
+are reviewed only for vocatives. Later ranks prepare in parallel, wait (at most 90
+seconds) until earlier ranks have a ready draft (`draft_json`, filtered by the
+Contributor consent of the reader), receive those drafts as `peerRepliesThisRound`,
+start Typing and decide. Publication follows rank. The history watermark (both the
+ready check and the publication `INSERT`/`UPDATE`) ignores bubbles of this reply
+and of earlier ranks of the same round, since their drafts were already context;
+any other new message, especially a human one, still forces a review. Shared tool
+actions are ordered by rank within a planned round. A bot-to-bot continuation
+waits for an earlier planned round to finish before taking the publication lane.
+
+**Superseding.** A new human message completes still-queued slots of older
+non-directed, non-task triggers in the same transaction that enqueues its round.
+Running turns continue and review against the new message. The coordinator and the
+first speaker receive the earlier unanswered human messages since the last bot
+message as `foldedEarlierMessages` and answer them too.
+
+**Researching members.** Contacts see who is researching right now and do not
+start the same search. The researcher announces it first in the group
+(`<reply>/part/0`, one energy point, no continuation slots) when it can take the
+publication lane within eight seconds; otherwise the Researching indicator alone
+informs people. See [web research](web-research.md#announced-research-and-grounded-answers-migration-0071).
+
+Receipts are unchanged: agent receipts are delivered on insert and read when the
+first slot of the round starts, which now happens within about two seconds, and the
+first speaker types right after planning. Planning adds a model call per eligible
+trigger but removes the silent drafts; it does not guarantee that every contact
+answers, and the model can still choose poorly.

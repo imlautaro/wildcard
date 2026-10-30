@@ -46,10 +46,12 @@ const summary = `
       'ownListenedAt', (SELECT listened_at FROM group_voice_playback WHERE message_id = gm.id AND user_id = m.user_id), 'transcript', NULL) END
     FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageVoiceJSON,
 g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (SELECT group_concat(label, ', ') FROM (
-    SELECT a.name || CASE WHEN p.recording_until > unixepoch('subsec') * 1000 THEN ' Recording...' ELSE ' Typing...' END AS label
+    SELECT a.name || CASE WHEN p.researching_until > unixepoch('subsec') * 1000 THEN ' Researching...'
+      WHEN p.recording_until > unixepoch('subsec') * 1000 THEN ' Recording...' ELSE ' Typing...' END AS label
     FROM group_reply r JOIN agent_attention attention ON attention.turn_id = r.id AND attention.attempt = r.attempt AND attention.agent_id = r.agent_id
     JOIN agent_presence p ON p.agent_id = r.agent_id JOIN contact_agent a ON a.id = r.agent_id
-    WHERE r.group_id = g.id AND r.status = 'running' AND p.status = 'typing' AND p.expires_at > unixepoch('subsec') * 1000
+    WHERE r.group_id = g.id AND r.status = 'running' AND p.expires_at > unixepoch('subsec') * 1000
+      AND (p.status = 'typing' OR p.researching_until > unixepoch('subsec') * 1000)
     ORDER BY r.sequence LIMIT 8)) AS replyActivity,
   m.last_read_sequence AS lastReadSequence,
   (SELECT COUNT(*) FROM group_message gm WHERE gm.group_id = g.id AND gm.sequence > m.last_read_sequence
@@ -183,8 +185,10 @@ groups.get('/:id', async (c) => {
     source.task_id AS taskID, (SELECT title FROM task WHERE id = source.task_id) AS taskTitle,
     EXISTS (SELECT 1 FROM agent_attention attention JOIN agent_presence presence ON presence.agent_id = attention.agent_id
       WHERE attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt
-        AND r.status = 'running' AND presence.status = 'typing' AND presence.expires_at > ?2) AS isTyping,
-    (SELECT CASE WHEN p.recording_until > ?2 THEN 'recording' ELSE 'typing' END FROM agent_presence p WHERE p.agent_id = r.agent_id) AS replyActivity
+        AND r.status = 'running' AND presence.expires_at > ?2
+        AND (presence.status = 'typing' OR presence.researching_until > ?2)) AS isTyping,
+    (SELECT CASE WHEN p.researching_until > ?2 THEN 'researching' WHEN p.recording_until > ?2 THEN 'recording' ELSE 'typing' END
+      FROM agent_presence p WHERE p.agent_id = r.agent_id) AS replyActivity
     FROM group_reply r
     JOIN group_message source ON source.id = r.source_id
     JOIN contact_agent a ON a.id = r.agent_id WHERE r.group_id = ?1 AND r.status IN ('queued', 'running', 'failed')
@@ -490,6 +494,14 @@ groups.post('/:id/messages', async (c) => {
       WHERE gm.id = ? AND gm.group_id = ? AND gm.user_id = ? AND gm.round_enqueued = 0 ORDER BY ga.joined_at, ga.agent_id
       ON CONFLICT(source_id, agent_id) DO NOTHING`).bind(b.id, id, owner),
     c.env.DB.prepare('UPDATE group_message SET round_enqueued = 1 WHERE id = ? AND group_id = ? AND user_id = ?').bind(b.id, id, owner),
+    // A new human message supersedes reply slots that have not started yet:
+    // the new round sees that history (earlier unanswered human messages are
+    // folded into it), so nobody answers stale messages minutes later.
+    // Directed requests and task notices keep their designated responders.
+    c.env.DB.prepare(`UPDATE group_reply SET status = 'complete' WHERE group_id = ?1 AND status = 'queued'
+      AND source_id IN (SELECT old.id FROM group_message old WHERE old.group_id = ?1 AND old.request_id IS NULL
+        AND old.task_id IS NULL AND old.sequence < (SELECT sequence FROM group_message WHERE id = ?2 AND group_id = ?1 AND user_id = ?3))`)
+      .bind(id, b.id, owner),
   ]);
   const saved = await c.env.DB.prepare('SELECT id, text, attachment_json AS attachmentJSON, reply_to_id AS replyToID FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
     .bind(b.id, id, owner).first<{ id: string; text: string; attachmentJSON: string | null; replyToID: string | null }>();

@@ -19,7 +19,7 @@ const activeReplies = computed(() => (state.value.snapshot?.replies ?? []).filte
 // Task work turns show what the contact is working on; other replies show typing dots.
 const workingReplies = computed(() => activeReplies.value.filter((reply) => reply.taskID));
 const typingReplies = computed(() => activeReplies.value.filter((reply) => !reply.taskID && reply.status === 'running' && reply.isTyping === 1));
-const subtitle = computed(() => typingReplies.value.length ? typingReplies.value.map((reply) => `${reply.name} ${reply.replyActivity === 'recording' ? 'recording' : 'typing'}…`).join(', ')
+const subtitle = computed(() => typingReplies.value.length ? typingReplies.value.map((reply) => `${reply.name} ${reply.replyActivity === 'researching' ? 'researching' : reply.replyActivity === 'recording' ? 'recording' : 'typing'}…`).join(', ')
   : workingReplies.value.length ? `${[...new Set(workingReplies.value.map((reply) => reply.name))].join(', ')} working…` : memberLine.value);
 function failedRepliesFor(message: GroupMessage) {
   return (state.value.snapshot?.replies ?? []).filter((reply) => reply.status === 'failed' && reply.sourceID === message.id
@@ -273,7 +273,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
       </div>
       <div v-for="reply in typingReplies" :key="reply.id" class="bubble-row incoming">
         <div class="avatar-slot" />
-        <div class="typing" role="status">{{ reply.replyActivity === 'recording' ? 'Recording' : 'Typing' }}<span /><span /><span /></div>
+        <div class="typing" role="status">{{ reply.replyActivity === 'researching' ? 'Researching' : reply.replyActivity === 'recording' ? 'Recording' : 'Typing' }}<span /><span /><span /></div>
       </div>
       </div>
     </div>

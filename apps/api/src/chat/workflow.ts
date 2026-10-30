@@ -13,7 +13,7 @@ import { groupRequestTurnAllowed } from '../groups/request-access';
 import { runGroup, type GroupJob } from '../groups/workflow';
 import { scheduleAllowed } from '../schedules/data';
 import type { VisitJob } from './visits';
-import { expirePresence, markRead, markRecording, markTyping } from './presence';
+import { attendedChat, expirePresence, markRead, markRecording, markTyping } from './presence';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { enqueueReply, deliverPush } from '../push/delivery';
 import { activeTurn, type AssistantMessage, type ChatJob } from './data';
@@ -59,8 +59,10 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
     if (!admitted) return;
     try {
       // Delivered → online → read → typing. Keep the queued agent disconnected
-      // until it actually starts handling the message.
-      await step.sleep('connect-delay', '1 second');
+      // until it actually starts handling the message. A contact still online in
+      // the chat the person has open reads at once, without the connect beat.
+      const attended = await step.do('attended-chat', () => attendedChat(env.DB, job));
+      await step.sleep('connect-delay', attended ? 300 : 1000);
       await waitForComposer(env, job, step, 'before-reply', 6);
       const batched = await step.do('batch-consecutive-messages', () => batchIntoNext(env, job));
       if (batched) {
@@ -74,7 +76,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         return true;
       });
       // mark-running connected the contact (agent_chat_status); it reads after a beat.
-      await step.sleep('read-delay', '1 second');
+      await step.sleep('read-delay', attended ? 300 : 1000);
       const readAt = await step.do('mark-read', () => markRead(env.DB, job));
       const listening = await this.listen(env, job, step);
       await this.refreshMemory(env, job, step, 'refresh-prior-memory', false);
@@ -83,7 +85,6 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         const turn = await activeTurn(env.DB, job);
         return readAt + readingDelay(turn?.userText ?? '');
       });
-      await pauseUntil(step, 'reading-pause', reading);
       const prepared = await step.do('prepare-reply', {
         retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' },
         timeout: '8 minutes',
@@ -94,12 +95,18 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         const contact = await env.DB.prepare('SELECT name FROM contact WHERE id = ?1 AND user_id = ?2')
           .bind(turn.contactID, turn.userID).first<{ name: string }>();
         if (!contact) return null;
-        // When replies may be spoken, the format is unknown until generation ends, so the
-        // contact stays online and shows Typing or Recording only once the reply exists.
         const voice = await privateVoiceReplies(env, turn.contactID);
-        if (!voice) await markTyping(env.DB, job);
+        // Generation starts as soon as the message is read; the visible reading
+        // pause and typing run while the model works, so the reply is ready sooner.
+        const generation = contactReply(env, turn, contact.name);
+        generation.catch(() => {});
+        const remaining = reading - Date.now();
+        if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+        // Typing shows during generation even when the reply may become a voice
+        // note: Recording replaces it once the spoken message is known.
+        await markTyping(env.DB, job);
         const typingAt = Date.now();
-        const reply = await contactReply(env, turn, contact.name);
+        const reply = await generation;
         return { reply, typingAt, voice };
       });
       if (prepared) {
@@ -107,7 +114,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
           retries: { limit: 0, delay: '1 second' }, timeout: '1 minute',
         }, () => shouldHoldReply(env, job, typeof prepared.reply === 'string' ? prepared.reply : (Array.isArray(prepared.reply) ? prepared.reply : prepared.reply?.messages)?.join('\n\n') ?? null)).catch(() => false);
         if (hold) await waitForComposer(env, job, step, 'before-publish', 3);
-        await this.publishMessages(env, job, step, prepared.reply, 'reply', prepared.voice ? undefined : prepared.typingAt);
+        await this.publishMessages(env, job, step, prepared.reply, 'reply', prepared.typingAt);
       }
     } catch (error) {
       const code = safeErrorCode(error);
@@ -119,7 +126,10 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         try {
           const recovery = await step.do('recover-response', { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' }, async () => {
             const turn = await activeTurn(env.DB, job);
-            if (!turn || turn.status !== 'running' || turn.assistantText || turn.scheduleID || turn.groupRequestID || turn.taskID) return null;
+            // A research announcement alone is not a reply; the turn can still recover.
+            const announcedOnly = !!turn?.assistantMessagesJSON && JSON.parse(turn.assistantMessagesJSON).length === 1
+              && !!await env.DB.prepare('SELECT 1 FROM web_research WHERE chat_turn_id = ?').bind(job.turnID).first();
+            if (!turn || turn.status !== 'running' || (turn.assistantText && !announcedOnly) || turn.scheduleID || turn.groupRequestID || turn.taskID) return null;
             const contact = await env.DB.prepare('SELECT name FROM contact WHERE id = ? AND user_id = ?')
               .bind(turn.contactID, turn.userID).first<{ name: string }>();
             if (!contact) return null;
@@ -210,6 +220,11 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
 
   private async publishMessages(env: Env, job: ChatJob, step: WorkflowStep, reply: ContactResponse | string[] | string | null, prefix = 'reply', firstTypingAt?: number) {
     const { response, messages, spoken } = replyMessages(reply);
+    // A research announcement may already be the turn's first bubble.
+    const base = await step.do(`${prefix}-published-base`, async () => {
+      const turn = await activeTurn(env.DB, job);
+      return turn?.assistantMessagesJSON ? (JSON.parse(turn.assistantMessagesJSON) as AssistantMessage[]).length : 0;
+    });
     for (let index = 0; index < Math.max(1, messages.length); index++) {
       if (messages[index]) {
         const composing = await step.do(`${prefix}-compose-message-${index}`, async () => {
@@ -243,14 +258,14 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         if (!await contactModelAllowed(env, delivered.contactID, delivered.userID)) throw new Error('MODEL_CONSENT_REQUIRED');
         const previous: AssistantMessage[] = delivered.assistantMessagesJSON ? JSON.parse(delivered.assistantMessagesJSON) : [];
         // A crash after the transaction but before its checkpoint must not append twice.
-        if (previous.length > index) return true;
+        if (previous.length > base + index) return true;
         // Recheck profile versions and conversation access after inference/pauses.
         const attachment = index === 0 && response?.attachment ? await generatedImage(env, {
           agentID: (await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ?').bind(delivered.contactID).first<{ id: string }>())!.id,
           userID: delivered.userID, contactID: delivered.contactID, contributor: env.META_CHAT_MODEL.includes('contributor') && !await privateContact(env.DB, delivered.contactID),
           beforeSequence: delivered.sequence + 1, turnID: job.turnID, attempt: job.attempt,
         }) : null;
-        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${index}`, text: messages[index], createdAt: now, ...(attachment ?? voice ? { attachment: attachment ?? voice } : {}), ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
+        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${base + index}`, text: messages[index], createdAt: now, ...(attachment ?? voice ? { attachment: attachment ?? voice } : {}), ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
         const interrupted = `EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = chat_turn.contact_id
           AND newer.user_id = chat_turn.user_id AND newer.sequence > chat_turn.sequence)`;
         const text = next.length ? next.map(message => message.text).join('\n\n') : null;
@@ -265,7 +280,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
             AND ${learningUnchanged}
             AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?3 AND attempt = ?4)
             ${index ? `AND NOT (${interrupted})` : ''}`)
-            .bind(text, now, job.turnID, job.attempt, JSON.stringify(next), index === messages.length - 1 || !messages.length ? 1 : 0, index, response?.learningRevision ?? null),
+            .bind(text, now, job.turnID, job.attempt, JSON.stringify(next), index === messages.length - 1 || !messages.length ? 1 : 0, base + index, response?.learningRevision ?? null),
           // Stopped task generations have no reply. The schema requires text for
           // completion; end them as failed so publication retries cannot hold attention.
           env.DB.prepare(`UPDATE chat_turn SET status = CASE WHEN assistant_text IS NOT NULL THEN 'complete' ELSE 'failed' END,

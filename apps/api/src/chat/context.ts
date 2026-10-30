@@ -37,6 +37,7 @@ import { rankMemories } from './semantic-memory';
 import { isRecord, museCompletion, safeErrorCode, type ModelMessage, type ModelTool, type ToolCall } from './meta';
 import { executeResearchTool, researchInstruction, researchTool, taskResearchInstruction, taskResearchTool } from '../research/tools';
 import { recentResearchContext } from '../research/context';
+import { announcePrivateResearch } from './announcement';
 
 const searchParameters = { type: 'object', additionalProperties: false,
   properties: { query: { type: 'string', description: 'Specific search words, in the language used in the original conversation.' } }, required: ['query'] };
@@ -139,6 +140,7 @@ async function executeTool(env: Env, scope: MemoryScope & { agentID: string }, c
   if (call.function.name === researchTool.function.name) return executeResearchTool(env, {
     kind: 'contact', contactID: turn.contactID, userID: turn.userID, agentID: scope.agentID,
     turnID: turn.id, attempt: turn.attempt, contributor: !!scope.contributorModel,
+    announce: text => announcePrivateResearch(env, turn.id, turn.attempt, text),
   }, args);
   if (chatImageTools.some(tool => tool.function.name === call.function.name)) return executeChatImageTool(env, imageScope, call.function.name, args);
   if (call.function.name === imageTool.function.name) return generateChatImage(env, { ...imageScope, turnID: turn.id, attempt: turn.attempt }, args);

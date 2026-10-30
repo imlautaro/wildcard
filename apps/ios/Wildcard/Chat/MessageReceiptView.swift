@@ -36,9 +36,10 @@ struct MessageReceiptView: View {
 
 struct ReplyTypingIndicator: View {
     var recording = false
+    var researching = false
     var body: some View {
         HStack {
-            AnimatedTypingLabel(recording: recording)
+            AnimatedTypingLabel(recording: recording, researching: researching)
             Spacer()
         }
         .transition(.opacity)
@@ -81,6 +82,8 @@ struct TaskWorkIndicator: View {
 
 private struct AnimatedTypingLabel: View {
     var recording = false
+    var researching = false
+    private var title: String { researching ? "Researching" : recording ? "Recording" : "Typing" }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @ScaledMetric(relativeTo: .subheadline) private var dotSize: CGFloat = 3
@@ -88,7 +91,7 @@ private struct AnimatedTypingLabel: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 0.1, paused: reduceMotion || scenePhase != .active)) { context in
             HStack(spacing: 3) {
-                Text(recording ? "Recording" : "Typing").manrope(.subheadline)
+                Text(title).manrope(.subheadline)
                 HStack(spacing: 3) {
                     ForEach(0..<3) { index in
                         let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2)
@@ -103,7 +106,7 @@ private struct AnimatedTypingLabel: View {
         }
         .foregroundStyle(.secondary)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(recording ? "Recording" : "Typing")
+        .accessibilityLabel(title)
     }
 }
 

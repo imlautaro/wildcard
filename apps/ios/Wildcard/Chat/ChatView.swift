@@ -181,7 +181,7 @@ struct ChatView: View {
                         } else if item.kind == .status && turn.taskID != nil && (turn.status == .queued || turn.status == .running) {
                             TaskWorkIndicator(title: turn.taskTitle)
                         } else if item.kind == .status && turn.status == .running && chat.presence?.status == .typing {
-                            ReplyTypingIndicator(recording: chat.presence?.isRecording == true)
+                            ReplyTypingIndicator(recording: chat.presence?.isRecording == true, researching: chat.presence?.isResearching == true)
                         } else if item.kind == .status && turn.status == .failed && !chat.turns.contains(where: { $0.sequence > turn.sequence && $0.assistantText != nil }) {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(turn.errorCode == "SCHEDULE_CANCELLED" ? "Scheduled message cancelled." : turn.errorCode == "GROUP_REQUEST_CANCELLED" ? "Group request cancelled." : "The reply to this message couldn't be completed.").manrope(.footnote).foregroundStyle(.secondary)

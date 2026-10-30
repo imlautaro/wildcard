@@ -309,3 +309,40 @@ or long briefing, full document list, group sharing without duplicate search,
 consent/model changes while running, pending/failed/ready replay, legacy deleted
 reports, clear/delete, offline navigation and account changes. Semantic intent and
 natural replies require live-model evaluation; static checks do not establish them.
+
+## Announced research and grounded answers (migration 0071)
+
+**Grounded answers were being discarded.** Meta's `web_search` can open result
+pages (`action.type: "open_page"`, URL in `action.url`, no `results`) and the model
+receives page context according to `search_context_size`, but the API returns empty
+`snippet` fields and often no `url_citation` annotations or Markdown links. Every
+report in a 2026-10-30 debug export therefore failed with `MODEL_RESEARCH_NO_CITATIONS`
+and was replaced by the title-only synthesis, which (correctly) said nothing could be
+verified. Live probes with the Contributor model showed the discarded answers held
+the actual figures (for example USCIS I-130 ranges and Visa Bulletin dates).
+
+The parser now accepts, in order: provider annotations or Markdown links matching a
+hit (unchanged); otherwise the pages the provider opened, credited as cited sources
+with a "Pages read for this answer" line; otherwise, after completed searches with
+results, the top five results it was given, with a line saying the pages were not
+opened individually. Provenance records `pagesOpened` and `searchResultsCredited`.
+The title-only synthesis remains only for a search without a usable answer. The
+operation still uses at most three built-in calls; instructions now ask the model to
+open the most relevant pages (official first) and to lead with the direct answer in
+under about 300 words, which cut live latency from about 57 to about 20 seconds.
+These are model-produced summaries of retrieved pages, not independent verification.
+
+**Announcement.** `research_web` requires an `announcement`: a short message in the
+contact's voice saying it is looking the topic up. Only a fresh, admitted, non-task
+search announces, right before the paid request. Private chats append it as the
+running turn's first bubble; groups publish `<reply>/part/0` through the publication
+lane (bounded wait, energy and continuation rules as for any bubble). The tool result
+then carries `announcementDelivered` so the final reply does not repeat it.
+
+**Researching indicator.** While the request runs, `agent_presence.researching_until`
+(timeout plus 30 seconds) and `researching_topic` are set and cleared afterwards.
+Private presence returns `status: "typing"` with `isResearching: true`; the contact
+list and group replies expose `replyActivity: "researching"`, and group summaries
+label the contact **Researching...**. Group contacts receive the names and topics of
+members researching right now. iOS and web show **Researching...** in headers, list
+previews and the incoming indicator; older clients fall back to Typing.

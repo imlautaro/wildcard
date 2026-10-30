@@ -30,10 +30,12 @@ export function messageDelay(text: string, seed = '') {
   let hash = 2166136261;
   for (const character of seed) hash = Math.imul(hash ^ character.codePointAt(0)!, 16777619);
   // A small, replay-stable variation avoids one mechanical speed for every turn.
-  const charactersPerSecond = 8 + (hash >>> 0) % 5;
+  // Long bubbles read as a contact who types fast, not as minutes of waiting:
+  // the visible pause stays proportional but is capped well below a minute.
+  const charactersPerSecond = 12 + (hash >>> 0) % 5;
   const length = Array.from(text.trim()).length;
   const paragraphs = (text.match(/\n\s*\n/gu) ?? []).length;
-  return Math.min(60_000, Math.round(1100 + length * 1000 / charactersPerSecond + Math.min(paragraphs, 4) * 450));
+  return Math.min(15_000, Math.round(900 + length * 1000 / charactersPerSecond + Math.min(paragraphs, 4) * 300));
 }
 
 // Voice preparation keeps its own short lead-in rather than a text typing budget.

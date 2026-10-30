@@ -2797,3 +2797,26 @@ pages; files are assembled only in the browser, with no server-side export stora
 Existing local setup and automatic release configuration apply. Rollback can remove
 the route and UI without schema changes. Runtime/browser export verification is
 pending; static query preparation and API/web type checks cover schema/types only.
+
+## Group round coordinator and research presence (migration 0071)
+
+Uses the existing D1 database, Workflows, Cron, model provider key and bindings; no
+new Cloudflare resource, secret, permission or dependency. Apply versioned migrations
+through `0071_group_round_planning.sql` before running the new API (local:
+`npm run db:migrate:local --workspace @wildcard/api`; production: the automatic API
+release after an authorized commit and push, never a manual deployment).
+
+The migration is additive: a `group_round` table (cascades with its trigger message
+and group), nullable planning/draft columns on `group_reply`, and
+`researching_until`/`researching_topic` on `agent_presence`. The API now admits four
+concurrent group turns per group (`chat/dispatch.ts` and `dispatchGroup`). An older
+API ignores the new columns and table; drain in-flight Workflows before rolling back
+to avoid mixed orchestration, and keep the columns while the new Worker can run.
+
+Validation performed: API, web and iOS static type checks; every new or changed
+statement prepared with `EXPLAIN` on local workerd D1 after applying all migrations;
+live coordinator and research calls against the Contributor model. Not verified:
+deployed latency, device behavior, concurrent Workflow interleavings and model
+quality across languages. See [groups](groups.md#round-coordinator-migration-0071),
+[chats](chats.md#responsive-orchestration-2026-10-30) and
+[web research](web-research.md#announced-research-and-grounded-answers-migration-0071).
