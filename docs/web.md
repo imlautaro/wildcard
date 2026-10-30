@@ -1249,9 +1249,11 @@ group typing wording is shared with iOS.
 - **Hover target.** The floating reply/reaction buttons show while the pointer is
   anywhere over the message's conversation row, not only the bubble, so moving
   toward them from above or below no longer hides them.
-- **Message menu.** Right click, hold, or the reaction button opens the emoji bar
-  above the pointer and the actions below it, each with an arrow; see
-  [reactions](reactions.md).
+- **Message menu.** Right click, hold, or the reaction button dims the screen with
+  a scrim that leaves the message highlighted (a cutout drawn as the spotlight's
+  shadow, so the message stays in place and no stacking context changes), and centers
+  the emoji bar above the message and the actions below it; pressing the scrim closes
+  it. See [reactions](reactions.md).
 - **Group typing wording.** Chat-list previews and the web group subtitle read
   "Ana is typing...", "Ana and Bo are typing..." or "4 people are typing..."; this
   comes from the API and applies to iOS too (see [chats](chats.md)).

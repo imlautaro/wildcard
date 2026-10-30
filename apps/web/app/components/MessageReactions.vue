@@ -9,13 +9,10 @@ const root = ref<HTMLElement>();
 const overlay = ref<HTMLElement>();
 const bar = ref<HTMLElement>();
 const menu = ref<HTMLElement>();
-// The menu opens at a point: the cursor for a right click, the finger for a hold, or the
-// pressed control. `top`/`bottom` span the control so the panels clear it.
-type Anchor = { x: number; top: number; bottom: number };
-type Placement = { top: number; left: number; arrowX: number; arrow: 'arrow-down' | 'arrow-up' | null };
-const anchor = ref<Anchor | null>(null);
-// Both panels float over the conversation (fixed to the viewport) instead of pushing messages down.
-const position = ref<{ bar: Placement; menu: Placement | null } | null>(null);
+type Box = { top: number; left: number };
+// The menu floats over the conversation (fixed to the viewport) instead of pushing messages down:
+// a scrim with a cutout over the message, the emoji bar above it and the actions below it.
+const position = ref<{ message: Box & { width: number; height: number }; bar: Box; menu: Box | null } | null>(null);
 const key = computed(() => `${props.messageID}/${props.side}`);
 const rows = computed(() => props.cache.rows.filter((row) => row.messageID === props.messageID && row.side === props.side));
 const own = computed(() => rows.value.find((row) => row.actorID === `user/${user.value?.id}`)?.emoji);
@@ -35,46 +32,35 @@ function reply() {
   open.value = false;
   emit('reply');
 }
-function openAt(value: Anchor) {
-  anchor.value = value;
-  open.value = true;
-}
-function openFrom(element: HTMLElement) {
-  const rect = element.getBoundingClientRect();
-  openAt({ x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom });
-}
-function toggleFrom(event: MouseEvent) {
-  if (open.value) open.value = false;
-  else openFrom(event.currentTarget as HTMLElement);
-}
-// Reactions sit above the anchor and actions below it, each with an arrow pointing at it.
-// Without room above, reactions move below and the actions stack under them; without room
-// below, the actions stack above the reactions. Arrows stay on the anchor when panels clamp.
+// Both panels center on the message: reactions above it, actions below it. Without room
+// above, reactions move below and the actions stack under them; without room below, the
+// actions stack above the reactions. A message taller than the screen keeps both in view.
 async function place() {
   position.value = null;
   await nextTick();
-  const point = anchor.value, strip = bar.value?.getBoundingClientRect(), list = menu.value?.getBoundingClientRect();
-  if (!point || !strip || !open.value) return;
-  const gap = 12, stack = 6, margin = 8, width = window.innerWidth, height = window.innerHeight;
-  const horizontal = (size: number) => {
-    const left = Math.min(Math.max(margin, point.x - size / 2), width - size - margin);
-    // Keep the arrow clear of the rounded corners.
-    return { left, arrowX: Math.min(Math.max(24, point.x - left), size - 24) };
+  const message = root.value?.getBoundingClientRect(), strip = bar.value?.getBoundingClientRect(), list = menu.value?.getBoundingClientRect();
+  if (!message || !strip || !open.value) return;
+  const gap = 8, margin = 8, width = window.innerWidth, height = window.innerHeight;
+  const center = message.left + message.width / 2;
+  const left = (size: number) => Math.min(Math.max(margin, center - size / 2), width - size - margin);
+  const clamp = (top: number, size: number) => Math.min(Math.max(margin, top), height - size - margin);
+  const listHeight = list?.height ?? 0;
+  const above = message.top - gap - strip.height >= margin;
+  const below = message.bottom + gap + listHeight <= height - margin;
+  let barTop: number, menuTop: number;
+  if (above && below) { barTop = message.top - gap - strip.height; menuTop = message.bottom + gap; }
+  else if (below || message.bottom + gap + strip.height + gap + listHeight <= height - margin) { barTop = message.bottom + gap; menuTop = barTop + strip.height + gap; }
+  else if (above) { barTop = message.top - gap - strip.height; menuTop = barTop - gap - listHeight; }
+  else { barTop = message.top - gap - strip.height; menuTop = message.bottom + gap; }
+  position.value = {
+    message: { top: message.top, left: message.left, width: message.width, height: message.height },
+    bar: { top: clamp(barTop, strip.height), left: left(strip.width) },
+    menu: list ? { top: clamp(menuTop, list.height), left: left(list.width) } : null,
   };
-  const above = point.top - gap - strip.height >= margin;
-  const barTop = above ? point.top - gap - strip.height : Math.min(point.bottom + gap, height - strip.height - margin);
-  const placed = { bar: { top: barTop, ...horizontal(strip.width), arrow: above ? 'arrow-down' as const : 'arrow-up' as const }, menu: null as Placement | null };
-  if (list) {
-    const below = above ? point.bottom + gap : barTop + strip.height + stack;
-    const top = below + list.height <= height - margin ? below
-      : above && barTop - stack - list.height >= margin ? barTop - stack - list.height : Math.max(margin, height - list.height - margin);
-    placed.menu = { top, ...horizontal(list.width), arrow: above && top === below ? 'arrow-up' : null };
-  }
-  position.value = placed;
 }
-watch([open, anchor], ([value]) => { if (value) void place(); else position.value = null; });
-function panelStyle(placement: Placement | null | undefined) {
-  return placement ? { top: `${placement.top}px`, left: `${placement.left}px`, '--arrow-x': `${placement.arrowX}px` } : { visibility: 'hidden' as const, top: '0', left: '0' };
+watch(open, (value) => { if (value) void place(); else position.value = null; });
+function boxStyle(box: Box | null | undefined) {
+  return box ? { top: `${box.top}px`, left: `${box.left}px` } : { visibility: 'hidden' as const, top: '0', left: '0' };
 }
 function outside(event: Event) {
   const target = event.target as Node;
@@ -82,6 +68,8 @@ function outside(event: Event) {
 }
 // Fixed panels would drift away from their message, so scrolling or resizing closes them.
 function dismiss(event: Event) { if (open.value && !overlay.value?.contains(event.target as Node)) open.value = false; }
+// The scrim makes the menu modal, so Escape closes it wherever focus is.
+function escape(event: KeyboardEvent) { if (open.value && event.key === 'Escape') open.value = false; }
 let timer: ReturnType<typeof setTimeout> | undefined;
 let held = false;
 let start: { x: number; y: number } | null = null;
@@ -89,17 +77,14 @@ function cancel() { clearTimeout(timer); start = null; }
 function down(event: PointerEvent) {
   held = false;
   if (event.button !== 0 || (event.target as HTMLElement).closest('.reaction-badges, .message-actions, .reaction-error')) return;
-  const point = { x: event.clientX, y: event.clientY };
-  start = point;
-  timer = setTimeout(() => { held = true; openAt({ x: point.x, top: point.y, bottom: point.y }); }, 450);
+  start = { x: event.clientX, y: event.clientY };
+  timer = setTimeout(() => { held = true; open.value = true; }, 450);
 }
 // Right-clicking a link keeps the browser's own menu (open, copy address, ...).
-// The keyboard context-menu key reports no pointer position, so it opens from the message.
 function contextMenu(event: MouseEvent) {
   if ((event.target as HTMLElement).closest('a[href]')) return;
   event.preventDefault();
-  if (event.clientX || event.clientY) openAt({ x: event.clientX, top: event.clientY, bottom: event.clientY });
-  else if (root.value) openFrom(root.value);
+  open.value = true;
 }
 function click(event: MouseEvent) {
   if (held) { held = false; event.preventDefault(); event.stopPropagation(); }
@@ -108,34 +93,40 @@ function move(event: PointerEvent) { if (start && Math.hypot(start.x - event.cli
 onMounted(() => {
   document.addEventListener('pointerdown', outside);
   document.addEventListener('scroll', dismiss, true);
+  document.addEventListener('keydown', escape);
   window.addEventListener('resize', dismiss);
 });
 onBeforeUnmount(() => {
   cancel();
   document.removeEventListener('pointerdown', outside);
   document.removeEventListener('scroll', dismiss, true);
+  document.removeEventListener('keydown', escape);
   window.removeEventListener('resize', dismiss);
 });
 </script>
 
 <template>
-  <div ref="root" class="reaction-message" :class="{ active: open }" @click.capture="click" @pointerdown="down" @pointermove="move" @pointerup="cancel" @pointercancel="cancel" @contextmenu="contextMenu" @keydown.esc="open = false">
+  <div ref="root" class="reaction-message" :class="{ active: open }" @click.capture="click" @pointerdown="down" @pointermove="move" @pointerup="cancel" @pointercancel="cancel" @contextmenu="contextMenu">
     <slot />
     <!-- Hover actions float beside the message, so they take no space in the conversation. -->
     <div class="message-actions">
       <button v-if="replyable" class="reaction-trigger" aria-label="Reply to message" @click="reply"><AppIcon name="reply" /></button>
-      <button class="reaction-trigger" aria-label="React to message" :aria-expanded="open" @click="toggleFrom"><AppIcon name="add-reaction" /></button>
+      <button class="reaction-trigger" aria-label="React to message" :aria-expanded="open" @click="open = !open"><AppIcon name="add-reaction" /></button>
     </div>
     <div v-if="summaries.length" class="reaction-badges">
       <button v-for="item in summaries" :key="item.emoji" class="reaction-badge" :class="{ selected: own === item.emoji }"
-        :title="item.rows.map((row) => row.name).join(', ')" :aria-label="`${item.emoji}: ${item.rows.map((row) => row.name).join(', ')}`" @click="toggleFrom">{{ item.emoji }} {{ item.rows.length }}</button>
+        :title="item.rows.map((row) => row.name).join(', ')" :aria-label="`${item.emoji}: ${item.rows.map((row) => row.name).join(', ')}`" @click="open = !open">{{ item.emoji }} {{ item.rows.length }}</button>
     </div>
     <Teleport to="body">
-      <div v-if="open && !cache.invalidated" ref="overlay" class="reaction-overlay" @keydown.esc="open = false" @contextmenu.prevent>
-        <div ref="bar" class="reaction-panel reaction-picker" :class="position?.bar.arrow" role="group" aria-label="Message reactions" :style="panelStyle(position?.bar)">
+      <div v-if="open && !cache.invalidated" ref="overlay" class="reaction-overlay" @contextmenu.prevent>
+        <!-- Pressing the scrim (or the highlighted message under it) closes the menu. -->
+        <div class="reaction-scrim" @click="open = false" @contextmenu="open = false">
+          <div v-if="position" class="reaction-spotlight" :style="{ top: `${position.message.top}px`, left: `${position.message.left}px`, width: `${position.message.width}px`, height: `${position.message.height}px` }" />
+        </div>
+        <div ref="bar" class="reaction-panel reaction-picker" role="group" aria-label="Message reactions" :style="boxStyle(position?.bar)">
           <button v-for="emoji in reactionEmojis" :key="emoji" :disabled="cache.busy.includes(key)" :aria-pressed="own === emoji" :aria-label="`React ${emoji}`" @click="choose(own === emoji ? null : emoji)">{{ emoji }}</button>
         </div>
-        <div v-if="hasMenu" ref="menu" class="reaction-panel reaction-menu" :class="position?.menu?.arrow" role="group" aria-label="Message actions" :style="panelStyle(position?.menu)">
+        <div v-if="hasMenu" ref="menu" class="reaction-panel reaction-menu" role="group" aria-label="Message actions" :style="boxStyle(position?.menu)">
           <button v-if="replyable" @click="reply"><AppIcon name="reply" /> Reply</button>
           <button v-if="receiptGroupID" @click="open = false; showsReaders = true"><AppIcon name="check" /> Message info</button>
           <button v-if="voice" @click="viewTranscript"><AppIcon name="file" /> View transcript</button>
@@ -162,13 +153,15 @@ onBeforeUnmount(() => {
 .reaction-trigger { padding: 2px 6px; border-radius: 999px; box-shadow: var(--md-elevation-1); }
 .reaction-trigger svg { width: 16px; height: 16px; }
 /* The whole conversation row is the hover target, so the pointer can reach the buttons from any direction. */
-:global(.bubble-row:hover .message-actions), .reaction-message:focus-within .message-actions, .reaction-message.active .message-actions { opacity: 1; pointer-events: auto; }
+:global(.bubble-row:hover .message-actions), .reaction-message:focus-within .message-actions { opacity: 1; pointer-events: auto; }
+/* While the menu is open they would sit dimmed under the scrim. */
+.reaction-message.active .message-actions { opacity: 0; pointer-events: none; }
 .reaction-overlay { display: contents; }
-.reaction-panel { position: fixed; z-index: 50; background: var(--md-surface-container); color: var(--md-on-surface); box-shadow: var(--md-elevation-2); }
-/* The arrow is a rotated square half outside the panel, pointing at the anchor. */
-.reaction-panel.arrow-down::after, .reaction-panel.arrow-up::after { content: ''; position: absolute; left: var(--arrow-x); width: 10px; height: 10px; background: inherit; transform: translateX(-50%) rotate(45deg); }
-.reaction-panel.arrow-down::after { bottom: -5px; }
-.reaction-panel.arrow-up::after { top: -5px; }
+/* The scrim catches presses; its dimming is the spotlight's shadow, so the message itself stays bright. */
+.reaction-scrim { position: fixed; inset: 0; z-index: 49; overflow: hidden; animation: reaction-fade 150ms var(--md-ease); }
+.reaction-spotlight { position: fixed; border-radius: 20px; box-shadow: 0 0 0 200vmax var(--md-scrim); pointer-events: none; }
+.reaction-panel { position: fixed; z-index: 50; background: var(--md-surface-container); color: var(--md-on-surface); box-shadow: var(--md-elevation-2); animation: reaction-fade 150ms var(--md-ease); }
+@keyframes reaction-fade { from { opacity: 0; } }
 .reaction-picker { border-radius: 999px; padding: 6px; display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 16px); }
 .reaction-picker button { background: transparent; border: 0; font-size: 22px; line-height: 1; cursor: pointer; padding: 6px; border-radius: 999px; }
 .reaction-picker button:hover:not(:disabled) { background: var(--hover); }
@@ -180,6 +173,7 @@ onBeforeUnmount(() => {
 .reaction-people { padding: 8px 16px 0; font-size: 13px; max-height: 140px; overflow-y: auto; color: var(--md-on-surface-variant); }
 .reaction-menu button + .reaction-people { margin-top: 8px; border-top: 1px solid var(--md-outline-variant); }
 .reaction-error { font-size: 12px; max-width: 280px; }
+@media (prefers-reduced-motion: reduce) { .reaction-scrim, .reaction-panel { animation: none; } }
 /* Touch screens open the same menu with a long press, so the hover actions stay hidden. */
 @media (hover: none) { :global(.bubble-row:hover .reaction-message .message-actions) { opacity: 0; pointer-events: none; } }
 </style>
