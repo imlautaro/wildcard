@@ -6,7 +6,9 @@ contact; in a group every member and group contact can read and edit them, so
 several contacts can write one document together. Documents open full screen like
 mini apps, with a Markdown viewer and an editor.
 
-[Web research](web-research.md) creates sourced reports in these same documents.
+[Web research](web-research.md) creates sourced reports in these same documents
+when a lasting deliverable was requested. Conversational background research uses
+its findings directly in chat and does not create a document or card.
 Both clients label the card **Web research** and offer an expandable source panel
 with the question, check date and cited/retrieved links. Provenance refers to
 revision 1 and survives later edits. Existing documents have `research: null`;

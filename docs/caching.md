@@ -1367,3 +1367,23 @@ recovery can fetch several already-published messages together. Deletion/access
 revocation/account switching retain their normal invalidation and rejection of
 late responses. No additional private disk retention is introduced. Device checks
 for these transitions remain pending.
+
+## Conversational research
+
+Migration 0068 keeps conversational public findings in the existing server receipt,
+not a document or new client cache. The API reuses at most two audience-local
+findings as bounded context, checking sequence, model/consent, current group roles
+and private contact/user/agent scope on every read. These request-local excerpts
+are not permissions, shared factual memory or a cross-account knowledge cache.
+Receipts retain one bounded normalized body/provenance until parent deletion;
+clear-history cascades remove them even when factual memory is kept. No extra
+private client disk persistence or retention sweeper is introduced.
+
+Only the ordinary reply reaches the existing iOS/web conversation stores, including
+source links the contact actually uses. Explicit document delivery still updates
+the normal document caches/source panels. Conversational delivery does not mutate
+the Docs list, so cached empty lists remain valid. Existing session freshness,
+request deduplication, pagination, budgets/eviction, pending IDs, stale-response
+rejection, mutation invalidation, access loss and account reset apply unchanged.
+Reopen/back/offline recovery reuses delivered messages and revalidates normally;
+it never reruns a search. Functional device/browser checks remain pending.

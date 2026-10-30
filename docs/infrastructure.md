@@ -2676,3 +2676,42 @@ builds, provider calls, remote migration and device/browser behavior were not ru
 Use fictional data for name diversity, retry stability, open-vs-typing races,
 quiet hours, persona cadence, group curiosity/closure, replay, access loss and
 account switching. See the affected feature guides for detailed limits.
+
+## Conversational research — migration 0068
+
+Apply `0068_conversational_research.sql` after 0067 using the existing D1 migration
+process. It adds receipt `delivery` with values conversation/document and default
+document, preserving every older receipt's report/deletion contract. New ordinary
+research defaults in code to conversation; exact-query task research keeps its
+report contract. No new service, binding, secret, permission, provider account,
+identifier replacement or client API field is required. Existing META_API_KEY,
+WEB_RESEARCH_ENABLED, D1, CHAT_WORKFLOW and optional APNs remain sufficient.
+
+A conversational receipt retains normalized Markdown/provenance after completion,
+within the existing 24,000-character/20-source limits, instead of creating a document
+and clearing its duplicate body. Its existing parent cascades/clear-history deletion
+remain authoritative; no TTL sweeper or private client disk retention is added.
+The shared context reader selects at most two completed findings in the same
+private audience/group, with current consent/model/sequence checks and bounded
+excerpts. It makes no provider calls. Report mode keeps the ordinary document and
+revision transaction. Full Docs lists block only document mode. Provider retries,
+uncertain reservation handling, one attempt per human source/task and 10/100 rolling
+account/installation reservations remain unchanged.
+
+Independent installation: follow the baseline Workers/D1/Meta setup, `npm ci`,
+`npm run db:migrate:local`, API/web development commands and Xcode configuration
+above. Commit and push before release; Workers Builds applies migrations before
+publishing. Verify migration 0068 plus matching source SHA on API/web/admin. Never
+run a manual deployment. Rollback retains the additive column and findings; drain
+in-flight research Workflows first. Older code does not understand completed
+conversation receipts and can turn ready ones into reports, so prefer a compatible
+forward fix or stop research until the rollback is resolved. No historical receipt
+or document is rewritten/backfilled by this migration.
+
+Validation recorded for this refinement is static API TypeScript, whitespace and
+29 SQL variants/binding arities against an empty 68-migration schema at depth 100.
+No remote migration, release, functional tests, build, provider inference or client
+session was executed. Use fictional private/group conversations to check intent,
+no unsolicited artifacts, follow-up reuse, full Docs list, bounded replay without
+another paid call, task/legacy reports, contributor/access loss, clear/delete,
+background/offline recovery and account isolation. See [web research](web-research.md).

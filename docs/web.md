@@ -17,7 +17,12 @@ iOS uses direct-bundle PNG resources for native launch and the matching vector i
 This system launch concern has no browser equivalent.
 
 [Web research](web-research.md) is available through ordinary human chat requests,
-with the same limits and permissions as iOS. Failed grounding checks are reported
+with the same limits and permissions as iOS. It defaults to conversational findings
+without a document, so the contact can follow an unfamiliar topic and continue the
+chat. Only a requested lasting report uses document delivery. Both clients reuse
+bounded recent findings within the same authorized conversation; neither downloads
+hidden research data or runs search on navigation. Migration 0068 is required.
+Failed grounding checks are reported
 separately from pending or uncertain operations. Document cards show **Web research**
 and cited-source counts; the full-screen viewer expands the original query, check
 date and cited/retrieved source links. Both clients accept source metadata from

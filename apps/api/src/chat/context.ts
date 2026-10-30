@@ -36,6 +36,7 @@ import { byteLength, clipText, keywords, readMemories, type MemoryScope } from '
 import { rankMemories } from './semantic-memory';
 import { isRecord, museCompletion, safeErrorCode, type ModelMessage, type ModelTool, type ToolCall } from './meta';
 import { executeResearchTool, researchInstruction, researchTool, taskResearchInstruction, taskResearchTool } from '../research/tools';
+import { recentResearchContext } from '../research/context';
 
 const searchParameters = { type: 'object', additionalProperties: false,
   properties: { query: { type: 'string', description: 'Specific search words, in the language used in the original conversation.' } }, required: ['query'] };
@@ -274,6 +275,10 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   const taskLists = turn.scheduleID ? [] : await readTaskLists(env.DB, { kind: 'contact', contactID: turn.contactID, userID: turn.userID }, false);
   const taskBoard = taskContext(taskLists);
   const documents = turn.scheduleID ? [] : await documentContext(env.DB, { kind: 'contact', contactID: turn.contactID, userID: turn.userID });
+  const researchContext = isolated || turn.scheduleID ? '' : await recentResearchContext(env.DB, {
+    kind: 'contact', contactID: turn.contactID, userID: turn.userID, agentID: agent.id,
+    contributor: model.includes('contributor'), beforeSequence: turn.sequence,
+  });
   const workTask = turn.taskID ? taskLists.flatMap(list => list.tasks.map(task => ({ list, task }))).find(({ task }) => task.id === turn.taskID
     && ['open', 'in_progress'].includes(task.status) && task.workState === 'active' && task.assigneeKind === 'agent' && task.assigneeID === agent.id) : undefined;
   const taskWork = turn.taskID ? { reason: (await env.DB.prepare('SELECT reason FROM task_work WHERE id = ?').bind(turn.id).first<{ reason: string }>())?.reason ?? 'review',
@@ -419,6 +424,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       'Memory extraction happens separately after replies. Schedule mutation tools, group publication tools and native proposal tools can change their respective data. Native proposals do not execute on the phone. Removing a memory is not deleting conversation history.',
       `You have at most ${turn.scheduleID ? 2 : 3} tool rounds and six tool executions; results and excerpts are limited. Admit missing information when necessary.`,
       ...(canResearchWeb ? [turn.taskID ? taskResearchInstruction : researchInstruction] : []),
+      researchContext,
       ...(turn.scheduleID ? [] : [monitorInstruction]),
       'Claim access only through the tools actually offered in this turn. Other participants’ raw chats and sensors remain inaccessible.',
     ].join(' ') },

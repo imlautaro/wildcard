@@ -33,6 +33,18 @@ for (const kind of ['contact', 'group']) for (const contributor of [false, true]
     ts.forEachChild(node, visit);
   }
   visit(tree);
+  const contextTree = ts.createSourceFile('context.ts', fs.readFileSync(path.join(root, 'apps/api/src/research/context.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
+  function visitContext(node) {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'prepare') {
+      const sql = vm.runInContext(node.arguments[0].getText(contextTree), context);
+      const parameters = (sql.match(/\?/g) || []).length;
+      const bind = node.parent && ts.isPropertyAccessExpression(node.parent) && node.parent.name.text === 'bind' ? node.parent.parent : null;
+      if (bind && ts.isCallExpression(bind) && bind.arguments.length !== parameters) throw Error('Research context SQL binding arity');
+      queries.set(sql, { sql, parameters });
+    }
+    ts.forEachChild(node, visitContext);
+  }
+  visitContext(contextTree);
 }
 const result = spawnSync('python3', ['scripts/checks/sql-depth.py'], { cwd: root, input: JSON.stringify([...queries.values()]), encoding: 'utf8' });
 if (result.status !== 0) throw Error(result.stderr || result.error || 'SQL preparation failed');

@@ -31,6 +31,7 @@ import { expressionHabits } from '../personality/expression';
 import { readPersonality } from '../personality/profile';
 import { documentContext, documentInstruction } from '../documents/tools';
 import { researchInstruction, taskResearchInstruction } from '../research/tools';
+import { recentResearchContext } from '../research/context';
 import type { GroupJob } from './workflow';
 
 export type GroupLearningFence = { person: number; audience: number };
@@ -144,6 +145,10 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
   const canResearchWeb = env.WEB_RESEARCH_ENABLED === 'true' && !previous && !row.sourceAgentID && !row.directed && (!row.taskID || !!workTask?.task.researchQuery)
     && !await env.DB.prepare('SELECT 1 FROM mcp_private_group WHERE group_id = ?').bind(row.groupID).first();
   const documents = await documentContext(env.DB, { kind: 'group', groupID: row.groupID });
+  const researchContext = await recentResearchContext(env.DB, {
+    kind: 'group', groupID: row.groupID, userID: row.userID, agentID: row.agentID,
+    contributor: !!contributor, beforeSequence: row.throughSequence + 1,
+  });
   // The internal notice ID is the work receipt ID; only monitor turns receive page changes.
   const pageChanges = workTask && (await env.DB.prepare('SELECT reason FROM task_work WHERE id = ?').bind(row.sourceID).first<{ reason: string }>())?.reason === 'monitor'
     ? await monitorChanges(env.DB, workTask.task.id, row.sourceID) : null;
@@ -235,6 +240,7 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
       peers: roundReplies.filter(m => m.agentID !== row.agentID).map(m => m.text),
       own: history.filter(m => m.agentID === row.agentID).map(m => m.text), names: members.filter(m => m.id !== row.agentID).map(m => m.name) }) },
     { role: 'system', content: conversationDirection },
+    ...(researchContext ? [{ role: 'system' as const, content: researchContext }] : []),
     { role: 'system', content: `You are ${JSON.stringify(row.name)}, agent ID ${JSON.stringify(row.agentID)}, participating in a group chat named ${JSON.stringify(row.groupName)}.
 ${profilePhotoInstruction}
 ${spoken}

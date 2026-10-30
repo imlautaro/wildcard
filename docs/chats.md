@@ -1,8 +1,10 @@
 # Private conversations
 
 Ordinary human requests can use bounded [web research](web-research.md). The
-contact saves a sourced document in this participant's chat, with matching iOS/web
-source panels and the existing document cache. Autonomous and connector-isolated
+contact normally uses the findings to understand the topic and continue the chat,
+without creating a document. A requested lasting report uses the same sourced
+document and source panel on iOS/web. Recent conversational findings remain scoped
+to this participant/agent chat for bounded follow-up context. Autonomous and connector-isolated
 turns do not gain search. See [agentic limits](agentic-limits.md) for budgets,
 uncertain-outcome handling and the boundaries before persistent work.
 

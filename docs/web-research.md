@@ -1,12 +1,20 @@
 # Web research
 
-Ask a contact a focused public-information question, for example: "Research the
-current Cloudflare Workflows free limits and save a report with official sources."
-The contact can call `research_web({ query, title })`. The API sends that question
-to Meta Responses with `web_search`, then saves the report in this chat's existing
-[documents](documents.md). Chat Completions still handles the conversation.
+A contact can research an unfamiliar public topic to understand what a person is
+talking about and continue the conversation. `research_web({ query, title })` now
+defaults to conversational delivery: Meta Responses performs the bounded search,
+and the findings return as evidence to the ordinary Chat Completions reply. No
+document, report card or separate notification is created. Asking the contact to
+look something up or get familiar with it does not itself request a deliverable.
 
-Both iOS and web show **Web research** and a cited-source count on the document
+When the person actually requests a saved report or other lasting write-up, the
+contact uses `research_web({ query, title, delivery: "document" })`. That mode saves
+the report in the chat's existing [documents](documents.md). The choice is semantic
+model direction backed by an explicit tool mode, not a keyword classifier or a
+universal guarantee about inferred intent. Authorized autonomous task research
+keeps its exact-query report contract.
+
+For document delivery, both iOS and web show **Web research** and a cited-source count on the document
 card. Open it to read the report and expand its source panel: query, check date,
 links, and whether each source was cited or only retrieved. Provenance refers to
 revision 1; editing a report does not recheck its claims or update its original
@@ -37,8 +45,8 @@ pause/revoke controls. Monitors, semantic memory and broader grants remain futur
   attention are checked before the provider call and during publication. Changing
   away from Contributor prevents a Contributor result from being published by
   that in-flight turn.
-- Private reports stay in that participant's chat. Group reports are visible to
-  every current group member. Research adds no cross-chat retrieval or connector
+- Private findings/reports stay in that participant's chat. Group findings/reports
+  are available only within that group, with current source-author/member consent. Research adds no cross-chat retrieval or connector
   permissions. Reports are untrusted evidence and cannot authorize external writes.
 
 ## Budgets and receipts
@@ -73,16 +81,22 @@ one does. No query, source or report content is retained in that usage table.
 Neither paid POST has a transport retry. A crash after reservation can leave a
 `pending` outcome; retries return uncertainty without sending another search for
 that message. A `failed` result is also not retried. A completed, grounded response
-becomes a `ready` draft. Publication creates the document, revision 1 and `complete`
-receipt in one transaction with a current-access guard. A ready draft can resume
-publication without another paid call. Admission rejects an already full document
-list before paying for research. If the list fills during research, it blocks publication;
-clearing space allows a later same-message retry to publish the saved draft.
+becomes a `ready` draft. Conversation delivery completes that receipt under the
+current-access guard and retains the normalized findings, returning them directly
+to the contact. Document delivery creates the document, revision 1 and `complete`
+receipt in one transaction. Either ready result can resume its delivery without
+another paid call. Only document delivery is subject to the document-list ceiling,
+both at admission and publication; a full document list does not prevent ordinary
+conversational research. If a document list fills during research, clearing space
+allows a later same-message retry to publish that saved document draft.
 There is no independent background publisher.
 
-Completed receipts point at the original document. Retries do not overwrite its
-edits. Deleting that document sets the pointer to null; the original message
-cannot recreate it. Budget denial returns without a provider call. Errors and
+Delivery mode is immutable once reserved. Completed conversational receipts return
+the same stored evidence on replay, including to another currently authorized
+contact in the same human group round, without another search or artifact.
+Completed document receipts point at the original document. Retries do not overwrite
+its edits or convert its delivery mode. Deleting that document sets the pointer to
+null; the original message cannot recreate it or reclassify it as inline findings. Budget denial returns without a provider call. Errors and
 uncertainty are returned to the contact for its ordinary chat response; research
 adds no separate job screen or retry button.
 
@@ -164,8 +178,14 @@ parent cascades. No backfill or new service is required.
 
 Migration `0053_web_research.sql` adds `web_research`, `web_research_usage` and nullable
 `chat_document.research_json`. Ready drafts retain normalized Markdown/provenance
-until publication or parent deletion. Publication clears the duplicate result
-body; original provenance stays with the document until deletion, across edits.
+until delivery or parent deletion. Document publication clears the duplicate
+result body; original provenance stays with the document until deletion, across
+edits. Conversational completion retains one normalized Markdown/provenance body
+(up to the existing 24,000-character/20-source limits) in the receipt until its
+parent chat turn, group source/reply, contact, agent or account is deleted. Clear
+chat removes source-linked findings even when factual memory is retained. There
+is no additional private client disk copy, global knowledge store or automatic
+conversion of research into shared factual memory.
 Existing revision retention stays at 50. Receipts keep query/title/model, status
 and safe failure code until parent deletion. There is no new retention sweeper.
 
@@ -246,3 +266,46 @@ require functional verification with fictional inputs after an authorized releas
 On both clients verify card → report → sources → back/reopen, empty lists,
 refresh/offline recovery, concurrent edits, deletion, access loss and account
 switching. Static checks do not establish these behaviors.
+
+## Conversation-local findings — migration 0068
+
+`0068_conversational_research.sql` adds only the receipt's `delivery` column. Its
+default is `document` so existing pending/ready/complete receipts preserve their
+original report and deletion contracts. New ordinary requests default in code to
+`conversation`; task research stays `document` and accepts no model-authored query
+or delivery override. Mode selection does not add a provider call, refund a budget,
+change grounding checks, relax consent or extend tool availability. Internal search
+output remains a structured research briefing; the conversation model uses it as
+evidence instead of forwarding its formatting or creating an unsolicited artifact.
+General document guidance also distinguishes a requested deliverable from context
+needed for ordinary conversation.
+
+Later replies can receive the two most recent completed conversational findings in
+this same private participant/agent chat or current group. Each context excerpt
+contains at most 5,500 Markdown characters (beginning and end when clipped), the
+public query, original check date and up to three cited source links. Clipping is
+explicit; the model must preserve uncertainty and cannot assume omitted evidence.
+Private queries enforce contact/user/agent identity and sequence. Groups enforce
+current author/viewer membership and memory consent, replying-agent membership,
+shared-agent availability, current Contributor eligibility and source sequence.
+Connector-isolated scopes return no such context; Standard processing excludes
+Contributor findings. Evidence never crosses private participants or private/group
+boundaries, and old dates do not establish current facts. This is bounded reuse,
+not a claim of permanent learning, complete knowledge or independent fact checking.
+
+The shared API provides the same behavior to iOS/web with their existing messages,
+Markdown source links, polling, delivered-part caches and Typing. Conversational
+research adds no document list mutation, report badge, client endpoint, countdown,
+extra notification or source-panel fetch. Explicit reports retain the existing
+source panel/editor/cache contract. Refresh, navigation and replay never trigger
+another paid search automatically.
+
+Static verification for this refinement: API TypeScript, whitespace and preparation
+of 29 research SQL variants/binding arities against all 68 empty migrations at
+expression depth 100. No functional harness, build, model call, remote migration,
+release or device/browser session was run. Verify with fictional data: unfamiliar
+references vs explicit reports, follow-up evidence reuse, no unsolicited document
+or long briefing, full document list, group sharing without duplicate search,
+consent/model changes while running, pending/failed/ready replay, legacy deleted
+reports, clear/delete, offline navigation and account changes. Semantic intent and
+natural replies require live-model evaluation; static checks do not establish them.

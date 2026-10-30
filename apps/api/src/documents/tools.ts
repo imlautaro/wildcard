@@ -4,6 +4,7 @@ import { applyEdits, createDocument, documentLimits, listDocuments, readDocument
 
 export const documentInstruction = 'Shared documents: this chat can hold Markdown documents that you and the humans read and edit; people open them full screen. '
   + 'Create one with create_document for writing meant to last or grow (plans, reports, notes, drafts, specs) instead of a very long chat message, then mention it briefly. '
+  + 'The human request must call for a lasting written deliverable. Looking up an unfamiliar topic so you can follow the conversation does not request a document. Use conversational research evidence directly; do not create a report or notes just because a search returned structured findings. '
   + 'Before editing, read_document for the latest text. Prefer edit_document with small find/replace edits so concurrent edits by others are kept; '
   + 'replace the whole text (markdown with baseRevision) only for a rewrite. Always give a short summary of the change. '
   + 'For ongoing writing work, pair a document with a task list: put the documentID in each task\'s notes so whoever is assigned works on that document in its task turns. '

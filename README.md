@@ -33,7 +33,7 @@ docs/
   tasks.md                   # Shared to-do lists and contact work turns
   persistent-work.md         # Task progress, retained budgets and pause/resume
   documents.md               # Collaborative Markdown documents in chats
-  web-research.md            # Bounded Meta web research with sourced reports
+  web-research.md            # Public conversational research and sourced reports
   monitors.md                # Code-checked page monitors that wake task contacts
 ```
 
@@ -251,8 +251,8 @@ Tasks can link a deliverable document and reviewers can send work back at most t
 ([collaboration](docs/tasks.md#collaboration-deliverables-and-bounded-reviews-0058), migration 0058).
 
 Human requests can use [web research](docs/web-research.md) through Meta Responses
-and `web_search`, saving a report with sources and original provenance in those
-documents. iOS and web show cited-source counts, check dates and source panels.
+and `web_search` to inform the conversation without creating a document. Requested
+lasting reports still save sources and original provenance in those documents. iOS and web show cited-source counts, check dates and source panels.
 Requests have durable replay receipts and rolling account/installation limits.
 Assigned tasks may run one human-saved exact public query with the app closed
 (migration 0055), with grant/revoke and receipt status on both clients. Schedules,
