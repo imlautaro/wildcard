@@ -67,31 +67,46 @@ struct SchedulesView: View {
                     description: Text("Ask this contact to write to you at a specific time or every ten minutes."))
             }
             ForEach(schedules) { schedule in
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(schedule.instruction).manrope()
-                        Text(schedule.repetition).manrope(.subheadline, weight: .semibold)
-                        Text("\(schedule.status == .active ? "Next" : "Scheduled for"): \(schedule.timing)")
-                            .manrope(.footnote)
-                        Text(schedule.timeZone).manrope(.caption).foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: schedule.status == .active ? "clock" : schedule.status == .cancelled ? "clock.badge.xmark" : "clock.badge.checkmark")
+                        .foregroundStyle(schedule.status == .active ? Color.accentColor : .secondary)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(schedule.instruction).manrope().lineLimit(3)
+                        Text("\(schedule.repetition) · \(schedule.status == .active ? "Next" : "Scheduled for") \(schedule.timing)")
+                            .manrope(.footnote).foregroundStyle(.secondary)
                         if schedule.status == .cancelled {
-                            Text("Cancelled").manrope(.footnote).foregroundStyle(.secondary)
-                        } else {
-                            if schedule.status == .completed {
-                                Text("Dispatched · pending or failed; check the conversation")
-                                    .manrope(.footnote).foregroundStyle(.secondary)
-                            }
-                            Button("Cancel schedule", role: .destructive) {
-                                Task { await cancel(schedule) }
-                            }
-                            .disabled(cancelling.contains(schedule.id))
+                            Text("Cancelled").manrope(.caption).foregroundStyle(.secondary)
+                        } else if schedule.status == .completed {
+                            Text("Dispatched · check the conversation").manrope(.caption).foregroundStyle(.secondary)
                         }
-                    }.padding(.vertical, 4)
+                    }
+                    Spacer(minLength: 0)
+                    if cancelling.contains(schedule.id) { ProgressView() }
+                }
+                .padding(.vertical, 4)
+                .accessibilityElement(children: .combine)
+                .swipeActions {
+                    if schedule.status != .cancelled {
+                        Button("Cancel", role: .destructive) { Task { await cancel(schedule) } }
+                            .disabled(cancelling.contains(schedule.id))
+                    }
+                }
+                .contextMenu {
+                    if schedule.status != .cancelled {
+                        Button("Cancel schedule", systemImage: "xmark.circle", role: .destructive) { Task { await cancel(schedule) } }
+                            .disabled(cancelling.contains(schedule.id))
+                    }
+                    Text(schedule.timeZone)
+                }
+                .accessibilityAction(named: "Cancel schedule") {
+                    if schedule.status != .cancelled { Task { await cancel(schedule) } }
                 }
             }
-            Section {
-                Text("Create or change schedules by messaging this contact. Times use the saved time zone. Messages may arrive after the scheduled time while they are generated and delivered.")
-                    .manrope(.footnote).foregroundStyle(.secondary)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                InfoButton(title: "Schedules", text: "Create or change schedules by messaging this contact. Swipe a schedule or hold it to cancel. Times use the saved time zone. Messages may arrive after the scheduled time while they are generated and delivered.")
             }
         }
         .navigationTitle("Schedules")

@@ -20,7 +20,10 @@ Use `list_schedules`, `update_schedule`, and `cancel_schedule` to inspect, edit,
 and cancel by chat. Editing replaces an active schedule's complete specification
 and requires its current revision. Cancelled/completed schedules cannot be edited;
 create a new one. Cancellation is also available from **Schedules** in the chat's
-three-dot menu (iOS), including while the contact is generating. Pull to refresh the list.
+three-dot menu (iOS), including while the contact is generating: each schedule is a
+compact row (instruction, repetition and next time, status), and you swipe it or hold
+it to cancel (VoiceOver: the Cancel schedule action). The how-it-works note is behind
+the info button in the toolbar. Pull to refresh the list.
 Creation and timing changes happen through chat; there is no separate form.
 The list refreshes every five seconds while the screen is open and the app is
 active. A one-time schedule disappears after its reply is saved successfully in
