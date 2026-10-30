@@ -31,7 +31,3 @@ onMounted(() => { void refresh(); });
     <button type="button" class="button-row" :disabled="busy" @click="refresh()"><AppIcon name="refresh" />Refresh</button>
   </div>
 </template>
-
-<style scoped>
-.info-title { display: flex; align-items: center; gap: 4px; }
-</style>

@@ -173,11 +173,14 @@ struct ContactPersonalityView: View {
     @State private var confirmRefresh = false
     @State private var confirmGenerate = false
     @State private var showingTemperament = false
-    /// IANA identifiers for the searchable time zone selector, keeping a saved value the system lacks.
+    /// IANA identifiers for the searchable time zone selector, sorted once.
+    private static let knownTimeZones = TimeZone.knownTimeZoneIdentifiers.sorted()
+        .map { SearchablePicker.Option(value: $0, label: $0.replacingOccurrences(of: "_", with: " ")) }
+    /// Keeps a saved value the system lacks selectable.
     private var timeZoneOptions: [SearchablePicker.Option] {
-        var identifiers = TimeZone.knownTimeZoneIdentifiers
-        if !identifiers.contains(draft.profile.timeZone) { identifiers.append(draft.profile.timeZone) }
-        return identifiers.sorted().map { SearchablePicker.Option(value: $0, label: $0.replacingOccurrences(of: "_", with: " ")) }
+        let zone = draft.profile.timeZone
+        return Self.knownTimeZones.contains { $0.value == zone } ? Self.knownTimeZones
+            : Self.knownTimeZones + [SearchablePicker.Option(value: zone, label: zone.replacingOccurrences(of: "_", with: " "))]
     }
     private var canEdit: Bool { contacts.contact(id: contactID)?.role == "owner" }
 

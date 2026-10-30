@@ -137,7 +137,6 @@ onMounted(async () => {
 <style scoped>
 .personality-field { padding-top: 12px; padding-bottom: 12px; }
 .personality-field textarea { font-size: 16px; color: var(--md-on-surface); width: 100%; }
-.info-title { display: flex; align-items: center; gap: 4px; }
 .personality-trait > span { font-weight: 500; }
 .personality-trait output { font-weight: 700; color: var(--md-primary); font-variant-numeric: tabular-nums; }
 .personality-trait { display: flex; flex-direction: column; padding: 16px; gap: 10px; }

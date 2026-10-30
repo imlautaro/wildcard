@@ -199,8 +199,10 @@ and caching still match across clients. Manrope stays the typeface on both.
   paragraphs with an info icon that opens the explanation in an `AppSheet`. Rows that
   open a sheet use `.button-row.opens` (chevron) with a trailing `.row-value`; switches
   use `.toggle-label` for a leading icon and info button. iOS equivalents are `.sheet`
-  with `presentationDetents`, `InfoButton` (popover) and `SheetRow`. See
-  [contacts](contacts.md#contact-details-layout). Checkboxes that are not switches render as Material checkboxes;
+  with `presentationDetents`, `InfoButton` (popover) and `SheetRow`. Screens using the
+  pattern on both clients: [contact details](contacts.md#contact-details-layout),
+  [Account](model-settings.md#account-layout), Connections (see MCP Connections below),
+  [group details](groups.md#membership-and-consent) and [Personality](personality.md). Checkboxes that are not switches render as Material checkboxes;
   use `.check-row` for a consent beside its text, and switches (`.toggle`) for
   settings that take effect immediately. Two-line rows use `.two-line` with a
   `.small` supporting line. `.search-field`, `.chip`, `.code-box`, `details`, and

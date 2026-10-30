@@ -189,6 +189,5 @@ useHead({ title: 'Connections' });
 </template>
 
 <style scoped>
-.info-title { display: flex; align-items: center; gap: 4px; }
 .oauth-fields { --field-bg: var(--md-surface-container); padding-top: 12px; }
 </style>
