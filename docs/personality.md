@@ -306,6 +306,25 @@ replaces the original 600-token cap, which exhausted its reasoning allowance
 before emitting classification JSON during the live evaluation. Broad quality,
 cost and latency calibration remains pending.
 
+## Returns after a pause
+
+Replies use [explicit message timing](chats.md#temporal-conversation-context) to
+interpret returns and topic changes. Enabled personalities receive categorical
+content guidance: warm contacts may welcome a return, reserved ones favor a brief
+acknowledgment or the direct answer, patient ones usually leave an old social
+question alone, and restless ones may notice a loose end once. Playful/wry contacts
+may use one gentle quip only when the current acting direction and topic permit
+it. These are optional tendencies, subordinate to the per-recipient acting plan,
+usefulness, care and the current message. No trait values enter the prompt.
+
+Disabled personalities still receive timing and general contextual guidance, but
+no new trait-derived return style. A pause does not itself establish rejection,
+hurt feelings or a new relationship penalty. Existing read-gap behavior remains
+separate. No new observations or learned recipient routines are stored. Group
+replies use their visible group dates without guessing a recipient local time or
+bringing private silence into the group. Timing and personality adherence still
+require real-model evaluation; this change does not implement adaptive outreach.
+
 ## Emoji and reactions
 
 People differ in how they use emoji: some put one in almost every message, others

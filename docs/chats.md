@@ -23,6 +23,45 @@ separate post/question tools and current tool results to report success or the
 actual rejection category. Recent successful destinations can resolve references
 in a fresh request; they cannot authorize replaying the old message.
 
+## Temporal conversation context
+
+Private replies receive the current UTC time, the current message's validated
+recipient time zone and local date/time, and dated recent human/reply messages.
+Each published assistant bubble uses its stored publication time. Legacy replies
+without bubble metadata use the turn's last update, explicitly marked approximate.
+The dates count toward the existing 12,000-byte recent-history budget.
+
+Server timing distinguishes the gap before the current human burst from time
+spent waiting for generation. Consecutive batched human messages share the first
+arrival as that burst's boundary, so an older pause is not erased by a second
+short message. The summary uses only rendered, bounded history; it does not claim
+complete silence or infer read status. Scheduled/task turns are labeled automated.
+Missing/invalid time zones retain UTC dates without guessing a local greeting.
+
+A pause or a new local date does not reset memory or force a greeting. Contacts
+may briefly acknowledge a return or an unfinished question when the current
+message and [personality](personality.md#returns-after-a-pause) make it welcome.
+Current tasks, urgent requests, sensitive disclosures and explicit quoted replies
+take priority. Silence does not create an obligation to answer an old question.
+The server does not classify every pause as abandonment or add relationship
+penalties from this timing context. Existing relationship behavior is unchanged.
+
+This is shared API behavior for iOS and web, including connector-isolated chats
+within their existing local history boundary. No migration, additional model
+call, service, client setting or cache is introduced. Histories retain their
+existing polling, refresh, invalidation and pending submission behavior. It does
+not add daily outreach or change [initiative](initiative.md) scheduling.
+
+With fictional conversations, verify morning returns after hours, a short exchange
+across midnight, direct tasks and sensitive messages after a long gap, an explicit
+quote resuming an old topic, an unrelated new topic after an unanswered question,
+batched messages, queued processing across a local-date boundary, multiple reply
+bubbles, approximate legacy dates, DST and unknown zones. Compare warm/reserved,
+patient/restless and playful/serious profiles, plus disabled personality. On both
+clients check reopen/back, refresh and offline recovery through ordinary history
+polling. Type checking does not establish real-model phrasing or device behavior;
+those checks remain pending until performed with authorization.
+
 ## API contract
 
 All routes require `Authorization: Bearer <session>` and return `Cache-Control:

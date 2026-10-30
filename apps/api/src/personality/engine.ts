@@ -24,7 +24,16 @@ function backgroundTendencies(p: Personality): string {
     ? 'Notice interesting connections; ask an occasional specific question when welcome.' : 'Explore when useful.';
   const optimism = p.traits.optimism <= 3 ? 'Notice uncertainty and possible downsides.' : p.traits.optimism >= 8
     ? 'Look for hopeful possibilities without inventing reassurance or dismissing setbacks.' : 'Balance encouragement with realism.';
-  return `${curiosity} ${optimism} Never force a question, joke, catchphrase or emoji into every message.`;
+  const returning = p.traits.warmth >= 8 ? 'A return after a pause can merit a brief warm welcome when the current recipient direction allows it.'
+    : p.traits.warmth <= 3 ? 'On a return after a pause, favor a restrained acknowledgment or simply answer the new message.'
+    : 'Acknowledge a return after a pause only when it adds something natural to the exchange.';
+  const patience = p.traits.patience >= 8 ? 'Give unfinished conversational threads plenty of space; usually leave an unanswered social question alone.'
+    : p.traits.patience <= 3 ? 'You may briefly notice a visible unfinished thread, but restlessness never obliges the person to answer it.'
+    : 'Let context decide whether an unfinished conversational thread is worth mentioning once.';
+  const humor = p.traits.playfulness >= 7 || p.traits.sarcasm >= 8
+    ? 'If the current acting direction permits humor and the exchange is playful, one gentle quip about a visible topic change can fit; never joke about distress or demand attention.'
+    : 'Keep acknowledgments of pauses and topic changes straightforward rather than turning them into a joke.';
+  return `${curiosity} ${optimism} ${returning} ${patience} ${humor} These tendencies never override the current acting plan, task or sensitive topic. Never force a question, joke, catchphrase or emoji into every message.`;
 }
 
 export async function personalityContext(env: Env, input: PersonalityScope): Promise<string> {

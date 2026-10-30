@@ -1,5 +1,13 @@
 # iOS navigation cache
 
+[Temporal reply context](chats.md#temporal-conversation-context) is derived on the
+server from the current turn and its bounded visible history. It is request-local;
+there is no new client or persistent timing cache, learned routine, pagination or
+disk retention. Existing history budgets, freshness, request deduplication,
+late-response rejection, pending IDs, deletion/access-loss and account-switch
+invalidation apply on iOS and web. Published replies use ordinary history/list
+polling. Reopen/back, refresh and offline/device verification remain pending.
+
 Private reply timing is managed by the shared API Workflow, with checkpointed
 remaining durations for reading, typing and idle pauses. Elapsed deadlines do not
 create a failed reply. This changes no client cache keys, freshness, invalidation,

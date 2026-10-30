@@ -1,5 +1,15 @@
 # Group conversations
 
+Replies interpret pauses using visible message dates and the trigger's arrival
+time, separately from generation delay. The shared [temporal guidance](chats.md#temporal-conversation-context)
+allows an optional personality-appropriate acknowledgment of a return or loose
+end while prioritizing the current request and the existing round/skip rules.
+Groups supply no recipient local time zone, so bots must not infer anyone's
+morning/evening from UTC or their fictional birthday zone. A group pause cannot
+prove that one person ignored a question, and private gaps are not disclosed.
+No new service, migration, model call, setting or cache is introduced; iOS and web
+reuse their history polling. Real-model and client verification remain pending.
+
 An initial reply to a human message can perform [web research](web-research.md)
 and save a sourced document for the group. Every contact in that human round
 shares one research reservation, so another contact cannot multiply paid requests.

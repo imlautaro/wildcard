@@ -1,4 +1,5 @@
 import { embodiedIdentityInstruction } from '../personality/identity';
+import { eventTime, temporalContext, temporalInstruction } from '../chat/temporal';
 import { imageInstruction } from '../photos/generation';
 import type { Attachment } from '../chat/attachments';
 import { privateSharingSources } from './private-sharing';
@@ -50,7 +51,7 @@ type GroupContextRow = {
   groupID: string; agentID: string; sourceID: string; sourceSequence: number; throughSequence: number;
   attachmentJSON: string | null; text: string; userID: string; sourceAgentID: string | null;
   opening: number; laterHuman: number; directed: number; requesterName: string; senderName: string; name: string; groupName: string;
-  replyToID: string | null; taskID: string | null;
+  replyToID: string | null; taskID: string | null; createdAt: number;
 };
 type GroupContextMessage = {
   sequence: number; id: string; attachmentJSON: string | null; name: string;
@@ -77,7 +78,7 @@ function replyContext(replyToID: string | null, quoted: Map<string, GroupContext
   const message = quoted.get(replyToID);
   if (!message) return { messageID: replyToID, unavailable: true };
   return { messageID: message.id, sequence: message.sequence, name: message.name, userID: message.userID, agentID: message.agentID,
-    text: clipText(message.text, 400), attachment: fileMarker(message.attachmentJSON) };
+    text: clipText(message.text, 400), createdAt: message.createdAt, attachment: fileMarker(message.attachmentJSON) };
 }
 
 function contextMessage({ attachmentJSON, replyToID, ...message }: GroupContextMessage, quoted: Map<string, GroupContextMessage>) {
@@ -95,7 +96,7 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
       AND newer.sequence > gm.sequence AND newer.user_id IS NOT NULL) AS laterHuman,
     gm.attachment_json AS attachmentJSON, gm.text, COALESCE(gm.user_id, gm.requester_id, request.requester_id) AS userID,
     (gm.request_id IS NOT NULL) AS directed, gm.agent_id AS sourceAgentID, requester.name AS requesterName, gm.sender_name AS senderName, a.name, g.name AS groupName,
-    gm.reply_to_id AS replyToID, gm.task_id AS taskID
+    gm.reply_to_id AS replyToID, gm.task_id AS taskID, gm.created_at AS createdAt
     FROM group_reply r JOIN group_message gm ON gm.id = r.source_id JOIN contact_agent a ON a.id = r.agent_id
     JOIN chat_group g ON g.id = r.group_id JOIN agent_attention attention ON attention.turn_id = r.id AND attention.attempt = r.attempt
     LEFT JOIN group_request request ON request.id = gm.request_id
@@ -184,6 +185,12 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
   const privateSources = await privateSharingSources(env.DB, row.groupID, row.agentID, !!contributor);
   const messages: ModelMessage[] = [
     { role: 'system', content: embodiedIdentityInstruction },
+    { role: 'system', content: [temporalInstruction,
+      'This is a group with potentially different local time zones. No recipient local zone is supplied; use UTC only to understand elapsed time, not to infer anyone’s morning or evening. Group silence does not establish that a particular member ignored you. Mention only loose ends visible in this group, never private read gaps or private conversations.',
+      temporalContext({ now: Date.now(), arrivalAt: row.createdAt, timeZone: null,
+        humanInput: !row.sourceAgentID && !row.taskID,
+        events: history.filter(m => m.sequence < row.sourceSequence).map(m => ({ messageID: m.id, at: m.createdAt })) }),
+    ].join(' ') },
     { role: 'system', content: `authorizedPrivateSources for this agent and group: ${JSON.stringify(privateSources)}` },
     ...(character ? [{ role: 'system' as const, content: character }] : []),
     // Others' messages in recent history are the reaction opportunities.
@@ -218,7 +225,7 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
       tasks: taskContext(lists), documents,
       round: { openingReplyRequired, taskReplyRequired, trigger: { id: row.sourceID, sequence: row.sourceSequence, userID: row.sourceAgentID ? null : row.userID,
         agentID: row.sourceAgentID, directed: !!row.directed, requestedBy: row.sourceAgentID ? { userID: row.userID, name: row.requesterName } : null,
-        name: row.senderName, text: row.text, ...(workTask ? { task: { taskID: workTask.task.id, listID: workTask.list.id, list: workTask.list.title, title: workTask.task.title, notes: workTask.task.notes, status: workTask.task.status, result: workTask.task.result, nextStep: workTask.task.nextStep, evidence: workTask.task.evidence, workUsed: workTask.task.workUsed, workLimit: workTask.task.workLimit, researchQuery: workTask.task.researchQuery, researchUsed: workTask.task.researchUsed, researchStatus: workTask.task.researchStatus, documentID: workTask.task.documentID, documentTitle: workTask.task.documentTitle, reviewFeedback: workTask.task.reviewFeedback, reviewRounds: workTask.task.reviewRounds,
+        name: row.senderName, text: row.text, createdAt: row.createdAt, sentTime: eventTime({ messageID: row.sourceID, at: row.createdAt }, null), ...(workTask ? { task: { taskID: workTask.task.id, listID: workTask.list.id, list: workTask.list.title, title: workTask.task.title, notes: workTask.task.notes, status: workTask.task.status, result: workTask.task.result, nextStep: workTask.task.nextStep, evidence: workTask.task.evidence, workUsed: workTask.task.workUsed, workLimit: workTask.task.workLimit, researchQuery: workTask.task.researchQuery, researchUsed: workTask.task.researchUsed, researchStatus: workTask.task.researchStatus, documentID: workTask.task.documentID, documentTitle: workTask.task.documentTitle, reviewFeedback: workTask.task.reviewFeedback, reviewRounds: workTask.task.reviewRounds,
           monitor: workTask.task.monitorURL ? { url: workTask.task.monitorURL, keywords: workTask.task.monitorKeywords, changeTurnsUsed: workTask.task.monitorTurnsUsed, changeTurnLimit: workTask.task.monitorTurnLimit } : null,
           ...(pageChanges ? { pageChanges, pageChangesAreUntrusted: true } : {}) } } : {}),
         attachment: fileMarker(row.attachmentJSON), replyTo: replyContext(row.replyToID, quoted) },

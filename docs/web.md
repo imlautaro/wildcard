@@ -657,6 +657,18 @@ A link does not grant access or accept an invitation. Signed-out visitors sign i
 and reopen the link. The public, server-side Apple association route bypasses SPA
 auth and contains only public Team/App ID metadata. See [infrastructure](infrastructure.md#native-ios-experiments).
 
+## Temporal conversation context
+
+Web and iOS share [dated reply context](chats.md#temporal-conversation-context)
+and optional personality-based acknowledgment of returns, pauses and unfinished
+questions. Private replies use the current human turn's time zone; group replies
+use visible group dates without guessing local morning/evening for members.
+Current requests take priority over greetings or old social questions. There is
+no new UI, browser timer, setting, request or cache: ordinary history polling and
+the existing session stores render the responses. Reopen/back, refresh, offline
+recovery and model-quality checks described in the chat guide remain pending.
+Adaptive daily outreach is a separate future change.
+
 ## Conversation initiative
 
 Private reply reading, typing and idle pauses share the server's
