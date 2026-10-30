@@ -2,8 +2,8 @@
 import type { VoiceInfo } from '~/utils/types';
 
 // Voice bubble content (docs/voice.md#voice-bubbles): play/pause, a seekable progress
-// waveform and the elapsed time while playing (the duration otherwise). Outgoing messages
-// show a microphone that turns the read-check color once a contact listened.
+// waveform and the elapsed time while playing (the duration otherwise). The avatar
+// microphone and seek thumb share the recipient listening state.
 // `path` is the audio download path and the player key; `blob` is a pending local clip.
 const props = defineProps<{ voice: VoiceInfo; path: string; blob?: Blob | null; outgoing?: boolean; senderName?: string; senderPhoto?: string | null }>();
 const { user } = useSession();
@@ -45,7 +45,8 @@ const loading = computed(() => active.value && voicePlayer.loading);
 const failed = computed(() => voicePlayer.failed === props.path);
 const total = computed(() => active.value && voicePlayer.duration > 0 ? voicePlayer.duration : props.voice.durationMs / 1000);
 const position = computed(() => active.value ? Math.min(voicePlayer.position, total.value) : selectedTime.value);
-const listened = computed(() => props.voice.listenedAt != null);
+const listened = computed(() => props.outgoing ? props.voice.listenedAt != null : props.voice.ownListenedAt != null);
+watch(playing, (value) => { if (value && !props.outgoing) void markVoicePlayback(props.path); });
 const clock = (seconds: number) => {
   const whole = Math.max(0, Math.round(seconds));
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
@@ -71,7 +72,7 @@ function seek(event: Event) {
 </script>
 
 <template>
-  <div ref="root" class="voice-message">
+  <div ref="root" class="voice-message" :class="{ listened }">
     <div class="voice-controls">
       <div v-if="outgoing" class="voice-avatar">
         <button v-if="playing" type="button" class="voice-speed"
@@ -79,7 +80,10 @@ function seek(event: Event) {
           title="Cycle playback speed: 1x, 1.5x, 2x" @click.stop="cycleVoicePlaybackRate">
           {{ voicePlayer.rate }}x
         </button>
-        <AppAvatar v-else :name="user?.name ?? 'You'" :path="ownPhoto" :size="40" />
+        <template v-else>
+          <AppAvatar :name="user?.name ?? 'You'" :path="ownPhoto" :size="40" />
+          <span class="voice-mic" role="img" :aria-label="listened ? 'Listened' : 'Not listened yet'"><AppIcon name="mic" filled /></span>
+        </template>
       </div>
       <button
         type="button" class="voice-play" :disabled="loading"
@@ -106,13 +110,15 @@ function seek(event: Event) {
           title="Cycle playback speed: 1x, 1.5x, 2x" @click.stop="cycleVoicePlaybackRate">
           {{ voicePlayer.rate }}x
         </button>
-        <AppAvatar v-else :name="senderName ?? 'Contact'" :path="senderPhoto" :size="40" />
+        <template v-else>
+          <AppAvatar :name="senderName ?? 'Contact'" :path="senderPhoto" :size="40" />
+          <span class="voice-mic" role="img" :aria-label="listened ? 'Listened' : 'Not listened yet'"><AppIcon name="mic" filled /></span>
+        </template>
       </div>
     </div>
     <div class="voice-info">
       <span v-if="failed" class="voice-error">Couldn't load audio</span>
       <span v-else>{{ label }}</span>
-      <span v-if="outgoing" class="voice-mic" :class="{ listened }" role="img" :aria-label="listened ? 'Listened' : 'Not listened yet'"><AppIcon name="mic" filled /></span>
     </div>
   </div>
 </template>
@@ -120,7 +126,7 @@ function seek(event: Event) {
 <style scoped>
 .voice-message { width: min(290px, 66vw); padding-top: 2px; white-space: normal; }
 .voice-controls { display: flex; align-items: center; gap: 10px; }
-.voice-avatar { width: 44px; height: 44px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.voice-avatar { position: relative; width: 44px; height: 44px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
 .voice-speed { width: 44px; height: 44px; flex: none; border: 2px solid transparent; border-radius: 50%; background: var(--md-surface-container-highest); background-clip: padding-box; color: inherit; font: inherit; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
 .voice-speed:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
 .voice-play { width: 44px; height: 44px; flex: none; border: 0; border-radius: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--md-on-surface-variant); cursor: pointer; }
@@ -136,12 +142,14 @@ function seek(event: Event) {
 .voice-track input[type='range']::-moz-range-thumb { width: 12px; height: 44px; border: 0; background: transparent; }
 .voice-track input[type='range']::-webkit-slider-runnable-track { height: 44px; background: transparent; }
 .voice-track input[type='range']::-moz-range-track { height: 44px; background: transparent; }
-.voice-thumb { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; background: var(--md-primary); transform: translate(-50%, -50%); pointer-events: none; }
+.voice-thumb { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; background: var(--md-on-surface-variant); transform: translate(-50%, -50%); pointer-events: none; }
 .voice-waveform:focus-within { outline: 2px solid var(--md-primary); outline-offset: 3px; border-radius: 4px; }
 .voice-track input[type='range']:disabled { cursor: default; }
 .voice-info { display: flex; align-items: center; gap: 4px; min-height: 16px; font-size: 12px; color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums; }
 .voice-error { color: var(--md-error); }
-.voice-mic { display: inline-flex; color: var(--md-on-surface-variant); }
-.voice-mic.listened { color: var(--read); }
+.voice-mic { position: absolute; bottom: -1px; left: -1px; display: inline-flex; padding: 2px; border-radius: 50%; background: var(--incoming); color: var(--md-on-surface-variant); }
+:global(.outgoing) .voice-mic { background: var(--outgoing); }
+.listened .voice-mic, .listened .voice-thumb { color: var(--read); }
+.listened .voice-thumb { background: var(--read); }
 .voice-mic svg { width: 14px; height: 14px; }
 </style>

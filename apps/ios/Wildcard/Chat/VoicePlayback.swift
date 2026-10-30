@@ -11,6 +11,7 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
     private(set) var currentKey: String?
     /// Includes the brief, cancellable preparation period after tapping Play.
     private(set) var isPlaying = false
+    private var playbackStarted: (() -> Void)?
     private(set) var failedKey: String?
     private(set) var playbackRate: Float = 1
     private var preferenceOwner: String?
@@ -92,9 +93,9 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
     func currentTime(for key: String) -> TimeInterval { currentKey == key ? player?.currentTime ?? 0 : 0 }
 
     @discardableResult
-    func play(_ data: Data, key: String, isMessage: Bool = false) -> Bool {
+    func play(_ data: Data, key: String, isMessage: Bool = false, onStarted: (() -> Void)? = nil) -> Bool {
         guard !isRecording else { return false }
-        if currentKey == key, player != nil { return resume() }
+        if currentKey == key, player != nil { playbackStarted = onStarted; return resume() }
         stop()
         do {
             let player = try AVAudioPlayer(data: data)
@@ -103,6 +104,7 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
             player.rate = playbackRate
             guard player.prepareToPlay() else { throw PlaybackFailure() }
             self.player = player
+            playbackStarted = onStarted
             self.isMessage = isMessage
             currentKey = key
             failedKey = nil
@@ -166,10 +168,13 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
                     do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
                     guard let self, let player, self.player === player, self.isPlaying else { return }
                     self.startTask = nil
-                    if !player.play() { self.fail() }
+                    if player.play() { self.playbackStarted?() } else { self.fail() }
                     self.updateNowPlaying()
                 }
-            } else if !player.play() { throw PlaybackFailure() }
+            } else {
+                guard player.play() else { throw PlaybackFailure() }
+                playbackStarted?()
+            }
             progressTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.updateNowPlaying() }
             }
@@ -199,6 +204,7 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
         player = nil
         currentKey = nil
         failedKey = nil
+        playbackStarted = nil
         isPlaying = false
         isMessage = false
         releasePlaybackResources()

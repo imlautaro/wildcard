@@ -14,16 +14,18 @@ struct MessageReplyQuote: Codable, Equatable, Sendable {
 }
 
 /// A recorded or synthesized voice message. `transcript` is `nil` until transcription
-/// finishes and empty when no speech was found; `listenedAt` is set when a contact listens.
-struct MessageVoice: Decodable, Equatable, Sendable {
+/// finishes and empty when no speech was found. `listenedAt` tracks contact listening;
+/// `ownListenedAt` tracks the signed-in person playing an incoming message.
+struct MessageVoice: Codable, Hashable, Sendable {
     let durationMs: Int
+    var ownListenedAt: Double? = nil
     var listenedAt: Double?
     var transcript: String?
 
     /// History and acknowledgements may arrive out of order; listening and transcription only move forward.
     func merging(_ other: MessageVoice?) -> MessageVoice {
         guard let other else { return self }
-        return MessageVoice(durationMs: durationMs, listenedAt: [listenedAt, other.listenedAt].compactMap { $0 }.max(),
+        return MessageVoice(durationMs: durationMs, ownListenedAt: [ownListenedAt, other.ownListenedAt].compactMap { $0 }.max(), listenedAt: [listenedAt, other.listenedAt].compactMap { $0 }.max(),
                             transcript: transcript ?? other.transcript)
     }
 }
@@ -71,6 +73,12 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
         var result = newer ? incoming : self
         result.readAt = [readAt, incoming.readAt].compactMap { $0 }.max()
         result.voice = result.voice?.merging(newer ? voice : incoming.voice)
+        let previous = newer ? assistantMessages : incoming.assistantMessages
+        result.assistantMessages = result.assistantMessages?.map { message in
+            var merged = message
+            merged.voice = message.voice?.merging(previous?.first(where: { $0.id == message.id })?.voice)
+            return merged
+        }
         return result
     }
 }

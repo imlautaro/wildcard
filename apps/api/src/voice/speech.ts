@@ -9,7 +9,7 @@ import { agentVoice, elevenLabsKey, voiceRepliesAvailable } from './catalog';
 import { markRecording } from '../chat/presence';
 
 export type VoiceAttachment = Attachment & { durationMs: number };
-export type PublicVoice = { durationMs: number; listenedAt: number | null; transcript: string | null };
+export type PublicVoice = { durationMs: number; listenedAt: number | null; ownListenedAt?: number | null; transcript: string | null };
 export const isVoice = (attachment: Pick<Attachment, 'mimeType'> | null | undefined): attachment is VoiceAttachment =>
   !!attachment?.mimeType.startsWith('audio/');
 

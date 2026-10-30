@@ -243,6 +243,23 @@ chats.get('/media', async (c) => {
   });
   return c.json({ items, nextBefore: results.length > page.length ? page[page.length - 1].sequence : null });
 });
+chats.put('/turns/:turnID/attachment/listened', async (c) => {
+  const part = Number(c.req.query('part') ?? '0');
+  if (c.req.query('side') !== 'assistant' || !Number.isSafeInteger(part) || part < 0 || part > 7) {
+    return c.json({ error: 'Voice message not found' }, 404);
+  }
+  const path = `$."${part}"`;
+  const row = await c.env.DB.prepare(`UPDATE chat_turn
+    SET assistant_voice_listened_json = json_set(assistant_voice_listened_json, ?1,
+      COALESCE(json_extract(assistant_voice_listened_json, ?1), ?2))
+    WHERE id = ?3 AND contact_id = ?4 AND user_id = ?5
+      AND json_extract(assistant_messages_json, ?6) LIKE 'audio/%'
+      AND EXISTS (SELECT 1 FROM contact WHERE id = ?4 AND user_id = ?5 AND clearing = 0)
+    RETURNING json_extract(assistant_voice_listened_json, ?1) AS listenedAt`)
+    .bind(path, Date.now(), c.req.param('turnID'), c.get('contactID'), c.get('owner'), `$[${part}].attachment.mimeType`)
+    .first<{ listenedAt: number }>();
+  return row ? c.json(row) : c.json({ error: 'Voice message not found' }, 404);
+});
 chats.get('/turns/:turnID/attachment', async (c) => {
   const turn = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
   const part = Number(c.req.query('part') ?? '0');

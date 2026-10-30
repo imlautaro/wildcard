@@ -2543,3 +2543,26 @@ or keep a compatible consumer running. Old 0063 consumers cannot account for
 linked scope locks correctly. The database upgrade is exercised locally, but
 activation/source verification and global Cloudflare failure/retry behavior remain
 unverified for these corrections until an authorized automatic release.
+
+## Voice playback receipts (migration 0066)
+
+Apply versioned `0066_voice_playback.sql` through the existing automatic API release
+before serving the updated clients. It adds `chat_turn.assistant_voice_listened_json`
+(default `{}`) and `group_voice_playback` keyed by message/account, with cascading
+foreign keys and an account index. No new service, binding, secret or account-specific
+resource is required; independent installations use the existing D1 provisioning and
+migration order through 0066. Local setup uses `npm run db:migrate:local` as usual.
+
+Authenticated idempotent PUTs to the audio attachment path plus `/listened` record
+incoming playback. Private requests require `side=assistant&part=N`; group requests
+verify current membership and reject the sender's own clip. Writes validate audio
+and reject a chat being cleared; they never run inference or change read receipts.
+History and chat summaries include current-account listening metadata and duration.
+
+Commit and push to release automatically; do not migrate or deploy production
+manually. Verify the automatic source commit/migration and then the listening checks
+in [voice cache verification](caching.md#voice-listening-metadata) on both clients.
+Those runtime checks have not yet been performed for this change. Rollback can leave
+this additive schema in place; older clients ignore the new optional response fields.
+New clients require the new API for persisted incoming receipts. Existing audio starts
+unlistened because previous human playback cannot be reconstructed from read receipts.

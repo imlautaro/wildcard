@@ -69,6 +69,17 @@ media.get('/media', async (c) => {
     return { ...message, name, mimeType, size };
   }), nextBefore: results.length > page.length ? page[page.length - 1].sequence : null });
 });
+media.put('/messages/:messageID/attachment/listened', async (c) => {
+  const row = await c.env.DB.prepare(`INSERT INTO group_voice_playback (message_id, user_id, listened_at)
+    SELECT gm.id, ?1, ?2 FROM group_message gm JOIN chat_group g ON g.id = gm.group_id
+    WHERE gm.id = ?3 AND gm.group_id = ?4 AND gm.user_id IS NOT ?1 AND g.clearing = 0
+      AND json_extract(gm.attachment_json, '$.mimeType') LIKE 'audio/%'
+      AND EXISTS (SELECT 1 FROM group_member WHERE group_id = gm.group_id AND user_id = ?1)
+    ON CONFLICT(message_id, user_id) DO UPDATE SET listened_at = group_voice_playback.listened_at
+    RETURNING listened_at AS listenedAt`)
+    .bind(c.get('owner'), Date.now(), c.req.param('messageID'), c.req.param('id')).first<{ listenedAt: number }>();
+  return row ? c.json(row) : c.json({ error: 'Voice message not found' }, 404);
+});
 media.get('/messages/:messageID/attachment', async (c) => {
   const row = await c.env.DB.prepare(`SELECT attachment_json AS attachmentJSON FROM group_message
     WHERE id = ? AND group_id = ? AND EXISTS (

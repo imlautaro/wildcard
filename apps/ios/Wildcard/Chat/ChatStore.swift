@@ -3,6 +3,12 @@ import Observation
 
 @Observable @MainActor
 final class ChatStore {
+    func markVoiceListened(turnID: String, part: Int) {
+        guard !invalidated, let index = turns.firstIndex(where: { $0.id == turnID }),
+              let count = turns[index].assistantMessages?.count, part >= 0, part < count else { return }
+        turns[index].assistantMessages?[part].voice?.ownListenedAt = Date().timeIntervalSince1970 * 1000
+    }
+
     private(set) var reactions = MessageReactionStore()
     struct OutgoingMessage {
         let turn: ChatTurn
@@ -74,6 +80,14 @@ final class ChatStore {
     func clearPresence() { presence = nil }
 
     func reconcile(_ contact: Contact) {
+        if !invalidated, let index = turns.lastIndex(where: { ($0.assistantText == nil ? $0.createdAt : $0.updatedAt) == contact.lastMessageAt }) {
+            if turns[index].assistantText == nil {
+                turns[index].voice = turns[index].voice?.merging(contact.lastMessageVoice)
+            } else if let part = turns[index].assistantMessages?.indices.last {
+                let voice = turns[index].assistantMessages?[part].voice?.merging(contact.lastMessageVoice)
+                turns[index].assistantMessages?[part].voice = voice
+            }
+        }
         guard !invalidated, contact.lastMessageFromUser == 1,
               let index = turns.lastIndex(where: { $0.createdAt == contact.lastMessageAt }),
               let readAt = contact.lastMessageReadAt else { return }

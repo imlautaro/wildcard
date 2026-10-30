@@ -1256,3 +1256,33 @@ archived chat, an empty archive, unarchiving and Back to Chats on device/browser
 [Clear/delete](chat-lifecycle.md) purge conversations, pending submissions, reactions and secondary resource snapshots, stop playback, and clear existing image/audio caches (including iOS protected disk storage). Server history revisions reset other devices' caches and fence pagination/offline sends. Archive uses the existing session list cache and pagination; unread totals still include archived chats. Device/browser failure-recovery verification remains pending.
 
 Lifecycle validation now includes source deletion, retained-memory permissions and pending cleanup across linked private/group scopes. See the [local integration report](chat-lifecycle-testing.md). The 0064 corrections are server-side and preserve both clients' existing revision/cache invalidation contract; device/browser cache eviction and stale viewer responses still need UI verification.
+
+## Voice listening metadata
+
+Migration 0066 stores incoming private listening by immutable turn/assistant part
+and group listening by message/account. History and chat-list summaries return
+`ownListenedAt`; outgoing `listenedAt` retains the existing contact-listening meaning.
+The API checks current ownership/membership and audio type inside idempotent writes.
+Private metadata is deleted with its turn; group playback rows cascade with the
+message or account. This stores playback metadata, never another audio copy.
+
+Both clients update the existing session conversation store after playback starts,
+coalesce concurrent receipt writes, and merge history/summary listening evidence
+without reverting to unlistened on a stale response. Lists project the same metadata
+and duration from retained conversations/pending sends before server summaries.
+No new client disk retention, pagination or audio-cache budget is introduced; metadata
+shares the existing conversation LRU and lifecycle. Account changes, clear/deletion
+and confirmed access loss discard it with the conversation. Late replies cannot
+recreate discarded data. Failed writes retain local evidence until cache eviction
+and retry on the next playback; only confirmed writes survive sign-out/reload.
+Existing history/list background refresh and explicit refresh bring in other-device
+receipts while keeping loaded content visible through transient failures.
+
+Manual verification on iOS and web remains pending: received audio starts grey, play
+turns the thumb/microphone and latest-row icon to the read color, pause/replay/back
+navigation preserve it, and a fresh session/device restores a confirmed receipt.
+Check both directions, groups with two human accounts, pending sends, multi-part
+replies ending in audio versus text, activity overrides, dark mode, screen readers,
+failed decoding, seek-only interaction and waveform loading without playback.
+Also check offline playback/retry, empty chats, explicit refresh, cache eviction,
+clear/delete, membership revocation and account switching during a receipt request.

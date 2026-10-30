@@ -263,7 +263,7 @@ function element() {
     voicePlayer.position = position;
     updateMediaPosition();
   });
-  audio.addEventListener('play', () => { voicePlayer.playing = true; stopPlaybackFrame(); updatePlaybackFrame(); updateMediaPosition(); });
+  audio.addEventListener('playing', () => { voicePlayer.playing = true; stopPlaybackFrame(); updatePlaybackFrame(); updateMediaPosition(); });
   audio.addEventListener('pause', () => { voicePlayer.playing = false; stopPlaybackFrame(); updateMediaPosition(); });
   audio.addEventListener('ended', stopVoicePlayback);
   audio.addEventListener('error', () => {

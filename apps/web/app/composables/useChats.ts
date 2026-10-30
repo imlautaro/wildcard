@@ -14,6 +14,7 @@ export type ChatRow = {
   id: string;
   name: string;
   photoPath: string | null;
+  voice?: import('~/utils/types').VoiceInfo | null;
   preview: string;
   sender: string | null;
   at: number;
@@ -187,6 +188,15 @@ async function refreshLists() {
     if (page.status === 'fulfilled') {
       const keepsOlder = contacts.value.length > page.value.contacts.length;
       contacts.value = mergeContacts(page.value.contacts);
+      for (const contact of contacts.value) {
+        const latest = peekConversation(contact.id)?.turns.at(-1);
+        if (!latest || turnTimestamp(latest) !== contact.lastMessageAt) continue;
+        if (latest.assistantText == null) latest.voice = mergeVoice(latest.voice, contact.lastMessageVoice);
+        else {
+          const message = latest.assistantMessages?.at(-1);
+          if (message) message.voice = mergeVoice(message.voice, contact.lastMessageVoice);
+        }
+      }
       if (!keepsOlder) nextCursor.value = page.value.nextCursor;
       contactsLoaded.value = true;
       contactsError.value = null;
@@ -203,7 +213,10 @@ async function refreshLists() {
       for (const group of groups.value) {
         const cached = peekGroupConversation(group.id);
         const message = cached?.messages.find((item) => item.id === group.lastMessageID);
-        if (message) message.receiptState = mergeReceipt(message.receiptState, group.lastMessageReceiptState);
+        if (message) {
+          message.receiptState = mergeReceipt(message.receiptState, group.lastMessageReceiptState);
+          message.voice = mergeVoice(message.voice, group.lastMessageVoice);
+        }
       }
       void confirmPreviews();
     } else if (!(groupsLoaded.value && isTransientFailure(groupList.reason))) {
@@ -305,8 +318,9 @@ function applyRead(kind: 'contact' | 'group', id: string, sequence: number, unre
 
 function contactRow(contact: Contact): ChatRow | null {
   const row = contactMessageRow(contact);
+  if (row && contact.clearing === 1) return { ...row, voice: null, preview: 'Cleaning up...' };
   if (row && (contact.replyActivity === 'typing' || contact.replyActivity === 'recording')) {
-    return { ...row, preview: contact.replyActivity === 'recording' ? 'Recording...' : 'Typing...', own: false, sender: null, sending: false, receiptState: null };
+    return { ...row, voice: null, preview: contact.replyActivity === 'recording' ? 'Recording...' : 'Typing...', own: false, sender: null, sending: false, receiptState: null };
   }
   return row;
 }
@@ -319,24 +333,26 @@ function contactMessageRow(contact: Contact): ChatRow | null {
   };
   const pending = cached?.pending;
   if (pending && !cached.turns.some((turn) => turn.id === pending.id)) {
-    return { ...base, preview: pending.text || (pending.attachment ? `Attachment: ${pending.attachment.name}` : ''),
+    return { ...base, voice: pending.voice ? { durationMs: pending.voice.durationMs, listenedAt: null, transcript: null } : null, preview: pending.voice ? voicePreviewLabel(pending.voice) : pending.text || (pending.attachment ? `Attachment: ${pending.attachment.name}` : ''),
       at: pending.createdAt, own: true, sending: true, readAt: null };
   }
   const latest = cached?.turns.at(-1);
   if (latest && turnTimestamp(latest) >= (contact.lastMessageAt ?? 0)) {
     const at = turnTimestamp(latest);
+    const voice = at === contact.lastMessageAt ? mergeVoice(latestTurnVoice(latest), contact.lastMessageVoice) : latestTurnVoice(latest);
     const reads = [latest.readAt, at === contact.lastMessageAt ? contact.lastMessageReadAt : null].filter((value): value is number => value != null);
-    return { ...base, preview: latest.assistantText != null ? [...plainMessageMarkdown(latest.assistantText)].slice(0, 500).join('') : turnPreview(latest), at, own: turnFromUser(latest), sending: false,
+    return { ...base, voice, preview: voice ? voicePreviewLabel(voice) : latest.assistantText != null ? [...plainMessageMarkdown(latest.assistantText)].slice(0, 500).join('') : turnPreview(latest), at, own: turnFromUser(latest), sending: false,
       readAt: reads.length ? Math.max(...reads) : null };
   }
   if (contact.lastMessageAt == null) return contact.onboardingChat === 1 || contact.archivedAt != null || contact.clearing === 1
     ? { ...base, preview: contact.clearing === 1 ? 'Cleaning up...' : 'No messages yet', at: contact.createdAt, own: false, sending: false, readAt: null } : null;
-  return { ...base, preview: contact.lastMessagePreview ?? (contact.lastMessageFromUser === 0 ? plainMessageMarkdown(contact.lastMessageText ?? '') : contact.lastMessageText ?? ''), at: contact.lastMessageAt, own: contact.lastMessageFromUser === 1,
+  return { ...base, voice: contact.lastMessageVoice, preview: contact.lastMessageVoice ? voicePreviewLabel(contact.lastMessageVoice) : contact.lastMessagePreview ?? (contact.lastMessageFromUser === 0 ? plainMessageMarkdown(contact.lastMessageText ?? '') : contact.lastMessageText ?? ''), at: contact.lastMessageAt, own: contact.lastMessageFromUser === 1,
     sending: false, readAt: contact.lastMessageReadAt ?? null };
 }
 
 function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   const cached = peekGroupConversation(group.id);
+  let voice = group.lastMessageVoice;
   let preview = group.lastMessagePreview ?? (group.lastMessageUserID == null ? plainMessageMarkdown(group.lastMessageText ?? 'No messages yet') : group.lastMessageText ?? 'No messages yet');
   let at = group.lastMessageAt ?? group.createdAt;
   let sender = group.lastMessageSenderName;
@@ -345,6 +361,7 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   let sending = false;
   const last = cached?.messages.at(-1);
   if (last && (last.id === group.lastMessageID || last.createdAt >= (group.lastMessageAt ?? 0))) {
+    voice = last.id === group.lastMessageID ? mergeVoice(last.voice, group.lastMessageVoice) : last.voice;
     preview = last.text ? [...(last.agentID ? plainMessageMarkdown(last.text) : last.text)].slice(0, 500).join('') : last.attachment ? `Attachment: ${last.attachment.name}` : '';
     at = last.createdAt;
     sender = last.senderName;
@@ -353,15 +370,17 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   }
   const pending = cached?.pending;
   if (pending && !cached.messages.some((message) => message.id === pending.id)) {
+    voice = pending.voice ? { durationMs: pending.voice.durationMs, listenedAt: null, transcript: null } : null;
     preview = pending.text || (pending.attachment ? `Attachment: ${pending.attachment.name}` : '');
     at = pending.createdAt;
     userID = me ?? null;
     receiptState = 'sent';
     sending = !pending.accepted;
   }
+  if (voice) preview = voicePreviewLabel(voice);
   const own = !!userID && userID === me;
   return {
-    kind: 'group', archived: group.archivedAt != null, canClear: group.ownerID === me, canDelete: false, id: group.id, name: group.name, photoPath: groupPhotoPath(group), preview: group.clearing===1 ? 'Cleaning up...' : group.replyActivity ?? preview,
+    kind: 'group', voice: group.replyActivity || group.clearing === 1 ? null : voice, archived: group.archivedAt != null, canClear: group.ownerID === me, canDelete: false, id: group.id, name: group.name, photoPath: groupPhotoPath(group), preview: group.clearing===1 ? 'Cleaning up...' : group.replyActivity ?? preview,
     sender: group.replyActivity ? null : own ? 'You' : sender, at, unread: Math.max(0, group.unreadCount ?? 0),
     own: group.replyActivity ? false : own, sending, readAt: null, receiptState: receiptState ?? 'sent',
   };

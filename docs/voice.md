@@ -41,16 +41,21 @@ receipt checks. Only one voice message plays at a time; starting another pauses 
 current one. Playback continues while scrolling, navigating away and listening in the background.
 See [background playback and ear routing](#background-playback-and-ear-routing) for platform limits.
 
-Outgoing voice messages show a microphone icon next to the duration:
+The sender avatar has a floating microphone at its lower-left corner. The microphone
+and progress thumb are grey before listening and use the read-check color afterward:
 
-- grey while no contact has listened;
-- **blue (the same color as the read checks)** once a contact starts listening, which
-  is when it starts transcribing the message (`voice.listenedAt`).
+- Outgoing clips use `voice.listenedAt`, set when a contact begins transcription.
+  In groups this still means the first contact has listened.
+- Incoming clips use `voice.ownListenedAt`, scoped to the signed-in person and set
+  only when playback actually starts. Opening a chat, fetching audio for a waveform,
+  scrubbing and failed playback do not mark a clip listened. Pausing and replaying
+  preserve the state; playing your own clip does not acknowledge it for recipients.
 
-Read checks keep their existing meaning (`readAt` in private chats, the aggregate
-receipt state in groups). In a private chat the contact reads the message, then
-listens, then answers. In a group the microphone turns blue when the first contact
-listens.
+Reading and listening remain separate. Read checks keep their existing private/group
+meaning. During playback the existing speed control replaces the avatar and its badge.
+Migration [0066](infrastructure.md#voice-playback-receipts-migration-0066) persists incoming
+listening across sessions/devices; existing clips start unlistened because past playback
+was not recorded. In groups another person's playback never marks your received clip listened.
 
 Long-press any voice message for the usual reactions/reply menu plus
 **View transcript**. The transcript appears in a sheet (iOS) or dialog (web):
@@ -60,7 +65,10 @@ Long-press any voice message for the usual reactions/reply menu plus
 - the text otherwise. Contact voice messages always have a transcript (it is the
   text that was spoken).
 
-Chat previews, Home rows and notifications show **Voice message** instead of text.
+Chat-list rows show a microphone and **Voice message (0:05)**, with the actual duration,
+for incoming, outgoing and pending clips; group rows retain their sender prefix.
+The microphone uses the same listening state as the bubble. Activity indicators still
+take precedence. Notifications and reply quotes keep **Voice message** without transcripts.
 
 ## When contacts reply with voice
 
@@ -327,8 +335,8 @@ The native app (`apps/ios`) implements the same behavior in private chats and gr
   waveform of real audio amplitude in rounded bars, the elapsed time while playing (the duration otherwise), the send
   time and the usual receipts. The play button has no circular background. The sender's
   avatar sits inside the bubble: left for your clips, right for incoming clips,
-  including groups and pending sends. Outgoing bubbles add the microphone in
-  `MessageReceiptView.readColor` once `voice.listenedAt` is set. `VoicePlayer.shared`
+  including groups and pending sends. The floating avatar microphone and seek thumb
+  use `MessageReceiptView.readColor` after the recipient listens. `VoicePlayer.shared`
   (`VoicePlayback.swift`) plays one clip at a time with `AVAudioPlayer`; scrolling does
   not stop it. Reply quotes of voice messages read "Voice message".
 - **Transcript.** The long-press popover adds **View transcript** (also a VoiceOver
@@ -403,8 +411,8 @@ The web app (`apps/web`) implements the same behavior in private chats and group
 - **Bubbles.** `VoiceMessage.vue` renders a plain play/pause button, rounded bars derived from the actual audio over a
   keyboard-accessible seekable range input, sender avatars (yours on the left,
   incoming senders on the right, including groups and pending sends) and the
-  elapsed time or duration; outgoing bubbles add the microphone, grey until
-  `voice.listenedAt` and then `--read` (the read-check color). One shared `<audio>`
+  elapsed time or duration. The floating avatar microphone and seek thumb are grey
+  before listening and use `--read` afterward. One shared `<audio>`
   element plays at a time and messages continue across navigation and hidden tabs,
   subject to browser background restrictions. Catalog samples stop on hiding the
   tab or leaving their picker. A failed

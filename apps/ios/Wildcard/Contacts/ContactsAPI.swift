@@ -20,6 +20,7 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     let createdAt: Double
     let updatedAt: Double
     var replyActivity: String? = nil
+    var lastMessageVoice: MessageVoice? = nil
     var lastMessagePreview: String? = nil
     var lastMessageText: String?
     var lastMessageAt: Double?

@@ -92,6 +92,7 @@ final class ContactsStore {
         let timestamp = turn.assistantText == nil ? turn.createdAt : turn.updatedAt
         guard chat.isSubmitting(turn.id) || timestamp >= (contact.lastMessageAt ?? 0) else { return contact }
         var result = contact
+        result.lastMessageVoice = turn.assistantText == nil ? turn.voice : turn.assistantMessages?.last?.voice
         result.lastMessageText = messagePreview(for: turn)
         result.lastMessagePreview = result.lastMessageText == "Voice message" ? result.lastMessageText
             : turn.assistantText.map { String(MessageMarkdown.plainText($0).prefix(500)) } ?? result.lastMessageText

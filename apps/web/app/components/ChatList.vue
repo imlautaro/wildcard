@@ -62,6 +62,8 @@ onMounted(() => { void chats.refresh(); });
             <div class="bottom">
               <span class="preview">
                 <MessageReceipt v-if="row.own" :sending="row.sending" :read-at="row.readAt" :receipt-state="row.receiptState" />
+                <span v-if="row.voice" class="preview-mic" :class="{ listened: row.own ? row.voice.listenedAt != null : row.voice.ownListenedAt != null }"
+                  role="img" :aria-label="(row.own ? row.voice.listenedAt != null : row.voice.ownListenedAt != null) ? 'Listened' : 'Not listened yet'"><AppIcon name="mic" filled /></span>
                 <b v-if="row.sender">{{ row.sender }}: </b>{{ row.preview }}
               </span>
               <span v-if="row.unread" class="badge" :aria-label="`${row.unread} unread`">{{ row.unread }}</span>
@@ -79,3 +81,9 @@ onMounted(() => { void chats.refresh(); });
     <span v-if="chats.invitationCount.value" class="badge">{{ chats.invitationCount.value }}</span>
   </NuxtLink>
 </template>
+
+<style scoped>
+.preview-mic { display: inline-flex; vertical-align: -2px; margin-right: 4px; color: var(--md-on-surface-variant); }
+.preview-mic.listened { color: var(--read); }
+.preview-mic :deep(svg) { width: 16px; height: 16px; }
+</style>

@@ -33,12 +33,18 @@ const mayInvite = `EXISTS (SELECT 1 FROM group_member m JOIN chat_group g ON g.i
 type GroupSummary = Record<string, unknown> & { lastMessageText: string | null; lastMessageUserID: string | null };
 function groupPreview(row: GroupSummary) {
   const source = row.lastMessageText;
-  return { ...row,
+  const { lastMessageVoiceJSON, ...fields } = row;
+  return { ...fields, lastMessageVoice: typeof lastMessageVoiceJSON === 'string' ? JSON.parse(lastMessageVoiceJSON) : null,
     lastMessagePreview: source == null ? null : [...(row.lastMessageUserID == null ? plainMessageMarkdown(source) : source)].slice(0, 500).join('') };
 }
 // Task work triggers (task_id set, no sender) are internal: the assignee's own reply is
 // the visible event, so they never count as unread, preview or history.
-const summary = `g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (SELECT group_concat(label, ', ') FROM (
+const summary = `
+  (SELECT CASE WHEN json_extract(gm.attachment_json, '$.mimeType') LIKE 'audio/%' THEN
+    json_object('durationMs', json_extract(gm.attachment_json, '$.durationMs'), 'listenedAt', gm.voice_listened_at,
+      'ownListenedAt', (SELECT listened_at FROM group_voice_playback WHERE message_id = gm.id AND user_id = m.user_id), 'transcript', NULL) END
+    FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageVoiceJSON,
+g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (SELECT group_concat(label, ', ') FROM (
     SELECT a.name || CASE WHEN p.recording_until > unixepoch('subsec') * 1000 THEN ' Recording...' ELSE ' Typing...' END AS label
     FROM group_reply r JOIN agent_attention attention ON attention.turn_id = r.id AND attention.attempt = r.attempt AND attention.agent_id = r.agent_id
     JOIN agent_presence p ON p.agent_id = r.agent_id JOIN contact_agent a ON a.id = r.agent_id
@@ -334,19 +340,20 @@ groups.get('/:id/messages', async (c) => {
   if (!Number.isSafeInteger(before) || before < 1) return c.json({ error: 'Invalid history cursor' }, 400);
   const { results } = await c.env.DB.prepare(`SELECT ${receiptState('group_message')} AS receiptState, sequence, id, user_id AS userID, agent_id AS agentID,
     sender_name AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON, reply_to_id AS replyToID,
+    (SELECT listened_at FROM group_voice_playback WHERE message_id = group_message.id AND user_id = ?3) AS ownListenedAt,
     voice_listened_at AS voiceListenedAt, voice_transcribed_at AS voiceTranscribedAt FROM group_message
-    WHERE group_id = ? AND sequence < ? AND task_id IS NULL ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before)
-    .all<{ sequence: number; attachmentJSON: string | null; replyToID: string | null; text: string; agentID: string | null; voiceListenedAt: number | null; voiceTranscribedAt: number | null }>();
+    WHERE group_id = ?1 AND sequence < ?2 AND task_id IS NULL ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before, c.get('owner'))
+    .all<{ ownListenedAt: number | null; sequence: number; attachmentJSON: string | null; replyToID: string | null; text: string; agentID: string | null; voiceListenedAt: number | null; voiceTranscribedAt: number | null }>();
   const page = results.slice(0, 50);
   const quotes = await groupQuotes(c.env.DB, c.req.param('id'), page);
   const current=await c.env.DB.prepare('SELECT history_revision AS value FROM chat_group WHERE id=?').bind(c.req.param('id')).first<{value:number}>();
   if (!epoch || epoch.value!==current?.value) return c.json({error:'Group was cleared. Refresh history.'},409);
-  return c.json({ historyRevision:epoch.value, messages: page.reverse().map(({ attachmentJSON, replyToID, voiceListenedAt, voiceTranscribedAt, ...message }) => {
+  return c.json({ historyRevision:epoch.value, messages: page.reverse().map(({ attachmentJSON, replyToID, voiceListenedAt, voiceTranscribedAt, ownListenedAt, ...message }) => {
     // Contacts' voice messages keep their spoken text; people's transcripts stay behind long press.
     const voice = publicVoice(storedAttachment({ attachmentJSON }), message.agentID ? null : voiceListenedAt,
       message.agentID ? message.text : voiceTranscribedAt ? message.text : null);
     return { ...message, text: voice && !message.agentID ? '' : message.text,
-      attachment: voice ? null : publicAttachment({ attachmentJSON }), voice, replyTo: quotes({ replyToID }) };
+      attachment: voice ? null : publicAttachment({ attachmentJSON }), voice: voice ? { ...voice, ownListenedAt } : null, replyTo: quotes({ replyToID }) };
   }), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 // Aggregate-only refresh for retained history; recheck membership in the query.

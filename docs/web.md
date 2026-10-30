@@ -983,3 +983,21 @@ The lifecycle API corrections in migration 0064 apply equally to web and iOS: pe
 The iOS chat header three-dot actions menu and fixed-width truncating title (see
 [chats](chats.md)) were scoped to iOS by request; the web chat header keeps its
 separate buttons.
+
+## Voice listening state and list previews
+
+Both clients show a lower-left microphone over the voice sender avatar and color
+it together with the seek thumb: grey before listening, read-check color afterward.
+Incoming messages use the current account's `ownListenedAt`; outgoing messages keep
+the contact's existing `listenedAt`. Only successful playback acknowledges incoming
+audio, including cached playback. Downloads for waveforms and chat reads do not.
+Chat lists show a microphone and `Voice message (0:05)` with the actual duration,
+including pending clips and group sender attribution. Activity takes precedence.
+
+Migration 0066 is required. Listening merges monotonically into the existing session
+conversation stores and summaries, with no additional persistent browser cache.
+Concurrent writes for one account/path share a request. Offline playback updates the
+retained conversation immediately; failed receipt writes retry on the next playback.
+After eviction or sign-out, only server-confirmed listening survives. See
+[cache policy and manual checks](caching.md#voice-listening-metadata).
+Browser and physical-device verification remains pending.

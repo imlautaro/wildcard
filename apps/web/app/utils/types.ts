@@ -30,6 +30,7 @@ export type Contact = {
   createdAt: number;
   updatedAt: number;
   replyActivity?: string | null;
+  lastMessageVoice?: VoiceInfo | null;
   lastMessagePreview?: string | null;
   lastMessageText: string | null;
   lastMessageAt: number | null;
@@ -48,7 +49,7 @@ export type Attachment = { name: string; mimeType: string; size: number };
 export type DraftAttachment = Attachment & { data: string; previewURL: string | null };
 // A recorded voice message (docs/voice.md): `listenedAt` turns the outgoing microphone
 // blue; `transcript` is null while transcribing and "" when no speech was detected.
-export type VoiceInfo = { durationMs: number; listenedAt: number | null; transcript: string | null };
+export type VoiceInfo = { durationMs: number; ownListenedAt?: number | null; listenedAt: number | null; transcript: string | null };
 // A recorded clip waiting to be sent: mono 16 kHz PCM16 WAV and its base64 body.
 export type DraftVoice = { blob: Blob; data: string; durationMs: number };
 export type VoiceOption = { id: string; name: string; gender: string | null; age: string | null; accent: string | null; description: string | null };
@@ -108,6 +109,7 @@ export type ChatGroup = {
   createdAt: number;
   updatedAt: number;
   replyActivity?: string | null;
+  lastMessageVoice?: VoiceInfo | null;
   lastMessagePreview?: string | null;
   lastMessageText: string | null;
   lastMessageAt: number | null;

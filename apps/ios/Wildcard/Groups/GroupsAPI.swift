@@ -11,6 +11,7 @@ struct ChatGroup: Decodable, Hashable, Identifiable {
     let createdAt: Double
     let updatedAt: Double
     var replyActivity: String? = nil
+    var lastMessageVoice: MessageVoice? = nil
     var lastMessagePreview: String? = nil
     var lastMessageText: String?
     var lastMessageAt: Double?
@@ -321,6 +322,11 @@ final class GroupsStore {
 
 @MainActor @Observable
 final class GroupChatStore {
+    func markVoiceListened(messageID: String) {
+        guard !invalidated, let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
+        messages[index].voice?.ownListenedAt = Date().timeIntervalSince1970 * 1000
+    }
+
     private(set) var reactions = MessageReactionStore()
     private var historyRevision = 0
     private(set) var snapshot: GroupSnapshot?
@@ -472,6 +478,7 @@ final class GroupChatStore {
     func reconcile(_ group: ChatGroup) {
         guard !invalidated, let index = messages.firstIndex(where: { $0.id == group.lastMessageID }) else { return }
         messages[index].receiptState = ReceiptProgress.merge(messages[index].receiptState, group.lastMessageReceiptState)
+        messages[index].voice = messages[index].voice?.merging(group.lastMessageVoice)
     }
 
     func preview(for group: ChatGroup) -> ChatGroup {
@@ -480,6 +487,7 @@ final class GroupChatStore {
         if let message = messages.last,
            message.id == group.lastMessageID || message.createdAt >= (group.lastMessageAt ?? 0) {
             result.lastMessageID = message.id
+            result.lastMessageVoice = message.voice
             result.lastMessageText = message.voice != nil ? "Voice message"
                 : message.text.isEmpty ? message.attachment.map { "Attachment: " + $0.name } ?? "" : String(message.text.prefix(500))
             result.lastMessagePreview = message.agentID != nil && message.voice == nil && !message.text.isEmpty
@@ -492,6 +500,7 @@ final class GroupChatStore {
         }
         if let pending, !messages.contains(where: { $0.id == pending.id }) {
             result.lastMessageID = pending.id
+            result.lastMessageVoice = pending.voice?.metadata
             result.lastMessageText = pending.voice != nil ? "Voice message"
                 : pending.text.isEmpty ? pending.attachment.map { "Attachment: " + $0.name } ?? "" : pending.text
             result.lastMessagePreview = result.lastMessageText

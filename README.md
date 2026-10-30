@@ -305,6 +305,8 @@ see [voice messages](docs/voice.md#reply-activity-indicators) and
 
 Chat rows support [archive, clear with optional memory removal, and contact deletion](docs/chat-lifecycle.md) on iOS and web. Group owners can clear shared history for everyone. Deletion uses a durable D1 outbox for Workflow and R2 cleanup.
 
+Voice bubbles and chat-list previews show [per-account listening state and audio duration](docs/voice.md#voice-bubbles) on iOS and web (migration [0066](docs/infrastructure.md#voice-playback-receipts-migration-0066)).
+
 Loaded voice messages support [background playback and system media controls](docs/voice.md#background-playback-and-ear-routing).
 iOS includes proximity-based receiver routing on iPhone and a brief startup margin;
 web background support depends on the browser and has no receiver-routing API.

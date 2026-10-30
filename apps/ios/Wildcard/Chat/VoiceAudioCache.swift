@@ -49,6 +49,15 @@ enum VoiceAudioResource: Hashable, Sendable {
     /// A catalog voice sample for the contact voice picker.
     case voicePreview(voiceID: String)
 
+    var playbackReceipt: (path: String, query: [URLQueryItem])? {
+        switch self {
+        case let .contactVoice(id, turn, part):
+            return ("contacts/\(id)/chat/turns/\(turn)/attachment/listened", [URLQueryItem(name: "side", value: "assistant"), URLQueryItem(name: "part", value: String(part))])
+        case let .groupVoice(id, message): return ("groups/\(id)/messages/\(message)/attachment/listened", [])
+        default: return nil
+        }
+    }
+
     var key: String {
         switch self {
         case let .userVoice(id, turn): return "contact/\(id)/voice/\(turn)/user"
@@ -72,6 +81,16 @@ final class VoiceAudioCache {
         let task: Task<Data, Error>
     }
     private var requests: [String: Request] = [:]
+    private var playbackWrites: [String: Task<Void, Error>] = [:]
+
+    func acknowledgePlayback(_ resource: VoiceAudioResource, write: @escaping () async throws -> Void) async {
+        if let task = playbackWrites[resource.key] { _ = try? await task.value; return }
+        let currentSession = session
+        let task = Task { try await write() }
+        playbackWrites[resource.key] = task
+        _ = try? await task.value
+        if session == currentSession { playbackWrites.removeValue(forKey: resource.key) }
+    }
     private let waveforms = NSCache<NSString, NSArray>()
     private struct WaveformRequest {
         let id = UUID()
@@ -116,6 +135,8 @@ final class VoiceAudioCache {
         session = UUID()
         for request in requests.values { request.task.cancel() }
         requests.removeAll()
+        for task in playbackWrites.values { task.cancel() }
+        playbackWrites.removeAll()
         memory.removeAllObjects()
         waveforms.removeAllObjects()
         for request in waveformRequests.values { request.task.cancel() }

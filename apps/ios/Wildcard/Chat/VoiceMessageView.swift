@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// A voice message bubble: sender avatar, plain play/pause, waveform progress, elapsed time while playing (duration
-/// otherwise), send time and receipts. Outgoing bubbles show a microphone that turns the
-/// read-check color once a contact has listened. Audio comes from `localData` (an outgoing
+/// otherwise), send time and receipts. The avatar microphone and seek thumb use the
+/// read-check color once the recipient has listened. Audio comes from `localData` (an outgoing
 /// clip) or the account's protected voice cache.
 struct VoiceMessageView: View {
     let resource: VoiceAudioResource
@@ -20,6 +20,8 @@ struct VoiceMessageView: View {
     var senderColor: Color? = nil
     var replyQuote: MessageReplyPreview? = nil
     var onQuoteTap: (() -> Void)? = nil
+    @Environment(ContactsStore.self) private var contacts
+    @Environment(GroupsStore.self) private var groups
     @Environment(AuthStore.self) private var auth
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -31,6 +33,8 @@ struct VoiceMessageView: View {
     @State private var selectedTime: TimeInterval = 0
     @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 44
 
+    private var listened: Bool { fromUser ? voice.listenedAt != nil : voice.ownListenedAt != nil }
+    private var listeningColor: Color { listened ? MessageReceiptView.readColor(colorScheme) : .secondary }
     private var player: VoicePlayer { VoicePlayer.shared }
     private var key: String { "\(auth.user?.id ?? "")/\(resource.key)" }
     private var isPlaying: Bool { player.isPlaying(key) }
@@ -52,12 +56,6 @@ struct VoiceMessageView: View {
                             if !fromUser { avatarSlot }
                         }
                         HStack(alignment: .lastTextBaseline, spacing: 4) {
-                            if fromUser {
-                                Image(systemName: "mic.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(voice.listenedAt != nil ? MessageReceiptView.readColor(colorScheme) : Color.secondary)
-                                    .accessibilityLabel(voice.listenedAt != nil ? "Listened" : "Not listened yet")
-                            }
                             Text(elapsed > 0 || isPlaying ? VoiceDuration.format(seconds: Int(elapsed)) : VoiceDuration.format(milliseconds: voice.durationMs))
                                 .manrope(.caption2).monospacedDigit()
                                 .foregroundStyle(.secondary)
@@ -109,7 +107,17 @@ struct VoiceMessageView: View {
                 .accessibilityLabel("Playback speed")
                 .accessibilityValue(player.playbackRateLabel)
                 .accessibilityHint("Cycles through 1x, 1.5x, and 2x for all voice messages.")
-            } else { avatar }
+            } else {
+                avatar.overlay(alignment: .bottomLeading) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(listeningColor)
+                        .padding(2)
+                        .background(fromUser ? Color("OutgoingMessageBackground") : Color(uiColor: .secondarySystemBackground), in: Circle())
+                        .offset(x: -3, y: 3)
+                        .accessibilityLabel(listened ? "Listened" : "Not listened yet")
+                }
+            }
         }
         .frame(width: 44, height: 44)
     }
@@ -136,7 +144,7 @@ struct VoiceMessageView: View {
                     }
                 }
                 .frame(width: trackWidth)
-                VoiceSeekSlider(value: progress, onChange: { fraction in
+                VoiceSeekSlider(value: progress, color: listeningColor, onChange: { fraction in
                     selectedTime = fraction * duration
                     player.seek(selectedTime, for: key)
                 })
@@ -180,12 +188,32 @@ struct VoiceMessageView: View {
     }
 
     private func playWithArtwork(_ data: Data) -> Bool {
-        guard player.play(data, key: key, isMessage: true) else { return false }
+        guard player.play(data, key: key, isMessage: true, onStarted: { markListened() }) else { return false }
         let photo = fromUser
             ? auth.user?.photoVersion.map { CachedImageResource.accountAvatar(version: $0) }
             : senderPhoto
         player.setSenderArtwork(for: key, resource: photo, auth: auth)
         return true
+    }
+
+    private func markListened() {
+        guard !fromUser, let receipt = resource.playbackReceipt else { return }
+        switch resource {
+        case let .contactVoice(id, turn, part): contacts.conversations.cachedStore(for: id)?.markVoiceListened(turnID: turn, part: part)
+        case let .groupVoice(id, message): groups.conversations.cachedStore(for: id)?.markVoiceListened(messageID: message)
+        default: break
+        }
+        // Retry the idempotent write on a later playback if the network is unavailable.
+        let owner = auth.user?.id
+        Task {
+            await auth.images.audio.acknowledgePlayback(resource) {
+                try Task.checkCancellation()
+                guard auth.user?.id == owner else { throw CancellationError() }
+                _ = try await auth.withSession { api, token in
+                    try await api.send(path: receipt.path, method: "PUT", token: token, query: receipt.query)
+                }
+            }
+        }
     }
 
     private func toggle() {
@@ -222,6 +250,7 @@ struct VoiceMessageView: View {
 /// Native slider keeps a 44-point hit area and touch/VoiceOver tracking over the bars.
 private struct VoiceSeekSlider: UIViewRepresentable {
     let value: Double
+    let color: Color
     let onChange: (Double) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onChange: onChange) }
@@ -242,8 +271,8 @@ private struct VoiceSeekSlider: UIViewRepresentable {
 
     func updateUIView(_ slider: UISlider, context: Context) {
         context.coordinator.onChange = onChange
-        slider.thumbTintColor = UIColor(Color.accentColor)
-        slider.tintColor = UIColor(Color.accentColor)
+        slider.thumbTintColor = UIColor(color)
+        slider.tintColor = UIColor(color)
         if !slider.isTracking { slider.value = Float(value) }
     }
 

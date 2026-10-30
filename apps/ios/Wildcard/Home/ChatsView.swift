@@ -304,6 +304,7 @@ private struct ChatListRow: View {
     private var messagePreview: String {
         if contact.clearing == 1 { return "Cleaning up..." }
         if let activity { return activity }
+        if let voice = contact.lastMessageVoice { return "Voice message (\(VoiceDuration.format(milliseconds: voice.durationMs)))" }
         guard let text = contact.lastMessageText else { return "No messages yet" }
         return (contact.lastMessagePreview ?? (contact.lastMessageFromUser == 0 ? MessageMarkdown.plainText(text) : text)).components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -321,6 +322,9 @@ private struct ChatListRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     if activity == nil && contact.lastMessageFromUser == 1 {
                         MessageReceiptView(sentAt: contact.lastMessageAt ?? contact.createdAt, readAt: contact.lastMessageReadAt, isSending: contacts.conversations.cachedStore(for: contact.id)?.outgoingMessage != nil)
+                    }
+                    if activity == nil && contact.clearing != 1, let voice = contact.lastMessageVoice {
+                        VoicePreviewMicrophone(listened: contact.lastMessageFromUser == 1 ? voice.listenedAt != nil : voice.ownListenedAt != nil)
                     }
                     Text(messagePreview).manrope(.subheadline)
                         .lineLimit(2)
@@ -382,7 +386,8 @@ private struct GroupChatListRow: View {
         if let activity = group.replyActivity { return AttributedString(activity) }
         let source = group.lastMessageText
         let cleaned = group.lastMessagePreview ?? source.map { group.lastMessageUserID == nil ? MessageMarkdown.plainText($0) : $0 }
-        let message = cleaned?.components(separatedBy: .newlines)
+        let voiceLabel = group.lastMessageVoice.map { "Voice message (\(VoiceDuration.format(milliseconds: $0.durationMs)))" }
+        let message = (voiceLabel ?? cleaned)?.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ") ?? "No messages yet"
         guard let sender = own ? "You" : group.lastMessageSenderName, !sender.isEmpty else { return AttributedString(message) }
         var preview = AttributedString(sender + ": ")
@@ -400,6 +405,9 @@ private struct GroupChatListRow: View {
                         MessageReceiptView(sentAt: group.lastMessageAt ?? group.createdAt,
                             isSending: groups.conversations.cachedStore(for: group.id).map { $0.pendingID == group.lastMessageID && !$0.pendingAccepted } ?? false,
                             receiptState: group.lastMessageReceiptState ?? "sent")
+                    }
+                    if group.replyActivity == nil && group.clearing != 1, let voice = group.lastMessageVoice {
+                        VoicePreviewMicrophone(listened: own ? voice.listenedAt != nil : voice.ownListenedAt != nil)
                     }
                     Text(messagePreview).manrope(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }
@@ -450,4 +458,15 @@ private struct ChatListTimestamp: View {
         return formatter.string(from: date)
     }
 
+}
+
+private struct VoicePreviewMicrophone: View {
+    let listened: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    var body: some View {
+        Image(systemName: "mic.fill")
+            .font(.subheadline)
+            .foregroundStyle(listened ? MessageReceiptView.readColor(colorScheme) : Color.secondary)
+            .accessibilityLabel(listened ? "Listened" : "Not listened yet")
+    }
 }

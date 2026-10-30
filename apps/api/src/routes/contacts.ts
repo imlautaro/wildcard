@@ -22,12 +22,19 @@ import personality from '../personality/routes';
 import generation from '../contacts/generation';
 import { listVoices, voiceRepliesAvailable, type Voice } from '../voice/catalog';
 
-type Contact = { archivedAt?: number | null; historyRevision?: number; clearing?: number; speechAccent: string | null; onboardingChat?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
+type Contact = { archivedAt?: number | null; historyRevision?: number; clearing?: number; speechAccent: string | null; onboardingChat?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageVoiceJSON?: string | null; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
 const columns = `archived_at AS archivedAt, history_revision AS historyRevision, clearing, (SELECT speech_accent FROM contact_agent WHERE id = contact.agent_id) AS speechAccent, onboarding_chat AS onboardingChat, initiative_enabled AS initiativeEnabled, voice_messages_enabled AS voiceMessagesEnabled,
   (SELECT voice_id FROM contact_agent WHERE id = contact.agent_id) AS voiceID, (SELECT voice_name FROM contact_agent WHERE id = contact.agent_id) AS voiceName, id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
   CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
 const managesAgent = `EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = contact.user_id)`;
 const selection = `${columns},
+  (SELECT CASE WHEN t.assistant_text IS NOT NULL THEN
+    CASE WHEN json_extract(t.assistant_messages_json, '$[#-1].attachment.mimeType') LIKE 'audio/%' THEN
+      json_object('durationMs', json_extract(t.assistant_messages_json, '$[#-1].attachment.durationMs'), 'listenedAt', NULL,
+        'transcript', NULL, 'ownListenedAt', json_extract(t.assistant_voice_listened_json, '$."' || (json_array_length(t.assistant_messages_json) - 1) || '"')) END
+    ELSE CASE WHEN json_extract(t.attachment_json, '$.mimeType') LIKE 'audio/%' THEN
+      json_object('durationMs', json_extract(t.attachment_json, '$.durationMs'), 'listenedAt', t.voice_listened_at, 'transcript', NULL) END END
+    FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageVoiceJSON,
   (SELECT ${privatePresenceStatus('contact')} FROM agent_presence p WHERE p.agent_id = contact.agent_id) AS replyActivity,
   (SELECT CASE WHEN t.assistant_text IS NULL AND t.schedule_id IS NULL AND t.group_request_id IS NULL AND t.task_id IS NULL THEN 1 ELSE 0 END
     FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageFromUser,
@@ -43,7 +50,8 @@ const selection = `${columns},
 // Parse the complete source before clipping, keeping the legacy raw summary intact.
 function contactPreview(row: Contact) {
   const source = row.lastMessageText;
-  return { ...row, lastMessageText: source == null ? source : [...source].slice(0, 500).join(''),
+  const { lastMessageVoiceJSON, ...fields } = row;
+  return { ...fields, lastMessageVoice: lastMessageVoiceJSON ? JSON.parse(lastMessageVoiceJSON) : null, lastMessageText: source == null ? source : [...source].slice(0, 500).join(''),
     lastMessagePreview: source == null ? null : [...(row.lastMessageFromUser === 0 ? plainMessageMarkdown(source) : source)].slice(0, 500).join('') };
 }
 const contacts = new Hono<{ Bindings: Env; Variables: { owner: string } }>();

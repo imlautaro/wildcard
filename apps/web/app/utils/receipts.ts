@@ -1,4 +1,4 @@
-import type { ChatTurn } from './types';
+import type { ChatTurn, VoiceInfo } from './types';
 
 // Ports of apps/ios/Wildcard/Chat/ConversationSync.swift and GroupMemberColor.swift.
 
@@ -9,6 +9,20 @@ export function mergeReceipt(current: string | null | undefined, incoming: strin
   if (incoming == null) return current ?? null;
   if (current == null) return incoming;
   return (receiptRank[incoming] ?? -1) >= (receiptRank[current] ?? -1) ? incoming : current;
+}
+
+export function mergeVoice(current: VoiceInfo | null | undefined, incoming: VoiceInfo | null | undefined) {
+  if (!incoming) return current ?? null;
+  if (!current) return incoming;
+  return { ...incoming, listenedAt: incoming.listenedAt ?? current.listenedAt,
+    ownListenedAt: incoming.ownListenedAt ?? current.ownListenedAt, transcript: incoming.transcript ?? current.transcript };
+}
+export function voicePreviewLabel(voice: { durationMs: number }) {
+  const seconds = Math.max(0, Math.round(voice.durationMs / 1000));
+  return `Voice message (${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')})`;
+}
+export function latestTurnVoice(turn: ChatTurn) {
+  return turn.assistantText == null ? turn.voice : turn.assistantMessages?.at(-1)?.voice;
 }
 
 const statusRank: Record<ChatTurn['status'], number> = { queued: 0, running: 1, failed: 2, complete: 3 };
@@ -24,6 +38,9 @@ export function mergeTurn(current: ChatTurn, incoming: ChatTurn): ChatTurn {
   const result = { ...(newer ? incoming : current) };
   const reads = [current.readAt, incoming.readAt].filter((value): value is number => value != null);
   result.readAt = reads.length ? Math.max(...reads) : null;
+  result.voice = mergeVoice(current.voice, incoming.voice);
+  result.assistantMessages = result.assistantMessages?.map((message) => ({ ...message,
+    voice: mergeVoice((newer ? current : incoming).assistantMessages?.find((old) => old.id === message.id)?.voice, message.voice) }));
   return result;
 }
 

@@ -140,7 +140,7 @@ function mergeMessages(existing: GroupMessage[], incoming: GroupMessage[]) {
   const byID = new Map(existing.map((message) => [message.id, message]));
   for (const message of incoming) {
     const current = byID.get(message.id);
-    byID.set(message.id, current ? { ...message, receiptState: mergeReceipt(current.receiptState, message.receiptState) } : message);
+    byID.set(message.id, current ? { ...message, voice: mergeVoice(current.voice, message.voice), receiptState: mergeReceipt(current.receiptState, message.receiptState) } : message);
   }
   return [...byID.values()].sort((a, b) => a.sequence - b.sequence);
 }
