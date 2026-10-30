@@ -243,6 +243,12 @@ struct ChatView: View {
             .refreshable { await chat.refresh(contactID: contactID, using: auth) }
         }
         .safeAreaInset(edge: .top, spacing: 0) { NativeActiveStatusView(contactID: contactID) }
+        .task(id: contacts.suggestedDrafts[contactID]) {
+            // A Home note's suggested reply fills an empty composer; it is never sent automatically.
+            guard let text = contacts.suggestedDrafts[contactID] else { return }
+            contacts.suggestedDrafts[contactID] = nil
+            if draftIsEmpty { draft = text; composerFocused = true }
+        }
         .task(id: native.selectedDraft?.id) {
             guard let item = native.selectedDraft, item.contactID == contactID, item.userID == auth.user?.id else { return }
             guard draftIsEmpty else { attachmentError = "Finish or clear your current draft, then import the shared draft from the inbox."; return }

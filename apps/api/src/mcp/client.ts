@@ -7,7 +7,9 @@ export { credential, endpoint, digest, size, encoder } from './security';
 import { validator } from './schema';
 export { validator } from './schema';
 
-export type RemoteTool = { name: string; description: string; inputSchema: Record<string, unknown>; fingerprint: string; allowed: boolean };
+// readOnly records the server's own read-only annotation (never trusted as proof
+// of safety); Home only uses it to narrow which approved tools it may read.
+export type RemoteTool = { name: string; description: string; inputSchema: Record<string, unknown>; fingerprint: string; allowed: boolean; readOnly?: boolean };
 export type Connection = { id: string; credentialScope: string; userID: string; name: string; url: string; credential: string | null; toolsJSON: string; authType: 'none' | 'bearer' | 'oauth'; oauthGeneration?: string };
 export const connectionColumns = 'id, credential_scope AS credentialScope, user_id AS userID, name, url, credential, tools_json AS toolsJSON, auth_type AS authType';
 
@@ -81,7 +83,8 @@ export async function catalog(client: Client, signal: AbortSignal): Promise<Remo
     if (tool.outputSchema) validator(tool.outputSchema);
     const description = (tool.description ?? '').slice(0, 2000);
     const fingerprint = await digest(JSON.stringify([tool.name, tool.description ?? '', tool.inputSchema, tool.outputSchema ?? null, tool.annotations ?? null]));
-    return { name: tool.name, description, inputSchema: tool.inputSchema, fingerprint, allowed: false };
+    const readOnly = tool.annotations?.readOnlyHint === true && tool.annotations?.destructiveHint !== true;
+    return { name: tool.name, description, inputSchema: tool.inputSchema, fingerprint, allowed: false, ...(readOnly ? { readOnly } : {}) };
   }));
   if (size(tools) > 256000) throw new Error('MCP_CATALOG_SIZE');
   return tools;

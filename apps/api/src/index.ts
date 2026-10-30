@@ -4,6 +4,7 @@ import { cleanResources } from './chat/cleanup';
 import { pruneLearning } from './chat/learning';
 import { dispatchTasks } from './tasks/dispatch';
 import { dispatchMonitors } from './monitors/dispatch';
+import { dispatchHome } from './home/workflow';
 import { recoverContactGeneration } from './contacts/generation';
 import { recoverOnboarding } from './onboarding/routes';
 import { deliverRemoteNative } from './native/remote';
@@ -48,6 +49,7 @@ export default {
     ctx.waitUntil(dispatchSchedules(env));
     ctx.waitUntil(dispatchTasks(env));
     ctx.waitUntil(dispatchMonitors(env));
+    ctx.waitUntil(dispatchHome(env));
     ctx.waitUntil(dispatchInitiatives(env));
     ctx.waitUntil(recoverChats(env));
     ctx.waitUntil(recoverGroups(env));

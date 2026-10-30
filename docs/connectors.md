@@ -636,3 +636,15 @@ OAuth/grant generations, ledger reservations, or memory/model isolation. It neve
 creates another external action. A fully unavailable model can still leave a
 contextual failure with manual retry. See [group recovery](groups.md#failed-replies-and-response-recovery)
 and [private recovery](chats.md#failed-replies-and-response-recovery).
+
+## Home reads
+
+[Home](home.md#connectors-on-home) can read the person's own connector data for a
+card (for example exchange rates or monthly spending) without a chat turn. It uses
+any of the person's account connectors, but only tools approved here that it
+classifies as reads (server `readOnlyHint` without `destructiveHint`, or a read-verb
+name without write verbs), rediscovers the catalog and checks the approved
+fingerprint on every call, and never writes. Connector cards are processed with
+Standard regardless of the account model. New discoveries record the server's
+`readOnlyHint` as `readOnly` in the stored catalog; it grants nothing by itself. The
+`add_to_home` chat tool is not offered in connector-isolated chats.

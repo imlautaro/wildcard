@@ -73,6 +73,20 @@ export const appIcons = {
   voice: ['material-symbols:record-voice-over-outline-rounded', 'material-symbols:record-voice-over-rounded'],
   logout: ['material-symbols:logout-rounded', 'material-symbols:logout-rounded'],
   model: ['material-symbols:smart-toy-outline-rounded', 'material-symbols:smart-toy-rounded'],
+  news: ['material-symbols:newspaper-rounded', 'material-symbols:newspaper-rounded'],
+  sport: ['material-symbols:sports-soccer-outline-rounded', 'material-symbols:sports-soccer-rounded'],
+  globe: ['material-symbols:public-rounded', 'material-symbols:public-rounded'],
+  plane: ['material-symbols:flight-rounded', 'material-symbols:flight-rounded'],
+  doc: ['material-symbols:article-outline-rounded', 'material-symbols:article-rounded'],
+  weather: ['material-symbols:partly-cloudy-day-outline-rounded', 'material-symbols:partly-cloudy-day-rounded'],
+  'trend-up': ['material-symbols:trending-up-rounded', 'material-symbols:trending-up-rounded'],
+  'trend-down': ['material-symbols:trending-down-rounded', 'material-symbols:trending-down-rounded'],
+  'trend-flat': ['material-symbols:trending-flat-rounded', 'material-symbols:trending-flat-rounded'],
+  'open-in-new': ['material-symbols:open-in-new-rounded', 'material-symbols:open-in-new-rounded'],
+  hide: ['material-symbols:visibility-off-outline-rounded', 'material-symbols:visibility-off-rounded'],
+  'thumb-up': ['material-symbols:thumb-up-outline-rounded', 'material-symbols:thumb-up-rounded'],
+  'thumb-down': ['material-symbols:thumb-down-outline-rounded', 'material-symbols:thumb-down-rounded'],
+  sparkle: ['material-symbols:auto-awesome-outline-rounded', 'material-symbols:auto-awesome-rounded'],
 } as const satisfies Record<string, readonly [outline: string, filled: string]>;
 
 export type AppIconName = keyof typeof appIcons;

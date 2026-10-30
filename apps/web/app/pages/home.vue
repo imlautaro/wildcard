@@ -1,0 +1,3 @@
+<template>
+  <HomeFeed back />
+</template>

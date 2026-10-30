@@ -11,6 +11,7 @@ import { maintainAgentMemories } from './agent-memory';
 import { dispatchGroupRequests } from '../groups/request-results';
 import { groupRequestTurnAllowed } from '../groups/request-access';
 import { runGroup, type GroupJob } from '../groups/workflow';
+import { runHome, type HomeJob } from '../home/workflow';
 import { scheduleAllowed } from '../schedules/data';
 import type { VisitJob } from './visits';
 import { attendedChat, expirePresence, markRead, markRecording, markTyping } from './presence';
@@ -42,11 +43,13 @@ function replyMessages(reply: ContactResponse | string[] | string | null) {
   return { response, messages, spoken };
 }
 
-export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob | InitiativeJob> {
-  async run(event: WorkflowEvent<ChatJob | VisitJob | GroupJob | InitiativeJob>, step: WorkflowStep) {
+export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob | InitiativeJob | HomeJob> {
+  async run(event: WorkflowEvent<ChatJob | VisitJob | GroupJob | InitiativeJob | HomeJob>, step: WorkflowStep) {
     if ('kind' in event.payload) {
       if (event.payload.kind === 'initiative') await runInitiative(this.env, event.payload, step);
       else if (event.payload.kind === 'group') await runGroup(this.env, event.payload, step);
+      // Home curation runs are per person, not per chat (docs/home.md).
+      else if (event.payload.kind === 'home') await runHome(this.env, event.payload, step);
       // Visits no longer connect contacts; legacy instances finish immediately.
       return;
     }

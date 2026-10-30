@@ -127,6 +127,18 @@ const debugDatasets: Record<string, Dataset> = {
   web_research: { table: 'web_research',
     columns: 'r.id, r.budget_id, r.user_id, r.agent_id, r.chat_turn_id, r.group_reply_id, r.group_source_id, r.query, r.title, r.model, r.status, r.result_json, r.error_code, r.document_id, r.created_at, r.task_id, r.task_generation, r.delivery',
     where: `r.user_id = ?1 AND (r.chat_turn_id IN (SELECT id FROM chat_turn WHERE contact_id IN (${contacts}) AND user_id = ?1) OR r.group_reply_id IN (SELECT id FROM group_reply WHERE group_id IN (${groups})) OR r.task_id IN (${tasks}))` },
+  home_feed: { table: 'home_feed',
+    columns: 'r.user_id, r.status, r.revision, r.due_at, r.claimed_at, r.requested_at, r.generated_at, r.viewed_at, r.time_zone, r.briefing, r.progress_json, r.error_code',
+    where: 'r.user_id = ?1' },
+  home_topic: { table: 'home_topic',
+    columns: 'r.id, r.user_id, r.title, r.brief, r.reason, r.kind, r.source, r.contact_id, r.status, r.feedback, r.pinned, r.created_at, r.updated_at',
+    where: 'r.user_id = ?1' },
+  home_card: { table: 'home_card',
+    columns: 'r.id, r.user_id, r.topic_id, r.contact_id, r.kind, r.position, r.payload_json, r.connector, r.revision, r.generated_at, r.expires_at',
+    where: 'r.user_id = ?1' },
+  mini_app_usage: { table: 'mini_app_usage',
+    columns: 'r.app_id, r.user_id, r.opens, r.last_opened_at',
+    where: 'r.user_id = ?1' },
 };
 
 const debugExport = new Hono<{ Bindings: Env; Variables: { owner: string } }>();

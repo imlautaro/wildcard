@@ -218,3 +218,32 @@ export type ChatDocumentSummary = { id: string; title: string; revision: number;
   createdAt: number; updatedAt: number; research?: ResearchProvenance | null };
 export type ChatDocumentRevision = { revision: number; summary: string | null; authorKind: 'user' | 'agent'; authorID: string; authorName: string; createdAt: number };
 export type ChatDocument = Omit<ChatDocumentSummary, 'length' | 'preview'> & { body: string; revisions: ChatDocumentRevision[] };
+
+// Home feed curated by the person's contacts (docs/home.md).
+export type HomeCardItem = {
+  title?: string; summary?: string; source?: string; url?: string; time?: string;
+  home?: string; away?: string; homeScore?: number | null; awayScore?: number | null; status?: string; detail?: string;
+  label?: string; value?: string; unit?: string; change?: string; trend?: 'up' | 'down' | 'flat'; caption?: string; trailing?: string;
+};
+export type HomeCardContent = {
+  kind: 'headlines' | 'matches' | 'table' | 'metrics' | 'chart' | 'tracker' | 'note' | 'list';
+  title: string; subtitle?: string; icon: string; accent: string; sources: { title: string; url: string }[];
+  items?: HomeCardItem[]; columns?: string[]; rows?: string[][]; highlight?: number; caption?: string;
+  style?: 'line' | 'bar'; points?: { label: string; value: number }[]; unit?: string; value?: string; change?: string;
+  trend?: 'up' | 'down' | 'flat'; summary?: string; figure?: string; figureLabel?: string; status?: string; progress?: number;
+  steps?: { label: string; state: 'done' | 'current' | 'upcoming'; detail?: string }[]; note?: string; text?: string; prompt?: string;
+};
+export type HomeCard = {
+  id: string; topicID: string; contactID: string | null; contactName: string | null; contactPhotoVersion: string | null;
+  reason: string | null; source: 'person' | 'contact' | 'curator'; feedback: 'more' | 'less' | null; connector: boolean;
+  generatedAt: number; content: HomeCardContent;
+};
+export type HomeFeed = {
+  enabled: boolean; status: 'idle' | 'updating'; pending: boolean; generatedAt: number | null; briefing: string | null; error: string | null;
+  progress: { total: number; done: number; title: string; contactID: string; contactName: string | null } | null;
+  contributors: { id: string; name: string; photoVersion: string | null }[];
+  cards: HomeCard[];
+  topics: { id: string; title: string; source: 'person' | 'contact' | 'curator'; status: 'active' | 'hidden'; feedback: 'more' | 'less' | null; contactID: string | null; hasCard: boolean }[];
+  apps: { id: string; title: string; subtitle: string | null; icon: string | null; contactID: string | null; groupID: string | null; ownerName: string | null; opens: number }[];
+  agenda: { id: string; kind: 'schedule' | 'task'; title: string; at: number | null; contactID: string | null; groupID: string | null; name: string | null }[];
+};

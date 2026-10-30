@@ -12,6 +12,8 @@ final class ContactsStore {
     private(set) var isMutating = false
     private(set) var error: String?
     private(set) var totalUnreadCount = 0
+    /// A message a Home note suggested sending, prefilled once when its chat opens (memory only).
+    var suggestedDrafts: [String: String] = [:]
     private let readAcknowledgements = ReadAcknowledgementQueue()
     let conversations = ConversationCache()
     let scheduleSnapshots = NavigationSnapshotCache<[ContactSchedule]>()

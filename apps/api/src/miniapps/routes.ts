@@ -84,6 +84,10 @@ export function miniAppRoutes(kind: 'contact' | 'group') {
     if (!inputs) return c.json({ error: 'Invalid inputs.' }, 400);
     // Each load runs remote reads; keep it well below the general management budget.
     if (!(await admitAuthRequest(c.env.DB, owner, 'mini-app-resolve', 20)).allowed) return c.json({ error: 'Too many refreshes. Please wait a minute.' }, 429);
+    // Opens feed Home quick access; reloads within ten minutes count as the same visit.
+    await c.env.DB.prepare(`INSERT INTO mini_app_usage (app_id, user_id, opens, last_opened_at) VALUES (?1, ?2, 1, ?3)
+      ON CONFLICT(app_id, user_id) DO UPDATE SET opens = opens + 1, last_opened_at = excluded.last_opened_at
+      WHERE mini_app_usage.last_opened_at < excluded.last_opened_at - 600000`).bind(app.id, owner, Date.now()).run();
     const result = await resolve(c.env, app, connectors, inputs, timeZone);
     return c.json({ revision: app.revision, inputs, resolvedAt: Date.now(), ...result });
   });

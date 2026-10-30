@@ -33,6 +33,8 @@ function failureMessage(path: string, method: string, status: number, body: unkn
   if (path.includes('/mcp')) return serverMessage(body) ?? 'Connections are temporarily unavailable. Please try again.';
   if (path.includes('/mini-apps')) return serverMessage(body) ?? 'Mini apps are temporarily unavailable. Please try again.';
   if (path.endsWith('/reactions')) return serverMessage(body) ?? 'Reactions are temporarily unavailable. Please try again.';
+  if (path === 'home' || path.startsWith('home/')) return status === 429 || status >= 500
+    ? 'Home is temporarily unavailable. Please try again.' : serverMessage(body) ?? 'Home is temporarily unavailable. Please try again.';
   if (path === 'voices' || path.startsWith('voices/')) {
     if (status === 404) return 'This voice is no longer available.';
     return 'Voices are unavailable right now. Please try again.';

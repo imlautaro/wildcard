@@ -56,6 +56,12 @@ export function forgetConversation(id: string) {
   forgetRead(`contact:${id}`);
 }
 
+// A Home note's suggested reply fills an empty composer; it is never sent automatically.
+export function suggestDraft(id: string, text: string) {
+  const entry = conversation(id);
+  if (!entry.draft.trim()) entry.draft = text;
+}
+
 // Read-only lookup for Home: no LRU reordering, so rendering never mutates the cache.
 export function peekConversation(id: string): Conversation | undefined {
   return conversations.get(id);

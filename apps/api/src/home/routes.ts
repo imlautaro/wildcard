@@ -1,0 +1,166 @@
+import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
+import { isRecord } from '../chat/meta';
+import { readBearerSession } from '../lib/session';
+import { admitAuthRequest } from '../lib/auth-rate-limit';
+import { parseSpec } from '../miniapps/spec';
+import { homeLimits } from './curator';
+import { dispatchHome, homeEnabled } from './workflow';
+import { topicColumns, type HomeTopicRow } from './signals';
+
+// Home feed for the signed-in person (docs/home.md). Cards come from curation
+// runs; quick access and agenda are computed on each read and cost no inference.
+const home = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
+home.use('*', bodyLimit({ maxSize: 4096, onError: c => c.json({ error: 'Request body too large' }, 413) }));
+home.use('*', async (c, next) => {
+  const session = await readBearerSession(c.env, c.req.raw.headers);
+  if (!session) return c.json({ error: 'Unauthorized' }, 401);
+  c.set('owner', session.user.id);
+  const reads = c.req.method === 'GET';
+  if (!(await admitAuthRequest(c.env.DB, session.user.id, reads ? 'home' : 'home-write', reads ? 90 : 20)).allowed) return c.json({ error: 'Too many requests' }, 429);
+  await next();
+});
+
+function zone(value: string | undefined): string | null {
+  if (!value || value.length > 64) return null;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: value }); return value; } catch { return null; }
+}
+
+type FeedRow = { status: string; generatedAt: number | null; briefing: string | null; progressJSON: string | null; errorCode: string | null; dueAt: number; requestedAt: number | null };
+type CardRow = { id: string; topicID: string; contactID: string | null; contactName: string | null; photoVersion: string | null; payloadJSON: string;
+  connector: number; generatedAt: number; reason: string | null; source: string; feedback: string | null };
+
+export async function homeFeed(env: Env, owner: string) {
+  const now = Date.now();
+  const [state, cards, topics, apps, schedules, tasks] = await Promise.all([
+    env.DB.prepare(`SELECT status, generated_at AS generatedAt, briefing, progress_json AS progressJSON, error_code AS errorCode,
+      due_at AS dueAt, requested_at AS requestedAt FROM home_feed WHERE user_id = ?`).bind(owner).first<FeedRow>(),
+    env.DB.prepare(`SELECT card.id, card.topic_id AS topicID, card.contact_id AS contactID, c.name AS contactName, c.photo_version AS photoVersion,
+        card.payload_json AS payloadJSON, card.connector, card.generated_at AS generatedAt, t.reason, t.source, t.feedback
+      FROM home_card card JOIN home_topic t ON t.id = card.topic_id AND t.status = 'active'
+      LEFT JOIN contact c ON c.id = card.contact_id AND c.user_id = card.user_id
+      WHERE card.user_id = ? ORDER BY card.position, card.generated_at DESC LIMIT 16`).bind(owner).all<CardRow>(),
+    env.DB.prepare(`SELECT ${topicColumns} FROM home_topic WHERE user_id = ? AND status != 'retired' ORDER BY updated_at DESC LIMIT 40`)
+      .bind(owner).all<HomeTopicRow>(),
+    // Enabled mini apps the person opens, plus ones created in the last three days.
+    env.DB.prepare(`SELECT a.id, a.spec_json AS specJSON, a.contact_id AS contactID, a.group_id AS groupID,
+        COALESCE(c.name, g.name) AS ownerName, COALESCE(u.opens, 0) AS opens
+      FROM mini_app a LEFT JOIN mini_app_usage u ON u.app_id = a.id AND u.user_id = ?1
+      LEFT JOIN contact c ON c.id = a.contact_id AND c.user_id = ?1 LEFT JOIN chat_group g ON g.id = a.group_id
+      WHERE a.approved_revision = a.revision AND (u.opens > 0 OR a.created_at > ?2)
+        AND (a.user_id = ?1 OR EXISTS (SELECT 1 FROM group_member m WHERE m.group_id = a.group_id AND m.user_id = ?1))
+      ORDER BY COALESCE(u.opens, 0) DESC, COALESCE(u.last_opened_at, a.created_at) DESC LIMIT 8`).bind(owner, now - 3 * 86_400_000)
+      .all<{ id: string; specJSON: string; contactID: string | null; groupID: string | null; ownerName: string | null; opens: number }>(),
+    env.DB.prepare(`SELECT s.id, s.instruction AS title, s.next_at AS at, s.contact_id AS contactID, c.name FROM contact_schedule s
+      JOIN contact c ON c.id = s.contact_id AND c.user_id = s.user_id
+      WHERE s.user_id = ?1 AND s.status = 'active' AND s.next_at < ?2 ORDER BY s.next_at LIMIT 4`).bind(owner, now + 2 * 86_400_000)
+      .all<{ id: string; title: string; at: number; contactID: string; name: string }>(),
+    env.DB.prepare(`SELECT t.id, t.title, l.contact_id AS contactID, l.group_id AS groupID, COALESCE(c.name, g.name) AS name FROM task t
+      JOIN task_list l ON l.id = t.list_id AND l.status = 'active'
+      LEFT JOIN contact c ON c.id = l.contact_id AND c.user_id = ?1 LEFT JOIN chat_group g ON g.id = l.group_id
+      WHERE t.assignee_kind = 'user' AND t.assignee_id = ?1 AND t.status IN ('open', 'in_progress')
+        AND (l.user_id = ?1 OR EXISTS (SELECT 1 FROM group_member m WHERE m.group_id = l.group_id AND m.user_id = ?1))
+      ORDER BY t.updated_at DESC LIMIT 4`).bind(owner)
+      .all<{ id: string; title: string; contactID: string | null; groupID: string | null; name: string | null }>(),
+  ]);
+  const progress = state?.progressJSON ? JSON.parse(state.progressJSON) as { total: number; done: number; title: string; contactID: string } : null;
+  const contributors = new Map<string, { id: string; name: string; photoVersion: string | null }>();
+  for (const card of cards.results) if (card.contactID && card.contactName) contributors.set(card.contactID, { id: card.contactID, name: card.contactName, photoVersion: card.photoVersion });
+  return {
+    enabled: homeEnabled(env),
+    status: state?.status === 'running' ? 'updating' : 'idle',
+    // A requested or first run that the minute Cron has not started yet is shown as updating.
+    pending: state?.status !== 'running' && !!state && state.dueAt <= now && (state.requestedAt !== null || state.generatedAt === null) && homeEnabled(env),
+    generatedAt: state?.generatedAt ?? null, briefing: state?.briefing ?? null, error: state?.errorCode ?? null,
+    progress: progress ? { ...progress, contactName: [...contributors.values()].find(item => item.id === progress.contactID)?.name
+      ?? (await env.DB.prepare('SELECT name FROM contact WHERE id = ? AND user_id = ?').bind(progress.contactID, owner).first<{ name: string }>())?.name ?? null } : null,
+    contributors: [...contributors.values()],
+    cards: cards.results.map(card => ({ id: card.id, topicID: card.topicID, contactID: card.contactID, contactName: card.contactName,
+      contactPhotoVersion: card.photoVersion, reason: card.reason, source: card.source, feedback: card.feedback, connector: card.connector === 1,
+      generatedAt: card.generatedAt, content: JSON.parse(card.payloadJSON) })),
+    topics: topics.results.map(topic => ({ id: topic.id, title: topic.title, source: topic.source, status: topic.status, feedback: topic.feedback,
+      contactID: topic.contactID, hasCard: cards.results.some(card => card.topicID === topic.id) })),
+    apps: apps.results.flatMap(app => {
+      try {
+        const { spec } = parseSpec(JSON.parse(app.specJSON));
+        return [{ id: app.id, title: spec.title, subtitle: spec.subtitle ?? null, icon: spec.icon, contactID: app.contactID, groupID: app.groupID,
+          ownerName: app.ownerName, opens: app.opens }];
+      } catch { return []; }
+    }),
+    agenda: [
+      ...schedules.results.map(row => ({ id: row.id, kind: 'schedule', title: row.title, at: row.at, contactID: row.contactID, groupID: null, name: row.name })),
+      ...tasks.results.map(row => ({ id: row.id, kind: 'task', title: row.title, at: null, contactID: row.contactID, groupID: row.groupID, name: row.name })),
+    ],
+  };
+}
+
+// Marks the feed due now and starts the run without waiting for the minute Cron.
+async function request(env: Env, ctx: { waitUntil(promise: Promise<unknown>): void }, owner: string, manual: boolean) {
+  const now = Date.now();
+  await env.DB.prepare(`INSERT INTO home_feed (user_id, due_at, viewed_at, requested_at) VALUES (?1, ?2, ?2, ?3)
+    ON CONFLICT(user_id) DO UPDATE SET due_at = MIN(home_feed.due_at, ?2), viewed_at = ?2,
+      requested_at = COALESCE(?3, home_feed.requested_at)`).bind(owner, now, manual ? now : null).run();
+  if (homeEnabled(env)) ctx.waitUntil(dispatchHome(env, owner).catch(() => console.error(JSON.stringify({ event: 'home_dispatch_deferred' }))));
+}
+
+home.get('/', async c => {
+  const owner = c.get('owner'), now = Date.now();
+  const timeZone = zone(c.req.query('timeZone'));
+  // The first view schedules the first run; later views keep automatic runs going.
+  await c.env.DB.prepare(`INSERT INTO home_feed (user_id, due_at, viewed_at, time_zone) VALUES (?1, ?2, ?2, ?3)
+    ON CONFLICT(user_id) DO UPDATE SET viewed_at = ?2, time_zone = COALESCE(?3, home_feed.time_zone)
+    WHERE home_feed.viewed_at < ?2 - 600000 OR (?3 IS NOT NULL AND home_feed.time_zone IS NOT ?3)`).bind(owner, now, timeZone).run();
+  const due = await c.env.DB.prepare(`SELECT 1 FROM home_feed WHERE user_id = ? AND status = 'idle' AND due_at <= ?`).bind(owner, now).first();
+  if (due && homeEnabled(c.env)) c.executionCtx.waitUntil(dispatchHome(c.env, owner).catch(() => console.error(JSON.stringify({ event: 'home_dispatch_deferred' }))));
+  return c.json(await homeFeed(c.env, owner));
+});
+
+home.post('/refresh', async c => {
+  const owner = c.get('owner');
+  if (!homeEnabled(c.env)) return c.json({ error: 'Home updates are turned off.' }, 409);
+  const recent = await c.env.DB.prepare('SELECT 1 FROM home_feed WHERE user_id = ? AND requested_at > ?').bind(owner, Date.now() - 60_000).first();
+  if (!recent) await request(c.env, c.executionCtx, owner, true);
+  return c.json(await homeFeed(c.env, owner));
+});
+
+home.post('/topics', async c => {
+  const owner = c.get('owner');
+  const body: unknown = await c.req.json().catch(() => null);
+  if (!isRecord(body) || Object.keys(body).join(',') !== 'text' || typeof body.text !== 'string') return c.json({ error: 'Provide text.' }, 400);
+  const text = body.text.replace(/\s+/g, ' ').trim();
+  if (!text || Array.from(text).length > 400 || /[\u0000-\u001f\u007f]/u.test(text)) return c.json({ error: 'Describe it in 1–400 characters.' }, 422);
+  const count = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM home_topic WHERE user_id = ? AND source = 'person' AND status = 'active'`)
+    .bind(owner).first<{ count: number }>();
+  if ((count?.count ?? 0) >= homeLimits.personTopics) return c.json({ error: `Home follows up to ${homeLimits.personTopics} of your requests. Hide one first.` }, 409);
+  const now = Date.now();
+  // The curator refines the title, layout and contact on the next run.
+  await c.env.DB.prepare(`INSERT INTO home_topic (id, user_id, title, brief, kind, source, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'list', 'person', ?, ?)`).bind(crypto.randomUUID(), owner, Array.from(text).slice(0, 80).join(''), text, now, now).run();
+  await request(c.env, c.executionCtx, owner, true);
+  return c.json(await homeFeed(c.env, owner), 201);
+});
+
+home.patch('/topics/:id', async c => {
+  const owner = c.get('owner');
+  const body: unknown = await c.req.json().catch(() => null);
+  if (!isRecord(body) || !Object.keys(body).length || Object.keys(body).some(key => !['status', 'feedback'].includes(key))
+    || (body.status !== undefined && !['active', 'hidden'].includes(String(body.status)))
+    || (body.feedback !== undefined && body.feedback !== null && !['more', 'less'].includes(String(body.feedback)))) {
+    return c.json({ error: 'Provide status (active or hidden) and/or feedback (more, less or null).' }, 400);
+  }
+  const topic = await c.env.DB.prepare(`SELECT status FROM home_topic WHERE id = ? AND user_id = ? AND status != 'retired'`)
+    .bind(c.req.param('id'), owner).first<{ status: string }>();
+  if (!topic) return c.json({ error: 'Topic not found' }, 404);
+  const now = Date.now();
+  const status = typeof body.status === 'string' ? body.status : topic.status;
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE home_topic SET status = ?1, feedback = CASE WHEN ?2 = 1 THEN ?3 ELSE feedback END, updated_at = ?4
+      WHERE id = ?5 AND user_id = ?6`).bind(status, 'feedback' in body ? 1 : 0, body.feedback ?? null, now, c.req.param('id'), owner),
+    // Hiding removes the card at once; the curator never brings the topic back.
+    c.env.DB.prepare(`DELETE FROM home_card WHERE topic_id = ? AND user_id = ? AND ? = 'hidden'`).bind(c.req.param('id'), owner, status),
+  ]);
+  if (topic.status === 'hidden' && status === 'active') await request(c.env, c.executionCtx, owner, true);
+  return c.json(await homeFeed(c.env, owner));
+});
+
+export default home;

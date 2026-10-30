@@ -1452,3 +1452,22 @@ account switch and access loss drop the cache, and late responses from an earlie
 session are discarded. Images reuse the private image caches with the preview fetch
 time as version. Server-side previews expire after seven days (failed after six
 hours). See [link previews](link-previews.md).
+
+## Home feed
+
+Both clients own one [Home](home.md) feed per signed-in session: iOS
+`HomeFeedStore` (created by the signed-in shell, so sign-out and account switch drop
+it) and web `useHome` (registered with the session reset). It lives in memory only
+and is never written to disk, because cards can contain connector data. The last
+feed renders synchronously when returning to Home; the first load shows card
+placeholders. While Home is visible the clients revalidate after 60 seconds, and
+every 4 seconds while a curation run is updating or pending; requests are
+deduplicated. `POST /home/refresh`, `POST /home/topics` and `PATCH /home/topics/:id`
+return the whole feed, which replaces the cached one; a mutation increments the
+store revision so a read that started earlier cannot overwrite it. Transient
+failures keep the cached cards; only a failed first load shows an error with Retry.
+Hiding a topic removes its card in the returned feed at once. Contact avatars come
+from the existing contact list and private image caches; the lead headline image
+reuses the link preview caches. Server-side, cards stay until replaced, retired,
+hidden or the account is deleted (cascade). Device verification of these paths is
+pending.

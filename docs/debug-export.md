@@ -10,7 +10,8 @@ group messages (including archived chats), reply attempts/status/error codes and
 Workflow IDs, group publication reservations, exchanges, receipts and reactions.
 It also includes the person's local factual/retained memory, learning and initiative
 state, schedules, consent/isolation settings, tasks/work/monitor checks, documents
-and revisions, research receipts/results, and mini-app definitions/state/actions.
+and revisions, research receipts/results, mini-app definitions/state/actions and
+per-person usage, and the [Home](home.md) feed state, topics and cards.
 IDs link datasets; private turn user/assistant text is stored together in
 `chat_turn`, while group messages and reply jobs are separate datasets. Stored
 `*_json` fields remain JSON strings; media metadata stays in those fields.

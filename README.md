@@ -36,6 +36,7 @@ docs/
   web-research.md            # Public conversational research and sourced reports
   monitors.md                # Code-checked page monitors that wake task contacts
   link-previews.md           # Link cards with server-fetched page metadata
+  home.md                    # Home: an adaptive feed the contacts curate together
 ```
 
 ## API development
@@ -70,7 +71,7 @@ Open `apps/ios/Wildcard.xcodeproj`, or run `npm run ios` on macOS. Select the
 `Wildcard` scheme in Xcode 27.1 or later. The current minimum deployment target is
 iOS 27.0. For a physical device, select your own signing team and bundle identifier.
 
-The app includes sign-up/sign-in, a [first-circle onboarding](docs/onboarding.md), native Chats and Account tabs, Keychain session
+The app includes sign-up/sign-in, a [first-circle onboarding](docs/onboarding.md), native Home, Chats and Account tabs ([Home](docs/home.md) is the first), Keychain session
 storage, restoration on launch, and logout. Account supports editing your name and
 choosing, cropping, replacing, or removing your own private [profile photo](docs/profile-photos.md#account-profile)
 directly through the centered avatar/name menus shared with contact editing. It uses the updated [Wildcard branding](docs/branding.md), including the Icon Composer
@@ -268,6 +269,16 @@ relevant changes. Memory selection can optionally add
 [semantic ranking](docs/memory.md#semantic-ranking-migration-0057) with Workers AI embeddings stored in D1 (migration 0057, off by default).
 See [agentic execution limits](docs/agentic-limits.md) for current work budgets and
 the controls required before extending persistent autonomous work.
+
+[Home](docs/home.md) is the first iOS tab and the web's main pane (`/`, or `/home`
+on narrow screens): an adaptive feed that the person's contacts build together. A
+durable curation run reads what the person's contacts know about them, their recent
+messages, connectors, mini apps and schedules, decides which topics to follow and
+which contact prepares each, and composes native cards (headlines, matches, tables,
+metrics, charts, trackers, notes, lists) with web research or read-only connector
+data. Home also offers quick access to the most used mini apps and an agenda of
+schedules and assigned tasks. People can follow topics, give feedback or hide cards;
+contacts can add topics from chat. Migration 0074 and `HOME_FEED_ENABLED` are required.
 
 In private chats a contact can build [mini apps](docs/mini-apps.md): declarative
 small tools and dashboards (saved state such as counters, stats, lists, charts and
