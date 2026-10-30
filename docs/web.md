@@ -1,5 +1,11 @@
 # Web app
 
+Task work uses the shared server attention dispatcher, including
+[Workflow ID recovery](tasks.md#workflow-id-recovery-october-29-2026). The correction
+also applies to iOS. Existing foreground polling refreshes work indicators after
+recovery; no API contract, cache lifetime or invalidation rule changes. Live backlog
+recovery and browser/device presentation require verification after release.
+
 [App branding](branding.md) uses the supplied background-inclusive logo on sign-in
 and registration, plus the supplied favicon in both web and admin. Favicons use
 a content version query to refresh older browser caches. These public assets are

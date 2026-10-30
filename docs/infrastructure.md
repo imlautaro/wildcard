@@ -1,5 +1,19 @@
 # Infrastructure
 
+## Task Workflow ID repair
+
+The [task dispatcher correction](tasks.md#workflow-id-recovery-october-29-2026)
+uses the existing D1 and `CHAT_WORKFLOW` bindings and Web Crypto SHA-256. It adds no
+service, secret, permission, account setting or migration. Independent installations
+use the existing provisioning instructions. Release committed and pushed source
+through the automatic API pipeline; never manually deploy. The minute Cron repairs
+invalid queued IDs atomically across turns, attention and the cleanup registry.
+Verify the pushed source version, then inspect technical queue states and confirm
+affected contacts answer in groups and privately. Do not claim recovery from static
+checks. Avoid rolling back to the old dispatcher: new task-derived invalid IDs
+would block attention again. Existing normalized IDs remain readable by older code;
+prefer rolling forward to retain validation and legacy cleanup handling.
+
 ## Required resources
 
 | Resource | Configuration | Purpose |

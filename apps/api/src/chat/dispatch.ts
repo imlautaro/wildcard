@@ -1,6 +1,30 @@
 import { discardWorkflow } from './cleanup';
 import { enqueueReply } from '../push/delivery';
 import { storedColumns, type StoredTurn } from './data';
+import { normalizedWorkflowID, validWorkflowID } from './workflow-ids';
+
+async function normalizeClaim(env: Env, claim: { id: string; workflowID: string; attempt: number; isGroup: number }) {
+  if (validWorkflowID(claim.workflowID)) return;
+  const workflowID = await normalizedWorkflowID(claim.workflowID);
+  const source = claim.isGroup ? 'group_reply' : 'chat_turn';
+  // An invalid ID could never have started a provider instance. Rename its
+  // registry entry, queued turn and claim together, preserving the attempt and
+  // task budget. A concurrent clear either removes all three first or sees the
+  // new registered ID. Never revive a running, canceled or superseded turn.
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE chat_workflow_instance SET id = ?1 WHERE id = ?2
+      AND EXISTS (SELECT 1 FROM ${source} WHERE id = ?3 AND attempt = ?4 AND workflow_id = ?2 AND status = 'queued')
+      AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?3 AND attempt = ?4 AND workflow_id = ?2)`)
+      .bind(workflowID, claim.workflowID, claim.id, claim.attempt),
+    env.DB.prepare(`UPDATE ${source} SET workflow_id = ?1
+      WHERE id = ?3 AND attempt = ?4 AND workflow_id = ?2 AND status = 'queued'
+        AND EXISTS (SELECT 1 FROM chat_workflow_instance WHERE id = ?1)`)
+      .bind(workflowID, claim.workflowID, claim.id, claim.attempt),
+    env.DB.prepare(`UPDATE agent_attention SET workflow_id = ?1 WHERE turn_id = ?3 AND attempt = ?4 AND workflow_id = ?2
+      AND EXISTS (SELECT 1 FROM ${source} WHERE id = ?3 AND attempt = ?4 AND workflow_id = ?1 AND status = 'queued')`)
+      .bind(workflowID, claim.workflowID, claim.id, claim.attempt),
+  ]);
+}
 
 export async function dispatchChat(env: Env, turn: StoredTurn) {
   const agent = await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ? AND user_id = ?')
@@ -20,12 +44,21 @@ export async function dispatchAgent(env: Env, agentID: string) {
         SELECT 1 FROM group_reply prior WHERE prior.group_id = r.group_id
           AND prior.status IN ('queued','running') AND prior.sequence < r.sequence)
     ) ORDER BY createdAt, sequence, id LIMIT 1 ON CONFLICT(agent_id) DO NOTHING`).bind(agentID, Date.now()).run();
-  const turn = await env.DB.prepare(`SELECT a.turn_id AS id, a.workflow_id AS workflowID, a.attempt,
+  const readClaim = () => env.DB.prepare(`SELECT a.turn_id AS id, a.workflow_id AS workflowID, a.attempt,
     (SELECT COALESCE(contact_id,group_id,agent_id) FROM chat_workflow_instance WHERE id=a.workflow_id) AS cleanupScope,
     EXISTS (SELECT 1 FROM group_reply r WHERE r.id = a.turn_id) AS isGroup
     FROM agent_attention a WHERE a.agent_id = ?`).bind(agentID)
     .first<{ id: string; workflowID: string; attempt: number; isGroup: number; cleanupScope: string | null }>();
+  let turn = await readClaim();
+  if (turn && !validWorkflowID(turn.workflowID)) {
+    await normalizeClaim(env, turn);
+    turn = await readClaim();
+  }
   if (!turn) return;
+  if (!validWorkflowID(turn.workflowID)) {
+    console.error(JSON.stringify({ event: 'chat_invalid_workflow_claim', turnID: turn.id }));
+    return;
+  }
   try {
     const registered = await env.DB.prepare('SELECT id FROM chat_workflow_instance WHERE id=?').bind(turn.workflowID).first();
     if (!registered) return;

@@ -193,6 +193,31 @@ revalidate it every five seconds while it is visible.
 
 ## Verification
 
+### Workflow ID recovery (October 29, 2026)
+
+Task receipt IDs can contain colons and grow beyond Cloudflare's 100-character
+Workflow ID limit. They remain internal receipt/turn IDs. The shared attention
+dispatcher converts an invalid Workflow ID to `chat-` plus its full SHA-256 hex
+digest before creating the instance. Valid existing IDs are preserved. The queued
+turn, attention claim and cleanup registry are renamed in one D1 transaction;
+attempts, task generations and spent work budgets do not change. This also repairs
+legacy queued claims when the minute recovery Cron retries dispatch. Current task
+authority is still checked by the Workflow before work; invalidated generations
+cannot acquire new permission through recovery. Cleanup skips invalid legacy IDs,
+which cannot refer to provider instances, so they cannot hold a clear lock forever.
+
+Read-only production diagnosis found three queued attention claims aged 405–702
+minutes, all with invalid task-derived IDs; one provider lookup returned instance
+not found. API TypeScript and preparation of all six normalization SQL variants
+against the fully migrated empty schema passed. No runtime tests, builds, provider
+inference, production writes or release were performed for this correction.
+Recovery of the live backlog still requires an authorized automatic release and
+subsequent observation. iOS and web use the same corrected dispatcher and existing
+foreground polling; there is no new client cache or API contract.
+
+Cloudflare's [Workers API](https://developers.cloudflare.com/workflows/build/workers-api/)
+documents the ID length and allowed characters.
+
 D1 rejects compound SELECTs with more than five terms (`too many terms in compound
 SELECT`), unlike local SQLite. The first release added two `UNION ALL` branches to
 `groupSourceAccess`, which made every group reply and **Retry reply** fail in

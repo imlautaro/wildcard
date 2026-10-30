@@ -1,3 +1,5 @@
+import { validWorkflowID } from './workflow-ids';
+
 // D1 triggers persist external cleanup in the same transaction as deletion.
 // Never discard a failed job; Cron retries with bounded backoff and concurrency.
 export async function cleanResources(env: Env, scope?: string): Promise<void> {
@@ -12,9 +14,13 @@ export async function cleanResources(env: Env, scope?: string): Promise<void> {
         if (job.kind === 'workflow') {
           try {
             const generation = job.resource.startsWith('generation:');
-            const instance = generation ? await env.ONBOARDING_WORKFLOW.get(job.resource.slice('generation:'.length))
-              : await env.CHAT_WORKFLOW.get(job.resource);
-            await instance.delete();
+            const id = generation ? job.resource.slice('generation:'.length) : job.resource;
+            // Legacy task IDs could not be created. They have no external state
+            // to delete; retrying their validation error would hold clear forever.
+            if (validWorkflowID(id)) {
+              const instance = generation ? await env.ONBOARDING_WORKFLOW.get(id) : await env.CHAT_WORKFLOW.get(id);
+              await instance.delete();
+            }
           }
           catch (error) {
             // Missing instances were never dispatched, expired, or already deleted.
