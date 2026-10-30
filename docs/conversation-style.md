@@ -81,7 +81,11 @@ Ordinary private messages usually need one or two short sentences; ordinary grou
 contributions often need one. Depth comes from the current request and useful
 missing content: requested explanation, multi-part questions, evidence, reasoning,
 instructions or necessary sensitive nuance. The whole burst shares this budget.
-High verbosity does not require extra paragraphs. No hard sentence cutoffs or lower
+High verbosity does not require extra paragraphs. A genuinely longer answer can
+use a few separate messages for distinct complete ideas when that makes reading
+easier. Short replies stay cohesive; code, lists and essential qualifications are
+not fragmented. Every text part gets its own server-managed composition wait and
+Typing state on iOS and web; see [successive messages](reply-messages.md). No hard sentence cutoffs or lower
 completion-token caps discard useful work. Creative identities influence ideas
 and judgment; even legacy poetic descriptions do not require lyrical language or
 unrelated metaphors. Explicit creative writing can still use imagery and length.

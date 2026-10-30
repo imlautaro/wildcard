@@ -406,8 +406,12 @@ before Online, or Typing before Online and Read, from the server state.
   turn and its earlier batched messages, only while the agent is connected. Memory
   maintenance and a reading pause (`readingDelay`, 0.4–2.5 seconds by length) follow;
   `markTyping` then requires the stored `readAt`. A fast generation still shows
-  typing for at least `messageDelay(first message)` (0.9–3 seconds) before the first
-  bubble. Successive messages keep Typing between parts.
+  typing for at least the length-aware composition budget before the first text
+  bubble, crediting generation time already spent typing. Each successive text
+  message starts its own wait with Typing visible; recovery uses the same path.
+  Text budgets grow at 8–12 Unicode characters per second plus a small lead-in
+  and paragraph pauses, capped at 60 seconds per bubble. Voice retains a separate
+  short Recording lead-in. See [successive messages](reply-messages.md) for details.
 - Opening a chat or editing a draft never connects the contact. Visit activity only
   paces replies and follow-ups (see [visiting a chat](#visiting-a-chat-and-composing-a-draft)).
 - Follow-up checks connect the contact for the decision, type for `messageDelay`

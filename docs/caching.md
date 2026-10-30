@@ -946,7 +946,11 @@ request deduplication, turn pagination and session eviction apply unchanged. No
 unsent model output, client timer or extra disk copy enters these caches. Reopen
 shows the cached delivered prefix immediately and sync appends newer parts; access
 loss and account changes invalidate it with the parent conversation. Group parts
-use normal message rows and the existing group cache. Check reopen/back navigation,
+use normal message rows and the existing group cache. Length-aware composition
+waits run only in the server Workflow; both clients poll the same delivered prefix
+and current Typing/Recording state. Clients never hold a complete reply to release
+it on a timer. An offline or suspended client may receive multiple already-published
+parts in one refresh, so gaps are only observable while syncing live. Check reopen/back navigation,
 empty/legacy history, offline recovery, new input during a burst, late responses,
 revocation and account switching as described in [successive messages](reply-messages.md).
 

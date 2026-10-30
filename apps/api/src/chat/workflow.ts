@@ -3,7 +3,7 @@ import { learnFromReply, recordLearningQuestion } from './learning';
 import { privateContact } from '../mcp/client';
 import { generatedImage } from '../photos/generation';
 import { contactModelAllowed } from './consent';
-import { messageDelay, readingDelay, type ContactResponse } from './messages';
+import { messageDelay, readingDelay, recordingDelay, type ContactResponse } from './messages';
 import { batchStatement, batchIntoNext, shouldHoldReply, waitForComposer } from './pacing';
 import { runInitiative, type InitiativeJob } from './initiative';
 import { jobAccountID, jobModel } from '../lib/model-preference';
@@ -103,22 +103,11 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         return { reply, typingAt, voice };
       });
       if (prepared) {
-        const { messages, spoken } = replyMessages(prepared.reply);
-        const first = messages[0];
-        const typingAt = first && prepared.voice ? await step.do('mark-composing', async () => {
-          await markTyping(env.DB, job);
-          if (spoken === 0) await markRecording(env.DB, job.turnID, job.attempt);
-          return Date.now();
-        }) : prepared.typingAt;
-        // Fast generations still show a plausible amount of typing.
-        if (first && typeof typingAt === 'number') {
-          await pauseUntil(step, 'typing-pause', typingAt + messageDelay(first));
-        }
         const hold = await step.do('reply-timing-decision', {
           retries: { limit: 0, delay: '1 second' }, timeout: '1 minute',
         }, () => shouldHoldReply(env, job, typeof prepared.reply === 'string' ? prepared.reply : (Array.isArray(prepared.reply) ? prepared.reply : prepared.reply?.messages)?.join('\n\n') ?? null)).catch(() => false);
         if (hold) await waitForComposer(env, job, step, 'before-publish', 3);
-        await this.publishMessages(env, job, step, prepared.reply);
+        await this.publishMessages(env, job, step, prepared.reply, 'reply', prepared.voice ? undefined : prepared.typingAt);
       }
     } catch (error) {
       const code = safeErrorCode(error);
@@ -219,16 +208,24 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
     return listenedAt + Math.min(duration, 60_000);
   }
 
-  private async publishMessages(env: Env, job: ChatJob, step: WorkflowStep, reply: ContactResponse | string[] | string | null, prefix = 'reply') {
+  private async publishMessages(env: Env, job: ChatJob, step: WorkflowStep, reply: ContactResponse | string[] | string | null, prefix = 'reply', firstTypingAt?: number) {
     const { response, messages, spoken } = replyMessages(reply);
     for (let index = 0; index < Math.max(1, messages.length); index++) {
-      // A later spoken message shows Recording, not Typing, during its pause.
-      if (index && index === spoken) await step.do(`${prefix}-mark-recording-${index}`, async () => {
-        const turn = await activeTurn(env.DB, job);
-        if (turn?.status === 'running' && await privateVoiceReplies(env, turn.contactID)) await markRecording(env.DB, job.turnID, job.attempt);
-        return true;
-      });
-      if (index) await step.sleep(`${prefix}-message-pause-${index}`, messageDelay(messages[index]));
+      if (messages[index]) {
+        const composing = await step.do(`${prefix}-compose-message-${index}`, async () => {
+          const turn = await activeTurn(env.DB, job);
+          if (!turn || turn.status !== 'running') return null;
+          await markTyping(env.DB, job);
+          const recording = index === spoken && await privateVoiceReplies(env, turn.contactID);
+          if (recording) await markRecording(env.DB, job.turnID, job.attempt);
+          return { startedAt: index === 0 && !recording ? firstTypingAt ?? Date.now() : Date.now(), recording };
+        });
+        if (!composing) break;
+        // Only the first bubble can credit already visible generation time. Every
+        // later bubble gets a fresh typing budget, including recovery responses.
+        const duration = composing.recording ? recordingDelay(messages[index]) : messageDelay(messages[index], job.turnID);
+        await pauseUntil(step, `${prefix}-composition-pause-${index}`, composing.startedAt + duration);
+      }
       // Checkpointed separately so publication retries never synthesize twice.
       const voice = index === spoken ? await step.do(`${prefix}-voice-message-${index}`, { retries: { limit: 0, delay: '1 second' }, timeout: '2 minutes' }, async () => {
         const turn = await activeTurn(env.DB, job);

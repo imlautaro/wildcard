@@ -2317,6 +2317,19 @@ multiple-message inference and client delivery using fictional data after releas
 static type/SQL checks do not establish provider JSON support or device behavior.
 See [successive messages](reply-messages.md) for the delivery and cache contracts.
 
+The length-aware pacing refinement uses the same D1 and Workflow bindings with
+no additional migration, secret, permission or service. Each text message waits
+up to 60 seconds; the Workflow checkpoints composition deadlines and refreshes the
+existing attended presence lease per part. Private initiative reserves 90 seconds
+of presence for its bounded wait. Sleep does not depend on an open client. Existing
+Cron recovery recognizes sleeping Workflows as active rather than failed. Commit
+and push to release through Workers Builds, then verify the active source SHA;
+no manual deployment is required. Rollback preserves delivered rows/JSON; drain
+in-flight Workflows before rolling back orchestration step names. Runtime timing,
+interruption/replay, voice-to-text transitions and visible Typing between parts
+remain to be checked on fictional iOS/web conversations; static checks alone do
+not establish them.
+
 ## Group private text sharing
 
 Migration `0043_group_private_sharing.sql` adds an opt-in human/agent/group grant

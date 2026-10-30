@@ -551,7 +551,11 @@ Static checks do not establish audible timing or touch behavior.
 ## Reply activity indicators
 
 Both clients show Recording... during voice attachment preparation and Typing...
-for text preparation. Private/group list second lines temporarily show that
+for text preparation. Text messages use the shared length-aware composition budget
+before each bubble; voice notes keep the short Recording preparation lead-in.
+A text part following a spoken part explicitly clears the earlier Recording
+overlay and shows Typing during its own wait. See [successive messages](reply-messages.md).
+Private/group list second lines temporarily show that
 activity instead of message previews and receipts, preserving message order,
 timestamps and unread counts. Groups identify each active contact. This reuses the
 existing session-owned summaries, foreground polling, deduplication, pagination,

@@ -1,6 +1,6 @@
 import { generatedImage } from '../photos/generation';
 import { learnFromReply, recordLearningQuestion } from '../chat/learning';
-import { messageDelay } from '../chat/messages';
+import { messageDelay, recordingDelay } from '../chat/messages';
 import { safeErrorCode } from '../chat/meta';
 import { jobAccountID, jobModel } from '../lib/model-preference';
 import { groupEnergyAvailable } from './energy';
@@ -106,9 +106,14 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
 
 async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep, messages: string[], invitesReply?: boolean, learningFence?: GroupDraft['learningFence'], learningQuestion?: GroupDraft['learningQuestion']) {
   for (let index = 1; index < messages.length; index++) {
-    await step.sleep(`group-message-pause-${index}`, messageDelay(messages[index]));
     const id = `${job.turnID}/part/${index}`;
     const previousID = index === 1 ? job.turnID : `${job.turnID}/part/${index - 1}`;
+    const typing = await step.do(`group-compose-message-${index}`, async () => {
+      const previous = await env.DB.prepare('SELECT sequence FROM group_message WHERE id = ?').bind(previousID).first<{ sequence: number }>();
+      return !!previous && await setGroupPresence(env, job, 'typing', previous.sequence);
+    });
+    if (!typing) break;
+    await step.sleep(`group-message-pause-${index}`, messageDelay(messages[index], job.turnID));
     const published = await step.do(`group-publish-message-${index}`, async () => {
       const contributor = env.META_CHAT_MODEL.includes('contributor');
       // Stop the unsent tail if anyone else speaks. Previously delivered messages
@@ -290,13 +295,15 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
         // Only single-message replies without a generated image can be spoken.
         const spoken = !!(single && spokenText && !prepared.attachment && voiceSuitable(spokenText));
         if (firstMessage) {
+          const recording = await step.do(`group-composition-mode-${review}`, async () =>
+            !!(spoken && await groupVoiceScope(env, job) && await voiceRepliesAvailable(env)));
           // A reply that will be spoken shows Recording from the start, never Typing first.
           const typing = await step.do(`group-mark-typing-${review}`, async () => {
             const marked = await setGroupPresence(env, job, 'typing', prepared.throughSequence);
-            if (marked && spoken && await groupVoiceScope(env, job) && await voiceRepliesAvailable(env)) await markRecording(env.DB, job.turnID, job.attempt);
+            if (marked && recording) await markRecording(env.DB, job.turnID, job.attempt);
             return marked;
           });
-          if (typing) await step.sleep(`group-first-message-pause-${review}`, messageDelay(firstMessage));
+          if (typing) await step.sleep(`group-first-message-pause-${review}`, recording ? recordingDelay(firstMessage) : messageDelay(firstMessage, job.turnID));
         }
         const voice = spoken && spokenText
           ? await step.do(`group-voice-message-${review}`, { retries: { limit: 0, delay: '1 second' }, timeout: '2 minutes' }, async () => {

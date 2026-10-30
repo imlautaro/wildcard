@@ -858,7 +858,12 @@ Browser/device behavior and real-model recall remain unverified.
 Like iOS, group bubbles and the member subtitle use the snapshot's explicit
 `replies[].isTyping === 1` only for running replies. Queued work, research and
 silent decisions show no typing. A completed nonempty draft starts a durable
-0.9–3 second typing pause before publication; successive parts retain the indicator.
+length-aware typing wait before each text publication, matching iOS. Every part
+has its own composition budget, capped at 60 seconds; later parts cannot reuse the
+first part's generation time. Short replies stay as one bubble unless context
+justifies a burst; longer replies may split into a few complete ideas for readability.
+Voice preparation keeps its short Recording lead-in. See
+[successive messages](reply-messages.md) for exact pacing and interruption rules.
 Retries still wait for all active jobs, including invisible queued work.
 Missing typing flags are treated as inactive. Existing session snapshots, one-second
 visible polling, invalidation and stale-response guards remain unchanged; no draft

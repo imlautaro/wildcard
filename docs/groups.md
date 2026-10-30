@@ -240,8 +240,12 @@ Implementation references: [Meta structured output](https://dev.meta.ai/docs/str
 oldest eligible job across private chats and group rounds. A group agent waits for
 an earlier group reply, and for its own work in other chats. Group research and
 the decision to reply or skip remain Online. Only a nonempty completed draft
-starts Typing, followed by a durable 0.9–3 second pause before first publication.
-Subsequent parts retain Typing until the burst ends. A context review returns
+starts Typing, followed by a durable length-aware composition wait before first
+text publication. Each subsequent part refreshes Typing and receives its own wait,
+scaled to that part's Unicode length and capped at 60 seconds. The server checks
+that the preceding message is still current before starting each later wait and
+rechecks publication access/history afterward. Voice notes retain the short
+Recording lead-in. See [successive messages](reply-messages.md) for timing details. A context review returns
 to Online while reconsidering the draft; publication still rechecks current history,
 permissions and energy, so a changed or revoked draft can be discarded.
 Saving the response ends visible typing; memory extraction completes before releasing the agent to another

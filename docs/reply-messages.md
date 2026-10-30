@@ -3,16 +3,35 @@
 A private reply or ordinary group response can contain one or several messages.
 The model chooses conversational beats from the current request, conversation and
 personality. One message remains valid; there is no fixed count or prescribed
-three-part greeting. Keep code, lists and cohesive explanations together rather
-than mechanically splitting sentences. The server validates 1–8 nonempty messages
-with at most 20,000 Unicode characters including separators. Eight is an abuse and
+three-part greeting. When requested depth makes an answer longer, a few distinct,
+self-contained ideas can become separate messages if that improves readability.
+Splitting is occasional, not a length target or a reason to add content. Keep
+code, lists, cohesive explanations and essential qualifications together rather
+than mechanically splitting sentences or counting characters. The server validates
+1–8 nonempty messages with at most 20,000 Unicode characters including separators. Eight is an abuse and
 latency ceiling, not a target.
 
 ## Delivery
 
 The existing ChatWorkflow checkpoints the prepared response and publishes each
-part separately. Between parts it sleeps for 0.9–3 seconds, based on the next
-message's length. Workflow scheduling and network latency may increase this gap.
+part separately. Every text part has a composition budget of 1.1 seconds plus its
+Unicode character count at 8–12 characters per second, with 0.45 seconds per blank-line
+paragraph break (at most four). The total is capped at 60 seconds per message.
+The turn ID deterministically varies the speed; replay keeps the same choice.
+For example, 100 characters take about 9–14 seconds, 300 about 26–39 seconds,
+and 600 about 51–60 seconds, before scheduling/network overhead. These are product
+pacing choices, not measurements of human typing speed.
+
+Only the first private text part credits time already spent visibly typing during
+generation. Each later part starts a fresh composition deadline after the preceding
+part is published. Recovery responses use the same delivery path. Before every
+part, the Workflow refreshes Typing and clears an earlier Recording overlay; group
+parts also check that the preceding message is still current before starting the
+wait. Publication retains its existing atomic access/interruption checks.
+Voice notes retain their separate 0.9–3 second preparation lead-in and Recording
+indicator; they do not inherit the longer text typing budget. Private initiative
+also uses the text budget, with a 90-second presence lease covering its maximum
+60-second wait. Workflow scheduling and network latency may increase these gaps.
 The timing uses durable [Workflow sleep](https://developers.cloudflare.com/workflows/build/sleeping-and-retrying/),
 not timers in an open app. Both clients poll the visible conversation every second;
 slow/offline clients can receive several already-delivered parts on their next refresh.
@@ -68,7 +87,10 @@ for local migration, automatic release and compatibility.
 
 Static validation covers API/web TypeScript, Swift typechecking and SQL preparation
 against the empty migrated schema (`node scripts/checks/reply-messages-sql.cjs`).
-No functional tests, builds, model calls or device/browser verification are implied.
+For the length-aware pacing refinement, only API TypeScript and whitespace checks
+were run. The existing iOS/web delivered-part and typing render paths were inspected;
+no client code or response contract changed. No functional tests, builds, model calls
+or device/browser verification were run for this refinement.
 With fictional data, verify one-message and variable-message replies, code/list
 cohesion, visible spacing and typing, navigation/background resume, a new human
 message between parts, tool receipts, repeated publication after interruption,
