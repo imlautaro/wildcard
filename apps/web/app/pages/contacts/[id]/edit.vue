@@ -107,16 +107,8 @@ const savePhoto = (photo: Blob | null) => run(async () => {
 });
 
 const remove = () => run(async () => {
-  const message = canManage.value
-    ? `This permanently deletes ${contact.value?.name ?? 'this contact'} for everyone, including all participants' chats, schedules, memories, and this contact's group messages and work.`
-    : 'This removes your access and deletes your private chat, schedules, and contributed memories. Other participants keep the contact.';
-  if (!window.confirm(message)) return;
+  if (!window.confirm(contactDeletionWarning(contact.value?.name, canManage.value))) return;
   await chats.deleteChatContact(id.value);
-  forgetContactEnergy(id.value);
-  forgetPersonality(id.value);
-  forgetMcpConnections(id.value);
-  forgetMiniApps(`contacts/${id.value}`);
-  forgetRead(`contact:${id.value}`);
   await navigateTo('/', { replace: true });
 });
 

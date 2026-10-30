@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DraftAttachment, DraftVoice, GroupMember, GroupMessage, ReplyQuote } from '~/utils/types';
+import { replyActivityLabel } from '../../../../../../shared/activity';
 
 const route = useRoute();
 const groupID = computed(() => String(route.params.id));
@@ -19,7 +20,8 @@ const activeReplies = computed(() => (state.value.snapshot?.replies ?? []).filte
 // Task work turns show what the contact is working on; other replies show typing dots.
 const workingReplies = computed(() => activeReplies.value.filter((reply) => reply.taskID));
 const typingReplies = computed(() => activeReplies.value.filter((reply) => !reply.taskID && reply.status === 'running' && reply.isTyping === 1));
-const subtitle = computed(() => typingReplies.value.length ? typingReplies.value.map((reply) => `${reply.name} is ${reply.replyActivity === 'researching' ? 'researching' : reply.replyActivity === 'recording' ? 'recording' : 'typing'}…`).join(', ')
+const subtitle = computed(() => typingReplies.value.length ? replyActivityLabel(typingReplies.value.map((reply) => ({ name: reply.name,
+    activity: reply.replyActivity === 'researching' || reply.replyActivity === 'recording' ? reply.replyActivity : 'typing' }))) ?? memberLine.value
   : workingReplies.value.length ? `${[...new Set(workingReplies.value.map((reply) => reply.name))].join(', ')} working…` : memberLine.value);
 function failedRepliesFor(message: GroupMessage) {
   return (state.value.snapshot?.replies ?? []).filter((reply) => reply.status === 'failed' && reply.sourceID === message.id

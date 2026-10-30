@@ -812,7 +812,11 @@ Typing presence or a running web search (`replyActivity: "researching"`). Queued
 replies and silent decisions never imply typing; planned speakers type while their
 reply is generated (see [round coordinator](#round-coordinator-migration-0071)). Both
 iOS and web require this explicit flag; missing fields from older API snapshots
-show no indicator. The web subtitle follows the same rule. Retry availability
+show no indicator. The web subtitle follows the same rule and formats the typing
+contacts with the same `replyActivityLabel` (`shared/activity.ts`) the API uses for
+the chat-list `replyActivity` summary ("Ana and Bo are typing...", "4 people are
+typing..."; see [chats](chats.md)). The summary query returns at most 50 active
+replies as JSON and the API formats them, so no migration is needed. Retry availability
 continues to consider all queued/running jobs. No migration or new service is needed.
 
 Replies that are task work turns carry `replies[].taskID` and `taskTitle`. Both clients

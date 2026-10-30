@@ -837,8 +837,13 @@ spoken message is known. **Researching...** replaces both while a web search run
 Recording... when their single-message reply will be spoken. Groups label each responding contact separately.
 Text fallback restores typing, and a finished turn returns to the normal presence.
 Chat list second lines temporarily replace the last message with **Typing...** or
-**Recording...** (including contact names in groups), hiding the last message's
-sender/checks. Message timestamps, unread counts and ordering do not change. Task
+**Recording...**, hiding the last message's sender/checks. Groups name the contacts
+in a sentence built by the API (`shared/activity.ts`): **Ana is typing...**, **Ana
+and Bo are typing...**, **Ana, Bo and Cy are typing...**, or **Ana is researching,
+Bo is typing...** for mixed activities. More than three contacts, or a line longer
+than 48 characters, collapses to **4 people are typing...** (**are replying...**
+when activities differ). Clients show `replyActivity` verbatim, so older builds get
+the new wording without an update. Message timestamps, unread counts and ordering do not change. Task
 work bubbles keep their existing task label. This applies to both iOS and web.
 
 Activity comes from the existing session-owned contact/group summaries and the

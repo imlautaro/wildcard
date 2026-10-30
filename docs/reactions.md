@@ -14,12 +14,18 @@ accessibility services. Unsaved outgoing messages cannot be reacted to.
 Contacts react on their own according to their personality; see
 [emoji and reactions](personality.md#emoji-and-reactions).
 On the web, hold a message, right-click it, or use its keyboard-focusable reaction
-button. That button and the reply button float beside the message on hover or
-keyboard focus (to the right of incoming messages, to the left of your own), so they
-take no space in the conversation. The selector floats over the conversation, above
-the message when there is room and below it otherwise, and closes on scroll, resize,
-Escape or a click outside. Pointer movement cancels the hold, preserving scrolling. Badges show counts;
-opening the selector shows participant names. Both clients use the same emoji set,
+button. That button and the reply button float beside the message while the pointer
+is anywhere over the message's conversation row, or on keyboard focus (to the right
+of incoming messages, to the left of your own), so they take no space in the
+conversation and stay reachable when the pointer leaves the bubble from above or
+below. The menu opens at the cursor (the finger for a hold, the pressed button or
+badge otherwise; the keyboard context-menu key uses the message) as two floating
+panels with arrows pointing at that point: the emoji bar above it and the actions
+(Reply, Message info, View transcript, Remove reaction, then who reacted) below it.
+Without room above, the emoji bar moves below the point and the actions stack under
+it; without room below, the actions stack above the emoji bar. Both close on scroll,
+resize, Escape or a click outside. Pointer movement cancels the hold, preserving
+scrolling. Badges show counts; opening the menu shows participant names. Both clients use the same emoji set,
 selection, replacement, removal and explicit retry behavior.
 
 ## API and persistence

@@ -6,6 +6,8 @@ const route = useRoute();
 const menuID = useId();
 const menu = ref<HTMLElement>();
 const menuOpen = ref(false);
+const rowMenu = ref<{ show: (row: ChatRow, event: MouseEvent) => void }>();
+const actionError = ref<string | null>(null);
 
 function onMenuToggle() {
   menuOpen.value = menu.value?.matches(':popover-open') ?? false;
@@ -57,6 +59,10 @@ onMounted(() => { void chats.refresh(); });
       <span v-if="chats.invitationCount.value" class="badge" :aria-label="`${chats.invitationCount.value} pending invitations`">{{ chats.invitationCount.value }}</span>
     </NuxtLink>
   </header>
+  <div v-if="actionError" class="notice" role="alert">
+    {{ actionError }}
+    <button class="link-button" @click="actionError = null">Dismiss</button>
+  </div>
   <div v-if="chats.error.value && visibleRows.length" class="notice" role="status">
     {{ chats.error.value }}
     <button class="link-button" @click="chats.refresh()">Retry</button>
@@ -74,7 +80,7 @@ onMounted(() => { void chats.refresh(); });
     </div>
     <ul v-else class="list">
       <li v-for="row in visibleRows" :key="`${row.kind}/${row.id}`">
-        <NuxtLink :to="rowPath(row)" class="row" :class="{ active: route.path === rowPath(row), unread: row.unread }">
+        <NuxtLink :to="rowPath(row)" class="row" :class="{ active: route.path === rowPath(row), unread: row.unread }" @contextmenu="rowMenu?.show(row, $event)">
           <AppAvatar :name="row.name" :path="row.photoPath" :size="48" />
           <div class="body">
             <div class="top">
@@ -98,6 +104,7 @@ onMounted(() => { void chats.refresh(); });
       <button class="link-button" @click="chats.loadMore()">Load older chats</button>
     </div>
   </div>
+  <ChatRowMenu ref="rowMenu" @error="message => actionError = message" />
 </template>
 
 <style scoped>

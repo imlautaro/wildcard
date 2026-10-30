@@ -1,4 +1,5 @@
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
+import { replyActivityLabel, type ReplyActivityEntry } from '../../../../shared/activity';
 import { learningRoutes } from '../chat/learning-routes';
 import { accountEnvironment } from '../lib/model-preference';
 import { reactionRoutes } from '../reactions/routes';
@@ -34,8 +35,9 @@ const mayInvite = `EXISTS (SELECT 1 FROM group_member m JOIN chat_group g ON g.i
 type GroupSummary = Record<string, unknown> & { lastMessageText: string | null; lastMessageUserID: string | null };
 function groupPreview(row: GroupSummary) {
   const source = row.lastMessageText;
-  const { lastMessageVoiceJSON, ...fields } = row;
+  const { lastMessageVoiceJSON, replyActivityJSON, ...fields } = row;
   return { ...fields, lastMessageVoice: typeof lastMessageVoiceJSON === 'string' ? JSON.parse(lastMessageVoiceJSON) : null,
+    replyActivity: replyActivityLabel(typeof replyActivityJSON === 'string' ? JSON.parse(replyActivityJSON) as ReplyActivityEntry[] : []),
     lastMessagePreview: source == null ? null : [...(row.lastMessageUserID == null ? plainMessageMarkdown(source) : source)].slice(0, 500).join('') };
 }
 // Task work triggers (task_id set, no sender) are internal: the assignee's own reply is
@@ -45,14 +47,14 @@ const summary = `
     json_object('durationMs', json_extract(gm.attachment_json, '$.durationMs'), 'listenedAt', gm.voice_listened_at,
       'ownListenedAt', (SELECT listened_at FROM group_voice_playback WHERE message_id = gm.id AND user_id = m.user_id), 'transcript', NULL) END
     FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageVoiceJSON,
-g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (SELECT group_concat(label, ', ') FROM (
-    SELECT a.name || CASE WHEN p.researching_until > unixepoch('subsec') * 1000 THEN ' Researching...'
-      WHEN p.recording_until > unixepoch('subsec') * 1000 THEN ' Recording...' ELSE ' Typing...' END AS label
+g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (SELECT json_group_array(json_object('name', name, 'activity', activity)) FROM (
+    SELECT a.name AS name, CASE WHEN p.researching_until > unixepoch('subsec') * 1000 THEN 'researching'
+      WHEN p.recording_until > unixepoch('subsec') * 1000 THEN 'recording' ELSE 'typing' END AS activity
     FROM group_reply r JOIN agent_attention attention ON attention.turn_id = r.id AND attention.attempt = r.attempt AND attention.agent_id = r.agent_id
     JOIN agent_presence p ON p.agent_id = r.agent_id JOIN contact_agent a ON a.id = r.agent_id
     WHERE r.group_id = g.id AND r.status = 'running' AND p.expires_at > unixepoch('subsec') * 1000
       AND (p.status = 'typing' OR p.researching_until > unixepoch('subsec') * 1000)
-    ORDER BY r.sequence LIMIT 8)) AS replyActivity,
+    ORDER BY r.sequence LIMIT 50)) AS replyActivityJSON,
   m.last_read_sequence AS lastReadSequence,
   (SELECT COUNT(*) FROM group_message gm WHERE gm.group_id = g.id AND gm.sequence > m.last_read_sequence
     AND gm.user_id IS NOT m.user_id AND gm.task_id IS NULL) AS unreadCount, g.id, g.name, g.owner_id AS ownerID,

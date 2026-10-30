@@ -466,6 +466,18 @@ async function deleteChatContact(id: string) {
   await lifecycleMutation(async () => {
     const owner = useSession().user.value?.id;
     await api(`contacts/${id}`,{method:'DELETE'});
-    if (useSession().user.value?.id === owner) removeContact(id);
+    if (useSession().user.value?.id !== owner) return;
+    removeContact(id);
+    forgetContactEnergy(id);
+    forgetMcpConnections(id);
+    forgetMiniApps(`contacts/${id}`);
+    forgetRead(`contact:${id}`);
   });
+}
+
+// Creators delete the contact for everyone; shared participants only leave it.
+export function contactDeletionWarning(name: string | undefined, canManage: boolean) {
+  return canManage
+    ? `This permanently deletes ${name ?? 'this contact'} for everyone, including all participants' chats, schedules, memories, and this contact's group messages and work.`
+    : 'This removes your access and deletes your private chat, schedules, and contributed memories. Other participants keep the contact.';
 }

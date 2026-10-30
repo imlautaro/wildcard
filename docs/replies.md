@@ -17,8 +17,9 @@ user or the agent in private chats and from any member in groups:
   reaction popover. VoiceOver exposes a **Reply** action. The swipe uses a UIKit pan
   recognizer that only begins for rightward horizontal movement, so vertical
   scrolling keeps working; a light haptic marks the trigger point.
-- Web: hover a message and use its floating reply button beside the reaction button,
-  or hold/right-click the message and choose **Reply** in the selector (on touch
+- Web: hover a message's row and use its floating reply button beside the reaction
+  button, or hold/right-click the message and choose **Reply** in the actions panel
+  below the cursor (on touch
   screens, which have no hover, use the hold). The web app has no swipe gesture.
 
 The composer then shows the quoted message above the text field with a cancel

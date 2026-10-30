@@ -476,8 +476,10 @@ and verification steps. Reactions use existing conversation synchronization and
 add no unread messages or push alerts. The hover reply/reaction buttons and the
 selector float over the conversation instead of taking space under the message
 (`MessageReactions.vue`; the selector is teleported to `body` with fixed
-positioning). Checked on a static headless Chrome mock with the real CSS; the live
-app is not visually verified.
+positioning). The earlier single-panel selector was checked on a static headless
+Chrome mock with the real CSS; the current two-panel menu (see
+[message menu](#chat-list-context-menu-and-message-menu-2026-10-30)) and the live app
+are not visually verified.
 
 ## Message replies
 
@@ -1044,7 +1046,7 @@ for reproducible setup and rollback.
 
 ## Chat lifecycle
 
-Chat rows have no Manage button. Open a contact's details from the chat title and scroll to the bottom for Archive/Unarchive, Clear chat with an optional memory-removal checkbox, and Delete contact and data. Group details place Archive/Unarchive and owner-only Clear chat at the bottom beside Delete group/Leave group. Destructive confirmations and existing session mutation/invalidation helpers are retained. This placement change is web-only; iOS retains its swipe actions and context menus as requested. Open Archived using the archive icon button immediately to the left of Account in the chat-list header; the button toggles the view and indicates its active state. The archived header also offers Back to Chats. Home has no Archived row. iOS places Archived in the top-left three-dot menu. Archived remains a view of the existing session list cache, retaining pagination and background refresh without a separate cache or request path. Clear group is owner-only and explicitly affects everyone. Behavior, copy, cascade, history fencing and cache rules match iOS; see [chat lifecycle](chat-lifecycle.md), including navigation verification steps. No browser execution/build validation has been performed for these actions.
+Chat rows have no Manage button; right-click one for its context menu (see [chat-list context menu](#chat-list-context-menu-and-message-menu-2026-10-30)). Open a contact's details from the chat title and scroll to the bottom for Archive/Unarchive, Clear chat with an optional memory-removal checkbox, and Delete contact and data. Group details place Archive/Unarchive and owner-only Clear chat at the bottom beside Delete group/Leave group. Destructive confirmations and existing session mutation/invalidation helpers are retained. This placement change is web-only; iOS retains its swipe actions and context menus as requested. Open Archived using the archive icon button immediately to the left of Account in the chat-list header; the button toggles the view and indicates its active state. The archived header also offers Back to Chats. Home has no Archived row. iOS places Archived in the top-left three-dot menu. Archived remains a view of the existing session list cache, retaining pagination and background refresh without a separate cache or request path. Clear group is owner-only and explicitly affects everyone. Behavior, copy, cascade, history fencing and cache rules match iOS; see [chat lifecycle](chat-lifecycle.md), including navigation verification steps. No browser execution/build validation has been performed for these actions.
 
 The lifecycle API corrections in migration 0064 apply equally to web and iOS: pending cleanup now includes group-derived private work, generated images retain their chat scope, and stale failures cannot delay newer cleanup. [38 local integration checks](chat-lifecycle-testing.md) pass against actual routes and emulated bindings; this does not validate browser/iOS UI or production services. No client API/copy/permission contract changes were needed.
 
@@ -1225,3 +1227,35 @@ menu offers Message, More/Less like this and Hide. A note's suggested reply fill
 the contact's empty composer through `suggestDraft` and is never sent automatically.
 Behavior, copy and caching match the iOS Updates tab (`useHome`, see
 [caching](caching.md#updates-feed)).
+
+## Chat-list context menu and message menu (2026-10-30)
+
+The first three changes are web-only: they are mouse interactions (right click and
+hover), and the chat-list menu was scoped to the web by request. iOS already offers
+row context menus and swipe actions and opens message reactions with a hold. The
+group typing wording is shared with iOS.
+
+- **Chat-list context menu.** Right-clicking a chat row (or the keyboard
+  context-menu key on a focused row) opens `ChatRowMenu` at the cursor, clamped to
+  the viewport: **Contact details**/**Group details**, **Archive**/**Unarchive**,
+  **Clear chat…** when allowed (contacts, and groups you own) and, for contacts,
+  **Delete contact…**. Clear opens a sheet with the same memory choice and
+  confirmation as the details pages (`ChatClearActions`); Delete uses the same
+  confirmation copy (`contactDeletionWarning`) and leaves an open chat or contact
+  page for `/`. All actions reuse the session lifecycle mutations
+  (`archiveChat`, `clearChat`, `deleteChatContact`, which now also forgets the
+  contact's energy, connections, mini apps and read guard), so cache invalidation
+  matches the details pages; failures show in a dismissible notice above the list.
+- **Hover target.** The floating reply/reaction buttons show while the pointer is
+  anywhere over the message's conversation row, not only the bubble, so moving
+  toward them from above or below no longer hides them.
+- **Message menu.** Right click, hold, or the reaction button opens the emoji bar
+  above the pointer and the actions below it, each with an arrow; see
+  [reactions](reactions.md).
+- **Group typing wording.** Chat-list previews and the web group subtitle read
+  "Ana is typing...", "Ana and Bo are typing..." or "4 people are typing..."; this
+  comes from the API and applies to iOS too (see [chats](chats.md)).
+
+No cache, API contract or storage change beyond the formatted `replyActivity`
+string. Verified statically only (web typecheck, API typecheck, `EXPLAIN` of the
+group summary query on local D1); browser behavior is not verified.

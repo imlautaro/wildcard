@@ -1,7 +1,9 @@
 # Chat lifecycle and resource cleanup
 
 Both iOS and web offer Archive/Unarchive, Clear chat, and Delete contact.
-On iOS, use a chat row's swipe actions or context menu. On web, open contact
+On iOS, use a chat row's swipe actions or context menu. On web, right-click a chat
+row for Contact/Group details, Archive/Unarchive, Clear chat… (a sheet with the same
+memory choice and confirmation) and, for contacts, Delete contact…, or open contact
 details from the chat title and scroll to the bottom for these actions; chat rows
 have no Manage button. Group details likewise place Archive/Unarchive and the
 owner-only Clear chat beside the existing Delete group/Leave group actions.
