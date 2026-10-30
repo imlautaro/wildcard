@@ -5,6 +5,7 @@
 // node_modules/@iconify-json/material-symbols/icons.json; not every symbol has
 // an outline variant.
 export const appIcons = {
+  menu: ['material-symbols:menu-rounded', 'material-symbols:menu-rounded'],
   compose: ['material-symbols:edit-outline-rounded', 'material-symbols:edit-rounded'],
   archive: ['material-symbols:archive-outline-rounded', 'material-symbols:archive-rounded'],
   back: ['material-symbols:arrow-back-rounded', 'material-symbols:arrow-back-rounded'],

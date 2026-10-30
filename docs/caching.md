@@ -474,6 +474,10 @@ caches.
   private and group conversations render synchronously from memory, including empty
   results. Spinners appear only on first load. Refreshes run in the background, and
   failures keep loaded content visible with a retry notice.
+  Account and new-chat flows hide the mounted chat list rather than destroying it,
+  preserving its Archived selection and scroll position. Its existing list/read
+  retry and invitation polling continue while the tab is visible. No new cache,
+  request cadence, retention or invalidation rules are introduced by the navigation menu.
 - **Freshness.** Polling runs only while the tab is visible, on the iOS one-second
   cadence (see [web app](web.md)), and returning to the tab refreshes immediately. A
   conversation refresh merges its newest page into cached history by ID: private

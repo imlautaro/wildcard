@@ -1,5 +1,12 @@
 # Private conversations
 
+Web navigation uses a solid primary **+** icon button in the Chats header to open
+Contacts. A menu button to the left of Chats opens an Account dropdown. Account
+and new-chat flows replace the chat list; Back restores it, including its Archived
+selection and scroll position. Existing conversations retain the adjacent list on
+wide screens. This layout change is scoped to web; iOS retains native navigation.
+See [web layout](web.md#design) and [cache behavior](caching.md#web-app).
+
 Ordinary human requests can use bounded [web research](web-research.md). The
 contact normally uses the findings to understand the topic and continue the chat,
 without creating a document. A requested lasting report uses the same sourced

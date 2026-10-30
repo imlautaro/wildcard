@@ -198,8 +198,8 @@ and caching still match across clients. Manrope stays the typeface on both.
   Material 3 expressive list: items separated by 2 px gaps inside one rounded block.
   `a.button-row` (navigation) trails a chevron; `button.button-row` (action) keeps
   the primary color. `.toggle` inputs are Material switches, `.text-field` is an
-  outlined field with a floating label (used on sign-in), `.fab` is the
-  extended floating action button for **New chat** in the chat list, and
+  outlined field with a floating label (used on sign-in), `.icon-button.primary`
+  is the solid primary **+** action for **New chat** in the chat-list header, and
   `.mini-tabs` is a navigation bar with an active indicator pill.
 - **Forms.** `AppSelect` replaces every native `<select>`: a Material menu listbox
   following the WAI-ARIA select-only combobox pattern (arrow keys, Home/End,
@@ -231,8 +231,22 @@ and caching still match across clients. Manrope stays the typeface on both.
   settings that take effect immediately. Two-line rows use `.two-line` with a
   `.small` supporting line. `.search-field`, `.chip`, `.code-box`, `details`, and
   `.actions-row` (end-aligned buttons) cover the remaining page patterns.
-- **Layout.** On wide screens the chat list sits on the container color and the
-  page renders in a rounded surface pane; below 860 px both are full-bleed.
+- **Layout.** On wide screens the chat list sits beside a rounded content pane.
+  A menu icon button to the left of the Chats title opens a dropdown with **My account**,
+  identified by the standard user icon rather than the account avatar.
+  The native auto popover dismisses on outside press, Escape, navigation or item
+  selection, supports keyboard focus, and exposes its expanded state on the button.
+  Account (including Connections) and New chat (Contacts, create contact/group,
+  invitations and join) hide the chat list and show a back button at every width.
+  The list stays mounted to preserve Archived selection, scroll and polling.
+  Below 860 px pages replace the chat list and use the full screen width.
+  This navigation change is explicitly web-only; iOS keeps its native tabs.
+  The Account dropdown, Escape dismissal and Account/Back navigation were checked
+  locally on October 30, 2026; type checking passed.
+  Earlier local checks on October 30, 2026 verified desktop Chats, Contacts and
+  Account, Back restoring Archived selection, and Chats/Contacts at 390 px.
+  Scroll restoration with populated history, dark mode, offline recovery and
+  account switching were not rechecked.
 - **State layers and ripple.** Interactive classes get a `currentColor` overlay
   (8% hover, 10% focus and press). `app/plugins/ripple.client.ts` adds the press
   ripple with one delegated `pointerdown` listener; the host list there and in

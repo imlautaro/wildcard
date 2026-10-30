@@ -2,14 +2,18 @@
 const chats = useChats();
 const archived = ref(false);
 const visibleRows = computed(() => archived.value ? chats.archivedRows.value : chats.rows.value);
-const { user } = useSession();
 const route = useRoute();
+const menuID = useId();
+const menu = ref<HTMLElement>();
+const menuOpen = ref(false);
+
+function onMenuToggle() {
+  menuOpen.value = menu.value?.matches(':popover-open') ?? false;
+}
+watch(() => route.path, () => menu.value?.hidePopover());
 
 function rowPath(row: ChatRow) {
   return row.kind === 'contact' ? `/chats/${row.id}` : `/groups/${row.id}`;
-}
-function accountPhotoPath() {
-  return user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null;
 }
 
 // Same cadence as the iOS session synchronizer: lists every second while
@@ -24,6 +28,16 @@ onMounted(() => { void chats.refresh(); });
 
 <template>
   <header class="bar">
+    <button class="icon-button" aria-label="Menu" title="Menu" :popovertarget="menuID"
+            :aria-controls="menuID" :aria-expanded="menuOpen">
+      <AppIcon name="menu" />
+    </button>
+    <nav :id="menuID" ref="menu" popover="auto" class="chat-menu" aria-label="Main navigation" @toggle="onMenuToggle">
+      <NuxtLink to="/account" class="row" @click="menu?.hidePopover()">
+        <AppIcon name="person" />
+        <span>My account</span>
+      </NuxtLink>
+    </nav>
     <button v-if="archived" class="icon-button" aria-label="Back to Chats" title="Back to Chats" @click="archived=false">
       <AppIcon name="back" />
     </button>
@@ -31,8 +45,9 @@ onMounted(() => { void chats.refresh(); });
     <button class="icon-button" aria-label="Archived" title="Archived" :aria-pressed="archived" @click="archived=!archived; chats.loadAllContacts()">
       <AppIcon name="archive" :filled="archived" />
     </button>
-    <NuxtLink to="/account" class="icon-button" aria-label="Account">
-      <AppAvatar :name="user?.name ?? ''" :path="accountPhotoPath()" :size="32" />
+    <NuxtLink to="/contacts" class="icon-button primary" aria-label="New chat" title="New chat">
+      <AppIcon name="plus" />
+      <span v-if="chats.invitationCount.value" class="badge" :aria-label="`${chats.invitationCount.value} pending invitations`">{{ chats.invitationCount.value }}</span>
     </NuxtLink>
   </header>
   <div v-if="chats.error.value && visibleRows.length" class="notice" role="status">
@@ -76,10 +91,6 @@ onMounted(() => { void chats.refresh(); });
       <button class="link-button" @click="chats.loadMore()">Load older chats</button>
     </div>
   </div>
-  <NuxtLink to="/contacts" class="fab" aria-label="Contacts and new chat">
-    <AppIcon name="compose" />New chat
-    <span v-if="chats.invitationCount.value" class="badge">{{ chats.invitationCount.value }}</span>
-  </NuxtLink>
 </template>
 
 <style scoped>

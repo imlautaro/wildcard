@@ -164,22 +164,28 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
     .mini-lesson .options button, .select-option, [data-ripple])::before { transition: none; }
 }
 
-/* Shell: the chat list sits on the container color beside a rounded content
-   pane on wide screens; single column on narrow screens. */
-.shell { display: grid; grid-template-columns: var(--sidebar) 1fr; height: 100dvh; background: var(--md-surface-container); }
+/* Shell: optional chat list beside a rounded content pane. */
+.shell { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); height: 100dvh; background: var(--md-surface-container); }
+.shell.without-chat-list { grid-template-columns: minmax(0, 1fr); }
+.shell.without-chat-list > main { margin-left: 8px; }
 .shell > aside { min-width: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 .shell > main {
   min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--md-surface);
   margin: 8px 8px 8px 0; border-radius: 24px;
 }
 @media (max-width: 860px) {
-  .shell { grid-template-columns: 1fr; background: var(--md-surface); }
-  .shell > main { margin: 0; border-radius: 0; }
+  .shell, .shell.without-chat-list { grid-template-columns: minmax(0, 1fr); }
+  .shell > main, .shell.without-chat-list > main { margin: 0; border-radius: 0; }
   .shell.has-page > aside { display: none; }
   .shell:not(.has-page) > main { display: none; }
 }
 
 /* Top app bar */
+.chat-menu {
+  position: fixed; inset: 56px auto auto 8px; margin: 0; min-width: 200px; padding: 8px 0;
+  border: 0; border-radius: var(--md-shape-m); background: var(--md-surface-container);
+  color: var(--md-on-surface); box-shadow: var(--md-elevation-2);
+}
 .bar { display: flex; align-items: center; gap: 4px; min-height: 64px; padding: 8px 8px 8px 4px; position: sticky; top: 0; z-index: 2; }
 .bar h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; padding-left: 12px; }
 .bar .title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; color: inherit; }
@@ -190,6 +196,7 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
 .bar .name { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .large-title { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; padding: 4px 16px 12px; }
 .back { display: none; }
+.shell.without-chat-list .back { display: inline-flex; }
 @media (max-width: 860px) { .back { display: inline-flex; } }
 
 /* Icon buttons, badges and the floating action button */
@@ -199,6 +206,7 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
 }
 .icon-button svg { width: 24px; height: 24px; }
 .bar > .icon-button:first-child { color: var(--md-on-surface); }
+.icon-button.primary { background: var(--md-primary); color: var(--md-on-primary); }
 .badge {
   min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--md-primary); color: var(--md-on-primary);
   font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums;
@@ -220,7 +228,6 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
 
 /* Lists */
 .scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
-.shell > aside .scroll { padding-bottom: 88px; }
 .list { list-style: none; margin: 0; padding: 0 8px; }
 .row {
   display: flex; align-items: center; gap: 16px; padding: 10px 16px; color: inherit; width: 100%;
