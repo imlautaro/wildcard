@@ -262,8 +262,10 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
             AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?3 AND attempt = ?4)
             ${index ? `AND NOT (${interrupted})` : ''}`)
             .bind(text, now, job.turnID, job.attempt, JSON.stringify(next), index === messages.length - 1 || !messages.length ? 1 : 0, index),
-          env.DB.prepare(`UPDATE chat_turn SET status = CASE WHEN task_id IS NOT NULL OR assistant_text IS NOT NULL THEN 'complete' ELSE 'failed' END,
-            error_code = CASE WHEN task_id IS NULL AND assistant_text IS NULL THEN 'GROUP_REQUEST_CANCELLED' ELSE NULL END, updated_at = ?1
+          // Stopped task generations have no reply. The schema requires text for
+          // completion; end them as failed so publication retries cannot hold attention.
+          env.DB.prepare(`UPDATE chat_turn SET status = CASE WHEN assistant_text IS NOT NULL THEN 'complete' ELSE 'failed' END,
+            error_code = CASE WHEN assistant_text IS NOT NULL THEN NULL WHEN task_id IS NOT NULL THEN 'GENERATION_INTERRUPTED' ELSE 'GROUP_REQUEST_CANCELLED' END, updated_at = ?1
             WHERE id = ?2 AND attempt = ?3 AND status = 'running'
             AND (NOT (${resultAllowed}) OR NOT (${scheduleAllowed('chat_turn')}) OR NOT (${workAllowed})
               ${index ? `OR (${interrupted})` : ''})`).bind(now, job.turnID, job.attempt),

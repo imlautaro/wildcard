@@ -218,6 +218,15 @@ foreground polling; there is no new client cache or API contract.
 Cloudflare's [Workers API](https://developers.cloudflare.com/workflows/build/workers-api/)
 documents the ID length and allowed characters.
 
+Live release verification on October 30 exposed a second legacy-task issue:
+publication tried to mark a stopped generation complete without assistant text,
+violating the existing `chat_turn` CHECK constraint and retaining attention during
+step retries. A stopped task turn with no reply now ends as failed with the existing
+`GENERATION_INTERRUPTED` code; a delivered reply still ends complete. This changes
+the work receipt, not the task's status or budget. Both clients retain their existing
+failed-task presentation without manual reply retry. Workflows already running
+older code finish their bounded retries before the catch/recovery releases attention.
+
 D1 rejects compound SELECTs with more than five terms (`too many terms in compound
 SELECT`), unlike local SQLite. The first release added two `UNION ALL` branches to
 `groupSourceAccess`, which made every group reply and **Retry reply** fail in

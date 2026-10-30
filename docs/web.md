@@ -5,6 +5,8 @@ Task work uses the shared server attention dispatcher, including
 also applies to iOS. Existing foreground polling refreshes work indicators after
 recovery; no API contract, cache lifetime or invalidation rule changes. Live backlog
 recovery and browser/device presentation require verification after release.
+Stopped task generations without replies use the existing failed-turn presentation
+and `GENERATION_INTERRUPTED` code on both clients; their task state is preserved.
 
 [App branding](branding.md) uses the supplied background-inclusive logo on sign-in
 and registration, plus the supplied favicon in both web and admin. Favicons use
