@@ -733,6 +733,19 @@ The per-participant `initiativeEnabled` field uses the existing contact cache an
 
 The faster initiative cadence (migration 0033) changes server scheduling and prompt guidance only. iOS and web retain the same contact/conversation caches, polling intervals, freshness, empty-state reuse, session isolation and late-response rejection. No client-side countdown, extra settings cache, pagination change or disk retention is added. Messages still enter the normal history/read/preview paths.
 
+Adaptive initiative (0065) derives activity/receptivity from at most 160 completed
+turns over 28 days of this participant's chat. These statistics are request-local,
+not a new materialized or client cache. Categorical source-linked feedback remains
+on its original turns; the explicit conversational pause stays on the contact.
+Neither is copied into shared factual memory or another participant's profile.
+Clearing history removes its labels and pause even when factual memory is kept;
+contact/account deletion cascades. Archiving cancels the pending plan. Finite
+ambient opportunities remain in the existing D1 plan and bounded Workflow
+checkpoints, with no extra client requests, pagination or disk retention. Existing
+contact mutation invalidation and history/account/access guards are unchanged.
+Both clients' help now explains adaptive timing; reopen/back, refresh, offline,
+mutation failure, revocation and account-switch verification remain pending.
+
 Native in-app status reuses the same bounded action list for per-message receipts.
 It adds an account-filtered, in-memory AlarmKit snapshot for at most the existing
 200 locally tracked alarm IDs; the alarm ledger and retention are unchanged.

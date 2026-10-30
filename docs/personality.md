@@ -297,6 +297,16 @@ second initial floor, scaled for subsequent follow-ups and combined with the
 existing backoff. Quiet hours, recipient opt-out, attention/activity, consent,
 evaluation/daily budgets and unanswered-message caps remain authoritative.
 
+[Adaptive initiative](initiative.md) additionally uses initiative/patience for
+spacing and unanswered-message ceilings, combined with this participant's actual
+engagement. Warmth, humor and verbosity still follow the existing acting plan.
+Optional later social opportunities use varied windows and stop after unanswered
+outreach; unrelated tasks cannot count as positive responses to greetings.
+Disabled personalities use neutral cadence values while retaining adaptation to
+this private conversation. No activity pattern, categorical outreach feedback or
+conversational pause is shared with another participant. Real-model calibration
+and the updated opt-in regressions remain pending for migration 0065.
+
 The classifier uses the same permitted model as the turn, adds at most one new
 model call per source (2,048 completion tokens including reasoning, existing
 45-second timeout), and has no

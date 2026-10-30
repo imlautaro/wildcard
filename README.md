@@ -271,7 +271,7 @@ reads when opened. Apps open full screen with optional native tabs, menus,
 composers and lessons, and are verified offline (automatic checks plus the
 contact's tests) before they are saved. Migrations 0037–0038 are required.
 
-Private contacts also support [conversation initiative](docs/initiative.md): durable AI reviews choose whether to wait, send a useful follow-up or stop after silence. Each participant can disable it in contact details on iOS or web. It reuses D1, Cron and Workflows; migrations 0032–0033 are required. Initial reviews become due after 30 seconds, with progressively longer gaps for unanswered follow-ups.
+Private contacts also support [adaptive conversation initiative](docs/initiative.md): durable AI reviews choose whether to wait, send a useful follow-up, start a later conversation or stop. Timing and amount adapt to personality and this participant's responses, with varied activity windows, ignored-greeting suppression and explicit conversational pauses. Each participant can disable it in contact details on iOS or web. It reuses D1, Cron and Workflows; migrations through 0065 are required. Continuations have a 24-hour horizon; eligible new-conversation opportunities have a separate bounded budget over seven days, and one unanswered ambient message ends outreach until human input.
 
 ## Contact personality experiment
 

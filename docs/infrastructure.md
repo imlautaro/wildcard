@@ -1736,6 +1736,59 @@ simulated model/time. No remote migration or new live-model evaluation was run
 for this adjustment; release and live prompt validation remain pending. iOS/web
 receive the same server behavior with their existing caches and API contract.
 
+### Adaptive initiative — migration 0065
+
+`0065_adaptive_initiative.sql` follows every migration through 0064. It adds a
+per-contact conversational pause, continuation/ambient mode on the existing plan,
+and source-linked engagement/response/outreach-kind fields on chat turns. No new
+service, table, binding, secret, provider account, permission or Cron Trigger is
+required. Independent installations use the existing D1, model/auth, Workflow
+and optional APNs provisioning above with their own account/resource identifiers.
+The checked-in Wrangler configuration is unchanged.
+
+Development: install with `npm ci`, apply all migrations with
+`npm run db:migrate:local`, then use the existing API/web commands and Xcode app.
+The API/web share the adaptive implementation and both clients' info copy is
+updated. For static validation use API/web type checks, Swift editor parsing,
+`git diff --check` and `python3 scripts/checks/initiative-sql-compile.py`. The
+script prepares actual SQL against an empty migrated SQLite schema without
+application data. The opt-in `node scripts/checks/initiative.cjs` fixture harness
+is updated but has not been executed for this change; neither have builds, live
+model calls, device/browser interactions or remote migrations.
+
+Production uses commit/push and the existing automatic migration-before-publish
+pipeline, never a manual deployment. Verify 0065 is applied, API/web tags match
+the pushed SHA, and existing Cron/Workflow/APNs paths remain configured. Migration
+0065 does not backfill learning or restart stopped plans: it increments revisions
+to invalidate existing drafts, preserves their counters and due dates, and cancels
+plans for already archived contacts. Future archiving cancels the plan immediately.
+Classification begins when an eligible live episode is next evaluated; stopped
+plans stay stopped. Historical outreach kinds are not retroactively guessed.
+
+Each contact has at most one plan. Continuations have six evaluations/24 hours;
+eligible ambient opportunities have a separate six-evaluation/seven-day budget
+from the last human input. At most one ambient send is allowed without a human
+return. Activity/receptivity is derived request-locally from at most 160 completed
+turns over 28 days, without a new stats cache or cross-participant learning.
+Feedback labels remain attached to source turns until history deletion; the
+explicit pause stays on the contact until clear, explicit resumption or an off/on
+setting change. Clear removes learning/pause even when factual memory is kept.
+This is not a new grant for native, connector, group, research or schedule actions.
+
+Use fictional data to verify window adaptation, DST/travel/unknown zones, quiet
+hours, personality and volume differences, unrelated tasks after greetings,
+explicit pause/resume, bounded waits/errors/expiration, replay and opt-out/archive/
+clear/new-input races during inference. Check source-linked feedback does not enter
+shared memories, both clients' caches/history/badges update normally, and APNs on
+a configured iPhone. See [initiative](initiative.md#verification) for the matrix.
+Static success does not establish these runtime/model/device results.
+
+Rollback must keep 0065 and its data in place. Older code does not enforce the new
+pause or ambient policy: disable affected participants' initiative before an
+authorized rollback, or roll forward with a compatible fix. Re-enabling still
+waits for new human input. Use only the committed/pushed automatic pipeline;
+do not reverse migrations, erase history or manually restart stopped episodes.
+
 ## Remote native device execution
 
 The [remote timer/alarm prototype](native-remote.md) reuses the API Worker, D1,

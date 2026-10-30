@@ -68,6 +68,7 @@ export const contactAgent = sqliteTable('contact_agent', {
 
 export const contact = sqliteTable('contact', {
   initiativeEnabled: integer('initiative_enabled', { mode: 'boolean' }).notNull().default(true),
+  initiativePaused: integer('initiative_paused', { mode: 'boolean' }).notNull().default(false),
   lastReplyReadAt: date('last_reply_read_at'),
   agentId: text('agent_id').references(() => contactAgent.id, { onDelete: 'cascade' }),
   contributorConsent: integer('contributor_consent', { mode: 'boolean' }).notNull().default(false),
@@ -121,6 +122,11 @@ export const agentPresence = sqliteTable('agent_presence', {
 export const chatTurn = sqliteTable('chat_turn', {
   toolsStarted: integer('tools_started', { mode: 'boolean' }).notNull().default(false),
   initiativeSourceId: text('initiative_source_id').references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'set null' }),
+  initiativeKind: text('initiative_kind', { enum: ['continuation', 'greeting', 'check-in'] }),
+  initiativeEngagement: text('initiative_engagement', { enum: ['social', 'practical', 'boundary', 'uncertain'] }),
+  initiativeResponse: text('initiative_response', { enum: ['engaged', 'unrelated', 'uncertain', 'none'] }),
+  initiativeResponseToId: text('initiative_response_to_id').references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'set null' }),
+  initiativeFeedbackAt: date('initiative_feedback_at'),
   readAt: date('read_at'),
   timeZone: text('time_zone'),
   scheduleId: text('schedule_id').references((): AnySQLiteColumn => contactSchedule.id),
@@ -623,6 +629,7 @@ export const miniAppState = sqliteTable('mini_app_state', {
 
 // Episode creation/invalidation triggers live in migration 0032.
 export const conversationInitiative = sqliteTable('conversation_initiative', {
+  mode: text('mode', { enum: ['continuation', 'ambient'] }).notNull().default('continuation'),
   contactId: text('contact_id').primaryKey().references(() => contact.id, { onDelete: 'cascade' }),
   sourceId: text('source_id').notNull().references(() => chatTurn.id, { onDelete: 'cascade' }),
   anchorId: text('anchor_id').notNull().references(() => chatTurn.id, { onDelete: 'cascade' }),

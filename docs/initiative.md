@@ -1,171 +1,194 @@
 # Conversation initiative
 
-Private contacts can decide to continue a conversation after their last reply,
-even when the app is closed. This is implemented on the server with the existing
-D1 database, one-minute Cron Trigger and `ChatWorkflow` binding. There is no
-always-running model loop and no new cloud service.
+Private contacts can continue an exchange and, when welcome, start another
+conversation later. The shared API serves iOS and web using the existing D1,
+one-minute Cron Trigger and `ChatWorkflow`. There is no always-running model or
+new service. Migration **0065** adds adaptive initiative to 0032–0033.
 
-After a direct human turn completes with a text reply, migrations 0032–0033 create a
-private episode for that participant. The first review becomes due 30 seconds
-later. Existing conversations are not backfilled. Scheduled messages, group
-results, reactions without text and proactive messages do not start new episodes.
-A new human message or attachment immediately invalidates the previous episode,
-including any draft being generated. Its successful reply starts a new episode.
+## Episodes and adaptive opportunities
 
-At each due review, Muse Spark receives up to eight completed turns (bounded text,
-attachment presence without bytes), their dates and actual read watermark, the
-last confirmed reply-read time, the previous brief intent, elapsed time,
-conversation-eligible memories and agent persona. Model selection follows account
-settings and existing shared-contact consent. MCP-isolated conversations always
-use Standard and their existing memory isolation. The model chooses:
+A completed reply to a direct human request starts a continuation episode. Its
+first review is due after 30 seconds; personality and response history can defer
+it before inference. New human input or an attachment invalidates the old episode
+and any draft immediately. Scheduled messages, autonomous task work, group results
+and proactive messages do not start episodes. There is no history backfill or
+restart of stopped plans on upgrade.
 
-- **Wait:** retain a short intended next step and choose another review delay.
-- **Send:** write a natural, contextual message now and choose a later review.
-- **Stop:** end this episode and wait for new human input.
+A continuation can wait, send a useful next thought, or stop the current exchange.
+Stopping an ordinary social exchange can instead create a later **ambient
+opportunity**: an optional new conversation, greeting or relevant check-in. This
+requires social participation in this private chat, no unanswered proactive
+message, no ignored greeting, no task-only pattern, and no explicit pause. A
+finished task is not a reason to keep probing socially. A goodbye ends the current
+exchange; an explicit request to stop unsolicited contact also pauses future
+initiative. Ambient opportunities expire seven days after the latest human input.
+One published ambient message ends outreach until the person returns. A model
+may also stop without sending, or wait for another flexible opportunity.
 
-The persisted intent is a short future-action summary, not a reasoning transcript.
-The model distinguishes an initial continuation from repeated unanswered outreach.
-A bare greeting is an opening: prefer one brief warm opener or relevant thought,
-rather than declaring the exchange finished. For a fresh conversation, send a
-useful continuation when already due, or normally review again in 30–120 seconds.
-The timing evidence explicitly supplies the phase, elapsed time, last confirmed
-read time and current minimum send gap. Later review guidance is 2–5 minutes
-after one proactive message and 10–30 minutes after two. These are model guidelines,
-not delivery guarantees or fixed timers: explicit user timing and context can
-justify longer waits. An unread proactive message normally calls for more space;
-a read receipt does not authorize escalating attention. Prefer one or two sentences,
-avoid repeating unanswered questions, and do not end every message with a question.
+Continuations retain six evaluations over at most 24 hours. A transition to
+ambient mode has a separate six-evaluation budget over the seven-day horizon;
+mode changes preserve a monotonically increasing revision so Workflow IDs cannot
+be reused. Deferrals and errors consume evaluations as before. If quiet hours or
+busy attention exhaust the continuation, Cron can promote only a source already
+classified social, with no proactive sends, to that finite ambient budget. An
+unknown or unclassified source cannot acquire new ambient permission this way.
 
-The model is instructed to respect goodbyes, requests to stop and natural endings,
-to avoid repeated questions, guilt or pressure, and to offer something useful
-instead of mechanically repeating greetings. These are semantic model decisions,
-not guaranteed intent classification. The model can stop before sending anything.
-No tools, MCP execution, native actions, group publication or schedule mutation
-are available to this planner. Explicit reminders retain their existing workflow.
+## Learning from this conversation
 
-## Initial limits
+At a review, the server reads at most 160 completed turns from the previous
+28 days of this participant's private chat. Dates and categorical observations
+are considered; the current source is also included if it waited longer in the
+queue, but such old input cannot train activity windows. The metadata
+is used locally; the model receives twelve bounded recent text turns, the
+attributed previous outreach, aggregate activity evidence, persona and eligible
+memories. It does not receive the full statistical sample or numeric personality
+traits. Shared agents do not combine participants' timing or receptivity.
+Connector-isolated chats retain their local boundary and Standard processing.
 
-These are implementation defaults that can be adjusted after product evaluation:
+The existing planning call also classifies the latest completed human request:
 
-- At most three unanswered proactive messages, six evaluations (including failed
-  dispatches/attempts and deferred reviews) and 24 hours per episode.
-- At least 30 seconds after the original reply, then two minutes after the first
-  follow-up and ten minutes after the second. The AI may choose longer waits.
-  Review delays accept 30–86400 seconds; publication still enforces these minimum
-  gaps, even when the AI requests a shorter review.
-- At most three proactive messages per contact and twelve per account in a rolling
-  24-hour window, including across separate episodes. Private messages that a
-  contact sends from a group have their own budget with the same numbers
-  ([groups](groups.md#private-messages-from-a-group)); they do not start or advance
-  an episode, because the episode trigger only follows human turns.
-- No proactive sends between 22:00 and 08:00 in the timezone supplied with the
-  latest human turn. Quiet-hour reviews defer to morning. Unknown/invalid timezones
-  suspend that episode rather than guessing. Travel changes apply on the next turn.
-- Cron checks up to ten due episodes per minute. A 30-second initial due time
-  typically reaches the next Cron in roughly 30–90 seconds, before inference.
-  This does not implement second-accurate messages. Delivery times are approximate;
-  model inference, server load and unavailable attention can delay them.
+- Social participation, a practical task/question, a boundary, or uncertainty.
+- Whether it actually engages with the preceding spontaneous message, changes
+  subject without acknowledging it, is ambiguous, or has no outreach to answer.
+- An explicit request to pause spontaneous contact or to resume it, if present.
 
-Waiting performs no inference between due dates. Errors back off fifteen minutes
-and consume the finite evaluation budget. A five-minute D1 lease allows a crashed
-or undispatched job to be replaced with a new revision. Six failed attempts stop
-until the next human exchange. Revisions, source IDs and atomic publication keep
-old jobs from posting after replacement.
+Feedback is saved once per source turn, with the actual prior outreach ID when
+applicable. The server links the first completed human request after an outreach,
+or a human request explicitly quoting that bot message; a random later task
+cannot count as its positive response. A quote to another message is not silently
+reattributed to the latest outreach. The labels
+are fallible model judgments, not facts about feelings. Unclear cases do not
+count as positive engagement or explicit resumption. Reading, visiting or typing
+alone never counts as a conversational response.
 
-## Publication and control
+Consecutive human messages marked `MESSAGE_BATCHED` immediately before the source
+are included in that request's context, so a short acknowledgment followed by a
+separate task message is not automatically treated as ignoring the greeting.
 
-Before publishing, an atomic D1 transaction rechecks the episode revision, latest
-conversation anchor, enabled setting, model/consent/isolation, current read
-watermark and read time, visit activity, agent attention and rolling budgets.
-Changed read/visit evidence discards a draft and schedules a fresh evaluation;
-new human input invalidates it completely. An active foreground visit/activity
-lease or busy agent defers a due review without invoking the model; activity is
-checked again at publication. No draft is published while another private/group turn holds
-the agent's attention. Planning itself does not claim attention.
+An unanswered greeting suppresses further greetings and social check-ins. An
+unrelated task does not lift this suppression; subsequent actual social engagement
+can. Two recent classified practical requests suppress social openers. An ambient
+message is never followed by another one without human input. For other outreach,
+measured receptivity requires at least three known outcomes from at most twenty
+recent proactive messages. Unanswered outreach older than 24 hours can reduce
+that estimate; ambiguous responses remain unknown.
 
-Each evaluated check is visible as presence: the contact connects (60-second
-lease, never shortening a longer one) before the decision. A send that still
-passes the current read/activity, quiet-hours and gap checks sets Typing scoped to
-this conversation (`agent_presence.typing_contact_id`, migration 0045) for
-`messageDelay(message)` before the atomic publication; other participants of a
-shared contact see Online. A publication stays Online for 30 seconds. A wait, stop,
-rejected publication or failure clears that typing and lets the contact go Offline
-about five seconds later. A busy agent is never changed. Deferred reviews (quiet
-hours, active visits, busy agent) do not connect the contact.
+New proactive messages store their kind. Historical unclassified outreach keeps
+an unknown kind instead of being retroactively labeled as a greeting.
 
-Messages are ordinary completed assistant-only turns, so both clients reuse their
-history, Markdown, quotes/reactions, previews, unread state and foreground polling.
-The iOS APNs outbox is enqueued in the same transaction; Cron retries notification
-failures independently. Browser push remains unavailable. A message already
-published remains in history when initiative is disabled.
+Activity estimates deduplicate each civil day/hour, weight recent days more
+strongly, smooth adjacent hours and give actual engaged responses extra weight.
+A learned window needs activity on at least three different days. Only samples
+with the current turn's time zone contribute, avoiding accidental mixing of travel
+zones. Before enough evidence exists, the bot uses varied daytime opportunities
+without claiming to know a routine. These estimates guide conversation timing;
+they do not establish that someone is awake, at home or available.
 
-**Contact details → Conversation initiative** is enabled by default in iOS and
-web. Its explanation is behind the info button beside the switch. Any participant can change their own setting, including for a shared contact;
-it never changes another participant's initiative or shared agent identity.
-`PUT /api/v1/contacts/:id/initiative` accepts only `{ "enabled": boolean }` and
-returns the current contact projection. Contact responses include numeric
-`initiativeEnabled`. Disabling deletes the pending episode. Re-enabling waits for
-the next completed human exchange and does not resurrect old outreach.
+## Personality timing and amount
 
-## Cache and verification
+Enabled personalities retain their acting director and expression guidance.
+Initiative and patience also affect the minimum gap and amount of outreach:
 
-The setting lives in the existing session-owned contact cache. Both editors reuse
-loaded contacts immediately and refresh in the background. Mutation responses
-replace the cached contact; concurrent mutations are disabled, pending reads are
-rejected, errors retain the last confirmed setting, and session changes reject
-late responses. No separate settings cache or private disk persistence is added.
-Plans stay server-side, at most one per contact, until replacement or contact
-removal. Workflow checkpoints follow the existing platform retention policy.
-Conversation messages use the same bounded conversation stores and invalidation
-rules as human-triggered replies. See [caching](caching.md).
+- Low initiative, task-oriented use or low measured receptivity allows at most
+  one unanswered continuation. Unknown receptivity normally allows two.
+- Up to three requires high initiative, a less patient character and
+  positive measured engagement. The global ceiling remains three.
+- Poor response history increases continuation spacing. Ambient minimum spacing
+  is roughly 13–31 hours depending on initiative/patience, with another day added
+  for weak measured receptivity. Actual opportunities can be later.
+- Windows are selected with a deterministic, source/revision-seeded weighted draw
+  and minute variation. Replay uses the same choice, while later opportunities
+  vary. Ordinary review delays also receive additional breathing room.
 
-Before release, use fictional accounts to verify a greeting, an unanswered
-question, a goodbye, an explicit stop request, read versus unread messages, human
-input/read/typing during inference, concurrent shared-agent attention, quiet
-hours, budget exhaustion, crash/notification recovery, and deletion/consent loss.
-Verify both editors on reopen/back navigation, empty and offline states, failed
-mutations, explicit refresh, contact removal and account switching. Confirm new
-messages update histories, previews and badges, and APNs on a configured iPhone.
-Static validation does not establish model quality, runtime timing or device
-behavior; these checks remain pending until explicitly performed.
+A disabled personality uses neutral cadence values and still adapts to this
+conversation's responses. Warmth, reserve, humor and verbosity continue through
+the existing character direction; no fixed greeting or daily quota is imposed.
+Explicit fixed-time reminders remain with schedule tools and are not jittered by
+this planner. Birthday jobs, group initiative and proactive external actions are
+not introduced.
 
-For reproducible setup, migration order, release and rollback, see
-[infrastructure](infrastructure.md#conversation-initiative).
+## Delivery limits and control
+
+No spontaneous message is delivered between **22:00 and 08:00** in the time zone
+of the latest human turn. This remains a delivery boundary, not a promise to write
+at 08:00. Missing/invalid zones suspend the episode without guessing. Cron checks
+at most ten due rows each minute; inference, attention and queue load can delay
+sending. At most three initiative messages per contact and twelve per account
+can be published in a rolling 24-hour window. Private messages originating from
+groups retain their separate existing budget and do not train initiative.
+
+Before publication, the atomic transaction rechecks the source/revision/anchor,
+current opt-out, archive/clear state, model selection, consent, MCP isolation,
+read/visit evidence, personality revision, agent attention and rolling budgets.
+New history prevents the old draft from publishing. Changed read/visit or profile
+evidence discards the draft and schedules another bounded evaluation. Presence,
+typing pauses, ordinary completed turns and the APNs outbox reuse existing paths.
+No tools, connectors, native actions, group publication or schedule mutations are
+available to the planner. Text can never prove an external action happened.
+
+**Contact details → Conversation initiative** controls only this participant's
+private chat, including when the agent is shared. Both clients explain adaptive
+timing and ignored-greeting suppression. Disabling cancels the current plan.
+Re-enabling waits for the next completed human exchange. An explicit conversational
+pause is stored on this contact; a casual greeting or unrelated task does not
+cancel it. An explicit resumption or switching initiative off/on clears it.
+Direct human replies remain available while initiative is paused.
+
+Archiving deletes the pending plan, and unarchiving does not restart it. Clear
+chat removes the plan, source-linked learning and conversational pause along with
+history, even when factual memory is retained. Contact/account deletion cascades.
+These categorical labels are not extracted into shared contact memories. Historical
+labels remain attached to their turns until history deletion, but only the bounded
+28-day sample influences adaptation. The explicit pause remains until reset.
+
+## Cache and setup
+
+The enabled setting uses the existing session-owned contact cache and mutation
+responses. Histories use the same bounded stores, polling, previews, unread state
+and iOS APNs outbox; browser push is still unavailable. There is no client timing
+cache, countdown, extra polling endpoint or private disk persistence. D1 plans
+persist at most one row per contact; Workflow checkpoints retain the bounded
+context under the existing platform policy. Existing account/access-loss and
+late-response invalidation apply. See [caching](caching.md#conversation-initiative).
+
+Apply all migrations through 0065 with the existing local migration command or
+the automatic production pipeline. Reproducible provisioning, source verification
+and rollback precautions are in [infrastructure](infrastructure.md#conversation-initiative).
+
+## Verification
+
+Static checks: API/web TypeScript, Swift editor parsing, `git diff --check`, and
+`python3 scripts/checks/initiative-sql-compile.py`. The SQL script prepares the
+actual Standard/Contributor SQL variants against an empty schema with all 65
+migrations at expression depth 100. It performs no functional fixtures, inference,
+network, credential or production access.
+
+The opt-in `node scripts/checks/initiative.cjs` harness has been updated for the
+current schema/decision contract, including unanswered greetings followed by
+unrelated tasks, ambient transition/replay, explicit pause/resume and upgrade
+invalidation. It has **not been run for this change**. Static success is not a
+functional pass. Tests, builds, live inference and client interaction require their
+separately authorized validation scope.
+
+Classification shares the existing planner call (2,400 completion tokens including
+reasoning, existing provider timeout); it does not add a second inference call.
+The new ambient phase can add up to six bounded evaluations per social source,
+so cost and cadence still need measurement before making quality claims.
+
+With fictional data, verify 06:00 sends followed by 10:00 responses over several
+days (while preserving quiet hours), changing activity windows, cold starts,
+travel/DST, quiet-hour boundaries, reserved versus proactive personalities,
+task-only use, ambiguous versus engaged replies and ignored greetings. Exercise
+new input/read/typing, personality edits, consent/isolation changes, archive/clear,
+account changes and daily budgets during inference. Verify crash/replay, leases,
+failed inference, seven-day expiration and terminal evaluation budgets. On both
+clients verify reopen/back, empty/offline states, failed setting mutations,
+access loss and normal history/list/badge updates; APNs needs a configured iPhone.
+Real-model semantic quality, cost/cadence calibration and devices remain pending.
 
 ## Faster cadence validation
 
-Migration 0033 replaces only the episode-creation trigger and advances pending
-first reviews that have never been evaluated. It preserves selected waits, stopped
-episodes, active Workflow leases, counters and history. It does not restart old
-conversations. The server adjustment applies equally to iOS and web through their
-existing histories, polling, caches and per-participant setting; no client update
-is required for the cadence itself.
-
-Run `node scripts/checks/initiative.cjs` explicitly for isolated checks of the
-actual migrated SQLite schema and initiative Workflow with simulated model/time.
-Six checks cover initial publication, replay without duplicates, increasing gaps,
-three-message and six-evaluation limits, a longer AI-selected wait, stopping,
-new-input/disabled invalidation and upgrade preservation. They use fictional data,
-no network, no secrets and no persistent database. These passed for the faster
-cadence. They do not verify that the real model follows the new greeting guidance.
-The earlier live Contributor run validated the previous policy; the new prompt
-still needs a separate live evaluation after an authorized release. UI, APNs,
-physical devices and sub-minute Cron timing were not exercised here.
-
-The [remote native transport prototype](native-remote.md#future-autonomous-initiative)
-is available only to explicit direct human requests. This planner still receives no
-native tools and does not schedule autonomous alarms/timers. Future reuse requires
-separate device/contact autonomy grants and policy; conversation initiative alone
-does not grant remote execution permission.
-
-## Personality timing
-
-When the [personality experiment](personality.md) is enabled, initiative receives
-the same per-recipient acting director and eligible relationship continuity as
-replies, without source causes or relationship counters. Patience and initiative set a
-30–480 second initial minimum, scaled for later follow-ups and combined with the
-existing backoff. The model can still wait longer or stop. Existing opt-out,
-quiet hours, daily/episode/evaluation caps, consent, current activity and exclusive
-attention are authoritative. Disabling the experiment preserves the original
-cadence. No new proactive action tools, annual birthday job or group initiative
-are introduced. Real-model timing and quality calibration remain pending.
+The six scenarios previously run for migration 0033 established the earlier
+cadence with a simulated model. They do not validate migration 0065, adaptive
+classification, current windows or current clients. Earlier live-model evaluations
+also predate this behavior. Preserve that distinction when reporting validation.

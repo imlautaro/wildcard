@@ -125,7 +125,7 @@ onMounted(() => { void session.refreshProfile().catch(() => {}); });
 onMounted(() => run(async () => {
   apply((await api<{ contact: Contact }>(`contacts/${id.value}`)).contact);
 }));
-const initiativeInfo = 'Allow thoughtful follow-ups when you have not replied. Stops after a few unanswered messages. Applies only to your private chat.';
+const initiativeInfo = "Allow occasional follow-ups and new conversations. Timing adapts to this chat and the contact's personality. Unanswered greetings stop further social openers until you engage again. Ask the contact to pause, or turn this off to stop initiative. Applies only to your private chat.";
 const voiceInfo = computed(() => `With voice messages on, ${contact.value?.name ?? 'this contact'} sometimes answers your private chat with a short voice message. In groups, the creator's setting applies.`);
 const voiceChoiceInfo = computed(() => `Accent applies to new messages for everyone. Results depend on the voice; samples keep their original accent. ${canManage.value ? 'Everyone who chats with this contact hears the voice you choose.' : "The contact's creator chooses its voice."}`);
 </script>

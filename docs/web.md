@@ -667,7 +667,7 @@ Current requests take priority over greetings or old social questions. There is
 no new UI, browser timer, setting, request or cache: ordinary history polling and
 the existing session stores render the responses. Reopen/back, refresh, offline
 recovery and model-quality checks described in the chat guide remain pending.
-Adaptive daily outreach is a separate future change.
+Later new-conversation opportunities use the separate adaptive initiative policy below.
 
 ## Conversation initiative
 
@@ -677,9 +677,9 @@ Slow memory refresh or generation cannot make those pauses request a past time.
 Conversation caches, polling and manual retry rules remain unchanged; verify a
 short message after slow memory refresh in both clients after the API release.
 
-Private contacts use the same server-side [initiative planner](initiative.md) as iOS, including while the browser is closed. Contact details provides the same Conversation initiative switch and copy for owners and shared-contact participants. The existing session-owned contact cache supplies the initial setting; background refresh and mutation responses update it, and generation guards reject late reads and session changes. Messages appear through ordinary conversation/list polling and unread updates; browser push is still unavailable. Migrations 0032–0033 and the API release are required. Verify reopen, refresh, offline/failure recovery, shared access revocation and account switching with fictional accounts; visual/runtime checks remain pending.
+Private contacts use the same server-side [adaptive initiative planner](initiative.md) as iOS, including while the browser is closed. Contact details provides the same Conversation initiative switch and help for owners and shared-contact participants: optional follow-ups and later conversations, timing influenced by personality and responses, ignored-greeting suppression and explicit pauses. The existing session-owned contact cache supplies the initial setting; background refresh and mutation responses update it, and generation guards reject late reads and session changes. Messages appear through ordinary conversation/list polling and unread updates; browser push is still unavailable. Migrations through 0065 and the API release are required. Verify reopen, refresh, offline/failure recovery, shared access revocation and account switching with fictional accounts; visual/runtime checks remain pending.
 
-The faster cadence is shared by the API with iOS: a first review is due after 30 seconds, followed by minimum gaps of two and ten minutes. One-minute Cron scheduling adds jitter; no browser timer or extra requests are introduced. The planner encourages one short greeting continuation and increases space after unanswered messages, preserving all existing limits. No web bundle change is needed for these server timings; histories, polling and cache invalidation are unchanged. New prompt quality remains pending live verification; see [initiative](initiative.md#faster-cadence-validation).
+Initial continuation reviews are due after 30 seconds, with personality/receptivity floors before inference and progressively larger gaps. Eligible social exchanges can create optional opportunities over seven days, selected from varied windows after several days of local activity evidence. A task unrelated to a greeting does not count as a positive response; repeated practical use suppresses social openers. One unanswered ambient message stops further outreach. No browser timer, extra requests, client timing cache or recurring clock schedule is introduced. An explicit pause persists server-side until explicit resumption or an off/on setting change; ordinary direct replies still work. Archiving cancels the plan; clear history removes its learning and pause. Both clients' help is updated. Model quality, device behavior and the opt-in regression harness remain unverified for 0065; see [initiative](initiative.md#verification).
 
 
 ### Private messages from groups

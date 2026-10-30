@@ -90,7 +90,7 @@ export async function clearContact(env: Env, id: string, userID: string, clearMe
   statements.push(db.prepare('DELETE FROM contact_schedule WHERE contact_id=?').bind(id));
   statements.push(db.prepare('DELETE FROM contact_memory_state WHERE contact_id=?').bind(id));
   statements.push(db.prepare('DELETE FROM chat_workflow_instance WHERE contact_id=?').bind(id));
-  statements.push(db.prepare(`UPDATE contact SET onboarding_chat=0, last_read_sequence=0,last_reply_read_at=NULL WHERE id=?`).bind(id));
+  statements.push(db.prepare(`UPDATE contact SET onboarding_chat=0, last_read_sequence=0,last_reply_read_at=NULL,initiative_paused=0 WHERE id=?`).bind(id));
   statements.push(db.prepare(`INSERT OR IGNORE INTO resource_cleanup(kind,resource,scope)
     SELECT 'object',object_key,?1 FROM chat_attachment_object WHERE scope=?1`).bind(id));
   statements.push(db.prepare(`DELETE FROM retained_contact_memory AS m WHERE contact_id=?1 AND rowid NOT IN

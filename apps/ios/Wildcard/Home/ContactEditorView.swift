@@ -72,7 +72,7 @@ struct ContactEditorView: View {
                     )) {
                         HStack {
                             Label("Conversation initiative", systemImage: "bubble.left.and.text.bubble.right")
-                            InfoButton(title: "Conversation initiative", text: "Allow thoughtful follow-ups when you have not replied. Stops after a few unanswered messages. Applies only to your private chat.")
+                            InfoButton(title: "Conversation initiative", text: "Allow occasional follow-ups and new conversations. Timing adapts to this chat and the contact's personality. Unanswered greetings stop further social openers until you engage again. Ask the contact to pause, or turn this off to stop initiative. Applies only to your private chat.")
                         }
                     }
                     .disabled(saving || contacts.isMutating)
