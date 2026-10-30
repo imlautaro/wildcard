@@ -1,7 +1,6 @@
 <script setup lang="ts">
 const props = defineProps<{ base: string }>();
 const { value, busy, error, refresh, setEnabled, reset } = useConversationLearning(() => props.base);
-useHead({ title: 'Conversation learning' });
 watch(() => props.base, () => { void refresh(false); }, { immediate: true });
 const labels = { observation: 'Observation', adjustment: 'Conversation adjustment', question: 'Optional question' };
 const back = computed(() => `/${props.base}/${props.base.startsWith('contacts/') ? 'edit' : 'members'}`);

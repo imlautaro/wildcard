@@ -1,6 +1,5 @@
 <script setup lang="ts">
 definePageMeta({ layout: false });
-useHead({ title: 'Sign in · Wildcard' });
 
 const { authenticate } = useSession();
 const registration = ref(false);

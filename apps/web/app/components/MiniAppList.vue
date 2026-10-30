@@ -2,7 +2,6 @@
 // The mini apps of one private chat (`contacts/<id>`) or of a group (`groups/<id>`).
 const props = defineProps<{ base: string; back: string; empty: string; footer: string }>();
 const apps = useMiniApps(() => props.base);
-useHead({ title: 'Mini apps' });
 onMounted(() => apps.refresh(true));
 </script>
 

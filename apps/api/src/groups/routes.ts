@@ -372,6 +372,33 @@ groups.get('/:id/receipts', async (c) => {
   return c.json({ receipts: results });
 });
 
+// A message's immutable recipient snapshot, visible only to current group members.
+groups.get('/:id/message-info', async c => {
+  const groupID = c.req.param('id'), messageID = c.req.query('messageID'), owner = c.get('owner');
+  if (!messageID || messageID.length > 160) return c.json({ error: 'Provide a message ID' }, 400);
+  const message = await c.env.DB.prepare(`SELECT gm.receipts_tracked AS tracked FROM group_message gm
+    WHERE gm.group_id = ?1 AND gm.id = ?2 AND gm.task_id IS NULL
+      AND EXISTS (SELECT 1 FROM group_member WHERE group_id = ?1 AND user_id = ?3)`)
+    .bind(groupID, messageID, owner).first<{ tracked: number }>();
+  if (!message) return c.json({ error: 'Message unavailable' }, 404);
+  const { results } = await c.env.DB.prepare(`SELECT r.recipient_kind AS kind, r.recipient_id AS id,
+    COALESCE(u.name, a.name, 'Former member') AS name, r.delivered_at AS deliveredAt, r.read_at AS readAt
+    FROM group_message_receipt r JOIN group_message gm ON gm.id = r.message_id
+    LEFT JOIN user u ON r.recipient_kind = 'user' AND u.id = r.recipient_id
+    LEFT JOIN contact_agent a ON r.recipient_kind = 'agent' AND a.id = r.recipient_id
+    WHERE gm.group_id = ?1 AND r.message_id = ?2
+      AND EXISTS (SELECT 1 FROM group_member WHERE group_id = ?1 AND user_id = ?3)
+    ORDER BY (r.read_at IS NULL), r.read_at, r.recipient_kind, r.recipient_id`)
+    .bind(groupID, messageID, owner).all();
+  // Membership/history can be revoked between reads; never return a stale snapshot.
+  if (!await c.env.DB.prepare(`SELECT 1 FROM group_message gm JOIN group_member member ON member.group_id = gm.group_id
+    WHERE gm.group_id = ?1 AND gm.id = ?2 AND member.user_id = ?3`).bind(groupID, messageID, owner).first()) {
+    return c.json({ error: 'Message unavailable' }, 404);
+  }
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ tracked: message.tracked === 1, recipients: results });
+});
+
 // Explicit client acknowledgement; HTTP/APNs acceptance alone does not confirm delivery.
 groups.put('/:id/receipts', async (c) => {
   const admission = await admitAuthRequest(c.env.DB, c.get('owner'), 'group-receipt', 120);

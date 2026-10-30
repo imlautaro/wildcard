@@ -1,30 +1,98 @@
-// Foreground message sounds, matching iOS `MessageSounds`: the same attenuated Mixkit
-// files, a pop for an accepted send and for a new reply in the visible conversation,
-// and a chime for a new message elsewhere while the tab is visible. The web has no
-// push, so there is no background notification sound.
-// Conversation keys: `contact/<id>` or `group/<id>`.
+// Foreground pop/chime events share one gesture-unlocked Web Audio context.
+// Bundled WAVs retain the iOS -40 dB attenuation; web applies +28 dB at playback.
+// Conversation keys: `contact/<id>` or `group/<id>`. No background/push audio.
 const files = { pop: '/sounds/mixkit-hard-pop-click-2364.wav', chime: '/sounds/mixkit-alert-quick-chime-766.wav' } as const;
+type Sound = keyof typeof files;
+const webGain = 10 ** (28 / 20);
 let visibleConversation: string | null = null;
-// Only messages completed while the tab has been visible can play, as on iOS.
 let activeSince: number | null = null;
 let generation = 0;
 const played = new Set<string>();
-const audio = new Map<keyof typeof files, HTMLAudioElement>();
+let context: AudioContext | null = null;
+let output: GainNode | null = null;
+const buffers = new Map<Sound, Promise<AudioBuffer>>();
+const sources = new Map<Sound, AudioBufferSourceNode>();
 
-registerSessionReset(() => { generation += 1; visibleConversation = null; played.clear(); });
-if (import.meta.client) {
-  const update = () => { activeSince = document.visibilityState === 'visible' ? (activeSince ?? Date.now()) : null; };
-  update();
-  document.addEventListener('visibilitychange', update);
+function stopSounds() {
+  for (const source of sources.values()) {
+    try { source.stop(); } catch { /* The audio context may already be interrupted. */ }
+    source.disconnect();
+  }
+  sources.clear();
+}
+registerSessionReset(() => { generation += 1; visibleConversation = null; played.clear(); stopSounds(); });
+
+function loadSound(name: Sound, target: AudioContext): Promise<AudioBuffer> {
+  const existing = buffers.get(name);
+  if (existing) return existing;
+  const request = fetch(files[name], { signal: AbortSignal.timeout(5000) })
+    .then(response => {
+      if (!response.ok) throw new Error('SOUND_UNAVAILABLE');
+      return response.arrayBuffer();
+    })
+    .then(bytes => target.decodeAudioData(bytes))
+    .catch(error => { if (buffers.get(name) === request) buffers.delete(name); throw error; });
+  buffers.set(name, request);
+  return request;
 }
 
-function play(name: keyof typeof files) {
-  if (!import.meta.client || activeSince === null) return;
-  let element = audio.get(name);
-  if (!element) { element = new Audio(files[name]); element.preload = 'auto'; audio.set(name, element); }
-  element.currentTime = 0;
-  // Browsers block audio until the person has interacted with the page; a blocked sound is skipped.
-  void element.play().catch(() => {});
+// Called synchronously in the trusted pointer/key handler, before fetching or
+// decoding. A delayed polling callback cannot itself grant autoplay permission.
+function unlock() {
+  if (!import.meta.client || document.visibilityState !== 'visible' || typeof AudioContext === 'undefined') return;
+  try {
+    if (!context || context.state === 'closed') {
+      context = new AudioContext();
+      output = context.createGain();
+      output.gain.value = webGain;
+      output.connect(context.destination);
+      buffers.clear();
+    }
+    if (context.state !== 'running') void context.resume().catch(() => {});
+    for (const name of Object.keys(files) as Sound[]) void loadSound(name, context).catch(() => {});
+  } catch { /* A later trusted gesture can retry audio initialization. */ }
+}
+
+/** Root-app lifetime: covers sign-in, chats, sheets and keyboard-only navigation. */
+export function useMessageSoundPlayback() {
+  function gesture(event: Event) { if (event.isTrusted) unlock(); }
+  function visibility() {
+    activeSince = document.visibilityState === 'visible' ? (activeSince ?? Date.now()) : null;
+    if (activeSince === null) { generation += 1; stopSounds(); }
+  }
+  onMounted(() => {
+    visibility();
+    document.addEventListener('visibilitychange', visibility);
+    document.addEventListener('pointerup', gesture, { capture: true, passive: true });
+    document.addEventListener('keydown', gesture, { capture: true });
+  });
+  onBeforeUnmount(() => {
+    document.removeEventListener('visibilitychange', visibility);
+    document.removeEventListener('pointerup', gesture, true);
+    document.removeEventListener('keydown', gesture, true);
+    generation += 1; activeSince = null; stopSounds();
+    const previous = context;
+    context = null; output = null; buffers.clear();
+    if (previous && previous.state !== 'closed') void previous.close().catch(() => {});
+  });
+}
+
+async function play(name: Sound, started: number, still: () => boolean) {
+  const target = context, destination = output, requestedAt = Date.now();
+  if (!target || target.state !== 'running' || !destination || activeSince === null) return;
+  try {
+    const buffer = await loadSound(name, target);
+    // Do not replay a delayed event after leaving, hiding, signing out or a slow load.
+    if (started !== generation || target !== context || target.state !== 'running'
+      || activeSince === null || !still() || Date.now() - requestedAt > 1500) return;
+    sources.get(name)?.stop();
+    const source = target.createBufferSource();
+    source.buffer = buffer;
+    source.connect(destination);
+    source.onended = () => { source.disconnect(); if (sources.get(name) === source) sources.delete(name); };
+    source.start();
+    sources.set(name, source);
+  } catch { /* Missing/blocked audio must not disrupt messaging; loads can retry. */ }
 }
 // Sounds wait briefly, as on iOS, so a reply's bubble has rendered before its pop.
 // `keys` are every name the same message can be announced under (turn ID, or the
@@ -35,7 +103,7 @@ function later(delay: number, keys: string[], name: keyof typeof files, still: (
     if (started !== generation || !still() || keys.some((key) => played.has(key))) return;
     for (const key of keys) played.add(key);
     while (played.size > 500) played.delete(played.values().next().value!);
-    play(name);
+    void play(name, started, still);
   }, delay);
 }
 

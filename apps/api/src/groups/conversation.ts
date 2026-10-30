@@ -77,12 +77,15 @@ export function validDelivery(value: unknown, memberIDs?: string[]): value is Gr
 // An index of visible contributions, not a semantic claim that somebody answered.
 // Use only messages already authorized for this model and current group audience.
 export function groupParticipation(members: Member[], messages: Message[], sourceSequence: number) {
-  const visible = [...new Map(messages.map(message => [message.id, message])).values()]
-    .filter(message => message.sequence > sourceSequence).sort((a, b) => a.sequence - b.sequence);
+  const all = [...new Map(messages.map(message => [message.id, message])).values()]
+    .sort((a, b) => a.sequence - b.sequence);
+  const visible = all.filter(message => message.sequence > sourceSequence);
   return {
     historyIsPartial: true,
     members: members.map(member => ({
       personID: `${member.kind}:${member.id}`,
+      visibleMessageIDsBeforeTrigger: all.filter(message => message.sequence < sourceSequence
+        && (member.kind === 'user' ? message.userID === member.id : message.agentID === member.id)).map(message => message.id),
       visibleMessageIDsAfterTrigger: visible.filter(message => member.kind === 'user'
         ? message.userID === member.id : message.agentID === member.id).map(message => message.id),
     })),

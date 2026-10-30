@@ -1,5 +1,4 @@
 <script setup lang="ts">
-useHead({ title: 'Open Wildcard contact' });
 const route = useRoute();
 const chats = useChats();
 const error = ref<string | null>(null);

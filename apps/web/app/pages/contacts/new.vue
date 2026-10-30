@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { Contact } from '~/utils/types';
 
-useHead({ title: 'New Contact' });
 const chats = useChats();
 const mode = ref('manual');
 const generation = useContactGeneration();

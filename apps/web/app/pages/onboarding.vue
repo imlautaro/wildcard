@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { circleTypes } from '../../../../shared/onboarding';
 definePageMeta({ layout: false });
-useHead({ title: 'Meet your circle · Wildcard' });
 const { user, refreshProfile, signOut } = useSession();
 const { options, snapshot, draft, busy, refresh, submit } = useOnboarding();
 const circleOptions = circleTypes.map(option => ({ value: option.code, label: option.name }));

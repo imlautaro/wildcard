@@ -35,7 +35,6 @@ const scroller = ref<HTMLElement>();
 const messageContent = ref<HTMLElement>();
 const composer = ref<{ focus: () => void }>();
 
-useHead({ title: computed(() => contact.value?.name ?? 'Chat') });
 
 // `part` is the index of a contact message within its turn (voice downloads use it).
 type MessageItem = { kind: 'user' | 'assistant' | 'status'; key: string; turn: ChatTurn; timestamp: number; text?: string; first?: boolean; part?: number };

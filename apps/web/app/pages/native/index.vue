@@ -1,5 +1,4 @@
 <script setup lang="ts">
-useHead({ title: 'Native experiments' });
 const capabilities = [
   // Focus sessions, guided recipes, spoken responses and NFC were deprecated on 2026-10-30.
   { kind: 'timer', icon: 'alarm', title: 'System tools', text: 'System timers and alarms, Calendar events, and Reminders, including arrival and departure reminders.' },

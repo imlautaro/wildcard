@@ -261,7 +261,9 @@ retest of a notification tap from a terminated/backgrounded app remains necessar
 ## Message sounds (October 27, 2026)
 
 The [web app](web.md#message-sounds) plays the same in-app sounds with the same rules
-(`useMessageSounds.ts`, files in `apps/web/public/sounds`); it has no push, so no
+(`useMessageSounds.ts`, files in `apps/web/public/sounds`). Since October 30, 2026,
+web playback applies +28 dB to those attenuated files and unlocks its AudioContext
+on trusted user interaction; iOS levels remain unchanged. It has no push, so no
 background notification sound.
 
 The main app bundles the three owner-supplied Mixkit WAV files in `Wildcard/Sounds`.

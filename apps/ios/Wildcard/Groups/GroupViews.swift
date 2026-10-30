@@ -693,6 +693,7 @@ private struct GroupMessageRow: View {
     @Environment(GroupsStore.self) private var groups
     @Environment(\.scenePhase) private var scenePhase
     @State private var isOnScreen = false
+    @State private var showsMessageInfo = false
     private var own: Bool { message.userID == auth.user?.id && message.agentID == nil }
     private var sender: GroupMember? {
         members.first { $0.id == (message.agentID ?? message.userID) && $0.kind == (message.agentID == nil ? "user" : "agent") }
@@ -742,7 +743,12 @@ private struct GroupMessageRow: View {
         // A contact voice message's transcript is the text it spoke.
         .messageReactions(groups.conversations.store(for: groupID).reactions, path: "groups/\(groupID)/reactions", messageID: message.id, side: "group", fromUser: own,
                           onReply: canReply ? onReply : nil,
-                          transcript: message.voice.map { $0.transcript ?? (message.agentID != nil ? message.text : nil) })
+                          transcript: message.voice.map { $0.transcript ?? (message.agentID != nil ? message.text : nil) },
+                          onMessageInfo: { showsMessageInfo = true })
+        .sheet(isPresented: $showsMessageInfo) {
+            GroupMessageInfoView(groupID: groupID, messageID: message.id,
+                cache: groups.conversations.store(for: groupID).messageInfo.store(for: message.id))
+        }
         .onScrollVisibilityChange(threshold: 0.5) { isOnScreen = $0 }
         .task(id: "\(message.id)-\(isOnScreen)-\(scenePhase)") {
             guard isOnScreen, scenePhase == .active, !own else { return }

@@ -20,6 +20,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'Wildcard',
+      titleTemplate: 'Wildcard',
       htmlAttrs: { lang: 'en' },
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
@@ -28,7 +29,7 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#121318', media: '(prefers-color-scheme: dark)' },
       ],
       link: [
-        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg?v=80154fe8f96b' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg?v=0c69391a81ea' },
         { rel: 'preload', href: '/fonts/Manrope.ttf', as: 'font', type: 'font/ttf', crossorigin: '' },
       ],
     },

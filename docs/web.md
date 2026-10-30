@@ -94,7 +94,8 @@ Matching iOS:
 
 - Email/password sign-up and sign-in, account name and photo, sign-out.
 - Unified chat list of contacts and groups, ordered by latest message, with unread
-  counts, sender prefixes, and an unread count in the tab title. It appears once both
+  counts and sender prefixes. The browser `<title>` always remains **Wildcard**,
+  including sign-in, chats, documents, mini apps and unread updates. It appears once both
   sources load; if one fails, available rows stay visible with Retry. Transient
   failures during background polling keep loaded rows silent (see
   [caching](caching.md#transient-failures-during-background-revalidation)). Your own last
@@ -432,7 +433,9 @@ editable draft) is removed from the web app. Browser verification is pending; se
 ## Message sounds
 
 The web plays the same foreground sounds as iOS ([notifications](notifications.md#message-sounds-october-27-2026)),
-from copies of the same attenuated Mixkit files in `public/sounds`:
+from copies of the same attenuated Mixkit files in `public/sounds`. Web playback
+applies +28 dB (gain approximately 25.12), bringing measured individual peaks from
+about -41 dBFS to -13 dBFS. iOS audio levels and the source WAVs stay unchanged:
 
 - An outgoing message the server accepted, in the visible chat or group, and a newly
   completed reply in the visible conversation play the pop. The reply sound waits
@@ -446,8 +449,24 @@ from copies of the same attenuated Mixkit files in `public/sounds`:
 
 `useMessageSounds.ts` keeps the visible conversation (`useVisibleConversation` in the
 chat and group pages), the visibility interval and a bounded set of announced IDs, in
-memory only. Browsers block audio until the person interacts with the page; a blocked
-sound is skipped. Playback has not been verified in a browser.
+memory only. The root app installs trusted pointer-up and keyboard handlers that
+create/resume a shared AudioContext synchronously during user activation, before
+async loading. This follows [browser autoplay requirements](https://developer.chrome.com/blog/autoplay/#web-audio).
+Two public decoded buffers are cached for the root-app lifetime (under 1 MiB at the
+bundled sample rate), with in-flight load deduplication; failed fetch/decode results
+are evicted for retry. No credentials or private audio enter this cache. Unmount
+closes the context and drops buffers. No separate feature request or disk cache is
+introduced. Existing HTTP caching serves the unchanged bundled WAVs.
+
+Hidden tabs stop active sounds and invalidate pending events; account reset also
+stops playback and clears deduplication. A new event rechecks account generation,
+visibility, destination and context after decoding, and skips loads delayed more
+than 1.5 seconds. A blocked/suspended context skips that event; a later gesture can
+resume audio, without replaying old alerts. The same sound restarts rather than
+stacking on itself; pop and chime can overlap. Real audibility remains unverified:
+check a fresh browser session, mouse/touch/keyboard activation, send/reply/elsewhere,
+rapid events, hidden/foreground transitions, sign-out, offline loading recovery,
+site mute and operating-system output volume on Chrome and Safari.
 
 ## Message reactions
 
@@ -1126,3 +1145,32 @@ cache, background permission or disk retention is added. See [initiative](initia
 and [group participation](groups.md#conversational-participation). For this refinement,
 static checks only are recorded; provider semantics and device/browser timing
 remain to be verified with fictional conversations.
+
+
+## Group preparation and message information
+
+The shared API admits two group preparers, coordinates publication and enforces
+directed participation as described in [groups](groups.md#concurrent-preparation-and-directed-participation-migration-0070).
+Both iOS and web use this behavior. Web right click or long press opens the message
+menu with **Message info**, including first read times and recipients still unread.
+The session-only 32-entry cache reuses loaded and empty snapshots, deduplicates,
+refreshes on open/every five visible seconds/manually, and invalidates on clear,
+delete, access loss or account change; late responses are rejected. No disk cache
+or independent permission decisions are introduced.
+
+Reply/react hover controls now have a continuous padded hit area from the bubble
+to the buttons, including outgoing messages. Keyboard focus keeps them visible;
+touch keeps the long-press menu. Browser verification remains pending for both
+sides, diagonal pointer movement, focus, touch, scrolling, narrow screens and media.
+
+
+## Fixed browser title and refreshed favicon
+
+The web Nuxt head sets both `title` and a constant `titleTemplate` to **Wildcard**.
+Per-page/component title writers and the unread-count title prefix were removed;
+visible page headings still describe their screens. The favicon supplied on
+October 30, 2026 is copied unchanged to `public/favicon.svg` and linked with its
+SHA-256 prefix (`0c69391a81ea`) for cache refresh. This request is web-only; admin
+and native branding are unchanged. Static checks cover head writers, SVG parsing,
+source equality and audio sample peaks. Navigation/browser rendering and listening
+remain pending; no tests or builds were run.

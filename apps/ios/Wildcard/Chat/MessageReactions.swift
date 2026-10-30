@@ -10,6 +10,7 @@ private struct MessageReactionsModifier: ViewModifier {
     let onReply: (() -> Void)?
     /// `.some` for voice messages: the transcript, `nil` while transcribing, empty without speech.
     let transcript: String??
+    let onMessageInfo: (() -> Void)?
     @Environment(AuthStore.self) private var auth
     @State private var showsPicker = false
     @State private var showsTranscript = false
@@ -29,6 +30,7 @@ private struct MessageReactionsModifier: ViewModifier {
                 .accessibilityAction(named: "React to message") { if enabled { showsPicker = true } }
                 .accessibilityActions {
                     if enabled, let onReply { Button("Reply", action: onReply) }
+                    if let onMessageInfo { Button("Message info", action: onMessageInfo) }
                     if transcript != nil { Button("View transcript") { showsTranscript = true } }
                 }
             if !rows.isEmpty {
@@ -74,6 +76,16 @@ private struct MessageReactionsModifier: ViewModifier {
                         onReply()
                     }
                 }
+                if let onMessageInfo {
+                    Button("Message info", systemImage: "info.circle") {
+                        showsPicker = false
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(350))
+                            guard !Task.isCancelled else { return }
+                            onMessageInfo()
+                        }
+                    }
+                }
                 if transcript != nil {
                     Button("View transcript", systemImage: "text.quote") {
                         showsPicker = false
@@ -103,8 +115,8 @@ private struct MessageReactionsModifier: ViewModifier {
 
 extension View {
     func messageReactions(_ store: MessageReactionStore, path: String, messageID: String, side: String, fromUser: Bool, enabled: Bool = true,
-                          onReply: (() -> Void)? = nil, transcript: String?? = nil) -> some View {
+                          onReply: (() -> Void)? = nil, transcript: String?? = nil, onMessageInfo: (() -> Void)? = nil) -> some View {
         modifier(MessageReactionsModifier(store: store, path: path, messageID: messageID, side: side, fromUser: fromUser, enabled: enabled, onReply: onReply,
-                                          transcript: transcript))
+                                          transcript: transcript, onMessageInfo: onMessageInfo))
     }
 }

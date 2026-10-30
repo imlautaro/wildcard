@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { ContactInvitation, ContactSharing } from '~/utils/types';
 
-useHead({ title: 'Share Contact' });
 const route = useRoute();
 const id = computed(() => String(route.params.id));
 const chats = useChats();

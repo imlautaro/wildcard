@@ -1,5 +1,4 @@
 <script setup lang="ts">
-useHead({ title: 'New Group' });
 const chats = useChats();
 const name = ref('');
 const shareMemory = ref(false);

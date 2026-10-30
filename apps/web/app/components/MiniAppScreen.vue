@@ -27,7 +27,6 @@ const components = computed(() => {
 });
 const composer = computed(() => components.value?.find((c): c is MiniAppComposer => c.type === 'composer') ?? null);
 const firstScreen = computed(() => !currentTab.value || currentTab.value.id === tabs.value[0]?.id);
-useHead({ title: computed(() => app.value?.title ?? 'Mini app') });
 
 const reads = computed(() => app.value?.tools.filter(t => t.role === 'read') ?? []);
 const writes = computed(() => app.value?.tools.filter(t => t.role === 'write') ?? []);

@@ -12,12 +12,14 @@ The logo supplied on October 29, 2026 is bundled locally across the clients:
 - Web sign-in and registration: `apps/web/public/icon.svg`, using the supplied
   background-inclusive icon unchanged at 64 × 64 pixels.
 - Web and admin browser tabs: each app's `public/favicon.svg`, using the supplied
-  favicon unchanged. Both Nuxt configurations append the first 12 characters of
+  favicon unchanged. The web favicon was replaced with the October 30, 2026
+  supplied file at the user’s web-only request; admin retains the prior favicon.
+  Both Nuxt configurations append the first 12 characters of
   its SHA-256 digest as a version query to refresh previously cached favicons.
 
 These are public bundled assets and require no account cache or network-backed
-feature cache. When replacing the favicon, update both copies and their version
-queries together. Preserve the distinct spacing of the favicon and full icon.
+feature cache. For a shared favicon refresh, update both copies and their version
+queries together; honor an explicitly web-only or admin-only request. Preserve the distinct spacing of the favicon and full icon.
 
 Static verification covers SVG/XML and JSON parsing, source equality, Icon Composer
 layer references, and removal of the previous logo path. Builds, browser rendering,

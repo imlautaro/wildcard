@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { GroupInvitation, ReceivedContactInvitation } from '~/utils/types';
 
-useHead({ title: 'Invitations' });
 const chats = useChats();
 const selected = ref<{ kind: 'contact'; invitation: ReceivedContactInvitation } | { kind: 'group'; invitation: GroupInvitation } | null>(null);
 const shareMemory = ref(false);

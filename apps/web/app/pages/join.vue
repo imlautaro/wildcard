@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { InvitationPreview } from '~/utils/types';
 
-useHead({ title: 'Join Shared Contact' });
 const chats = useChats();
 const code = ref('');
 const preview = ref<InvitationPreview | null>(null);

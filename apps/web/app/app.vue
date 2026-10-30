@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { status, restore } = useSession();
+useMessageSoundPlayback();
 </script>
 
 <template>

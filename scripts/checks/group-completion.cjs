@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const { fixture, source } = require('./group-publication.cjs');
 const call = (name, args = {}, id = name) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } });
 const answer = (...tool_calls) => ({ role: 'assistant', content: null, tool_calls });
-const finish = () => answer(call('finish_group_research'));
+const finish = (responseRequired = false) => answer(call('finish_group_research', {responseRequired}));
 const decision = (action, messages) => JSON.stringify({ action, messages, replyToID: null, invitesReply: false, includeImage: false, learningQuestion: null,
   delivery: { audience: ['keep','skip'].includes(action) ? 'none' : 'group', recipientIDs: [], nameUse: 'omit', depth: 'brief', followUp: 'none' } });
 const final = (text = 'Fictional total: 42.') => ({ role: 'assistant', content: decision('reply', [text]) });
@@ -216,6 +216,24 @@ async function check(name, run) {
     }]);
     await f.complete();
     assert.equal(f.state.model.length,2);
+    assert.equal(f.state.tools.length,0);
+  });
+  await check('a requested personal intervention cannot finalize as skip', async f => {
+    f.simulate([finish(true), {role:'assistant',content:decision('skip',[])}, final('Here is my perspective.')]);
+    const result = await f.complete();
+    assert.equal(result.text, 'Here is my perspective.');
+    assert.equal(result.responseRequired, true);
+    assert.ok(!f.state.model[1].options.responseFormat.json_schema.schema.properties.action.enum.includes('skip'));
+  });
+  await check('a stale-draft review finalizes without restarting research or tools', async f => {
+    f.input.previous = {text:'A saved response.',throughSequence:0,responseRequired:true};
+    f.input.openingReplyRequired = true;
+    f.input.allowedActions = ['keep','revise'];
+    f.simulate([{role:'assistant',content:decision('keep',[])}]);
+    const result = await f.complete();
+    assert.equal(result.text,'A saved response.');
+    assert.equal(f.state.model.length,1);
+    assert.equal(f.state.model[0].options.tools,undefined);
     assert.equal(f.state.tools.length,0);
   });
   console.log(`${checks} isolated completion regressions passed.`);

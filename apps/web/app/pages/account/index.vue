@@ -1,5 +1,4 @@
 <script setup lang="ts">
-useHead({ title: 'Account' });
 const { user, saveName, savePhoto, saveModel, refreshProfile, signOut } = useSession();
 const busy = ref(false);
 const error = ref<string | null>(null);

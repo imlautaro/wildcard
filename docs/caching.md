@@ -1397,3 +1397,30 @@ request deduplication, pagination, budgets/eviction, pending IDs, stale-response
 rejection, mutation invalidation, access loss and account reset apply unchanged.
 Reopen/back/offline recovery reuses delivered messages and revalidates normally;
 it never reruns a search. Functional device/browser checks remain pending.
+
+
+## Group message read details
+
+**Message info** uses the immutable receipt snapshot through the membership-checked
+`groups/:id/message-info` endpoint. iOS keeps eight NavigationSnapshot entries per
+retained group; web keeps a 32-entry session LRU. Loaded and empty results render
+synchronously on reopening; refresh runs on open, every five seconds while visible,
+and manually. Requests deduplicate and reject writes after invalidation. Transient
+errors retain usable snapshots. Clear/group deletion/access loss and account reset
+remove the relevant values; no private data is written to disk. There is no new
+conversation cache or pagination. Server permissions remain authoritative. Reopen,
+back, empty states, offline/error recovery, refresh, clear/access revocation and
+account switching need device/browser verification; static checks do not prove them.
+
+
+## Public web message audio
+
+The root app caches only the two public decoded UI sound buffers and their
+in-flight loads in memory (under 1 MiB at bundled sample rate). Reuse is immediate;
+failed loads evict, teardown clears, and unchanged bundled files use normal HTTP
+caching. There is no private audio or account data in this cache. Session reset
+stops active sounds and invalidates pending events/played IDs; visibility loss also
+stops and invalidates events. Playback checks generation, destination and visibility
+after async decoding and skips events delayed over 1.5 seconds. No old sound replays
+after unlock, navigation, account switching or offline recovery. Browser listening,
+keyboard/touch unlocking and background/resume behavior remain unverified.

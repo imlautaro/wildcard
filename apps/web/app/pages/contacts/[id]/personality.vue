@@ -16,7 +16,6 @@ const canEdit = computed(() => contact.value?.role === 'owner');
 const dirty = computed(() => JSON.stringify(draft.value) !== baseline.value);
 const valid = computed(() => !!parsePersonality(draft.value));
 const facts = computed(() => valid.value ? birthdayFacts(draft.value, Date.now()) : null);
-useHead({ title: 'Personality' });
 const latestBirthday = computed(() => {
   try { return latestAdultBirthDate(Date.now(), draft.value.timeZone); }
   catch { return latestAdultBirthDate(); }

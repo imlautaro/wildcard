@@ -138,7 +138,9 @@ admission threshold. Leaving does not erase history; the UI explains this.
 ## Reply rounds and exclusive attention
 
 Each accepted human message snapshots the current contacts into a finite round:
-at most one response per contact in insertion order. New human messages can queue
+at most one response per contact. Up to two contacts prepare concurrently. Admission
+uses the oldest two unfinished slots, with a single atomic attention claim per agent
+and a two-claim group cap; publication follows readiness rather than insertion order. New human messages can queue
 while contacts respond. Published bot messages can enqueue other contacts in the
 same exchange, subject to [shared energy and finite conversation limits](energy.md).
 A human can privately [ask an agent to post in the group](group-requests.md),
@@ -146,7 +148,7 @@ including greetings and announcements. Ordinary posts require no designated reci
 and permit bounded public responses. A directed question starts with one designated
 reply whose answer returns privately; that public answer can then start bounded
 conversation. No additional private result is created for later conversation.
-Group replies are serialized by their persisted sequence. Agents added later do
+Group messages still publish atomically with a fresh history watermark. Agents added later do
 not answer old messages, including after an HTTP retry. A group can have no bots.
 
 Each draft identifies its human or bot trigger, current members, the round's
@@ -196,7 +198,8 @@ transient retry and a one-minute timeout; provider requests retain their
 45-second timeout. Tool steps have no automatic retry and a one-minute timeout;
 the MCP reservation/receipt ledger still protects interruptions before checkpoint.
 
-Each draft/review has two explicit phases. Evidence gathering exposes retrieval,
+Initial drafts have two explicit phases. Stale-draft reviews go straight to tool-free
+finalization with fresh bounded history and the saved draft; they do not restart research. Evidence gathering exposes retrieval,
 reactions and, only for authorized direct human triggers, MCP. It does not request
 structured output. The model ends this phase with the internal, side-effect-free
 `finish_group_research` control tool, called alone. Plain prose cannot end research
@@ -219,7 +222,7 @@ Current group/source/attention access is checked before each new inference and
 tool execution. Cached external receipts also require current connector ownership,
 contact/group grants, grant/OAuth generations and tool approval before subsequent
 inference. MCP execution keeps its existing stricter admission checks, including
-rejection after a later human trigger. Reviews still have no external tools.
+rejection after a later human trigger. Reviews have no tools.
 Snapshots remain bounded and preserve their history watermark. Attachments are
 checkpointed only as object references and loaded inside inference steps; their
 bytes are not written into Workflow step output. There is no unlimited catch-up
@@ -239,8 +242,8 @@ Implementation references: [Meta structured output](https://dev.meta.ai/docs/str
 [Cloudflare Workflow rules](https://developers.cloudflare.com/workflows/build/rules-of-workflows/).
 
 `agent_attention` remains the single unique lock per agent. Dispatch chooses the
-oldest eligible job across private chats and group rounds. A group agent waits for
-an earlier group reply, and for its own work in other chats. Group research and
+oldest eligible job across private chats and group rounds. A group admits at most two preparing agents, and each waits for its own work in
+other chats. Group research and
 the decision to reply or skip remain Online. Only a nonempty completed draft
 starts Typing, followed by a durable length-aware composition wait before first
 text publication. Each subsequent part refreshes Typing and receives its own wait,
@@ -343,7 +346,8 @@ earlier round replies and retrieval excerpts. Private-agent contexts also acknow
 included shared group excerpts. Context can be clipped and attachment markers may
 omit bytes. No reply is generated merely to advance a check. An unaddressed agent
 may stay unread until a later authorized turn includes the message. Failed model
-calls do not confirm consumption. Agent reads describe model processing, not humans.
+calls do not confirm consumption. Agent reads describe the server contact read acknowledgement, which may precede
+response generation; they do not prove a completed model response or a reply.
 
 Legacy messages lack a snapshot and return `receiptState: null`; iOS conservatively
 shows Sent, never inferred Received/Read. Empty recipient snapshots also remain Sent.
@@ -970,3 +974,72 @@ consume more existing model/energy budget. Static types/SQL cannot establish nat
 banter, balance across personalities or when a thread should end; use fictional
 social, practical, directed, settled, sensitive and farewell conversations to verify
 that contacts both contribute and leave space without repeated greetings/questions.
+
+
+## Concurrent preparation and directed participation (migration 0070)
+
+Two agents can prepare drafts and retrieve context simultaneously. The atomic
+`agent_attention` insertion enforces the group cap, including concurrent dispatch
+and recovery. One agent still attends only one private/group turn at a time.
+A ready draft acquires `group_publication`, a D1 reservation held through
+composition, history review and its message burst. Other bots keep preparing but
+wait to publish. Reservation acquisition is independent of insertion order and
+retries for at most 180 one-second durable waits. This avoids bot-to-bot review
+starvation; human traffic can still invalidate drafts. The existing two-review
+bound, access/consent checks, energy and exchange caps remain authoritative.
+Terminal attempts release reservations; admission removes stale reservations, and
+parent deletion cascades remove them. Missing/expired lanes fail visibly rather
+than bypassing publication guards. Required drafts still invalidated after both
+reviews leave a failed reply for the existing retry UI instead of silently completing.
+
+Retrieval is concurrent. A preparer that requests a tool outside the read-only
+retrieval/photo catalog first checks for older unfinished slots. If blocked, no
+such call executes; the turn waits at most 180 five-second durable waits, then
+rebuilds current input and makes a new decision after the older slot finishes.
+This preserves ordered tool effects and lets the model see work already completed
+by peers. Existing receipts and tool-specific guards still apply; semantic
+identification of duplicate work remains fallible. Group voice transcription
+uses the oldest unfinished turn, while other preparers wait for the saved
+transcript or for that predecessor to finish, with the same bounded wait.
+
+The evidence-completion tool declares whether the current request requires this
+agent's own response. Direct questions, requests to intervene, requests for each
+member's perspective and references to silent members take precedence over the
+optional-contribution rule. The final decision schema removes skip when a response
+is required, and the obligation survives reviews without newer human traffic.
+A newer human message may cancel/supersede the request; another bot's answer alone
+cannot satisfy a personal response. Identity/reference resolution is model-based,
+not keyword matching. The bounded participation index includes visible messages
+before and after the trigger so references to previously silent members have
+context; absence from partial history is not proof of never participating. Exhaustion, access loss, failures and continuous human
+traffic can still prevent delivery; this is not a guarantee that every bot always
+answers. In private, asking why a contact was silent does not request a public
+post or require sending permission; contacts must not invent prior skip reasons.
+
+## Per-message read information
+
+Long press a group message on iOS, or right click/long press on web, and choose
+**Message info**. Both clients show **Read by**, first read times, and **Not read
+yet** with Sent/Received status. This is available for messages by any sender.
+The sender is excluded by the original recipient snapshot. New members do not
+appear in old snapshots; former recipients remain represented. Legacy messages
+without receipt tracking show unavailable, never fabricated reads.
+
+`GET /api/v1/groups/:id/message-info?messageID=...` requires current group membership
+and that exact visible message in the group. It returns only recipient kind/ID,
+name, delivered/read timestamps and whether tracking exists. It does not mark
+anything read. The response is private/no-store; clients use bounded session-only
+memory caches, immediately reuse loaded/empty snapshots and revalidate on opening,
+every five seconds while visible, and on explicit refresh. iOS uses an eight-entry
+NavigationSnapshotCache per retained group; web retains at most 32 message snapshots.
+Requests deduplicate. Clear/deletion/access loss/account changes invalidate caches
+and reject late writes. Transient failures keep a previously loaded snapshot.
+There is no disk persistence or recipient pagination (membership is bounded).
+
+Opt-in fictional checks: `node scripts/checks/group-concurrency.cjs`,
+`node scripts/checks/group-completion.cjs`, `node scripts/checks/group-energy.cjs`
+and `node scripts/checks/group-receipts.cjs`. They were not run for this change.
+Device/browser and real model validation remain pending: check two concurrent
+preparers, a third waiting, earlier work blocking effects, publication races and
+replay, cancellation/revocation, directed/silent-member requests, legacy/empty
+read lists, reopen/back, offline recovery, refresh, clear and account switching.

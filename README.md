@@ -176,7 +176,9 @@ npm run typecheck:admin
 shared chat, with explicit shared-memory and model consent, in-app invitations,
 per-member invitation permissions, sender avatars/names, [persisted recipient receipts](docs/groups.md#delivery-and-read-receipts)
 that require all original recipients for Received/Read, and a scrolling member
-subtitle. Each human message starts a bounded automatic reply round. Groups and
+subtitle. Each human message starts a bounded automatic reply round. Up to two contacts prepare replies simultaneously, with coordinated publication
+and prioritized directed participation. Long press a group message (right click on
+web) and choose **Message info** to see recipient reads and timestamps. Groups and
 private chats share the same exclusive attention queue per agent. Create one from
 **Chats → + → Contacts → Create group**. Each turn sees the original request,
 earlier replies in its round and current bounded group history. Group instructions

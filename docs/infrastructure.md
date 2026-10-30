@@ -2765,3 +2765,24 @@ Old admin clients may describe pending work as partial storage cleanup. Rollback
 cannot restore deleted content; removing the triggers would reopen the cleanup
 omissions. Historical orphan recovery is limited to recorded IDs/prefixes; never
 purge an entire bucket or shared Workflow to compensate for missing ownership.
+
+
+## Two concurrent group preparers (migration 0070)
+
+Uses the existing D1 database, Workflows, recovery Cron and model binding; no new
+Cloudflare resource, secret, account permission or dependency is needed. Apply
+versioned migrations through `0070_group_publication.sql` before running the new
+API: local setup uses `npm run db:migrate:local --workspace @wildcard/api`. For an
+independent account, follow the existing resource/binding/secret setup order above.
+Production migration remains part of the automatic API release after an authorized
+commit and push; do not deploy manually. The additive reservation table cascades
+with groups/replies. Existing history/receipts remain compatible. An older API may
+ignore the table; drain in-flight Workflows before rollback to avoid mixed
+orchestration. Do not remove the table while the new Worker can be running.
+
+Verify two concurrent attention claims per group, readiness-ordered publication,
+reservation recovery after failed/terminated attempts, clear/delete cascades,
+ordered action effects, transcription sharing and the membership-checked message
+read endpoint with fictional data. Existing energy and exchange caps remain active.
+Static validation does not establish deployed behavior, latency or model quality;
+production migration/deployment and functional validation are pending.

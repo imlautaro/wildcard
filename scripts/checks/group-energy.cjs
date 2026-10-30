@@ -24,11 +24,12 @@ async function check(name, run) {
 const points = (f, id) => f.context.readEnergy(f.env.DB, id);
 const maxSequence = f => f.sqlite.prepare('SELECT MAX(sequence) n FROM group_message').get().n;
 function claim(f, agent) {
-  f.sqlite.exec('DELETE FROM agent_attention');
+  f.sqlite.exec('DELETE FROM group_publication; DELETE FROM agent_attention');
   const row = f.sqlite.prepare("SELECT * FROM group_reply WHERE agent_id=? AND status='queued' ORDER BY sequence LIMIT 1").get(agent);
   assert.ok(row, 'expected a queued reply');
   f.sqlite.prepare("INSERT INTO agent_attention(agent_id,turn_id,attempt,workflow_id,acquired_at) VALUES (?,?,?,?,0)").run(agent,row.id,row.attempt,row.workflow_id);
   f.sqlite.prepare("UPDATE group_reply SET status='running' WHERE id=?").run(row.id);
+  f.sqlite.prepare('INSERT INTO group_publication(group_id,turn_id,attempt,acquired_at) VALUES (?,?,?,0)').run(row.group_id,row.id,row.attempt);
   return {kind:'group',turnID:row.id,attempt:row.attempt};
 }
 const publish = (f, job, text='Fictional response') => f.context.publishGroupDraft(f.env, job, {text,throughSequence:maxSequence(f)});

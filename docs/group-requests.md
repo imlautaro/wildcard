@@ -15,6 +15,12 @@ slot and its answer returns privately with attribution. That public answer can
 start bounded conversation. Addressing or greeting a bot alone does not request a
 designated answer or private return; ordinary public responses remain possible.
 
+A private question about a contact's earlier silence in a group asks for an
+explanation in the private conversation. It does not authorize or request a new
+public message and should not prompt for sending permission. Group history is
+not a recorded explanation of a skipped turn: the contact must distinguish what
+it can verify from speculation about why it did not respond.
+
 ## Authorization and audience
 
 `send_group_message(groupID, text)` publishes without requesting a designated answer or private return.

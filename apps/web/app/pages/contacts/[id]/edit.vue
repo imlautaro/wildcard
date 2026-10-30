@@ -12,7 +12,6 @@ const busy = ref(false);
 const error = ref<string | null>(null);
 const canManage = computed(() => contact.value?.role !== 'member');
 const archived = computed(() => (chats.contacts.value.find(item => item.id === id.value) ?? contact.value)?.archivedAt != null);
-useHead({ title: computed(() => contact.value?.name ?? 'Contact') });
 
 function apply(updated: Contact) {
   if (session.user.value?.id !== ownerID || updated.id !== id.value) return;

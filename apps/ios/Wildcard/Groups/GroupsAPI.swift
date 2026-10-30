@@ -328,6 +328,7 @@ final class GroupChatStore {
     }
 
     private(set) var reactions = MessageReactionStore()
+    @ObservationIgnored let messageInfo = NavigationSnapshotCache<GroupMessageInfo>()
     private var historyRevision = 0
     private(set) var snapshot: GroupSnapshot?
     private(set) var messages: [GroupMessage] = []
@@ -354,6 +355,7 @@ final class GroupChatStore {
     }
 
     func invalidate() {
+        messageInfo.removeAll()
         reactions.invalidate()
         invalidated = true
         accessEpoch += 1
@@ -556,6 +558,7 @@ final class GroupChatStore {
             guard !invalidated, epoch == accessEpoch, let state = snapshot else { return }
             guard (page.historyRevision ?? 0) >= historyRevision else { return }
             if historyRevision != (page.historyRevision ?? 0) {
+                messageInfo.removeAll()
                 reactions.invalidate(); reactions = MessageReactionStore()
                 messages = []; pending = nil; failedVoice = nil; nextBefore = nil; newIncomingMessageIDs = []
                 VoicePlayer.shared.stop()

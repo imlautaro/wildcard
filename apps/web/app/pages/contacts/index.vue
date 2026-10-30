@@ -1,5 +1,4 @@
 <script setup lang="ts">
-useHead({ title: 'Contacts' });
 const chats = useChats();
 const query = ref('');
 const loading = ref(!chats.allContactsLoaded.value);

@@ -83,6 +83,7 @@ function receiptsFor(id: string): Receipts {
 }
 
 export function forgetGroup(id: string) {
+  forgetGroupMessageInfo(id);
   forgetConversationLearning(`groups/${id}`);
   const removed = groups.get(id);
   if (removed) {
@@ -212,6 +213,7 @@ async function fetchGroupConversation(id: string, visible: boolean) {
     const previousEpoch = entry.snapshot?.group.historyRevision ?? 0;
     if ((page.historyRevision ?? 0)<previousEpoch || (page.historyRevision ?? 0)!==(snapshot.group.historyRevision ?? 0)) return;
     if (previousEpoch!==(page.historyRevision ?? 0)) {
+      forgetGroupMessageInfo(id);
       if (entry.pending?.attachment?.previewURL) URL.revokeObjectURL(entry.pending.attachment.previewURL);
       entry.messages=[]; entry.pending=null; entry.draft=''; entry.replyTo=null;
       clearReactionCache(entry.reactions); clearPrivateImages(); clearVoiceAudio();

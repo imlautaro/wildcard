@@ -12,7 +12,6 @@ const messageContent = ref<HTMLElement>();
 const composer = ref<{ focus: () => void }>();
 
 const group = computed(() => state.value.snapshot?.group ?? chats.groups.value.find((item) => item.id === groupID.value) ?? null);
-useHead({ title: computed(() => group.value?.name ?? 'Group') });
 
 const members = computed(() => new Map((state.value.snapshot?.members ?? []).map((member) => [`${member.kind}/${member.id}`, member])));
 const memberLine = computed(() => (state.value.snapshot?.members ?? []).map((member) => member.kind === 'user' && member.id === user.value?.id ? 'You' : member.name).join(', '));
@@ -223,7 +222,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
             <AppAvatar v-if="item.last" :name="item.message.senderName" :path="senderPhoto(item.message)" :size="28" />
           </div>
           <MessageReactions :cache="state.reactions" :path="`groups/${groupID}/reactions`" :message-i-d="item.message.id" side="group" :replyable="canReply"
-            :voice="!!item.message.voice" :transcript="transcriptOf(item.message)" @reply="startReply(item.message)">
+            :receipt-group-i-d="groupID" :voice="!!item.message.voice" :transcript="transcriptOf(item.message)" @reply="startReply(item.message)">
           <div class="bubble" :class="{ media: item.message.attachment?.mimeType.startsWith('image/') }">
             <span
               v-if="!isMine(item.message) && item.first" class="sender"

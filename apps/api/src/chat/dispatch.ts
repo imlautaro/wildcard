@@ -42,7 +42,11 @@ export async function dispatchAgent(env: Env, agentID: string) {
       UNION ALL SELECT r.id, r.attempt, r.workflow_id, r.created_at, r.sequence FROM group_reply r
       WHERE r.agent_id = ?1 AND r.status = 'queued' AND NOT EXISTS (
         SELECT 1 FROM group_reply prior WHERE prior.group_id = r.group_id
-          AND prior.status IN ('queued','running') AND prior.sequence < r.sequence)
+          AND prior.status IN ('queued','running') AND prior.sequence < r.sequence
+          GROUP BY prior.group_id HAVING COUNT(*) >= 2)
+        AND (SELECT COUNT(*) FROM agent_attention active JOIN group_reply held
+          ON held.id = active.turn_id AND held.attempt = active.attempt
+          WHERE held.group_id = r.group_id) < 2
     ) ORDER BY createdAt, sequence, id LIMIT 1 ON CONFLICT(agent_id) DO NOTHING`).bind(agentID, Date.now()).run();
   const readClaim = () => env.DB.prepare(`SELECT a.turn_id AS id, a.workflow_id AS workflowID, a.attempt,
     (SELECT COALESCE(contact_id,group_id,agent_id) FROM chat_workflow_instance WHERE id=a.workflow_id) AS cleanupScope,

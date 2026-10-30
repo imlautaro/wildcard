@@ -252,7 +252,9 @@ and history use what was said. The contact then "listens" for the clip's duratio
 voice message. Voice turns are never batched with neighboring text messages.
 
 **Groups.** A voice message is transcribed once, by the first contact reply job of
-its round, after the round's read step. Jobs in a group are serialized, so later
+its round, after the round's read step. The oldest unfinished group turn owns
+transcription; another preparer waits for the saved transcript or its predecessor
+to finish, so later
 contacts reuse the stored transcript. Groups without contacts never transcribe;
 their voice messages show "Transcribing…" indefinitely. Contact replies in groups use
 the same suitability rules and the contact creator's opt-in; only single-message

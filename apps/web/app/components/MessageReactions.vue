@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ReactionCache } from '~/composables/useMessageReactions';
 // `voice` adds "View transcript" to the menu; `transcript` follows docs/voice.md.
-const props = defineProps<{ cache: ReactionCache; path: string; messageID: string; side: string; replyable?: boolean; voice?: boolean; transcript?: string | null }>();
+const props = defineProps<{ cache: ReactionCache; path: string; messageID: string; side: string; replyable?: boolean; voice?: boolean; transcript?: string | null; receiptGroupID?: string }>();
 const emit = defineEmits<{ reply: [] }>();
 const { user } = useSession();
 const open = ref(false);
@@ -18,6 +18,7 @@ function choose(emoji: string | null) {
   void setMessageReaction(props.cache, props.path, props.messageID, props.side, emoji);
 }
 const showsTranscript = ref(false);
+const showsReaders = ref(false);
 function viewTranscript() {
   open.value = false;
   showsTranscript.value = true;
@@ -89,11 +90,13 @@ onBeforeUnmount(() => {
         :style="position ? { top: `${position.top}px`, left: `${position.left}px` } : { visibility: 'hidden', top: '0', left: '0' }" @keydown.esc="open = false">
         <button v-for="emoji in reactionEmojis" :key="emoji" :disabled="cache.busy.includes(key)" :aria-pressed="own === emoji" :aria-label="`React ${emoji}`" @click="choose(own === emoji ? null : emoji)">{{ emoji }}</button>
         <button v-if="replyable" class="reaction-reply" @click="reply"><AppIcon name="reply" /> Reply</button>
+        <button v-if="receiptGroupID" class="reaction-reply" @click="open = false; showsReaders = true"><AppIcon name="check" /> Message info</button>
         <button v-if="voice" class="reaction-reply" @click="viewTranscript"><AppIcon name="file" /> View transcript</button>
         <button v-if="own" :disabled="cache.busy.includes(key)" @click="choose(null)">Remove</button>
         <div v-if="rows.length" class="reaction-people"><div v-for="row in rows" :key="row.actorID">{{ row.emoji }} {{ row.name }}</div></div>
       </div>
     </Teleport>
+    <GroupMessageInfo v-if="receiptGroupID && showsReaders" :group-i-d="receiptGroupID" :message-i-d="messageID" @close="showsReaders = false" />
     <VoiceTranscriptDialog v-if="voice && showsTranscript" :transcript="transcript ?? null" @close="showsTranscript = false" />
     <div v-if="cache.pending[key] && cache.errors[key]" role="status" class="reaction-error">
       {{ cache.errors[key] }} <button @click="choose(cache.pending[key]!.emoji)">Retry reaction</button>
@@ -106,8 +109,8 @@ onBeforeUnmount(() => {
 .reaction-badges { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
 .reaction-badge, .reaction-trigger { display: inline-flex; align-items: center; gap: 2px; min-height: 26px; border: 1px solid var(--md-outline-variant); border-radius: 8px; padding: 2px 8px; background: var(--md-surface-container-low); color: var(--md-on-surface-variant); font-size: 13px; cursor: pointer; }
 .reaction-badge.selected { border-color: transparent; background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
-.message-actions { position: absolute; top: 50%; left: calc(100% + 4px); z-index: 1; display: flex; gap: 3px; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity 120ms; }
-:global(.bubble-row.outgoing .message-actions) { left: auto; right: calc(100% + 4px); flex-direction: row-reverse; }
+.message-actions { position: absolute; top: 50%; left: 100%; padding-left: 8px; z-index: 1; display: flex; gap: 3px; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity 120ms; }
+:global(.bubble-row.outgoing .message-actions) { left: auto; right: 100%; padding-left: 0; padding-right: 8px; flex-direction: row-reverse; }
 .reaction-trigger { padding: 2px 6px; border-radius: 999px; box-shadow: var(--md-elevation-1); }
 .reaction-trigger svg { width: 16px; height: 16px; }
 .reaction-message:hover .message-actions, .reaction-message:focus-within .message-actions, .reaction-message.active .message-actions { opacity: 1; pointer-events: auto; }

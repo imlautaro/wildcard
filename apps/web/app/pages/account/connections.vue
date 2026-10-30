@@ -78,7 +78,6 @@ async function disconnect(connection: string) {
 }
 onMounted(() => { void refresh(); });
 onBeforeUnmount(() => { token.value = ''; clientSecret.value = ''; });
-useHead({ title: 'Connections' });
 </script>
 <template>
   <PageBar title="Connections" back="/account" always-back>

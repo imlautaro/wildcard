@@ -20,9 +20,10 @@ import { speakMessage, transcribeVoice, voiceSuitable } from '../voice/speech';
 
 export type GroupJob = { kind: 'group'; turnID: string; attempt: number };
 export async function dispatchGroup(env: Env, groupID: string) {
-  const row = await env.DB.prepare(`SELECT agent_id AS id FROM group_reply WHERE group_id = ?
-    AND status IN ('queued', 'running') ORDER BY sequence LIMIT 1`).bind(groupID).first<{ id: string }>();
-  if (row) await dispatchAgent(env, row.id);
+  const { results } = await env.DB.prepare(`SELECT agent_id AS id FROM group_reply WHERE group_id = ?
+    AND status IN ('queued', 'running') ORDER BY sequence LIMIT 2`).bind(groupID).all<{ id: string }>();
+  // Admissions are atomic in dispatchAgent, including concurrent dispatch/recovery.
+  await Promise.all(results.map(row => dispatchAgent(env, row.id)));
 }
 export async function recoverGroups(env: Env) {
   const { results } = await env.DB.prepare(`SELECT DISTINCT group_id AS id FROM group_reply WHERE status IN ('queued','running')
@@ -38,9 +39,32 @@ const closeTerminalContinuations = (db: D1Database, messageID: string) => db.pre
   .bind(messageID);
 
 type PublishOutcome = 'published' | 'skipped' | 'changed' | 'inactive';
+
+async function claimPublication(env: Env, job: GroupJob) {
+  // A terminated/failed attempt must not strand the group's publication lane.
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM group_publication WHERE group_id = (SELECT group_id FROM group_reply WHERE id = ?1)
+      AND NOT EXISTS (SELECT 1 FROM group_reply r JOIN agent_attention a ON a.turn_id = r.id AND a.attempt = r.attempt
+        WHERE r.id = group_publication.turn_id AND r.attempt = group_publication.attempt AND r.status = 'running')`)
+      .bind(job.turnID),
+    env.DB.prepare(`INSERT INTO group_publication(group_id, turn_id, attempt, acquired_at)
+      SELECT r.group_id, r.id, r.attempt, ?3 FROM group_reply r JOIN agent_attention a ON a.turn_id = r.id AND a.attempt = r.attempt
+      WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' ON CONFLICT DO NOTHING`)
+      .bind(job.turnID, job.attempt, Date.now()),
+  ]);
+  return !!await env.DB.prepare('SELECT 1 FROM group_publication WHERE turn_id = ? AND attempt = ?')
+    .bind(job.turnID, job.attempt).first();
+}
+
+async function releasePublication(env: Env, job: GroupJob) {
+  await env.DB.prepare('DELETE FROM group_publication WHERE turn_id = ? AND attempt = ?')
+    .bind(job.turnID, job.attempt).run();
+}
+
 // Recheck attention, source-author access, shared-agent consent and Contributor
 // eligibility at publication, not just before a potentially slow model request.
-const publicationAccess = (contributor: boolean) => `EXISTS (SELECT 1 FROM agent_attention attention
+const publicationAccess = (contributor: boolean) => `EXISTS (SELECT 1 FROM group_publication lane
+    WHERE lane.turn_id = r.id AND lane.attempt = r.attempt AND lane.group_id = r.group_id) AND EXISTS (SELECT 1 FROM agent_attention attention
     WHERE attention.agent_id = r.agent_id AND attention.turn_id = r.id AND attention.attempt = r.attempt)
   AND EXISTS (SELECT 1 FROM group_agent member WHERE member.group_id = r.group_id AND member.agent_id = r.agent_id)
   AND ${groupSourceAccess('r', contributor)}
@@ -145,8 +169,8 @@ async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep,
 type Reader = { agentID: string; groupID: string; sequence: number };
 
 // People's voice messages up to this round's trigger are transcribed once, by the
-// first contact job that reaches them. Group jobs are serialized, so later contacts
-// reuse the saved transcript. A failure leaves it for a later round.
+// oldest unfinished turn. Concurrent preparers wait for that transcript or for
+// their predecessor to finish, preventing duplicate provider calls.
 async function listenGroup(env: Env, job: GroupJob, step: WorkflowStep) {
   const pending = await step.do('group-voice-pending', async () => {
     const { results } = await env.DB.prepare(`SELECT gm.id, json_extract(gm.attachment_json, '$.durationMs') AS durationMs
@@ -159,6 +183,18 @@ async function listenGroup(env: Env, job: GroupJob, step: WorkflowStep) {
     return results;
   });
   if (!pending.length) return;
+  let admitted = false;
+  for (let wait = 0; wait < 180; wait++) {
+    admitted = await step.do(`group-voice-admission-${wait}`, async () => !await env.DB.prepare(`SELECT 1
+      FROM group_reply current JOIN group_reply prior ON prior.group_id = current.group_id
+      WHERE current.id = ?1 AND prior.sequence < current.sequence AND prior.status IN ('queued','running')
+        AND EXISTS (SELECT 1 FROM group_message voice WHERE voice.group_id = current.group_id
+          AND voice.id IN (SELECT value FROM json_each(?2)) AND voice.voice_transcribed_at IS NULL) LIMIT 1`)
+      .bind(job.turnID, JSON.stringify(pending.map(message => message.id))).first());
+    if (admitted) break;
+    await step.sleep(`group-voice-wait-${wait}`, '5 seconds');
+  }
+  if (!admitted) throw new Error('GROUP_VOICE_WAIT_EXPIRED');
   await step.sleep('group-listen-delay', '1 second');
   const listenedAt = await step.do('group-mark-listened', async () => {
     const now = Date.now();
@@ -275,7 +311,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
       // not repeated when a later publish step retries or the Workflow resumes.
       for (let review = 0; review <= 2; review++) {
         const previous = draft;
-        const preparation = await step.do(`group-prepare-input-${review}`, {
+        let preparation = await step.do(`group-prepare-input-${review}`, {
           retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' }, timeout: '2 minutes',
         }, async () => {
           const task = await env.DB.prepare('SELECT status FROM group_reply WHERE id = ? AND attempt = ?')
@@ -286,8 +322,44 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
           return prepareGroupInput(env, job, previous);
         });
         if (!preparation) { outcome = 'inactive'; break; }
-        draft = 'draft' in preparation ? preparation.draft
-          : { ...await completeGroupDraft(env, preparation.input, step, `group-draft-${review}`), learningFence: preparation.input.learningFence };
+        let completed = 'draft' in preparation ? preparation.draft
+          : await completeGroupDraft(env, preparation.input, step, `group-draft-${review}`);
+        if (completed.deferActions) {
+          // Only the second preparer can defer. Hold its attention claim while the
+          // older turn finishes, so neither a third preparer nor duplicate actions enter.
+          let ready = false;
+          for (let wait = 0; wait < 180; wait++) {
+            ready = await step.do(`group-action-lane-${review}-${wait}`, async () => !await env.DB.prepare(`SELECT 1
+              FROM group_reply current JOIN group_reply prior ON prior.group_id = current.group_id
+              WHERE current.id = ? AND prior.sequence < current.sequence
+                AND prior.status IN ('queued','running') LIMIT 1`).bind(job.turnID).first());
+            if (ready) break;
+            await step.sleep(`group-action-wait-${review}-${wait}`, '5 seconds');
+          }
+          if (!ready) throw new Error('GROUP_ACTION_WAIT_EXPIRED');
+          preparation = await step.do(`group-action-refresh-${review}`, () => prepareGroupInput(env, job, previous));
+          completed = 'draft' in preparation ? preparation.draft
+            : await completeGroupDraft(env, preparation.input, step, `group-action-draft-${review}`);
+          if (completed.deferActions) throw new Error('GROUP_ACTION_LANE_CHANGED');
+        }
+        draft = { ...completed, ...('input' in preparation ? { learningFence: preparation.input.learningFence } : {}) };
+        // Ready drafts acquire the publication lane in readiness order. The
+        // other agent keeps preparing, but cannot invalidate this draft's review
+        // or execute shared actions out of order. Human traffic can still interrupt.
+        let publicationReady = false;
+        for (let wait = 0; wait < 180; wait++) {
+          publicationReady = await step.do(`group-publication-lane-${review}-${wait}`, () => claimPublication(env, job));
+          if (publicationReady) break;
+          const active = await step.do(`group-publication-active-${review}-${wait}`, async () => !!await env.DB.prepare(
+            "SELECT 1 FROM group_reply WHERE id = ? AND attempt = ? AND status = 'running'").bind(job.turnID, job.attempt).first());
+          if (!active) break;
+          await step.sleep(`group-publication-wait-${review}-${wait}`, '1 second');
+        }
+        if (!publicationReady) throw new Error('GROUP_PUBLICATION_WAIT_EXPIRED');
+        const stale = await step.do(`group-ready-history-${review}`, async () => !!await env.DB.prepare(`SELECT 1
+          FROM group_message WHERE group_id = (SELECT group_id FROM group_reply WHERE id = ?1)
+            AND sequence > ?2 LIMIT 1`).bind(job.turnID, draft!.throughSequence).first());
+        if (stale) { outcome = 'changed'; continue; }
         const prepared = draft;
         const firstMessage = prepared.messages?.[0] ?? prepared.text;
         const single = (prepared.messages?.length ?? 1) <= 1;
@@ -330,15 +402,17 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
       if (outcome === 'changed') {
         await step.do('group-supersede-changing-turn', async () => {
           // Never publish the last unchecked draft. New human messages already
-          // have their own rounds; close this obsolete slot and unblock the queue.
-          const result = await env.DB.prepare(`UPDATE group_reply SET status = 'complete'
+          // have their own rounds. Keep an undelivered required response visible
+          // as failed; optional obsolete slots can finish silently.
+          const result = await env.DB.prepare(`UPDATE group_reply SET status = ?3
             WHERE id = ?1 AND attempt = ?2 AND status = 'running'
             AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)
             AND NOT EXISTS (SELECT 1 FROM group_message WHERE id = ?1)`)
-            .bind(job.turnID, job.attempt).run();
-          if (result.meta.changes) console.log(JSON.stringify({ event: 'group_turn_superseded', reason: 'context_kept_changing' }));
+            .bind(job.turnID, job.attempt, draft?.responseRequired ? 'failed' : 'complete').run();
+          if (result.meta.changes) console.log(JSON.stringify({ event: 'group_turn_superseded', reason: 'context_kept_changing', responseRequired: !!draft?.responseRequired }));
         });
       }
+      await step.do('group-release-publication', () => releasePublication(env, job));
       await step.do('group-deliver-push', async () => {
         try { await deliverGroupPush(env, job.turnID); }
         catch { console.error(JSON.stringify({ event: 'group_push_deferred' })); }
@@ -368,6 +442,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
     await env.DB.prepare(`UPDATE agent_presence SET status = 'online', expires_at = ?3
       WHERE agent_id IN (SELECT agent_id FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)`)
       .bind(job.turnID, job.attempt, Date.now() + 30_000).run();
+    await releasePublication(env, job);
     await releaseAttention(env, job);
     if (task) await dispatchGroup(env, task.groupID);
   });

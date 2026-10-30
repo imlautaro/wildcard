@@ -14,7 +14,6 @@ const contributorConsent = ref(false);
 const busy = ref(false);
 const error = ref<string | null>(null);
 const notice = ref<string | null>(null);
-useHead({ title: computed(() => snapshot.value?.group.name ?? 'Group') });
 
 const isOwner = computed(() => snapshot.value?.group.ownerID === user.value?.id);
 const archived = computed(() => (chats.groups.value.find(item => item.id === id.value) ?? snapshot.value?.group)?.archivedAt != null);

@@ -136,6 +136,18 @@ async function check(name,fn){await fn(); count++; console.log('PASS '+name);}
   const denied=await handler({...c,get:()=> 'b'});assert.equal(denied.data.receipts.length,0);
   const malformed=await handler({...c,req:{param:()=> 'g',query:()=>'{'}});assert.equal(malformed.status,400);
  });
+ await check('message info exposes only the exact group snapshot to current members',async()=>{
+  const handler=context.routes.handlers.get('get /:id/message-info');
+  const c={env:{DB},get:()=> 'a',req:{param:()=> 'g',query:()=> 'm1'},header(){},json:(data,status=200)=>({data,status})};
+  const result=await handler(c);
+  assert.equal(result.status,200);assert.equal(result.data.tracked,true);
+  assert.equal(result.data.recipients.length,3);
+  assert.ok(result.data.recipients.every(r=>r.readAt!==null));
+  assert.equal((await handler({...c,get:()=> 'b'})).status,404);
+  assert.equal((await handler({...c,req:{param:()=> 'other',query:()=> 'm1'}})).status,404);
+  assert.equal((await handler({...c,req:{param:()=> 'g',query:()=> 'legacy'}})).data.tracked,false);
+  assert.equal((await handler({...c,req:{param:()=> 'g',query:()=> 'missing'}})).status,404);
+ });
  await check('receipt rate limits fail before writes',async()=>{
   context.admitAuthRequest=async()=>({allowed:false});
   assert.equal((await ack('a',['m1'])).status,429);

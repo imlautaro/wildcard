@@ -14,7 +14,6 @@ const busy = ref(false);
 const error = ref<string | null>(null);
 const conflict = ref<string | null>(null);
 const draft = reactive({ title: '', body: '', baseRevision: 0, summary: '' });
-useHead({ title: computed(() => doc.value?.title ?? 'Document') });
 
 let timer: ReturnType<typeof setInterval> | undefined;
 onMounted(() => {
