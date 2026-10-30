@@ -1058,8 +1058,12 @@ queue, and answers arrived for messages long superseded.
 
 **Planning.** The first admitted slot of an eligible trigger claims `group_round`
 and makes one coordinator call (`groups/planning.ts`, minimal reasoning, about
-3–8 seconds). The coordinator sees the trigger, up to 16 visible messages (same
-author/Contributor filter as replies), and each candidate's name, persona summary,
+3–8 seconds). The coordinator sees the trigger, the message it quotes (even when
+older than the window, then with up to three messages on each side as
+`quotedExchange`: a database read, not a coordinator tool round, to keep planning
+a single call; deeper history is left to speakers it gives tools, who can search
+and read group history), up to 16 visible messages (same author/Contributor filter
+as replies; voice messages are marked and represented by their transcripts), and each candidate's name, persona summary,
 specialties, energy, recent activity and Researching state. It returns at most
 three ordered speakers, each with a role (`answer`, `research`, `react`, `spark`),
 a one-line internal angle and whether tools are needed. Human questions, requests,
@@ -1079,7 +1083,10 @@ marks the round `failed` and every slot falls back to the per-contact decision
 described above, so the group never goes silent because of the coordinator.
 
 **Speaking.** The plan is a system instruction for the speaker (never mentioned to
-people). Rank 1 of a human round must reply and shows Typing from the start of its
+people). The angle is a hint: when the speaker's fuller context (a quote, a voice
+transcript, history) already answers what the angle asks for, the conversation wins.
+Before this was added, a quoted voice message outside the coordinator's window made
+it plan "ask for the lyric", and contacts claimed they could not hear the audio. Rank 1 of a human round must reply and shows Typing from the start of its
 generation; its first-message pause credits that time. A planned turn without
 tools skips the evidence round and goes straight to its decision; planned drafts
 are reviewed only for vocatives. Later ranks prepare in parallel, wait (at most 90

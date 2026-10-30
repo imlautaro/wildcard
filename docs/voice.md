@@ -251,7 +251,10 @@ and history use what was said. The contact then "listens" for the clip's duratio
 (at most 60 seconds) before typing. The model receives the transcript marked as a
 voice message. Voice turns are never batched with neighboring text messages.
 
-**Groups.** A voice message is transcribed once, by the first contact reply job of
+**Groups.** Group contacts are told that a `voiceMessage` marker's text (also in
+quotes) is the transcript of what was said, so they answer it instead of claiming
+they cannot listen; sending audio themselves is a separate setting (2026-10-30).
+A voice message is transcribed once, by the first contact reply job of
 its round, after the round's read step. The oldest unfinished group turn owns
 transcription; another preparer waits for the saved transcript or its predecessor
 to finish, so later
