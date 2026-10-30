@@ -202,3 +202,17 @@ never forwards the user's onboarding profile as conversation context or applies 
 new participant's country to a shared agent. No new retention, cache or migration
 is introduced. Both clients use the same server behavior; semantic/device checks
 remain pending.
+
+## Name variety
+
+New first circles use the shared [name pool](contact-generation.md#varied-generated-names):
+24 candidates per male/female gender, server-side random selection without replacement,
+and a shuffled 2/3 gender mix. Names are assigned independently of the five
+ordered temperaments and shuffled specialties. The identity model must keep the
+assigned names/genders. Native spelling remains valid. Existing account contact
+names and the human's name are excluded within the documented bounded window;
+no other account's names are read. One extra Standard text completion adds latency
+and cost before the immutable plan is saved. Completed contacts and saved plans
+keep their names; no historical regeneration is introduced. Both clients use the
+same Workflow and existing progress/cache contract. Actual cultural/name diversity,
+provider failure handling and device recovery remain pending live verification.

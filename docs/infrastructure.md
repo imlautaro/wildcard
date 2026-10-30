@@ -2640,3 +2640,39 @@ new response guidance, while existing accent values remain valid. Parsed drafts
 discard the internal delivery plan, and legacy decisions without it are accepted.
 Fictional live-model evaluation is recorded in the [style evaluation](conversation-style-evaluation.md);
 no production operation, device or acoustic validation is implied.
+
+## Name variety and conversational activity refinement
+
+This change reuses the existing DB, ONBOARDING_WORKFLOW, CHAT_WORKFLOW, minute Cron,
+Meta secret, optional APNs and client caches. No migration, resource, permission,
+account-specific identifier or secret is added. New onboarding/AI creation adds
+one bounded Standard name-pool completion before identity generation (24 candidates
+per requested gender; at most 48). Existing two-minute identity steps and immutable
+plan persistence still apply. Failures before a saved plan can repeat billable
+inference; saved plans/portraits are reused. Personality regeneration does not
+call the name pool or rename existing contacts.
+
+Private continuation floors are shorter and adaptive ambient gaps use hours rather
+than the former near-day floor. Busy agents and active six-second typing leases
+are excluded from Cron claims; passive visits no longer defer initiative or change
+its publication watermark. Other deferrals/errors retain finite evaluation budgets.
+All quiet hours, consent, explicit pause, unanswered-message and rolling publication
+limits stay in force. Existing stopped plans/due dates are not backfilled or restarted.
+Groups gain in-round conversational direction and an additive internal follow-up
+category, using the same publication/energy/exchange guards. This does not create
+an idle-group scheduler. More eligible conversation can consume more existing
+inference and energy budget; actual cadence/cost remains unmeasured.
+
+An independent installation follows the existing npm/migration/Workers setup above;
+local API/web/Xcode commands are unchanged. Release only committed and pushed source
+through Workers Builds and verify each active SHA; never deploy manually. Rollback
+keeps all data/columns, saved plans and delivery rows. Drain in-flight Workflows
+before a code rollback because older internal schemas reject the new follow-up
+category. Verification for this refinement covers API/web types, Swift editor
+parsing, whitespace and static SQL preparation against an empty 67-migration schema.
+The initiative SQL preparer now substitutes a static learning-epoch integer for
+0067's validated interpolation; it never evaluates TypeScript. Functional harnesses,
+builds, provider calls, remote migration and device/browser behavior were not run.
+Use fictional data for name diversity, retry stability, open-vs-typing races,
+quiet hours, persona cadence, group curiosity/closure, replay, access loss and
+account switching. See the affected feature guides for detailed limits.

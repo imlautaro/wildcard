@@ -1,4 +1,4 @@
-import { groupParticipation, validDelivery } from './conversation';
+import { groupConversationDirection, groupParticipation, validDelivery } from './conversation';
 import { cachedAppraisal } from '../personality/relationships';
 import { embodiedIdentityInstruction } from '../personality/identity';
 import { conversationStyle, regionalConversation } from '../personality/conversation';
@@ -36,6 +36,7 @@ import type { GroupJob } from './workflow';
 export type GroupLearningFence = { person: number; audience: number };
 export type GroupDraft = { learningQuestion?: LearningQuestion | null; learningFence?: GroupLearningFence; includeImage?: boolean; attachment?: Attachment | null; invitesReply?: boolean; replyToID?: string | null; messages?: string[]; text: string | null; throughSequence: number };
 export type GroupInput = {
+  conversationDirection?: string;
   memberNames?: string[];
   deliveryAudience?: 'group' | 'individual';
   memberIDs?: string[];
@@ -195,6 +196,8 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
     ORDER BY r.group_message_id, actorID`).bind(JSON.stringify([...new Set([row.sourceID, ...history.map((m) => m.id), ...roundReplies.map((m) => m.id)])]), row.groupID, contributor).all<Reaction>();
   const personalitySnapshot = await readPersonality(env.DB, row.agentID);
   const personality = personalitySnapshot.personality;
+  const conversationDirection = groupConversationDirection({ agentID: row.agentID, seed: row.sourceID, personality,
+    peerQuestions: history.filter(m => m.agentID && m.agentID !== row.agentID).slice(0, 6).filter(m => /[?？]/u.test(m.text)).length });
   const character = await personalityContext(env, { agentID: row.agentID, groupID: row.groupID,
       processingUserID: row.userID,
       speakerID: row.sourceAgentID ? `agent:${row.sourceAgentID}` : `user:${row.userID}`,
@@ -231,6 +234,7 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
     { role: 'system', content: conversationStyle({ agentID: row.agentID, personality, group: true,
       peers: roundReplies.filter(m => m.agentID !== row.agentID).map(m => m.text),
       own: history.filter(m => m.agentID === row.agentID).map(m => m.text), names: members.filter(m => m.id !== row.agentID).map(m => m.name) }) },
+    { role: 'system', content: conversationDirection },
     { role: 'system', content: `You are ${JSON.stringify(row.name)}, agent ID ${JSON.stringify(row.agentID)}, participating in a group chat named ${JSON.stringify(row.groupName)}.
 ${profilePhotoInstruction}
 ${spoken}
@@ -276,6 +280,7 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
   const file = isFile(row.attachmentJSON) ? { attachmentJSON: row.attachmentJSON!, text: row.text, name: row.senderName }
     : history.find((message) => isFile(message.attachmentJSON));
   return { input: {
+    conversationDirection,
     memberNames: members.map(m => m.name),
     deliveryAudience,
     memberIDs: members.filter(m => m.id !== row.agentID).map(m => `${m.kind}:${m.id}`),
@@ -307,7 +312,7 @@ export function groupDecisionFormat(input: GroupInput): Record<string, unknown> 
         recipientIDs: { type: 'array', maxItems: 4, items: { type: 'string', ...(input.memberIDs?.length ? { enum: input.memberIDs } : {}) } },
         nameUse: { type: 'string', enum: ['omit', 'disambiguation', 'personal-emphasis'] },
         depth: { type: 'string', enum: ['minimal', 'brief', 'developed'] },
-        followUp: { type: 'string', enum: ['none', 'missing-information'] },
+        followUp: { type: 'string', enum: ['none', 'missing-information', 'conversation'] },
       } },
       messages: { type: 'array', items: { type: 'string' }, maxItems: 8 },
       learningQuestion: { type: ['object', 'null'], additionalProperties: false, required: ['key', 'quote'], properties: { key: { type: 'string' }, quote: { type: 'string' } } },

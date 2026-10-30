@@ -1348,3 +1348,22 @@ grant access, change recipients' permissions or replay tools. Publication keeps
 its current membership/consent/history checks, and existing stale-draft review
 handles traffic arriving during the extra model call. Text-only effects failing
 speech fitness simply arrive as ordinary text in both session conversation stores.
+
+## Name pools and conversational activity
+
+Name-pool candidates are ephemeral server data inside generation. Only selected
+names enter the existing immutable D1 plan/contact and normal iOS/web caches; there
+is no candidate endpoint, local name history or global cross-account cache. Saved
+plans are reused after retry/navigation; a completed contact follows the usual
+store refresh. Existing creation deduplication, pending IDs, access/account reset,
+stale-response guards, pagination and eviction budgets remain unchanged.
+
+Conversational direction and activity statistics remain request-local/Workflow
+checkpoints. Private initiative reads the composer typing watermark rather than
+passive visit timestamps; it adds no client requests or timing cache. Group replies
+reuse normal delivered-message rows and one-second foreground sync, including
+Typing between parts. Reopen/back/empty views use existing snapshots; offline
+recovery can fetch several already-published messages together. Deletion/access
+revocation/account switching retain their normal invalidation and rejection of
+late responses. No additional private disk retention is introduced. Device checks
+for these transitions remain pending.

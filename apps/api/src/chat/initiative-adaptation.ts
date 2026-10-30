@@ -76,8 +76,8 @@ export function adaptivePolicy(samples: InitiativeSample[], sourceID: string, p:
     paused, taskOnly, unanswered, maxUnanswered, greetingsAllowed,
     ambientAllowed: !paused && !taskOnly && !ignoredGreeting && unanswered === 0 && !!lastSocial,
     responseRate, measuredOutcomes: outcomes.length,
-    minimumAmbientGapHours: 12 + (10 - initiative) * 1.5 + patience * 0.5
-      + (responseRate !== null && responseRate < 0.5 ? 24 : 0),
+    minimumAmbientGapHours: 1 + (10 - initiative) * 0.35 + patience * 0.1
+      + (responseRate !== null && responseRate < 0.5 ? 6 : 0),
   };
 }
 export type AdaptivePolicy = ReturnType<typeof adaptivePolicy>;

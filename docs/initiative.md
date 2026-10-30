@@ -28,7 +28,9 @@ may also stop without sending, or wait for another flexible opportunity.
 Continuations retain six evaluations over at most 24 hours. A transition to
 ambient mode has a separate six-evaluation budget over the seven-day horizon;
 mode changes preserve a monotonically increasing revision so Workflow IDs cannot
-be reused. Deferrals and errors consume evaluations as before. If quiet hours or
+be reused. Deferrals after a claim and errors consume evaluations as before. Cron excludes
+currently busy agents and active six-second typing leases before claiming a row,
+so those conditions normally wait without consuming the six evaluations. If quiet hours or
 busy attention exhaust the continuation, Cron can promote only a source already
 classified social, with no proactive sends, to that finite ambient budget. An
 unknown or unclassified source cannot acquire new ambient permission this way.
@@ -93,9 +95,15 @@ Initiative and patience also affect the minimum gap and amount of outreach:
   one unanswered continuation. Unknown receptivity normally allows two.
 - Up to three requires high initiative, a less patient character and
   positive measured engagement. The global ceiling remains three.
-- Poor response history increases continuation spacing. Ambient minimum spacing
-  is roughly 13–31 hours depending on initiative/patience, with another day added
-  for weak measured receptivity. Actual opportunities can be later.
+- The personality continuation floor is now 20–101 seconds instead of 30–480,
+  with the first continuation still subject to a 30-second minimum. Neutral traits
+  give a 60-second floor; low initiative and high patience leave more room.
+  Later unanswered continuations retain at least two- and ten-minute gaps.
+- Poor response history still triples continuation spacing. Ambient minimum spacing
+  is roughly 1.1–5.2 hours depending on initiative/patience, with six hours added
+  for weak measured receptivity. The transition/review floor follows this same
+  adaptive gap rather than imposing another six-hour minimum. Window selection,
+  quiet hours, model decisions, Cron and queue load can make delivery later.
 - Windows are selected with a deterministic, source/revision-seeded weighted draw
   and minute variation. Replay uses the same choice, while later opportunities
   vary. Ordinary review delays also receive additional breathing room.
@@ -119,9 +127,13 @@ groups retain their separate existing budget and do not train initiative.
 
 Before publication, the atomic transaction rechecks the source/revision/anchor,
 current opt-out, archive/clear state, model selection, consent, MCP isolation,
-read/visit evidence, personality revision, agent attention and rolling budgets.
-New history prevents the old draft from publishing. Changed read/visit or profile
-evidence discards the draft and schedules another bounded evaluation. Presence,
+read/typing evidence, personality revision, agent attention and rolling budgets.
+New history prevents the old draft from publishing. Changed read/typing or profile
+evidence discards the draft and schedules another bounded evaluation. Simply opening
+or leaving the chat open no longer suppresses initiative or invalidates a draft:
+only recent actual composer activity gets a courtesy pause. The same typing
+watermark is checked in context, before Typing and in atomic publication/feedback
+SQL, including multiple devices. Passive visit timestamps do not count as typing. Presence,
 typing pauses, ordinary completed turns and the APNs outbox reuse existing paths.
 No tools, connectors, native actions, group publication or schedule mutations are
 available to the planner. Text can never prove an external action happened.
@@ -202,3 +214,25 @@ or override a pause, task-only pattern, unanswered-message suppression, quiet ho
 consent or budget. Actual question publication records an asked status atomically.
 Reset/disable advances an epoch that rejects stale initiative drafts. Initiative does
 not itself trigger a learning review or enable group initiative.
+
+## Conversational activity refinement
+
+The planner now explicitly considers one short next thought after a greeting or
+an open social exchange, without needing another human question or read receipt.
+It still decides whether there is anything worth saying. Unknown/poor engagement,
+completed tasks, boundaries and unanswered outreach keep their existing suppression
+and budgets; shorter opportunities do not grant more messages. Existing stopped
+plans, already selected due dates and saved history are not restarted or rewritten.
+Newly evaluated plans use the updated floors. Shared-contact statistics remain
+isolated per private participant. Both clients use the same API implementation and
+matching initiative help. Groups use separate in-round conversational direction,
+not this private planner or its opt-out setting.
+
+For this refinement, static API/web types, Swift editor parsing, SQL preparation
+against 67 empty migrations and whitespace checks are the validation scope.
+The SQL checker now substitutes a static integer for the validated learning epoch
+added in 0067; it does not evaluate TypeScript. No functional harness, build,
+provider inference or device/browser session was run. Check passive-open vs typing,
+new input/read/profile changes during inference, personality cadence, ambient
+transition, quiet hours, stop/opt-out and replay with fictional data before making
+runtime or semantic quality claims.

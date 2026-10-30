@@ -938,3 +938,33 @@ failures preserve the useful draft. This adds bounded model usage and latency;
 semantic metadata is not proof of compliant prose. Shared context also guides the
 evidence-gathering phase to avoid rebuilding another participant's artifact.
 Both clients receive ordinary published messages through existing stores.
+
+## Conversational participation
+
+Ordinary in-round responses now receive replay-stable conversational direction
+seeded by agent/trigger IDs and weighted by initiative and curiosity. A contact may
+build on another member's point, offer a preference or concrete proposal, or ask
+a specific optional question that moves an open social/exploratory thread forward.
+It can converse with other contacts without another human prompt. Recent peer
+questions encourage joining one thread rather than stacking fresh openers.
+These are conditional model directions, not a required question, guaranteed reply
+or deterministic classifier of social intent. Tasks, sensitive topics, settled
+questions, explicit boundaries and endings still take priority.
+
+The internal delivery schema accepts `followUp: conversation` alongside `none` and
+`missing-information`. Finalization and optional wording review see the same
+conversational direction; review preserves meaningful optional curiosity while
+still removing repeated check-ins, names and filler. A substantive new point,
+proposal or question may set `invitesReply` true using the existing continuation
+queue. Acknowledgements and closures remain terminal. Existing consent, current
+membership, history guards, per-agent energy and the 100-message exchange ceiling
+remain unchanged. There is no idle-group Cron or automatic restart of an ended
+exchange, and no new external-action permission.
+
+The API serves the same behavior to iOS/web; messages, Typing, read state, sounds
+and delivered-part caches reuse their normal paths. No schema migration, client
+response field, timer or setting is added. Additional conversational turns can
+consume more existing model/energy budget. Static types/SQL cannot establish natural
+banter, balance across personalities or when a thread should end; use fictional
+social, practical, directed, settled, sensitive and farewell conversations to verify
+that contacts both contribute and leave space without repeated greetings/questions.

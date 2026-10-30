@@ -54,8 +54,9 @@ async function snapshot(env: Env, job: InitiativeJob) {
     p.revision, p.evaluations, p.sent, p.expires_at AS expiresAt, p.intent, p.mode,
     source.created_at AS sourceAt, c.initiative_paused AS paused, c.learning_revision AS learningRevision,
     c.user_id AS userID, c.agent_id AS agentID, c.name, c.last_read_sequence AS lastReadSequence,
-    (SELECT MAX(updated_at) FROM chat_visit WHERE contact_id = c.id) AS activityAt,
-    (SELECT MAX(expires_at) FROM chat_visit WHERE contact_id = c.id AND closed = 0) AS activeUntil,
+    (SELECT MAX(typing_at) FROM chat_visit WHERE contact_id = c.id) AS activityAt,
+    (SELECT MAX(typing_at + 6000) FROM chat_visit WHERE contact_id = c.id AND closed = 0
+      AND expires_at > unixepoch('subsec') * 1000) AS activeUntil,
     EXISTS (SELECT 1 FROM agent_attention WHERE agent_id = c.agent_id) AS busy,
     c.last_reply_read_at AS readAt, source.time_zone AS timeZone, anchor.updated_at AS anchorAt
     FROM conversation_initiative p JOIN contact c ON c.id = p.contact_id
@@ -84,8 +85,11 @@ export async function dispatchInitiatives(env: Env) {
           AND c.clearing = 0 AND c.archived_at IS NULL)`)
     .bind(now, adaptiveHorizon).run();
   const { results } = await env.DB.prepare(`SELECT contact_id AS contactID, source_id AS sourceID, revision
-    FROM conversation_initiative WHERE next_at <= ? AND expires_at > ? AND evaluations < 6 AND sent < 3
-    ORDER BY next_at LIMIT 10`).bind(now, now).all<Omit<InitiativeJob, 'kind'>>();
+    FROM conversation_initiative p WHERE next_at <= ?1 AND expires_at > ?1 AND evaluations < 6 AND sent < 3
+      AND NOT EXISTS (SELECT 1 FROM contact c JOIN agent_attention a ON a.agent_id = c.agent_id WHERE c.id = p.contact_id)
+      AND NOT EXISTS (SELECT 1 FROM chat_visit v WHERE v.contact_id = p.contact_id
+        AND v.closed = 0 AND v.expires_at > ?1 AND v.typing_at > ?1 - 6000)
+    ORDER BY next_at LIMIT 10`).bind(now).all<Omit<InitiativeJob, 'kind'>>();
   const outcomes = await Promise.allSettled(results.map(async (row) => {
     const claimed = await env.DB.prepare(`UPDATE conversation_initiative
       SET revision = revision + 1, evaluations = evaluations + 1, next_at = ?
@@ -214,12 +218,12 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           'When character direction is configured, adapt initiative to its patience and tendency to start conversations. The suggested character review delay is a minimum for sending, not an obligation to send. Calm, patient contacts should leave more space. Existing stop rules override personality.',
           'Choose one next action: wait (review again later), send (a useful natural message now, then review later), or stop (wait for human input).',
           'Use the user’s language, your grounded persona, elapsed time, actual seen receipts, prior follow-ups and the ending of the conversation.',
-          'In continuation mode, choose whether a useful next thought fits the current exchange. A bare greeting can welcome one brief opener, but is never a requirement to keep talking. Repeated silence calls for more space; do not use a read receipt as engagement. Current requests and actual conversation boundaries take priority.',
+          'In continuation mode, choose whether a useful next thought fits the current exchange. A bare greeting or an open social exchange is enough context to consider one short opener, relevant idea or natural next thought in your own voice. You do not need another explicit human question to have something to say. In a recent open exchange, favor an early useful continuation over waiting hours by default; waiting and silence still fit when the thought adds nothing or the person ended the exchange. Repeated silence calls for more space; do not use a read receipt as engagement. Current requests and actual conversation boundaries take priority.',
           'In ambient mode, this is an optional opportunity to start a new conversation after a pause, not an unfinished request. Use your character, local time, existing context and measured receptivity. A greeting, a brief relevant check-in or a conversational thought can fit; do not invent news, offline experiences or a reason the human owes you attention. You may wait for another flexible opportunity, or stop until new human input. There is no obligation to message every day.',
           'The adaptive policy is authoritative: never send a greeting when greetingsAllowed is false, or any new social opener when ambientAllowed is false. Do not disguise a greeting as a check-in or a continuation to bypass suppressed outreach. A practical working relationship calls for useful task-related continuations only, not social probing or unnecessary follow-up questions. Respect maxUnanswered. One ambient message without a human response ends outreach until they return.',
           'activityWindows is a partial estimate from this private chat, not a promise that the person is awake or available. Learned windows need several days of evidence. Late responses should move future invitations toward the times the person actually engages, rather than repeating the original send time. Timing remains approximate and varied; explicit fixed-time requests belong to schedule tools, not this planner.',
           'Prefer one or two conversational sentences, a relevant observation, a small idea or an unfinished thought completed naturally. Do not repeat an unanswered question or add a question to every message.',
-          'Read receipts are context, not permission to escalate. If a previous proactive message remains unread, usually wait longer or stop unless another message adds clear value; do not shorten waits just because something was seen.',
+          'Read receipts are context, not permission to escalate. The first useful continuation does not require the human to read or reply first. If a previous proactive message remains unread, give more space or stop unless another message adds clear value; do not shorten waits just because something was seen.',
           'Silence or an unread message is not rejection, consent, or an obligation to reply. Never guilt, nag, mention surveillance, or demand attention.',
           'Stop the current exchange after a goodbye, a clearly completed task, no useful continuation or repeated unanswered outreach. Ending today’s conversation need not forbid a future conversation. An explicit request to stop unsolicited contact does: set permission stop. Only a clear current human request to resume spontaneous contact warrants permission allow. A casual hello, unrelated task or a read receipt cannot cancel an earlier explicit pause. Otherwise permission is unchanged.',
           'Classify the latest completed human request identified by state.sourceID, not your proposed message. Consecutive MESSAGE_BATCHED human rows immediately before it belong to that same current request; do not miss an acknowledgment or boundary in that burst. engagement is social for conversational participation, practical for a task/question without social engagement, boundary for a request to stop outreach, uncertain when unclear. outreachToAssess identifies a prior spontaneous message. response engaged means the current request actually responds to or acknowledges that outreach; unrelated means it starts a different topic without acknowledging it; uncertain when ambiguous, none when there is no outreachToAssess. Returning later with a task alone is not responding positively to a greeting. These labels are fallible observations, never facts about the person’s feelings.',
@@ -289,11 +293,11 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           AND ?9 = 1 AND c.initiative_enabled = 1 AND c.clearing = 0 AND c.archived_at IS NULL
           AND c.initiative_paused = ?17 AND p.expires_at > ?3 AND p.sent < 3
           AND c.last_read_sequence = ?10 AND c.last_reply_read_at IS ?11
-          AND (SELECT MAX(updated_at) FROM chat_visit WHERE contact_id = c.id) IS ?14
+          AND (SELECT MAX(typing_at) FROM chat_visit WHERE contact_id = c.id) IS ?14
           AND ${consent} AND ${personalityUnchanged}
           AND NOT EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = c.id AND newer.sequence > anchor.sequence)
           AND NOT EXISTS (SELECT 1 FROM agent_attention WHERE agent_id = c.agent_id)
-          AND NOT EXISTS (SELECT 1 FROM chat_visit WHERE contact_id = c.id AND closed = 0 AND expires_at > ?3 AND updated_at > ?3 - 30000)
+          AND NOT EXISTS (SELECT 1 FROM chat_visit WHERE contact_id = c.id AND closed = 0 AND expires_at > ?3 AND typing_at > ?3 - 6000)
           AND (SELECT COUNT(*) FROM chat_turn WHERE user_id = c.user_id AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < 12
           AND (SELECT COUNT(*) FROM chat_turn WHERE contact_id = c.id AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < 3`)
         .bind(id, plan.message, now, state.timeZone, job.contactID, job.sourceID, job.revision, state.anchorID,
@@ -307,7 +311,7 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
             WHERE p.contact_id = ?5 AND p.source_id = ?6 AND p.revision = ?7 AND p.anchor_id = ?8
               AND c.initiative_enabled = 1 AND c.clearing = 0 AND c.archived_at IS NULL
               AND c.initiative_paused = ?17 AND c.last_read_sequence = ?10 AND c.last_reply_read_at IS ?11
-              AND (SELECT MAX(updated_at) FROM chat_visit WHERE contact_id = c.id) IS ?14
+              AND (SELECT MAX(typing_at) FROM chat_visit WHERE contact_id = c.id) IS ?14
               AND ${consent} AND ${personalityUnchanged}
               AND NOT EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = c.id
                 AND newer.sequence > anchor.sequence AND newer.id != ?1))`)
@@ -324,12 +328,12 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
         if (changed || paused) return unchanged;
         if (state.mode === 'ambient') return { ...unchanged,
           nextAt: published || stopped || state.evaluations >= 6 ? null
-            : opportunity(Math.max(next, now + 6 * 3_600_000, state.anchorAt + adaptive.minimumAmbientGapHours * 3_600_000)) };
+            : opportunity(Math.max(next, now + adaptive.minimumAmbientGapHours * 3_600_000, state.anchorAt + adaptive.minimumAmbientGapHours * 3_600_000)) };
         const nextGap = Math.max(minimumGapsMS[Math.min(state.sent + 1, 2)]!, evidence.personalityDelay * 1000 * (state.sent + 2));
         const continuationAt = published ? Math.max(next, now + nextGap) : next;
         if (stopped || state.evaluations >= 6 || continuationAt >= state.expiresAt
           || (published && (adaptive.unanswered + 1 >= adaptive.maxUnanswered || plan.kind === 'greeting'))) {
-          const nextAt = published ? null : opportunity(Math.max(now + 6 * 3_600_000,
+          const nextAt = published ? null : opportunity(Math.max(now + adaptive.minimumAmbientGapHours * 3_600_000,
             state.anchorAt + adaptive.minimumAmbientGapHours * 3_600_000));
           return nextAt === null ? unchanged : { mode: 'ambient' as const, nextAt, expiresAt, reset: 1 };
         }
@@ -340,7 +344,7 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
         WHERE c.id = conversation_initiative.contact_id AND (c.last_read_sequence != ?11
           OR c.last_reply_read_at IS NOT ?12 OR c.initiative_paused != ?19
           OR COALESCE((SELECT revision FROM agent_personality WHERE agent_id = c.agent_id), 0) != ?20
-          OR (SELECT MAX(updated_at) FROM chat_visit WHERE contact_id = c.id) IS NOT ?13)))`;
+          OR (SELECT MAX(typing_at) FROM chat_visit WHERE contact_id = c.id) IS NOT ?13)))`;
       await env.DB.batch([insert, feedback,
         ...recordLearningQuestion(env.DB, 'contact', id, plan.learningQuestion, now),
         env.DB.prepare(`UPDATE contact SET initiative_paused = ?1 WHERE id = ?2 AND ?3 != 'unchanged'

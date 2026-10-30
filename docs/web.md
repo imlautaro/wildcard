@@ -1069,3 +1069,30 @@ effects such as typed laughter, repeated letters and emoji stay as text instead
 of being synthesized literally; plain conversational notes remain eligible for
 audio. The fictional live-model [evaluation record](conversation-style-evaluation.md)
 covers behavior, while visual/device and acoustic verification remain separate.
+
+## Name variety and conversational activity
+
+Onboarding and AI contact creation use the same server-selected local name pools
+as iOS, with bounded account-local duplicate exclusion. Existing names, saved job
+plans, creator-edited personalities and pending submission IDs are preserved.
+The extra name-pool completion runs within the existing generating state; it adds
+model latency/cost without new client requests, pagination or cache fields. See
+[generated names](contact-generation.md#varied-generated-names).
+
+Private initiative no longer treats a passive open chat as active composing. Actual
+recent typing still delays it, and new input/read/profile evidence still rejects
+stale drafts. Personality-based continuation floors are shorter, and eligible
+later social opportunities use roughly 1.1–5.2 hour minimum gaps, with longer spacing
+for weak receptivity and normal quiet-hour/window/model delays. Budgets, explicit
+pause/opt-out and ignored-greeting suppression are unchanged. Both clients show
+matching initiative help and use the existing contact/history caches.
+
+Groups can actively develop a visible social thread, respond to another contact
+or offer a relevant proposal without waiting for another human message. The internal
+follow-up category now distinguishes conversational curiosity from required
+clarification; final wording review preserves both. This uses existing bounded
+reply opportunities, not an idle-group scheduler. No new per-client timer, draft
+cache, background permission or disk retention is added. See [initiative](initiative.md)
+and [group participation](groups.md#conversational-participation). For this refinement,
+static checks only are recorded; provider semantics and device/browser timing
+remain to be verified with fictional conversations.

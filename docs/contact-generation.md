@@ -131,3 +131,36 @@ inference, remote migration or release are implied by these static checks.
 
 See [infrastructure](infrastructure.md#ai-contact-generation) for installation and
 release compatibility.
+
+## Varied generated names
+
+New creation and first-circle onboarding share `contacts/names.ts`. Before identity
+generation, one Standard completion proposes 24 distinct plausible local given
+names per requested gender (24 for a single contact, 48 for the mixed first circle).
+The server validates native spelling/length, filters case/accent/spacing variants,
+requires at least twelve usable candidates per gender, shuffles with cryptographic
+rejection sampling and selects without replacement. Identity generation receives
+the assigned names/genders and must retain them. Names do not choose temperament,
+appearance or interests. This avoids repeatedly accepting the identity model's
+first few preferred names without maintaining a narrow country-specific name list.
+The pool is model-generated; cultural fit and actual diversity need live evaluation.
+
+Exclusions use at most 256 most recently updated contact names in this account,
+including shared contacts, plus locally filtered onboarding-user names. Only
+contact names, requested country/language/genders go to the name-pool completion;
+additional human-name exclusions remain server-side. There is no cross-account
+name lookup, private history, email, global popularity table or candidate cache.
+Exclusion beyond that bounded account window is not guaranteed. Name collisions
+are not forbidden for manual contacts or preexisting identities.
+
+The selected name is saved with the ordinary immutable identity plan before portrait
+work; retry with a saved plan retains it. A failure before plan persistence can
+regenerate a pool and incur another call. Existing contacts, saved plans and
+personality regeneration retain their names. The extra completion adds bounded
+latency and model cost to new creation/onboarding, within their existing two-minute
+identity step; no new binding, migration, setting or response field is introduced.
+iOS/web reuse their current generation progress, submission IDs, job cache and
+completed-contact refresh. Static checks do not prove that every requested locale
+produces a valid or sufficiently varied pool. Fictional live checks should repeat
+both creation paths for the same and different locales, exercise used-name filtering,
+malformed/undersized pools, persisted retries and personality regeneration.

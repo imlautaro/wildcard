@@ -9,7 +9,7 @@ import { clamp, day, neutralAppraisal, type PersonalityScope } from './types';
 export type { PersonalityScope } from './types';
 
 export function initiativeDelay(p: Personality): number {
-  return Math.round(30 + (p.traits.patience - 1) * 30 + (10 - p.traits.initiative) * 20);
+  return Math.round(20 + (p.traits.patience - 1) * 5 + (10 - p.traits.initiative) * 4);
 }
 
 export async function prunePersonalityEvents(db: D1Database) {

@@ -119,7 +119,9 @@ This applies to planning, decisions, opinions and discussion as well as greeting
 Existing consent filters, energy, exclusive attention, required opening/task
 responses and atomic stale-draft publication checks remain authoritative. Reviews
 rebuild current visible participation before reevaluating a stale draft. No new
-group initiative or response obligation is added. Semantic decisions remain
+idle-group scheduling or response obligation is added. In-round participation can
+include a grounded proposal, fresh perspective or specific conversational question,
+with initiative/curiosity-weighted direction preserved through final review. Semantic decisions remain
 fallible model judgments, not deterministic guarantees from queue order.
 
 ## Final delivery and optional wording review
@@ -206,3 +208,8 @@ evaluation on the same date. The [evaluation record](conversation-style-evaluati
 distinguishes published failures, intermediate attempts and final evidence. The
 new correction includes 80 passing local regressions; it remains uncommitted and
 unpublished at the end of that evaluation.
+
+The group delivery metadata also allows `followUp: conversation` for optional,
+specific curiosity that advances an open social thread. It is distinct from
+missing information required to answer a task and from a reflexive reciprocal
+check-in. See [conversational participation](groups.md#conversational-participation).
