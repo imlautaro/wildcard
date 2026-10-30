@@ -57,12 +57,11 @@ async function create() {
         <div class="group">
           <div class="field"><input v-model="name" type="text" placeholder="Name" aria-label="Name" maxlength="100" autofocus></div>
         </div>
-        <p class="group-footer">Each contact is an AI agent with its own memory. You can add a photo after creating it.</p>
         <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
         <button type="submit" class="button block" :disabled="!valid || busy">Create Contact</button>
       </form>
       <form v-else @submit.prevent="generation.submit">
-        <p class="group-footer">These fields describe your bot. Your saved onboarding preferences are reused without asking for your details again. Generation uses Meta Standard processing.</p>
+        <div class="group-title info-title">Your bot <InfoButton label="Your bot" text="These fields describe your bot. Your saved onboarding preferences are reused without asking for your details again. Generation uses Meta Standard processing." /></div>
         <fieldset :disabled="generation.busy.value || !!job" style="border: 0; padding: 0" v-if="options">
           <AppSelect v-model="draft.style" label="Visual style" :options="options.styles.map(o => ({ value: o.code, label: o.name }))" />
           <AppSelect v-model="draft.purpose" label="Relationship" :options="[{ value: 'friends', label: 'Friend' }, { value: 'study', label: 'Study partner' }, { value: 'work', label: 'Work colleague' }]" />

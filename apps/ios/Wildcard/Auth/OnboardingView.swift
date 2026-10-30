@@ -150,9 +150,10 @@ struct OnboardingView: View {
                         SearchablePicker(title: "Country", selection: $store.draft.country, options: options.countries.pickerOptions,
                                          placeholder: "Choose your country")
                     } header: {
-                        Text("About you")
-                    } footer: {
-                        Text("Your contacts will have names common in your country and speak your preferred language. Contacts in every style are adults, usually within two years of your age, with a minimum age of 18. Gender does not determine your contacts’ personalities.")
+                        HStack {
+                            Text("About you")
+                            InfoButton(title: "About you", text: "Your contacts will have names common in your country and speak your preferred language. Contacts in every style are adults, usually within two years of your age, with a minimum age of 18. Gender does not determine your contacts’ personalities.")
+                        }
                     }
                     .disabled(store.locked || store.busy)
                     Section("Agent appearance") {
@@ -171,8 +172,11 @@ struct OnboardingView: View {
                             TextField(store.draft.circleType == "study" ? "What are you studying?" : "What do you do for work?", text: $store.draft.occupation)
                         }
                         Toggle("Create a group with my five contacts", isOn: $store.draft.createGroup)
-                    } footer: {
-                        Text("Friends have varied interests. Study and work teams use your field to create complementary contacts.")
+                    } header: {
+                        HStack {
+                            Text("Your circle")
+                            InfoButton(title: "Your circle", text: "Friends have varied interests. Study and work teams use your field to create complementary contacts.")
+                        }
                     }
                     .disabled(store.locked || store.busy)
                     Section {

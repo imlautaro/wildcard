@@ -62,10 +62,9 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
             <input v-model="draft.occupation" maxlength="200" placeholder=" " :required="!locked">
             <span>{{ draft.circleType === 'study' ? 'What are you studying?' : 'What do you do for work?' }}</span>
           </label>
-          <p class="hint">Friends have varied interests. Study and work teams use your field to create complementary contacts.</p>
           <label class="check-row"><input v-model="draft.createGroup" type="checkbox"><span>Create a group with my five contacts</span></label>
         </fieldset>
-        <p class="hint">Your contacts will have names common in your country and speak your preferred language. Contacts in every style are adults, usually within two years of your age, with a minimum age of 18. Gender does not determine your contacts’ personalities.</p>
+        <p class="hint info-title">About your contacts <InfoButton label="About your contacts" text="Your contacts will have names common in your country and speak your preferred language. Contacts in every style are adults, usually within two years of your age, with a minimum age of 18. Gender does not determine your contacts’ personalities. Friends have varied interests. Study and work teams use your field to create complementary contacts." /></p>
         <div class="group consent">
           <label class="check-row">
             <input v-model="draft.sharedMemoryConsent" type="checkbox" :disabled="locked || busy">

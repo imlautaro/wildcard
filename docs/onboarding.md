@@ -172,3 +172,11 @@ Provider contracts checked October 28, 2026:
 [Cloudflare Workflow rules](https://developers.cloudflare.com/workflows/build/rules-of-workflows/).
 
 AI creation reuses these persisted preferences without asking for the user profile again. Unfinished legacy plans containing minors are replaced with adult plans before publication; prior unpublished photos can remain in R2 for operator cleanup. Completed circles are not automatically regenerated.
+
+## Explanations
+
+The onboarding form keeps the shared-memory consent text visible beside its switch or
+checkbox. The notes about generated contacts (names, language, ages, gender) and about
+the circle type are behind info buttons on iOS and web, as are the Your bot and manual
+creation notes in Create contact. See the settings pattern in
+[contacts](contacts.md#contact-details-layout).

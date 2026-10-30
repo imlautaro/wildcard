@@ -131,9 +131,10 @@ struct ContactGenerationSection: View {
                 ProgressView()
             }
         } header: {
-            Text("Your bot")
-        } footer: {
-            Text("These fields describe your bot. Your saved onboarding preferences are reused without asking for your details again. Generation uses Meta Standard processing.")
+            HStack {
+                Text("Your bot")
+                InfoButton(title: "Your bot", text: "These fields describe your bot. Your saved onboarding preferences are reused without asking for your details again. Generation uses Meta Standard processing.")
+            }
         }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
