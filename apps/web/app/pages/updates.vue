@@ -1,3 +1,3 @@
 <template>
-  <HomeFeed back />
+  <UpdatesFeed />
 </template>

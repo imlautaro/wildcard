@@ -1453,14 +1453,14 @@ session are discarded. Images reuse the private image caches with the preview fe
 time as version. Server-side previews expire after seven days (failed after six
 hours). See [link previews](link-previews.md).
 
-## Home feed
+## Updates feed
 
-Both clients own one [Home](home.md) feed per signed-in session: iOS
+Both clients own one [Updates](updates.md) feed (API resource `home`) per signed-in session: iOS
 `HomeFeedStore` (created by the signed-in shell, so sign-out and account switch drop
 it) and web `useHome` (registered with the session reset). It lives in memory only
 and is never written to disk, because cards can contain connector data. The last
-feed renders synchronously when returning to Home; the first load shows card
-placeholders. While Home is visible the clients revalidate after 60 seconds, and
+feed renders synchronously when returning to Updates; the first load shows card
+placeholders. While Updates is visible the clients revalidate after 60 seconds, and
 every 4 seconds while a curation run is updating or pending; requests are
 deduplicated. `POST /home/refresh`, `POST /home/topics` and `PATCH /home/topics/:id`
 return the whole feed, which replaces the cached one; a mutation increments the

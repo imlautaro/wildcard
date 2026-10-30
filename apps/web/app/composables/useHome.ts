@@ -1,6 +1,7 @@
 import type { HomeFeed } from '~/utils/types';
 
-// Session-owned Home feed (docs/home.md), matching the iOS HomeFeedStore. Memory
+// Session-owned Updates feed (docs/updates.md; the API resource is still `home`),
+// matching the iOS HomeFeedStore. Memory
 // only: connector-derived cards are never persisted. The last feed renders at once
 // on navigation; reads are deduplicated, revalidated after a minute (every four
 // seconds while contacts are preparing cards), and every mutation returns the whole

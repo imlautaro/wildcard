@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import type { HomeCard, HomeFeed } from '~/utils/types';
 
-// Home: the feed a person's contacts curate together (docs/home.md). On wide
+// Updates: the feed a person's contacts curate together (docs/updates.md). On wide
 // screens it fills the content pane beside the chat list; cards flow into two
 // columns, the lead card spans both.
-defineProps<{ back?: boolean }>();
 const home = useHome();
 const chats = useChats();
 const { user } = useSession();
@@ -29,8 +28,8 @@ const notice = computed(() => {
   if (!feed.value) return null;
   if (!feed.value.enabled) return 'Curated cards are turned off on this server. Your apps and agenda still show here.';
   if (updating.value || !feed.value.error) return null;
-  return feed.value.error === 'HOME_NO_CONTACTS' ? 'Add a contact so they can start curating your Home.'
-    : 'Your contacts couldn’t finish updating Home. They’ll try again in a few minutes.';
+  return feed.value.error === 'HOME_NO_CONTACTS' ? 'Add a contact so they can start curating your updates.'
+    : 'Your contacts couldn’t finish your updates. They’ll try again in a few minutes.';
 });
 
 usePolling(() => home.refresh(homeUpdating(home.state.value)), () => homeUpdating(home.state.value) ? 4000 : 60_000);
@@ -73,11 +72,11 @@ function origin(topic: HomeFeed['topics'][number]) {
 <template>
   <div class="page home-page">
     <header class="bar">
-      <NuxtLink v-if="back" to="/" class="icon-button back" aria-label="Back"><AppIcon name="back" /></NuxtLink>
-      <h1 class="title">Home</h1>
-      <button class="icon-button" aria-label="Home topics" title="Home topics" @click="managing = true"><AppIcon name="list" /></button>
+      <NuxtLink to="/" class="icon-button back" aria-label="Back"><AppIcon name="back" /></NuxtLink>
+      <h1 class="title">Updates</h1>
+      <button class="icon-button" aria-label="Topics" title="Topics" @click="managing = true"><AppIcon name="list" /></button>
       <button class="icon-button" aria-label="Update now" title="Update now" :disabled="!feed?.enabled || updating || busy" @click="run(home.update)"><AppIcon name="refresh" /></button>
-      <button class="icon-button primary" aria-label="Follow something on Home" title="Follow something" @click="following = true"><AppIcon name="plus" /></button>
+      <button class="icon-button primary" aria-label="Follow something in Updates" title="Follow something" @click="following = true"><AppIcon name="plus" /></button>
     </header>
     <div class="home-inner">
       <section class="home-hero">
@@ -99,7 +98,7 @@ function origin(topic: HomeFeed['topics'][number]) {
           <span class="grow">{{ feed.progress.contactName ?? 'A contact' }} is preparing {{ feed.progress.title }}</span>
           <span class="count">{{ Math.min(feed.progress.done + 1, feed.progress.total) }}/{{ feed.progress.total }}</span>
         </template>
-        <template v-else><span class="spinner" /><span class="grow">Your contacts are updating Home…</span></template>
+        <template v-else><span class="spinner" /><span class="grow">Your contacts are preparing updates…</span></template>
       </div>
       <div v-if="notice" class="notice">{{ notice }} <button v-if="home.state.error && !feed" class="link-button" @click="home.refresh(true)">Retry</button></div>
       <div v-if="actionError" class="notice">{{ actionError }}</div>
@@ -141,7 +140,7 @@ function origin(topic: HomeFeed['topics'][number]) {
       </button>
     </div>
 
-    <AppSheet v-if="following" title="Follow on Home" @close="following = false">
+    <AppSheet v-if="following" title="Follow in Updates" @close="following = false">
       <form id="home-follow" @submit.prevent="follow">
         <textarea v-model="followText" class="follow-input" rows="3" maxlength="400" autofocus
           placeholder="For example: processing times for my I-130" aria-label="What should your contacts follow?" />
@@ -153,7 +152,7 @@ function origin(topic: HomeFeed['topics'][number]) {
       </template>
     </AppSheet>
 
-    <AppSheet v-if="managing" title="Home topics" @close="managing = false">
+    <AppSheet v-if="managing" title="Topics" @close="managing = false">
       <p class="muted small">Your contacts add and retire their own picks as your interests change. Topics you or a contact asked for stay until you hide them.</p>
       <ul class="topics">
         <li v-for="topic in feed?.topics ?? []" :key="topic.id" :class="{ hidden: topic.status === 'hidden' }">

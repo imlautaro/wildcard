@@ -33,9 +33,9 @@ onMounted(() => { void chats.refresh(); });
       <AppIcon name="menu" />
     </button>
     <nav :id="menuID" ref="menu" popover="auto" class="chat-menu" aria-label="Main navigation" @toggle="onMenuToggle">
-      <NuxtLink to="/home" class="row" @click="menu?.hidePopover()">
-        <AppIcon name="home" />
-        <span>Home</span>
+      <NuxtLink to="/updates" class="row" @click="menu?.hidePopover()">
+        <AppIcon name="sparkle" />
+        <span>Updates</span>
       </NuxtLink>
       <NuxtLink to="/account" class="row" @click="menu?.hidePopover()">
         <AppIcon name="person" />
@@ -46,8 +46,8 @@ onMounted(() => { void chats.refresh(); });
       <AppIcon name="back" />
     </button>
     <h1 class="title">{{ archived ? 'Archived' : 'Chats' }}</h1>
-    <NuxtLink to="/home" class="icon-button home-link" aria-label="Home" title="Home" :class="{ active: route.path === '/' || route.path === '/home' }">
-      <AppIcon name="home" :filled="route.path === '/' || route.path === '/home'" />
+    <NuxtLink to="/updates" class="icon-button" aria-label="Updates" title="Updates" :class="{ active: route.path === '/updates' }">
+      <AppIcon name="sparkle" :filled="route.path === '/updates'" />
     </NuxtLink>
     <button class="icon-button" aria-label="Archived" title="Archived" :aria-pressed="archived" @click="archived=!archived; chats.loadAllContacts()">
       <AppIcon name="archive" :filled="archived" />

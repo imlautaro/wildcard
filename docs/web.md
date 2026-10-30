@@ -1213,17 +1213,15 @@ Web shows one link card per bubble (`LinkPreviewCard`) using `useLinkPreviews`, 
 memory-only session cache, and the private image blob cache for the API's copy of
 the image, matching iOS. See [link previews](link-previews.md).
 
-## Home (migration 0074)
+## Updates (migration 0074)
 
-[Home](home.md) is the web's default content: `/` renders `HomeFeed` in the content
-pane beside the chat list on screens wider than 860 px, and the house button in the
-chat list header (also **Menu → Home**) opens `/home`, which works on every width
-and shows a back button on narrow screens. Narrow screens keep `/` as the chat list
-and do not mount the feed there, so it never polls while hidden. Cards
-(`HomeCard`) use Material 3 surfaces with a per-card accent, inline SVG charts and
-the link preview image for the lead headline; menus reuse the mini app menu styles.
-**Update now**, **Home topics** and **Follow** live in the page bar; the card menu
-offers Message, More/Less like this and Hide. A note's suggested reply fills the
-contact's empty composer through `suggestDraft` and is never sent automatically.
-Behavior, copy and caching match the iOS Home tab (`useHome`, see
-[caching](caching.md#home-feed)).
+[Updates](updates.md) opens at `/updates` from the sparkle button in the chat list
+header (also **Menu → Updates**). It shows beside the chat list on wide screens and
+full width with a back button on narrow ones; `/` keeps the "Select a chat" pane.
+Cards (`HomeCard`) use Material 3 surfaces with a per-card accent, inline SVG charts
+and the link preview image for the lead headline; menus reuse the mini app menu
+styles. **Update now**, **Topics** and **Follow** live in the page bar; the card
+menu offers Message, More/Less like this and Hide. A note's suggested reply fills
+the contact's empty composer through `suggestDraft` and is never sent automatically.
+Behavior, copy and caching match the iOS Updates tab (`useHome`, see
+[caching](caching.md#updates-feed)).

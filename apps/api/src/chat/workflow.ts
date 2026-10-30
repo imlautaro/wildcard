@@ -48,7 +48,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
     if ('kind' in event.payload) {
       if (event.payload.kind === 'initiative') await runInitiative(this.env, event.payload, step);
       else if (event.payload.kind === 'group') await runGroup(this.env, event.payload, step);
-      // Home curation runs are per person, not per chat (docs/home.md).
+      // Updates curation runs are per person, not per chat (docs/updates.md).
       else if (event.payload.kind === 'home') await runHome(this.env, event.payload, step);
       // Visits no longer connect contacts; legacy instances finish immediately.
       return;

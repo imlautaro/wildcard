@@ -244,7 +244,7 @@ struct ChatView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) { NativeActiveStatusView(contactID: contactID) }
         .task(id: contacts.suggestedDrafts[contactID]) {
-            // A Home note's suggested reply fills an empty composer; it is never sent automatically.
+            // An Updates note's suggested reply fills an empty composer; it is never sent automatically.
             guard let text = contacts.suggestedDrafts[contactID] else { return }
             contacts.suggestedDrafts[contactID] = nil
             if draftIsEmpty { draft = text; composerFocused = true }

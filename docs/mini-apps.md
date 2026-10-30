@@ -411,10 +411,10 @@ switching and access revocation.
 
 [Clear/delete](chat-lifecycle.md) remove chat-owned mini apps, state and actions and invalidate iOS/web snapshots. Completed external connector effects cannot be undone by deleting their local receipts. Archive preserves mini apps.
 
-## Home quick access
+## Updates quick access
 
 Opening an enabled app (`POST …/resolve`) counts one visit per person in
-`mini_app_usage` (reloads within ten minutes count once; migration 0074). [Home](home.md)
+`mini_app_usage` (reloads within ten minutes count once; migration 0074). [Updates](updates.md)
 lists up to eight enabled apps the person has opened, most used first, plus apps
 created in the last three days, as tiles that open the app full screen on iOS or its
 page on the web. Group apps count separately for each member.

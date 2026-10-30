@@ -30,19 +30,19 @@ struct HomeView: View {
     @Environment(NativeExperiments.self) private var native
     @Environment(\.scenePhase) private var scenePhase
     private enum Section: Hashable {
-        case home
         case chats
+        case updates
         case account
 
-        var title: String { self == .home ? "Home" : self == .chats ? "Chats" : "Account" }
+        var title: String { self == .updates ? "Updates" : self == .chats ? "Chats" : "Account" }
     }
 
     @State private var nativeRouteError: String?
     @State private var showNativeInbox = false
-    @State private var section: Section = .home
-    @State private var home = HomeFeedStore()
-    @State private var homeFollowing = false
-    @State private var homeManaging = false
+    @State private var section: Section = .chats
+    @State private var updates = HomeFeedStore()
+    @State private var updatesFollowing = false
+    @State private var updatesManaging = false
     @State private var destinations: [HomeDestination] = []
     @State private var sync = ConversationSync()
     @State private var contacts = ContactsStore()
@@ -54,13 +54,6 @@ struct HomeView: View {
     var body: some View {
         NavigationStack(path: $destinations) {
             TabView(selection: $section) {
-                Tab("Home", systemImage: "house", value: Section.home) {
-                    HomeFeedView(
-                        store: home, following: $homeFollowing, managing: $homeManaging,
-                        openContact: { id in destinations.append(.contact(id)) },
-                        openGroup: { id in destinations.append(.group(id)) }
-                    )
-                }
                 Tab("Chats", systemImage: "bubble.left.and.bubble.right", value: Section.chats) {
                     ChatsView(
                         openContact: { contact in destinations.append(.contact(contact.id)) },
@@ -69,6 +62,13 @@ struct HomeView: View {
                     )
                 }
                 .badge(totalUnreadCount)
+                Tab("Updates", systemImage: "sparkles.rectangle.stack", value: Section.updates) {
+                    UpdatesView(
+                        store: updates, following: $updatesFollowing, managing: $updatesManaging,
+                        openContact: { id in destinations.append(.contact(id)) },
+                        openGroup: { id in destinations.append(.group(id)) }
+                    )
+                }
                 Tab("Account", systemImage: "person.crop.circle", value: Section.account) {
                     AccountView()
                 }
@@ -76,24 +76,24 @@ struct HomeView: View {
             .safeAreaInset(edge: .top, spacing: 0) { topAccessories(for: nil) }
             .navigationTitle(section.title)
             .toolbar {
-                if section == .home && destinations.isEmpty {
+                if section == .updates && destinations.isEmpty {
                     ToolbarItem(placement: .topBarLeading) {
                         Menu {
-                            Button { Task { try? await home.requestUpdate(using: auth) } } label: {
+                            Button { Task { try? await updates.requestUpdate(using: auth) } } label: {
                                 Label("Update now", systemImage: "arrow.clockwise")
                             }
-                            .disabled(home.feed?.enabled != true || home.feed?.isUpdating == true)
-                            Button { homeManaging = true } label: { Label("Home topics", systemImage: "list.bullet.rectangle") }
+                            .disabled(updates.feed?.enabled != true || updates.feed?.isUpdating == true)
+                            Button { updatesManaging = true } label: { Label("Topics", systemImage: "list.bullet.rectangle") }
                         } label: {
                             Image(systemName: "ellipsis")
                         }
                         .tint(Color(uiColor: .label))
-                        .accessibilityLabel("Home options")
+                        .accessibilityLabel("Updates options")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button { homeFollowing = true } label: { Image(systemName: "plus") }
+                        Button { updatesFollowing = true } label: { Image(systemName: "plus") }
                             .tint(Color(uiColor: .label))
-                            .accessibilityLabel("Follow something on Home")
+                            .accessibilityLabel("Follow something in Updates")
                     }
                 }
                 if section == .chats && destinations.isEmpty {

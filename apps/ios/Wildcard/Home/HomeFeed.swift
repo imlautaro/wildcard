@@ -1,7 +1,8 @@
 import Foundation
 import Observation
 
-/// The Home feed that a person's contacts curate together (see docs/home.md).
+/// The Updates feed that a person's contacts curate together (see docs/updates.md).
+/// The API and storage keep the original `home` name (`/api/v1/home`, `home_*` tables).
 struct HomeFeed: Decodable, Sendable {
     struct Progress: Decodable, Hashable, Sendable {
         let total: Int

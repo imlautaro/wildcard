@@ -219,7 +219,7 @@ export type ChatDocumentSummary = { id: string; title: string; revision: number;
 export type ChatDocumentRevision = { revision: number; summary: string | null; authorKind: 'user' | 'agent'; authorID: string; authorName: string; createdAt: number };
 export type ChatDocument = Omit<ChatDocumentSummary, 'length' | 'preview'> & { body: string; revisions: ChatDocumentRevision[] };
 
-// Home feed curated by the person's contacts (docs/home.md).
+// Updates feed curated by the person's contacts (docs/updates.md; API resource `home`).
 export type HomeCardItem = {
   title?: string; summary?: string; source?: string; url?: string; time?: string;
   home?: string; away?: string; homeScore?: number | null; awayScore?: number | null; status?: string; detail?: string;

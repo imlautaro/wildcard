@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-/// Native layouts for the closed Home card catalog (docs/home.md#cards).
+/// Native layouts for the closed Updates card catalog (docs/updates.md#cards).
 enum HomeStyle {
     static func accent(_ name: String) -> Color {
         ["blue": .blue, "green": .green, "orange": .orange, "red": .red, "purple": .purple,
@@ -142,7 +142,7 @@ struct HomeCardView: View {
         }
         Button { act(.more) } label: { Label("More like this", systemImage: card.feedback == "more" ? "hand.thumbsup.fill" : "hand.thumbsup") }
         Button { act(.less) } label: { Label("Less like this", systemImage: card.feedback == "less" ? "hand.thumbsdown.fill" : "hand.thumbsdown") }
-        Button(role: .destructive) { act(.hide) } label: { Label("Hide from Home", systemImage: "eye.slash") }
+        Button(role: .destructive) { act(.hide) } label: { Label("Hide from Updates", systemImage: "eye.slash") }
     }
 }
 

@@ -1,15 +1,21 @@
-# Home
+# Updates
 
-Home is a personal, adaptive feed that a person's contacts build together. Each
+Updates is a personal, adaptive feed that a person's contacts build together. Each
 card is about something the person actually cares about (their team's league, the
 processing times of an application they are waiting on, the exchange rates they
 follow, a trip) and is prepared by the contact best suited to it, with its own
-layout. Home also gives quick access to the mini apps the person opens most and an
-agenda of upcoming schedules and tasks assigned to them.
+layout. Updates also gives quick access to the mini apps the person opens most and
+an agenda of upcoming schedules and tasks assigned to them.
 
-On iOS, Home is the first tab of the signed-in shell. On the web, Home fills the
-content pane at `/` beside the chat list on wide screens, and opens at `/home` from
-the house button in the chat list header (or **Menu → Home**) on narrow screens.
+On iOS, Updates is the second tab of the signed-in shell (Chats stays the default).
+On the web it opens at `/updates` from the sparkle button in the chat list header
+(or **Menu → Updates**), beside the chat list on wide screens; `/` keeps the
+"Select a chat" pane.
+
+The feature was first shipped as "Home" (default tab) and renamed on 2026-10-30.
+The API and storage keep that original name: `/api/v1/home`, the `home_*` tables,
+`HOME_FEED_ENABLED` and the `apps/api/src/home/` module; client data types are
+`HomeFeed`/`HomeCard`.
 
 This is a first implementation (2026-10-30). See [verification](#verification).
 
@@ -17,7 +23,7 @@ This is a first implementation (2026-10-30). See [verification](#verification).
 
 - **Cards** appear as contacts finish them; a status pill shows who is preparing
   what ("Lucía is preparing Barça este finde · 2/5"). The first card is the lead
-  card. Each card shows its contact, when it was prepared, why it is on Home and
+  card. Each card shows its contact, when it was prepared, why it is in Updates and
   its sources.
 - **Pull to refresh** (iOS) or **Update now** (web, and iOS **⋯ → Update now**)
   asks the contacts to refresh cards older than 30 minutes. Requests within a
@@ -25,12 +31,12 @@ This is a first implementation (2026-10-30). See [verification](#verification).
 - **Follow something** (**+**): describe what to follow ("processing times for my
   I-130"). The curator picks the layout and the contact on the next run.
 - **Card menu** (⋯ or long press on iOS): **Message {contact}**, **More like
-  this**, **Less like this**, **Hide from Home**. Hidden topics never come back
-  unless the person shows them again in **Home topics**.
+  this**, **Less like this**, **Hide from Updates**. Hidden topics never come back
+  unless the person shows them again in **Topics**.
 - **Notes** can suggest a reply. Tapping it opens the chat with the message in the
   composer (only if the composer is empty); it is never sent automatically.
 - **From a chat**: when the person asks a contact to keep an eye on something or to
-  put it on Home, the contact calls `add_to_home`. The topic is attributed to that
+  put it in Updates, the contact calls `add_to_updates`. The topic is attributed to that
   contact and stays until hidden.
 - **Your apps**: enabled mini apps the person has opened, most used first, plus
   ones created in the last three days. Tiles open the mini app full screen (iOS) or
@@ -72,7 +78,7 @@ A **curation run** is a `kind: 'home'` instance of the existing `CHAT_WORKFLOW`
 directly by an API request, with one durable step per stage:
 
 1. **Plan** (one model call, structured output). The editor reads the person's
-   [signals](#what-home-reads) and returns 2–8 topics in order, each with a layout,
+   [signals](#what-updates-reads) and returns 2–8 topics in order, each with a layout,
    the contact that prepares it, whether it needs web research or a connector, a
    reason shown to the person, plus a one-sentence briefing for the header. Topics
    the person or a contact asked for are always kept; curator topics left out are
@@ -95,39 +101,39 @@ directly by an API request, with one durable step per stage:
 
 Runs are fenced by a per-person revision: a newer claim makes an older instance's
 writes no-ops, and a run that has not finished after 45 minutes can be claimed
-again. Automatic runs happen only while the person opened Home in the last three
+again. Automatic runs happen only while the person opened Updates in the last three
 days; a feed that was never opened never runs.
 
-Triggers: the first Home view, **Update now**/pull to refresh, following a topic,
-showing a hidden topic again, a contact's `add_to_home` (picked up by the minute
-Cron once the person has opened Home) and card expiry.
+Triggers: the first Updates view, **Update now**/pull to refresh, following a topic,
+showing a hidden topic again, a contact's `add_to_updates` (picked up by the minute
+Cron once the person has opened Updates) and card expiry.
 
-## What Home reads
+## What Updates reads
 
 Only the person's own rows: their contacts (name, personality description and
 specialties, which connectors each contact has), what any of their contacts
 remembers about them (up to 60 recent `contact_memory` facts across all their
 contacts), their own last 30 private messages and 12 group messages, their
 connectors' approved read tools, their mini apps and usage, their active schedules
-and their Home topics, feedback and current cards.
+and their Topics, feedback and current cards.
 
 Connector-isolated private chats and groups (`mcp_private_contact`,
 `mcp_private_group`) are excluded from these signals, so their history never reaches
 a Contributor call. Pooling what the person's own contacts know about the person is
-intended: the contacts curate Home together. Home never reads other participants' memories or
+intended: the contacts curate Updates together. Updates never reads other participants' memories or
 messages from shared contacts or groups, and its output is never written back into
 contact memory. Card JSON is stored in D1 (`home_card`) until it is replaced,
 retired, hidden or the account is deleted.
 
-## Connectors on Home
+## Connectors in Updates
 
 A connector topic lets the assigned contact read the person's own data, for example
 an exchange-rate tool or last month's spending from a personal finance connector.
 
 - Any of the person's account connectors can be used, whether or not the tool is
   assigned to that contact (decision for this first version: no per-contact
-  restriction on Home).
-- Only tools approved in **Connections** that Home considers reads are listed or
+  restriction in Updates).
+- Only tools approved in **Connections** that Updates considers reads are listed or
   called: the server annotates them `readOnlyHint` without `destructiveHint`, or the
   tool name starts with a read verb (`get`, `list`, `search`, `fetch`, `read`,
   `query`, `find`, `lookup`, `price`, `rate`, `balance`, …) and contains no write verb
@@ -139,19 +145,19 @@ an exchange-rate tool or last month's spending from a personal finance connector
 - Connector cards are produced with `muse-spark-1.3` Standard regardless of the
   account's model preference, as in connector-isolated chats. Other cards use the
   account's model (Contributor when the person chose it).
-- The `add_to_home` chat tool is not offered in connector-isolated chats, so their
+- The `add_to_updates` chat tool is not offered in connector-isolated chats, so their
   private history does not reach the curator.
 
 ## Web research and budgets
 
-`research_web` on Home calls the same research model as conversational research
+`research_web` in Updates calls the same research model as conversational research
 with a public query written by the contact (instructions forbid personal details).
 Each search reserves one slot of the account's and the global daily web research
-budget (`web_research_usage`, 30 and 300 per 24 hours) and one of Home's own 12 per
+budget (`web_research_usage`, 30 and 300 per 24 hours) and one of Updates' own 12 per
 person per 24 hours (`home_research`). Findings are saved with the reservation, so a
 retried Workflow step reuses them instead of searching again. Saved findings are
 deleted after two days (bounded cleanup on later reservations). `WEB_RESEARCH_ENABLED`
-also disables Home searches.
+also disables Updates searches.
 
 Cost bounds per run: one planning call, at most six cards, four model rounds per
 card, four searches and three connector reads per card.
@@ -164,7 +170,7 @@ Reads are limited to 90 per minute, writes to 20 per minute.
 | Route | Purpose |
 | --- | --- |
 | `GET /api/v1/home?timeZone=…` | The feed: `enabled`, `status`, `pending`, `briefing`, `progress`, `contributors`, `cards`, `topics`, `apps`, `agenda`. Records the view and the time zone, and starts a due run. |
-| `POST /api/v1/home/refresh` | Request an update (409 when Home updates are turned off). Returns the feed. |
+| `POST /api/v1/home/refresh` | Request an update (409 when Updates are turned off). Returns the feed. |
 | `POST /api/v1/home/topics` `{ text }` | Follow something (1–400 characters, at most 20 active requests). Returns the feed (201). |
 | `PATCH /api/v1/home/topics/:id` `{ status?, feedback? }` | `status`: `active` or `hidden`; `feedback`: `more`, `less` or `null`. Hiding deletes the card. Returns the feed. |
 
@@ -182,13 +188,13 @@ Both clients keep one session-owned feed in memory (`HomeFeedStore` on iOS,
 to disk because cards can contain connector data.
 
 - Navigation shows the last feed synchronously; the first load shows placeholders.
-- Background revalidation after 60 seconds while Home is visible, every 4 seconds
+- Background revalidation after 60 seconds while Updates is visible, every 4 seconds
   while a run is in progress or pending. Requests are deduplicated.
 - Every mutation returns the whole feed, which replaces the cached one; a newer
   mutation rejects older in-flight reads.
 - Transient failures keep usable cards visible; only a first load shows the error.
-- On the web, `/` mounts the feed only on wide screens, so a hidden feed never
-  polls or counts as a Home visit.
+- The feed is mounted only on its own page or tab: opening the app or the web's
+  `/` never polls it or counts as a visit (which would keep automatic runs going).
 - Link preview images reuse the existing link preview cache and the private image
   cache (iOS) / private image loader (web).
 
@@ -213,7 +219,7 @@ Performed on 2026-10-30, before any release:
   `muse-spark-1.3-contributor` model and web research: Spanish (Argentina) cards for
   a La Liga fixture (`matches`), I-130 processing times (`tracker`), exchange rates
   (`metrics`, with explicitly dated figures when today's value was not found), a
-  Champions League topic added through `add_to_home`, and a note. About 128 seconds.
+  Champions League topic added through `add_to_updates`, and a note. About 128 seconds.
 
 - Local web rendering (desktop light and phone-width dark) with headless Chrome
   against a scratch D1 seeded with those cards plus fictional chart/table fixtures,
@@ -229,5 +235,5 @@ figures can be days old, which cards are instructed to state.
   schedules and tasks.
 - Group mini apps appear in quick access, but group conversations are not used as
   topics beyond the person's own group messages.
-- Push notifications for new cards and Home widgets are not implemented.
+- Push notifications for new cards and Updates widgets are not implemented.
 - The read-tool classification for connectors is a heuristic (see above).

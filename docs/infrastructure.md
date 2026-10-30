@@ -2847,11 +2847,11 @@ or permission. Apply through the automatic API release (local:
 the table; the `link-previews/` objects can be deleted with the table. See
 [link previews](link-previews.md).
 
-## Home feed (migration 0074)
+## Updates feed (migration 0074)
 
 `0074_home_feed.sql` adds `home_feed` (one row per person: run state, revision
 fence, due time, briefing, progress), `home_topic`, `home_card` (validated card JSON),
-`home_research` (Home's search ledger and saved findings) and `mini_app_usage`. All
+`home_research` (the Updates search ledger and saved findings) and `mini_app_usage`. All
 rows cascade with their account; topics and cards also set their contact to null
 when it is deleted. It is additive: older APIs ignore the tables, and the
 `readOnly` field now recorded in new MCP tool catalogs is ignored by older code.
@@ -2860,22 +2860,22 @@ Configuration: the versioned `HOME_FEED_ENABLED` var in `apps/api/wrangler.jsonc
 (`"true"` in this installation). `"false"` stops new curation runs and returns
 `enabled: false`; apps and agenda still work. Runs reuse `CHAT_WORKFLOW`
 (`kind: 'home'`), the existing `* * * * *` Cron (`dispatchHome`), `DB` and the
-encrypted `META_API_KEY`; Home searches also honor `WEB_RESEARCH_ENABLED` and share
+encrypted `META_API_KEY`; Updates searches also honor `WEB_RESEARCH_ENABLED` and share
 the web research daily budgets. No new service, binding, secret, bucket or account
 permission. Independent installations and staging need nothing beyond the required
-resources above; Home runs use the Meta chat and Responses (web search) endpoints
+resources above; curation runs use the Meta chat and Responses (web search) endpoints
 already required by chats and research.
 
 Local setup: `npm run db:migrate:local --workspace @wildcard/api`, set
-`HOME_FEED_ENABLED` in `wrangler.jsonc` (or override in `.dev.vars`), then open Home.
+`HOME_FEED_ENABLED` in `wrangler.jsonc` (or override in `.dev.vars`), then open Updates.
 Runs call the real Meta API and may incur charges. Release only through the
 automatic committed and pushed API release; publish the API before the clients
-(older clients have no Home tab; new clients against an older API show a load error
-on Home only).
+(older clients have no Updates tab; new clients against an older API show a load error
+in Updates only).
 
 Validation performed: API/web/iOS static checks; migrations 0001–0074 on a scratch
 local workerd D1 with the new statements executed with bound parameters; one full
-local curation run with the Contributor model. See [Home](home.md#verification) for
+local curation run with the Contributor model. See [Updates](updates.md#verification) for
 what remains unverified.
 
 Rollback: set `HOME_FEED_ENABLED` to `"false"` through another automatic release to

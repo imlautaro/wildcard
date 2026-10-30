@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The Home tab: a feed the person's contacts curate together (see docs/home.md).
-struct HomeFeedView: View {
+/// The Updates tab: a feed the person's contacts curate together (see docs/updates.md).
+struct UpdatesView: View {
     let store: HomeFeedStore
     @Binding var following: Bool
     @Binding var managing: Bool
@@ -45,7 +45,7 @@ struct HomeFeedView: View {
         .sheet(isPresented: $following) { HomeFollowSheet(store: store) }
         .sheet(isPresented: $managing) { HomeTopicsSheet(store: store) }
         .fullScreenCover(item: $openedApp) { app in MiniAppScreen(base: app.base, appID: app.id) }
-        .alert("Home", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+        .alert("Updates", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
     }
@@ -90,8 +90,8 @@ struct HomeFeedView: View {
         if feed.isUpdating { return nil }
         switch feed.error {
         case nil: return nil
-        case "HOME_NO_CONTACTS": return "Add a contact so they can start curating your Home."
-        default: return "Your contacts couldn’t finish updating Home. They’ll try again in a few minutes."
+        case "HOME_NO_CONTACTS": return "Add a contact so they can start curating your updates."
+        default: return "Your contacts couldn’t finish your updates. They’ll try again in a few minutes."
         }
     }
 
@@ -246,7 +246,7 @@ private struct HomeStatusPill: View {
                 Text("\(min(progress.done + 1, progress.total))/\(progress.total)").manrope(.caption, weight: .bold).monospacedDigit().foregroundStyle(.secondary)
             } else {
                 ProgressView().controlSize(.small)
-                Text("Your contacts are updating Home…").manrope(.footnote, weight: .semibold)
+                Text("Your contacts are preparing updates…").manrope(.footnote, weight: .semibold)
                 Spacer(minLength: 0)
             }
         }
@@ -301,7 +301,7 @@ struct HomeFollowSheet: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(.red).manrope(.footnote) } }
             }
-            .navigationTitle("Follow on Home")
+            .navigationTitle("Follow in Updates")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel", role: .cancel) { dismiss() } }
@@ -321,7 +321,7 @@ struct HomeFollowSheet: View {
     }
 }
 
-/// What Home follows, with the option to hide or restore each topic.
+/// What Updates follows, with the option to hide or restore each topic.
 struct HomeTopicsSheet: View {
     let store: HomeFeedStore
     @Environment(AuthStore.self) private var auth
@@ -345,7 +345,7 @@ struct HomeTopicsSheet: View {
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }
             .manrope()
-            .navigationTitle("Home topics")
+            .navigationTitle("Topics")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }

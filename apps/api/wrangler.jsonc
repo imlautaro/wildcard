@@ -29,7 +29,7 @@
     "AI_GATEWAY_ID": "",
     "WEB_RESEARCH_ENABLED": "true",
     "SEMANTIC_MEMORY_ENABLED": "false",
-    // Home curation runs (docs/home.md). "false" keeps Home to quick access and agenda.
+    // Updates curation runs (docs/updates.md). "false" keeps Updates to quick access and agenda.
     "HOME_FEED_ENABLED": "true",
     // Comma-separated user IDs allowed into apps/admin. Not secret; see docs/admin.md.
     "SUPER_ADMIN_USER_IDS": "F16b7zR7fmdk1HJcFfX9kUOxSW3fvFmM"

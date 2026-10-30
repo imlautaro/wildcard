@@ -8,7 +8,7 @@ import { homeLimits } from './curator';
 import { dispatchHome, homeEnabled } from './workflow';
 import { topicColumns, type HomeTopicRow } from './signals';
 
-// Home feed for the signed-in person (docs/home.md). Cards come from curation
+// Updates feed for the signed-in person (docs/updates.md; the API keeps the `home` name). Cards come from curation
 // runs; quick access and agenda are computed on each read and cost no inference.
 const home = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 home.use('*', bodyLimit({ maxSize: 4096, onError: c => c.json({ error: 'Request body too large' }, 413) }));
@@ -117,7 +117,7 @@ home.get('/', async c => {
 
 home.post('/refresh', async c => {
   const owner = c.get('owner');
-  if (!homeEnabled(c.env)) return c.json({ error: 'Home updates are turned off.' }, 409);
+  if (!homeEnabled(c.env)) return c.json({ error: 'Updates are turned off.' }, 409);
   const recent = await c.env.DB.prepare('SELECT 1 FROM home_feed WHERE user_id = ? AND requested_at > ?').bind(owner, Date.now() - 60_000).first();
   if (!recent) await request(c.env, c.executionCtx, owner, true);
   return c.json(await homeFeed(c.env, owner));
@@ -131,7 +131,7 @@ home.post('/topics', async c => {
   if (!text || Array.from(text).length > 400 || /[\u0000-\u001f\u007f]/u.test(text)) return c.json({ error: 'Describe it in 1–400 characters.' }, 422);
   const count = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM home_topic WHERE user_id = ? AND source = 'person' AND status = 'active'`)
     .bind(owner).first<{ count: number }>();
-  if ((count?.count ?? 0) >= homeLimits.personTopics) return c.json({ error: `Home follows up to ${homeLimits.personTopics} of your requests. Hide one first.` }, 409);
+  if ((count?.count ?? 0) >= homeLimits.personTopics) return c.json({ error: `Updates follows up to ${homeLimits.personTopics} of your requests. Hide one first.` }, 409);
   const now = Date.now();
   // The curator refines the title, layout and contact on the next run.
   await c.env.DB.prepare(`INSERT INTO home_topic (id, user_id, title, brief, kind, source, created_at, updated_at)

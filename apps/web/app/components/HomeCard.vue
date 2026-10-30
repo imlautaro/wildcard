@@ -2,7 +2,7 @@
 import type { HomeCard } from '~/utils/types';
 import type { AppIconName } from '~/utils/icons';
 
-// One Home card of the closed catalog (docs/home.md#cards), drawn with Material 3
+// One Updates card of the closed catalog (docs/updates.md#cards), drawn with Material 3
 // surfaces like the iOS HomeCards layouts. `lead` is the first, larger card.
 const props = defineProps<{ card: HomeCard; lead?: boolean }>();
 const emit = defineEmits<{ action: [kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: string] }>();
@@ -68,7 +68,7 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
             <button type="button" role="menuitem" @click="act('more')"><AppIcon name="thumb-up" :filled="card.feedback === 'more'" /> More like this</button>
             <button type="button" role="menuitem" @click="act('less')"><AppIcon name="thumb-down" :filled="card.feedback === 'less'" /> Less like this</button>
             <hr>
-            <button type="button" role="menuitem" class="danger" @click="act('hide')"><AppIcon name="hide" /> Hide from Home</button>
+            <button type="button" role="menuitem" class="danger" @click="act('hide')"><AppIcon name="hide" /> Hide from Updates</button>
           </div>
         </template>
       </div>
