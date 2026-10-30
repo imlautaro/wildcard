@@ -1,15 +1,15 @@
 <script setup lang="ts">
 useHead({ title: 'Native experiments' });
 const capabilities = [
-  { kind: 'focus', icon: 'target', title: 'Live Activities', text: 'Focus sessions and guided recipes in Live Activities and Dynamic Island.' },
+  // Focus sessions, guided recipes, spoken responses and NFC were deprecated on 2026-10-30.
   { kind: 'timer', icon: 'alarm', title: 'System tools', text: 'System timers and alarms, Calendar events, and Reminders, including arrival and departure reminders.' },
-  { kind: 'speech', icon: 'speaker', title: 'Voice and shortcuts', text: 'Spoken responses, Siri and Shortcuts, Action button shortcuts, and a Home Screen contact widget.' },
-  { kind: 'location', icon: 'nfc', title: 'Sharing and NFC', text: 'Shared drafts from Safari, Photos or Files, and contact links on NFC tags.' },
+  { kind: 'default', icon: 'iphone', title: 'Shortcuts and widgets', text: 'Siri and Shortcuts, Action button shortcuts, and a Home Screen contact widget.' },
+  { kind: 'default', icon: 'share', title: 'Sharing', text: 'Shared drafts from Safari, Photos or Files, and authorized contact links.' },
 ] as const;
 // Longer explanations open in a sheet from a row instead of stacked paragraphs.
 const topics = [
   { title: 'Automatic execution', icon: 'bolt', paragraphs: ['Timers and alarms run without extra app confirmation on the requesting iPhone while Wildcard is open. In Native experiments, choose other tools under Run without confirmation or turn automatic execution off. Calendar and location reminders still require review; older requests remain manual. iOS may request permission the first time. Enabling a shared contact does not give other participants access to your device or system data.'] },
-  { title: 'Live status and receipts', icon: 'check', paragraphs: ['On iPhone, active timers, alarms, focus sessions, recipes and spoken responses appear inside Wildcard. Timer cards show the system countdown when available, with pause, resume and cancel controls. Each native request also has an operation receipt in its chat. After the backend update, the contact briefly waits for the device receipt before confirming automatic execution; an unconfirmed request is never described as completed.'] },
+  { title: 'Live status and receipts', icon: 'check', paragraphs: ['On iPhone, active timers and alarms appear inside Wildcard. Timer cards show the system countdown when available, with pause, resume and cancel controls. Each native request also has an operation receipt in its chat. After the backend update, the contact briefly waits for the device receipt before confirming automatic execution; an unconfirmed request is never described as completed.'] },
   { title: 'Remote timers and alarms', icon: 'timer', paragraphs: [
     'To request a timer or alarm from this browser, enable Allow remote timers and alarms in the iPhone contact’s Native experiments, then choose that phone in the web chat. A visible push lets the notification extension attempt scheduling while the phone is locked or the main app is closed. Requests expire after one minute; the chat shows the device receipt.',
     'This experimental path requires updated backend, app and extension signing, and has not yet been verified on our signed device. Autonomous bot initiative cannot trigger it yet.',

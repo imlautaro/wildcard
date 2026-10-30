@@ -1,3 +1,4 @@
+import { activeNativeKinds } from './actions';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
@@ -33,9 +34,10 @@ routes.post('/:actionID', async c => {
   const now = Date.now();
   const running = body.status === 'running';
   const row = await c.env.DB.prepare(`UPDATE native_action SET status = ?5, execution_id = ?6, updated_at = ?4
-    WHERE ${access} AND id = ?7 AND remote_device_id IS NULL AND ${running ? "status = 'pending' AND expires_at > ?4" : body.status === 'cancelled' ? "(status = 'pending' OR (status = 'running' AND execution_id = ?6))" : "status = 'running' AND execution_id = ?6"}
+    WHERE ${access} AND id = ?7 AND remote_device_id IS NULL
+    AND (?5 != 'running' OR kind IN (SELECT value FROM json_each(?8))) AND ${running ? "status = 'pending' AND expires_at > ?4" : body.status === 'cancelled' ? "(status = 'pending' OR (status = 'running' AND execution_id = ?6))" : "status = 'running' AND execution_id = ?6"}
     RETURNING ${columns}`).bind(c.req.param('id'), c.get('owner'), c.req.query('deviceID')!.toLowerCase(), now,
-      body.status, body.executionID.toLowerCase(), c.req.param('actionID')).first();
+      body.status, body.executionID.toLowerCase(), c.req.param('actionID'), JSON.stringify(activeNativeKinds)).first();
   // Do not replay a claim: an uncertain claim must never cause a second device action.
   return row ? c.json({ action: row }) : c.json({ error: 'Action changed, expired, or already claimed. Refresh its status; do not repeat execution.' }, 409);
 });

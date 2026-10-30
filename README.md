@@ -114,19 +114,20 @@ appear on chat rows, the Chats tab, and the app icon; returning to the app refre
 ## Native iOS experiments
 
 Optional [native experiments](docs/native-experiments.md) let a private contact
-prepare device-specific requests for focus/recipe Live Activities, system timers
-and alarms, Calendar, Reminders (including location reminders), and spoken text.
+prepare device-specific requests for system timers and alarms, Calendar, and
+Reminders (including location reminders). NFC, focus sessions, guided recipes and
+spoken responses are deprecated; their source is retained but disabled.
 Enable a contact from **Contact details → Native experiments** or **Account → Native
 experiments**. New timers and alarms run automatically while the requesting iPhone
 app is open; choose other automatic tools in **Run without confirmation**. Calendar,
 location reminders and older requests retain manual review. iOS permissions still apply.
-Active timers, alarms, Live Activities and speech are visible inside the app, with
+Active timers and alarms are visible inside the app, with
 system controls and per-message operation receipts. The backend briefly waits for
 automatic device receipts before replying and includes recent outcomes in later
 native-enabled turns. The app also
 includes Siri/Shortcuts actions, Action button shortcuts, a contact widget, shared
-input drafts and NFC contact links. Actions and permissions remain per person and
-device. Apple App Group/Associated Domains/NFC signing setup and migration 0031 are
+input drafts and authorized contact links. Actions and permissions remain per person and
+device. Apple App Group/Associated Domains signing setup and migration 0031 are
 required; see [infrastructure](docs/infrastructure.md#native-ios-experiments).
 These Apple integrations have no browser execution equivalent; the web app offers
 a feature guide and authorized contact-link fallback. Device verification is pending.

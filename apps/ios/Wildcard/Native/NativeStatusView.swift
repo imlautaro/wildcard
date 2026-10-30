@@ -16,9 +16,9 @@ struct NativeActiveStatusView: View {
             }
             let sessions = Activity<ContactSessionAttributes>.activities.filter {
                 $0.attributes.userID == auth.user?.id && (contactID == nil || $0.attributes.contactID == contactID)
-                    && !$0.content.state.finished && $0.attributes.expiresAt > .now
+                    && NativeExperiments.kinds.contains($0.attributes.kind) && !$0.content.state.finished && $0.attributes.expiresAt > .now
             }
-            let showSpeech = native.speaking && (contactID == nil || native.speakingContactID == contactID)
+            let showSpeech = NativeExperiments.kinds.contains("speech") && native.speaking && (contactID == nil || native.speakingContactID == contactID)
             let count = alarms.count + sessions.count + (showSpeech ? 1 : 0)
             if count > 0 {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -224,7 +224,10 @@ struct NativeActionReceiptView: View {
         return action.createdAt >= since
     }
     private var status: String {
-        switch action.status {
+        if NativeExperiments.deprecatedKinds.contains(action.kind), action.status == "pending" {
+            return "Deprecated experiment · unavailable"
+        }
+        return switch action.status {
         case "completed":
             switch action.kind {
             case "timer": "Timer scheduled on this iPhone"
@@ -258,7 +261,7 @@ struct NativeActionReceiptView: View {
                     .foregroundStyle(.secondary)
                 }
             }
-            if action.remoteDeviceID == nil, action.status == "pending", !automatic, action.expiresAt > Date.now.timeIntervalSince1970 * 1000 {
+            if NativeExperiments.kinds.contains(action.kind), action.remoteDeviceID == nil, action.status == "pending", !automatic, action.expiresAt > Date.now.timeIntervalSince1970 * 1000 {
                 Button { Task { await native.run(action, contactID: contactID, using: auth) } } label: {
                     Text("Review and run").manrope(.footnote, weight: .semibold).frame(maxWidth: .infinity)
                 }

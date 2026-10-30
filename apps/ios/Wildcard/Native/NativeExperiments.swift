@@ -12,8 +12,10 @@ import AppIntents
 @Observable @MainActor
 final class NativeExperiments {
     static let shared = NativeExperiments()
-    static let kinds = ["focus", "recipe", "timer", "alarm", "calendar", "reminder", "location_reminder", "speech"]
-    static let automaticKinds: Set<String> = ["timer", "alarm", "focus", "recipe", "reminder", "speech"]
+    // Deprecated on 2026-10-30. Keep implementations and historical payloads for reference.
+    static let deprecatedKinds: Set<String> = ["focus", "recipe", "speech"]
+    static let kinds = ["timer", "alarm", "calendar", "reminder", "location_reminder"]
+    static let automaticKinds: Set<String> = ["timer", "alarm", "reminder"]
     var remoteEnabled: Set<String> = []
     var remoteBusy = false
     private(set) var automaticSince: [String: [String: Double]] = [:]
@@ -55,13 +57,21 @@ final class NativeExperiments {
             enabled = values.mapValues { Set($0).intersection(Self.kinds) }
             remoteEnabled = Set(UserDefaults.standard.stringArray(forKey: "native-remote.\(userID)") ?? [])
             if let saved = UserDefaults.standard.dictionary(forKey: "automatic-" + settingsKey(userID)) as? [String: [String: Double]] {
-                automaticSince = saved
+                automaticSince = saved.mapValues { $0.filter { Self.automaticKinds.contains($0.key) } }
             } else {
                 let now = Date.now.timeIntervalSince1970 * 1000
                 automaticSince = enabled.mapValues { kinds in
                     Dictionary(uniqueKeysWithValues: kinds.intersection(["timer", "alarm"]).map { ($0, now) })
                 }
                 saveAutomaticSettings()
+            }
+        }
+        // Persist the active allowlist so legacy preferences cannot restore deprecated tools.
+        UserDefaults.standard.set(enabled.mapValues { Array($0).sorted() }, forKey: settingsKey(userID))
+        saveAutomaticSettings()
+        Task {
+            for activity in Activity<ContactSessionAttributes>.activities where Self.deprecatedKinds.contains(activity.attributes.kind) {
+                await activity.end(nil, dismissalPolicy: .immediate)
             }
         }
         knownContacts = contacts
@@ -224,7 +234,7 @@ final class NativeExperiments {
         return action.createdAt >= since
     }
     func run(_ action: NativeAction, contactID: String, using auth: AuthStore, automatically: Bool = false) async {
-        guard action.remoteDeviceID == nil, let payload = action.payload, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000,
+        guard Self.kinds.contains(action.kind), action.remoteDeviceID == nil, let payload = action.payload, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000,
               auth.user?.id == userID, UIApplication.shared.applicationState == .active, enabled[contactID]?.contains(action.kind) == true, busy.isEmpty else { return }
         let owner = userID; let current = generation; let execution = UUID().uuidString.lowercased()
         busy.insert(action.id); error = nil
@@ -283,7 +293,8 @@ final class NativeExperiments {
         return date
     }
     private func execute(_ p: NativePayload, actionID: String, executionID: String, contactID: String, automatically: Bool) async throws -> String {
-        guard let owner = userID else { return "cancelled" }
+        guard Self.kinds.contains(p.kind), let owner = userID else { return "cancelled" }
+        // Deprecated focus/recipe/speech handlers remain below but cannot pass the allowlist.
         switch p.kind {
         case "focus", "recipe":
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { throw AuthAPI.Failure.rejected("Enable Live Activities for Wildcard in Settings.") }

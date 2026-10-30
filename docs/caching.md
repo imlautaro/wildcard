@@ -692,6 +692,14 @@ text comparisons are based on the cleaned preview.
 
 ## Native experiments
 
+NFC, focus, recipe and native speech experiments are deprecated as of 2026-10-30.
+On activation, iOS intersects saved kinds with the active allowlist and removes
+retired automatic timestamps, persisting the filtered settings. Historical request
+snapshots/receipts remain available; retired requests cannot execute. Active legacy
+focus/recipe activities are ended. No new cache or retention is introduced. Verify
+upgrade from old settings, offline reopen, account switching and remaining timer/
+alarm behavior on a device; browser guide/cache behavior is unchanged.
+
 The session-owned `NativeExperiments` store retains up to 20 contact action lists
 of 50 records. Empty results are cached; five-second freshness and shared in-flight
 requests avoid repeated navigation loads. The active requests screen and a

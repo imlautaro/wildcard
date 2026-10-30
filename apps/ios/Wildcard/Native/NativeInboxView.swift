@@ -5,9 +5,9 @@ struct NativeExperimentsDirectoryView: View {
     @Environment(ContactsStore.self) private var contacts
     @Environment(NativeExperiments.self) private var native
     private static let capabilities: [(kind: String, symbol: String?, title: String)] = [
-        ("focus", nil, "Live Activities and Dynamic Island"), ("timer", nil, "Timers and alarms"),
-        ("calendar", nil, "Calendar and Reminders"), ("speech", nil, "Spoken text"),
-        ("default", "square.and.arrow.up", "Shortcuts, widgets, sharing and NFC links"),
+        ("timer", nil, "Timers and alarms"),
+        ("calendar", nil, "Calendar and Reminders"),
+        ("default", "square.and.arrow.up", "Shortcuts, widgets and sharing"),
     ]
     var body: some View {
         List {

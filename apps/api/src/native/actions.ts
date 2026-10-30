@@ -3,13 +3,18 @@ import { deliverRemoteNative } from './remote';
 import { isRecord, type ModelTool } from '../chat/meta';
 import type { StoredTurn } from '../chat/data';
 
+// Legacy kinds remain accepted in old client contexts and historical payloads.
 export const nativeKinds = ['focus', 'recipe', 'timer', 'alarm', 'calendar', 'reminder', 'location_reminder', 'speech'] as const;
+// Deprecated on 2026-10-30: never advertise or create focus, recipe or speech actions.
+const deprecatedNativeKinds: ReadonlySet<string> = new Set(['focus', 'recipe', 'speech']);
+export const activeNativeKinds = nativeKinds.filter(kind => !deprecatedNativeKinds.has(kind));
 export type NativeContext = { deviceID: string; kinds: string[]; automaticKinds?: string[]; remote?: true };
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export function parseNativeContext(value: unknown): NativeContext | null {
   if (!isRecord(value) || Object.keys(value).some(key => !['deviceID', 'kinds', 'automaticKinds', 'remote'].includes(key))
     || typeof value.deviceID !== 'string' || !uuid.test(value.deviceID) || !Array.isArray(value.kinds)
-    || !value.kinds.length || value.kinds.length > nativeKinds.length
+    // Filtering legacy-only contexts yields an empty list, which must survive re-parsing.
+    || value.kinds.length > nativeKinds.length
     || value.kinds.some(k => typeof k !== 'string' || !nativeKinds.includes(k as typeof nativeKinds[number]))
     || new Set(value.kinds).size !== value.kinds.length) return null;
   if (value.remote !== undefined && value.remote !== true) return null;
@@ -18,17 +23,18 @@ export function parseNativeContext(value: unknown): NativeContext | null {
   if (value.automaticKinds !== undefined && (!Array.isArray(value.automaticKinds)
     || value.automaticKinds.some(k => typeof k !== 'string' || !['timer', 'alarm', 'focus', 'recipe', 'reminder', 'speech'].includes(k) || !kinds.includes(k))
     || new Set(value.automaticKinds).size !== value.automaticKinds.length)) return null;
-  return { ...(value.remote === true ? { remote: true as const } : {}), ...(Array.isArray(value.automaticKinds) ? { automaticKinds: [...value.automaticKinds].sort() } : {}), deviceID: value.deviceID.toLowerCase(), kinds: [...value.kinds].sort() };
+  return { ...(value.remote === true ? { remote: true as const } : {}), ...(Array.isArray(value.automaticKinds) ? { automaticKinds: value.automaticKinds.filter(k => !deprecatedNativeKinds.has(k)).sort() } : {}), deviceID: value.deviceID.toLowerCase(), kinds: value.kinds.filter(k => !deprecatedNativeKinds.has(k)).sort() };
 }
 export const nativeTools: ModelTool[] = [{ type: 'function', function: {
   name: 'request_native_action',
-  description: 'Prepare an iOS action ONLY for this direct human request and enabled device capabilities. This queues a device request; it does NOT execute it on the server. Local automatic requests need the app open. Remote timer/alarm requests use a visible push and the notification extension and may run while locked with the main app closed. Other requests need review. Follow the returned nextStep and never ask for extra confirmation for automatic kinds. Only a device-reported completed receipt confirms the requested operation; scheduling success does not mean an alarm rang. One proposal per kind per human message; replays return the original. Date must be explicit-offset ISO 8601. Never invent coordinates. Omit both coordinates to let the person choose the location on the phone map. Focus/recipe use Live Activities; timer/alarm use AlarmKit; calendar opens an editor; reminder saves to Reminders; location_reminder creates an arrival/departure reminder in Reminders; speech reads text on request.',
+  description: 'Prepare an iOS action ONLY for this direct human request and enabled device capabilities. This queues a device request; it does NOT execute it on the server. Local automatic requests need the app open. Remote timer/alarm requests use a visible push and the notification extension and may run while locked with the main app closed. Other requests need review. Follow the returned nextStep and never ask for extra confirmation for automatic kinds. Only a device-reported completed receipt confirms the requested operation; scheduling success does not mean an alarm rang. One proposal per kind per human message; replays return the original. Date must be explicit-offset ISO 8601. Never invent coordinates. Omit both coordinates to let the person choose the location on the phone map. Timer/alarm use AlarmKit; calendar opens an editor; reminder saves to Reminders; location_reminder creates an arrival/departure reminder in Reminders.',
   parameters: { type: 'object', additionalProperties: false, required: ['kind', 'title'], properties: {
-    kind: { type: 'string', enum: [...nativeKinds] }, title: { type: 'string', maxLength: 100 },
+    kind: { type: 'string', enum: [...activeNativeKinds] }, title: { type: 'string', maxLength: 100 },
     body: { type: 'string', maxLength: 2000 }, durationSeconds: { type: 'integer', minimum: 1, maximum: 28800 },
     date: { type: 'string', description: 'Future explicit-offset ISO 8601 date for alarm/calendar/reminder.' },
     endDate: { type: 'string', description: 'End date for calendar, after date.' },
-    steps: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 160 } },
+    // Deprecated schema retained for reference; excluded from advertised tools:
+    // steps: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 160 } },
     latitude: { type: 'number', minimum: -90, maximum: 90 }, longitude: { type: 'number', minimum: -180, maximum: 180 },
     radius: { type: 'number', minimum: 100, maximum: 1000 }, trigger: { type: 'string', enum: ['arrival', 'departure'] },
   } },
@@ -39,7 +45,7 @@ export const nativeTools: ModelTool[] = [{ type: 'function', function: {
 const dateValue = (v: unknown): number | null => typeof v === 'string' && v.length <= 40 && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(v) && Number.isFinite(Date.parse(v)) ? Date.parse(v) : null;
 function validPayload(a: Record<string, unknown>, kinds: string[]): boolean {
   const fields = ['kind','title','body','durationSeconds','date','endDate','steps','latitude','longitude','radius','trigger'];
-  if (Object.keys(a).some(k => !fields.includes(k)) || typeof a.kind !== 'string' || !kinds.includes(a.kind)
+  if (Object.keys(a).some(k => !fields.includes(k)) || typeof a.kind !== 'string' || !activeNativeKinds.some(kind => kind === a.kind) || !kinds.includes(a.kind)
     || typeof a.title !== 'string' || !a.title.trim() || a.title.length > 100 || /[\u0000-\u001f]/.test(a.title)
     || (a.body !== undefined && (typeof a.body !== 'string' || a.body.length > 2000 || a.body.includes('\0')))) return false;
   const allowed: Record<string, string[]> = {

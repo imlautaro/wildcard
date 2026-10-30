@@ -633,10 +633,16 @@ web sends a selected `remoteDeviceID` and the server resolves its granted kinds.
 The existing old-API fallback for the iPhone's optional `automaticKinds` hint is
 unchanged. Remote settings, migration and extension require an updated API/app.
 
-ActivityKit, AlarmKit, EventKit, Core NFC, App Intents and the iOS Share extension
+AlarmKit, EventKit, App Intents and the iOS Share extension
 have no local browser execution equivalent. The web guide describes their platform
 requirements; its remote timer/alarm selector and receipt cache are described above.
 Native per-kind permissions and explicit device linking remain controlled on iOS.
+As of 2026-10-30, the web guide and iOS controls no longer offer NFC, Focus sessions,
+Guided recipes or Spoken responses. Their source remains retained and disabled;
+the API filters legacy capability lists and blocks new proposals/claims for retired
+kinds. Chat voice messages are unchanged. Historical native receipts remain readable.
+Remaining capabilities and browser caches are unchanged; verify the guide on browser
+navigation and the retained native tools on a signed iPhone.
 
 The iOS Account entry and native contact directory share the root navigation path,
 including contact-tool pushes and Back navigation. This fixes an iOS-only issue

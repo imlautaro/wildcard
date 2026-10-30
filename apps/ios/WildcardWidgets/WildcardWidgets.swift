@@ -4,7 +4,12 @@ import ActivityKit
 import AppIntents
 
 @main struct WildcardWidgetBundle: WidgetBundle {
-    var body: some Widget { WildcardSessionWidget(); WildcardAlarmWidget(); WildcardContactWidget() }
+    var body: some Widget {
+        // Deprecated focus/recipe widget retained below, excluded from the bundle.
+        // WildcardSessionWidget()
+        WildcardAlarmWidget()
+        WildcardContactWidget()
+    }
 }
 struct WildcardSessionWidget: Widget {
     var body: some WidgetConfiguration {

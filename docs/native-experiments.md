@@ -11,14 +11,43 @@ They are optional experiments, disabled until enabled per contact on that device
 The same agent may be shared, but enabling its tools grants no access to another
 participant's phone, Calendar, Reminders, files, location or private requests.
 
+## Deprecated experiments (2026-10-30)
+
+NFC, Focus sessions, Guided recipes and Spoken responses are retired from the app.
+Their source is retained with deprecation comments or excluded compilation blocks;
+focus/recipe widget registration is disabled. Ordinary chat voice messages remain
+available through the separate [voice feature](voice.md).
+
+The active allowlist contains timers, alarms, Calendar, Reminders and location
+reminders. iOS filters and persists saved tool settings and automatic preferences
+on activation, so legacy settings cannot restore retired tools. Existing focus/recipe
+Live Activities are ended on activation; old activity intents can only finish them.
+NFC UI and implementation are excluded, and its entitlement/privacy key are commented
+out. Ordinary authorized contact links, Siri, Shortcuts, widgets and shared drafts stay.
+
+The API accepts legacy capability lists and filters retired kinds without blocking
+ordinary chat messages. It advertises only active kinds, rejects retired proposals,
+and prevents claiming old pending actions of retired kinds. Historical rows/receipts
+remain readable and already running claims can still report an outcome; the updated
+iOS app cannot execute retired actions. Existing Calendar/Reminders items and system
+alarms are unaffected. No migration or new service is required. Older installed apps
+need an update for their UI to match; publishing the API alone cannot remove their UI.
+Rolling back to older source can re-enable retired experiments and is not a supported
+way to preserve this deprecation policy.
+
+Static checks do not verify upgrade cleanup on a device. Verify saved settings,
+legacy pending requests, active-session cleanup, remaining tools and voice messages
+on a signed installation. The archived behavior below describes retained source
+where explicitly marked, rather than currently available capabilities.
+
 ## Start here
 
 Open a private chat, tap the contact name/avatar, then choose **Native experiments**
 in the contact details, or use
 **Account → Native experiments**. Enable the contact and choose allowed tools.
 This explicitly exposes its name to Siri/Shortcuts queries, the contact widget,
-and the Share extension on this device. Live Activities may expose titles and
-recipe instructions on the Lock Screen; system privacy/display settings apply.
+and the Share extension on this device. Alarm activities may expose titles
+on the Lock Screen; system privacy/display settings apply.
 No system permission is requested merely by enabling the experiment.
 
 The iOS Account entry, native contact directory and contact tools all use the
@@ -41,8 +70,7 @@ to the foreground. The separately enabled [remote path](native-remote.md) uses t
 notification extension. Neither transport promises exact delivery timing.
 
 **Run without confirmation** controls each supported kind per contact, account and
-installation. Timers and alarms default on; focus, recipes, reminders and speech
-are optional. Calendar and location reminders keep manual review. Automatic settings
+installation. Timers and alarms default on; reminders are optional. Calendar and location reminders keep manual review. Automatic settings
 store a per-kind activation timestamp: older proposals stay manual, including on
 upgrade, re-enabling a kind, or re-enabling automatic execution. Changing settings
 does not undo already executed system actions. Automatic attempts are serialized,
@@ -56,15 +84,15 @@ to review the full proposal and tap **Review and run**. Calendar presents the sy
 editor; an unspecified reminder location presents a map for explicit selection.
 A pending request has not been executed. **Completed** means the phone reported
 finishing the operation (for example, scheduling an alarm), not that an alarm
-fired, a recipe was cooked, or the person completed a task.
+fired or the person completed a task.
 
 ### In-app status and agent awareness
 
 A pinned strip of compact glass cards in the private chat shows this account/contact's
-active system alarms/timers, focus/recipe sessions and speech; a single card spans the
+active system alarms/timers; a single card spans the
 width and several scroll horizontally. Other screens show the same account's cards;
 tapping a card's title opens the relevant chat. Timers expose round Pause/Resume and
-Cancel/Stop controls; focus/recipe cards expose their existing session controls.
+Cancel/Stop controls.
 Each message also shows its native operation receipts as centered chips, including
 pending, running, completed, failed, cancelled and uncertain outcomes, with a status
 icon colored by outcome. Manual requests can be run from their chat chip. A receipt is historical: a timer can have been successfully
@@ -100,14 +128,11 @@ messages are preserved. Verify new replies after updating both backend and app.
 
 | Capability | Example | Implementation |
 | --- | --- | --- |
-| Focus session | “Help me focus for 25 minutes” | ActivityKit + WidgetKit, countdown, pause/resume/finish |
-| Guided recipe | “Guide me through these recipe steps” | ActivityKit, up to 12 steps, Next/Finish controls |
 | Timer | “Set a timer for 12 minutes” | AlarmKit countdown, pause/resume/cancel |
 | Alarm | “Set an alarm tomorrow at 7 AM” | AlarmKit fixed future date |
 | Calendar | “Add a meeting tomorrow, 3–4 PM” | EventKitUI editor; user chooses calendar and saves |
 | Reminder | “Remind me tomorrow at 9 AM to water the plant” | EventKit, default Reminders list, optional due date/alarm |
 | Location reminder | “Remind me to buy milk when I arrive” | Reminders structured-location alarm; choose map location if omitted |
-| Speech | “Read that explanation aloud” | AVSpeechSynthesizer, system-language voice, explicit Stop |
 
 AlarmKit has its own authorization and alarms may sound through Silent/Focus.
 It is distinct from existing cloud schedules, which generate chat messages.
@@ -118,7 +143,9 @@ requesting broad calendar access. Location reminders are evaluated by iOS Remind
 Wildcard does not register background location tracking or upload the chosen map
 location. Map search sends the entered search to Apple's MapKit service.
 
-Focus and recipe activities run locally and do not receive ActivityKit pushes.
+### Archived focus/recipe implementation (deprecated)
+
+The retained focus and recipe activities ran locally and do not receive ActivityKit pushes.
 A focus countdown is visual: it does not itself sound an alarm, change the system
 Focus mode, or automatically message the bot. Request a separate timer if desired.
 ActivityKit imposes an eight-hour activity lifetime. Pausing does not extend that
@@ -165,7 +192,10 @@ Expired drafts are hidden; writing another draft prunes expired files. Sign-out 
 account replacement clears the inbox. Cold launches into the same account preserve
 it. Ordinary typed composer drafts retain their existing behavior.
 
-## NFC and links
+## Contact links
+
+NFC reading/writing is deprecated and excluded from the app. The NFC description
+below records the retained implementation only. **Share contact link** remains active.
 
 **Share contact link** creates an HTTPS Universal Link using the agent ID.
 **Write contact link to NFC tag** explicitly confirms replacing the tag's NDEF
@@ -247,8 +277,7 @@ are pruned on authorized refresh. Account lists never expose another account's a
 An alarm ID is saved before scheduling, so an uncertain scheduling result can still
 be inspected/cancelled on the next authorized refresh.
 Live Activities and exposed identities are removed on sign-out/contact removal;
-allowed-tool settings remain scoped by local account. Explicitly disabling all
-contact tools ends its focus/recipe activities. Permissions remain controlled by iOS.
+allowed-tool settings remain scoped by local account. Deprecated focus/recipe activities are ended on activation. Permissions remain controlled by iOS.
 
 ## Cache and retention
 
@@ -270,7 +299,7 @@ are refreshed only when their content changes. See [caching](caching.md).
 ## Reproduction and device checks
 
 See [infrastructure](infrastructure.md#native-ios-experiments) for App IDs, App Group,
-Associated Domains, NFC, extensions, migration, web association metadata and rollback.
+Associated Domains, extensions, migration, web association metadata and rollback.
 A correctly signed device installation is required. Simulator typechecking is not
 a signing, metadata extraction, permission, lifecycle, Siri, NFC, or APNs check.
 
@@ -279,8 +308,8 @@ Device checks after an authorized release:
 1. Enable one contact, inspect Siri/Shortcuts entities and widget, then disable it.
 2. Request each action with fictional titles; check pending versus completed state,
    deny permissions, cancel editors, and verify the system item before marking success.
-3. Start/pause/resume/end focus and recipe activities, lock the device, and use
-   expanded Island controls; check elapsed sessions, stale displays and no Island models.
+3. Upgrade from saved focus/recipe/speech settings and verify those tools disappear,
+   old pending requests cannot run, and existing focus/recipe activities end.
 4. Schedule/cancel a test timer, exercise silent/Focus intentionally, and inspect
    alarm countdown/paused presentations on the Lock Screen and Island.
 5. Save a location reminder at a chosen fictional/test location; inspect its arrival
@@ -290,8 +319,8 @@ Device checks after an authorized release:
 7. Exercise offline refresh, duplicate taps, interrupted execution, lost acknowledgement,
    expired proposals, contact removal, sign-out and account switching. Never retry
    an uncertain system action to test idempotency against real personal data.
-8. Read/write a disposable NFC tag and resolve its link as an existing participant,
-   another participant in the same agent, an outsider, and a signed-out web visitor.
+8. Verify NFC controls are absent. Resolve an ordinary shared contact link as an
+   existing participant, an outsider, and a signed-out web visitor.
 
 Current verification: API/web typechecks, Swift typechecks, plist/project syntax,
 and SQL compilation against an empty migrated schema are static checks only.
@@ -327,7 +356,7 @@ must remain visible while chatting and browsing Account/Chats. Pause/resume/canc
 from both system surfaces and the in-app card; confirm the exact countdown tracks
 system presentation and falls back honestly if unavailable. Exercise expiry,
 permission denial, missing acknowledgement, app restart, disabled tools, account
-switch and simultaneous focus/recipe/speech sessions. These device/model checks
+switch and legacy focus/recipe session cleanup. These device/model checks
 remain pending; static typechecks do not establish runtime correctness.
 
 ## Layout
@@ -335,7 +364,7 @@ remain pending; static typechecks do not establish runtime correctness.
 iOS: the contact screen keeps the main switch and the remote timers/alarms switch at the
 top (with a one-line note of what the remote switch grants), and opens **Allowed
 tools**, **Run without confirmation** and **Try it in chat** as rows with counts that
-open sheets. Explanations for those, Physical contact and Requests are behind info
+open sheets. Explanations for those, Contact link and Requests are behind info
 buttons. Web: the informational page lists capabilities and opens Automatic execution,
 Live status and receipts, Remote timers and alarms, and What stays on your iPhone in
 sheets. See the settings pattern in [contacts](contacts.md#contact-details-layout).

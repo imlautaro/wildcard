@@ -258,7 +258,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
     AND a.status IN ('completed', 'failed', 'cancelled', 'unknown')
     ORDER BY a.updated_at DESC, a.id LIMIT 10`)
     .bind(turn.contactID, turn.userID, nativeContext.deviceID).all()).results : [];
-  const turnTools = nativeContext && !autonomous ? [...baseTools, ...nativeTools] : baseTools;
+  const turnTools = nativeContext?.kinds.length && !autonomous ? [...baseTools, ...nativeTools] : baseTools;
   const speaker = await env.DB.prepare('SELECT id, name FROM user WHERE id = ?').bind(turn.userID).first<{ id: string; name: string }>();
   const agent = await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ? AND user_id = ?')
     .bind(turn.contactID, turn.userID).first<{ id: string }>();

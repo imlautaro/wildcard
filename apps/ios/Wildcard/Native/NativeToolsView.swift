@@ -10,8 +10,11 @@ struct NativeToolsView: View {
     @Environment(ContactsStore.self) private var contacts
     @Environment(NativeExperiments.self) private var native
     @Environment(\.scenePhase) private var scenePhase
+    // Deprecated NFC UI state retained with its implementation.
+    #if false
     @State private var nfc = NativeNFC()
     @State private var confirmNFCWrite = false
+    #endif
     @State private var sessionRevision = 0
     @State private var sheet: SheetKind?
 
@@ -36,8 +39,10 @@ struct NativeToolsView: View {
     private var kinds: Set<String> { native.enabled[contactID] ?? [] }
     private var contact: Contact? { contacts.contact(id: contactID) }
     private static let examples: [(kind: String, text: String)] = [
-        ("focus", "“Help me focus for 25 minutes”"), ("recipe", "“Guide me through a recipe”"),
-        ("timer", "“Set a timer for 12 minutes”"), ("calendar", "“Add an event tomorrow at 3 PM”"), ("speech", "“Read this aloud”"),
+        // Deprecated examples retained for reference:
+        // ("focus", "“Help me focus for 25 minutes”"), ("recipe", "“Guide me through a recipe”"),
+        // ("speech", "“Read this aloud”"),
+        ("timer", "“Set a timer for 12 minutes”"), ("calendar", "“Add an event tomorrow at 3 PM”"),
     ]
     var body: some View {
         Form {
@@ -83,6 +88,8 @@ struct NativeToolsView: View {
                 if let agent = contact?.agentID {
                     Section {
                         ShareLink(item: NativeShared.link(agentID: agent)) { Label("Share contact link", systemImage: "square.and.arrow.up") }
+                        // Deprecated NFC controls retained, excluded from the app.
+                        #if false
                         Button { confirmNFCWrite = true } label: { Label("Write contact link to NFC tag", systemImage: "sensor.tag.radiowaves.forward") }
                             .confirmationDialog("Replace the NFC tag’s content with this contact link?", isPresented: $confirmNFCWrite, titleVisibility: .visible) {
                                 Button("Replace tag content", role: .destructive) { nfc.write(NativeShared.link(agentID: agent)) }
@@ -91,13 +98,16 @@ struct NativeToolsView: View {
                         Button { nfc.read { native.receive($0) } } label: { Label("Read NFC tag", systemImage: "wave.3.right") }
                             .disabled(!NativeNFC.available || nfc.busy)
                         if let message = nfc.message { Text(message).manrope(.footnote) }
+                        #endif
                     } header: {
                         HStack {
-                            Text("Physical contact")
-                            InfoButton(title: "Physical contact", text: "This link opens the same agent for existing participants. It does not invite people or grant access. NFC background opening requires Associated Domains configuration.")
+                            Text("Contact link")
+                            InfoButton(title: "Contact link", text: "This link opens the same agent for existing participants. It does not invite people or grant access.")
                         }
                     }
                 }
+                // Deprecated focus/recipe controls retained for reference.
+                #if false
                 let sessions = Activity<ContactSessionAttributes>.activities.filter { $0.attributes.contactID == contactID && $0.attributes.userID == auth.user?.id }
                 if !sessions.isEmpty {
                     Section("Live sessions") {
@@ -125,6 +135,7 @@ struct NativeToolsView: View {
                         }
                     }.id(sessionRevision)
                 }
+                #endif
                 let alarms = native.localAlarms.filter { $0.contactID == contactID }
                 if !alarms.isEmpty {
                     Section("Scheduled system alarms") {
@@ -148,9 +159,11 @@ struct NativeToolsView: View {
                     }
                 }
             }
+            #if false // Deprecated spoken-response control.
             if native.speaking {
                 Button { native.stopSpeaking() } label: { Label("Stop reading", systemImage: "stop.fill") }
             }
+            #endif
             if let error = native.error {
                 Section { Label { Text(error) } icon: { Image(systemName: "exclamationmark.triangle.fill") }.foregroundStyle(.red) }
             }
@@ -219,7 +232,7 @@ struct NativeToolsView: View {
                         .padding(.top, 2)
                 }
             }
-            if action.remoteDeviceID == nil, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000 {
+            if NativeExperiments.kinds.contains(action.kind), action.remoteDeviceID == nil, action.status == "pending", action.expiresAt > Date.now.timeIntervalSince1970 * 1000 {
                 HStack {
                     Button("Review and run") { Task { await native.run(action, contactID: contactID, using: auth) } }
                         .buttonStyle(.borderedProminent)

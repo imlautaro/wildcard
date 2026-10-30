@@ -11,6 +11,8 @@ struct ChangeContactSessionIntent: LiveActivityIntent {
     init() {}
     init(activityID: String, action: String) { self.activityID = activityID; self.action = action }
     @MainActor func perform() async throws -> some IntentResult {
+        // Deprecated sessions may only be finished; old system controls cannot resume them.
+        guard action == "finish" else { return .result() }
         guard let activity = Activity<ContactSessionAttributes>.activities.first(where: { $0.id == activityID }),
               NativeShared.directory?.userID == activity.attributes.userID,
               NativeShared.directory?.contacts.contains(where: { $0.id == activity.attributes.contactID }) == true else { return .result() }

@@ -1,3 +1,5 @@
+// Deprecated on 2026-10-30: NFC is excluded from the app; source retained for reference.
+#if false
 import Foundation
 import CoreNFC
 import Observation
@@ -46,3 +48,5 @@ import Observation
         }
     }
 }
+
+#endif

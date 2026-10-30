@@ -1654,7 +1654,8 @@ An independent installation needs:
    [remote timer/alarm prototype](#remote-native-device-execution) also requires
    assigning this group to the Notification Service App ID and its signing profile.
 3. Enable App Groups and Associated Domains on the main App ID, App Groups on the
-   Widgets/Share IDs, and NFC Tag Reading on the main App ID. Regenerate signing
+   Widgets/Share IDs. NFC Tag Reading is deprecated and its entitlement is commented
+   out; do not enable it for new installations. Regenerate signing
    profiles. The versioned entitlements configure the corresponding capabilities.
    These checked-in files do not register App IDs or change the developer account.
 4. Replace `WILDCARD_LINK_HOST` with an HTTPS host you control. Associate
@@ -1664,13 +1665,15 @@ An independent installation needs:
    Serve JSON with HTTP 200 and no redirect or authentication. Apple association
    fetching/caching and workers.dev delivery must be verified on a physical device;
    a custom HTTPS domain may be used with the same route and matching configuration.
-5. The embedded `WildcardWidgets` target includes focus/recipe and AlarmKit Live
-   Activity presentations plus the contact widget. `WildcardShare` imports drafts
+5. The embedded `WildcardWidgets` target includes AlarmKit Live Activity
+   presentations plus the contact widget. Deprecated focus/recipe presentation
+   source is retained but not registered in the widget bundle. `WildcardShare` imports drafts
    through the App Group. Shared Swift sources participate in all three targets;
    activity intents are excluded from Share with its build condition.
 6. Keep `NSSupportsLiveActivities`, `NSAlarmKitUsageDescription`,
-   `NSRemindersFullAccessUsageDescription`, and `NFCReaderUsageDescription` in the main
-   app plist, plus each extension's versioned Info.plist and entitlements. No broad
+   `NSRemindersFullAccessUsageDescription` in the main
+   app plist, plus each extension's versioned Info.plist and entitlements. The
+   deprecated `NFCReaderUsageDescription` is commented out for reference. No broad
    calendar permission or background location mode is needed for these experiments.
    App Intent actions require an unlocked/authenticated device. The minimum target
    remains iOS 27.0; alarm APIs are checked against the installed Xcode SDK.
@@ -1680,9 +1683,9 @@ An independent installation needs:
 
 Live Activities are local in this release; no ActivityKit push tokens, broadcast
 channels, new APNs credentials or delivery service are provisioned. Existing chat
-APNs configuration still applies to reply notifications. NFC background opening
-requires the HTTPS association; foreground NFC additionally requires supported
-hardware. Neither an NFC link nor an agent ID grants contact access.
+APNs configuration still applies to reply notifications. NFC read/write is disabled;
+ordinary contact Universal Links retain the HTTPS association and authorization checks.
+No Apple account capability changes are performed by editing these local files.
 
 Rollback: retain the additive D1 column/table and stored ledgers; older clients
 ignore them. An older API cannot accept new native-context submissions, so disable

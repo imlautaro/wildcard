@@ -13,8 +13,10 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Deprecated NFC configuration; retained for reference.
 	<key>NFCReaderUsageDescription</key>
 	<string>Read or write a contact link on an NFC tag when you request it.</string>
+	-->
 	<key>NSAlarmKitUsageDescription</key>
 	<string>Schedule alarms and timers you explicitly run from a contact.</string>
 	<key>NSMicrophoneUsageDescription</key>
