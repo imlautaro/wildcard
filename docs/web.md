@@ -315,6 +315,13 @@ behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.
 
 ## Voice messages
 
+Incoming group voice messages show the sender avatar to the left using the same
+row slot and consecutive-message grouping as text messages, matching iOS's use of
+its normal text-row avatar placement. The avatar inside the voice bubble remains
+on the right and becomes the speed control during playback. Both photos reuse the
+existing member-photo cache. Visual verification in both clients remains pending;
+see [voice bubble verification](voice.md#voice-bubble-presentation-and-verification).
+
 Loaded messages now continue through chat navigation and hidden tabs. Supported
 browsers expose a generic Voice message title, the sender profile photo (or a
 neutral person avatar), and Media Session play/pause, stop,

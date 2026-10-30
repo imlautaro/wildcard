@@ -41,6 +41,11 @@ receipt checks. Only one voice message plays at a time; starting another pauses 
 current one. Playback continues while scrolling, navigating away and listening in the background.
 See [background playback and ear routing](#background-playback-and-ear-routing) for platform limits.
 
+Incoming group voice messages also show the sender's avatar to the left of the
+bubble, using the same row placement and grouping as text messages on each client.
+The avatar inside the voice bubble remains on the right; playback replaces only
+that inner avatar with the speed control.
+
 The sender avatar has a floating microphone at its lower-left corner. The microphone
 and progress thumb are grey before listening and use the read-check color afterward:
 
@@ -501,6 +506,9 @@ Device/browser verification remains pending: compare incoming, outgoing and pend
 clips in private chats and groups, missing/updated photos, light/dark mode, narrow
 screens and large text; check playback, pause/resume, retry, web seeking with pointer
 and keyboard, receipts, reopening offline, access loss and account switching.
+Check incoming human/contact group clips alone and beside consecutive text/voice
+messages: the left avatar follows normal text-row grouping and stays visible while
+the inner avatar becomes the speed control during playback.
 Also compare real silence/speech peaks in WAV and MP3, seek before first play,
 seek while paused/playing, drag to both ends and verify the thumb, time and sound
 agree, check that scrubbing cannot reply to a message, and check decode/download

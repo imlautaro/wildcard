@@ -357,7 +357,10 @@ retry, budget eviction and account switching.
 ### Voice bubble avatars and waveform
 
 Both clients reuse the existing versioned account, contact and group-member photo
-caches for avatars inside voice bubbles. Visible bubbles load immutable audio through
+caches for avatars inside voice bubbles and beside incoming group voice rows.
+The outer and inner avatars share the same member/version resource and existing
+request deduplication, eviction and account/access invalidation rules.
+Visible bubbles load immutable audio through
 the existing audio cache and derive 37 real RMS amplitude samples. Analysis and
 playback share downloads; repeated navigation uses cached samples or derives them
 from cached bytes. Pending clips use local bytes without a separate download.

@@ -219,7 +219,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
           :class="[isMine(item.message) ? 'outgoing' : 'incoming', { highlighted: highlighted === item.message.id }]" :style="{ marginTop: item.first ? '6px' : '0' }"
           :data-read-id="isMine(item.message) ? undefined : item.message.id"
         >
-          <div v-if="!isMine(item.message) && !item.message.voice" class="avatar-slot">
+          <div v-if="!isMine(item.message)" class="avatar-slot">
             <AppAvatar v-if="item.last" :name="item.message.senderName" :path="senderPhoto(item.message)" :size="28" />
           </div>
           <MessageReactions :cache="state.reactions" :path="`groups/${groupID}/reactions`" :message-i-d="item.message.id" side="group" :replyable="canReply"

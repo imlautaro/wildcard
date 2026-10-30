@@ -470,6 +470,8 @@ The paperclip offers Photos and Files with the same JPEG/PNG/GIF/WebP/PDF format
 and 5 MiB limit as private chats. Images use identical bubbles, optional captions,
 cover thumbnails and full-screen zoom/swipe dismissal; PDFs use native Quick Look.
 Incoming files align left with the sender's name/avatar, outgoing files right.
+Incoming voice messages also keep the normal text-row sender avatar on the left
+in both clients, alongside the avatar inside the voice bubble on the right.
 An uncertain submission retains its original UUID and attachment bytes for retry;
 database rejection restores the draft without overwriting later edits.
 
