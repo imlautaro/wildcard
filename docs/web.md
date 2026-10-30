@@ -980,9 +980,11 @@ Chat rows have no Manage button. Open a contact's details from the chat title an
 
 The lifecycle API corrections in migration 0064 apply equally to web and iOS: pending cleanup now includes group-derived private work, generated images retain their chat scope, and stale failures cannot delay newer cleanup. [38 local integration checks](chat-lifecycle-testing.md) pass against actual routes and emulated bindings; this does not validate browser/iOS UI or production services. No client API/copy/permission contract changes were needed.
 
-The iOS chat header three-dot actions menu and fixed-width truncating title (see
-[chats](chats.md)) were scoped to iOS by request; the web chat header keeps its
-separate buttons.
+The iOS chat header three-dot actions menu and bounded, truncating principal
+navigation title (see [chats](chats.md)) are scoped to iOS by request. Moving the
+private/group identity from the leading action slot to the principal title slot
+addresses native overflow nesting; the web chat header keeps its separate buttons.
+No API, copy, permission or session-cache behavior changes.
 
 ## Voice listening state and list previews
 

@@ -49,7 +49,7 @@ struct ContactDetailView: View {
                         }
                     }
                 }
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .principal) {
                     NavigationLink(value: HomeDestination.editContact(contactID)) {
                         HStack(spacing: 6) {
                             ContactAvatar(contact: contact, size: 38)
@@ -64,8 +64,6 @@ struct ContactDetailView: View {
                             }
                         }
                         .frame(width: ChatHeaderLayout.width(barWidth: barWidth), alignment: .leading)
-                        .padding(.leading, -6)
-                        .padding(.trailing, 8)
                     }
                     .tint(Color(uiColor: .label))
                     .accessibilityLabel(contact.canManage ? "Edit \(contact.name)" : "View \(contact.name)")

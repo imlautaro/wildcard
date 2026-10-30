@@ -329,24 +329,25 @@ The session synchronizer polls visible authoritative history/presence every seco
 has polling latency and may miss very short Online/Typing phases; there is no
 WebSocket service. Navigation/backgrounding and refresh failures clear cached
 presence, showing **Loading...** until the next successful refresh.
-The leading navigation-bar header places the avatar beside left-aligned name
-and status. The avatar measures 38 points, with a compact 6-point gap before the
-text. The header retains the native toolbar background and link style, with a
-6-point leading padding reduction to bring the avatar closer to the capsule's
-edge and 8 points of extra trailing padding after the name/status. It reserves
-the subtitle line with **Loading...** while presence is unavailable, including
-its accessibility value. The name and status use -2 points of vertical spacing
-to tighten the visual gap left by the font line metrics.
+The navigation-bar header uses the principal title slot, placing the 38-point
+avatar beside the left-aligned name and status with a compact 6-point gap. Tapping
+it opens contact details. It reserves the subtitle line with **Loading...** while
+presence is unavailable, including its accessibility value. The name and status
+use -2 points of vertical spacing to tighten the font line metrics.
 
-On iOS the header has a fixed width (bar width minus 160 points for the back button,
-actions menu and margins, at least 120 points; `ChatHeaderLayout`), so a long contact
-or group name truncates on one line. Without it the system moved the whole
-avatar/title/subtitle segment into the toolbar overflow. Chat actions (Tasks,
-Schedules, Share contact; Tasks in groups) always live in one three-dot menu
-(`ChatActionsMenu`) whose buttons push onto the Home stack, never as separate bar
-buttons, so the bar never overflows into the system menu, where navigation links did
-not open. This is iOS-only as requested; web keeps its header buttons. Device checks
-pending: long names on small phones and large Dynamic Type, menu navigation and back.
+On iOS the header has a bounded width (bar width minus 160 points for the back
+button, actions menu and margins, at least 120 points; `ChatHeaderLayout`), so long
+contact and group names truncate on one line. It must stay in `.principal`:
+placing the identity in `.topBarLeading` allowed iOS to collapse it and the actions
+menu into a system overflow menu even with the width bound, creating two menu
+levels. The principal title has no extra side-action padding. Chat actions (Tasks,
+Schedules, Share contact; Tasks in groups) remain in one trailing three-dot menu
+(`ChatActionsMenu`) whose buttons push onto the Home stack. This correction is
+scoped to iOS by request; web keeps its header buttons. Existing session stores,
+presence refresh and avatar caching are unchanged; no requests or cache are added.
+Device checks pending: cold/cached entry, long names on small phones, landscape,
+large Dynamic Type, presence updates, opening actions in one tap, title navigation
+and back navigation in private and group chats.
 The title shows Online, Typing..., Last seen today/yesterday at HH:mm, or a dated
 Last seen
 for older activity. A contact without prior activity shows Offline rather than an

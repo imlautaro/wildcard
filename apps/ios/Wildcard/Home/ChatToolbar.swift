@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Chat headers sit in the leading toolbar slot. A fixed width that leaves room for the
-/// back button and the actions menu makes long names truncate; an unbounded header makes
-/// the system move the whole avatar/title/subtitle segment into the toolbar overflow.
+/// Chat headers use the principal title slot instead of an overflow-eligible side action.
+/// Bound their width to leave room for the back button and actions menu, truncating long names.
 enum ChatHeaderLayout {
     /// Back button, actions menu, bar margins and spacing.
     private static let reserved: CGFloat = 160
@@ -10,7 +9,7 @@ enum ChatHeaderLayout {
     static func width(barWidth: CGFloat) -> CGFloat { max(120, barWidth - reserved) }
 }
 
-/// Every chat action lives in one menu, so the bar never overflows into the system menu.
+/// Chat actions share one trailing menu, separate from the principal identity header.
 /// Actions are buttons that push onto the Home stack; a `NavigationLink` inside a toolbar
 /// menu does not navigate reliably.
 struct ChatActionsMenu<Content: View>: View {

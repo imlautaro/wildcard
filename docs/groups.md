@@ -428,8 +428,12 @@ messages. Pagination and session caching are unchanged. Device checks must cover
 cold/cached entry, very tall text/Markdown, images, keyboard resizing, pending sends,
 new replies, older-page loading and quoted navigation; large loaded histories also
 need performance verification. See [chat positioning](chats.md) for the tradeoff.
-The group header aligns its 38-point identity and compact title/member
-subtitle beside the back button, matching the individual chat header layout.
+The group header places its 38-point identity and compact title/member subtitle
+in the principal navigation title slot between the back button and the single
+actions menu, matching the individual [chat header layout](chats.md). It is not
+a leading bar action, which iOS could collapse into a nested overflow menu.
+Tapping the title still opens group details; member marquee and session caching
+are unchanged. Device verification of the title and one-level menu is pending.
 
 Groups support text, image/PDF attachments, [voice messages](voice.md) and foreground polling.
 Group push alerts, per-member unread counts and foreground notifications are

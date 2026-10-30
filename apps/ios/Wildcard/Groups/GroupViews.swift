@@ -389,7 +389,7 @@ struct GroupChatView: View {
                     Button("Tasks", systemImage: "checklist") { open(.groupTasks(groupID)) }
                 }
             }
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItem(placement: .principal) {
                 NavigationLink(value: HomeDestination.groupDetails(groupID)) {
                     HStack(spacing: 6) {
                         GroupPhotoAvatar(group: store.snapshot?.group, size: 38)
@@ -403,8 +403,6 @@ struct GroupChatView: View {
                         }
                     }
                     .frame(width: ChatHeaderLayout.width(barWidth: barWidth), alignment: .leading)
-                    .padding(.leading, -6)
-                    .padding(.trailing, 8)
                 }
                 .tint(Color(uiColor: .label))
                 .accessibilityLabel(store.snapshot?.group.name ?? "Group details")
