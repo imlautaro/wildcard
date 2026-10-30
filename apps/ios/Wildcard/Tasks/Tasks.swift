@@ -381,8 +381,14 @@ private struct TaskEditorView: View {
                         TextField("Exact public query", text: $researchQuery, axis: .vertical).lineLimit(2...6)
                             .disabled(assignee != task.assigneeKey || task.assigneeKind != "agent")
                         Text(task.researchDetail).font(.caption)
-                    } header: { Text("Public web research") } footer: {
-                        Text("Saving this query authorizes one public search with the app closed. Only this exact query is sent; use public information. Leave empty to revoke. Failed or uncertain attempts count. Daily limits also apply. Changing assignee clears permission; save the assignment first. Reports appear in Docs.")
+                    } header: {
+                        HStack {
+                            Label("Public web research", systemImage: "globe")
+                            InfoButton(title: "Public web research", text: "Saving this query authorizes one public search with the app closed. Only this exact query is sent; use public information. Leave empty to revoke. Failed or uncertain attempts count. Daily limits also apply. Changing assignee clears permission; save the assignment first. Reports appear in Docs.")
+                        }
+                    } footer: {
+                        // What saving authorizes stays visible next to the field.
+                        Text("Saving authorizes one public search with the app closed.")
                     }
                 }
                 if task.assigneeKind == "agent" || task.monitorURL != nil || (task.monitorTurnsUsed ?? 0) > 0 {
@@ -397,8 +403,14 @@ private struct TaskEditorView: View {
                         TextField("Keywords, comma-separated (optional)", text: $monitorKeywords).disabled(locked)
                         Text(task.monitorDetail).font(.caption)
                         ForEach(task.monitorChecks ?? [], id: \.self) { Text($0.label).font(.caption).foregroundStyle(.secondary) }
-                    } header: { Text("Page monitor") } footer: {
-                        Text("Saving a public page lets the server check it with the app closed, without the model. The contact gets a turn only when the page text changes (and matches a keyword, if set), up to 3 per day and 20 in total. Redirects are not followed; save the final address. Leave empty to remove. Changing assignee removes the monitor; save the assignment first. Pausing or finishing the task stops checks.")
+                    } header: {
+                        HStack {
+                            Label("Page monitor", systemImage: "eye")
+                            InfoButton(title: "Page monitor", text: "Saving a public page lets the server check it with the app closed, without the model. The contact gets a turn only when the page text changes (and matches a keyword, if set), up to 3 per day and 20 in total. Redirects are not followed; save the final address. Leave empty to remove. Changing assignee removes the monitor; save the assignment first. Pausing or finishing the task stops checks.")
+                        }
+                    } footer: {
+                        // What saving authorizes stays visible next to the field.
+                        Text("Saving lets the server check this page with the app closed.")
                     }
                 }
                 if task.workState == "blocked" {
@@ -407,13 +419,16 @@ private struct TaskEditorView: View {
                 if task.assigneeKind == "agent", task.workState != nil, !task.isFinished {
                     Section {
                         if let used = task.workUsed, let limit = task.workLimit { Text("\(used)/\(limit) work turns used") }
-                        Button(task.workState == "active" ? "Pause work" : "Resume work") {
+                        Button(task.workState == "active" ? "Pause work" : "Resume work", systemImage: task.workState == "active" ? "pause.circle" : "play.circle") {
                             control(["workState": task.workState == "active" ? "paused" : "active"])
                         }
                         .disabled(saving || (task.workState != "active" && (task.workUsed ?? 0) >= (task.workLimit ?? 6)))
-                        Button("Cancel task", role: .destructive) { control(["status": "canceled"]) }.disabled(saving)
-                    } footer: {
-                        Text("Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget.")
+                        Button("Cancel task", systemImage: "xmark.circle", role: .destructive) { control(["status": "canceled"]) }.disabled(saving)
+                    } header: {
+                        HStack {
+                            Text("Work")
+                            InfoButton(title: "Work", text: "Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget.")
+                        }
                     }
                 }
                 if list.tasks.count > 1 {

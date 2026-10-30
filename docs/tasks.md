@@ -20,7 +20,9 @@ have not been verified yet.
   and tap a task to edit its title, status (To do, In progress, Done, Canceled),
   assignee, notes, next step, evidence and what it waits for. Contact tasks also offer
   **Pause work**, **Resume work** and **Cancel task**. **Cancel list** cancels the list and every
-  unfinished task. On iOS, swipe a task to cancel it.
+  unfinished task. On iOS, swipe a task to cancel it. The task editor is a sheet on
+  both clients; web research, page monitor and work explanations are behind info
+  buttons, with a one-line note of what saving authorizes kept beside each field.
 - Each task row shows the assignee, its status, what it is waiting for (a clock icon
   while blocked) and the result the contact recorded. Contact tasks in progress show a
   **Working** chip while their work is active. Paused, blocked and exhausted tasks

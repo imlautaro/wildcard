@@ -144,7 +144,8 @@ const cancelList = (list: TaskList) => run(async () => {
                 <span v-if="task.result" class="small task-result">{{ task.result }}</span>
               </button>
             </div>
-            <form v-if="editing === task.id" class="task-editor" @submit.prevent="save(task)">
+            <AppSheet v-if="editing === task.id" title="Task" @close="editing = null">
+            <form :id="`task-form-${task.id}`" class="task-editor group" @submit.prevent="save(task)">
               <div class="field"><label :for="`title-${task.id}`">Title</label><input :id="`title-${task.id}`" v-model="form.title" type="text" maxlength="300" required></div>
               <div class="field"><label :for="`status-${task.id}`">Status</label><AppSelect :id="`status-${task.id}`" v-model="form.status" variant="plain" :options="statusOptions" /></div>
               <div class="field"><label :for="`assignee-${task.id}`">Assignee</label><AppSelect :id="`assignee-${task.id}`" v-model="form.assignee" variant="plain" :options="assigneeOptions" /></div>
@@ -153,22 +154,22 @@ const cancelList = (list: TaskList) => run(async () => {
               <div class="field"><label :for="`evidence-${task.id}`">Evidence</label><textarea :id="`evidence-${task.id}`" v-model="form.evidence" rows="2" maxlength="2000" /></div>
               <div v-if="task.workState === 'blocked'" class="field"><label :for="`blocked-${task.id}`">Blocked reason</label><textarea :id="`blocked-${task.id}`" v-model="form.blockedReason" rows="2" maxlength="2000" /></div>
               <div v-if="task.assigneeKind === 'agent' || task.researchUsed" class="field">
-                <label :for="`research-${task.id}`">Public web research</label>
+                <span class="info-title"><label :for="`research-${task.id}`">Public web research</label><InfoButton label="Public web research" text="Saving this query authorizes one public search with the app closed. Only this exact query is sent; use public information. Leave empty to revoke. Failed or uncertain attempts count. Daily limits also apply. Changing assignee clears permission; save the assignment first. Reports appear in Docs." /></span>
                 <textarea :id="`research-${task.id}`" v-model="form.researchQuery" rows="2" maxlength="600" placeholder="Exact public query" :disabled="assignmentChanged(task) || task.assigneeKind !== 'agent'" />
                 <p class="small">{{ researchDetail(task) }}</p>
-                <p class="group-footer">Saving this query authorizes one public search with the app closed. Only this exact query is sent; use public information. Leave empty to revoke. Failed or uncertain attempts count. Daily limits also apply. Changing assignee clears permission; save the assignment first. Reports appear in Docs.</p>
+                <p class="small muted">Saving authorizes one public search with the app closed.</p>
               </div>
               <div v-if="task.assigneeKind === 'agent' || task.monitorURL || task.monitorTurnsUsed" class="field">
-                <label :for="`monitor-${task.id}`">Page monitor</label>
+                <span class="info-title"><label :for="`monitor-${task.id}`">Page monitor</label><InfoButton label="Page monitor" text="Saving a public page lets the server check it with the app closed, without the model. The contact gets a turn only when the page text changes (and matches a keyword, if set), up to 3 per day and 20 in total. Redirects are not followed; save the final address. Leave empty to remove. Changing assignee removes the monitor; save the assignment first. Pausing or finishing the task stops checks." /></span>
                 <input :id="`monitor-${task.id}`" v-model="form.monitorURL" type="url" maxlength="2048" placeholder="https://example.com/page" :disabled="assignmentChanged(task) || task.assigneeKind !== 'agent'">
                 <AppSelect v-model="form.monitorInterval" variant="plain" aria-label="Check frequency" :options="monitorIntervals" :disabled="assignmentChanged(task) || task.assigneeKind !== 'agent'" />
                 <input v-model="form.monitorKeywords" type="text" maxlength="300" placeholder="Keywords, comma-separated (optional)" aria-label="Monitor keywords" :disabled="assignmentChanged(task) || task.assigneeKind !== 'agent'">
                 <p class="small">{{ monitorDetail(task) }}</p>
                 <ul v-if="task.monitorChecks?.length" class="small task-monitor-checks"><li v-for="check in task.monitorChecks" :key="check.checkedAt">{{ checkLabel(check) }}</li></ul>
-                <p class="group-footer">Saving a public page lets the server check it with the app closed, without the model. The contact gets a turn only when the page text changes (and matches a keyword, if set), up to 3 per day and 20 in total. Redirects are not followed; save the final address. Leave empty to remove. Changing assignee removes the monitor; save the assignment first. Pausing or finishing the task stops checks.</p>
+                <p class="small muted">Saving lets the server check this page with the app closed.</p>
               </div>
-              <p v-if="task.assigneeKind === 'agent'" class="group-footer">Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget.</p>
               <div v-if="task.assigneeKind === 'agent' && task.workState && !['done', 'canceled'].includes(task.status)" class="task-actions">
+                <InfoButton label="Work" text="Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget." />
                 <button v-if="task.workState === 'active'" type="button" class="button secondary" :disabled="busy" @click="controlWork(task, 'paused')">Pause work</button>
                 <button v-else type="button" class="button secondary" :disabled="busy || task.workUsed >= task.workLimit" @click="controlWork(task, 'active')">Resume work</button>
                 <button type="button" class="button secondary" :disabled="busy" @click="run(async () => { await tasks.updateTask(task.id, originalTask(task).version, { status: 'canceled' }); editing = null; })">Cancel task</button>
@@ -179,11 +180,12 @@ const cancelList = (list: TaskList) => run(async () => {
                   <input v-model="form.blockedBy" type="checkbox" :value="other.id"> {{ other.title }}
                 </label>
               </fieldset>
-              <div class="task-actions">
-                <button type="button" class="button secondary" :disabled="busy" @click="editing = null">Close</button>
-                <button type="submit" class="button" :disabled="busy || !form.title.trim() || form.monitorKeywords.trim().length > 300">Save</button>
-              </div>
             </form>
+            <template #actions>
+              <button type="button" class="button text" :disabled="busy" @click="editing = null">Close</button>
+              <button type="submit" :form="`task-form-${task.id}`" class="button" :disabled="busy || !form.title.trim() || form.monitorKeywords.trim().length > 300">Save</button>
+            </template>
+            </AppSheet>
           </div>
           <form v-if="list.status === 'active'" class="field" @submit.prevent="addTask(list)">
             <input v-model="drafts[list.id]" type="text" maxlength="300" placeholder="Add a task" :aria-label="`Add a task to ${list.title}`">
