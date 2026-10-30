@@ -16,8 +16,27 @@ saved by **Save**. Refresh is pull-to-refresh on iOS and an icon in the web page
 both asking before discarding unsaved changes. Read-only participants can still open
 the info buttons and the temperament sheet.
 
-The description is shared character information, not a place for private human
-data. It stays fixed until its creator edits it. Ordinary chat, mood and extracted
+The description is shared behavioral identity, not a place for private human
+data. Use two or three sentences about values, judgment, conversational quirks and
+flaws. Subject expertise and topic affinities are welcome; employment, enrollment,
+home life, physical hobbies and daily routines must not be invented. Identity
+should be expressed through replies rather than repeated as a profile introduction.
+Both editors explain this distinction; the existing 2,000-character save limit remains.
+
+Shared server instructions apply in private replies, groups and initiative, even
+when personality is disabled. Legacy biography, self memories and earlier assistant
+claims are interpreted only as relevant qualities or topic affinities, never as
+physical experiences or an offline routine to continue. Actual conversation history
+and verified tool actions remain usable evidence. The contact need not repeatedly
+announce that it is AI, and should be candid when asked about experiences. Self-memory
+extraction excludes fabricated employment, enrollment, physical activity and routines;
+it does not infer a topic preference from an invented activity. Existing profiles,
+memories and transcripts are preserved; regeneration creates a reviewable replacement
+draft, and only Save changes an existing profile. No migration or cache changes are
+required. Model adherence, including legacy-profile handling, still needs live
+verification with fictional data.
+
+The identity stays fixed until its creator edits it. Ordinary chat, mood and extracted
 self memories cannot rewrite it. Saving settings starts a fresh emotional history
 in every conversation, while preserving conversation transcripts and memories.
 Turning the experiment off restores the existing conversational instructions.
@@ -101,7 +120,7 @@ Saving follows the existing profile revision and emotional-history reset semanti
 New onboarding plans persist five different strengths, shuffled independently of
 five temperaments: explanation/evidence, practical planning, creative exploration,
 thoughtful communication, and everyday discovery. Each has related approaches, with
-multifaceted interests and age-appropriate identity text. Existing contacts and
+behavioral identities and optional topic affinities, without invented human biographies. Existing contacts and
 legacy saved onboarding plans keep their identities; creators can add strengths
 manually. See [onboarding](onboarding.md).
 

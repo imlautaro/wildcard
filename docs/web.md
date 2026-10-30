@@ -728,6 +728,15 @@ apply instantly and are reconciled with the server (`useMiniApps`).
 
 ## Contact personality
 
+Stable identity help matches iOS: brief values, ways of thinking, conversational
+quirks and flaws, with expertise/topic interests allowed and invented human routines
+excluded. The web placeholder suggests two or three sentences. Shared API guidance
+covers generation, regeneration, onboarding, private/group replies and initiative;
+legacy profiles are interpreted behaviorally without rewriting saved data. Existing
+session drafts, revision checks, cache invalidation and save behavior are unchanged.
+No new requests or storage. Static checks cannot establish model adherence or device
+behavior; verify generated drafts and legacy-profile replies with fictional data.
+
 The personality editor renders the shared trait list, so the new **Emoji** slider
 appears with the others; see [emoji and reactions](personality.md#emoji-and-reactions).
 

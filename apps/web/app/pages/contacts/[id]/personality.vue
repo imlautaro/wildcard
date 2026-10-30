@@ -31,7 +31,7 @@ const timeZoneOptions = computed(() => {
 const info = {
   generate: 'Generate all personality fields with Meta Standard, then review and save the draft. Your contact name and adult birthday stay the same.',
   experiment: 'One shared character, with a relationship that follows each person across chats and groups. Private conversations stay private. Only its creator can edit these settings.',
-  identity: 'This identity is shared with everyone who talks to the contact. Conversation and mood do not rewrite it. Use fictional information. Saving changes starts a fresh emotional history.',
+  identity: 'Briefly describe values, ways of thinking, conversational quirks and flaws. Expertise and topic interests are welcome; avoid invented jobs, studies, physical experiences or daily routines. Identity is expressed through replies and shared with everyone who talks to the contact. Conversation and mood do not rewrite it. Saving changes starts a fresh emotional history.',
   specialties: 'Things this contact is especially good at. These strengths are shared with everyone and independent of temperament. They can still talk about anything. Optional, up to 1,000 characters.',
   birthday: 'Age is calculated from the date of birth in the birthday time zone. February 29 is observed on February 28 in other years.',
   temperament: 'The contact expresses tendencies through tone and timing. It does not receive these scores. Feelings settle over time. Its acting direction adapts to each person without exposing private causes. Conversations with connections stay isolated. Follow-ups still respect your initiative switch and delivery limits.',
@@ -99,7 +99,7 @@ onMounted(async () => {
         </div>
         <div class="group-title info-title">Stable identity <InfoButton label="Stable identity" :text="info.identity" /></div>
         <div class="group">
-          <div class="field personality-field"><textarea v-model="draft.description" :readonly="!canEdit" :disabled="busy" rows="5" aria-label="Stable identity" placeholder="Background, values, interests, and things this contact always knows about itself." /></div>
+          <div class="field personality-field"><textarea v-model="draft.description" :readonly="!canEdit" :disabled="busy" rows="5" aria-label="Stable identity" placeholder="Values, ways of thinking, humor, and conversational quirks. Two or three sentences are enough." /></div>
         </div>
         <div class="group-title info-title">Specialties <InfoButton label="Specialties" :text="info.specialties" /></div>
         <div class="group">

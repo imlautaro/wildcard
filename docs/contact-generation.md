@@ -21,6 +21,16 @@ never private chat history. Inputs are untrusted prompt data. Model instructions
 avoid copying user personal details into the generated shared identity; this needs
 live semantic verification.
 
+New identity generation, personality regeneration and onboarding share guidance for
+a concise behavioral identity: values, judgment, conversational quirks and flaws.
+Optional interests are topics to discuss, not physical activities the contact performs.
+Expertise and strengths remain configurable through specialties, without fabricated
+credentials or lived experience. Regeneration replaces old biography in the draft
+rather than paraphrasing it; it still requires Save. Saved job plans remain immutable,
+so retries with a preexisting plan can retain an older identity. Shared conversation
+instructions also handle those legacy profiles. No schema, API or cache changes.
+Live semantic checks of generation and replies remain pending.
+
 A new identity has a generated name, portrait, enabled personality, specialties,
 time zone and all sixteen temperament traits. Muse Spark 1.3 Standard creates text;
 the existing Muse Image integration creates the portrait. The server chooses a

@@ -276,7 +276,8 @@ Private contacts also support [conversation initiative](docs/initiative.md): dur
 ## Contact personality experiment
 
 Creators can configure [Personality](docs/personality.md) in contact details on
-both iOS and web: stable fictional identity, birthday/time zone with computed age,
+both iOS and web: concise behavioral identity (values, judgment and conversational
+quirks, without an invented human routine), birthday/time zone with computed age,
 and fifteen temperament sliders. The contact receives behavioral direction rather
 than scores. Relationships continue across eligible chats/groups through a
 server-side acting director that produces per-recipient direction without private

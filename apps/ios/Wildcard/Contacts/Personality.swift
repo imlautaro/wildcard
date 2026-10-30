@@ -212,7 +212,7 @@ struct ContactPersonalityView: View {
                 } header: {
                     HStack {
                         Text("Stable identity")
-                        InfoButton(title: "Stable identity", text: "This identity is shared with everyone who talks to the contact. Conversation and mood do not rewrite it. Use fictional information. Saving changes starts a fresh emotional history.")
+                        InfoButton(title: "Stable identity", text: "Briefly describe values, ways of thinking, conversational quirks and flaws. Expertise and topic interests are welcome; avoid invented jobs, studies, physical experiences or daily routines. Identity is expressed through replies and shared with everyone who talks to the contact. Conversation and mood do not rewrite it. Saving changes starts a fresh emotional history.")
                     }
                 }
                 Section {

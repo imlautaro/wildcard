@@ -31,7 +31,12 @@ The server creates exactly five fictional contacts and optionally a group contai
 the account and those same five agent identities. Group names are deterministic:
 **Friends**, **Study Group**, or **Work Team**; the model does not choose a name. Muse Spark 1.3 Standard proposes
 common given names for the selected country, a mixed-gender cast, distinct
-occupations/interests, English identity descriptions and physical descriptions.
+behavioral identities, optional topic affinities, English identity descriptions and
+physical descriptions. Identities use values, judgment, conversational quirks and
+flaws, without assigning employment, enrollment or physical routines. Work/study
+context informs subject strengths and approaches rather than a human biography.
+Saved plans keep their original identities on retry; reply instructions interpret
+legacy biography without claiming lived experience. See [personality](personality.md).
 No external popularity ranking verifies the model's name choices. The user's
 gender does not determine the cast's genders, temperaments or romantic roles.
 Country determines naming context, not stereotyped appearance or behavior.

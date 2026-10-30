@@ -1,3 +1,4 @@
+import { embodiedIdentityInstruction } from '../personality/identity';
 import { imageInstruction } from '../photos/generation';
 import type { Attachment } from '../chat/attachments';
 import { privateSharingSources } from './private-sharing';
@@ -182,6 +183,7 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
         recent: history.slice(0, 3).map(m => ({ speaker: m.name, text: clipText(m.text, 400) })) }) });
   const privateSources = await privateSharingSources(env.DB, row.groupID, row.agentID, !!contributor);
   const messages: ModelMessage[] = [
+    { role: 'system', content: embodiedIdentityInstruction },
     { role: 'system', content: `authorizedPrivateSources for this agent and group: ${JSON.stringify(privateSources)}` },
     ...(character ? [{ role: 'system' as const, content: character }] : []),
     // Others' messages in recent history are the reaction opportunities.
