@@ -72,7 +72,7 @@ function seek(event: Event) {
 </script>
 
 <template>
-  <div ref="root" class="voice-message" :class="{ listened }">
+  <div ref="root" class="voice-message" :class="{ listened, 'voice-message-outgoing': outgoing }">
     <div class="voice-controls">
       <div v-if="outgoing" class="voice-avatar">
         <button v-if="playing" type="button" class="voice-speed"
@@ -148,7 +148,7 @@ function seek(event: Event) {
 .voice-info { display: flex; align-items: center; gap: 4px; min-height: 16px; font-size: 12px; color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums; }
 .voice-error { color: var(--md-error); }
 .voice-mic { position: absolute; bottom: -1px; left: -1px; display: inline-flex; padding: 2px; border-radius: 50%; background: var(--incoming); color: var(--md-on-surface-variant); }
-:global(.outgoing) .voice-mic { background: var(--outgoing); }
+.voice-message-outgoing .voice-mic { background: var(--outgoing); }
 .listened .voice-mic, .listened .voice-thumb { color: var(--read); }
 .listened .voice-thumb { background: var(--read); }
 .voice-mic svg { width: 14px; height: 14px; }

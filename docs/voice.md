@@ -663,3 +663,13 @@ and uncached photos, offline/photo failure, immediate lock/navigation, pause/res
 rapid clip replacement while photos load, web LRU pressure, and clear/delete/access
 loss or account changes while an artwork request is in flight. Static typechecking
 does not establish the system's rendered artwork or app-icon presentation.
+
+### Web microphone background scope
+
+The outgoing avatar microphone background is scoped through a class on the
+`VoiceMessage` root. It must not generate a global `.outgoing` background rule,
+which would color entire sent-message rows, including text and attachments.
+The correction affects only web CSS; iOS and playback/listening state are unchanged.
+It adds no network requests, retention or cache invalidation. Browser verification
+of sent/pending text, attachments and voice messages in private/groups and both
+color schemes remains pending.

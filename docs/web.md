@@ -1003,3 +1003,11 @@ retained conversation immediately; failed receipt writes retry on the next playb
 After eviction or sign-out, only server-confirmed listening survives. See
 [cache policy and manual checks](caching.md#voice-listening-metadata).
 Browser and physical-device verification remains pending.
+
+The outgoing voice microphone background uses a component-local
+`voice-message-outgoing` class. Keep this rule scoped: Vue compiles a selector
+starting with `:global(.outgoing)` into a rule targeting the whole outgoing row,
+which paints the row background behind sent text, attachment and voice bubbles.
+This web-only CSS correction changes no iOS behavior, API, migrations or cache
+policy. Verify private/group sent and pending messages in light/dark mode after
+release; static selector inspection does not establish rendered browser appearance.
