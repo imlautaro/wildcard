@@ -26,6 +26,7 @@ function serverMessage(body: unknown): string | null {
 }
 
 function failureMessage(path: string, method: string, status: number, body: unknown): string {
+  if (path === 'me/debug-export') return serverMessage(body) ?? 'The export could not be completed. Please try again.';
   if (path.startsWith('onboarding')) return serverMessage(body) ?? 'Setup is temporarily unavailable. Please try again.';
   if (path === 'contacts/generation') return serverMessage(body) ?? 'Contact generation is temporarily unavailable. Please try again.';
   if (path.includes('/personality')) return serverMessage(body) ?? 'Personality is temporarily unavailable. Please try again.';

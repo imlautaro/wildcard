@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import debugExport from './debug-export';
 import { bodyLimit } from 'hono/body-limit';
 import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
@@ -25,6 +26,8 @@ me.get('/', async (c) => {
   // Runtime flags that change client behavior (docs/admin.md).
   return c.json({ user: responseUser(row), features: { voiceMessages: await voiceRepliesAvailable(c.env) } });
 });
+
+me.route('/debug-export', debugExport);
 
 me.patch('/', bodyLimit({ maxSize: 4096 }), async (c) => {
   const input: unknown = await c.req.json().catch(() => null);

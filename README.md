@@ -328,3 +328,8 @@ adjustments and optional questions. Private/group replies on iOS and web use the
 API behavior; private initiative uses it within existing outreach limits. Both clients
 provide per-person inspection, disable and reset controls. Migration 0067 uses the
 existing D1, Workflows and minute Cron; no new service or secret is required.
+
+The web account screen can [download a debug JSON export](docs/debug-export.md)
+with private/group chat history and related authorized records, including archived
+chats. It downloads locally without uploading to an AI; credentials and media bytes
+are excluded. The feature is web-only and uses existing infrastructure.

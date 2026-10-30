@@ -1174,3 +1174,15 @@ SHA-256 prefix (`0c69391a81ea`) for cache refresh. This request is web-only; adm
 and native branding are unchanged. Static checks cover head writers, SVG parsing,
 source equality and audio sample peaks. Navigation/browser rendering and listening
 remain pending; no tests or builds were run.
+
+## Debug JSON downloads
+
+**My account → Export debug JSON** downloads all available private/group chat
+history and related debugging records for the signed-in account, including archived
+chats. The disclosure explains private content and excluded credentials/media;
+no AI upload occurs. The web-only download uses sequential authorized pages,
+progress/cancel and a 100 MB limit, discards failed exports and rechecks access/history
+before saving. It bypasses navigation caches and clears temporary data on cancellation,
+unmount or session reset. See [debug export](debug-export.md) for contents, limitations,
+setup and pending browser verification. iOS has no export UI in this explicitly
+web-scoped feature.

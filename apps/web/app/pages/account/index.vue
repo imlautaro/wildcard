@@ -1,5 +1,8 @@
 <script setup lang="ts">
 const { user, saveName, savePhoto, saveModel, refreshProfile, signOut } = useSession();
+const { exporting, progress, exportError, download, cancel } = useDebugExport();
+const exportSheet = ref(false);
+onBeforeUnmount(cancel);
 const busy = ref(false);
 const error = ref<string | null>(null);
 const models = [
@@ -60,9 +63,23 @@ onMounted(async () => {
         <NuxtLink class="button-row" to="/native"><AppIcon name="iphone" />Native experiments</NuxtLink>
       </div>
       <div class="group" style="margin-top: 20px">
+        <button type="button" class="button-row opens" @click="exportSheet = true"><AppIcon name="file" />Export debug JSON</button>
+      </div>
+      <div class="group" style="margin-top: 20px">
         <button type="button" class="button-row danger" :disabled="busy" @click="leave"><AppIcon name="logout" />Sign out</button>
       </div>
       <p class="group-footer" style="padding-top: 8px">Scheduled messages and push notifications are available in the iOS app.</p>
+
+      <AppSheet v-if="exportSheet" title="Export debug JSON" @close="cancel(); exportSheet = false">
+        <p>Download your private and group chat history, including archived chats, contacts, local memories, reply status, schedules, tasks, documents and mini apps.</p>
+        <p class="group-footer">This file contains private text and group participants. Review it before sharing with an AI or anyone else. Credentials, other people's private chats and media files are excluded. Nothing is sent to an AI by this download. Downloads are limited to 100 MB; exports over this limit fail without saving a partial file.</p>
+        <p v-if="progress" role="status" aria-live="polite" style="margin-top: 12px">{{ progress }}</p>
+        <p v-if="exportError" class="notice" role="alert" style="margin-top: 12px">{{ exportError }}</p>
+        <template #actions>
+          <button type="button" class="button text" @click="cancel(); exportSheet = false">{{ exporting ? 'Cancel export' : 'Close' }}</button>
+          <button type="button" class="button" :disabled="exporting" @click="download">{{ exporting ? 'Exporting…' : 'Download JSON' }}</button>
+        </template>
+      </AppSheet>
 
       <AppSheet v-if="modelSheet" title="Chat model" @close="modelSheet = false">
         <template #header><InfoButton label="Chat model" :text="modelInfo" /></template>

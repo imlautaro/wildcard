@@ -2786,3 +2786,14 @@ ordered action effects, transcription sharing and the membership-checked message
 read endpoint with fictional data. Existing energy and exchange caps remain active.
 Static validation does not establish deployed behavior, latency or model quality;
 production migration/deployment and functional validation are pending.
+
+## Debug export endpoint
+
+The web-only [debug JSON export](debug-export.md) uses the existing API D1 binding,
+`/me` bearer authentication, and web API service binding/httpOnly session cookie.
+No infrastructure, migration, secret, permission, bucket or model-provider changes
+are required. The route uses a fixed dataset/column allowlist and authorized 25-row
+pages; files are assembled only in the browser, with no server-side export storage.
+Existing local setup and automatic release configuration apply. Rollback can remove
+the route and UI without schema changes. Runtime/browser export verification is
+pending; static query preparation and API/web type checks cover schema/types only.

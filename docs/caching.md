@@ -1424,3 +1424,19 @@ stops and invalidates events. Playback checks generation, destination and visibi
 after async decoding and skips events delayed over 1.5 seconds. No old sound replays
 after unlock, navigation, account switching or offline recovery. Browser listening,
 keyboard/touch unlocking and background/resume behavior remain unverified.
+
+## Explicit debug exports (web only)
+
+[Debug JSON export](debug-export.md) intentionally has no cache: a user-triggered
+full-history download must fetch unloaded pages and avoid retaining another copy of
+private conversations. One session-owned operation deduplicates clicks, loads 25
+rows per page, retains at most 100 MB of JSON parts, and releases them after download,
+failure or cancellation. Final Blob/browser allocations can temporarily add memory.
+No disk persistence occurs except the explicit browser download. Cancel, sheet close,
+account-page unmount and session reset abort the request and reject late responses;
+the temporary object URL is revoked after download. Retry starts from scratch;
+conversation caches are untouched. Authorization is checked on every page and the
+scope/history manifest is checked again before saving. This remains a live export,
+not a transaction snapshot. Browser checks for navigation, empty/archived histories,
+offline recovery, access revocation, clear, cancellation and account switching are
+pending; see the feature guide for the full fictional-data checklist.
