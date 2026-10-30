@@ -18,75 +18,73 @@ struct ContactSharingView: View {
         sharing != nil && shareMemory && (sharing?.contributorModel != true || contributorConsent)
     }
 
+    @State private var showingInvite = false
+    private static let aboutSharing = "Everyone talks to the same contact, with shared memories and presence. Each person starts an empty, private chat and keeps their own schedules and notifications. Invitations appear inside Wildcard; no email is sent. They expire after 24 hours. Up to four participants, including you."
+
     var body: some View {
         Form {
-            Section {
-                Text("Everyone talks to the same contact, with shared memories and presence. Each person starts an empty, private chat and keeps their own schedules and notifications.")
-                Text("The contact can recall facts learned from anyone here, including saved memories from before sharing. Chat transcripts and attachments stay private.")
-                Toggle("Share existing and future memories", isOn: $shareMemory)
-                if sharing?.contributorModel == true {
-                    Toggle("I agree to Meta's Contributor data use", isOn: $contributorConsent)
-                    Text("Your selected model is Contributor. Messages and shared memories sent to Meta may be used to train its models.")
-                        .manrope(.footnote).foregroundStyle(.secondary)
-                }
-                TextField("Existing user's email", text: $recipientEmail)
-                    .textContentType(.emailAddress).keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button("Invite User") { createInvitation(byEmail: true) }
-                    .disabled(!canInvite || recipientEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                DisclosureGroup("Invite with a code instead") {
-                    Button("Create Invitation Code") { createInvitation() }.disabled(!canInvite)
-                    Text("Anyone with this code can accept it. Share it only with your intended recipient.")
-                        .manrope(.footnote).foregroundStyle(.secondary)
-                }
-            } footer: {
-                Text("Enter the email of an existing Wildcard account. Their invitation appears inside Wildcard; no email is sent. Invitations expire after 24 hours. Up to four participants, including you.")
-            }
             if let invitation {
-                Section("New Invitation") {
+                Section("New invitation") {
                     if let code = invitation.code {
                         Text(code).textSelection(.enabled).font(.system(.footnote, design: .monospaced))
-                        ShareLink(item: code) { Label("Share Invitation Code", systemImage: "square.and.arrow.up") }
-                        Text("The recipient signs in, taps + → Join Shared Contact, and pastes this code.")
-                            .manrope(.footnote).foregroundStyle(.secondary)
+                        HStack {
+                            ShareLink(item: code) { Label("Share code", systemImage: "square.and.arrow.up") }
+                            Spacer()
+                            InfoButton(title: "Invitation code", text: "The recipient signs in, taps + → Join Shared Contact, and pastes this code. Anyone with this code can accept it, so share it only with your intended recipient.")
+                        }
                     } else if let email = invitation.recipientEmail {
                         Label("Invitation sent to \(email)", systemImage: "checkmark.circle")
-                        Text("They can accept it from Contact Invitations in Wildcard.")
-                            .manrope(.footnote).foregroundStyle(.secondary)
                     }
                 }
             }
             if let sharing {
-                Section("Participants") {
+                Section {
                     ForEach(sharing.members) { member in
                         HStack {
-                            Text(member.name)
+                            Label(member.name, systemImage: member.role == "owner" ? "person.crop.circle.badge.checkmark" : "person.crop.circle")
                             Spacer()
                             if member.role == "owner" { Text("Creator").foregroundStyle(.secondary) }
-                            else { Button("Remove", role: .destructive) { removal = member } }
+                            else {
+                                Button(role: .destructive) { removal = member } label: { Image(systemName: "person.badge.minus") }
+                                    .buttonStyle(.borderless)
+                                    .accessibilityLabel("Remove \(member.name)")
+                            }
                         }
                     }
+                    Button("Invite someone", systemImage: "person.badge.plus") {
+                        shareMemory = false; contributorConsent = false; recipientEmail = ""; showingInvite = true
+                    }
+                } header: {
+                    HStack {
+                        Text("Participants")
+                        InfoButton(title: "Shared contacts", text: Self.aboutSharing)
+                    }
                 }
-                Section("Pending Invitations") {
-                    ForEach(sharing.invitations) { invite in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(invite.recipientEmail ?? "Invitation code")
-                                Text("Expires \(Date(timeIntervalSince1970: invite.expiresAt / 1000).formatted(date: .abbreviated, time: .shortened))")
-                                    .manrope(.footnote).foregroundStyle(.secondary)
+                if !sharing.invitations.isEmpty {
+                    Section("Pending invitations") {
+                        ForEach(sharing.invitations) { invite in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(invite.recipientEmail ?? "Invitation code")
+                                    Text("Expires \(Date(timeIntervalSince1970: invite.expiresAt / 1000).formatted(date: .abbreviated, time: .shortened))")
+                                        .manrope(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button(role: .destructive) { revoke(invitationID: invite.id) } label: { Image(systemName: "xmark.circle") }
+                                    .buttonStyle(.borderless)
+                                    .accessibilityLabel("Revoke invitation")
                             }
-                            Spacer()
-                            Button("Revoke", role: .destructive) { revoke(invitationID: invite.id) }
                         }
                     }
                 }
             }
             if busy && sharing == nil { ProgressView() }
-            if let error {
+            if let error, !showingInvite {
                 Text(error).foregroundStyle(.red).manrope(.footnote)
                 Button("Retry") { Task { await load() } }
             }
         }
+        .sheet(isPresented: $showingInvite) { inviteSheet }
         .disabled(busy)
         .navigationTitle("Share Contact")
         .navigationBarTitleDisplayMode(.inline)
@@ -102,6 +100,43 @@ struct ContactSharingView: View {
         } message: {
             Text("Their access, private chat, schedules, and contributed memories will be deleted. Facts already repeated in other chats cannot be recalled.")
         }
+    }
+
+    private var inviteSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    // Consent covers this text, so it stays visible beside the switches.
+                    Text("The contact can recall facts learned from anyone here, including saved memories from before sharing. Chat transcripts and attachments stay private.")
+                        .manrope(.footnote).foregroundStyle(.secondary)
+                    Toggle("Share existing and future memories", isOn: $shareMemory)
+                    if sharing?.contributorModel == true {
+                        Text("Your selected model is Contributor. Messages and shared memories sent to Meta may be used to train its models.")
+                            .manrope(.footnote).foregroundStyle(.secondary)
+                        Toggle("I agree to Meta's Contributor data use", isOn: $contributorConsent)
+                    }
+                }
+                Section {
+                    TextField("Existing user's email", text: $recipientEmail)
+                        .textContentType(.emailAddress).keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Button("Send invitation", systemImage: "paperplane") { createInvitation(byEmail: true) }
+                        .disabled(!canInvite || recipientEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                } header: { Text("By email") }
+                Section {
+                    Button("Create invitation code", systemImage: "qrcode") { createInvitation() }.disabled(!canInvite)
+                } header: { Text("Or with a code") }
+                if let error { Text(error).foregroundStyle(.red).manrope(.footnote) }
+            }
+            .disabled(busy)
+            .navigationTitle("Invite")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { InfoButton(title: "Shared contacts", text: Self.aboutSharing) }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { showingInvite = false } }
+            }
+        }
+        .presentationDetents([.large])
     }
 
     private func load() async {
@@ -136,6 +171,7 @@ struct ContactSharingView: View {
                 invitation = try await auth.withSession { api, token in
                     try await api.inviteContact(id: contactID, email: email, contributorConsent: contributorConsent, token: token)
                 }
+                showingInvite = false
                 cache.invalidate()
                 busy = false
                 await load()

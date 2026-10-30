@@ -8,9 +8,11 @@ starts an empty chat. It never clones an agent or copies someone else's history.
 ## iOS flow and consent
 
 The creator opens a contact and chooses **Share contact** in the chat's three-dot menu. **Share
-Contact** explains shared memory, requires approval to share existing and future
-memories, and lets the creator enter an existing user's email and tap **Invite
-User**. The server resolves that address to an immutable account ID and creates
+Contact** lists participants and pending invitations (remove/revoke are icon
+buttons), with the general explanation behind an info button. **Invite someone**
+opens a sheet that keeps the shared-memory text beside its consent switches and lets
+the creator enter an existing user's email and tap **Send invitation**, or create an
+invitation code. Web uses the same layout. The server resolves that address to an immutable account ID and creates
 an in-app request for that account. The recipient opens **Chats → + → Contacts → Contact Invitations**
 and accepts or declines there. Acceptance still
 requires shared-memory consent and, when applicable, Contributor consent. No
