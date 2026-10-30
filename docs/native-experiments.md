@@ -329,3 +329,13 @@ system presentation and falls back honestly if unavailable. Exercise expiry,
 permission denial, missing acknowledgement, app restart, disabled tools, account
 switch and simultaneous focus/recipe/speech sessions. These device/model checks
 remain pending; static typechecks do not establish runtime correctness.
+
+## Layout
+
+iOS: the contact screen keeps the main switch and the remote timers/alarms switch at the
+top (with a one-line note of what the remote switch grants), and opens **Allowed
+tools**, **Run without confirmation** and **Try it in chat** as rows with counts that
+open sheets. Explanations for those, Physical contact and Requests are behind info
+buttons. Web: the informational page lists capabilities and opens Automatic execution,
+Live status and receipts, Remote timers and alarms, and What stays on your iPhone in
+sheets. See the settings pattern in [contacts](contacts.md#contact-details-layout).

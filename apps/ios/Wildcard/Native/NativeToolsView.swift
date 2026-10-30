@@ -13,6 +13,26 @@ struct NativeToolsView: View {
     @State private var nfc = NativeNFC()
     @State private var confirmNFCWrite = false
     @State private var sessionRevision = 0
+    @State private var sheet: SheetKind?
+
+    private enum SheetKind: String, Identifiable {
+        case tools, automatic, examples
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .tools: "Allowed tools"
+            case .automatic: "Run without confirmation"
+            case .examples: "Try it in chat"
+            }
+        }
+        var info: String {
+            switch self {
+            case .tools: "Tools this contact can use on this iPhone. Each request still appears in Requests on this iPhone."
+            case .automatic: "Applies to new requests on this iPhone while Wildcard is open. iOS may ask for permission the first time. Calendar and location reminders still require review. Older requests remain manual."
+            case .examples: "Run an Open contact or Draft message shortcut from Siri, Spotlight or the Action button. Add the Contact widget to your Home Screen. Shared inputs remain drafts until you send them."
+            }
+        }
+    }
     private var kinds: Set<String> { native.enabled[contactID] ?? [] }
     private var contact: Contact? { contacts.contact(id: contactID) }
     private static let examples: [(kind: String, text: String)] = [
@@ -30,48 +50,35 @@ struct NativeToolsView: View {
                             .manrope(.footnote).foregroundStyle(.secondary)
                     }
                 }.padding(.vertical, 4)
-                Toggle("Enable native experiments", isOn: Binding(get: { !kinds.isEmpty }, set: {
-                    native.setKinds($0 ? Set(NativeExperiments.kinds) : [], contactID: contactID)
-                }))
-            } footer: {
-                Text("Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms run automatically when requested in this private chat while Wildcard is open. Choose other automatic tools below. Lock Screen activities may show their titles. Other people sharing this contact receive no device access.")
+                HStack {
+                    Toggle("Enable native experiments", isOn: Binding(get: { !kinds.isEmpty }, set: {
+                        native.setKinds($0 ? Set(NativeExperiments.kinds) : [], contactID: contactID)
+                    }))
+                    InfoButton(title: "Native experiments", text: "Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms run automatically when requested in this private chat while Wildcard is open. Choose other automatic tools below. Lock Screen activities may show their titles. Other people sharing this contact receive no device access.")
+                }
             }
             if !kinds.isEmpty {
                 Section {
-                    Toggle(isOn: Binding(
-                        get: { native.remoteEnabled.contains(contactID) },
-                        set: { on in Task { await native.setRemoteEnabled(on, contactID: contactID, using: auth) } }
-                    )) {
-                        NativeToolLabel(kind: "timer", title: "Allow remote timers and alarms", symbol: "iphone.radiowaves.left.and.right")
-                    }.disabled(native.remoteBusy)
-                } footer: {
-                    Text("Lets requests from your other signed-in devices schedule timers and alarms on this iPhone, including while locked or Wildcard is closed. Requires AlarmKit and visible notifications. Delivery may be delayed; requests expire after one minute. This does not enable autonomous initiative actions.")
-                }
-                Section("Allowed tools") {
-                    ForEach(NativeExperiments.kinds, id: \.self) { kind in
-                        Toggle(isOn: Binding(get: { kinds.contains(kind) }, set: { on in
-                            var value = kinds
-                            if on { value.insert(kind) } else { value.remove(kind) }
-                            native.setKinds(value, contactID: contactID)
-                        })) { NativeToolLabel(kind: kind) }
-                    }
-                }
-                Section {
-                    ForEach(NativeExperiments.kinds.filter { kinds.contains($0) && NativeExperiments.automaticKinds.contains($0) }, id: \.self) { kind in
+                    HStack {
                         Toggle(isOn: Binding(
-                            get: { native.automaticSince[contactID]?[kind] != nil },
-                            set: { native.setAutomatic($0, kind: kind, contactID: contactID) }
-                        )) { NativeToolLabel(kind: kind) }
+                            get: { native.remoteEnabled.contains(contactID) },
+                            set: { on in Task { await native.setRemoteEnabled(on, contactID: contactID, using: auth) } }
+                        )) {
+                            NativeToolLabel(kind: "timer", title: "Allow remote timers and alarms", symbol: "iphone.radiowaves.left.and.right")
+                        }.disabled(native.remoteBusy)
+                        InfoButton(title: "Remote timers and alarms", text: "Lets requests from your other signed-in devices schedule timers and alarms on this iPhone, including while locked or Wildcard is closed. Requires AlarmKit and visible notifications. Delivery may be delayed; requests expire after one minute. This does not enable autonomous initiative actions.")
                     }
-                } header: { Text("Run without confirmation") } footer: {
-                    Text("Applies to new requests on this iPhone while Wildcard is open. iOS may ask for permission the first time. Calendar and location reminders still require review. Older requests remain manual.")
+                } footer: {
+                    // What the switch grants stays visible next to it.
+                    Text("Your other devices can schedule timers and alarms on this iPhone.")
                 }
                 Section {
-                    ForEach(Self.examples, id: \.text) { example in
-                        Label { Text(example.text).manrope(.subheadline) } icon: { NativeGlyph(kind: example.kind, size: 26) }
-                    }
-                } header: { Text("Try it in chat") } footer: {
-                    Text("Run an Open contact or Draft message shortcut from Siri, Spotlight or the Action button. Add the Contact widget to your Home Screen. Shared inputs remain drafts until you send them.")
+                    let automatic = NativeExperiments.kinds.filter { kinds.contains($0) && NativeExperiments.automaticKinds.contains($0) }
+                    SheetRow(title: "Allowed tools", systemImage: "wrench.and.screwdriver",
+                             value: "\(kinds.count) of \(NativeExperiments.kinds.count)") { sheet = .tools }
+                    SheetRow(title: "Run without confirmation", systemImage: "bolt",
+                             value: "\(automatic.filter { native.automaticSince[contactID]?[$0] != nil }.count) of \(automatic.count)") { sheet = .automatic }
+                    SheetRow(title: "Try it in chat", systemImage: "text.bubble", value: "\(Self.examples.count) ideas") { sheet = .examples }
                 }
                 if let agent = contact?.agentID {
                     Section {
@@ -84,8 +91,11 @@ struct NativeToolsView: View {
                         Button { nfc.read { native.receive($0) } } label: { Label("Read NFC tag", systemImage: "wave.3.right") }
                             .disabled(!NativeNFC.available || nfc.busy)
                         if let message = nfc.message { Text(message).manrope(.footnote) }
-                    } header: { Text("Physical contact") } footer: {
-                        Text("This link opens the same agent for existing participants. It does not invite people or grant access. NFC background opening requires Associated Domains configuration.")
+                    } header: {
+                        HStack {
+                            Text("Physical contact")
+                            InfoButton(title: "Physical contact", text: "This link opens the same agent for existing participants. It does not invite people or grant access. NFC background opening requires Associated Domains configuration.")
+                        }
                     }
                 }
                 let sessions = Activity<ContactSessionAttributes>.activities.filter { $0.attributes.contactID == contactID && $0.attributes.userID == auth.user?.id }
@@ -131,8 +141,11 @@ struct NativeToolsView: View {
                     ForEach(native.actions[contactID] ?? []) { action in
                         requestRow(action)
                     }
-                } header: { Text("Requests on this iPhone") } footer: {
-                    Text("Completed means this device finished the requested operation, such as scheduling an alarm. It does not mean the alarm rang or a real-world task was completed. Requests expire after 24 hours. Calendar and reminder items you save remain in their system apps.")
+                } header: {
+                    HStack {
+                        Text("Requests on this iPhone")
+                        InfoButton(title: "Requests", text: "Completed means this device finished the requested operation, such as scheduling an alarm. It does not mean the alarm rang or a real-world task was completed. Requests expire after 24 hours. Calendar and reminder items you save remain in their system apps.")
+                    }
                 }
             }
             if native.speaking {
@@ -144,6 +157,42 @@ struct NativeToolsView: View {
         }
         .navigationTitle("Native experiments")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $sheet) { kind in
+            NavigationStack {
+                Form {
+                    switch kind {
+                    case .tools:
+                        ForEach(NativeExperiments.kinds, id: \.self) { kind in
+                            Toggle(isOn: Binding(get: { kinds.contains(kind) }, set: { on in
+                                var value = kinds
+                                if on { value.insert(kind) } else { value.remove(kind) }
+                                native.setKinds(value, contactID: contactID)
+                            })) { NativeToolLabel(kind: kind) }
+                        }
+                    case .automatic:
+                        let automatic = NativeExperiments.kinds.filter { kinds.contains($0) && NativeExperiments.automaticKinds.contains($0) }
+                        if automatic.isEmpty { Text("Allow a tool first.").foregroundStyle(.secondary) }
+                        ForEach(automatic, id: \.self) { kind in
+                            Toggle(isOn: Binding(
+                                get: { native.automaticSince[contactID]?[kind] != nil },
+                                set: { native.setAutomatic($0, kind: kind, contactID: contactID) }
+                            )) { NativeToolLabel(kind: kind) }
+                        }
+                    case .examples:
+                        ForEach(Self.examples, id: \.text) { example in
+                            Label { Text(example.text).manrope(.subheadline) } icon: { NativeGlyph(kind: example.kind, size: 26) }
+                        }
+                    }
+                }
+                .navigationTitle(kind.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) { InfoButton(title: kind.title, text: kind.info) }
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { sheet = nil } }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
         .refreshable { await native.refresh(contactID: contactID, using: auth, force: true) }
         .task(id: "\(scenePhase)-\(kinds.sorted())") {
             guard scenePhase == .active else { return }
