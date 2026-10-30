@@ -85,7 +85,7 @@ all contacts in alphabetical order. Tap a contact to open its conversation. Swip
 tap a contact to open its conversation and its title to edit it. Editors
 push over the full tab layout, preserving the selected tab on return. Chats supports
 pull to refresh and paginated loading. Choose, crop, replace, or remove a [profile photo](docs/profile-photos.md) in the
-contact editor. Private photo bytes use R2. Contact identities are saved in D1; each participant has an isolated private conversation. See [contacts](docs/contacts.md). Conversations format bot replies with essential Markdown and show plain bot text in
+contact editor. Private photo bytes use R2. Contact identities are saved in D1; each participant has an isolated private conversation. See [contacts](docs/contacts.md). The shared [conversation style](docs/conversation-style.md) guides natural regional wording, distinct writing habits, brief useful replies and group addressing in both clients. Conversations format bot replies with essential Markdown and show plain bot text in
 chat list previews, quoted replies and notifications. Contacts can choose [successive messages](docs/reply-messages.md) with brief durable pauses on iOS and web. Conversations support
 [emoji reactions](docs/reactions.md) from humans and bots on their own or others’
 messages in both private chats and groups, [quoted replies](docs/replies.md) to any

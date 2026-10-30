@@ -23,6 +23,15 @@ for source in (root / 'apps/api/src/personality').glob('*.ts'):
 private_context = (root / 'apps/api/src/chat/context.ts').read_text()
 queries.extend(query for query in re.findall(r'\.prepare\(`([^`]+)`\)', private_context)
                if 't.updated_at AS repliedAt, c.last_reply_read_at AS readAt' in query)
+# Group participation must retain successive bubbles outside the recent window.
+group_context = (root / 'apps/api/src/groups/context.ts').read_text()
+fragments = {name: re.search(rf'const {name} = `([^`]+)`', group_context).group(1)
+             for name in ['visibleMessage', 'messageColumns']}
+for query in re.findall(r'\.prepare\(`([^`]+)`\)', group_context):
+    if 'FROM group_reply reply' in query:
+        for name, fragment in fragments.items():
+            query = query.replace('${' + name + '}', fragment)
+        queries.append(query)
 for query in queries:
     if '${' in query:
         raise ValueError('Unresolved personality SQL template')

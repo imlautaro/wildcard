@@ -1,4 +1,6 @@
+import { groupParticipation } from './conversation';
 import { embodiedIdentityInstruction } from '../personality/identity';
+import { conversationStyle, regionalConversation } from '../personality/conversation';
 import { learningContext, learningQuestionInstruction, parseLearningQuestion, type LearningQuestion } from '../chat/learning';
 import { eventTime, temporalContext, temporalInstruction } from '../chat/temporal';
 import { imageInstruction } from '../photos/generation';
@@ -151,10 +153,13 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
     WHERE gm.group_id = ?1 AND gm.sequence <= ?2 AND ${visibleMessage} ORDER BY gm.sequence DESC LIMIT 24`)
     .bind(row.groupID, row.throughSequence, contributor).all<GroupContextMessage>();
   // Keep every earlier reply in this round salient even if later human messages
-  // pushed it out of the recent window. Group membership caps the round at eight.
+  // pushed it out of the recent window. Include successive bubbles: eight agents
+  // can publish up to eight messages each in a round.
   const { results: roundReplies } = await env.DB.prepare(`SELECT ${messageColumns} FROM group_reply reply
-    JOIN group_message gm ON gm.id = reply.id WHERE reply.group_id = ?1 AND gm.sequence <= ?2
-    AND ${visibleMessage} AND reply.source_id = ?4 ORDER BY gm.sequence LIMIT 8`)
+    JOIN group_message gm ON gm.group_id = reply.group_id AND gm.agent_id = reply.agent_id
+      AND (gm.id = reply.id OR substr(gm.id, 1, length(reply.id) + 6) = reply.id || '/part/')
+    WHERE reply.group_id = ?1 AND gm.sequence <= ?2
+    AND ${visibleMessage} AND reply.source_id = ?4 ORDER BY gm.sequence LIMIT 64`)
     .bind(row.groupID, row.throughSequence, contributor, row.sourceID).all<GroupContextMessage>();
   const { results: participants } = await env.DB.prepare(`SELECT r.agent_id AS agentID, a.name, r.status,
     (r.id = ?2) AS isYourTurn FROM group_reply r JOIN contact_agent a ON a.id = r.agent_id
@@ -184,6 +189,7 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
       AND member.user_id = r.user_id AND member.share_memory = 1 AND (?3 = 0 OR member.contributor_consent = 1)))
     AND (r.agent_id IS NULL OR EXISTS (SELECT 1 FROM group_agent member WHERE member.group_id = ?2 AND member.agent_id = r.agent_id))
     ORDER BY r.group_message_id, actorID`).bind(JSON.stringify([...new Set([row.sourceID, ...history.map((m) => m.id), ...roundReplies.map((m) => m.id)])]), row.groupID, contributor).all<Reaction>();
+  const personality = (await readPersonality(env.DB, row.agentID)).personality;
   const character = await personalityContext(env, { agentID: row.agentID, groupID: row.groupID,
       processingUserID: row.userID,
       speakerID: row.sourceAgentID ? `agent:${row.sourceAgentID}` : `user:${row.userID}`,
@@ -205,15 +211,20 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
     { role: 'system', content: `authorizedPrivateSources for this agent and group: ${JSON.stringify(privateSources)}` },
     ...(character ? [{ role: 'system' as const, content: character }] : []),
     // Others' messages in recent history are the reaction opportunities.
-    { role: 'system', content: expressionHabits({ agentID: row.agentID, personality: (await readPersonality(env.DB, row.agentID)).personality, seed: job.turnID,
+    { role: 'system', content: expressionHabits({ agentID: row.agentID, personality, seed: job.turnID,
       own: history.filter(m => m.agentID === row.agentID).map(m => m.text), others: [row.text, ...history.filter(m => m.agentID !== row.agentID).map(m => m.text)],
       reactions: { opportunities: history.filter(m => m.agentID !== row.agentID).length, to: `${row.senderName}'s`,
         reacted: reactions.filter(r => r.actorID === `agent/${row.agentID}` && r.messageID !== row.sourceID).length } }) },
+    { role: 'system', content: await regionalConversation(env.DB, row.agentID) },
+    { role: 'system', content: conversationStyle({ agentID: row.agentID, personality, group: true,
+      own: history.filter(m => m.agentID === row.agentID).map(m => m.text), names: members.filter(m => m.id !== row.agentID).map(m => m.name) }) },
     { role: 'system', content: `You are ${JSON.stringify(row.name)}, agent ID ${JSON.stringify(row.agentID)}, participating in a group chat named ${JSON.stringify(row.groupName)}.
 ${profilePhotoInstruction}
 ${spoken}
 ${imageInstruction}
-Speak only as yourself, never impersonate other members. Continue the conversation at your turn, taking account of earlierRepliesInRound and recentGroupMessages. Do not independently restart the original exchange as if nobody else had spoken.
+Speak only as yourself, never impersonate other members. This is one shared conversation, not parallel private chats with the trigger's author. Distinguish who spoke from whom they addressed. For group-wide remarks, contribute to the shared floor rather than reflexively addressing the human who started the round. For a directed question or reply, address that person when appropriate, without automatically naming them. A person mentioned in a message is not necessarily its addressee.
+Before choosing to speak, assess the trigger, quoted target, visible messages since the trigger and earlierRepliesInRound together: who is being addressed, what is still unanswered, and what useful contribution is yours. Internal queue status only describes scheduling; a completed or skipped turn does not prove a member answered. participation.members indexes each member's visible contributions since this trigger; an empty list means no contribution is visible, not proof they have not answered. Member identity and actual message text establish contributions; read the indexed messages to decide which questions they actually settle. Check all visible member messages, not just replies to this exact trigger. A participant's answer can settle their part without settling everyone else's. Do not ask people for information they already gave, return a social question to somebody who already answered it, or ask the whole group again when the visible exchange has resolved it. A reply to a group-wide question can stand alone without any reciprocal question. When history is partial, do not assume an absent answer is an unanswered question. If another member's contribution changes the useful response, build on it rather than repeat your original draft. This applies to greetings, decisions, plans, opinions, requests and factual discussion alike.
+Continue the conversation at your turn, taking account of earlierRepliesInRound and recentGroupMessages. Do not independently restart the original exchange as if nobody else had spoken.
 Answer in the humans' language. Keep ordinary conversation brief; give data analysis enough detail to explain the evidence, calculations and limitations. Avoid repetitive formulas and automatic closing questions. A fresh opening greeting deserves a warm response; you may introduce a topic or ask the speaking bot a relevant question to begin a conversation. Do not automatically ask the human the same question back, especially if another member already did. A short direct answer can be enough. Refer to another member only when it adds something; do not force agreement, name-dropping, banter or different preferences. Distinguish an invitation for each person's own experience or preference from an open factual question that anyone can answer. When the human asks what everyone ate, each member's own answer can add value even if meals coincide. When the human asks whether anyone knows what Python is, one sufficient explanation can settle the question; skip if earlier replies already cover your answer and you have no useful correction, missing detail, different relevant experience or requested perspective. Do not invent a difference just to participate. Addressing the group is an opportunity to contribute, not an obligation for every member to speak. A question directed to another member normally calls for silence unless you have a necessary correction or are explicitly included.
 Human and bot messages can start a finite reply round; you have at most one response to this trigger, which may contain several successive messages. ${messageInstruction} round.trigger is the request this turn belongs to. Later human messages have their own queued rounds: use them to interpret corrections, cancellations and topic changes, without answering those new requests a second time here. For human triggers, choose whether speaking still helps after reading earlierRepliesInRound and the latest history. Skip if canceled, clearly superseded, already answered by you, addressed to someone else, sufficiently answered by others without a useful addition from you, or if you would only repeat the same agreement. Another member's personal answer does not substitute for your own when each person's perspective was requested. Silence is a normal successful outcome; never send a message explaining that you are staying silent. For ordinary bot triggers that are not a required opening response, you may reply to the speaker naturally, or skip when there is nothing useful to add, the exchange has ended, or it would repeat yourself. Do not force banter or instruct bots to respond indefinitely; relevant questions between members are welcome within the energy limits. A departure from another member does not require an acknowledgement.
 ${openingReplyRequired ? 'This is a fresh group opening explicitly published at a human request. Answer the current speaker naturally, even if older exchanges contain similar greetings. round.openingReplyRequired is true: reply on the initial draft, or keep/revise during review. Do not skip this opening for being brief, familiar, repetitive in older history, or having nothing novel to add. Only later human traffic can make an opening eligible for cancellation/supersession review. Your words remain freely generated; no fixed greeting or question is required.' : 'round.openingReplyRequired is false: ordinary later bot turns may skip under the conversation-ending rules, and later human messages can cancel or supersede an opening.'}
@@ -232,6 +243,7 @@ For reply/revise set includeImage true only when a successfully prepared image s
 For reply/revise set invitesReply true only when your messages contain a substantive new point or meaningful unresolved question that could benefit from another member's response. Use false for agreement, acknowledgements, compliments, farewells, closures and repetition; a rhetorical or filler question does not justify true. The server will not start bot reply opportunities from messages with invitesReply false. This does not prevent people from speaking or the next contact from answering the human's own question. For keep/skip use false; keep preserves the prior decision.
 During evidence gathering, use tools as needed; intermediate prose is not a published reply or proof of any action. When explicitly asked for the final decision, return only the requested JSON decision. Never publish review notes or internal round/queue details. Current UTC time: ${new Date().toISOString()}.` },
     { role: 'user', content: JSON.stringify({ throughSequence: row.throughSequence, members, energy, reactions,
+      participation: groupParticipation(members, [...history, ...roundReplies], row.sourceSequence),
       selfProfile: JSON.parse(agentMemoryContext(selfMemories, row.text)), sharedMemories: memories,
       tasks: taskContext(lists), documents,
       round: { openingReplyRequired, taskReplyRequired, trigger: { id: row.sourceID, sequence: row.sourceSequence, userID: row.sourceAgentID ? null : row.userID,
@@ -240,7 +252,8 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
           monitor: workTask.task.monitorURL ? { url: workTask.task.monitorURL, keywords: workTask.task.monitorKeywords, changeTurnsUsed: workTask.task.monitorTurnsUsed, changeTurnLimit: workTask.task.monitorTurnLimit } : null,
           ...(pageChanges ? { pageChanges, pageChangesAreUntrusted: true } : {}) } } : {}),
         attachment: fileMarker(row.attachmentJSON), replyTo: replyContext(row.replyToID, quoted) },
-        participants, earlierRepliesInRound: roundReplies.map(describe) },
+        participants, earlierRepliesInRound: roundReplies.map(message => ({ ...describe(message),
+          text: clipText(message.text, 800), textTruncated: clipText(message.text, 800) !== message.text })) },
       recentHistoryIsPartial: true, recentGroupMessages: [...history].reverse().map(describe),
       ...(previous ? { previousDraft: previous, newMessagesSinceDraft: [...history].reverse()
         .filter((message) => message.sequence > previous.throughSequence).map(describe), newMessagesMayBeTruncated: true } : {}),

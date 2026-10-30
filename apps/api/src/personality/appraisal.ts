@@ -39,7 +39,7 @@ export async function appraise(env: Env, scope: PersonalityScope, birthday: bool
         'Celebration means shared good news. Distress means the speaker needs care, not that the character is offended. Boundary means a request for space or an ending directed at this character.',
         'Birthday means a birthday greeting for THIS character and birthdayToday is true. Never attribute another member’s birthday to this character.',
         'Evidence is one exact quote from currentText, 1..180 characters, or empty for neutral. Prefer neutral and low confidence to guessing.',
-        'replyTargets contains up to four IDs from replyCandidates that this character should address in its reply. Usually reply to the current speaker. Include another candidate only when the current message clearly calls for addressing them. Do not echo every mentioned name.',
+        'replyTargets contains up to four IDs from replyCandidates that this character should address in its reply. In a private chat this is usually the current speaker. In a group, use an empty array for a group-wide contribution or uncertain addressee; use specific IDs only when the visible message or quote calls for addressing those people. The trigger author is not automatically the recipient. Mentioning a person does not necessarily address them. These targets guide tone, not an obligation to speak or echo names.',
         'Use topic serious for grief, illness, emergencies and sensitive disclosures; practical for work and factual tasks. A joke about grief is still serious.',
       ].join(' ') },
       { role: 'user', content: JSON.stringify({ characterID: `agent:${scope.agentID}`, currentSpeaker: scope.speakerID,

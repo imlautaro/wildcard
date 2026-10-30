@@ -1314,3 +1314,22 @@ late inference and unpublished drafts cannot restore older learning. Ordinary fa
 memory follows its own retention controls. Verify reopen/back, empty results, explicit
 refresh, offline/failure recovery, reset during a request, history clear, remote
 revocation and account switching on both clients; device/browser checks are pending.
+
+## Natural conversation style
+
+[Conversation style](conversation-style.md) introduces no downloaded resource or
+client cache. Stable writing habits are computed server-side from the shared
+agent ID and current traits. Regional wording reads the existing speech override
+and validated original generation preferences during context preparation. Local
+name/length feedback and the group participation index use only that audience's
+already-authorized history; no cross-conversation measurements are cached.
+
+Both clients retain their current session conversation/contact stores, pagination,
+request deduplication, loaded/empty snapshots, background refresh, stale-response
+rejection, pending submissions and account/access invalidation. Accent mutations
+upsert the existing contact responses; failures retain the prior selection. No
+new persistence, eviction policy or image key is introduced. Checkpoints can retain
+older direction for an in-flight draft; newly prepared contexts use current
+settings. Stored historical messages do not change after a release. Check reopen,
+refresh, empty chats, offline recovery, mutation failure, revocation and account
+switching on iOS/web. Static checks do not verify these device behaviors.

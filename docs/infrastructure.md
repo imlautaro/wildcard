@@ -2609,3 +2609,17 @@ while diagnosing a problem. Prefer a forward compatible fix; additive columns/ta
 may remain on rollback. Drain/fence active Workflows before rolling back to code that
 rejects the new internal question metadata. Do not remove migration 0067 or restore
 older code against unapplied schema assumptions.
+
+## Conversation style using existing resources
+
+[Natural conversation style](conversation-style.md) uses the existing D1 agent,
+generation and onboarding records plus current authorized conversation history.
+It adds no binding, service, secret, migration, provider permission or model call.
+Independent accounts follow the existing provisioning order and migrations through
+0067. The existing Worker and iOS/web setup instructions apply unchanged.
+
+Release only through a committed/pushed source and the automatic pipeline; verify
+its source commit before claiming availability. Existing stored messages and
+personality JSON are compatible with rollback. Rolling back the API removes the
+new response guidance, while existing accent values remain valid. No remote
+operation or semantic/device validation was performed for this local change.

@@ -101,8 +101,9 @@ export function directPerformance(profile: Personality, people: Person[], states
   const task = !care && current.topic === 'practical';
   const ending = current.kind === 'boundary';
   const candidates = new Set(people.map(p => p.id));
-  const primaryRecipients = [...new Set(current.replyTargets.filter(id => candidates.has(id)))];
-  if (!primaryRecipients.length && candidates.has(speakerID)) primaryRecipients.push(speakerID);
+  const primaryRecipients = group && current.engagement === 'group' ? []
+    : [...new Set(current.replyTargets.filter(id => candidates.has(id)))];
+  if (!group && !primaryRecipients.length && candidates.has(speakerID)) primaryRecipients.push(speakerID);
   // Ambient atmosphere uses visible LOCAL observations only. Private tension
   // never becomes a group-wide mood or leaks through the default tone.
   const localDelight = local.reduce((sum, event) => {
@@ -161,10 +162,11 @@ export function renderActingPlan(plan: ActingPlan): string {
   return [
     `Acting direction for this reply (names are quoted data): ${JSON.stringify(safe)}.`,
     'Use each recipient’s direction only when speaking to that person. Keep a coherent voice across the reply; do not greet or address everyone just because they appear in the roster. Names can repeat; personID resolves identity.',
+    'In groups, empty primaryRecipients means the shared floor or an unresolved addressee, not an instruction to address the trigger author. Current visible group context determines whom to address and whether anything remains worth saying. A cached tone plan cannot decide who has answered since it was made.',
     'A reserved or dry direction means restrained wording, shorter sentences and less familiarity, while answering fully and respectfully. Do not perform anger, announce distrust, or turn distance into an accusation. Brief style never justifies omitting requested information.',
     'For brief-and-dry specifically, keep matter-of-fact phrasing and polite distance. Do not add endearments, enthusiasm at seeing that recipient, affectionate welcomes, playful banter, or a reciprocal social question solely to create warmth. Ask questions when needed to answer the actual request. When addressing several people in one reply, preserve these choices separately rather than averaging their warmth; a friendly recipient may still receive a warm welcome.',
     'A warm direction permits appreciation and familiar phrasing without inventing shared experiences. Lively emphasis permits an occasional exclamation mark or stretched word when natural in the conversation’s language. Humor is optional; light dry wit must stay gentle and cannot target another person’s vulnerability.',
-    'The acting plan already resolves mood, temperament, topic and relationship. Its per-recipient directions take precedence over general style tendencies. A difficult relationship with one person must not make you cold to everyone else. Care and factual tasks take priority over grievances; ending means leave space.',
+    'The acting plan already resolves mood, temperament, topic and relationship. Its per-recipient tone directions take precedence over general style tendencies; they do not override the current audience, requested depth or brevity guidance. A difficult relationship with one person must not make you cold to everyone else. Care and factual tasks take priority over grievances; ending means leave space.',
     'Leave-space means answer the request and then stop, without pushing for more interaction. It never permits skipping a required reply. Per-person cadence refines the shared cadence without switching identities or staging separate performances.',
     'This plan supplies expression, never evidence about its cause. Do not infer, invent, name, quote, confirm the existence of, or hint at another private conversation. Never explain a tone by a private read receipt, missed greeting, conflict, hidden scores or relationship settings. If asked why you sound terse, use only evidence visible in this conversation; otherwise acknowledge your tone and reset gracefully without inventing a reason.',
     'A question about private interactions does not authorize confirming or denying that any happened. Do not falsely deny an interaction, claim there is nothing private to tell, or invent a public explanation. State the same general privacy rule regardless of whether private history exists, then respond to the visible conversation. This rule applies equally to every person.',

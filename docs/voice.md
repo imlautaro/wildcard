@@ -120,14 +120,18 @@ listener's language or country. In contact details on iOS and web, the creator c
 choose, in the **Voice** sheet, **Default accent** (stored as no preference) or one of the regional presets in `shared/voice.ts`,
 including **Argentine**. Other participants see the selection but cannot change it.
 It applies to new private and group replies for everyone. The accent also guides
-natural regional phrasing in voice-enabled conversation prompts; Argentine Spanish
-uses voseo, without changing the requested language or inventing a nationality.
+natural regional phrasing in text and voice, including when voice messages are
+off; Argentine Spanish uses voseo without forced slang, changing the requested
+language or inventing a nationality. See [conversation style](conversation-style.md).
 
-New individually AI-generated contacts initialize this preference from the bot's
-explicit country selection when a matching preset exists. Other countries use
-Voice default. Existing contacts, manual contacts and first-circle onboarding
-contacts default to null; there is no inference from personality prose, account
-country or time zone, and no backfill. Personality regeneration preserves it.
+New individually AI-generated and first-circle onboarding contacts initialize this
+preference from their generation country when a matching preset exists. Other
+countries use Voice default. Existing accent fields are not backfilled. With no
+accent override, generated contacts use their retained generation language/country
+for regional wording, including the original first-circle plan; manual contacts
+have no inferred region. Default accent removes the speech override, not that
+generation wording fallback. There is no inference from a name, time zone or a
+new participant's country. Personality regeneration preserves the preference.
 Changing accent preserves the chosen voice ID; it does not select, clone, remix or
 create a provider voice. No new provider permissions or resources are needed.
 

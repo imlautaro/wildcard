@@ -339,7 +339,7 @@ private struct ContactVoiceRows: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
-                            InfoButton(title: "Voice", text: "Accent applies to new messages for everyone. Results depend on the voice; samples keep their original accent. " + (contact?.canManage == true ? "Everyone who chats with this contact hears the voice you choose." : "The contact's creator chooses its voice."))
+                            InfoButton(title: "Voice", text: "Accent guides regional wording in text and voice, without forcing slang or changing the language. Audio results depend on the voice; samples keep their original accent. " + (contact?.canManage == true ? "Everyone who chats with this contact hears the voice you choose." : "The contact's creator chooses its voice."))
                         }
                         ToolbarItem(placement: .confirmationAction) { Button("Done") { presented = false } }
                     }

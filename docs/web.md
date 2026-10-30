@@ -344,7 +344,8 @@ caching and pending device/browser checks.
 New replies use conversational delivery and moderate stability. Contact details →
 **Voice → Speech accent** lets the creator select a shared regional preference,
 including Argentine, or Voice default; members see it read-only. It applies to
-new private and group audio on both clients. The API requires migration 0061.
+new private and group audio on both clients and guides matching-language regional
+wording in text even with voice off. The API requires migration 0061.
 This is an accent preference, independent of nationality; provider fidelity is
 best effort. The existing voice remains selected, and sample buttons keep playing
 their original recording. See [casual delivery](voice.md#casual-delivery-and-speech-accent-0061).
@@ -1028,3 +1029,22 @@ session cache retains empty/loaded content, deduplicates reads and revalidates a
 thirty seconds or explicit Refresh; mutations fence older reads. Clear, removal and
 account switching invalidate it. No disk storage or extra polling is introduced.
 See [behavior and limitations](conversation-learning.md) and [cache rules](caching.md#conversation-learning).
+
+## Natural conversation style
+
+Web and iOS use the shared [conversation style](conversation-style.md) in private
+replies, group drafts/reviews and optional private initiative. Contact-specific
+writing habits, current-audience name/length feedback, regional language from
+retained generation preferences and group participation context guide new replies.
+Ordinary messages favor brief contributions; useful explanations retain needed
+depth. Existing identities and messages are preserved. Both clients' Voice help
+explains that accent also guides text wording without forcing slang.
+
+There is no new response contract, client request, cache, migration or model call.
+Existing conversation stores keep loaded history and receive new replies through
+the usual polling/mutation flow. Accent updates still upsert the session contact
+and reject late reads/account changes. Reloading cannot rewrite old messages.
+Check both clients with fictional conversations, distinct writing styles, directed
+and group-wide messages, partial history, voice on/off, refresh/back navigation,
+offline failures, revocation and account switching. Model quality and visual/device
+behavior are pending; static checks are not a conversational quality evaluation.

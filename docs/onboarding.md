@@ -185,3 +185,20 @@ checkbox. The notes about generated contacts (names, language, ages, gender) and
 the circle type are behind info buttons on iOS and web, as are the Your bot and manual
 creation notes in Create contact. See the settings pattern in
 [contacts](contacts.md#contact-details-layout).
+
+## Conversational generation preferences
+
+New identity descriptions retain language and regional wording preferences, with
+subtle grammar and vocabulary rather than a nationality caricature. New contacts
+also initialize the existing speech accent preset when the selected country has
+one. The creative temperament favors fresh relevant ideas without requiring poetic
+speech or maximum verbosity. Existing descriptions remain intact.
+
+[Conversation style](conversation-style.md) can read only the language/country
+codes from the retained original plan's generation preferences for existing
+first-circle agents. It identifies origin by agent ID in that plan, not the mutable
+chat-list onboarding flag, so clearing history does not lose the preference. It
+never forwards the user's onboarding profile as conversation context or applies a
+new participant's country to a shared agent. No new retention, cache or migration
+is introduced. Both clients use the same server behavior; semantic/device checks
+remain pending.

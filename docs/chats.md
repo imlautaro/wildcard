@@ -850,3 +850,15 @@ schedules, task work and group-result delivery do not train them. Both clients o
 inspection, disable and reset from contact details. Ordinary factual memory and the
 configured personality remain separate. Migration 0067 is required; model/device
 validation remains pending.
+
+## Natural wording and depth
+
+Both clients receive the shared [conversation style](conversation-style.md):
+sparing use of names, subtle regional wording even with voice off, grounded
+expression of creative identities, and stable optional chat-writing habits per
+contact. Current-audience recent replies supply bounded name/length feedback;
+private wording and measurements are never carried to groups. Short social replies
+remain short; requested explanations, evidence and necessary nuance retain depth.
+Scheduled/task replies and private initiative use the same style direction within
+their existing permissions. No client cache, response contract or new inference
+is added. Existing messages are unchanged; model/device verification is pending.

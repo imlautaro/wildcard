@@ -901,3 +901,21 @@ Membership/consent changes and source deletion invalidate derived state. Questio
 remain optional contributions under existing reply/skip, energy and publication
 limits; this feature adds no group initiative. Migration 0067 is required; model
 quality and device behavior need functional validation.
+
+## Addressing the shared conversation
+
+The shared [conversation style](conversation-style.md) distinguishes a trigger's
+author from its addressee. A deterministic participation index lists current
+members' visible messages after the trigger, deduplicating recent and round
+history. It includes humans and bots but does not interpret queue completion as an
+answer or an absent message as proof of silence. The model reads actual content
+and quotes to decide who is addressed, what is still open and whether a short
+contribution adds value. It avoids asking again for answers already given, across
+planning, opinions, decisions and conversation as well as greetings.
+
+Group-wide personality appraisals do not force a primary individual recipient.
+Directed replies retain individual tone guidance. Existing required openings/task
+updates, skip decisions, consent, energy and atomic stale-draft review stay in
+force. Reviews rebuild visible participation; they do not reveal private exchanges.
+This API behavior is shared by iOS and web, with no new request or cache. Model
+quality and device/browser behavior remain pending verification.

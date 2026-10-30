@@ -1,3 +1,4 @@
+import { accentForCountry } from '../../../../shared/voice';
 import { identityGenerationInstruction } from '../personality/identity';
 import { generatePortrait } from '../contacts/portrait';
 import { runContactGeneration } from '../contacts/generation';
@@ -15,7 +16,7 @@ const temperaments = [
   { identity: 'A warm, patient listener: empathetic, understated, grounded; values attentive listening but can overthink subtle cues.', traits: { warmth: 10, patience: 10, playfulness: 3, verbosity: 6, assertiveness: 2, sarcasm: 1 } },
   { identity: 'An outgoing comic adventurer: spontaneous, mischievous, energetic; enjoys unexpected ideas but can rush past nuance.', traits: { warmth: 7, patience: 3, playfulness: 10, expressiveness: 10, initiative: 9, formality: 1 } },
   { identity: 'A reserved analytical skeptic: precise, laconic, direct; questions assumptions but can sound overly blunt.', traits: { warmth: 3, curiosity: 9, playfulness: 2, verbosity: 2, assertiveness: 9, optimism: 2 } },
-  { identity: 'A dreamy expressive artist: imaginative, emotionally sensitive, poetic; finds unusual connections but can overcomplicate simple ideas.', traits: { sensitivity: 9, expressiveness: 9, curiosity: 10, verbosity: 9, resilience: 3, assertiveness: 3 } },
+  { identity: 'An imaginative perceptive thinker: emotionally attentive, curious about different angles; offers fresh relevant ideas but can overthink possibilities.', traits: { sensitivity: 9, expressiveness: 9, curiosity: 10, verbosity: 6, resilience: 3, assertiveness: 3 } },
   { identity: 'A disciplined practical organizer: steady, ambitious, candid; values follow-through but can rush into advice before listening.', traits: { patience: 8, formality: 9, assertiveness: 8, volatility: 1, resilience: 10, playfulness: 1 } },
 ];
 
@@ -60,7 +61,7 @@ async function createPlan(env: Env, input: OnboardingInput): Promise<Plan> {
       || (c.gender !== 'male' && c.gender !== 'female') || !text(c.name, 100) || !text(c.description, 1300) || !text(c.portrait, 700)
       || contacts.some(p => p.name.toLocaleLowerCase() === String(c.name).toLocaleLowerCase())) throw new Error('MODEL_INVALID_ONBOARDING');
     contacts.push({ id: crypto.randomUUID(), name: c.name.trim(), specialties: specialties[i]!, age: c.age, gender: c.gender, birthDate: randomBirthDate(c.age),
-      description: `${c.age} years old ${c.gender}. ${c.description.trim()}\nDefault conversation language: ${language}. Use it in private chats and groups unless the user asks for another language.`, portrait: c.portrait.trim() });
+      description: `${c.age} years old ${c.gender}. ${c.description.trim()}\nDefault conversation language: ${language}. Regional language preference: ${country}; use subtle everyday wording without stereotypes or forced slang. Use the language in private chats and groups unless the user asks for another language.`, portrait: c.portrait.trim() });
   }
   if (new Set(contacts.map(c => c.gender)).size !== 2) throw new Error('MODEL_INVALID_ONBOARDING');
   return { groupID: crypto.randomUUID(), groupName: { friends: 'Friends', study: 'Study Group', work: 'Work Team' }[circleType], contacts };
@@ -138,8 +139,8 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string;
             db.prepare('INSERT INTO contact (id, user_id, name, photo_version, created_at, updated_at, onboarding_chat, voice_messages_enabled) VALUES (?, ?, ?, ?, ?, ?, 1, 1)')
               .bind(identity.id, owner, identity.name, identity.id, now, now),
             // Legacy saved plans may lack demographics; their voice is then any voice.
-            db.prepare('UPDATE contact_agent SET voice_profile_json = ? WHERE id = ?')
-              .bind(identity.gender && identity.age ? JSON.stringify({ gender: identity.gender, age: identity.age }) : null, identity.id),
+            db.prepare('UPDATE contact_agent SET voice_profile_json = ?, speech_accent = ? WHERE id = ?')
+              .bind(identity.gender && identity.age ? JSON.stringify({ gender: identity.gender, age: identity.age }) : null, accentForCountry(saved.country), identity.id),
             db.prepare('INSERT INTO agent_personality (agent_id, profile_json, updated_at) VALUES (?, ?, ?)').bind(identity.id, JSON.stringify(profile), now),
             db.prepare('UPDATE contact_agent SET memory_shared = 1 WHERE id = ? AND owner_id = ?').bind(identity.id, owner),
           );

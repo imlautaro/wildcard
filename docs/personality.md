@@ -541,3 +541,17 @@ identity and current explicit instructions take priority; learning cannot rewrit
 shared personality, manufacture a human routine or require agreement. Questions remain
 optional, and a practical interaction can end without a social closer. This applies
 to private/group replies and bounded private initiative on both clients.
+
+## Grounded identity and writing habits
+
+[Conversation style](conversation-style.md) adds stable contact-specific writing
+habits constrained by formality, expression and playfulness, plus local feedback
+for repeated participant names and lengthy replies. Personality influences relevant
+ideas and judgment rather than forcing metaphors, catchphrases or paragraphs.
+Legacy poetic identities receive the same grounded-conversation guidance without
+being rewritten. New onboarding uses an imaginative, perceptive temperament rather
+than requiring poetic speech; its default verbosity is moderate. Group-wide
+engagement no longer forces the trigger author into the director's primary
+recipients; directed contributions can still address specific people. Current
+visible discussion, not a cached tone appraisal, determines what remains unanswered.
+The shared API applies this to both clients, with no new profile field or migration.

@@ -1,5 +1,6 @@
 // Explicit speech preferences, independent of nationality or the listener's locale.
-// These are best-effort v4 delivery directions, not guaranteed provider capabilities.
+// Matching-language regional wording also applies to text. Audio directions are
+// best-effort v4 hints, not guaranteed provider capabilities.
 export const speechAccents = [
   { code: 'AR', name: 'Argentine', direction: 'Argentine accent' },
   { code: 'UY', name: 'Uruguayan', direction: 'Uruguayan accent' },
