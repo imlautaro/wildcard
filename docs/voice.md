@@ -685,3 +685,15 @@ The correction affects only web CSS; iOS and playback/listening state are unchan
 It adds no network requests, retention or cache invalidation. Browser verification
 of sent/pending text, attachments and voice messages in private/groups and both
 color schemes remains pending.
+
+## Text effects and speech fitness
+
+Casual messages containing emoji, flag symbols, obvious repeated-letter effects
+or supported written-laughter patterns stay as text even at the usual audio
+length. The API never rewrites those messages or asks a second model to turn them
+into speech. Plain conversational prose still uses the existing voice opt-in and
+suitability rules. This applies to private and group replies on iOS and web, with
+no new cache or response field. Voice prompting describes the current audience
+rather than automatically treating every note as a private message to one person.
+Fictional text/prompt evaluation and local fitness checks are documented in the
+[style evaluation](conversation-style-evaluation.md); no acoustic claim is made.

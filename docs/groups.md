@@ -921,3 +921,16 @@ updates, skip decisions, consent, energy and atomic stale-draft review stay in
 force. Reviews rebuild visible participation; they do not reveal private exchanges.
 This API behavior is shared by iOS and web, with no new request or cache. Model
 quality and device/browser behavior remain pending verification.
+
+## Final delivery review
+
+[Conversation delivery](conversation-style.md#final-delivery-and-optional-wording-review)
+reuses the current message's audience classification and chooses categorical
+audience, name, depth and follow-up direction inside finalization. A question or
+member-name mention can trigger one optional tool-free wording review before
+publication. It can keep/revise prose, preserves prepared images, cannot replay
+actions, and still passes the existing access/history-watermark guards. Review
+failures preserve the useful draft. This adds bounded model usage and latency;
+semantic metadata is not proof of compliant prose. Shared context also guides the
+evidence-gathering phase to avoid rebuilding another participant's artifact.
+Both clients receive ordinary published messages through existing stores.

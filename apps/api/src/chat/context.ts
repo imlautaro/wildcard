@@ -1,5 +1,5 @@
 import { embodiedIdentityInstruction } from '../personality/identity';
-import { conversationStyle, regionalConversation } from '../personality/conversation';
+import { conversationStyle, regionalConversation, replyDeliveryInstruction } from '../personality/conversation';
 import { learningContext, learningQuestionInstruction } from './learning';
 import { assistantEvents, eventTime, temporalContext, temporalInstruction } from './temporal';
 import { privateTaskAccess } from '../tasks/access';
@@ -444,7 +444,8 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
     if (turn.taskID && !await contactModelAllowed(env, turn.contactID, turn.userID)) throw new Error('MODEL_CONSENT_REQUIRED');
     if (turn.taskID && !await env.DB.prepare(`SELECT id FROM chat_turn WHERE id = ? AND ${privateTaskAccess('chat_turn')}`).bind(turn.id).first()) return null;
     if (round === toolRounds) messages.push({ role: 'system', content: 'Tool budget exhausted. Answer using the available evidence; acknowledge any missing detail.' });
-    const answer = await museCompletion(env, await withChatImages(env, imageScope, await withProfilePhotos(env, imageScope, messages)), model,
+    const answer = await museCompletion(env, await withChatImages(env, imageScope, await withProfilePhotos(env, imageScope,
+      [...messages, { role: 'system', content: replyDeliveryInstruction }])), model,
       !recoveryCode && round < toolRounds ? { responseFormat: { type: 'json_object' }, maxTokens: 8192, tools: autonomous ? turnTools.filter((tool) => !['create_schedule', 'update_schedule', 'cancel_schedule', 'send_group_message', 'ask_agent_in_group', 'generate_chat_image'].includes(tool.function.name)) : turnTools } : { responseFormat: { type: 'json_object' } });
     await acknowledgeGroupResults(env.DB, agent.id, processedGroupResults);
     processedGroupResults.length = 0;

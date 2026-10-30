@@ -860,5 +860,6 @@ contact. Current-audience recent replies supply bounded name/length feedback;
 private wording and measurements are never carried to groups. Short social replies
 remain short; requested explanations, evidence and necessary nuance retain depth.
 Scheduled/task replies and private initiative use the same style direction within
-their existing permissions. No client cache, response contract or new inference
-is added. Existing messages are unchanged; model/device verification is pending.
+their existing permissions. No client cache or response contract is added.
+Private delivery guidance is reinforced at final generation without another call;
+group replies can use the bounded optional review described in the linked guide. Existing messages are unchanged; model/device verification is pending.

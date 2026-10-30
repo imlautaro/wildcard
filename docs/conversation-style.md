@@ -3,8 +3,9 @@
 Private replies, group drafts/reviews and optional private initiative use shared
 server-side direction on iOS and web. New messages use the revised behavior after
 an API release; stored messages and creator-edited personalities are preserved.
-No additional model call, service, migration, permission or client response field
-is introduced. This change is local until committed, pushed and automatically
+No service, migration, permission or client response field is introduced. Most
+replies use existing calls; group replies with questions or visible member names
+can receive one additional bounded wording review, as described below. This change is local until committed, pushed and automatically
 released through the existing pipeline.
 
 ## Regional language
@@ -71,6 +72,8 @@ These are mention counts, not a claim to classify every name as a vocative. Seve
 long recent contributions trigger a fresh assessment of length, rather than
 mirroring prior verbosity. These counts are transient, do not enter memory or
 learning, and never transfer private text or its measurements into a group.
+Peer name mentions in the same visible round also discourage copying personalized
+salutations, rather than considering each agent in isolation.
 Initiative uses the same guidance and length feedback; its name guidance is general
 rather than based on a participant-name count.
 
@@ -115,6 +118,44 @@ rebuild current visible participation before reevaluating a stale draft. No new
 group initiative or response obligation is added. Semantic decisions remain
 fallible model judgments, not deterministic guarantees from queue order.
 
+## Final delivery and optional wording review
+
+The existing personality appraisal's complete, sufficiently confident audience
+classification is reused as a current-trigger hint. Only the categorical audience
+is rendered, not its confidence or private relationship causes. Disabled
+personality and incomplete classifications leave the decision to current visible
+context. Later messages can redirect an initially group-wide contribution.
+
+Group finalization chooses an internal `delivery` object before writing: shared
+or individual audience, actual recipient IDs, reason for using a name, depth and
+need for an unresolved question. IDs are checked against the current roster.
+This plan is not a reasoning trace and never enters published messages. Metadata
+is not proof of compliant prose: live evaluation found a group-labelled answer
+that still ended with an automatic singular check-in.
+
+A nonempty group draft containing a question mark or a visible member name can
+therefore receive one additional tool-free wording review. These are possible
+review triggers, not a ban on questions, quotations or attribution. The reviewer
+keeps or revises the wording; it cannot initiate tools, replay actions, skip a
+required reply, remove a prepared image or create a new opportunity to speak.
+The review sees a text/quote/question allowlist, not attachment storage keys or
+internal learning fences. Valid learned-question metadata stays tied to actual
+published wording through the existing parser and publication path.
+
+The review is checkpointed once per draft preparation with no step retry and the
+existing 45-second model timeout; transport or format failure preserves the useful
+draft and logs a bounded diagnostic. Access is checked before inference and again
+at publication. Existing history-watermark review remains authoritative if traffic
+changes while the extra call is running. This adds variable latency and one model
+call for flagged drafts; it is best effort, not a guarantee about every utterance.
+Legacy parsed checkpoints without delivery metadata remain accepted. New strict
+requests require it, but the metadata is discarded from publishable drafts.
+
+Shared-work guidance also applies during evidence gathering, so another agent's
+already-contributed artifact is inspected or reused rather than automatically
+rebuilt. A member's statement remains attributed evidence, never an execution
+receipt or authorization to perform a new action.
+
 ## Cache, release and verification
 
 There is no new client download or persistent cache. Preferences are read during
@@ -127,8 +168,9 @@ The same help in the iOS and web Voice sheets describes the wording effect.
 
 Static validation: API and web TypeScript, Swift parse, SQL EXPLAIN against all
 migrations in an empty ephemeral database, and `git diff --check`. Opt-in isolated
-regressions are in `scripts/checks/conversation-style.cjs`; do not run them without
-the authorization required by AGENTS.md. Static success does not establish model
+regressions are in `scripts/checks/conversation-style.cjs`; live fictional-data
+evaluation uses `scripts/checks/conversation-style-live-eval.mjs`. Run either only
+with the authorization required by AGENTS.md. See the [evaluation record](conversation-style-evaluation.md). Static success does not establish model
 quality or device behavior.
 
 After release, evaluate fictional private/group conversations over multiple turns
@@ -144,8 +186,9 @@ exact wording. Voice notes must sound conversational without typed effects.
 On both clients check reopen/back navigation, loaded and empty chats, explicit
 refresh, failed accent mutations/offline recovery, shared access revocation and
 account switching. Existing cached histories should remain usable and new replies
-should use the current server behavior. Live-model and device/browser verification
-remain pending; no production chats are needed for these checks.
+should use the current server behavior. The later [live evaluation](conversation-style-evaluation.md)
+records fictional-model results; device/browser verification remains pending and
+needs no production chats.
 
 Static checks completed locally on October 30, 2026: API/web TypeScript, Swift
 parse of the edited contact view, 19 personality/group-context SQL statements and
@@ -153,3 +196,9 @@ parse of the edited contact view, 19 personality/group-context SQL statements an
 `git diff --check`. Swift parse is not a full application typecheck. The new
 regression harness was written but not executed; no tests, builds, real inference,
 production data access, commit, push or release were performed for this change.
+
+The initial static-only verification above predates the corrective real-model
+evaluation on the same date. The [evaluation record](conversation-style-evaluation.md)
+distinguishes published failures, intermediate attempts and final evidence. The
+new correction includes 80 passing local regressions; it remains uncommitted and
+unpublished at the end of that evaluation.

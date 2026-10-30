@@ -555,3 +555,10 @@ engagement no longer forces the trigger author into the director's primary
 recipients; directed contributions can still address specific people. Current
 visible discussion, not a cached tone appraisal, determines what remains unanswered.
 The shared API applies this to both clients, with no new profile field or migration.
+
+Final delivery reuses only the current trigger's complete audience category, not
+private relationship evidence. The group model chooses internal delivery metadata;
+a bounded optional prose review checks flagged questions or member names because
+metadata alone does not prove that the text followed the direction. See the
+[behavior and evaluation](conversation-style-evaluation.md). No personality profile
+is rewritten and no new cross-context relationship or memory is created.

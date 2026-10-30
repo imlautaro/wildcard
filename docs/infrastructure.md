@@ -2614,12 +2614,16 @@ older code against unapplied schema assumptions.
 
 [Natural conversation style](conversation-style.md) uses the existing D1 agent,
 generation and onboarding records plus current authorized conversation history.
-It adds no binding, service, secret, migration, provider permission or model call.
+It adds no binding, service, secret, migration or provider permission. Flagged
+group drafts can use one extra bounded, tool-free wording review through the
+existing Meta transport; account for its variable latency and model usage.
 Independent accounts follow the existing provisioning order and migrations through
 0067. The existing Worker and iOS/web setup instructions apply unchanged.
 
 Release only through a committed/pushed source and the automatic pipeline; verify
 its source commit before claiming availability. Existing stored messages and
 personality JSON are compatible with rollback. Rolling back the API removes the
-new response guidance, while existing accent values remain valid. No remote
-operation or semantic/device validation was performed for this local change.
+new response guidance, while existing accent values remain valid. Parsed drafts
+discard the internal delivery plan, and legacy decisions without it are accepted.
+Fictional live-model evaluation is recorded in the [style evaluation](conversation-style-evaluation.md);
+no production operation, device or acoustic validation is implied.

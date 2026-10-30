@@ -6,7 +6,9 @@ const { fixture, source } = require('./group-publication.cjs');
 const call = (name, args = {}, id = name) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } });
 const answer = (...tool_calls) => ({ role: 'assistant', content: null, tool_calls });
 const finish = () => answer(call('finish_group_research'));
-const final = (text = 'Fictional total: 42.') => ({ role: 'assistant', content: JSON.stringify({ action: 'reply', text }) });
+const decision = (action, messages) => JSON.stringify({ action, messages, replyToID: null, invitesReply: false, includeImage: false, learningQuestion: null,
+  delivery: { audience: ['keep','skip'].includes(action) ? 'none' : 'group', recipientIDs: [], nameUse: 'omit', depth: 'brief', followUp: 'none' } });
+const final = (text = 'Fictional total: 42.') => ({ role: 'assistant', content: decision('reply', [text]) });
 let checks = 0;
 async function check(name, run) {
   const f = fixture();
@@ -25,8 +27,14 @@ async function check(name, run) {
     const state = { model: [], tools: [], logs: [], checkpoints: new Map(), reads: [] };
     const c = vm.createContext({ Error, SyntaxError, Date, JSON, TextEncoder, NonRetryableError: class extends Error {},
       personalityContext:async()=>'',
+      chatImageTools: [], taskTools: [], documentTools: [], groupMiniAppTools: [],
+      taskToolNames: new Set(), documentToolNames: new Set(),
+      researchTool: { function: { name: 'research_web' } }, taskResearchTool: { function: { name: 'research_task' } },
+      imageTool: { function: { name: 'generate_chat_image' } }, profilePhotoTool: { function: { name: 'view_profile_photo' } },
+      privateMessageTool: { function: { name: 'message_privately' } }, generatedImage: async () => null,
+      withChatImages: async (_env, _scope, messages) => messages, withProfilePhotos: async (_env, _scope, messages) => messages,
       learningContext:async()=>'', learningQuestionInstruction:'', parseLearningQuestion:()=>null,
-      console: { error: v => state.logs.push(v), log: v => state.logs.push(v) },
+      console: { error: v => state.logs.push(v), warn: v => state.logs.push(v), log: v => state.logs.push(v) },
       groupSourceAccess: f.context.groupSourceAccess,
       isRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),
       safeErrorCode: f.context.safeErrorCode,
@@ -44,6 +52,7 @@ async function check(name, run) {
         return '{"tools":[{"toolName":"read_total"}]}';
       },
     });
+    for (const file of ['personality/conversation.ts','groups/conversation.ts','chat/messages.ts']) vm.runInContext(source(file), c);
     vm.runInContext(source('groups/context.ts'), c);
     vm.runInContext(source('groups/completion.ts'), c);
     const input = { messages: [{ role: 'system', content: 'Fictional group context.' }],
@@ -164,9 +173,50 @@ async function check(name, run) {
     for (const text of ['private text','{"action":"other","text":"x"}','{"action":"skip","text":"x"}']) {
       assert.throws(()=>f.c.parseGroupDecision(text,f.input),/GROUP_INVALID_DECISION/);
     }
-    assert.throws(()=>f.c.parseGroupDecision('{"action":"skip","text":""}',{...f.input,openingReplyRequired:true,allowedActions:['reply']}),/GROUP_OPENING_REPLY_REQUIRED/);
+    assert.throws(()=>f.c.parseGroupDecision(decision('skip', []),{...f.input,openingReplyRequired:true,allowedActions:['reply']}),/GROUP_OPENING_REPLY_REQUIRED/);
     const previous={text:'Original response',throughSequence:0};
-    assert.equal(f.c.parseGroupDecision('{"action":"keep","text":""}',{...f.input,previous,allowedActions:['keep','revise']}).text,previous.text);
+    assert.equal(f.c.parseGroupDecision(decision('keep', []),{...f.input,previous,allowedActions:['keep','revise']}).text,previous.text);
+  });
+  await check('wording review revises a flagged draft without tools and survives replay', async f => {
+    f.input.memberNames=['Demo Human'];
+    f.simulate([finish(), final('Hello Demo Human, how are you?'),
+      {role:'assistant',content:decision('revise',['Everything is fine here.'])}]);
+    assert.equal((await f.complete()).text,'Everything is fine here.');
+    assert.equal(f.state.model.length,3);
+    assert.equal(f.state.model.at(-1).options.tools,undefined);
+    assert.equal(f.state.tools.length,0);
+    await f.complete();
+    assert.equal(f.state.model.length,3);
+  });
+  await check('failed optional review preserves the draft and never repeats executed tools on replay', async f => {
+    f.simulate([answer(call('call_mcp_tool',{connectionID:'connector',toolName:'read_total',arguments:{}})),
+      finish(), final('The available total is 42. What do you think?'), Error('MODEL_TEMPORARILY_UNAVAILABLE')]);
+    assert.equal((await f.complete()).text,'The available total is 42. What do you think?');
+    assert.equal(f.state.tools.length,1);
+    assert.ok(f.state.checkpoints.has('draft-delivery-review'));
+    await f.complete();
+    assert.equal(f.state.tools.length,1);
+    assert.equal(f.state.model.length,4);
+  });
+  await check('wording review preserves prepared media without sending its storage key to the model', async f => {
+    f.c.generatedImage=async()=>({name:'Fictional.png',mimeType:'image/png',key:'PRIVATE_STORAGE_CANARY'});
+    const draft=JSON.parse(final('The shared result is ready. What do you think?').content);
+    draft.includeImage=true;
+    f.simulate([finish(),{role:'assistant',content:JSON.stringify(draft)},
+      {role:'assistant',content:decision('revise',['The shared result is ready.'])}]);
+    const result=await f.complete();
+    assert.equal(result.attachment.key,'PRIVATE_STORAGE_CANARY');
+    assert.equal(result.includeImage,true);
+    assert.ok(!JSON.stringify(f.state.model.at(-1).messages).includes('PRIVATE_STORAGE_CANARY'));
+  });
+  await check('access loss before wording review prevents another inference', async f => {
+    f.simulate([finish(),()=>{
+      f.sqlite.exec("DELETE FROM group_agent WHERE group_id='group' AND agent_id='sender'");
+      return final('The available total is 42. What do you think?');
+    }]);
+    await f.complete();
+    assert.equal(f.state.model.length,2);
+    assert.equal(f.state.tools.length,0);
   });
   console.log(`${checks} isolated completion regressions passed.`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

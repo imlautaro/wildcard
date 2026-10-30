@@ -57,7 +57,12 @@ export function writingHabits(agentID: string, p: Personality) {
 export type ConversationStyleInput = {
   agentID: string; personality: Personality; group: boolean;
   own: string[]; names: string[];
+  peers?: string[];
 };
+
+// Keep the short writing decision salient after tool results and long context.
+// It changes wording only, never the permitted actions or disclosure boundary.
+export const replyDeliveryInstruction = 'User-facing wording: answer the current need in your established language and writing habits. Default to zero vocatives: routine greetings, thanks, agreement and confirmations do not need the person’s name. Use a name to resolve a real recipient ambiguity, deliberately get someone’s attention or add meaningful personal emphasis, not as a friendliness formula. Say the useful thing directly; omit the extra welcome, recap, compliment and closing question. Keep ordinary chat short across the entire burst. Develop requested explanations, evidence and necessary nuance fully. Regional grammar and vocabulary should sound ordinary, without a regional catchphrase or slang opener on every message. Creative personality does not require poetic phrasing. When voice delivery is enabled and the reply suits a voice note, follow the spoken register instead of typed laughter, stretched letters or text-only effects. Never lengthen a reply merely to qualify for audio.';
 
 // Feedback only inspects the current audience's recent messages. It cannot carry
 // private text or its measurements into another conversation or shared memory.
@@ -68,13 +73,15 @@ export function conversationStyle(input: ConversationStyleInput): string {
     const first = full.split(/\s+/u)[0]!;
     return [...first].length >= 3 ? [full, first] : [full];
   }))];
-  const named = own.filter(text => {
+  const mentionsName = (text: string) => {
     const normalized = text.normalize('NFKC').toLowerCase();
     return names.some(name => {
       const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}($|[^\\p{L}\\p{N}_])`, 'u').test(normalized);
     });
-  }).length;
+  };
+  const named = own.filter(mentionsName).length;
+  const peerNamed = input.group ? (input.peers ?? []).slice(0, 64).filter(mentionsName).length : 0;
   const longRecent = own.filter(text => text.trim().split(/\s+/u).length > (input.group ? 55 : 90)).length;
   return [
     `Your stable writing habits (preferences, never a checklist): ${JSON.stringify(writingHabits(input.agentID, input.personality))}.`,
@@ -82,6 +89,7 @@ export function conversationStyle(input: ConversationStyleInput): string {
     'Orthographic shortcuts are for casual text only. For voice notes or prose requested for speaking, use natural spoken wording and ordinary punctuation, without typed laughter, stretched letters, emoji, stage directions or fake hesitations. Keep code, links, quotations, names, technical notation and requested documents correct. Serious or sensitive moments call for clarity and restraint.',
     'Use names sparingly. Knowing who spoke does not require saying their name. Usually omit names in direct replies; use one when it resolves real ambiguity, redirects attention, or fits a rare personal moment. Do not append a name to warmth, agreement, questions or every greeting. A quote can identify a recipient without repeating the name in the text.',
     named >= 2 ? 'You have repeatedly named participants in your recent messages here. Break that pattern now: omit vocatives unless they are actually necessary to disambiguate the addressee.' : '',
+    peerNamed ? 'Other agents have already named participants in this round. Do not copy their personalized salutation or restart the exchange with the trigger author. A recipient name is still possible when genuinely needed for routing or attribution.' : '',
     input.group ? 'For ordinary group conversation, favor one short contribution, often a single sentence. Count the whole burst, not each bubble, as your contribution; leave room for others.' : 'For ordinary private conversation, favor one short message, usually one or two concise sentences; a minimal acknowledgement can be shorter.',
     'Choose depth from the current need: a social acknowledgement, a direct answer, or a developed explanation. Length is justified by an explicit request for depth, a genuinely multi-part question, essential reasoning or evidence, useful instructions, or necessary nuance in a sensitive matter. Develop only those parts. A short human message can need depth and a long human message can need a short answer. Personality verbosity changes how you explain useful content, never how much padding you add.',
     longRecent >= 3 ? 'Several recent replies here were long. Do not continue that length by inertia; reassess this turn and use the shortest complete contribution that serves it.' : '',

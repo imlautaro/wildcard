@@ -63,7 +63,9 @@ function fixture() {
     console: { error(v) { state.logs.push(JSON.parse(v)); }, log(v) { state.logs.push(JSON.parse(v)); } },
     byteLength: text => Buffer.byteLength(text), clipText: text => text,
     dispatchGroup: async () => { state.dispatches++; }, deliverGroupPush: async () => { state.pushes++; },
-    scheduleTools: [], groupRetrievalTools: [],
+    scheduleTools: [], groupRetrievalTools: [], chatImageTools: [],
+    imageTool: {function:{name:'generate_chat_image'}}, profilePhotoTool: {function:{name:'view_profile_photo'}},
+    researchTool: {function:{name:'research_web'}}, taskToolNames: new Set(), documentToolNames: new Set(),
     reactionTool: {function:{name:'react_to_message'}}, nativeTools: [], mcpTools: [], miniAppTools: [], miniAppInstruction: '',
     personalityContext: async () => '',
     learningContext: async () => '', learningQuestionInstruction: '', parseLearningQuestion: () => null,
@@ -82,7 +84,7 @@ function fixture() {
         message: { content: state.fault === 'json' ? '{' : JSON.stringify({ authorized: state.decision }) } }] }));
     },
   });
-  for (const file of ['chat/meta.ts', 'groups/energy.ts', 'groups/request-access.ts', 'groups/requests.ts', 'chat/context.ts']) vm.runInContext(source(file), context);
+  for (const file of ['chat/meta.ts', 'tasks/access.ts', 'groups/energy.ts', 'groups/request-access.ts', 'groups/requests.ts', 'chat/context.ts']) vm.runInContext(source(file), context);
   const env = { DB, META_API_KEY: 'fictional-not-a-key', META_CHAT_MODEL: 'muse-spark-1.3-contributor' };
   let counter = 0;
   function turn(text = 'Say hello in Demo Group.') {
@@ -150,7 +152,11 @@ if (require.main === module) (async () => {
     ['invalid tool arguments', () => {}, 'ask_agent_in_group', { groupID: 'group', question: 'Hello?' }, 'INVALID_ARGUMENTS'],
     ['unclear semantic authorization', f => f.state.decision = false, 'send_group_message', { groupID: 'group', text: 'Hello!' }, 'AUTHORIZATION_UNCLEAR'],
   ]) await check(name + ' has its own failure code and no writes', async f => {
-    const t = f.turn(); mutate(f); const r = await f.call(t, tool, args);
+    const t = f.turn(); mutate(f); let r = await f.call(t, tool, args);
+    if (code === 'SOURCE_TURN_INACTIVE') {
+      assert.match(r.error, /no longer active/);
+      r = JSON.parse(await f.context.executeGroupRequest(f.env, t, 'sender', { ...args, targetAgentID: null }));
+    }
     assert.equal(r.code, code); assert.equal(r.published, false); assert.equal(f.state.batches, 0);
     assert.ok(f.state.logs.some(log => log.event === 'group_publication_result' && log.code === code));
     assert.equal(f.count('group_message'), 0);
@@ -193,7 +199,8 @@ if (require.main === module) (async () => {
   });
   await check('autonomous sources cannot use either publication mode', async f => {
     const t = f.turn(); t.scheduleID = 'fictional-schedule';
-    assert.equal((await f.call(t)).code, 'AUTONOMOUS_SOURCE');
+    assert.match((await f.call(t)).error, /does not authorize/);
+    assert.equal(JSON.parse(await f.context.executeGroupRequest(f.env,t,'sender',{groupID:'group',text:'Hello!',targetAgentID:null})).code,'AUTONOMOUS_SOURCE');
     t.scheduleID = null; t.groupRequestID = 'fictional-result';
     assert.equal((await f.call(t, 'ask_agent_in_group', { groupID: 'group', targetAgentID: 'target', question: 'Hello?' })).code, 'AUTONOMOUS_SOURCE');
     assert.equal(f.state.modelCalls, 0); assert.equal(f.state.batches, 0);

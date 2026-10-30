@@ -20,6 +20,10 @@ async function check(name, run) {
   try {
     for (const file of ['shared/onboarding.ts', 'shared/voice.ts',
       'apps/api/src/personality/conversation.ts', 'apps/api/src/groups/conversation.ts']) load(f.context, file);
+    f.context.parseLearningQuestion = () => null;
+    load(f.context, 'apps/api/src/chat/messages.ts');
+    load(f.context, 'apps/api/src/groups/context.ts');
+    load(f.context, 'apps/api/src/voice/speech.ts');
     await run(f);
     assert.equal(f.sqlite.prepare('PRAGMA foreign_key_check').all().length, 0);
     checks++;
@@ -65,6 +69,48 @@ async function check(name, run) {
     assert.ok(f.context.conversationStyle({ ...base, own: [long, long, long] }).includes('Several recent replies'));
     assert.ok(!f.context.conversationStyle({ ...base, own: Array(8).fill('Brief.').concat([long, long, long]) }).includes('Several recent replies'));
     assert.ok(!f.context.conversationStyle({ ...base, own: [] }).includes('Several recent replies'));
+  });
+  await check('peer name repetition corrects the shared round without importing private text', f => {
+    const base = { agentID: 'actor', personality: f.profile, names: ['Alex'], own: [], peers: ['Hello Alex, PEER_CANARY'] };
+    const group = f.context.conversationStyle({ ...base, group: true });
+    assert.ok(group.includes('Other agents have already named participants'));
+    assert.ok(!group.includes('PEER_CANARY'));
+    assert.ok(!f.context.conversationStyle({ ...base, group: false }).includes('Other agents have already named participants'));
+  });
+  await check('categorical delivery validates recipients without granting tools or entering published text', f => {
+    const input = { memberIDs: ['user:alice', 'agent:peer'], allowedActions: ['reply', 'skip'],
+      openingReplyRequired: false, throughSequence: 7, contextMessageIDs: [], previous: null };
+    const delivery = { audience: 'group', recipientIDs: [], nameUse: 'omit', depth: 'brief', followUp: 'none' };
+    const answer = { action: 'reply', delivery, messages: ['A shared thought.'], replyToID: null,
+      includeImage: false, invitesReply: false, learningQuestion: null };
+    const parse = value => f.context.parseGroupDecision(JSON.stringify(value), input);
+    assert.equal(parse(answer).text, 'A shared thought.');
+    assert.ok(!JSON.stringify(parse(answer)).includes('nameUse'));
+    assert.ok(f.context.validDelivery({ ...delivery, audience: 'individual', recipientIDs: ['agent:peer'] }, input.memberIDs));
+    assert.throws(() => parse({ ...answer, delivery: { ...delivery, audience: 'individual', recipientIDs: ['user:departed'] } }), /GROUP_INVALID_DECISION/);
+    assert.throws(() => parse({ ...answer, delivery: { ...delivery, audience: 'none' } }), /GROUP_INVALID_DECISION/);
+    assert.equal(parse({ ...answer, action: 'skip', messages: [] }).text, null);
+    const { delivery: ignored, ...legacy } = answer;
+    assert.equal(parse(legacy).text, 'A shared thought.');
+    const schema = f.context.groupDecisionFormat(input).json_schema.schema;
+    assert.ok(schema.required.includes('delivery'));
+    assert.deepEqual(Array.from(schema.properties.delivery.properties.recipientIDs.items.enum), input.memberIDs);
+  });
+  await check('wording review flags possible routing problems without treating every mention as an error', f => {
+    assert.equal(f.context.needsDeliveryReview('A shared thought.', ['Alex']), false);
+    assert.equal(f.context.needsDeliveryReview('Hello Alex.', ['Alex Morgan']), true);
+    assert.equal(f.context.needsDeliveryReview('What do you think?', []), true);
+    assert.equal(f.context.needsDeliveryReview('Planning is complete.', ['Ann']), false);
+    assert.equal(f.context.needsDeliveryReview(null, ['Alex']), false);
+    assert.ok(f.context.currentAudienceInstruction('group').includes('whole group'));
+    assert.equal(f.context.currentAudienceInstruction(), '');
+  });
+  await check('voice fitness keeps written effects as text without rewriting the message', f => {
+    const plain = 'That was a useful discovery, and now we can get back to the conversation.';
+    assert.equal(f.context.voiceSuitable(plain), true);
+    for (const effect of [' hahaha', ' soooo', ' 🙂', ' 🇦🇷']) assert.equal(f.context.voiceSuitable(plain + effect), false);
+    assert.equal(f.context.voiceSuitable('Thanks.'), false);
+    assert.equal(f.context.voiceSuitable(plain + ' https://example.invalid'), false);
   });
   await check('generated regional preferences are read independently of voice opt-in without forwarding the job', async f => {
     f.sqlite.prepare(`INSERT INTO contact_generation(id,user_id,input_json,status,contact_id,updated_at)

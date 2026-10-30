@@ -1047,7 +1047,9 @@ Ordinary messages favor brief contributions; useful explanations retain needed
 depth. Existing identities and messages are preserved. Both clients' Voice help
 explains that accent also guides text wording without forcing slang.
 
-There is no new response contract, client request, cache, migration or model call.
+There is no new client response contract, request, cache or migration. Group
+replies containing questions or member names can use one optional server-side
+wording review, with no tools or action replay; it adds model cost and latency.
 Existing conversation stores keep loaded history and receive new replies through
 the usual polling/mutation flow. Accent updates still upsert the session contact
 and reject late reads/account changes. Reloading cannot rewrite old messages.
@@ -1055,3 +1057,10 @@ Check both clients with fictional conversations, distinct writing styles, direct
 and group-wide messages, partial history, voice on/off, refresh/back navigation,
 offline failures, revocation and account switching. Model quality and visual/device
 behavior are pending; static checks are not a conversational quality evaluation.
+
+The same final delivery guidance and optional group review apply to iOS and web.
+Internal audience/depth metadata is never exposed as a message. New casual text
+effects such as typed laughter, repeated letters and emoji stay as text instead
+of being synthesized literally; plain conversational notes remain eligible for
+audio. The fictional live-model [evaluation record](conversation-style-evaluation.md)
+covers behavior, while visual/device and acoustic verification remain separate.

@@ -1,4 +1,5 @@
-import { groupParticipation } from './conversation';
+import { groupParticipation, validDelivery } from './conversation';
+import { cachedAppraisal } from '../personality/relationships';
 import { embodiedIdentityInstruction } from '../personality/identity';
 import { conversationStyle, regionalConversation } from '../personality/conversation';
 import { learningContext, learningQuestionInstruction, parseLearningQuestion, type LearningQuestion } from '../chat/learning';
@@ -35,6 +36,9 @@ import type { GroupJob } from './workflow';
 export type GroupLearningFence = { person: number; audience: number };
 export type GroupDraft = { learningQuestion?: LearningQuestion | null; learningFence?: GroupLearningFence; includeImage?: boolean; attachment?: Attachment | null; invitesReply?: boolean; replyToID?: string | null; messages?: string[]; text: string | null; throughSequence: number };
 export type GroupInput = {
+  memberNames?: string[];
+  deliveryAudience?: 'group' | 'individual';
+  memberIDs?: string[];
   learningFence?: GroupLearningFence;
   messages: ModelMessage[];
   scope: GroupRetrievalScope & { groupID: string; reactionJob: GroupJob };
@@ -189,13 +193,21 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
       AND member.user_id = r.user_id AND member.share_memory = 1 AND (?3 = 0 OR member.contributor_consent = 1)))
     AND (r.agent_id IS NULL OR EXISTS (SELECT 1 FROM group_agent member WHERE member.group_id = ?2 AND member.agent_id = r.agent_id))
     ORDER BY r.group_message_id, actorID`).bind(JSON.stringify([...new Set([row.sourceID, ...history.map((m) => m.id), ...roundReplies.map((m) => m.id)])]), row.groupID, contributor).all<Reaction>();
-  const personality = (await readPersonality(env.DB, row.agentID)).personality;
+  const personalitySnapshot = await readPersonality(env.DB, row.agentID);
+  const personality = personalitySnapshot.personality;
   const character = await personalityContext(env, { agentID: row.agentID, groupID: row.groupID,
       processingUserID: row.userID,
       speakerID: row.sourceAgentID ? `agent:${row.sourceAgentID}` : `user:${row.userID}`,
       sourceID: job.turnID, attempt: job.attempt, text: row.text,
       context: JSON.stringify({ name: row.name, speaker: row.senderName, replyTo: replyContext(row.replyToID, quoted),
         recent: history.slice(0, 3).map(m => ({ speaker: m.name, text: clipText(m.text, 400) })) }) });
+  const appraisal = personality.enabled ? await cachedAppraisal(env.DB, { agentID: row.agentID, groupID: row.groupID,
+    processingUserID: row.userID, speakerID: row.sourceAgentID ? `agent:${row.sourceAgentID}` : `user:${row.userID}`,
+    sourceID: job.turnID, model: env.META_CHAT_MODEL }, personalitySnapshot.revision) : null;
+  const deliveryAudience = appraisal?.complete && appraisal.confidence >= 0.7
+    ? appraisal.engagement === 'group' ? 'group' as const
+      : appraisal.engagement === 'self' && appraisal.replyTargets.length ? 'individual' as const : undefined
+    : undefined;
   const privateSources = await privateSharingSources(env.DB, row.groupID, row.agentID, !!contributor);
   const messages: ModelMessage[] = [
     { role: 'system', content: embodiedIdentityInstruction },
@@ -217,6 +229,7 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
         reacted: reactions.filter(r => r.actorID === `agent/${row.agentID}` && r.messageID !== row.sourceID).length } }) },
     { role: 'system', content: await regionalConversation(env.DB, row.agentID) },
     { role: 'system', content: conversationStyle({ agentID: row.agentID, personality, group: true,
+      peers: roundReplies.filter(m => m.agentID !== row.agentID).map(m => m.text),
       own: history.filter(m => m.agentID === row.agentID).map(m => m.text), names: members.filter(m => m.id !== row.agentID).map(m => m.name) }) },
     { role: 'system', content: `You are ${JSON.stringify(row.name)}, agent ID ${JSON.stringify(row.agentID)}, participating in a group chat named ${JSON.stringify(row.groupName)}.
 ${profilePhotoInstruction}
@@ -263,6 +276,9 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
   const file = isFile(row.attachmentJSON) ? { attachmentJSON: row.attachmentJSON!, text: row.text, name: row.senderName }
     : history.find((message) => isFile(message.attachmentJSON));
   return { input: {
+    memberNames: members.map(m => m.name),
+    deliveryAudience,
+    memberIDs: members.filter(m => m.id !== row.agentID).map(m => `${m.kind}:${m.id}`),
     learningFence,
     messages,
     scope: { agentID: row.agentID, userID: row.userID, groupID: row.groupID,
@@ -284,9 +300,18 @@ During evidence gathering, use tools as needed; intermediate prose is not a publ
 
 export function groupDecisionFormat(input: GroupInput): Record<string, unknown> {
   return { type: 'json_schema', json_schema: { name: 'group_turn_decision', strict: true, schema: {
-    type: 'object', additionalProperties: false, required: ['action', 'messages', 'replyToID', 'invitesReply', 'includeImage', 'learningQuestion'], properties: {
+    type: 'object', additionalProperties: false, required: ['action', 'delivery', 'messages', 'replyToID', 'invitesReply', 'includeImage', 'learningQuestion'], properties: {
+      action: { type: 'string', enum: input.allowedActions },
+      delivery: { type: 'object', additionalProperties: false, required: ['audience', 'recipientIDs', 'nameUse', 'depth', 'followUp'], properties: {
+        audience: { type: 'string', enum: ['group', 'individual', 'none'] },
+        recipientIDs: { type: 'array', maxItems: 4, items: { type: 'string', ...(input.memberIDs?.length ? { enum: input.memberIDs } : {}) } },
+        nameUse: { type: 'string', enum: ['omit', 'disambiguation', 'personal-emphasis'] },
+        depth: { type: 'string', enum: ['minimal', 'brief', 'developed'] },
+        followUp: { type: 'string', enum: ['none', 'missing-information'] },
+      } },
+      messages: { type: 'array', items: { type: 'string' }, maxItems: 8 },
       learningQuestion: { type: ['object', 'null'], additionalProperties: false, required: ['key', 'quote'], properties: { key: { type: 'string' }, quote: { type: 'string' } } },
-      includeImage: { type: 'boolean' }, invitesReply: { type: 'boolean' }, replyToID: { type: ['string', 'null'] }, action: { type: 'string', enum: input.allowedActions }, messages: { type: 'array', items: { type: 'string' }, maxItems: 8 },
+      includeImage: { type: 'boolean' }, invitesReply: { type: 'boolean' }, replyToID: { type: ['string', 'null'] },
     },
   } } };
 }
@@ -302,10 +327,14 @@ export function parseGroupDecision(answer: string, input: GroupInput): GroupDraf
   try { decision = JSON.parse(answer); }
   catch { return invalid('invalid_json'); }
   if (!isRecord(decision) || typeof decision.action !== 'string'
-    || !Array.isArray(decision.messages) || Object.keys(decision).some(key => !['action', 'messages', 'replyToID', 'invitesReply', 'includeImage', 'learningQuestion'].includes(key))) {
+    || !Array.isArray(decision.messages) || Object.keys(decision).some(key => !['action', 'delivery', 'messages', 'replyToID', 'invitesReply', 'includeImage', 'learningQuestion'].includes(key))) {
     return invalid('invalid_shape');
   }
   if (typeof decision.invitesReply !== 'boolean' || typeof decision.includeImage !== 'boolean') return invalid('invalid_shape');
+  // Older checkpointed decisions omit delivery. New requests require it in the
+  // strict response schema; present metadata must still be structurally valid.
+  if (decision.delivery !== undefined && (!validDelivery(decision.delivery, input.memberIDs)
+    || (['reply', 'revise'].includes(decision.action) && decision.delivery.audience === 'none'))) return invalid('invalid_shape');
   const replyToID = decision.replyToID ?? null;
   if (replyToID !== null && (typeof replyToID !== 'string' || !input.contextMessageIDs.includes(replyToID))) return invalid('invalid_shape');
   if (['keep', 'skip'].includes(decision.action) && replyToID !== null) return invalid('invalid_shape');

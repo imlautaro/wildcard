@@ -1336,3 +1336,11 @@ older direction for an in-flight draft; newly prepared contexts use current
 settings. Stored historical messages do not change after a release. Check reopen,
 refresh, empty chats, offline recovery, mutation failure, revocation and account
 switching on iOS/web. Static checks do not verify these device behaviors.
+
+The final group wording review uses the existing Workflow step checkpoints; it
+creates no client cache or downloaded state. It sees only the current authorized
+group context and candidate prose, never other private text. A review does not
+grant access, change recipients' permissions or replay tools. Publication keeps
+its current membership/consent/history checks, and existing stale-draft review
+handles traffic arriving during the extra model call. Text-only effects failing
+speech fitness simply arrive as ordinary text in both session conversation stores.

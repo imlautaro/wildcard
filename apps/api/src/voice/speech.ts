@@ -32,6 +32,8 @@ export async function parseVoice(value: unknown): Promise<{ metadata: Omit<Voice
 export function voiceSuitable(text: string) {
   const length = Array.from(text.trim()).length;
   return length >= 60 && length <= 600
+    // Keep visible chat effects as text instead of reading their spelling aloud.
+    && !/\p{Extended_Pictographic}|\p{Regional_Indicator}|(\p{L})\1{2,}|(?:^|[^\p{L}])(?:ha|ja){2,}(?=$|[^\p{L}])/iu.test(text)
     && !/```|`[^`\n]+`|https?:\/\/|www\.|\]\(/i.test(text)
     && !/^\s*([-*+]|\d+[.)])\s/m.test(text) && !/^\s*#{1,6}\s/m.test(text) && !/\|.*\|/.test(text);
 }

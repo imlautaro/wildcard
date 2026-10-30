@@ -291,7 +291,7 @@ if (require.main === module) (async()=>{
  await check('cadence and emphasis resolve high energy against each recipient’s relationship',async f=>{
    f.profile.traits.energy=10; f.profile.traits.expressiveness=10;
    const states=f.context.relationshipStates(f.profile,f.people,[f.event('user:alice','conflict'),f.event('user:bob','affection')],now);
-   const plan=f.context.directPerformance(f.profile,f.people,states,f.appraisal('neutral'),'user:alice',[],true,now);
+   const plan=f.context.directPerformance(f.profile,f.people,states,f.appraisal('neutral',{replyTargets:['user:alice']}),'user:alice',[],true,now);
    assert.equal(plan.cadence,'unhurried');
    assert.equal(plan.recipients.find(p=>p.personID==='user:alice').cadence,'unhurried');
    assert.equal(plan.recipients.find(p=>p.personID==='user:alice').emphasis,'restrained');
