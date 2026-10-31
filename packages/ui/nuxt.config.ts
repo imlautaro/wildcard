@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { appIcons } from './app/utils/icons';
+import { themeScript } from './app/utils/theme';
 
 // Wildcard UI: the Nuxt layer that apps/web and apps/admin extend. It owns the
 // design tokens, the Material 3 component styles with the Wildcard customization
@@ -27,10 +28,11 @@ export default defineNuxtConfig({
       htmlAttrs: { lang: 'en' },
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
-        { name: 'color-scheme', content: 'light dark' },
-        { name: 'theme-color', content: '#f9f9fc', media: '(prefers-color-scheme: light)' },
-        { name: 'theme-color', content: '#111318', media: '(prefers-color-scheme: dark)' },
       ],
+      // Applies the saved appearance before the first paint and owns the
+      // color-scheme and theme-color <meta> tags (kept out of Nuxt's head manager,
+      // which would reset them); see app/utils/theme.ts.
+      script: [{ innerHTML: themeScript }],
       link: [
         { rel: 'preload', href: '/fonts/Manrope.ttf', as: 'font', type: 'font/ttf', crossorigin: '' },
       ],

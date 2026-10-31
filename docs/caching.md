@@ -1538,3 +1538,11 @@ access, references, model, consent, typing and budgets; unpublished images follo
 the existing 24-hour registry cleanup grace period. Verify reopen/back, refresh,
 empty/offline recovery, clear/delete, reference revocation and account switching
 with fictional data on both clients; static checks do not establish device behavior.
+
+## Appearance preference
+
+Not network-backed, so no session cache applies. The System/Light/Dark choice is a
+device setting (iOS `UserDefaults` `appearance`, web `localStorage`
+`wildcard-theme`) that holds no private data and intentionally survives sign-out
+and account switching. See [appearance](appearance.md).
+

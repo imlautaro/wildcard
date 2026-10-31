@@ -41,8 +41,6 @@ const active = computed(() => props.interactive && props.preview.quote.available
 .text svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: var(--space-1); }
 .text.unavailable { font-style: italic; }
 .before-join { font: var(--type-label-small); color: var(--md-on-surface-variant); opacity: 0.8; }
-@media (prefers-color-scheme: dark) {
-  .reply-quote::before { background: var(--quote-dark); }
-  .author { color: var(--quote-dark); }
-}
+:root[data-theme="dark"] .reply-quote::before { background: var(--quote-dark); }
+:root[data-theme="dark"] .author { color: var(--quote-dark); }
 </style>

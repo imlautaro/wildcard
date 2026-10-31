@@ -31,6 +31,7 @@ docs/
   authentication.md          # Auth contract, session behavior, and limitations
   web.md                     # Web app architecture, features, and limitations
   design-system.md           # Wildcard UI layer: tokens, components, spacing rules
+  appearance.md              # System/Light/Dark theme preference on iOS and web
   admin.md                   # Super admin panel, account deletion, and runtime flags
   mini-apps.md               # Contact-built native mini apps over MCP tools
   tasks.md                   # Shared to-do lists and contact work turns

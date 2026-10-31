@@ -24,6 +24,13 @@ const saveChatModel = () => run(async () => {
   await saveModel(chatModel.value, contributorConsent.value);
   modelSheet.value = false;
 });
+const { preference: themePreference, setPreference: setThemePreference } = useTheme();
+const themeOptions = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+] as const;
+const themeSheet = ref(false);
 const photoPath = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
 
 async function run(task: () => Promise<void>) {
@@ -57,6 +64,7 @@ onMounted(async () => {
 
       <AppListGroup>
         <AppListItem icon="model" opens :value="models.find(model => model.value === currentModel)?.label ?? currentModel" @click="openModelSheet">Chat model</AppListItem>
+        <AppListItem icon="appearance" opens :value="themeOptions.find(option => option.value === themePreference)?.label" @click="themeSheet = true">Appearance</AppListItem>
         <AppListItem icon="link" to="/account/connections">Connections</AppListItem>
         <AppListItem icon="iphone" to="/native">Native experiments</AppListItem>
       </AppListGroup>
@@ -75,6 +83,18 @@ onMounted(async () => {
         <template #actions>
           <AppButton variant="text" @click="cancel(); exportSheet = false">{{ exporting ? 'Cancel export' : 'Close' }}</AppButton>
           <AppButton :disabled="exporting" @click="download">{{ exporting ? 'Exporting…' : 'Download JSON' }}</AppButton>
+        </template>
+      </AppSheet>
+
+      <AppSheet v-if="themeSheet" title="Appearance" @close="themeSheet = false">
+        <AppListGroup role="radiogroup" aria-label="Appearance">
+          <label v-for="option in themeOptions" :key="option.value" class="choice-row">
+            <input type="radio" name="appearance" :value="option.value" :checked="themePreference === option.value" @change="setThemePreference(option.value)">
+            <span>{{ option.label }}</span>
+          </label>
+        </AppListGroup>
+        <template #actions>
+          <AppButton @click="themeSheet = false">Done</AppButton>
         </template>
       </AppSheet>
 

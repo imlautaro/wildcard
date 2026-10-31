@@ -13,11 +13,9 @@
 /* Dark panes get a hairline instead of a shadow; drawn above their content so
    bars and composers can't cover it. */
 .shell > main { position: relative; }
-@media (prefers-color-scheme: dark) {
-  .shell > main::after {
-    content: ''; position: absolute; inset: 0; z-index: 10; border-radius: inherit; pointer-events: none;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-outline-variant) 50%, transparent);
-  }
+:root[data-theme="dark"] .shell > main::after {
+  content: ''; position: absolute; inset: 0; z-index: 10; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-outline-variant) 50%, transparent);
 }
 .rail { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-5) 0 var(--space-4); }
 .rail-mark {

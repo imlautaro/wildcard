@@ -14,6 +14,7 @@ struct AccountView: View {
     @State private var refreshingProfile = true
     @State private var showingModel = false
     @State private var showingNotifications = false
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
 
     private static let models = [
         (value: "muse-spark-1.3", label: "Standard", detail: "Meta does not train on your data."),
@@ -59,6 +60,12 @@ struct AccountView: View {
                 }
                 .disabled(refreshingProfile || auth.isBusy)
                 SheetRow(title: "Notifications", systemImage: "bell", value: push.status) { showingNotifications = true }
+                Picker(selection: $appearance) {
+                    ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+                } label: {
+                    Label("Appearance", systemImage: "circle.lefthalf.filled")
+                }
+                .pickerStyle(.menu)
                 NavigationLink { McpConnectionsView(contactID: "account", cache: contacts.mcpSnapshots.store(for: "account")) }
                     label: { Label("Connections", systemImage: "link") }
                 NavigationLink(value: HomeDestination.nativeExperiments) { Label("Native experiments", systemImage: "iphone") }

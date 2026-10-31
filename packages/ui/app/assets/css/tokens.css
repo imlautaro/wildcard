@@ -74,51 +74,51 @@
     color-scheme: light;
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --md-primary: #b0c6ff;
-      --md-on-primary: #002c70;
-      --md-primary-container: #20448f;
-      --md-on-primary-container: #dae3ff;
-      --md-secondary: #bcc6e0;
-      --md-secondary-container: #3a4458;
-      --md-on-secondary-container: #dfe5f9;
-      --md-tertiary: #e3b8ff;
-      --md-tertiary-container: #613a80;
-      --md-on-tertiary-container: #f3daff;
-      --md-error: #ffb4ab;
-      --md-on-error: #690005;
-      --md-error-container: #93000a;
-      --md-on-error-container: #ffdad6;
-      --md-success: #82d69a;
-      --md-success-container: #0f5129;
-      --md-on-success-container: #c8f1d1;
-      --md-warning: #ffb95c;
-      --md-warning-container: #6a3b00;
-      --md-on-warning-container: #ffdcbd;
-      --md-surface: #111318;
-      --md-surface-dim: #111318;
-      --md-surface-bright: #37393f;
-      --md-surface-container-lowest: #0c0e13;
-      --md-surface-container-low: #191b21;
-      --md-surface-container: #1d2026;
-      --md-surface-container-high: #282a31;
-      --md-surface-container-highest: #33353c;
-      --md-on-surface: #e2e2e9;
-      --md-on-surface-variant: #c4c6d0;
-      --md-outline: #8e909b;
-      --md-outline-variant: #44474f;
-      --md-inverse-surface: #e2e2e9;
-      --md-inverse-on-surface: #2d3036;
-      --md-inverse-primary: #045de3;
-      --md-scrim: rgb(0 0 0 / 56%);
-      --ui-shadow: 230 50% 2%;
-      --md-elevation-1: 0 1px 2px hsl(var(--ui-shadow) / 0.4), 0 1px 3px 1px hsl(var(--ui-shadow) / 0.2);
-      --md-elevation-2: 0 1px 2px hsl(var(--ui-shadow) / 0.4), 0 4px 12px -2px hsl(var(--ui-shadow) / 0.4);
-      --md-elevation-3: 0 2px 4px hsl(var(--ui-shadow) / 0.3), 0 10px 24px -6px hsl(var(--ui-shadow) / 0.5);
-      --md-elevation-4: 0 4px 8px hsl(var(--ui-shadow) / 0.3), 0 24px 56px -12px hsl(var(--ui-shadow) / 0.6);
-      color-scheme: dark;
-    }
+  /* Dark roles: <html data-theme="dark">, set by the appearance preference
+     (System follows prefers-color-scheme). See app/utils/theme.ts. */
+  :root[data-theme="dark"] {
+    --md-primary: #b0c6ff;
+    --md-on-primary: #002c70;
+    --md-primary-container: #20448f;
+    --md-on-primary-container: #dae3ff;
+    --md-secondary: #bcc6e0;
+    --md-secondary-container: #3a4458;
+    --md-on-secondary-container: #dfe5f9;
+    --md-tertiary: #e3b8ff;
+    --md-tertiary-container: #613a80;
+    --md-on-tertiary-container: #f3daff;
+    --md-error: #ffb4ab;
+    --md-on-error: #690005;
+    --md-error-container: #93000a;
+    --md-on-error-container: #ffdad6;
+    --md-success: #82d69a;
+    --md-success-container: #0f5129;
+    --md-on-success-container: #c8f1d1;
+    --md-warning: #ffb95c;
+    --md-warning-container: #6a3b00;
+    --md-on-warning-container: #ffdcbd;
+    --md-surface: #111318;
+    --md-surface-dim: #111318;
+    --md-surface-bright: #37393f;
+    --md-surface-container-lowest: #0c0e13;
+    --md-surface-container-low: #191b21;
+    --md-surface-container: #1d2026;
+    --md-surface-container-high: #282a31;
+    --md-surface-container-highest: #33353c;
+    --md-on-surface: #e2e2e9;
+    --md-on-surface-variant: #c4c6d0;
+    --md-outline: #8e909b;
+    --md-outline-variant: #44474f;
+    --md-inverse-surface: #e2e2e9;
+    --md-inverse-on-surface: #2d3036;
+    --md-inverse-primary: #045de3;
+    --md-scrim: rgb(0 0 0 / 56%);
+    --ui-shadow: 230 50% 2%;
+    --md-elevation-1: 0 1px 2px hsl(var(--ui-shadow) / 0.4), 0 1px 3px 1px hsl(var(--ui-shadow) / 0.2);
+    --md-elevation-2: 0 1px 2px hsl(var(--ui-shadow) / 0.4), 0 4px 12px -2px hsl(var(--ui-shadow) / 0.4);
+    --md-elevation-3: 0 2px 4px hsl(var(--ui-shadow) / 0.3), 0 10px 24px -6px hsl(var(--ui-shadow) / 0.5);
+    --md-elevation-4: 0 4px 8px hsl(var(--ui-shadow) / 0.3), 0 24px 56px -12px hsl(var(--ui-shadow) / 0.6);
+    color-scheme: dark;
   }
 
   :root {

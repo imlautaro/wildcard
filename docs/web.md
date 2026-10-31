@@ -1353,3 +1353,14 @@ show **Joined without earlier messages**. On `/invitations`, a group invitation 
 "You'll see messages from when you join." No new caches; see
 [groups](groups.md#join-banners-and-welcomes). Verified statically (type check); browser/device rendering, keyboard and
 screen-reader behavior are unverified.
+
+## Appearance (2026-10-31)
+
+**Account → Appearance** picks **System**, **Light** or **Dark** on both clients,
+applied immediately and stored per device (iOS `UserDefaults` key `appearance`, web
+`localStorage` key `wildcard-theme`), not per account. The web resolves it to
+`<html data-theme>` with an inline `<head>` script before the first paint, and all
+dark styles now use `:root[data-theme="dark"]` instead of `prefers-color-scheme`.
+iOS sets the windows' `overrideUserInterfaceStyle`. Details and verification status:
+[appearance](appearance.md).
+

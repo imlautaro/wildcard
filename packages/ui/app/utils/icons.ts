@@ -20,6 +20,7 @@ export const appIcons = {
   file: ['material-symbols:description-outline-rounded', 'material-symbols:description-rounded'],
   close: ['material-symbols:close-rounded', 'material-symbols:close-rounded'],
   gear: ['material-symbols:settings-outline-rounded', 'material-symbols:settings-rounded'],
+  appearance: ['material-symbols:contrast-rounded', 'material-symbols:contrast-rounded'],
   share: ['material-symbols:share-outline-rounded', 'material-symbols:share-rounded'],
   'group-add': ['material-symbols:group-add-outline-rounded', 'material-symbols:group-add-rounded'],
   reply: ['material-symbols:reply-rounded', 'material-symbols:reply-rounded'],

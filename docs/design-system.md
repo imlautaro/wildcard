@@ -12,12 +12,13 @@ apps only.
 
 | Path in `packages/ui` | Contents |
 | --- | --- |
-| `nuxt.config.ts` | `$meta.name: 'ui'` (alias `#layers/ui`), `@nuxt/icon` in client-bundle mode, the three CSS files, shared `<head>` (viewport, color scheme, theme color, font preload). |
+| `nuxt.config.ts` | `$meta.name: 'ui'` (alias `#layers/ui`), `@nuxt/icon` in client-bundle mode, the three CSS files, shared `<head>` (viewport, font preload, and the inline theme script that sets `data-theme` and the color-scheme/theme-color tags). |
 | `app/assets/css/tokens.css` | Cascade layer order, `@font-face`, color roles (light and dark), spacing, type, shape, elevation and motion tokens. |
 | `app/assets/css/base.css` | Reset, document typography, focus ring, scrollbars, Material checkbox and radio, utilities (`.visually-hidden`, `.muted`, `.small`, `.code`, `.tabular`). |
 | `app/assets/css/components.css` | Every component class (catalog below). |
 | `app/components/` | The Vue components (catalog below). |
 | `app/plugins/ripple.client.ts` | The press ripple. |
+| `app/utils/theme.ts`, `app/composables/useTheme.ts`, `app/plugins/theme.client.ts` | Appearance preference (System, Light, Dark); see [appearance](appearance.md). |
 | `app/utils/icons.ts` | The icon registry (`appIcons`, `AppIconName`), auto-imported in both apps. |
 | `public/fonts/` | Manrope (SIL OFL) served by both apps. |
 
@@ -49,7 +50,9 @@ Use tokens, never raw values, for color, spacing, type, radius, elevation and mo
   the custom `success` and `warning` roles with their containers, the full surface
   container ladder (`surface-container-lowest` … `highest`, `surface-dim`,
   `surface-bright`), `outline`, `outline-variant`, the inverse roles and `scrim`.
-  Dark mode follows `prefers-color-scheme`. Older aliases (`--accent`, `--surface`,
+  Dark roles apply under `:root[data-theme="dark"]`, set from the user's
+  System/Light/Dark preference ([appearance](appearance.md)); never write dark rules
+  as `@media (prefers-color-scheme: dark)`. Older aliases (`--accent`, `--surface`,
   `--separator`, `--danger`, …) still resolve; use the `--md-*` roles in new code.
 - **Spacing** (`--space-*`): a 4 px grid — `0-5` 2, `1` 4, `1-5` 6, `2` 8, `3` 12,
   `4` 16, `5` 20, `6` 24, `8` 32, `10` 40, `12` 48, `16` 64.

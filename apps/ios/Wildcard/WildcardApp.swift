@@ -7,6 +7,8 @@ struct WildcardApp: App {
     @State private var auth = AuthStore()
     @State private var native = NativeExperiments.shared
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
 
     init() {
         AppTypography.configureNavigation()
@@ -50,6 +52,10 @@ struct WildcardApp: App {
                 }
                 .tint(Color(red: 4 / 255, green: 93 / 255, blue: 227 / 255))
                 .task { await auth.restore() }
+                // Reapplied when the scene becomes active so windows created after
+                // launch (a new scene, a restored window) get the override too.
+                .onChange(of: appearance, initial: true) { _, value in value.apply() }
+                .onChange(of: scenePhase) { _, phase in if phase == .active { appearance.apply() } }
                 .onChange(of: auth.state) { _, state in
                     if state == .signedOut { push.clearAccountState(); native.clear() }
                 }
