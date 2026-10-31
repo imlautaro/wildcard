@@ -78,8 +78,9 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string;
     if (event.payload.generationID) return runContactGeneration(this.env, owner, event.payload.generationID, step);
     try {
       const saved = await step.do('load-preferences', async () => {
-        const row = await this.env.DB.prepare(`SELECT o.input_json, o.status FROM account_onboarding o JOIN user u ON u.id = o.user_id
-          WHERE o.user_id = ? AND u.onboarding_required = 1`).bind(owner).first<{ input_json: string; status: string }>();
+        // Progressive setup clears onboarding_required at submission; the row status decides.
+        const row = await this.env.DB.prepare('SELECT input_json, status FROM account_onboarding WHERE user_id = ?')
+          .bind(owner).first<{ input_json: string; status: string }>();
         if (!row || row.status === 'complete') return null;
         await this.env.DB.prepare("UPDATE account_onboarding SET status = 'generating', updated_at = ? WHERE user_id = ?")
           .bind(Date.now(), owner).run();
@@ -106,39 +107,16 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string;
           .bind(JSON.stringify(plan), replaced ? 1 : 0, Date.now(), owner, 'complete').run();
         return plan;
       });
-      for (let i = 0; i < plan.contacts.length; i++) {
-        const identity = plan.contacts[i]!;
-        await step.do(`adult-portrait-${i + 1}-${identity.id}`, { retries: { limit: 2, delay: '15 seconds', backoff: 'exponential' }, timeout: '4 minutes' }, async () => {
-          const active = await this.env.DB.prepare('SELECT user_id FROM account_onboarding WHERE user_id = ? AND status != ?').bind(owner, 'complete').first();
-          if (!active) return;
-          const key = photoKey(owner, identity.id, identity.id);
-          if (!await this.env.CONTACT_PHOTOS.head(key)) {
-            const bytes = await generatePortrait(this.env, identity, saved);
-            if (!await this.env.DB.prepare('SELECT user_id FROM account_onboarding WHERE user_id=?').bind(owner).first()) return;
-            try {
-              await this.env.CONTACT_PHOTOS.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
-            } finally {
-              if (!await this.env.DB.prepare('SELECT user_id FROM account_onboarding WHERE user_id=?').bind(owner).first()) {
-                await removePhoto(this.env, key);
-              }
-            }
-          }
-          await this.env.DB.prepare('UPDATE account_onboarding SET photo_count = MAX(photo_count, ?), updated_at = ? WHERE user_id = ?')
-            .bind(i + 1, Date.now(), owner).run();
-        });
-      }
-      await step.do('publish-circle', async () => {
-        const row = await this.env.DB.prepare('SELECT status FROM account_onboarding WHERE user_id = ?').bind(owner).first<{ status: string }>();
+      // Progressive setup (docs/onboarding.md#progressive-setup): the contacts appear in the
+      // chat list right away, disabled (setup_pending) until their portrait is ready.
+      await step.do('publish-contacts', async () => {
+        const db = this.env.DB;
+        const row = await db.prepare('SELECT status FROM account_onboarding WHERE user_id = ?').bind(owner).first<{ status: string }>();
         if (!row || row.status === 'complete') return;
-        const now = Date.now(), db = this.env.DB;
-        const createGroup = saved.createGroup !== false; // Legacy submissions retain their group.
-        const statements: D1PreparedStatement[] = [
-          db.prepare('UPDATE user SET name = ?, updated_at = ? WHERE id = ?').bind(saved.name, now, owner),
-        ];
-        if (createGroup) statements.push(
-          db.prepare('INSERT INTO chat_group (id, owner_id, name, created_at) VALUES (?, ?, ?, ?)').bind(plan.groupID, owner, plan.groupName, now),
-          db.prepare('INSERT INTO group_member (group_id, user_id, can_invite, share_memory, contributor_consent, joined_at) VALUES (?, ?, 1, 1, 0, ?)').bind(plan.groupID, owner, now),
-        );
+        // Retries after a failure find the contacts already published (one atomic batch).
+        if (await db.prepare('SELECT 1 FROM contact WHERE id = ? AND user_id = ?').bind(plan.contacts[0]!.id, owner).first()) return;
+        const now = Date.now();
+        const statements: D1PreparedStatement[] = [db.prepare('UPDATE user SET name = ?, updated_at = ? WHERE id = ?').bind(saved.name, now, owner)];
         for (const [i, identity] of plan.contacts.entries()) {
           const profile = defaultPersonality();
           profile.enabled = true;
@@ -147,28 +125,86 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string;
           profile.specialties = identity.specialties ?? ''; // Legacy saved plans keep their original identities.
           Object.assign(profile.traits, temperaments[i]!.traits);
           statements.push(
-            // The existing contact trigger creates its one shared agent identity.
-            db.prepare('INSERT INTO contact (id, user_id, name, photo_version, created_at, updated_at, onboarding_chat, voice_messages_enabled) VALUES (?, ?, ?, ?, ?, ?, 1, 1)')
-              .bind(identity.id, owner, identity.name, identity.id, now, now),
+            // The existing contact trigger creates its one shared agent identity. The photo
+            // version is set when the portrait exists; until then clients show initials.
+            db.prepare('INSERT INTO contact (id, user_id, name, photo_version, created_at, updated_at, onboarding_chat, voice_messages_enabled, setup_pending) VALUES (?, ?, ?, NULL, ?, ?, 1, 1, 1)')
+              .bind(identity.id, owner, identity.name, now - i, now - i),
             // Legacy saved plans may lack demographics; their voice is then any voice.
             db.prepare('UPDATE contact_agent SET voice_profile_json = ?, speech_accent = ? WHERE id = ?')
               .bind(identity.gender && identity.age ? JSON.stringify({ gender: identity.gender, age: identity.age }) : null, accentForCountry(saved.country), identity.id),
             db.prepare('INSERT INTO agent_personality (agent_id, profile_json, updated_at) VALUES (?, ?, ?)').bind(identity.id, JSON.stringify(profile), now),
             db.prepare('UPDATE contact_agent SET memory_shared = 1 WHERE id = ? AND owner_id = ?').bind(identity.id, owner),
           );
-          if (createGroup) statements.push(db.prepare('INSERT INTO group_agent (group_id, agent_id, added_by, joined_at) VALUES (?, ?, ?, ?)').bind(plan.groupID, identity.id, owner, now));
         }
-        statements.push(db.prepare("UPDATE account_onboarding SET status = 'complete', group_id = ?, updated_at = ? WHERE user_id = ?").bind(createGroup ? plan.groupID : null, now, owner),
+        await db.batch(statements);
+      });
+      // Portraits are generated in parallel; each contact is enabled as soon as its own is ready.
+      // A portrait that keeps failing enables its contact with initials instead of failing the circle.
+      await Promise.all(plan.contacts.map(async (identity, i) => {
+        try {
+          await step.do(`adult-portrait-${i + 1}-${identity.id}`, { retries: { limit: 2, delay: '15 seconds', backoff: 'exponential' }, timeout: '4 minutes' }, async () => {
+            const active = await this.env.DB.prepare('SELECT user_id FROM account_onboarding WHERE user_id = ? AND status != ?').bind(owner, 'complete').first();
+            if (!active) return;
+            const key = photoKey(owner, identity.id, identity.id);
+            const present = async () => !!await this.env.DB.prepare('SELECT 1 FROM contact WHERE id = ? AND user_id = ?').bind(identity.id, owner).first();
+            if (!await this.env.CONTACT_PHOTOS.head(key)) {
+              const bytes = await generatePortrait(this.env, identity, saved);
+              if (!await present()) return;
+              try {
+                await this.env.CONTACT_PHOTOS.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+              } finally {
+                // Account or contact deletion can win while the portrait was generated.
+                if (!await present()) await removePhoto(this.env, key);
+              }
+            }
+            await this.ready(owner, identity.id, plan, identity.id);
+          });
+        } catch {
+          await step.do(`ready-without-portrait-${i + 1}-${identity.id}`, async () => this.ready(owner, identity.id, plan, null));
+        }
+      }));
+      await step.do('publish-circle', async () => {
+        const row = await this.env.DB.prepare('SELECT status FROM account_onboarding WHERE user_id = ?').bind(owner).first<{ status: string }>();
+        if (!row || row.status === 'complete') return;
+        const now = Date.now(), db = this.env.DB;
+        const createGroup = saved.createGroup !== false; // Legacy submissions retain their group.
+        // Contacts deleted during setup are left out of the group.
+        const { results: kept } = await db.prepare(`SELECT id FROM contact WHERE user_id = ? AND id IN (SELECT value FROM json_each(?))`)
+          .bind(owner, JSON.stringify(plan.contacts.map(c => c.id))).all<{ id: string }>();
+        const statements: D1PreparedStatement[] = [];
+        if (createGroup && kept.length) statements.push(
+          db.prepare('INSERT INTO chat_group (id, owner_id, name, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING').bind(plan.groupID, owner, plan.groupName, now),
+          db.prepare('INSERT INTO group_member (group_id, user_id, can_invite, share_memory, contributor_consent, joined_at) VALUES (?, ?, 1, 1, 0, ?) ON CONFLICT DO NOTHING').bind(plan.groupID, owner, now),
+          ...plan.contacts.filter(c => kept.some(k => k.id === c.id)).map(identity =>
+            db.prepare('INSERT INTO group_agent (group_id, agent_id, added_by, joined_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING').bind(plan.groupID, identity.id, owner, now)),
+        );
+        statements.push(db.prepare("UPDATE account_onboarding SET status = 'complete', group_id = ?, updated_at = ? WHERE user_id = ?").bind(createGroup && kept.length ? plan.groupID : null, now, owner),
           db.prepare('UPDATE user SET onboarding_required = 0 WHERE id = ?').bind(owner));
-        // D1 batch is atomic: all five contacts, optional group and completion appear together.
+        // D1 batch is atomic: the optional group and completion appear together.
         await db.batch(statements);
       });
     } catch (error) {
       await step.do('mark-failed', async () => {
-        await this.env.DB.prepare("UPDATE account_onboarding SET status = 'failed', updated_at = ? WHERE user_id = ? AND status != 'complete'")
-          .bind(Date.now(), owner).run();
+        // Published contacts stay usable (with initials) while the person can retry the rest.
+        await this.env.DB.batch([
+          this.env.DB.prepare("UPDATE account_onboarding SET status = 'failed', updated_at = ? WHERE user_id = ? AND status != 'complete'").bind(Date.now(), owner),
+          this.env.DB.prepare('UPDATE contact SET setup_pending = 0 WHERE user_id = ? AND setup_pending = 1').bind(owner),
+        ]);
       });
       throw error;
     }
+  }
+
+  /** Enables one first-circle contact with its portrait, unless the person already set a photo. */
+  private async ready(owner: string, contactID: string, plan: Plan, photoVersion: string | null) {
+    const now = Date.now();
+    await this.env.DB.batch([
+      this.env.DB.prepare('UPDATE contact SET setup_pending = 0, photo_version = COALESCE(photo_version, ?), updated_at = ? WHERE id = ? AND user_id = ?')
+        .bind(photoVersion, now, contactID, owner),
+      // photo_count now counts ready contacts, in any order.
+      this.env.DB.prepare(`UPDATE account_onboarding SET photo_count = (SELECT COUNT(*) FROM contact WHERE user_id = ?1 AND setup_pending = 0
+          AND id IN (SELECT value FROM json_each(?2))), updated_at = ?3 WHERE user_id = ?1`)
+        .bind(owner, JSON.stringify(plan.contacts.map(c => c.id)), now),
+    ]);
   }
 }

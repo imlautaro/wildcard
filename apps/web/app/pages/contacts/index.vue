@@ -38,7 +38,11 @@ onMounted(async () => {
                    :text="query ? 'No matching contacts.' : 'No contacts yet. Create one to start chatting.'" />
     <ul class="list">
       <li v-for="contact in visible" :key="contact.id">
-        <NuxtLink :to="`/chats/${contact.id}`" class="row" data-ripple>
+        <div v-if="contact.setupPending === 1" class="row" aria-disabled="true" style="opacity: 0.55">
+          <AppAvatar :name="contact.name" :path="contactPhotoPath(contact)" :size="40" />
+          <span class="body"><span class="top"><strong>{{ contact.name }}</strong><span class="small muted">Creating…</span></span></span>
+        </div>
+        <NuxtLink v-else :to="`/chats/${contact.id}`" class="row" data-ripple>
           <AppAvatar :name="contact.name" :path="contactPhotoPath(contact)" :size="40" />
           <span class="body">
             <span class="top"><strong>{{ contact.name }}</strong><span v-if="contact.role === 'member'" class="small muted">Shared</span></span>

@@ -12,6 +12,9 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     var historyRevision: Int? = nil
     var clearing: Int? = nil
     var onboardingChat: Int? = nil
+    /// 1 while a first-circle contact is still being created; it cannot be opened yet.
+    var setupPending: Int? = nil
+    var isSettingUp: Bool { setupPending == 1 }
     var initiativeEnabled: Int? = nil
     /// This participant's opt-in to voice replies (0 or 1).
     var voiceMessagesEnabled: Int? = nil

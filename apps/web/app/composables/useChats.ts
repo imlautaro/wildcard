@@ -23,6 +23,8 @@ export type ChatRow = {
   sending: boolean;
   readAt: number | null;
   receiptState: string | null;
+  /** A first-circle contact still being created: shown disabled (docs/onboarding.md#progressive-setup). */
+  setupPending?: boolean;
 };
 
 const contacts = ref<Contact[]>([]);
@@ -331,6 +333,10 @@ function applyRead(kind: 'contact' | 'group', id: string, sequence: number, unre
 }
 
 function contactRow(contact: Contact): ChatRow | null {
+  if (contact.setupPending === 1) {
+    return { kind: 'contact', archived: false, canClear: false, canDelete: false, id: contact.id, name: contact.name, photoPath: contactPhotoPath(contact),
+      voice: null, preview: 'Creating…', sender: null, at: contact.createdAt, unread: 0, own: false, sending: false, readAt: null, receiptState: null, setupPending: true };
+  }
   const row = contactMessageRow(contact);
   if (row && contact.clearing === 1) return { ...row, voice: null, preview: 'Cleaning up...' };
   if (row && (contact.replyActivity === 'typing' || contact.replyActivity === 'recording' || contact.replyActivity === 'researching')) {

@@ -16,6 +16,7 @@ export type Contact = {
   historyRevision?: number;
   clearing?: number;
   onboardingChat?: number;
+  setupPending?: number;
   id: string;
   // The name this account reads: its private alias when set, else the shared name.
   name: string;

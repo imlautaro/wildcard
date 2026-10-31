@@ -145,8 +145,9 @@ chats.post('/turns', attachmentBody, async (c) => {
     || (!body.text.trim() && body.attachment === undefined && body.voice === undefined) || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
     return c.json({ error: 'Provide an id and a message using 1–4000 characters' }, 400);
   }
-  const epoch = await c.env.DB.prepare('SELECT history_revision AS revision,clearing FROM contact WHERE id=? AND user_id=?')
-    .bind(c.get('contactID'),c.get('owner')).first<{revision:number;clearing:number}>();
+  const epoch = await c.env.DB.prepare('SELECT history_revision AS revision,clearing,setup_pending AS setupPending FROM contact WHERE id=? AND user_id=?')
+    .bind(c.get('contactID'),c.get('owner')).first<{revision:number;clearing:number;setupPending:number}>();
+  if (epoch?.setupPending) return c.json({ error: 'This contact is still being created. Try again in a moment.' }, 409);
   if (!epoch || epoch.clearing || (body.historyRevision ?? 0)!==epoch.revision) return c.json({error:'Chat was cleared. Refresh before sending a new message.'},409);
   // A voice message is only audio: no caption or file. Its transcript comes later.
   if (body.voice !== undefined && (body.text.trim() || body.attachment !== undefined)) {

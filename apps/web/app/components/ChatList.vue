@@ -27,6 +27,21 @@ usePolling(async () => {
 usePolling(() => chats.refreshInvitations(), () => 15_000);
 const updatesUnseen = updatesBadge();
 usePolling(() => refreshUpdatesBadge(), () => 15_000);
+
+// Progressive first circle (docs/onboarding.md#progressive-setup): follow it while contacts are created.
+const onboarding = useOnboarding();
+const creatingCircle = computed(() => !archived.value && circleRunning(onboarding.snapshot.value));
+const circleFailed = computed(() => !archived.value && onboarding.snapshot.value?.status === 'failed');
+// Before the identities exist, placeholders stand in for the five contacts.
+const placeholders = computed(() => creatingCircle.value && !chats.rows.value.some(row => row.setupPending) && !(onboarding.snapshot.value?.photoCount) ? 5 : 0);
+const retryingCircle = ref(false);
+async function retryCircle() {
+  retryingCircle.value = true;
+  try { await onboarding.retry(); } catch (failure) { actionError.value = errorMessage(failure); }
+  finally { retryingCircle.value = false; }
+}
+usePolling(() => creatingCircle.value ? onboarding.refreshStatus() : Promise.resolve(), () => 3000);
+onMounted(() => { if (!onboarding.snapshot.value || creatingCircle.value) void onboarding.refreshStatus(); });
 onMounted(() => { void chats.refresh(); });
 </script>
 
@@ -54,18 +69,41 @@ onMounted(() => { void chats.refresh(); });
     {{ chats.error.value }}
     <template #actions><button class="link-button" @click="chats.refresh()">Retry</button></template>
   </AppNotice>
+  <AppNotice v-if="creatingCircle" class="circle-progress">
+    <span class="spinner" aria-hidden="true" />
+    Creating your contacts… {{ onboarding.snapshot.value?.photoCount ?? 0 }} of 5 ready. Each one opens as soon as it is ready.
+  </AppNotice>
+  <AppNotice v-else-if="circleFailed" tone="warning">
+    We could not finish creating your contacts.
+    <template #actions><button class="link-button" :disabled="retryingCircle" @click="retryCircle">Retry</button></template>
+  </AppNotice>
   <div class="scroll">
-    <AppLoading v-if="!chats.loaded.value && !chats.error.value" label="Loading chats…" />
+    <ul v-if="placeholders" class="list" aria-label="Contacts being created">
+      <li v-for="n in placeholders" :key="n">
+        <div class="row pending" aria-disabled="true">
+          <AppAvatar name="" :path="null" :size="52" />
+          <div class="body"><div class="top"><strong>New contact</strong></div><div class="bottom"><span class="preview">Creating…</span></div></div>
+        </div>
+      </li>
+    </ul>
+    <AppLoading v-if="!chats.loaded.value && !chats.error.value && !placeholders" label="Loading chats…" />
     <AppEmptyState v-else-if="chats.error.value && !visibleRows.length" icon="error" :text="chats.error.value">
       <template #actions><AppButton variant="tonal" icon="refresh" @click="chats.refresh()">Try again</AppButton></template>
     </AppEmptyState>
-    <AppEmptyState v-else-if="!visibleRows.length" :icon="archived ? 'archive' : 'chat'"
+    <AppEmptyState v-else-if="!visibleRows.length && !placeholders" :icon="archived ? 'archive' : 'chat'"
                    :title="archived ? 'No archived chats' : 'No chats yet'" text="Open a contact to start a conversation.">
       <template #actions><AppButton to="/contacts" icon="plus">Open Contacts</AppButton></template>
     </AppEmptyState>
     <ul v-else class="list">
       <li v-for="row in visibleRows" :key="`${row.kind}/${row.id}`">
-        <NuxtLink :to="rowPath(row)" class="row" data-ripple :class="{ active: route.path === rowPath(row), unread: row.unread }" @contextmenu="rowMenu?.show(row, $event)">
+        <div v-if="row.setupPending" class="row pending" aria-disabled="true" :aria-label="`${row.name}, being created`">
+          <AppAvatar :name="row.name" :path="row.photoPath" :size="52" />
+          <div class="body">
+            <div class="top"><strong>{{ row.name }}</strong></div>
+            <div class="bottom"><span class="preview"><span class="spinner small" aria-hidden="true" /> Creating…</span></div>
+          </div>
+        </div>
+        <NuxtLink v-else :to="rowPath(row)" class="row" data-ripple :class="{ active: route.path === rowPath(row), unread: row.unread }" @contextmenu="rowMenu?.show(row, $event)">
           <AppAvatar :name="row.name" :path="row.photoPath" :size="52" />
           <div class="body">
             <div class="top">
@@ -93,6 +131,9 @@ onMounted(() => { void chats.refresh(); });
 </template>
 
 <style scoped>
+.row.pending { opacity: 0.55; cursor: default; }
+.spinner.small { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px; }
+.circle-progress .spinner { display: inline-block; width: 16px; height: 16px; vertical-align: -3px; margin-right: var(--space-2); }
 .preview-mic { display: inline-flex; vertical-align: -2px; margin-right: 4px; color: var(--md-on-surface-variant); }
 .preview-mic.listened { color: var(--read); }
 .preview-mic :deep(svg) { width: 16px; height: 16px; }

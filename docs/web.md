@@ -1284,3 +1284,13 @@ value clears it. The owner's rename field starts from `realName ?? name`; member
 and, when an alias is set, a line with the shared name. Everything else reads the server-resolved `name`.
 Static typecheck only (`npm run typecheck`); browser behavior is not verified. API contract:
 [contacts](contacts.md#contact-alias-private-display-name).
+
+## Progressive first circle (migration 0077, 2026-10-31)
+
+Onboarding offers **Create my first five contacts with AI**; without it the account
+starts empty. With it, the person lands in Chats right after submitting: the chat list
+follows the circle (`useOnboarding().refreshStatus`, every 3 seconds while it is being
+created), shows placeholders and then disabled "Creating…" rows for contacts with
+`setupPending`, and offers Retry on failure. The Contacts directory greys out pending
+contacts too. Matches iOS; see [onboarding](onboarding.md#progressive-setup).
+

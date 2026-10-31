@@ -51,7 +51,39 @@ struct ChatsView: View {
         }
     }
 
-    private func contactRow(_ contact: Contact) -> some View {
+    // Progressive first circle (docs/onboarding.md#progressive-setup).
+    private var creatingCircle: Bool { mode == .chats && auth.onboarding.running }
+    private var circleFailed: Bool { mode == .chats && auth.onboarding.snapshot?.status == "failed" }
+    /// Before the identities exist, placeholders stand in for the five contacts.
+    private var circlePlaceholders: Int {
+        creatingCircle && !contacts.contacts.contains(where: \.isSettingUp) && (auth.onboarding.snapshot?.photoCount ?? 0) == 0 ? 5 : 0
+    }
+
+    private func pendingRow(name: String, contact: Contact?) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            if let contact { ContactAvatar(contact: contact, size: mode == .contacts ? 48 : 48) }
+            else { Circle().fill(Color(uiColor: .secondarySystemFill)).frame(width: 48, height: 48) }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(name).manrope(.body, weight: .semibold).lineLimit(1)
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text("Creating…").manrope(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+        .opacity(0.55)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(name), being created")
+    }
+
+    @ViewBuilder private func contactRow(_ contact: Contact) -> some View {
+        if contact.isSettingUp { pendingRow(name: contact.name, contact: contact) }
+        else { contactButton(contact) }
+    }
+
+    private func contactButton(_ contact: Contact) -> some View {
         Button { openContact(contact) } label: {
             if mode != .contacts {
                 ChatListRow(contact: contact)
@@ -135,7 +167,24 @@ struct ChatsView: View {
                     Button("Dismiss") { self.mutationError = nil }
                 }
             }
-            if mode == .chats && entries.isEmpty && contacts.hasLoaded && groups.hasLoaded && contacts.nextCursor == nil {
+            if creatingCircle {
+                Section {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("Creating your contacts… \(auth.onboarding.snapshot?.photoCount ?? 0) of 5 ready. Each one opens as soon as it is ready.")
+                            .manrope(.footnote).foregroundStyle(.secondary)
+                    }
+                    ForEach(0..<circlePlaceholders, id: \.self) { _ in pendingRow(name: "New contact", contact: nil) }
+                }
+                .listSectionSeparator(.hidden, edges: .all)
+            } else if circleFailed {
+                Section {
+                    Text("We could not finish creating your contacts.").manrope(.footnote)
+                    Button("Retry") { Task { await auth.onboarding.retry(auth: auth) } }
+                        .disabled(auth.onboarding.busy)
+                }
+            }
+            if mode == .chats && entries.isEmpty && !creatingCircle && contacts.hasLoaded && groups.hasLoaded && contacts.nextCursor == nil {
                 Section { Text("No chats yet. Tap + to choose a contact.").foregroundStyle(.secondary) }
             }
             if mode != .contacts && !entries.isEmpty {
@@ -186,6 +235,15 @@ struct ChatsView: View {
             }
         }
         .listStyle(.plain)
+        .task(id: creatingCircle) {
+            guard mode == .chats else { return }
+            if auth.onboarding.snapshot == nil || creatingCircle { await auth.onboarding.refreshStatus(auth: auth) }
+            // The contact list itself is revalidated by ConversationSync; this follows the circle's progress.
+            while creatingCircle && !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                await auth.onboarding.refreshStatus(auth: auth)
+            }
+        }
         .overlay {
             if mode != .contacts && entries.isEmpty && groups.error == nil && contacts.error == nil && mutationError == nil {
                 if !contacts.hasLoaded || !groups.hasLoaded || contacts.nextCursor != nil {

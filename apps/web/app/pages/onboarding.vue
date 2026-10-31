@@ -7,7 +7,8 @@ const circleOptions = circleTypes.map(option => ({ value: option.code, label: op
 const error = ref<string | null>(null);
 const locked = computed(() => !!snapshot.value?.input);
 const running = computed(() => snapshot.value?.status === 'queued' || snapshot.value?.status === 'generating');
-const ready = computed(() => !!draft.name.trim() && !!draft.country && draft.sharedMemoryConsent && (locked.value || draft.circleType === 'friends' || !!draft.occupation?.trim()) && (locked.value || (typeof draft.age === 'number' && Number.isInteger(draft.age) && draft.age >= 1 && draft.age <= 120)));
+const withContacts = computed(() => draft.createContacts !== false);
+const ready = computed(() => !!draft.name.trim() && !!draft.country && (!withContacts.value || draft.sharedMemoryConsent) && (locked.value || !withContacts.value || draft.circleType === 'friends' || !!draft.occupation?.trim()) && (locked.value || (typeof draft.age === 'number' && Number.isInteger(draft.age) && draft.age >= 1 && draft.age <= 120)));
 let disposed = false;
 let updating = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -19,7 +20,8 @@ async function update() {
     await refresh();
     if (disposed) return;
     error.value = null;
-    if (snapshot.value?.status === 'complete') {
+    // Progressive setup lets the person into the app while the circle is still being created.
+    if (snapshot.value?.status === 'complete' || running.value) {
       await refreshProfile();
       if (!disposed && !user.value?.onboardingRequired) await navigateTo('/');
     }
@@ -28,7 +30,12 @@ async function update() {
 }
 async function start() {
   error.value = null;
-  try { await submit(); }
+  try {
+    await submit();
+    // The person enters the app right away; contacts keep being created in the chat list.
+    await refreshProfile();
+    if (!disposed && !user.value?.onboardingRequired) await navigateTo('/');
+  }
   catch (failure) { error.value = errorMessage(failure); }
 }
 onMounted(() => {
@@ -43,7 +50,7 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
     <form class="auth-card onboarding" @submit.prevent="start">
       <p class="eyebrow">Your Wildcard circle</p>
       <h1>Make yourself at home.</h1>
-      <p class="lead">Five different personalities. Add a group to bring everyone together if you like.</p>
+      <p class="lead">Start with five AI contacts with different personalities, or start empty and add contacts later.</p>
       <template v-if="options">
         <fieldset :disabled="locked || busy" class="onboarding-fields">
           <div class="pair">
@@ -56,12 +63,16 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
             <AppSelect v-model="draft.language" label="Preferred language" :disabled="locked || busy" :options="options.languages.map(option => ({ value: option.code, label: option.name }))" />
           </div>
           <AppSelect v-model="draft.country" label="Country" :disabled="locked || busy" :options="options.countries.map(option => ({ value: option.code, label: option.name }))" />
+          <label class="check-row"><input v-model="draft.createContacts" type="checkbox"><span>Create my first five contacts with AI</span></label>
+        </fieldset>
+        <fieldset v-if="withContacts" :disabled="locked || busy" class="onboarding-fields">
           <AppSelect v-model="draft.style" label="Agent appearance" :disabled="locked || busy" :options="options.styles.map(option => ({ value: option.code, label: option.name }))" />
           <AppSelect v-model="draft.circleType" label="Your circle" :disabled="locked || busy" :options="circleOptions" />
           <AppTextField v-if="draft.circleType !== 'friends'" v-model="draft.occupation" :label="draft.circleType === 'study' ? 'What are you studying?' : 'What do you do for work?'"
                         maxlength="200" :required="!locked" />
           <label class="check-row"><input v-model="draft.createGroup" type="checkbox"><span>Create a group with my five contacts</span></label>
         </fieldset>
+        <template v-if="withContacts">
         <p class="hint info-title">About your contacts <InfoButton label="About your contacts" text="Your contacts will have names common in your country and speak your preferred language. Contacts in every style are adults, usually within two years of your age, with a minimum age of 18. Gender does not determine your contacts’ personalities. Friends have varied interests. Study and work teams use your field to create complementary contacts." /></p>
         <AppListGroup class="consent">
           <label class="check-row">
@@ -69,6 +80,7 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
             <span>I agree to enable shared memory for my five AI contacts. If I create a group, its members can read the full group history. Facts shared in private or group chats may become shared memories recalled by these contacts in other chats; private transcripts remain access controlled. Setup uses Meta Standard processing.</span>
           </label>
         </AppListGroup>
+        </template>
         <div v-if="running" role="status" aria-live="polite" class="progress">
           <span class="spinner" />
           <div>
@@ -78,7 +90,7 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
         </div>
         <AppNotice v-if="snapshot?.status === 'failed'">We could not finish your circle. Retry to continue with your saved preferences and portraits.</AppNotice>
         <AppButton v-if="!running && snapshot?.status !== 'complete'" type="submit" block :disabled="!ready || busy">
-          {{ busy ? 'Saving…' : locked ? 'Retry setup' : 'Create my circle' }}
+          {{ busy ? 'Saving…' : locked ? 'Retry setup' : withContacts ? 'Create my circle' : 'Start' }}
         </AppButton>
       </template>
       <AppLoading v-else label="Loading your preferences…" />

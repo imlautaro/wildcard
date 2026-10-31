@@ -924,6 +924,15 @@ retain account, access context, agent identity and immutable version in the
 existing private image cache. See [onboarding](onboarding.md#cache-and-account-isolation)
 for recovery, mutation behavior and pending device/browser verification.
 
+With [progressive setup](onboarding.md#progressive-setup) the same progress snapshot
+also serves the chat list: it is fetched once when Chats first appears in a session
+(without the options catalog) and every 3 seconds while the circle is queued or
+generating, stopping when it completes or fails. Contacts appear and become enabled
+through the existing contact list cache and its revalidation; `setupPending` is a
+field of the cached contact, so a stale row stays disabled at most until the next
+list refresh. Retry replaces the snapshot and bumps the store revision so an older
+status read cannot overwrite it.
+
 ## On-demand profile images in model context
 
 The shared iOS/web API's `view_profile_photo` path deliberately avoids a persistent

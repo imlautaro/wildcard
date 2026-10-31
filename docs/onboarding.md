@@ -91,6 +91,53 @@ square JPEG up to 4096 pixels because Meta's size controls aspect ratio rather
 than guaranteeing dimensions. Manual uploads keep their existing 1024-pixel and
 512-KiB limits. Existing private R2 routes and image caches serve the photos.
 
+## Progressive setup
+
+Since 2026-10-31 nobody waits on the onboarding screen while contacts are generated
+(it took several minutes: one identity call plus five sequential portraits).
+
+- **Optional AI contacts.** The form has **Create my first five contacts with AI**
+  (on by default). Turned off, it hides appearance, circle, group and shared-memory
+  consent, the button reads **Start**, and `POST /onboarding` with
+  `createContacts: false` completes onboarding at once: it saves the name and clears
+  `onboarding_required`, with no Workflow, contacts or group. Contacts can be created
+  later from Contacts.
+- **Straight into the app.** With AI contacts, the submission saves the input and
+  clears `onboarding_required` in the same batch, then starts the Workflow. Both
+  clients refresh the profile after submitting and open Chats immediately.
+- **Disabled contacts while they are created.** After the identity plan, one atomic
+  `publish-contacts` step inserts all five contacts, personalities and shared agent
+  identities with `contact.setup_pending = 1` (migration 0077) and no photo version.
+  The five portraits then run as parallel Workflow steps; each one stores its JPEG and
+  enables its own contact (`setup_pending = 0`, photo version set unless the person
+  already uploaded a photo), so the person can start talking to the first contact while
+  the others are still being drawn. A portrait that still fails after its retries
+  enables the contact with initials instead of failing the circle. `photo_count` now
+  counts ready contacts, in any order. A final `publish-circle` step creates the
+  optional group with the contacts that still exist and marks setup complete.
+- **Chats while creating.** Both chat lists follow `GET /onboarding` every 3 seconds
+  while status is `queued` or `generating` and show "Creating your contacts… N of 5
+  ready". Before the identities exist they show five "New contact" placeholders;
+  afterwards each contact row is greyed out with "Creating…" and cannot be opened
+  (also in the web Contacts directory). Contacts expose `setupPending` (0 or 1); the
+  contact list revalidation the clients already run picks up each contact as it
+  becomes ready. `POST /contacts/:id/turns` answers 409 "This contact is still being
+  created" for a pending contact.
+- **Failure and retry.** On failure, published contacts are enabled (with initials if
+  their portrait was missing) and the chat list shows "We could not finish creating
+  your contacts" with **Retry**, which posts to `/onboarding` again: an existing,
+  unfinished setup is retried with its saved preferences even though
+  `onboarding_required` is already cleared (a completed one returns its status).
+- **Compatibility.** Older clients send no `createContacts` (treated as true). Old
+  iOS builds keep showing onboarding progress until setup completes, as before, and
+  do not know `setupPending`: if one opens a pending contact, sending is refused with
+  the 409 message. Workflow instances already running during the release replay with
+  the new step layout; a mismatch fails them into the existing Retry path.
+
+Not verified on devices or against a real Workflow run: checked with the API, web and
+iOS static type checks, `onboarding-sql-compile.py` and the changed statements on the
+local workerd D1.
+
 ## Durable setup and recovery
 
 - `GET /api/v1/onboarding/options` returns the authenticated options catalog.
@@ -99,7 +146,9 @@ than guaranteeing dimensions. Manual uploads keep their existing 1024-pixel and
 - `POST /api/v1/onboarding` accepts exactly `name`, `age`, `gender`, `language`, `country`,
   `style`, `createGroup` (boolean), `circleType` (`friends`, `study`, `work`),
   `occupation` (string, required and nonempty for work/study), and
-  `sharedMemoryConsent: true`. The previous seven-field request remains accepted
+  `sharedMemoryConsent: true`, plus optional `createContacts` (boolean; with `false`
+  consent may be false and work/study need no occupation, see
+  [progressive setup](#progressive-setup)). The previous seven-field request remains accepted
   as Friends with group creation enabled, for older installed clients. Validation and six submissions per
   account/minute bound requests. Registration allows five attempts per IP/minute.
 
@@ -113,10 +162,11 @@ plan, progress and final group ID. A single deterministic Workflow ID per accoun
 arbitrates concurrent dispatch. Cron recovers pending dispatches and records
 terminal failure. A visible **Retry setup** restarts an errored/terminated instance.
 
-Identity generation persists its plan before portrait work. Five separate steps
-save JPEGs under immutable IDs in the existing private bucket; retries skip
-already stored images. The final D1 batch creates all five contacts, personalities,
-shared agent membership and optional group, then clears `user.onboarding_required`. It is
+Identity generation persists its plan before portrait work. Contacts are then
+published disabled and enabled one by one as their portraits finish (see
+[progressive setup](#progressive-setup)); five parallel steps save JPEGs under
+immutable IDs in the existing private bucket and retries skip already stored images.
+The final D1 batch creates the optional group and marks setup complete. Each batch is
 atomic and idempotent after completion. The normal contact trigger creates each
 agent, preserving shared identities rather than copies. No welcome message or
 background conversation is invented during setup.
@@ -125,8 +175,7 @@ Generation continues after closing either client. Model calls have bounded
 retries/timeouts (45 seconds for text, 180 seconds per portrait; step budgets
 2/4 minutes). A provider request that succeeds before a storage failure can be
 repeated and charged again; this is not exactly-once billing. Failed work retains
-the plan and any completed images for retry. Partial images are private and not
-exposed as contacts before final publication. There is no automatic expiration
+the plan and any completed images for retry. Contacts are visible but disabled until their own portrait step finishes. There is no automatic expiration
 of failed setup: operators must account for retained rows/images when managing
 storage. Normal contact deletion removes published photos through existing paths.
 Account deletion now queues account photo prefixes and the onboarding Workflow,

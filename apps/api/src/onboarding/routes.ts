@@ -55,23 +55,34 @@ onboarding.post('/', bodyLimit({ maxSize: 4096 }), async c => {
   const owner = c.get('owner');
   const admission = await admitAuthRequest(c.env.DB, owner, 'onboarding-start', 6);
   if (!admission.allowed) return c.json({ error: 'Too many attempts. Please try again later.' }, 429);
-  const required = await c.env.DB.prepare('SELECT onboarding_required AS required FROM user WHERE id = ?').bind(owner).first<{ required: number }>();
-  if (!required?.required) return c.json({ error: 'Onboarding is already complete or unavailable for this account.' }, 409);
   const body: unknown = await c.req.json().catch(() => null);
-  // Existing submissions are immutable, including legacy setups without age.
-  const existing = await c.env.DB.prepare('SELECT user_id FROM account_onboarding WHERE user_id = ?').bind(owner).first();
+  // Existing submissions are immutable, including legacy setups without age. Since
+  // progressive setup the person is already in the app, so a retry of an unfinished
+  // circle is accepted after onboarding_required was cleared.
+  const existing = await c.env.DB.prepare('SELECT status FROM account_onboarding WHERE user_id = ?').bind(owner).first<{ status: string }>();
   if (existing) {
+    if (existing.status === 'complete') return c.json(await onboardingStatus(c.env, owner), 200);
     try { await dispatchOnboarding(c.env, owner, true); }
     catch { /* Cron recovers dispatch outages. */ }
     return c.json(await onboardingStatus(c.env, owner), 202);
   }
+  const required = await c.env.DB.prepare('SELECT onboarding_required AS required FROM user WHERE id = ?').bind(owner).first<{ required: number }>();
+  if (!required?.required) return c.json({ error: 'Onboarding is already complete or unavailable for this account.' }, 409);
   const input = parseOnboarding(body);
   if (!input) return c.json({ error: 'Enter an age from 1 to 120, complete every field (including your occupation or studies for a work or study circle) and accept shared memory to create your circle.' }, 422);
+  const now = Date.now();
+  // The person enters the app right away (docs/onboarding.md#progressive-setup): without AI
+  // contacts onboarding is complete; otherwise contacts appear disabled while they are created.
   // First submission freezes preferences; retries always reuse the original plan.
-  await c.env.DB.prepare(`INSERT INTO account_onboarding (user_id, input_json, status, updated_at)
-    VALUES (?, ?, 'queued', ?) ON CONFLICT(user_id) DO NOTHING`).bind(owner, JSON.stringify(input), Date.now()).run();
-  try { await dispatchOnboarding(c.env, owner, true); }
-  catch { /* Cron recovers a persisted submission after a dispatch outage. */ }
-  return c.json(await onboardingStatus(c.env, owner), 202);
+  await c.env.DB.batch([
+    c.env.DB.prepare(`INSERT INTO account_onboarding (user_id, input_json, status, updated_at)
+      VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO NOTHING`).bind(owner, JSON.stringify(input), input.createContacts === false ? 'complete' : 'queued', now),
+    c.env.DB.prepare('UPDATE user SET name = ?, onboarding_required = 0, updated_at = ? WHERE id = ?').bind(input.name, now, owner),
+  ]);
+  if (input.createContacts !== false) {
+    try { await dispatchOnboarding(c.env, owner, true); }
+    catch { /* Cron recovers a persisted submission after a dispatch outage. */ }
+  }
+  return c.json(await onboardingStatus(c.env, owner), input.createContacts === false ? 200 : 202);
 });
 export default onboarding;

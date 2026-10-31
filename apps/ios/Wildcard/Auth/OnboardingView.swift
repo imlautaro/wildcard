@@ -12,10 +12,12 @@ struct OnboardingInput: Codable, Sendable {
     var circleType = "friends"
     var occupation = ""
     var sharedMemoryConsent = false
+    /// false starts without AI contacts (docs/onboarding.md#progressive-setup).
+    var createContacts = true
 
     init() {}
     private enum CodingKeys: String, CodingKey {
-        case name, age, gender, language, country, style, createGroup, circleType, occupation, sharedMemoryConsent
+        case name, age, gender, language, country, style, createGroup, circleType, occupation, sharedMemoryConsent, createContacts
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -29,6 +31,7 @@ struct OnboardingInput: Codable, Sendable {
         circleType = try values.decodeIfPresent(String.self, forKey: .circleType) ?? "friends"
         occupation = try values.decodeIfPresent(String.self, forKey: .occupation) ?? ""
         sharedMemoryConsent = try values.decode(Bool.self, forKey: .sharedMemoryConsent)
+        createContacts = try values.decodeIfPresent(Bool.self, forKey: .createContacts) ?? true
     }
 }
 struct OnboardingOption: Decodable, Identifiable, Sendable {
@@ -109,6 +112,7 @@ final class OnboardingStore {
         error = nil
         var input = draft
         if input.circleType == "friends" { input.occupation = "" }
+        if !input.createContacts { input.createGroup = false; input.circleType = "friends"; input.occupation = "" }
         defer { if current == revision { busy = false } }
         do {
             let result = try await auth.withSession { api, token in
@@ -119,6 +123,32 @@ final class OnboardingStore {
             guard current == revision else { return }
             snapshot = result
             if let input = result.input { draft = input }
+            // The person enters the app right away; contacts keep being created in Chats.
+            if result.status != "failed" { try? await auth.refreshProfile() }
+        } catch is CancellationError { }
+        catch { if current == revision { self.error = error.localizedDescription } }
+    }
+
+    /// Follows the first circle from the chat list without loading the onboarding options.
+    func refreshStatus(auth: AuthStore) async {
+        let current = revision
+        guard let value = try? await auth.withSession({ api, token in
+            try JSONDecoder().decode(OnboardingSnapshot.self, from: try await api.send(path: "onboarding", token: token).0)
+        }), current == revision else { return }
+        snapshot = value
+    }
+
+    /// Retries an unfinished circle with the saved preferences (the body is ignored).
+    func retry(auth: AuthStore) async {
+        revision += 1
+        let current = revision
+        busy = true
+        defer { if current == revision { busy = false } }
+        do {
+            let value = try await auth.withSession { api, token in
+                try JSONDecoder().decode(OnboardingSnapshot.self, from: try await api.send(path: "onboarding", method: "POST", body: Data("{}".utf8), token: token).0)
+            }
+            if current == revision { snapshot = value; error = nil }
         } catch is CancellationError { }
         catch { if current == revision { self.error = error.localizedDescription } }
     }
@@ -132,7 +162,7 @@ struct OnboardingView: View {
             Form {
                 Section {
                     Text("Make yourself at home.").manrope(.largeTitle, weight: .bold)
-                    Text("Five different personalities. Add a group to bring everyone together if you like.")
+                    Text("Start with five AI contacts with different personalities, or start empty and add contacts later.")
                         .foregroundStyle(.secondary)
                 }
                 if let options = store.options {
@@ -156,6 +186,11 @@ struct OnboardingView: View {
                         }
                     }
                     .disabled(store.locked || store.busy)
+                    Section {
+                        Toggle("Create my first five contacts with AI", isOn: $store.draft.createContacts)
+                    }
+                    .disabled(store.locked || store.busy)
+                    if store.draft.createContacts {
                     Section("Agent appearance") {
                         Picker("Style", selection: $store.draft.style) {
                             ForEach(options.styles) { Text($0.name).tag($0.code) }
@@ -185,6 +220,7 @@ struct OnboardingView: View {
                         Text("I agree to enable shared memory for my five AI contacts. If I create a group, its members can read the full group history. Facts shared in private or group chats may become shared memories recalled by these contacts in other chats; private transcripts remain access controlled. Setup uses Meta Standard processing.")
                     }
                     .disabled(store.locked || store.busy)
+                    }
                     Section {
                         if store.running {
                             HStack {
@@ -197,15 +233,15 @@ struct OnboardingView: View {
                             if store.snapshot?.status == "failed" {
                                 Text("We could not finish your circle. Retry to continue with your saved preferences and portraits.")
                             }
-                            Button(store.busy ? "Saving…" : store.locked ? "Retry setup" : "Create my circle") {
+                            Button(store.busy ? "Saving…" : store.locked ? "Retry setup" : store.draft.createContacts ? "Create my circle" : "Start") {
                                 // This task belongs to the session store and survives view navigation.
                                 Task { await store.submit(auth: auth) }
                             }
                             .disabled(store.busy || store.draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                      || store.draft.name.count > 100 || store.draft.country.isEmpty || !store.draft.sharedMemoryConsent
+                                      || store.draft.name.count > 100 || store.draft.country.isEmpty || (store.draft.createContacts && !store.draft.sharedMemoryConsent)
                                       || (!store.locked && (!(1...120).contains(store.draft.age ?? 0)
                                           || store.draft.occupation.count > 200
-                                          || (store.draft.circleType != "friends" && store.draft.occupation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))))
+                                          || (store.draft.createContacts && store.draft.circleType != "friends" && store.draft.occupation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))))
                         }
                     }
                 } else {
@@ -224,6 +260,8 @@ struct OnboardingView: View {
                 if store.draft.name.isEmpty, auth.user?.name != "New member" { store.draft.name = auth.user?.name ?? "" }
                 while !Task.isCancelled {
                     await store.refresh(auth: auth)
+                    // Progressive setup lets the person into the app while the circle is created.
+                    if store.running { try? await auth.refreshProfile() }
                     if auth.user?.onboardingRequired == false { return }
                     do { try await Task.sleep(for: .seconds(store.running ? 3 : 10)) }
                     catch { return }
