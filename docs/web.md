@@ -478,7 +478,11 @@ once and manages schemas and tool approvals. On iOS and web it lists servers as 
 with their state ("3/5 tools" or "Needs authorization"); a row opens a sheet with the
 URL, access, Authorize/Configure OAuth, Enable all, Refresh tools, the searchable tool
 switches (each tool's description and input schema behind an info button) and
-Disconnect. **Add server** opens the form in a sheet; the data-use text that consent
+Disconnect. **Browse connector library** opens a searchable, categorized sheet of
+official servers with brand logos; choosing one prefills and locks the endpoint and
+access mode of the same form (see [connector library](connectors.md#connector-library)).
+Rows for connectors created from a preset show its logo. **Add custom server** opens
+the manual form in a sheet; the data-use text that consent
 covers stays visible beside the consent switch, while other explanations are behind
 info buttons. Refresh is pull-to-refresh on iOS and an icon button on web. Contact details → Connections is a
 simple assignment list for that account's connectors. Group details → Connections

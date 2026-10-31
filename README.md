@@ -241,7 +241,9 @@ and reproducible infrastructure documentation.
 
 ## MCP connections
 
-Configure remote MCP connectors once in **Account → Connections** on iOS or web.
+Configure remote MCP connectors once in **Account → Connections** on iOS or web,
+either from the [connector library](docs/connectors.md#connector-library) of official
+servers (Notion, Linear, GitHub, Stripe, Google Workspace and more) or manually.
 Grant each contact access from contact details → **Connections**. Bot owners can
 explicitly enable assigned connectors in **Group details → Connections**; human
 members can request tools and responses are visible to everyone. Authorized private

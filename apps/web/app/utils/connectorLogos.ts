@@ -1,0 +1,41 @@
+// Brand logos for the connector library presets served by GET /me/mcp, keyed by
+// preset ID. nuxt.config.ts bundles exactly these Iconify `logos` icons into the
+// client; an unknown ID falls back to the generic link icon. Verify names against
+// node_modules/@iconify-json/logos/icons.json and keep apps/ios ConnectorLogos.xcassets
+// in sync (scripts/export-connector-logos.mjs).
+export const connectorLogos: Record<string, string> = {
+  notion: 'logos:notion-icon',
+  linear: 'logos:linear-icon',
+  todoist: 'logos:todoist-icon',
+  monday: 'logos:monday-icon',
+  clickup: 'logos:clickup-icon',
+  airtable: 'logos:airtable',
+  miro: 'logos:miro-icon',
+  coda: 'logos:coda-icon',
+  dropbox: 'logos:dropbox',
+  zapier: 'logos:zapier-icon',
+  gmail: 'logos:google-gmail',
+  'google-calendar': 'logos:google-calendar',
+  'google-drive': 'logos:google-drive',
+  github: 'logos:github-icon',
+  gitlab: 'logos:gitlab-icon',
+  sentry: 'logos:sentry-icon',
+  vercel: 'logos:vercel-icon',
+  netlify: 'logos:netlify-icon',
+  supabase: 'logos:supabase-icon',
+  neon: 'logos:neon-icon',
+  prisma: 'logos:prisma',
+  postman: 'logos:postman-icon',
+  posthog: 'logos:posthog-icon',
+  amplitude: 'logos:amplitude-icon',
+  intercom: 'logos:intercom-icon',
+  zendesk: 'logos:zendesk-icon',
+  stripe: 'logos:stripe',
+  paypal: 'logos:paypal',
+  square: 'logos:square',
+  'cloudflare-docs': 'logos:cloudflare-icon',
+  'microsoft-learn': 'logos:microsoft-icon',
+  'aws-knowledge': 'logos:aws',
+  'hugging-face': 'logos:hugging-face-icon',
+  exa: 'logos:exa-icon',
+};

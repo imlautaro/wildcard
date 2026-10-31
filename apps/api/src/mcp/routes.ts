@@ -6,6 +6,10 @@ import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { isRecord } from '../chat/meta';
 import { connectionColumns, credential, discover, endpoint, type Connection, type RemoteTool } from './client';
 import { DnsFailure, OAuthSetupFailure, safeFailureCode } from './errors';
+import { mcpPresets } from './presets';
+
+// Normalized like stored connector URLs, so clients can match presets to connections exactly.
+const presets = mcpPresets.map(preset => ({ ...preset, url: endpoint(preset.url).href }));
 
 const routes = new Hono<{ Bindings: Env; Variables: { owner: string; sessionID: string } }>();
 routes.use('*', async (c, next) => {
@@ -55,7 +59,7 @@ routes.get('/', async c => {
   }));
   let redirect: string | null = null;
   try { redirect = callbackURL(c.env); } catch { /* Public/Bearer connections still work in local HTTP development. */ }
-  return c.json({ connections, callbackURL: redirect });
+  return c.json({ connections, callbackURL: redirect, presets });
 });
 routes.post('/', async c => {
   const data: unknown = await c.req.json();

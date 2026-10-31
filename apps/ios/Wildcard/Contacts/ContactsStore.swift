@@ -18,7 +18,7 @@ final class ContactsStore {
     let conversations = ConversationCache()
     let scheduleSnapshots = NavigationSnapshotCache<[ContactSchedule]>()
     let mcpAccessSnapshots = NavigationSnapshotCache<[McpAccess]>()
-    let mcpSnapshots = NavigationSnapshotCache<[McpConnection]>()
+    let mcpSnapshots = NavigationSnapshotCache<McpCatalog>()
     let energySnapshots = NavigationSnapshotCache<ContactEnergy>()
     let learningSnapshots = NavigationSnapshotCache<ConversationLearningSnapshot>()
     /// The account-independent voice catalog for the contact voice picker, cached for the session.

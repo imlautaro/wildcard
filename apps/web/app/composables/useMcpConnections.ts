@@ -1,19 +1,22 @@
 export type McpTool = { name: string; description: string; fingerprint: string; allowed: boolean; inputSchema: Record<string, unknown> };
 export type McpConnection = { id: string; name: string; url: string; authenticated: boolean; authType: 'none' | 'bearer' | 'oauth'; oauthStatus: string | null; oauthConfigured: boolean; oauthIssuer: string | null; oauthScope: string | null; tools: McpTool[] };
-type Snapshot = { value: McpConnection[] | null; callbackURL: string | null; revision: number; request: Promise<void> | null };
+// A connector library entry. It only prefills the connect form; see docs/connectors.md.
+export type McpPreset = { id: string; name: string; description: string; category: string; url: string; authType: 'none' | 'bearer' | 'oauth'; issuer?: string; scope?: string; ownClient?: boolean; note?: string };
+type Snapshot = { value: McpConnection[] | null; callbackURL: string | null; presets: McpPreset[]; revision: number; request: Promise<void> | null };
 const snapshots = shallowReactive(new Map<string, Snapshot>());
 registerSessionReset(() => { if (import.meta.client) sessionStorage.removeItem('wildcard.mcp.oauth'); for (const entry of snapshots.values()) entry.revision++; snapshots.clear(); });
 export function forgetMcpConnections(id: string) { const entry = snapshots.get(id); if (entry) entry.revision++; snapshots.delete(id); }
 export function useMcpConnections(contactID: MaybeRefOrGetter<string>) {
   const connections = computed(() => snapshots.get(toValue(contactID))?.value ?? null);
   const callbackURL = computed(() => snapshots.get(toValue(contactID))?.callbackURL ?? null);
+  const presets = computed(() => snapshots.get(toValue(contactID))?.presets ?? []);
   const busy = ref(false);
   const error = ref<string | null>(null);
   async function refresh() {
     const id = toValue(contactID);
     let entry = snapshots.get(id);
     if (!entry) {
-      entry = reactive({ value: null, callbackURL: null, revision: 0, request: null }) as Snapshot;
+      entry = reactive({ value: null, callbackURL: null, presets: [], revision: 0, request: null }) as Snapshot;
       snapshots.set(id, entry);
       while (snapshots.size > 8) forgetMcpConnections(snapshots.keys().next().value!);
     }
@@ -21,8 +24,8 @@ export function useMcpConnections(contactID: MaybeRefOrGetter<string>) {
     const current = entry, revision = current.revision;
     current.request = (async () => {
       try {
-        const result = await api<{ connections: McpConnection[]; callbackURL: string | null }>(`me/mcp`);
-        if (snapshots.get(id) === current && current.revision === revision) { current.value = result.connections; current.callbackURL = result.callbackURL; error.value = null; }
+        const result = await api<{ connections: McpConnection[]; callbackURL: string | null; presets?: McpPreset[] }>(`me/mcp`);
+        if (snapshots.get(id) === current && current.revision === revision) { current.value = result.connections; current.callbackURL = result.callbackURL; current.presets = result.presets ?? []; error.value = null; }
       } catch (failure) {
         if (snapshots.get(id) !== current || current.revision !== revision) return;
         if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) forgetMcpConnections(id);
@@ -43,5 +46,5 @@ export function useMcpConnections(contactID: MaybeRefOrGetter<string>) {
       error.value = errorMessage(failure); return false;
     } finally { busy.value = false; }
   }
-  return { connections, callbackURL, busy, error, refresh, mutate };
+  return { connections, callbackURL, presets, busy, error, refresh, mutate };
 }

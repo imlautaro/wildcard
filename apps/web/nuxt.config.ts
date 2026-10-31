@@ -2,12 +2,16 @@
 // API Worker through a service binding and keep the session token in a cookie.
 // The design system (tokens, components, icons, ripple, font) comes from the
 // shared Wildcard UI layer; main.css holds only this app's own styles.
+import { connectorLogos } from './app/utils/connectorLogos';
+
 export default defineNuxtConfig({
   extends: ['../../packages/ui'],
   compatibilityDate: '2026-10-26',
   ssr: false,
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
+  // Connector library logos join the layer's Material Symbols in the client bundle.
+  icon: { clientBundle: { icons: Object.values(connectorLogos) } },
   app: {
     head: {
       title: 'Wildcard',

@@ -576,7 +576,10 @@ connector catalogs (approximately 4 MB JSON before overhead), including an empty
 result. Legacy accounts exceeding sixteen retain all migrated connectors; their
 snapshot can exceed this normal budget until redundant connectors are explicitly
 removed. The migration never silently deletes authorization state. Schemas are cached once per connector, independently of assignments. iOS
-uses NavigationSnapshotCache and web uses useMcpConnections (`account` key).
+uses NavigationSnapshotCache and web uses useMcpConnections (`account` key). The
+connector library presets (about 35 small entries) and the OAuth callback URI travel in
+the same `GET /me/mcp` snapshot, so iOS no longer issues a second request for the
+callback URI; logos are bundled with each client and never downloaded.
 Contact/group access lists use separate schema-free snapshots through the existing
 iOS cache and useMcpAccess, bounded to eight lists (up to sixteen account choices
 per contact or 32 bot/connector pairs per group). Complete catalog discovery remains

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { McpConnection } from '~/composables/useMcpConnections';
+import type { McpConnection, McpPreset } from '~/composables/useMcpConnections';
 const id = computed(() => 'account');
-const { connections, callbackURL, busy, error, refresh, mutate } = useMcpConnections(id);
+const { connections, callbackURL, presets, busy, error, refresh, mutate } = useMcpConnections(id);
 const name = ref('');
 const url = ref('');
 const token = ref('');
@@ -19,8 +19,36 @@ function visibleTools(connection: McpConnection) {
   return connection.tools.filter(tool => !query || `${tool.name} ${tool.description}`.toLowerCase().includes(query));
 }
 type OAuthLaunch = { flowID: string; launchURL: string };
-function gmail() { advancedOAuth.value = true; clientID.value = ''; clientSecret.value = ''; name.value = 'Gmail'; url.value = 'https://gmailmcp.googleapis.com/mcp/v1'; authType.value = 'oauth'; issuer.value = 'https://accounts.google.com'; scope.value = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose'; }
-function configure(connection: { id: string; name: string; url: string }) { advancedOAuth.value = false; clientID.value = ''; clientSecret.value = ''; issuer.value = ''; scope.value = ''; configureID.value = connection.id; name.value = connection.name; url.value = connection.url; authType.value = 'oauth'; if (connection.url === 'https://gmailmcp.googleapis.com/mcp/v1') { advancedOAuth.value = true; issuer.value = 'https://accounts.google.com'; scope.value = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose'; } }
+// Connector library: a preset prefills the form and locks its endpoint and access mode.
+const preset = ref<McpPreset | null>(null);
+const libraryOpen = ref(false);
+const libraryQuery = ref('');
+const presetFor = (connectionURL: string) => presets.value.find(entry => entry.url === connectionURL) ?? null;
+const connectedURLs = computed(() => new Set((connections.value ?? []).map(connection => connection.url)));
+const library = computed(() => {
+  const query = libraryQuery.value.trim().toLowerCase();
+  const groups = new Map<string, McpPreset[]>();
+  for (const entry of presets.value) {
+    if (query && !`${entry.name} ${entry.description} ${entry.category}`.toLowerCase().includes(query)) continue;
+    groups.set(entry.category, [...groups.get(entry.category) ?? [], entry]);
+  }
+  return [...groups].map(([category, entries]) => ({ category, entries }));
+});
+function resetForm() { configureID.value = null; preset.value = null; clientID.value = ''; clientSecret.value = ''; token.value = ''; name.value = ''; url.value = ''; authType.value = 'none'; issuer.value = ''; scope.value = ''; advancedOAuth.value = false; }
+function choosePreset(entry: McpPreset) {
+  resetForm();
+  preset.value = entry; name.value = entry.name; url.value = entry.url; authType.value = entry.authType;
+  issuer.value = entry.issuer ?? ''; scope.value = entry.scope ?? ''; advancedOAuth.value = !!entry.ownClient;
+  libraryOpen.value = false; libraryQuery.value = ''; formOpen.value = true;
+}
+function configure(connection: { id: string; name: string; url: string }) {
+  resetForm();
+  configureID.value = connection.id; name.value = connection.name; url.value = connection.url; authType.value = 'oauth';
+  // Presets without automatic client registration need their pinned issuer and scopes again.
+  const match = presetFor(connection.url);
+  preset.value = match;
+  if (match?.ownClient) { advancedOAuth.value = true; issuer.value = match.issuer ?? ''; scope.value = match.scope ?? ''; }
+}
 async function authorize(connectionID: string, config?: Record<string, string>) {
   const result = await mutate<OAuthLaunch>(`/${connectionID}/oauth/start`, 'POST', { platform: 'web', ...(config ? { rediscover: true, ...config } : {}) });
   clientSecret.value = '';
@@ -40,14 +68,15 @@ function summary(connection: McpConnection) {
   return connection.authType === 'oauth' && !connection.authenticated ? 'Needs authorization' : `${connection.tools.filter(tool => tool.allowed).length}/${connection.tools.length} tools`;
 }
 function openForm() {
-  if (configureID.value) { configureID.value = null; clientSecret.value = ''; name.value = ''; url.value = ''; }
+  if (configureID.value || preset.value) resetForm();
   formOpen.value = true;
 }
 function cancelForm() {
-  if (configureID.value) { configureID.value = null; clientSecret.value = ''; name.value = ''; url.value = ''; }
+  if (configureID.value || preset.value) resetForm();
   formOpen.value = false;
 }
 function configureFromDetail(connection: McpConnection) { configure(connection); detailID.value = null; formOpen.value = true; }
+const libraryInfo = 'Official remote MCP servers from each provider, prefilled with their endpoint and access mode. You still review the privacy terms, sign in with the provider and approve each tool. Wildcard does not operate these servers, and providers can change them.';
 const supported = 'Remote Streamable HTTP servers with public access, a Bearer token, or OAuth. Legacy SSE and local command servers are not supported yet.';
 const oauthInfo = "Wildcard discovers the OAuth settings and opens the provider's sign-in page. Authorizing an account does not enable tools. Most servers need no manual settings. If you use your own client credentials, enter their trusted authorization server too. Google requires your own registered Web OAuth client marked for an AI-powered agent and Workspace preview access.";
 const notice = 'Configure a connector once, then grant contacts access from their Connections screen. Tool approvals apply to every contact and group you authorize. Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard.';
@@ -61,7 +90,7 @@ async function connect() {
   }
   token.value = '';
   if (authType.value === 'oauth') await authorize(connectionID, { ...(issuer.value.trim() ? { issuer: issuer.value.trim() } : {}), ...(scope.value.trim() ? { scope: scope.value.trim() } : {}), ...(clientID.value ? { clientID: clientID.value } : {}), ...(clientSecret.value ? { clientSecret: clientSecret.value } : {}) });
-  else { name.value = ''; url.value = ''; consent.value = false; if (!error.value) formOpen.value = false; }
+  else if (!error.value) { resetForm(); consent.value = false; formOpen.value = false; }
 }
 async function permission(connection: string, tool: { name: string; fingerprint: string; allowed: boolean }) {
   if (!tool.allowed && !window.confirm(`Allow ${tool.name} without asking again? It may read, change, or send external data. Only enable tools you understand and trust.`)) return;
@@ -90,9 +119,29 @@ onBeforeUnmount(() => { token.value = ''; clientSecret.value = ''; });
     <AppLoading v-if="connections === null" label="Loading connections…" />
     <AppListGroup v-else>
       <div v-if="!connections.length" class="text-block">No connections yet.</div>
-      <AppListItem v-for="connection in connections" :key="connection.id" icon="link" opens :value="summary(connection)" @click="detailID = connection.id">{{ connection.name }}</AppListItem>
-      <AppListItem icon="plus" :disabled="busy" @click="openForm">Add server</AppListItem>
+      <AppListItem v-for="connection in connections" :key="connection.id" icon="link" opens :value="summary(connection)" @click="detailID = connection.id">
+        <template v-if="presetFor(connection.url)" #leading><ConnectorLogo :id="presetFor(connection.url)!.id" /></template>
+        {{ connection.name }}
+      </AppListItem>
+      <AppListItem icon="grid" :disabled="busy || !presets.length" @click="libraryOpen = true">Browse connector library</AppListItem>
+      <AppListItem icon="plus" :disabled="busy" @click="openForm">Add custom server</AppListItem>
     </AppListGroup>
+
+    <AppSheet v-if="libraryOpen" title="Connector library" @close="libraryOpen = false; libraryQuery = ''">
+      <template #header><InfoButton label="Connector library" :text="libraryInfo" /></template>
+      <AppSearchField v-model="libraryQuery" label="Search connectors" maxlength="200" class="tool-search" />
+      <p v-if="!library.length" class="text-block">No matches</p>
+      <template v-for="group in library" :key="group.category">
+        <div class="group-title">{{ group.category }}</div>
+        <AppListGroup>
+          <AppListItem v-for="entry in group.entries" :key="entry.id" opens :supporting="entry.description" @click="choosePreset(entry)">
+            <template #leading><ConnectorLogo :id="entry.id" /></template>
+            {{ entry.name }}
+            <template #trailing><AppChip v-if="connectedURLs.has(entry.url)" tone="success">Connected</AppChip></template>
+          </AppListItem>
+        </AppListGroup>
+      </template>
+    </AppSheet>
 
     <AppSheet v-if="detail" :title="detail.name" @close="detailID = null">
       <AppListGroup>
@@ -132,23 +181,27 @@ onBeforeUnmount(() => { token.value = ''; clientSecret.value = ''; });
       <AppNotice v-if="error">{{ error }}</AppNotice>
     </AppSheet>
 
-    <AppSheet v-if="formOpen" :title="configureID ? 'Configure OAuth' : 'Add server'" @close="cancelForm">
+    <AppSheet v-if="formOpen" :title="configureID ? 'Configure OAuth' : preset ? `Connect ${preset.name}` : 'Add server'" @close="cancelForm">
       <template #header><InfoButton label="Supported servers" :text="supported" /></template>
       <form id="mcp-form" @submit.prevent="connect">
-        <AppListGroup v-if="!configureID">
-          <AppListItem icon="mail" @click="gmail">Use Gmail settings</AppListItem>
+        <AppListGroup v-if="preset">
+          <div class="preset-summary">
+            <ConnectorLogo :id="preset.id" />
+            <span class="two-line"><span>{{ preset.name }}</span><span class="small">{{ preset.description }}</span></span>
+          </div>
+          <p v-if="preset.note" class="text-block">{{ preset.note }}</p>
         </AppListGroup>
         <AppListGroup>
           <div class="field"><label for="mcp-name">Name</label><input id="mcp-name" v-model="name" :readonly="!!configureID" placeholder="My server" maxlength="80" required></div>
-          <div class="field"><label for="mcp-url">URL</label><input id="mcp-url" v-model="url" :readonly="!!configureID" type="url" placeholder="https://example.com/mcp" aria-label="HTTPS endpoint" maxlength="2048" required></div>
+          <div class="field"><label for="mcp-url">URL</label><input id="mcp-url" v-model="url" :readonly="!!configureID || !!preset" type="url" placeholder="https://example.com/mcp" aria-label="HTTPS endpoint" maxlength="2048" required></div>
           <div class="field">
             <label for="mcp-auth">Access</label>
             <AppSelect
-              id="mcp-auth" v-model="authType" variant="plain" :disabled="!!configureID"
+              id="mcp-auth" v-model="authType" variant="plain" :disabled="!!configureID || !!preset"
               :options="[{ value: 'none', label: 'Public access' }, { value: 'bearer', label: 'Bearer token' }, { value: 'oauth', label: 'OAuth' }]"
             />
           </div>
-          <div v-if="authType === 'bearer'" class="field"><label for="mcp-token">Token</label><input id="mcp-token" v-model="token" type="password" placeholder="Optional" aria-label="Bearer token (optional)" autocomplete="off" maxlength="4096"></div>
+          <div v-if="authType === 'bearer'" class="field"><label for="mcp-token">Token</label><input id="mcp-token" v-model="token" type="password" :placeholder="preset ? 'Required' : 'Optional'" :aria-label="preset ? 'Bearer token' : 'Bearer token (optional)'" autocomplete="off" maxlength="4096"></div>
         </AppListGroup>
         <AppListGroup v-if="authType === 'oauth'" title="OAuth" :info="oauthInfo">
           <p v-if="!callbackURL" class="text-block callback-missing">OAuth requires a public HTTPS API configuration.</p>
@@ -172,7 +225,7 @@ onBeforeUnmount(() => { token.value = ''; clientSecret.value = ''; });
       </form>
       <template #actions>
         <AppButton variant="text" @click="cancelForm">Cancel</AppButton>
-        <AppButton type="submit" form="mcp-form" :disabled="busy || !consent || !name.trim() || !url.trim()">{{ authType === 'oauth' ? 'Continue' : 'Connect' }}</AppButton>
+        <AppButton type="submit" form="mcp-form" :disabled="busy || !consent || !name.trim() || !url.trim() || (preset?.authType === 'bearer' && !token.trim())">{{ authType === 'oauth' ? 'Continue' : 'Connect' }}</AppButton>
       </template>
     </AppSheet>
   </div></div>
@@ -183,4 +236,5 @@ onBeforeUnmount(() => { token.value = ''; clientSecret.value = ''; });
 .wrap { overflow-wrap: anywhere; }
 .callback-missing { color: var(--md-error); }
 .tool-search { margin-bottom: var(--space-2); }
+.preset-summary { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
 </style>

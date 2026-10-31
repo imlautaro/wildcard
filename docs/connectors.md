@@ -69,6 +69,53 @@ or disconnecting blocks future admissions; an already admitted remote action may
 finish. Disconnect deletes the encrypted token and configuration. Reconnect to
 replace a token. Revoking the token at its provider also prevents future access.
 
+## Connector library
+
+**Account → Connections → Browse connector library** lists official remote MCP servers
+grouped by category, with the provider's logo, a one-line description, a search
+field and a **Connected** label when an account connector already uses that URL.
+Choosing one opens the usual connect form prefilled with its name, endpoint and access
+mode; the endpoint and access mode are locked, the name stays editable, and the
+privacy consent, OAuth sign-in and per-tool approvals are unchanged. **Add custom
+server** keeps the manual form. A preset grants nothing by itself, and the API does
+not trust it: the client submits the URL like any custom server.
+
+The catalog is `apps/api/src/mcp/presets.ts`, served as `presets` in `GET /me/mcp`
+with URLs normalized like stored connectors (for example a trailing `/`), so it rides
+the existing session snapshot on both clients. Older API responses without `presets`
+decode to an empty library. Presets with `ownClient` (Gmail, Google Calendar, Google
+Drive) prefill issuer and scopes and open Advanced settings for your Client ID and
+secret, and **Configure OAuth** restores those values by matching the connector URL.
+GitHub uses a Bearer fine-grained personal access token because its OAuth server
+offers no automatic client registration, so its form requires the token before
+**Connect** is enabled. Each preset's `note` explains such setup.
+
+Logos come from Iconify's `logos` collection (`@iconify-json/logos` 1.2.16, pinned in
+apps/web). Web bundles exactly the icons in `apps/web/app/utils/connectorLogos.ts`
+into the client (`nuxt.config.ts`; no Iconify API requests). iOS uses vector imagesets
+in `apps/ios/Wildcard/Assets.xcassets/ConnectorLogos/`, generated from the same map by
+`node scripts/export-connector-logos.mjs`. Both render the logo on a fixed white tile
+so dark marks stay legible in dark mode; an ID without a logo shows the link icon.
+To add a preset: add it to `presets.ts`, add its `logos:` name (verify it in
+`node_modules/@iconify-json/logos/icons.json`) to the web map, rerun the export script,
+and release both clients. Brands without a usable logo in that collection were left out.
+
+Selection criteria, probed from a development Mac on 2026-10-30 with the same SDK
+discovery code as `prepareConfig`: Streamable HTTP; an endpoint shape accepted by
+`endpoint()` with no redirect; and, for OAuth, RFC 9728 resource metadata whose
+resource matches the URL, a matching issuer, S256, and Client ID Metadata Documents
+or Dynamic Client Registration. Public entries (Cloudflare Docs, Microsoft Learn,
+AWS Knowledge, Hugging Face, Exa) and the Google servers also listed tools whose input
+schemas pass the preflight. Not verified: OAuth catalogs (they need a signed-in
+account), actual DCR acceptance of Wildcard's redirect URI, the 20-second deadline
+and DNS checks from Workers egress, and the Bearer GitHub flow. Excluded at probe
+time: Atlassian and Pipedrive (no resource metadata), Asana, HubSpot, Box, Slack,
+PagerDuty and Dovetail (registered client required), Mercado Libre and HeyGen
+(redirects), Calendly, Zoom, Trello and Microsoft (no MCP endpoint at the probed
+URL), Firecrawl (an unbounded `(…)+` pattern), and Webflow, Wix, Mixpanel and Sanity
+(only wide wordmarks in the logo collection, illegible at row size). Providers change servers without
+notice; the library is a curated starting point, not an endorsement or guarantee.
+
 ## Privacy and model behavior
 
 Granting a contact access permanently marks its private conversation as isolated, including
@@ -152,17 +199,30 @@ also inherit existing chat admission and Workflow time budgets. No automatic
 remote action retries or transport reconnections are enabled.
 
 Schemas use @cfworker/json-schema (2020-12), an interpreting validator that
-works without eval/new Function in Workers. References, patternProperties,
+works without eval/new Function in Workers. Local references to root definitions
+(`#/$defs/<name>` and `#/definitions/<name>`, as emitted by pydantic, zod and Google)
+are inlined before preflight; the referenced subschema is shared, and sibling keywords
+of a `$ref` combine with it under 2020-12 semantics (a root `$ref` beside `description`,
+as pydantic emits, keeps the referenced object type). The 1,000-node/depth-16 bounds
+apply to the expanded graph, so each reuse counts. Remote, nested-pointer, missing and
+cyclic (recursive) references, `$dynamicRef`/`$recursiveRef`, patternProperties,
 unsupported schema dialects and excessive catalogs fail closed. Anchored finite
 patterns up to 256 characters are admitted only after static preflight limits their
 maximum match width to 256 and alternative combinations to 64. Literal characters,
-character classes, simple character escapes, groups/alternation and exact repeats
-on individual characters are supported. Variable/unbounded repetition, quantified
+character classes, simple character escapes, groups/alternation, exact repeats and
+bounded `{m,n}` repeats (n ≤ 256) on individual characters are supported. Each
+variable repeat multiplies a pattern-wide budget of 1,024 choices, so `[A-Za-z0-9._:-]{1,128}`
+or IPv4-style `\d{1,3}` groups pass while adjacent overlapping repeats such as
+`a{0,64}a{0,64}` are rejected. Open-ended repetition (`+`, `*`, `{m,}`), quantified
 groups, lookarounds, backreferences and Unicode property escapes remain rejected.
 Date/month and UUID patterns can therefore be enforced without admitting arbitrary
 backtracking complexity. Preflight visits actual subschemas, so properties named
-pattern or literal enum/const data are not mistaken for schema keywords. Even a
-single incompatible tool still prevents catalog replacement; precise schema errors
+pattern or literal enum/const/$ref data are not mistaken for schema keywords. Only
+input schemas gate a catalog: output schemas are still part of the tool fingerprint,
+but one outside this subset no longer rejects discovery, and structured results stay
+untrusted, size-bounded evidence (call sessions never validated them, because they
+do not list tools first). Even a single incompatible input schema still prevents
+catalog replacement; `node scripts/checks/mcp-schema.cjs` covers these rules offline. Precise schema errors
 explain the rejected feature without exposing tokens or remote exception bodies. HTTPS
 must use a public DNS hostname, default port, no credentials, query or fragment.
 Redirects and off-endpoint transport requests are rejected. Public DNS addresses
@@ -274,7 +334,7 @@ Registration where supported, and refresh tokens are implemented.
 Implicit grants, device-code grants, client-credentials grants, provider endpoints containing query parameters, legacy SSE-only
 servers, stdio commands, custom headers, catalogs exceeding the bounded limits and non-text
 results remain unsupported. Full interoperability with a particular live server
-is not established by static checks or by this feature's Gmail preset.
+is not established by static checks or by the connector library presets.
 
 Static API TypeScript, web typechecking and complete iOS Simulator Swift
 typechecking passed. Sixteen SQL statements compiled with EXPLAIN against an
@@ -320,7 +380,7 @@ is mandatory only when supplying pre-registered credentials or when the server
 cannot advertise one. Static credentials are never sent to an automatically chosen
 issuer. A provider supporting neither metadata-document clients nor dynamic
 registration gets a specific manual-client-required error. Google still needs its
-own registered client; the Gmail preset expands advanced settings for this reason.
+own registered client; the Google presets expand advanced settings for this reason.
 Review the saved issuer and requested scopes before reauthorizing. Configuration
 stays encrypted; only public issuer/scope and status are displayed. Existing
 reauthorization reuses saved configuration, whereas submitting the setup form
@@ -344,8 +404,12 @@ No tunnel, Google project, OAuth application or account connection is provisione
 automatically. Existing Worker Builds applies both migrations when an authorized
 commit/push eventually releases this work. No manual deployment is permitted.
 
-**Gmail preset:** choose **Use Gmail settings** to fill the official endpoint,
-`https://accounts.google.com` issuer and `gmail.readonly gmail.compose` scope URLs.
+**Google presets:** choose **Gmail**, **Google Calendar** or **Google Drive** in the
+[connector library](#connector-library) to fill the official endpoint,
+`https://accounts.google.com` issuer and scope URLs (`gmail.readonly gmail.compose`;
+`calendar.calendarlist.readonly calendar.events`; `drive.readonly drive.file`).
+Before 2026-10-30, every Gmail catalog was rejected after authorization because its
+schemas use local `$ref`; the schema changes above admit it.
 Provide your own Google Web OAuth Client ID and client secret; Google does not
 support the dynamic registration path here. Enable Gmail API and Gmail MCP API in
 your Google project, enroll in the Workspace Developer Preview where required,

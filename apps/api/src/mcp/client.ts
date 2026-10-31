@@ -47,7 +47,10 @@ export async function remote<T>(env: Env, connection: Connection, action: (clien
   };
   const transport = new StreamableHTTPClientTransport(url, { fetch: guardedFetch, reconnectionOptions: { maxRetries: 0, maxReconnectionDelay: 1000, initialReconnectionDelay: 1000, reconnectionDelayGrowFactor: 1 } });
   const schemaProvider: jsonSchemaValidator = { getValidator<T>(schema: Record<string, unknown>) {
-    const validate = validator(schema);
+    // Output schemas never gate a catalog: structured results stay untrusted, size-bounded
+    // evidence, so a schema outside the supported subset leaves that output unvalidated.
+    let validate: (value: unknown) => boolean;
+    try { validate = validator(schema); } catch { validate = () => true; }
     return (value: unknown) => validate(value)
       ? { valid: true as const, data: value as T, errorMessage: undefined }
       : { valid: false as const, data: undefined, errorMessage: 'External schema validation failed.' };
@@ -80,7 +83,6 @@ export async function catalog(client: Client, signal: AbortSignal): Promise<Remo
     if (!tool.name || tool.name.length > 128 || names.has(tool.name)) throw new Error('MCP_TOOL');
     names.add(tool.name);
     validator(tool.inputSchema);
-    if (tool.outputSchema) validator(tool.outputSchema);
     const description = (tool.description ?? '').slice(0, 2000);
     const fingerprint = await digest(JSON.stringify([tool.name, tool.description ?? '', tool.inputSchema, tool.outputSchema ?? null, tool.annotations ?? null]));
     const readOnly = tool.annotations?.readOnlyHint === true && tool.annotations?.destructiveHint !== true;

@@ -49,17 +49,38 @@ struct McpConnection: Decodable, Sendable, Identifiable {
     let oauthScope: String?
     let tools: [McpTool]
 }
-private struct McpEnvelope: Decodable { let connections: [McpConnection]; let callbackURL: String? }
+/// A connector library entry served by `GET /me/mcp`. It only prefills the connect form.
+struct McpPreset: Decodable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    let description: String
+    let category: String
+    let url: String
+    let authType: String
+    let issuer: String?
+    let scope: String?
+    let ownClient: Bool?
+    let note: String?
+}
+/// The account's connectors with the OAuth redirect URI and the connector library, cached together.
+struct McpCatalog: Decodable, Sendable {
+    let connections: [McpConnection]
+    let callbackURL: String?
+    let presets: [McpPreset]
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        connections = try c.decode([McpConnection].self, forKey: .connections)
+        callbackURL = try c.decodeIfPresent(String.self, forKey: .callbackURL)
+        presets = try c.decodeIfPresent([McpPreset].self, forKey: .presets) ?? []
+    }
+    private enum CodingKeys: String, CodingKey { case connections, callbackURL, presets }
+}
 struct McpOAuthLaunch: Decodable { let flowID: String; let launchURL: URL }
 private struct McpCreated: Decodable { let id: String }
 extension AuthAPI {
-    func mcpConnections(contactID: String, token: String) async throws -> [McpConnection] {
+    func mcpCatalog(contactID: String, token: String) async throws -> McpCatalog {
         let (data, _) = try await send(path: "me/mcp", token: token)
-        return try JSONDecoder().decode(McpEnvelope.self, from: data).connections
-    }
-    func mcpCallbackURL(contactID: String, token: String) async throws -> String? {
-        let (data, _) = try await send(path: "me/mcp", token: token)
-        return try JSONDecoder().decode(McpEnvelope.self, from: data).callbackURL
+        return try JSONDecoder().decode(McpCatalog.self, from: data)
     }
     func createMcp(contactID: String, body: Data, token: String) async throws -> String {
         let (data, _) = try await send(path: "me/mcp", method: "POST", body: body, token: token, timeout: 60)
@@ -77,7 +98,7 @@ extension AuthAPI {
 struct McpConnectionsView: View {
     @Environment(ContactsStore.self) private var contacts
     let contactID: String
-    let cache: NavigationSnapshot<[McpConnection]>
+    let cache: NavigationSnapshot<McpCatalog>
     @Environment(AuthStore.self) private var auth
     @Environment(\.scenePhase) private var scenePhase
     @State private var name = ""
@@ -91,7 +112,6 @@ struct McpConnectionsView: View {
     @State private var clientSecret = ""
     @State private var advancedOAuth = false
     @State private var configureID: String?
-    @State private var callbackURL: String?
     @State private var browser = McpOAuthBrowser()
     @State private var isVisible = false
     @State private var busy = false
@@ -101,25 +121,55 @@ struct McpConnectionsView: View {
     @State private var pendingEnableAll: McpConnection?
     @State private var pendingDisconnect: String?
     @State private var sheet: SheetKind?
+    @State private var preset: McpPreset?
+    @State private var libraryQuery = ""
     private let notice = "Configure a connector once, then grant contacts access from their Connections screen. Tool approvals apply to every contact and group you authorize. Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard."
     private let supported = "Remote Streamable HTTP servers with public access, a Bearer token, or OAuth. Legacy SSE and local command servers are not supported yet."
 
-    /// One sheet at a time: switching from a server's details to its OAuth form replaces it.
+    private let libraryInfo = "Official remote MCP servers from each provider, prefilled with their endpoint and access mode. You still review the privacy terms, sign in with the provider and approve each tool. Wildcard does not operate these servers, and providers can change them."
+    private var connections: [McpConnection]? { cache.value?.connections }
+    private var callbackURL: String? { cache.value?.callbackURL }
+    private var presets: [McpPreset] { cache.value?.presets ?? [] }
+    private func presetFor(_ url: String) -> McpPreset? { presets.first { $0.url == url } }
+
+    /// One sheet at a time: switching from a server's details to its OAuth form, or from
+    /// the library to a preset's form, replaces it.
     private enum SheetKind: Identifiable {
-        case detail(String), form
-        var id: String { if case .detail(let id) = self { "detail:\(id)" } else { "form" } }
+        case detail(String), form, library
+        var id: String {
+            switch self {
+            case .detail(let id): "detail:\(id)"
+            case .form: "form"
+            case .library: "library"
+            }
+        }
     }
 
     var body: some View {
         Form {
             Section {
-                if cache.value == nil { ProgressView("Loading connections…") }
-                else if cache.value?.isEmpty == true { Text("No connections yet.").foregroundStyle(.secondary) }
-                ForEach(cache.value ?? []) { connection in
-                    SheetRow(title: connection.name, systemImage: "link", value: summary(connection)) { sheet = .detail(connection.id) }
+                if connections == nil { ProgressView("Loading connections…") }
+                else if connections?.isEmpty == true { Text("No connections yet.").foregroundStyle(.secondary) }
+                ForEach(connections ?? []) { connection in
+                    if let match = presetFor(connection.url) {
+                        Button { sheet = .detail(connection.id) } label: {
+                            HStack {
+                                Label { Text(connection.name) } icon: { ConnectorLogo(id: match.id) }
+                                Spacer(minLength: 8)
+                                Text(summary(connection)).foregroundStyle(.secondary).lineLimit(1)
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .foregroundStyle(Color(uiColor: .label))
+                    } else {
+                        SheetRow(title: connection.name, systemImage: "link", value: summary(connection)) { sheet = .detail(connection.id) }
+                    }
                 }
-                Button("Add server", systemImage: "plus") {
-                    if configureID != nil { configureID = nil; name = ""; url = ""; clientSecret = "" }
+                Button("Browse connector library", systemImage: "square.grid.2x2") { sheet = .library }
+                    .disabled(presets.isEmpty)
+                Button("Add custom server", systemImage: "plus") {
+                    if configureID != nil || preset != nil { resetForm() }
                     sheet = .form
                 }
             } header: {
@@ -137,6 +187,7 @@ struct McpConnectionsView: View {
             switch kind {
             case .detail(let id): detailSheet(id)
             case .form: formSheet
+            case .library: librarySheet
             }
         }
         .task(id: scenePhase) { if scenePhase == .active { await refresh() } }
@@ -156,7 +207,7 @@ struct McpConnectionsView: View {
     private func detailSheet(_ id: String) -> some View {
         NavigationStack {
             Group {
-                if let connection = cache.value?.first(where: { $0.id == id }) {
+                if let connection = connections?.first(where: { $0.id == id }) {
                     Form {
                         Section {
                             LabeledContent("Access", value: authLabel(connection))
@@ -244,18 +295,21 @@ struct McpConnectionsView: View {
     private var formSheet: some View {
         NavigationStack {
             Form {
-                if configureID == nil {
-                    Section { Button("Use Gmail settings", systemImage: "envelope") { gmail() } }
+                if let preset {
+                    Section {
+                        Label { VStack(alignment: .leading, spacing: 2) { Text(preset.name); Text(preset.description).font(.caption).foregroundStyle(.secondary) } } icon: { ConnectorLogo(id: preset.id) }
+                        if let note = preset.note { Text(note).font(.footnote).foregroundStyle(.secondary) }
+                    }
                 }
                 Section {
                     TextField("Name", text: $name).disabled(configureID != nil)
-                    TextField("HTTPS endpoint", text: $url).disabled(configureID != nil).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                    TextField("HTTPS endpoint", text: $url).disabled(configureID != nil || preset != nil).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                     Picker("Authentication", selection: $authType) {
                         Text("Public access").tag("none")
                         Text("Bearer token").tag("bearer")
                         Text("OAuth").tag("oauth")
-                    }.disabled(configureID != nil)
-                    if authType == "bearer" { SecureField("Bearer token (optional)", text: $token).textInputAutocapitalization(.never).autocorrectionDisabled() }
+                    }.disabled(configureID != nil || preset != nil)
+                    if authType == "bearer" { SecureField(preset == nil ? "Bearer token (optional)" : "Bearer token", text: $token).textInputAutocapitalization(.never).autocorrectionDisabled() }
                 } header: {
                     HStack {
                         Text("Server")
@@ -287,12 +341,12 @@ struct McpConnectionsView: View {
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }
             .disabled(busy)
-            .navigationTitle(configureID == nil ? "Add server" : "Configure OAuth")
+            .navigationTitle(configureID != nil ? "Configure OAuth" : preset.map { "Connect \($0.name)" } ?? "Add server")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        if configureID != nil { configureID = nil; clientSecret = ""; name = ""; url = "" }
+                        if configureID != nil || preset != nil { resetForm() }
                         sheet = nil
                     }
                 }
@@ -303,8 +357,49 @@ struct McpConnectionsView: View {
                             if error == nil { sheet = nil }
                         }
                     }
-                    .disabled(busy || !consent || name.trimmingCharacters(in: .whitespaces).isEmpty || url.isEmpty)
+                    .disabled(busy || !consent || name.trimmingCharacters(in: .whitespaces).isEmpty || url.isEmpty || (preset?.authType == "bearer" && token.isEmpty))
                 }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    private var librarySheet: some View {
+        let query = libraryQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let matches = presets.filter { query.isEmpty || "\($0.name) \($0.description) \($0.category)".localizedCaseInsensitiveContains(query) }
+        let categories = matches.reduce(into: [String]()) { if !$0.contains($1.category) { $0.append($1.category) } }
+        let connected = Set((connections ?? []).map(\.url))
+        return NavigationStack {
+            List {
+                if matches.isEmpty { Text("No matches").foregroundStyle(.secondary) }
+                ForEach(categories, id: \.self) { category in
+                    Section(category) {
+                        ForEach(matches.filter { $0.category == category }) { entry in
+                            Button { choose(entry) } label: {
+                                HStack {
+                                    Label {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(entry.name)
+                                            Text(entry.description).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                    } icon: { ConnectorLogo(id: entry.id) }
+                                    Spacer(minLength: 8)
+                                    if connected.contains(entry.url) { Text("Connected").font(.caption.weight(.semibold)).foregroundStyle(.green) }
+                                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .foregroundStyle(Color(uiColor: .label))
+                        }
+                    }
+                }
+            }
+            .searchable(text: $libraryQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search connectors")
+            .navigationTitle("Connector library")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { InfoButton(title: "Connector library", text: libraryInfo) }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { libraryQuery = ""; sheet = nil } }
             }
         }
         .presentationDetents([.large])
@@ -316,8 +411,7 @@ struct McpConnectionsView: View {
     }
     private func refresh() async {
         do {
-            try await cache.refresh { try await auth.withSession { api, token in try await api.mcpConnections(contactID: contactID, token: token) } }
-            if callbackURL == nil { callbackURL = try await auth.withSession { api, token in try await api.mcpCallbackURL(contactID: contactID, token: token) } }
+            try await cache.refresh { try await auth.withSession { api, token in try await api.mcpCatalog(contactID: contactID, token: token) } }
             error = nil
         } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = "This contact is no longer available." }
         catch is CancellationError { }
@@ -336,21 +430,25 @@ struct McpConnectionsView: View {
         catch is CancellationError { return false }
         catch { self.error = error.localizedDescription; return false }
     }
-    private func gmail() {
-        advancedOAuth = true
-        clientID = ""; clientSecret = ""
-        name = "Gmail"; url = "https://gmailmcp.googleapis.com/mcp/v1"; authType = "oauth"
-        issuer = "https://accounts.google.com"
-        scope = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose"
+    private func resetForm() {
+        configureID = nil; preset = nil
+        clientID = ""; clientSecret = ""; token = ""; name = ""; url = ""; authType = "none"; issuer = ""; scope = ""; advancedOAuth = false
+    }
+    /// A preset prefills the form and locks its endpoint and access mode.
+    private func choose(_ entry: McpPreset) {
+        resetForm()
+        preset = entry; name = entry.name; url = entry.url; authType = entry.authType
+        issuer = entry.issuer ?? ""; scope = entry.scope ?? ""; advancedOAuth = entry.ownClient == true
+        libraryQuery = ""; sheet = .form
     }
     private func configure(_ connection: McpConnection) {
-        advancedOAuth = false
-        clientID = ""; clientSecret = ""; issuer = ""; scope = ""
+        resetForm()
         configureID = connection.id; name = connection.name; url = connection.url; authType = "oauth"
-        if connection.url == "https://gmailmcp.googleapis.com/mcp/v1" {
+        // Presets without automatic client registration need their pinned issuer and scopes again.
+        preset = presetFor(connection.url)
+        if let preset, preset.ownClient == true {
             advancedOAuth = true
-            issuer = "https://accounts.google.com"
-            scope = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose"
+            issuer = preset.issuer ?? ""; scope = preset.scope ?? ""
         }
     }
     private func connect() async {
@@ -374,7 +472,7 @@ struct McpConnectionsView: View {
                 if !clientSecret.isEmpty { config["clientSecret"] = clientSecret }
                 clientSecret = ""
                 try await runAuthorization(id, config)
-            } else { name = ""; url = ""; consent = false }
+            } else { resetForm(); consent = false }
             cache.invalidate(); await refresh()
         } catch is CancellationError { cache.invalidate(); await refresh() }
         catch { clientSecret = ""; cache.invalidate(); await refresh(); self.error = error.localizedDescription }
@@ -410,7 +508,7 @@ struct McpConnectionsView: View {
         try await auth.withSession { api, token in try await api.changeMcp(contactID: contactID, suffix: "/\(id)/oauth/finish", method: "POST", body: completion, token: token) }
         do { try await auth.withSession { api, token in try await api.changeMcp(contactID: contactID, suffix: "/\(id)/refresh", method: "POST", body: Data("{}".utf8), token: token) } }
         catch { throw AuthAPI.Failure.rejected("Account authorized. Open Connections and refresh tools to review permissions.") }
-        configureID = nil; name = ""; url = ""; consent = false
+        resetForm(); consent = false
     }
     private func permission(_ connection: String, _ tool: McpTool, _ allowed: Bool) async {
         await mutate("/\(connection)", "PATCH", ["fingerprint": tool.fingerprint, "allowed": allowed])
@@ -516,5 +614,25 @@ struct McpAccessView: View {
         } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = "This resource is no longer available." }
         catch is CancellationError { }
         catch { self.error = error.localizedDescription }
+    }
+}
+
+/// A connector library preset's brand logo on a fixed light tile, so dark marks stay
+/// legible in dark mode. Logos come from scripts/export-connector-logos.mjs; unknown IDs
+/// fall back to the link symbol.
+struct ConnectorLogo: View {
+    let id: String
+    var body: some View {
+        Group {
+            if let logo = UIImage(named: "ConnectorLogos/\(id)") {
+                Image(uiImage: logo).resizable().scaledToFit().frame(width: 20, height: 20)
+            } else {
+                Image(systemName: "link").foregroundStyle(Color(white: 0.12))
+            }
+        }
+        .frame(width: 30, height: 30)
+        .background(.white, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Color(uiColor: .separator)))
+        .accessibilityHidden(true)
     }
 }
