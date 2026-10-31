@@ -62,7 +62,9 @@ export async function attachmentMessage(env: Env, turn: Pick<StoredTurn, 'attach
   if (!object || object.size !== attachment.size || object.size > attachmentLimit) throw new Error('ATTACHMENT_UNAVAILABLE');
   const data = `data:${attachment.mimeType};base64,${Buffer.from(await object.arrayBuffer()).toString('base64')}`;
   return { role: 'user', content: [
-    { type: 'text', text: turn.userText || 'Please describe or summarize the attached file.' },
+    // A caption-less file is a continuation of the conversation (often something
+    // the contact asked for), not a request to describe it.
+    { type: 'text', text: turn.userText || '[File sent without a caption. Read it in the context of the conversation: if it answers or continues something under discussion, use it to keep helping. Describe or summarize it only if nothing in the conversation explains why it was sent.]' },
     attachment.mimeType === 'application/pdf'
       ? { type: 'file', file: { filename: attachment.name, file_data: data } }
       : { type: 'image_url', image_url: { url: data } },
