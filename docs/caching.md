@@ -1504,3 +1504,13 @@ already-loaded messages under the old name until their next refresh; private-cha
 connection snapshots are not explicitly invalidated.
 Verification: change an alias, then reopen a group with that bot, its members, quotes, a task list and Updates,
 and confirm the other member's view is unchanged. Not run on a device or browser.
+
+## Linked contacts
+
+iOS `ContactsStore.linkSnapshots` and web `useContactLinks` keep one snapshot per
+contact (at most eight, memory only, dropped with the session). Returning to the page
+shows the snapshot at once and revalidates in the background, and in the foreground on
+iOS. Every link change invalidates all snapshots (links are mutual) and the change's
+response replaces the current one; a failed read keeps the last snapshot with Retry.
+Deleting a contact clears the iOS snapshots. See [linked contacts](contacts.md#linked-contacts).
+

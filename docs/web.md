@@ -1300,3 +1300,9 @@ Onboarding and **Create Contact** (AI) offer **3D animated pets** and **Custom**
 shows a **Describe your characters** field (80 characters). The options are loaded with
 `?custom=1`. Matches iOS; see [onboarding](onboarding.md#character-styles).
 
+## Linked contacts (migration 0078, 2026-10-31)
+
+`/contacts/:id/links` (**Linked contacts** in contact details) lists linked contacts with
+**Unlink** and a picker to link another of your contacts; links are mutual. Cached by
+`useContactLinks`. Matches iOS; see [linked contacts](contacts.md#linked-contacts).
+

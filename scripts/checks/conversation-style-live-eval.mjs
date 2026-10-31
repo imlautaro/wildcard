@@ -117,6 +117,11 @@ function setup(scenario) {
     f.sqlite.prepare('INSERT INTO group_agent(group_id,agent_id,added_by,joined_at) VALUES (?,?,?,0)').run('group-a',a.id,'owner');
   }
   f.sqlite.exec('UPDATE contact SET learning_enabled=0');
+  // Optional linked contacts for one human: scenario.links = [[agentA, agentB, userID?]].
+  for (const [first, second, userID = 'alice'] of scenario.links ?? []) {
+    const [a, b] = [`contact-${first}-${userID}`, `contact-${second}-${userID}`].sort();
+    f.sqlite.prepare('INSERT INTO contact_link(user_id,contact_a,contact_b,created_at) VALUES (?,?,?,0)').run(userID, a, b);
+  }
   if (scenario.generationCountry) for (const a of agents) {
     const creator=f.sqlite.prepare("SELECT id FROM contact WHERE agent_id=? AND user_id='owner'").get(a.id);
     f.sqlite.prepare("INSERT INTO contact_generation(id,user_id,input_json,status,contact_id,updated_at) VALUES (?,'owner',?,'complete',?,0)")
@@ -151,7 +156,7 @@ async function privateTurn(f, record, input, i) {
   const agentID = input.agentID ?? f.agents[0].id, userID = input.userID ?? 'alice';
   const contactID=f.sqlite.prepare('SELECT id FROM contact WHERE agent_id=? AND user_id=?').get(agentID,userID).id;
   for (const [historyIndex, prior] of (input.history ?? []).entries()) f.sqlite.prepare(`INSERT INTO chat_turn(id,contact_id,user_id,user_text,assistant_text,status,workflow_id,created_at,updated_at)
-    VALUES (?,?,?,?,?,'complete',?,?,?)`).run(`history-${i}-${historyIndex}`,contactID,userID,prior.user,prior.assistant,`history-${i}`,Date.now()-60000,Date.now()-60000);
+    VALUES (?,?,?,?,?,'complete',?,?,?)`).run(`history-${i}-${historyIndex}`,contactID,userID,prior.user,prior.assistant,`history-${i}-${historyIndex}`,Date.now()-60000,Date.now()-60000);
   const id = `${record.id}-private-${i}`;
   f.sqlite.prepare(`INSERT INTO chat_turn(id,contact_id,user_id,user_text,status,workflow_id,created_at,updated_at,time_zone)
     VALUES (?,?,?,?,'running',?,?,?,'America/Argentina/Buenos_Aires')`).run(id,contactID,userID,input.text,id,Date.now(),Date.now());

@@ -161,6 +161,7 @@ const voiceChoiceInfo = computed(() => `Accent guides regional wording in text a
         <AppListItem :to="`/contacts/${id}/personality`" icon="person">Personality</AppListItem>
         <AppListItem :to="`/contacts/${id}/learning`" icon="person">Conversation learning</AppListItem>
         <AppListItem :to="`/contacts/${id}/connections`" icon="link">Connections</AppListItem>
+        <AppListItem :to="`/contacts/${id}/links`" icon="people">Linked contacts</AppListItem>
         <AppListItem :to="`/contacts/${id}/mini-apps`" icon="grid">Mini apps</AppListItem>
         <AppListItem :to="`/contacts/${id}/tasks`" icon="tasks">Tasks</AppListItem>
         <AppListItem v-if="canManage" :to="`/contacts/${id}/sharing`" icon="share">Share contact</AppListItem>

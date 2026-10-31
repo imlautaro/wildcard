@@ -322,3 +322,50 @@ and a member can both set an alias; members cannot rename the shared contact.
 and Remove alias buttons because members have no toolbar Save; the rename field is populated from the shared
 name. `Contact.realName`/`alias` decode optionally so older cached snapshots still load. Static typecheck
 only; not run on a simulator or device.
+
+## Linked contacts
+
+Since 2026-10-31 a person can give two of their own contacts access to each other
+(**Contact details → Linked contacts** on iOS and web). A link is mutual: linking Vale
+to Tomi also links Tomi to Vale. Contacts that use private connectors
+(connector-isolated, `mcp_private_contact`) or are still being created cannot be linked,
+so connector data never crosses a link.
+
+- **Storage** (migration 0078): `contact_link` holds one row per pair of the person's
+  own contact rows, in a fixed order (`contact_a < contact_b`); `contact_note` keeps
+  what one contact asked or told another. Both cascade with either contact or the
+  account. Shared contacts can be linked by each holder for their own chats only.
+- **API**: `GET /contacts/:id/links` returns `links`, `available` (other linkable
+  contacts, display names with aliases) and `unavailable` (a reason when this contact
+  cannot be linked); `PUT` and `DELETE /contacts/:id/links/:otherID` link and unlink
+  and return the same shape (30 changes per minute; 409 for contacts that cannot be
+  linked).
+- **In private chats** (not in connector-isolated chats or scheduled messages; task
+  work turns included), the prompt lists the linked contacts (shared name, the alias
+  the person saved, description and specialties) and offers two tools:
+  - `ask_linked_contact {contactID, question}`: the linked contact answers at once in
+    its own voice, without tools, from its memories of this person, its last eight
+    turns with them and up to four earlier turns matching the question. It says so when
+    it does not know. The answer is returned to the asking contact, which attributes
+    it. The exchange is saved as a note for the linked contact.
+  - `tell_linked_contact {contactID, message}`: saves a note. The linked contact sees
+    notes from the last seven days in its next private turns with the person; a note
+    newer than its last reply is marked new and passed along once, naturally ("Vale
+    told me…"). Nothing notifies the person.
+  Notes use one ID per turn, attempt, tool and contact, so a replayed step does not
+  duplicate them, and a replayed question reuses the saved answer. Notes and answers are
+  untrusted data in prompts. The asking contact's model is used for the answer (and the
+  linked contact must allow it, as for its own chat).
+- **Clients**: the Linked contacts page lists linked contacts with **Unlink** and a
+  picker to link another one. iOS caches it in `ContactsStore.linkSnapshots`, web in
+  `useContactLinks` (one snapshot per contact, eight at most, dropped with the session);
+  since links are mutual, every change invalidates all snapshots and its response
+  replaces the current one. Deleting a contact clears the iOS snapshots.
+
+Checked on 2026-10-31 with `conversation-style-live-eval.mjs` (new optional
+`scenario.links`) on `muse-spark-1.3-contributor` and fictional chats: asked "preguntale
+a Tomi a dónde te dije que me iba el finde", Vale answered "Tomi dice que le contaste que
+te vas a Mar del Plata con tu hermana este finde"; after "decile a Tomi que al final vamos
+el sábado temprano", Tomi's next reply to a greeting passed it along. Link SQL and
+cascades were run on the local workerd D1. Not verified on devices.
+

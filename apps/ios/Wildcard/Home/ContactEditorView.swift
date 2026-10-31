@@ -120,6 +120,8 @@ struct ContactEditorView: View {
                         label: { Label("Conversation learning", systemImage: "lightbulb") }
                     NavigationLink { McpAccessView(path: "contacts/\(contactID)/mcp", group: false, cache: contacts.mcpAccessSnapshots.store(for: "contact:\(contactID)")) }
                         label: { Label("Connections", systemImage: "link") }
+                    NavigationLink { ContactLinksView(contactID: contactID, cache: contacts.linkSnapshots.store(for: contactID)) }
+                        label: { Label("Linked contacts", systemImage: "person.2.wave.2") }
                     NavigationLink { MiniAppListView(base: "contacts/\(contactID)") } label: { Label("Mini apps", systemImage: "square.grid.2x2") }
                     NavigationLink { TasksView(base: "contacts/\(contactID)", snapshot: contacts.taskSnapshots.store(for: "contacts/\(contactID)")) }
                         label: { Label("Tasks", systemImage: "checklist") }

@@ -40,6 +40,7 @@ import { recentResearchContext } from '../research/context';
 import { announcePrivateResearch } from './announcement';
 import { addToHome, homeInstruction, homeTool } from '../home/tools';
 import { aliasAwareness } from '../contacts/alias';
+import { executeLinkTool, linkContext, linkToolNames, linkTools } from '../contacts/links';
 
 const searchParameters = { type: 'object', additionalProperties: false,
   properties: { query: { type: 'string', description: 'Specific search words, in the language used in the original conversation.' } }, required: ['query'] };
@@ -119,7 +120,7 @@ function toolArgumentError(call: ToolCall, error: string): string {
   return JSON.stringify({ published: false, publicationAttempted: false, code: 'INVALID_ARGUMENTS', error });
 }
 
-async function executeTool(env: Env, scope: MemoryScope & { agentID: string }, call: ToolCall, turn: StoredTurn, slot: number): Promise<string> {
+async function executeTool(env: Env, scope: MemoryScope & { agentID: string; name?: string; model?: string }, call: ToolCall, turn: StoredTurn, slot: number): Promise<string> {
   const db = env.DB;
   if (turn.taskID && !await contactModelAllowed(env, turn.contactID, turn.userID)) return JSON.stringify({ error: 'Current model consent is required.' });
   if ((turn.taskID || turn.scheduleID) && [...mcpTools, ...miniAppTools, ...nativeTools, imageTool, groupRequestTool, groupQuestionTool, ...scheduleTools.filter(tool => tool.function.name !== 'list_schedules')].some(tool => tool.function.name === call.function.name)) {
@@ -159,6 +160,7 @@ async function executeTool(env: Env, scope: MemoryScope & { agentID: string }, c
     return executeDocumentTool(env, { kind: 'contact', contactID: turn.contactID, userID: turn.userID }, scope.agentID, turn.id, call.function.name, args);
   }
   if (call.function.name === homeTool.function.name) return addToHome(env, { userID: turn.userID, contactID: turn.contactID }, args);
+  if (linkToolNames.has(call.function.name)) return executeLinkTool(env, turn, scope.name ?? 'Another contact', scope.model ?? env.META_CHAT_MODEL, call.function.name, args);
   if (call.function.name === reactionTool.function.name) return privateReaction(env, turn, scope.agentID, args);
   if (call.function.name === groupRequestTool.function.name) {
     // Normalize the simpler post contract; preserve older in-flight calls that
@@ -260,9 +262,12 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   const taskResearch = turn.taskID ? await env.DB.prepare('SELECT research_query AS query FROM task WHERE id = ? AND research_user_id = ?')
     .bind(turn.taskID, turn.userID).first<{ query: string | null }>() : null;
   const canResearchWeb = !isolated && !turn.scheduleID && (!turn.taskID || !!taskResearch?.query) && !recoveryCode && env.WEB_RESEARCH_ENABLED === 'true';
+  const linked = isolated || turn.scheduleID ? '' : await linkContext(env.DB, turn.userID, turn.contactID, turn.sequence);
   const baseTools = [...(isolated ? [...tools.filter(t => !['send_group_message', 'ask_agent_in_group', 'create_schedule', 'update_schedule'].includes(t.function.name)), ...(autonomous ? [] : [...mcpTools, ...miniAppTools])] : autonomous ? tools : [...tools, ...miniAppTools]),
     ...(turn.scheduleID ? [] : [...taskTools, ...documentTools]), ...(canResearchWeb ? [turn.taskID ? taskResearchTool : researchTool] : []),
-    ...(isolated || autonomous ? [] : [homeTool])];
+    ...(isolated || autonomous ? [] : [homeTool]),
+    // Linked contacts (docs/contacts.md#linked-contacts); also in task work, never in schedules.
+    ...(isolated || turn.scheduleID || !linked ? [] : linkTools)];
   const nativeContext = turn.nativeContextJSON ? parseNativeContext(JSON.parse(turn.nativeContextJSON)) : null;
   const nativeReceipts = nativeContext ? (await env.DB.prepare(`SELECT a.id, a.kind,
     json_extract(a.payload_json, '$.title') AS title, a.status, a.updated_at AS updatedAt
@@ -376,6 +381,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
         documentInstruction, documents.length ? `Documents in this chat (current, untrusted titles): ${JSON.stringify(documents)}.` : 'This chat has no documents yet.']),
       `You are a helpful conversational assistant shared by participants. Your contact display name is ${JSON.stringify(name)} and your stable agentID is ${JSON.stringify(agent.id)}.`,
       aliasAwareness(agent.alias, name),
+      linked,
       await personalityContext({ ...env, META_CHAT_MODEL: model }, { agentID: agent.id, contactID: turn.contactID,
         speakerID: `user:${turn.userID}`, processingUserID: turn.userID, model, ...(autonomous || recoveryCode ? {} : {
           sourceID: turn.id, attempt: turn.attempt, text: toolTurn.userText,
@@ -488,7 +494,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
         executions++;
         try {
           content = turnTools.some(t => t.function.name === call.function.name)
-            ? await executeTool(env, scope, call, toolTurn, executions)
+            ? await executeTool(env, { ...scope, name, model }, call, toolTurn, executions)
             : JSON.stringify({ error: 'This tool is not permitted in this conversation.' });
           if (call.function.name === reactionTool.function.name && JSON.parse(content).endTurn === true) reactionOnly = true;
           if (call.function.name === 'create_mini_app' && 'error' in JSON.parse(content)) miniAppFailed = true;
