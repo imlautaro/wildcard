@@ -5,6 +5,8 @@ struct ContactGenerationInput: Codable, Sendable {
     var age = 25
     var gender = "female"
     var style = "cartoon"
+    /// Theme for the Custom style; sent only with that style.
+    var customStyle: String? = nil
     var purpose = "friends"
     var language = "en"
     var country = ""
@@ -30,7 +32,10 @@ final class ContactGenerationStore {
     private var submissionID: String?
     private var dismissedID: String?
     var running: Bool { ["queued", "generating"].contains(job?.status ?? "") }
-    var ready: Bool { !draft.country.isEmpty && (18...120).contains(draft.age) }
+    var ready: Bool {
+        !draft.country.isEmpty && (18...120).contains(draft.age)
+            && (draft.style != "custom" || !(draft.customStyle ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
     func reset() {
         revision += 1; draft = ContactGenerationInput(); job = nil; options = nil
         busy = false; loading = false; initialized = false; error = nil; submissionID = nil; dismissedID = nil; created = nil
@@ -54,7 +59,7 @@ final class ContactGenerationStore {
                 let choices: OnboardingOptions
                 if let cached { choices = cached }
                 else {
-                    let (data, _) = try await api.send(path: "onboarding/options", token: token)
+                    let (data, _) = try await api.send(path: "onboarding/options", token: token, query: [URLQueryItem(name: "custom", value: "1")])
                     choices = try JSONDecoder().decode(OnboardingOptions.self, from: data)
                 }
                 let (preferences, _) = try await api.send(path: "onboarding", token: token)
@@ -66,7 +71,7 @@ final class ContactGenerationStore {
             guard current == revision else { return }
             options = result.0
             if !initialized {
-                if let saved = result.1.input { draft.language = saved.language; draft.country = saved.country; draft.style = saved.style }
+                if let saved = result.1.input { draft.language = saved.language; draft.country = saved.country; draft.style = saved.style; draft.customStyle = saved.customStyle.isEmpty ? nil : saved.customStyle }
                 initialized = true
             }
             adopt(result.2)
@@ -80,7 +85,9 @@ final class ContactGenerationStore {
         revision += 1; loading = false
         let current = revision
         submissionID = submissionID ?? UUID().uuidString.lowercased()
-        let id = submissionID!, input = draft
+        let id = submissionID!
+        var input = draft
+        if input.style != "custom" { input.customStyle = nil }
         busy = true; error = nil
         defer { if current == revision { busy = false } }
         do {
@@ -112,6 +119,11 @@ struct ContactGenerationSection: View {
                 Group {
                     Picker("Visual style", selection: $store.draft.style) {
                         ForEach(options.styles) { Text($0.name).tag($0.code) }
+                    }
+                    if store.draft.style == "custom" {
+                        TextField("Describe your character (a friendly robot, a kitten…)", text: Binding(
+                            get: { store.draft.customStyle ?? "" },
+                            set: { store.draft.customStyle = String($0.prefix(80)) }))
                     }
                     Picker("Relationship", selection: $store.draft.purpose) {
                         Text("Friend").tag("friends")

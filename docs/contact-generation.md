@@ -4,7 +4,9 @@ Both clients offer **Manually** and **Generate with AI** in Create contact. Both
 are one form with the same **Create** action; creating opens the new contact's chat
 (iOS replaces the add-contact screen with it). Manual creation keeps the existing
 name/photo flow. AI creation asks only about the bot:
-visual style (Cartoon, Anime, 3D animated movie, Realistic people), relationship
+visual style (Cartoon, Anime, 3D animated movie, Realistic people, 3D animated pets or
+Custom with a theme of up to 80 characters; see
+[character styles](onboarding.md#character-styles)), relationship
 (Friend, Study partner, Work colleague), integer age 18–120, gender, preferred
 language and country. Language/country/style initially reuse the saved onboarding
 preferences; they remain editable bot settings. No user demographics are asked

@@ -3,7 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { discardWorkflow } from '../chat/cleanup';
-import { onboardingOptions, parseOnboarding, type OnboardingStatus } from '../../../../shared/onboarding';
+import { legacyOnboardingOptions, onboardingOptions, parseOnboarding, type OnboardingStatus } from '../../../../shared/onboarding';
 
 export type OnboardingRow = { input_json: string; status: OnboardingStatus['status']; photo_count: number; group_id: string | null };
 export async function onboardingStatus(env: Env, owner: string): Promise<OnboardingStatus> {
@@ -49,7 +49,8 @@ onboarding.use('*', async (c, next) => {
   c.set('owner', session.user.id);
   await next();
 });
-onboarding.get('/options', c => c.json(onboardingOptions));
+// Clients that can send customStyle ask for ?custom=1 (docs/onboarding.md#character-styles).
+onboarding.get('/options', c => c.json(c.req.query('custom') === '1' ? onboardingOptions : legacyOnboardingOptions));
 onboarding.get('/', async c => c.json(await onboardingStatus(c.env, c.get('owner'))));
 onboarding.post('/', bodyLimit({ maxSize: 4096 }), async c => {
   const owner = c.get('owner');

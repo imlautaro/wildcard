@@ -1,5 +1,5 @@
 import type { ContactGenerationInput, ContactGenerationJob } from '../../../../shared/contact-generation';
-const initial = (): ContactGenerationInput => ({ age: 25, gender: 'female', style: 'cartoon', purpose: 'friends', language: 'en', country: '' });
+const initial = (): ContactGenerationInput => ({ age: 25, gender: 'female', style: 'cartoon', customStyle: '', purpose: 'friends', language: 'en', country: '' });
 const draft = reactive(initial());
 const job = ref<ContactGenerationJob | null>(null);
 const busy = ref(false);
@@ -35,7 +35,7 @@ export function useContactGeneration() {
         if (current !== revision) return;
         if (!initialized) {
           const saved = onboarding.snapshot.value?.input;
-          if (saved) Object.assign(draft, { language: saved.language, country: saved.country, style: saved.style });
+          if (saved) Object.assign(draft, { language: saved.language, country: saved.country, style: saved.style, customStyle: saved.customStyle ?? '' });
           initialized = true;
         }
         adopt(result.job);
@@ -52,7 +52,7 @@ export function useContactGeneration() {
     request = null; busy.value = true; error.value = null;
     submissionID ??= crypto.randomUUID();
     try {
-      const result = await api<{ job: ContactGenerationJob }>('contacts/generation', { json: { id: submissionID, input: { ...draft } } });
+      const result = await api<{ job: ContactGenerationJob }>('contacts/generation', { json: { id: submissionID, input: { ...draft, customStyle: draft.style === 'custom' ? draft.customStyle : undefined } } });
       if (current === revision) adopt(result.job);
     } catch (failure) { if (current === revision) error.value = errorMessage(failure); }
     finally { if (current === revision) busy.value = false; }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { circleTypes } from '../../../../shared/onboarding';
+import { circleTypes, customStyleLimit } from '../../../../shared/onboarding';
 definePageMeta({ layout: false });
 const { user, refreshProfile, signOut } = useSession();
 const { options, snapshot, draft, busy, refresh, submit } = useOnboarding();
@@ -8,7 +8,8 @@ const error = ref<string | null>(null);
 const locked = computed(() => !!snapshot.value?.input);
 const running = computed(() => snapshot.value?.status === 'queued' || snapshot.value?.status === 'generating');
 const withContacts = computed(() => draft.createContacts !== false);
-const ready = computed(() => !!draft.name.trim() && !!draft.country && (!withContacts.value || draft.sharedMemoryConsent) && (locked.value || !withContacts.value || draft.circleType === 'friends' || !!draft.occupation?.trim()) && (locked.value || (typeof draft.age === 'number' && Number.isInteger(draft.age) && draft.age >= 1 && draft.age <= 120)));
+const customReady = computed(() => draft.style !== 'custom' || !!draft.customStyle?.trim());
+const ready = computed(() => !!draft.name.trim() && !!draft.country && (locked.value || !withContacts.value || customReady.value) && (!withContacts.value || draft.sharedMemoryConsent) && (locked.value || !withContacts.value || draft.circleType === 'friends' || !!draft.occupation?.trim()) && (locked.value || (typeof draft.age === 'number' && Number.isInteger(draft.age) && draft.age >= 1 && draft.age <= 120)));
 let disposed = false;
 let updating = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -67,6 +68,8 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
         </fieldset>
         <fieldset v-if="withContacts" :disabled="locked || busy" class="onboarding-fields">
           <AppSelect v-model="draft.style" label="Agent appearance" :disabled="locked || busy" :options="options.styles.map(option => ({ value: option.code, label: option.name }))" />
+          <AppTextField v-if="draft.style === 'custom'" v-model="draft.customStyle" label="Describe your characters" placeholder="Friendly robots, kittens…"
+                        :maxlength="customStyleLimit" :required="!locked" />
           <AppSelect v-model="draft.circleType" label="Your circle" :disabled="locked || busy" :options="circleOptions" />
           <AppTextField v-if="draft.circleType !== 'friends'" v-model="draft.occupation" :label="draft.circleType === 'study' ? 'What are you studying?' : 'What do you do for work?'"
                         maxlength="200" :required="!locked" />

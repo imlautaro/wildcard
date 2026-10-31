@@ -2,20 +2,20 @@ import type { OnboardingInput, OnboardingStatus, OnboardingOption } from '../../
 type Options = { countries: OnboardingOption[]; languages: OnboardingOption[]; styles: OnboardingOption[] };
 const options = ref<Options | null>(null);
 const snapshot = ref<OnboardingStatus | null>(null);
-const draft = reactive<OnboardingInput>({ name: '', age: null, gender: 'male', language: 'en', country: '', style: 'cartoon', createGroup: true, circleType: 'friends', occupation: '', sharedMemoryConsent: false, createContacts: true });
+const draft = reactive<OnboardingInput>({ name: '', age: null, gender: 'male', language: 'en', country: '', style: 'cartoon', createGroup: true, circleType: 'friends', occupation: '', sharedMemoryConsent: false, createContacts: true, customStyle: '' });
 let revision = 0;
 let loading: Promise<void> | null = null;
 let submitting: Promise<void> | null = null;
 const busy = ref(false);
 registerSessionReset(() => {
   revision++; loading = null; submitting = null; busy.value = false; options.value = null; snapshot.value = null;
-  Object.assign(draft, { name: '', age: null, gender: 'male', language: 'en', country: '', style: 'cartoon', createGroup: true, circleType: 'friends', occupation: '', sharedMemoryConsent: false, createContacts: true });
+  Object.assign(draft, { name: '', age: null, gender: 'male', language: 'en', country: '', style: 'cartoon', createGroup: true, circleType: 'friends', occupation: '', sharedMemoryConsent: false, createContacts: true, customStyle: '' });
 });
 async function refresh() {
   if (busy.value) return;
   const current = revision;
   loading ??= Promise.all([
-    options.value ? Promise.resolve(options.value) : api<Options>('onboarding/options'),
+    options.value ? Promise.resolve(options.value) : api<Options>('onboarding/options', { query: { custom: '1' } }),
     api<OnboardingStatus>('onboarding'),
   ]).then(([choices, state]) => {
     if (current !== revision) return;
@@ -32,7 +32,7 @@ async function submit() {
   busy.value = true;
   const body = draft.createContacts === false
     ? { ...draft, createGroup: false, circleType: 'friends', occupation: '' }
-    : { ...draft, occupation: draft.circleType === 'friends' ? '' : draft.occupation };
+    : { ...draft, occupation: draft.circleType === 'friends' ? '' : draft.occupation, customStyle: draft.style === 'custom' ? draft.customStyle : '' };
   submitting = api<OnboardingStatus>('onboarding', { json: body }).then(state => {
     if (current !== revision) return;
     snapshot.value = state;

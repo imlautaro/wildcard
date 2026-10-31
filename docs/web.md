@@ -1294,3 +1294,9 @@ created), shows placeholders and then disabled "Creating…" rows for contacts w
 `setupPending`, and offers Retry on failure. The Contacts directory greys out pending
 contacts too. Matches iOS; see [onboarding](onboarding.md#progressive-setup).
 
+## Character styles (2026-10-31)
+
+Onboarding and **Create Contact** (AI) offer **3D animated pets** and **Custom**; Custom
+shows a **Describe your characters** field (80 characters). The options are loaded with
+`?custom=1`. Matches iOS; see [onboarding](onboarding.md#character-styles).
+

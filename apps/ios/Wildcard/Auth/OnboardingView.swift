@@ -14,10 +14,12 @@ struct OnboardingInput: Codable, Sendable {
     var sharedMemoryConsent = false
     /// false starts without AI contacts (docs/onboarding.md#progressive-setup).
     var createContacts = true
+    /// Theme for the Custom style, at most 80 characters (docs/onboarding.md#character-styles).
+    var customStyle = ""
 
     init() {}
     private enum CodingKeys: String, CodingKey {
-        case name, age, gender, language, country, style, createGroup, circleType, occupation, sharedMemoryConsent, createContacts
+        case name, age, gender, language, country, style, createGroup, circleType, occupation, sharedMemoryConsent, createContacts, customStyle
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -32,6 +34,7 @@ struct OnboardingInput: Codable, Sendable {
         occupation = try values.decodeIfPresent(String.self, forKey: .occupation) ?? ""
         sharedMemoryConsent = try values.decode(Bool.self, forKey: .sharedMemoryConsent)
         createContacts = try values.decodeIfPresent(Bool.self, forKey: .createContacts) ?? true
+        customStyle = try values.decodeIfPresent(String.self, forKey: .customStyle) ?? ""
     }
 }
 struct OnboardingOption: Decodable, Identifiable, Sendable {
@@ -87,7 +90,8 @@ final class OnboardingStore {
                 let choices: OnboardingOptions
                 if let cached { choices = cached }
                 else {
-                    let (data, _) = try await api.send(path: "onboarding/options", token: token)
+                    // ?custom=1: this build can send customStyle, so it is offered the Custom style.
+                    let (data, _) = try await api.send(path: "onboarding/options", token: token, query: [URLQueryItem(name: "custom", value: "1")])
                     choices = try JSONDecoder().decode(OnboardingOptions.self, from: data)
                 }
                 let (data, _) = try await api.send(path: "onboarding", token: token)
@@ -113,6 +117,7 @@ final class OnboardingStore {
         var input = draft
         if input.circleType == "friends" { input.occupation = "" }
         if !input.createContacts { input.createGroup = false; input.circleType = "friends"; input.occupation = "" }
+        if input.style != "custom" { input.customStyle = "" }
         defer { if current == revision { busy = false } }
         do {
             let result = try await auth.withSession { api, token in
@@ -195,6 +200,12 @@ struct OnboardingView: View {
                         Picker("Style", selection: $store.draft.style) {
                             ForEach(options.styles) { Text($0.name).tag($0.code) }
                         }
+                        if store.draft.style == "custom" {
+                            TextField("Describe your characters (friendly robots, kittens…)", text: $store.draft.customStyle)
+                                .onChange(of: store.draft.customStyle) { _, value in
+                                    if value.count > 80 { store.draft.customStyle = String(value.prefix(80)) }
+                                }
+                        }
                     }
                     .disabled(store.locked || store.busy)
                     Section {
@@ -239,6 +250,8 @@ struct OnboardingView: View {
                             }
                             .disabled(store.busy || store.draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                       || store.draft.name.count > 100 || store.draft.country.isEmpty || (store.draft.createContacts && !store.draft.sharedMemoryConsent)
+                                      || (!store.locked && store.draft.createContacts && store.draft.style == "custom"
+                                          && store.draft.customStyle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                                       || (!store.locked && (!(1...120).contains(store.draft.age ?? 0)
                                           || store.draft.occupation.count > 200
                                           || (store.draft.createContacts && store.draft.circleType != "friends" && store.draft.occupation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))))

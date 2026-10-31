@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { Contact } from '~/utils/types';
+import { customStyleLimit } from '../../../../../shared/onboarding';
 
 const chats = useChats();
 const mode = ref('manual');
 const generation = useContactGeneration();
 const { draft, job, options } = generation;
 const running = computed(() => ['queued', 'generating'].includes(job.value?.status ?? ''));
-const ready = computed(() => !!draft.country && Number.isInteger(draft.age) && draft.age >= 18 && draft.age <= 120);
+const ready = computed(() => !!draft.country && Number.isInteger(draft.age) && draft.age >= 18 && draft.age <= 120 && (draft.style !== 'custom' || !!draft.customStyle?.trim()));
 let timer: ReturnType<typeof setTimeout> | undefined;
 let disposed = false;
 async function poll() {
@@ -64,6 +65,8 @@ async function create() {
         <div class="group-title info-title">Your bot <InfoButton label="Your bot" text="These fields describe your bot. Your saved onboarding preferences are reused without asking for your details again. Generation uses Meta Standard processing." /></div>
         <fieldset v-if="options" class="bot-fields" :disabled="generation.busy.value || !!job">
           <AppSelect v-model="draft.style" label="Visual style" :options="options.styles.map(o => ({ value: o.code, label: o.name }))" />
+          <AppTextField v-if="draft.style === 'custom'" v-model="draft.customStyle" label="Describe your character" placeholder="A friendly robot, a kitten…"
+                        :maxlength="customStyleLimit" required />
           <AppSelect v-model="draft.purpose" label="Relationship" :options="[{ value: 'friends', label: 'Friend' }, { value: 'study', label: 'Study partner' }, { value: 'work', label: 'Work colleague' }]" />
           <label class="field">Age<input v-model.number="draft.age" type="number" min="18" max="120" step="1" required></label>
           <AppSelect v-model="draft.gender" label="Gender" :options="[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]" />
