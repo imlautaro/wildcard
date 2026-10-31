@@ -174,9 +174,9 @@ struct ChatAttachmentView: View {
             Group {
                 if let thumbnail = displayedThumbnail {
                     Color.clear
-                        .aspectRatio(1, contentMode: .fit)
+                        .aspectRatio(thumbnail.size.width / max(thumbnail.size.height, 1), contentMode: .fit)
                         .overlay {
-                            Image(uiImage: thumbnail).resizable().scaledToFill()
+                            Image(uiImage: thumbnail).resizable().scaledToFit()
                         }
                         .clipped()
                         .overlay(alignment: .bottomTrailing) {
@@ -199,7 +199,7 @@ struct ChatAttachmentView: View {
                         .background(bubbleColor, in: MessageBubbleShape(cornerRadius: imageBubbleRadius, fromUser: fromUser))
                         .clipShape(MessageBubbleShape(cornerRadius: imageBubbleRadius, fromUser: fromUser))
                         .contentShape(MessageBubbleShape(cornerRadius: imageBubbleRadius, fromUser: fromUser))
-                        .frame(maxWidth: 260, maxHeight: 260, alignment: .trailing)
+                        .frame(maxWidth: 260, maxHeight: 360, alignment: .trailing)
                 } else {
                     bubbleColor
                         .aspectRatio(1, contentMode: .fit)

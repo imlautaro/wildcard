@@ -2888,3 +2888,32 @@ Rollback: set `HOME_FEED_ENABLED` to `"false"` through another automatic release
 stop spending immediately (in-flight runs finish their current card). Keep the
 tables; deleting `home_card`/`home_topic` rows only clears feeds, and dropping them
 requires a release of code that no longer reads them.
+
+## Contextual image framing and initiative — migration 0079
+
+Apply `0079_initiative_images.sql` after every migration through 0078. It adds
+`generated_initiative_image`, a disposable provider receipt with a unique source
+turn foreign key (cascade deletion), status, reference versions and immutable
+attachment metadata. It limits spontaneous image attempts to one per private
+initiative episode, independently of the direct reply's existing image receipt.
+It uses the already required DB, private CONTACT_PHOTOS bucket, META_API_KEY,
+Muse Image generation/edit access, Spark descriptions, CHAT_WORKFLOW and Cron.
+No new binding, secret, permission, account setting or service is required.
+
+For an independent account follow the provisioning order above, replacing account,
+bucket, database, Worker and domain identifiers. Use `npm ci`, the existing local
+secret setup and `npm run db:migrate:local`, then the API/web dev commands or the
+iOS local API setting. Use fictional data. Production applies the additive
+migration through commit/push and automatic release only; verify build status and
+active source SHA before functional verification. No production migration, model
+request or deployment is implied by this local change.
+
+The planner has 3,400 completion tokens; image generation gets one four-minute
+Workflow step without automatic retries and renews its claim for five minutes.
+HTTP and byte limits remain as documented under generated images. Failed, pending
+or uncertain receipts suppress repeated provider calls, including after replay.
+Unused images follow the registry's 24-hour grace cleanup; delivered images use
+existing assistant metadata and image caches. Rollback through a previously
+pushed compatible revision keeps the additive table and delivered JSON; it does
+not recall delivered images. Disable participant initiative before rollback if
+needed. Verify the fictional-data matrix in [generated images](generated-images.md).

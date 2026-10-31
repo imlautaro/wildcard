@@ -958,8 +958,10 @@ The iOS request correction uses the same contract through `URLQueryItem`, restor
 parity for bot images in bubbles, the full-screen viewer and chat media. No web
 behavior or cache change is needed. Device verification remains pending.
 
-Chat image thumbnails use a square frame with `object-fit: cover`, cropping excess
-edges without distortion. In private chats and groups, clicking a loaded image
+Loaded chat image thumbnails preserve their full portrait, landscape or square
+composition with `object-fit: contain` and a 400-pixel height bound. iOS likewise
+preserves the full composition up to 260 by 360 points; media-gallery tiles remain
+square. In private chats and groups, clicking a loaded image
 opens a black full-screen modal in the same tab, reusing its existing private
 image cache URL without downloading it again. The viewer fits the complete image;
 Zoom in/Fit image or double-click toggles zoom, with scrolling to inspect it.
@@ -1306,3 +1308,18 @@ shows a **Describe your characters** field (80 characters). The options are load
 **Unlink** and a picker to link another of your contacts; links are mutual. Cached by
 `useContactLinks`. Matches iOS; see [linked contacts](contacts.md#linked-contacts).
 
+
+## Contextual image framing and initiative (0079)
+
+Contacts choose an image aspect ratio from subject, composition and requested
+format rather than always generating a square. The shared API also permits private
+initiative to send one relevant image and caption without a photo request, subject
+to the existing opt-out, pauses, quiet hours, consent and outreach budgets. There
+is at most one attempt per source episode; failure withholds the caption too.
+Current self/human avatars are available; the initiative planner cannot retrieve
+earlier chat images. Both clients use existing assistant attachment history and
+private image caches; no extra polling or persistence is added. Apply migration
+0079 through the automatic API release. Verify both clients' portrait/landscape
+layout, captions, full-screen viewing, replay, opt-out during generation, offline
+reopen and account changes with fictional data; runtime/device checks are pending.
+See [generated images](generated-images.md) and [initiative](initiative.md).

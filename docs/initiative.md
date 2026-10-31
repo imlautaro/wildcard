@@ -135,8 +135,12 @@ only recent actual composer activity gets a courtesy pause. The same typing
 watermark is checked in context, before Typing and in atomic publication/feedback
 SQL, including multiple devices. Passive visit timestamps do not count as typing. Presence,
 typing pauses, ordinary completed turns and the APNs outbox reuse existing paths.
-No tools, connectors, native actions, group publication or schedule mutations are
-available to the planner. Text can never prove an external action happened.
+The planner may propose one contextual image with its caption, even without an
+image request, through [generated images](generated-images.md#contextual-framing-and-spontaneous-images-0079).
+It cannot use retrieval tools, connectors, native actions, group publication or
+schedule mutations. Images obey every text initiative gate and consume an ordinary
+outreach slot, with at most one image attempt per source episode (migration 0079).
+The caption is withheld if the image is unavailable. Text can never prove an external action happened.
 
 **Contact details → Conversation initiative** controls only this participant's
 private chat, including when the agent is shared. Both clients explain adaptive
@@ -182,7 +186,7 @@ invalidation. It has **not been run for this change**. Static success is not a
 functional pass. Tests, builds, live inference and client interaction require their
 separately authorized validation scope.
 
-Classification shares the existing planner call (2,400 completion tokens including
+Classification and optional image proposals share the existing planner call (3,400 completion tokens including
 reasoning, existing provider timeout); it does not add a second inference call.
 The new ambient phase can add up to six bounded evaluations per social source,
 so cost and cadence still need measurement before making quality claims.

@@ -182,21 +182,24 @@ for(const group of [false,true]) test(`${group?'group':'private'} clear keeps ex
   assert.equal(await count(table),0);await drain();
 });
 
-test('private clear purges image and voice objects, including a late write and generated image',async()=>{
+test('private clear purges image and voice objects, including late writes and direct/initiative generated images',async()=>{
   await fixture();
   const key='attachments/fixture-owner/fixture-contact/fixture-turn/image';
   const voice='attachments/fixture-owner/fixture-contact/fixture-turn/voice';
   const generated='generated/fixture-image.jpg';
+  const spontaneous='generated/initiative-fixture.jpg';
   await turn('fixture-turn',ids.contact,ids.owner,{attachment_json:await attachment(key,ids.contact),assistant_messages_json:JSON.stringify([{id:'fixture-part',text:'Fictional audio',attachment:JSON.parse(await attachment(voice,ids.contact))}])});
   await attachment(generated,ids.contact);
+  await attachment(spontaneous,ids.contact);
+  await run("INSERT INTO generated_initiative_image(id,source_id,status,attachment_json,created_at) VALUES(?,?,'complete',?,?)",'initiative-fixture','fixture-turn',JSON.stringify({key:spontaneous}),now);
   await run("INSERT INTO generated_chat_image(id,chat_turn_id,status,attachment_json,created_at) VALUES(?,?,'complete',?,?)",'fixture-image','fixture-turn',JSON.stringify({key:generated}),now);
   await run('INSERT INTO chat_image_index(object_key,digest,description,context,search_text,updated_at) VALUES(?,?,?,?,?,?)',key,'fixture','Fictional picture','Fictional context','fictional',now);
   const response=await api(`contacts/${ids.contact}/clear`,ids.owner,'POST',{clearMemory:true,historyRevision:0});
   assert.equal(response.status,202);assert.equal(response.body.cleanup,'pending');
-  assert.equal(await count('generated_chat_image'),0);assert.equal(await count('chat_image_index'),0);
+  assert.equal(await count('generated_chat_image'),0);assert.equal(await count('generated_initiative_image'),0);assert.equal(await count('chat_image_index'),0);
   await bucket.put(key,'fictional late upload after first sweep');
   await drain();
-  for(const file of [key,voice,generated]) assert.equal(await bucket.head(file),null,file);
+  for(const file of [key,voice,generated,spontaneous]) assert.equal(await bucket.head(file),null,file);
   assert.equal(await count('chat_attachment_object'),0);
 });
 

@@ -1,7 +1,7 @@
 # Chat attachments
 
 On the web, private and group chat images (including generated contact images)
-use square cover thumbnails for both optimistic previews and saved messages.
+preserve the original image composition for both optimistic previews and saved messages.
 Clicking a loaded thumbnail opens the full image in a black modal in the same tab.
 The modal provides Close, Escape, Zoom in/Fit image, double-click zoom and scrolling
 when enlarged. It reuses the thumbnail's cached original blob URL without another
@@ -20,10 +20,9 @@ thumbnails use local bytes while the request is pending. A clock indicates sendi
 and attachment preview actions wait for server acceptance. The right
 button sends when an attachment is selected; the [voice message](voice.md)
 microphone replaces it only when the composer is empty. Failed sends retain the draft and attachment, including the request
-identifier for uncertain network results. Images load automatically as square
-inline thumbnails up to 260 points wide, using centered aspect-fill (cover):
-the image fills the available area without distortion and excess edges are
-cropped. Loading and retry placeholders use the same square layout. This applies
+identifier for uncertain network results. Images load automatically as inline thumbnails up to 260 points wide and
+360 points tall, preserving the full image with aspect-fit:
+the complete composition remains visible without distortion or cropped edges. Loading and retry placeholders retain a square layout. This applies
 to optimistic previews and saved messages, with or without captions.
 When sent with text, the caption appears below the image inside the same outgoing
 bubble. Captions share the text-message layout: short single-line text keeps the

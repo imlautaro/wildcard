@@ -1,3 +1,4 @@
+import { generateChatImage, generatedImage, imageInstruction, imageTool, type ImageScope } from '../photos/generation';
 import { embodiedIdentityInstruction } from '../personality/identity';
 import { conversationStyle, regionalConversation } from '../personality/conversation';
 import { learningContext, learningQuestionInstruction, parseLearningQuestion, recordLearningQuestion, type LearningQuestion } from './learning';
@@ -29,13 +30,15 @@ type Snapshot = {
   activeUntil: number | null; busy: number; activityAt: number | null; lastReadSequence: number; readAt: number | null; timeZone: string | null; anchorAt: number;
 };
 type Decision = { action: 'wait' | 'send' | 'stop'; delaySeconds: number; intent: string; message: string | null;
+  imageJSON?: string | null;
   learningQuestion?: LearningQuestion | null;
   kind: InitiativeKind | null; engagement: Engagement; response: OutreachResponse; permission: 'unchanged' | 'allow' | 'stop' };
 // One early continuation, then progressively more space after unanswered messages.
 const minimumGapsMS = [30_000, 120_000, 600_000];
 
 function decision(value: unknown): Decision {
-  if (!isRecord(value) || Object.keys(value).filter(key => key !== 'learningQuestion').sort().join(',') !== 'action,delaySeconds,engagement,intent,kind,message,permission,response'
+  if (!isRecord(value) || Object.keys(value).filter(key => !['learningQuestion', 'image'].includes(key)).sort().join(',') !== 'action,delaySeconds,engagement,intent,kind,message,permission,response'
+    || (value.image != null && (value.action !== 'send' || !isRecord(value.image)))
     || !['wait', 'send', 'stop'].includes(String(value.action))
     || typeof value.delaySeconds !== 'number' || !Number.isSafeInteger(value.delaySeconds)
     || value.delaySeconds < 30 || value.delaySeconds > 86_400
@@ -47,7 +50,8 @@ function decision(value: unknown): Decision {
     || !['social', 'practical', 'boundary', 'uncertain'].includes(String(value.engagement))
     || !['engaged', 'unrelated', 'uncertain', 'none'].includes(String(value.response))
     || !['unchanged', 'allow', 'stop'].includes(String(value.permission))) throw new Error('MODEL_INVALID_RESPONSE');
-  return { ...value, learningQuestion: parseLearningQuestion(value.learningQuestion, typeof value.message === 'string' ? [value.message] : []) } as Decision;
+  const { image, ...fields } = value;
+  return { ...fields, imageJSON: image == null ? null : JSON.stringify(image), learningQuestion: parseLearningQuestion(value.learningQuestion, typeof value.message === 'string' ? [value.message] : []) } as Decision;
 }
 
 async function snapshot(env: Env, job: InitiativeJob) {
@@ -166,7 +170,9 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
         deferredUntil: state.anchorAt + gap, model, messages: [] };
       const character = await personalityContext({ ...env, META_CHAT_MODEL: model }, { agentID: state.agentID,
         contactID: state.contactID, speakerID: `user:${state.userID}`, processingUserID: state.userID, model });
-      return { state, deferredUntil: null, model, isolated, samples, adaptive, personality, personalityRevision,
+      const imageAttempted = !!await env.DB.prepare('SELECT id FROM generated_initiative_image WHERE source_id = ?')
+        .bind(state.sourceID).first();
+      return { state, deferredUntil: null, model, isolated, imageAttempted, samples, adaptive, personality, personalityRevision,
         character, regional: await regionalConversation(env.DB, state.agentID),
         writing: conversationStyle({ agentID: state.agentID, personality, group: false,
           own: rows.flatMap(row => row.assistantText ? [row.assistantText] : []), names: [] }), learning: await learningContext({ ...env, META_CHAT_MODEL: model },
@@ -231,14 +237,17 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           'Stop the current exchange after a goodbye, a clearly completed task, no useful continuation or repeated unanswered outreach. Ending today’s conversation need not forbid a future conversation. An explicit request to stop unsolicited contact does: set permission stop. Only a clear current human request to resume spontaneous contact warrants permission allow. A casual hello, unrelated task or a read receipt cannot cancel an earlier explicit pause. Otherwise permission is unchanged.',
           'Classify the latest completed human request identified by state.sourceID, not your proposed message. Consecutive MESSAGE_BATCHED human rows immediately before it belong to that same current request; do not miss an acknowledgment or boundary in that burst. engagement is social for conversational participation, practical for a task/question without social engagement, boundary for a request to stop outreach, uncertain when unclear. outreachToAssess identifies a prior spontaneous message. response engaged means the current request actually responds to or acknowledges that outreach; unrelated means it starts a different topic without acknowledging it; uncertain when ambiguous, none when there is no outreachToAssess. Returning later with a task alone is not responding positively to a greeting. These labels are fallible observations, never facts about the person’s feelings.',
           'You may not execute external actions, access connectors, create reminders, publish to groups, or claim that you did. Explicit reminders belong to schedule tools in human turns.',
-          'No tools are available. Do not invent facts, current external events, prior commitments or private information from other participants.',
-          'Return only JSON with exactly action, delaySeconds (integer 30–86400), intent (brief future action summary, max 400 characters; no reasoning trace), message (null unless send; max 2000 characters), kind (greeting, check-in or continuation when sending, otherwise null), engagement, response, permission and learningQuestion (null unless actually asking one supplied pending curiosity). Classify a message whose primary purpose is a morning/evening greeting as greeting, even if it adds a short question.',
+          'You may propose one image in the optional image field when sharing it now would add clear conversational value. You do not need a prior image request. A visual thought, an imagined scene or a playful selfie can fit; never use a photo to bypass outreach suppression or claim an offline experience. The server generates it only after permission and timing checks. If imageAttempted is true, return image null: this episode already used its one attempt. Your message is its caption; if generation fails, neither image nor caption is sent. Do not promise a later image.',
+          imageInstruction,
+          `For image, return null or an object matching these generate_chat_image parameters: ${JSON.stringify(imageTool.function.parameters)}. Your own avatar memberID is ${JSON.stringify(state.agentID)}; the current human memberID is ${JSON.stringify(state.userID)}. Only these two profile identities are available. No retrieval tools are available in this planner: chatImageReferences must be empty, and never guess an earlier image reference or its contents.`,
+          'No external action or retrieval tools are available. Do not invent facts, current external events, prior commitments or private information from other participants.',
+          'Return only JSON with exactly action, delaySeconds (integer 30–86400), intent (brief future action summary, max 400 characters; no reasoning trace), message (null unless send; max 2000 characters), kind (greeting, check-in or continuation when sending, otherwise null), engagement, response, permission, learningQuestion (null unless actually asking one supplied pending curiosity), and image (null unless sending a contextual image now). Classify a message whose primary purpose is a morning/evening greeting as greeting, even if it adds a short question.',
           'delaySeconds is a minimum delay to another review, not a delivery promise. The server may choose a later varied opportunity. Current continuations have six evaluations; ambient opportunities have a separate finite budget over at most seven days from the last human input. Never promise future delivery unless an explicit schedule actually exists.',
         ].join(' ') },
         { role: 'user', content: JSON.stringify({ state: evidence.state, adaptive: evidence.adaptive,
           activityWindows: evidence.activityWindows, outreachToAssess: evidence.outreachToAssess,
-          timing: evidence.timing, messages: evidence.messages, memories: evidence.memories, persona: evidence.persona, now: evidence.now }) },
-      ], evidence.model, { responseFormat: { type: 'json_object' }, maxTokens: 2400 });
+          imageAttempted: evidence.imageAttempted, timing: evidence.timing, messages: evidence.messages, memories: evidence.memories, persona: evidence.persona, now: evidence.now }) },
+      ], evidence.model, { responseFormat: { type: 'json_object' }, maxTokens: 3400 });
       return decision(JSON.parse(answer.content ?? 'null'));
     });
     const characterGap = evidence.gap;
@@ -253,7 +262,41 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
     // Read/typing changes during inference discard the draft and schedule a fresh evaluation.
     const changedSince = (current: Snapshot) => current.lastReadSequence !== state.lastReadSequence
       || current.readAt !== state.readAt || current.activityAt !== state.activityAt || current.learningRevision !== state.learningRevision;
-    if (plan.action === 'send' && plan.message && maySend) {
+    const initiativeID = `initiative-${job.sourceID}-${job.revision}`;
+    const imageEnv = { ...env, META_CHAT_MODEL: evidence.model };
+    const imageScope: ImageScope = {
+      contactID: state.contactID, userID: state.userID, agentID: state.agentID,
+      contributor: evidence.model.includes('contributor'), turnID: state.sourceID, attempt: 1,
+      initiative: { id: initiativeID, assertAccess: async () => {
+        const current = await snapshot(env, job);
+        const now = Date.now();
+        const budget = await env.DB.prepare(`SELECT
+          (SELECT COUNT(*) FROM chat_turn WHERE user_id = ?1 AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < 12
+          AND (SELECT COUNT(*) FROM chat_turn WHERE contact_id = ?2 AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < 3 AS allowed`)
+          .bind(state.userID, state.contactID, now).first<{ allowed: number }>();
+        return !!budget?.allowed && !!current && !current.busy && !changedSince(current) && current.paused === state.paused
+          && maySend && quietUntil(state.timeZone, now) === now && now >= state.anchorAt + characterGap
+          && (await readPersonality(env.DB, state.agentID)).revision === evidence.personalityRevision
+          && await privateContact(env.DB, state.contactID) === evidence.isolated
+          && (evidence.isolated || await accountModel(env, state.userID) === evidence.model)
+          && await contactModelAllowed(imageEnv, state.contactID, state.userID);
+      } },
+    };
+    const imageReady = plan.action === 'send' && plan.imageJSON && maySend
+      ? await step.do('initiative-image', { retries: { limit: 0, delay: '1 second' }, timeout: '4 minutes' }, async () => {
+        const args: unknown = JSON.parse(plan.imageJSON!);
+        if (!isRecord(args) || !Array.isArray(args.chatImageReferences) || args.chatImageReferences.length !== 0
+          || !await imageScope.initiative!.assertAccess()) return false;
+        // Keep the claim alive through the bounded provider/description step and typing pause.
+        const lease = await env.DB.prepare(`UPDATE conversation_initiative SET next_at = MAX(next_at, ?1)
+          WHERE contact_id = ?2 AND source_id = ?3 AND revision = ?4`)
+          .bind(Date.now() + 300_000, job.contactID, job.sourceID, job.revision).run();
+        if (!lease.meta.changes) return false;
+        // The episode reservation survives Workflow replay and uncertain provider outcomes.
+        await generateChatImage(imageEnv, imageScope, args);
+        return !!await generatedImage(imageEnv, imageScope);
+      }) : !plan.imageJSON;
+    if (plan.action === 'send' && plan.message && maySend && imageReady) {
       const typing = await step.do('initiative-typing', async () => {
         const current = await snapshot(env, job);
         const now = Date.now();
@@ -279,7 +322,12 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
       const changed = changedSince(current) || current.paused !== state.paused
         || (await readPersonality(env.DB, state.agentID)).revision !== evidence.personalityRevision;
       const next = Math.max(now + variedReviewDelay(plan.delaySeconds, `${job.sourceID}/${job.revision}/review`) * 1000, state.anchorAt + characterGap);
-      const id = `initiative-${job.sourceID}-${job.revision}`;
+      const id = initiativeID;
+      const attachment = plan.imageJSON && imageReady && !changed && maySend
+        ? await generatedImage(imageEnv, imageScope) : null;
+      const canPublishImage = !plan.imageJSON || !!attachment;
+      const assistantMessages = attachment
+        ? JSON.stringify([{ id: `${id}/assistant/0`, text: plan.message, createdAt: now, attachment }]) : null;
       const contributor = evidence.model.includes('contributor');
       const modelAllowed = contributor ? `(c.user_id = (SELECT owner_id FROM contact_agent WHERE id = c.agent_id) OR c.contributor_consent = 1)` : '1';
       const isolated = evidence.isolated === true;
@@ -288,8 +336,8 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
       const personalityUnchanged = `COALESCE((SELECT revision FROM agent_personality WHERE agent_id = c.agent_id), 0) = ?16
         AND c.learning_revision = ${Number.isSafeInteger(state.learningRevision) ? state.learningRevision : -1}`;
       const insert = env.DB.prepare(`INSERT OR IGNORE INTO chat_turn
-        (id, contact_id, user_id, user_text, assistant_text, status, workflow_id, created_at, updated_at, initiative_source_id, time_zone, initiative_kind)
-        SELECT ?1, c.id, c.user_id, '', ?2, 'complete', ?1, ?3, ?3, p.source_id, ?4, ?15
+        (id, contact_id, user_id, user_text, assistant_text, status, workflow_id, created_at, updated_at, initiative_source_id, time_zone, initiative_kind, assistant_messages_json)
+        SELECT ?1, c.id, c.user_id, '', ?2, 'complete', ?1, ?3, ?3, p.source_id, ?4, ?15, ?18
         FROM conversation_initiative p JOIN contact c ON c.id = p.contact_id JOIN user u ON u.id = c.user_id
         JOIN chat_turn anchor ON anchor.id = p.anchor_id
         WHERE p.contact_id = ?5 AND p.source_id = ?6 AND p.revision = ?7 AND p.anchor_id = ?8
@@ -304,8 +352,8 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           AND (SELECT COUNT(*) FROM chat_turn WHERE user_id = c.user_id AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < 12
           AND (SELECT COUNT(*) FROM chat_turn WHERE contact_id = c.id AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < 3`)
         .bind(id, plan.message, now, state.timeZone, job.contactID, job.sourceID, job.revision, state.anchorID,
-          plan.action === 'send' && maySend && !changed && quietUntil(state.timeZone, now) === now && now >= state.anchorAt + characterGap ? 1 : 0,
-          state.lastReadSequence, state.readAt, evidence.model, isolated ? 1 : 0, state.activityAt, plan.kind, evidence.personalityRevision, state.paused);
+          plan.action === 'send' && maySend && canPublishImage && !changed && quietUntil(state.timeZone, now) === now && now >= state.anchorAt + characterGap ? 1 : 0,
+          state.lastReadSequence, state.readAt, evidence.model, isolated ? 1 : 0, state.activityAt, plan.kind, evidence.personalityRevision, state.paused, assistantMessages);
       const feedback = env.DB.prepare(`UPDATE chat_turn SET initiative_engagement = ?18,
         initiative_response = ?19, initiative_response_to_id = ?20, initiative_feedback_at = ?3
         WHERE id = ?6 AND initiative_engagement IS NULL AND ?9 = 1

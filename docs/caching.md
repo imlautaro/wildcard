@@ -1514,3 +1514,19 @@ iOS. Every link change invalidates all snapshots (links are mutual) and the chan
 response replaces the current one; a failed read keeps the last snapshot with Retry.
 Deleting a contact clears the iOS snapshots. See [linked contacts](contacts.md#linked-contacts).
 
+
+## Contextual and spontaneous chat images (0079)
+
+Framing is chosen on the server; loaded iOS/web chat thumbnails preserve the full
+composition using existing cached pixels. Private initiative stores an image as
+ordinary `assistantMessages[0].attachment`, using the same account/scope/immutable
+ID keys, authorized assistant endpoint, in-flight deduplication, session history
+revalidation, bounded memory and iOS protected disk eviction. No new cache,
+retention policy, polling, pagination or public image URL is introduced.
+Existing clear/delete/access-loss/account-change invalidation and late-response
+guards apply. Loading placeholders and media-gallery square tiles are unchanged.
+Before publication the server rechecks initiative source/revision, conversation
+access, references, model, consent, typing and budgets; unpublished images follow
+the existing 24-hour registry cleanup grace period. Verify reopen/back, refresh,
+empty/offline recovery, clear/delete, reference revocation and account switching
+with fictional data on both clients; static checks do not establish device behavior.

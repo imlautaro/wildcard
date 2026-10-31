@@ -308,7 +308,10 @@ causes. Connector conversations retain their local isolation. Initiative adapts 
 remain disabled until explicitly enabled. Migrations 0039–0040 are required; see
 [infrastructure](docs/infrastructure.md#contact-personality) for release and rollback.
 
-Contacts can [generate contextual chat images](docs/generated-images.md), optionally
+Contacts can [generate contextual chat images](docs/generated-images.md) with
+portrait, landscape or square framing chosen from context, including optional
+private spontaneous image messages within existing initiative limits (migration
+0079). They can optionally
 combining up to three authorized current profile photos and images from the same
 chat. Selfies use the contact avatar; named members use their avatars. Internal
 visual descriptions support finding earlier scenes without exposing labels in chat. Both clients show images

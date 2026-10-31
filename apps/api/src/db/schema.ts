@@ -730,6 +730,18 @@ export const generatedChatImage = sqliteTable('generated_chat_image', {
   check('generated_image_complete', sql`${table.status} != 'complete' OR ${table.attachmentJson} IS NOT NULL`),
 ]);
 
+export const generatedInitiativeImage = sqliteTable('generated_initiative_image', {
+  id: text('id').primaryKey(),
+  sourceId: text('source_id').notNull().unique().references(() => chatTurn.id, { onDelete: 'cascade' }),
+  status: text('status', { enum: ['pending', 'complete', 'failed'] }).notNull(),
+  attachmentJson: text('attachment_json'),
+  referencesJson: text('references_json').notNull().default('[]'),
+  createdAt: date('created_at').notNull(),
+}, table => [
+  check('initiative_image_status', sql`${table.status} IN ('pending', 'complete', 'failed')`),
+  check('initiative_image_complete', sql`${table.status} != 'complete' OR ${table.attachmentJson} IS NOT NULL`),
+]);
+
 export const taskList = sqliteTable('task_list', {
   id: text('id').primaryKey(),
   groupId: text('group_id').references(() => chatGroup.id, { onDelete: 'cascade' }),
