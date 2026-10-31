@@ -23,7 +23,7 @@ export type McpPreset = {
   note?: string;
 };
 
-const google = 'Google requires your own Web OAuth client marked for an AI-powered agent, with the API and its MCP API enabled in your Google Cloud project. Enter its Client ID and secret under Advanced.';
+const google = 'This Google MCP server is in preview: your Google Workspace account and Google Cloud project must first be approved in the Google Workspace Developer Preview Program, or its tools fail with a permission error. It also needs your own Web OAuth client marked for an AI-powered agent, with the API and its MCP API enabled in that project. Enter its Client ID and secret under Advanced.';
 
 export const mcpPresets: McpPreset[] = [
   { id: 'notion', name: 'Notion', category: 'Productivity', url: 'https://mcp.notion.com/mcp', authType: 'oauth', description: 'Search, read and update pages and databases.' },

@@ -411,8 +411,13 @@ commit/push eventually releases this work. No manual deployment is permitted.
 Before 2026-10-30, every Gmail catalog was rejected after authorization because its
 schemas use local `$ref`; the schema changes above admit it.
 Provide your own Google Web OAuth Client ID and client secret; Google does not
-support the dynamic registration path here. Enable Gmail API and Gmail MCP API in
-your Google project, enroll in the Workspace Developer Preview where required,
+support the dynamic registration path here. These servers are in preview: the Google
+Workspace account and Cloud project must be approved in the Google Workspace Developer
+Preview Program (an application reviewed by Google, not instant). Without it,
+authorization and tool discovery can succeed while every tool call fails with a
+permission error, and the MCP API may be missing from the project's API Library.
+The preset note says so. Enable Gmail API and Gmail MCP API in
+your Google project,
 configure consent/audience/test users and scopes, and mark the OAuth client
 **Use this client for an AI-powered agent**. Review the current Google requirements
 before public release, including restricted-scope verification and data policies.
