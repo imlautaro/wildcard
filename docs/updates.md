@@ -96,9 +96,10 @@ directly by an API request, with one durable step per stage:
    person, the previous card and the titles of the other cards. It may call
    `research_web` (one search per card, four per run) and, for connector topics,
    `list_mcp_tools`/`call_mcp_tool` (three reads per card), then answers with a card
-   or skips. An invalid card gets one repair round; a skip keeps the earlier card
-   for another hour. Each card is saved as soon as it is ready, so the feed fills
-   progressively.
+   or skips with a short reason. An invalid card gets one repair round; a skip keeps
+   the earlier card for another hour and is remembered on the topic (see
+   [skipped topics](#skipped-topics)). Each card is saved as soon as it is ready, so
+   the feed fills progressively.
 3. **Finish**. The next automatic run is due when the first card expires (between
    one and twelve hours later), or ten minutes after a failed run.
 
@@ -113,6 +114,22 @@ days; a feed that was never opened never runs.
 Triggers: the first Updates view, **Update now**/pull to refresh, following a topic,
 showing a hidden topic again, a contact's `add_to_updates` (picked up by the minute
 Cron once the person has opened Updates) and card expiry.
+
+## Skipped topics
+
+A contact composing a card may answer `{"action":"skip","reason":"..."}` when it
+has nothing honest to show. Since 2026-10-31 (migration 0080) the topic keeps
+`skips` (consecutive skipped runs) and `skip_reason` (the last reason, one short
+English line for the editor, at most 200 characters):
+
+- The editor sees them as `skippedRuns` and `lastSkipReason` on each topic and is
+  told to reassign it to a better placed contact, rewrite the brief, or drop a
+  curator topic, instead of returning it unchanged.
+- A curator topic skipped three runs in a row (`homeLimits.skipsToRetire`) is
+  retired with its card. Topics the person or a contact asked for are never retired
+  this way; they stay until the person hides them.
+- A published card resets both fields. A reviewer's skip during
+  [review](#contacts-review-cards) only keeps the card and is not counted.
 
 ## Contacts review cards
 

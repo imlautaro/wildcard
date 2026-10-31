@@ -131,7 +131,7 @@ const debugDatasets: Record<string, Dataset> = {
     columns: 'r.user_id, r.status, r.revision, r.due_at, r.claimed_at, r.requested_at, r.generated_at, r.viewed_at, r.time_zone, r.briefing, r.progress_json, r.error_code',
     where: 'r.user_id = ?1' },
   home_topic: { table: 'home_topic',
-    columns: 'r.id, r.user_id, r.title, r.brief, r.reason, r.kind, r.source, r.contact_id, r.status, r.feedback, r.pinned, r.created_at, r.updated_at',
+    columns: 'r.id, r.user_id, r.title, r.brief, r.reason, r.kind, r.source, r.contact_id, r.status, r.feedback, r.pinned, r.created_at, r.updated_at, r.skips, r.skip_reason',
     where: 'r.user_id = ?1' },
   home_card: { table: 'home_card',
     columns: 'r.id, r.user_id, r.topic_id, r.contact_id, r.kind, r.position, r.payload_json, r.connector, r.revision, r.generated_at, r.expires_at',

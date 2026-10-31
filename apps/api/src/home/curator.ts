@@ -10,6 +10,8 @@ import { homeReadable, type HomeContact, type HomeSignals } from './signals';
 export const homeLimits = {
   topics: 8, composePerRun: 6, rounds: 4, researchPerRun: 4, researchDaily: 12, connectorCalls: 3,
   personTopics: 20, contactTopics: 30,
+  // Consecutive skips after which a curator topic is retired (requested topics never are).
+  skipsToRetire: 3,
 } as const;
 
 export type PlannedTopic = { id: string | null; title: string; brief: string; reason: string; kind: CardKind;
@@ -45,7 +47,8 @@ export async function planHome(env: Env, signals: HomeSignals, model: string): P
     schedules: signals.schedules.map(schedule => ({ instruction: schedule.instruction, next: date(schedule.nextAt, signals.timeZone), repeats: schedule.repeats })),
     homeTopics: visible.map(topic => ({ id: topic.id, title: topic.title, brief: topic.brief, kind: topic.kind, source: topic.source,
       feedback: topic.feedback ?? undefined, contactID: topic.contactID ?? undefined,
-      hasCard: signals.cards.some(card => card.topicID === topic.id) })),
+      hasCard: signals.cards.some(card => card.topicID === topic.id),
+      skippedRuns: topic.skips || undefined, lastSkipReason: topic.skips && topic.skipReason ? topic.skipReason : undefined })),
     hiddenTopics: hidden.map(topic => ({ title: topic.title, brief: clipText(topic.brief, 160) })),
   };
   const answer = await museCompletion(env, [
@@ -58,6 +61,8 @@ export async function planHome(env: Env, signals: HomeSignals, model: string): P
       'Updates already shows upcoming schedules, tasks assigned to the person and quick access to their most used mini apps on its own; do not create topics that only repeat them. Use them as hints of what the person cares about.',
       'Keep every topic whose source is "person" or "contact" (someone asked for it) with its id. Keep useful curator topics with their id so cards stay stable; omit stale ones to drop them. Use id "" for a new topic.',
       'Never return or recreate a hidden topic or anything close to it. Feedback "less" means lower it or drop it; "more" means keep it near the top.',
+      'skippedRuns means its contact (contactID) found nothing honest to show that many runs in a row; lastSkipReason says why. '
+        + 'Assign it to another contact better placed for it, rewrite the brief so it can be answered with the evidence, or omit it when it is a curator topic with no better option. Do not return it unchanged.',
       `kind picks the layout: ${kindLines}.`,
       'Assign each topic to the contact best suited by specialties, personality and who the person talked to about it. Spread topics across contacts when it fits.',
       'research: true when the card needs current public information from the web (news, scores, prices, official processing times). That search is public and never includes personal details.',
@@ -120,12 +125,14 @@ const composerTools = (research: boolean, connectors: boolean): ModelTool[] => [
 
 export type ComposeBudget = { research: number; researchID: (index: number) => string; topicID: string };
 
-/** One contact prepares one card. Returns null when it honestly has nothing to show. */
+export type ComposeResult = { card: HomeCard; connector: boolean } | { skip: string };
+
+/** One contact prepares one card, or skips with a reason when it honestly has nothing to show. */
 export async function composeCard(env: Env, context: ComposeContext, topic: PlannedTopic & { id: string },
   previous: string | null, others: string[], model: string, budget: ComposeBudget,
-  review?: { authorName: string; excerpts: ReviewExcerpt[] }): Promise<{ card: HomeCard; connector: boolean } | null> {
+  review?: { authorName: string; excerpts: ReviewExcerpt[] }): Promise<ComposeResult> {
   const contact = context.contacts.find(item => item.id === topic.contactID);
-  if (!contact) return null;
+  if (!contact) return { skip: '' };
   const terms = keywords(`${topic.title} ${topic.brief}`);
   const match = (text: string) => terms.some(term => text.normalize('NFKC').toLowerCase().includes(term));
   const memories = context.memories.filter(memory => match(memory.content));
@@ -141,7 +148,8 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
         + `Write every visible text in ${context.language}, concise and scannable like a well-designed news or dashboard card, with a touch of your own voice in subtitles and notes.`,
       `Now: ${localNow(Date.now(), context.timeZone)} (${context.timeZone}).`,
       'Gather evidence with the tools when the card needs current or personal data, then answer with JSON only: '
-        + '{"action":"publish","card":{...}} or {"action":"skip","reason":"..."}.',
+        + '{"action":"publish","card":{...}} or {"action":"skip","reason":"..."}. '
+        + 'A skip reason is one short line in English for the editor, saying what was missing (for example "no public data on this application type"); no personal details.',
       'Only use facts from tool results, the evidence below and the previous card. Never invent numbers, scores, dates, quotes, sources or links; copy URLs exactly from tool results and omit url when you have none. '
         + 'Use the most recent figures the evidence gives and label when they are from (subtitle, time or caption); when today\'s value is not out yet, show the latest one with its date instead of giving up.',
       ...(research ? ['research_web runs one public web search. Use one focused, self-contained query without personal details.'] : []),
@@ -198,7 +206,9 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
     }
     let output: unknown;
     try { output = JSON.parse(answer.content ?? ''); } catch { output = null; }
-    if (isRecord(output) && output.action === 'skip') return null;
+    if (isRecord(output) && output.action === 'skip') {
+      return { skip: Array.from(typeof output.reason === 'string' ? output.reason.replace(/\s+/g, ' ').trim() : '').slice(0, 200).join('') };
+    }
     const parsed = isRecord(output) && output.action === 'publish' ? parseCard(output.card) : { error: 'Answer with {"action":"publish","card":{...}} or {"action":"skip","reason":"..."}.' };
     if ('card' in parsed) return { card: parsed.card, connector: connectorUsed };
     // One repair turn for a card the validator rejected.

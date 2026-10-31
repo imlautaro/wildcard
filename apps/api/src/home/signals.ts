@@ -9,7 +9,7 @@ import { cardKinds, type CardKind } from './cards';
 // groups, whose history never reaches a Contributor-capable call.
 export type HomeContact = { id: string; name: string; description: string; specialties: string; connectors: string[]; lastAt: number | null };
 export type HomeTopicRow = { id: string; title: string; brief: string; reason: string | null; kind: CardKind; source: 'person' | 'contact' | 'curator';
-  contactID: string | null; status: 'active' | 'hidden' | 'retired'; feedback: 'more' | 'less' | null; pinned: number; updatedAt: number };
+  contactID: string | null; status: 'active' | 'hidden' | 'retired'; feedback: 'more' | 'less' | null; pinned: number; updatedAt: number; skips: number; skipReason: string | null };
 export type HomeCardRow = { topicID: string; kind: CardKind; contactID: string | null; payloadJSON: string; generatedAt: number; expiresAt: number };
 export type HomeSignals = {
   userName: string; timeZone: string; now: number;
@@ -52,7 +52,8 @@ export async function homeTimeZone(db: D1Database, userID: string): Promise<stri
   return 'UTC';
 }
 
-export const topicColumns = `id, title, brief, reason, kind, source, contact_id AS contactID, status, feedback, pinned, updated_at AS updatedAt`;
+export const topicColumns = `id, title, brief, reason, kind, source, contact_id AS contactID, status, feedback, pinned, updated_at AS updatedAt,
+  skips, skip_reason AS skipReason`;
 
 export async function readSignals(db: D1Database, userID: string): Promise<HomeSignals | null> {
   const user = await db.prepare('SELECT name FROM user WHERE id = ?').bind(userID).first<{ name: string }>();

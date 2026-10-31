@@ -119,12 +119,27 @@ async function compose(env: Env, job: HomeJob, run: RunPlan, index: number, rese
   const result = await composeCard({ ...env, META_CHAT_MODEL: model }, run.context, topic, topic.previous,
     run.titles.filter(title => title !== topic.title), model, budget);
   const now = Date.now();
-  if (!result) {
-    // Nothing honest to show now: keep an earlier card for another hour, without a new revision.
-    await env.DB.prepare(`UPDATE home_card SET expires_at = ?1 WHERE topic_id = ?2 AND user_id = ?3`).bind(now + 3_600_000, topic.id, job.userID).run();
+  const fence = `EXISTS (SELECT 1 FROM home_feed WHERE user_id = ?2 AND revision = ?3 AND status = 'running')`;
+  if ('skip' in result) {
+    // Nothing honest to show now: keep an earlier card for another hour, without a new revision,
+    // and remember the skip for the editor. A curator topic skipped too many runs in a row is
+    // retired with its card (docs/updates.md#skipped-topics).
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE home_card SET expires_at = ?1 WHERE topic_id = ?2 AND user_id = ?3`).bind(now + 3_600_000, topic.id, job.userID),
+      env.DB.prepare(`UPDATE home_topic SET skips = skips + 1, skip_reason = ?4,
+          status = CASE WHEN source = 'curator' AND skips + 1 >= ?5 THEN 'retired' ELSE status END,
+          updated_at = CASE WHEN source = 'curator' AND skips + 1 >= ?5 THEN ?6 ELSE updated_at END
+        WHERE id = ?1 AND user_id = ?2 AND status = 'active' AND ${fence}`)
+        .bind(topic.id, job.userID, job.revision, result.skip || null, homeLimits.skipsToRetire, now),
+      env.DB.prepare(`DELETE FROM home_card WHERE topic_id = ?1 AND user_id = ?2
+          AND EXISTS (SELECT 1 FROM home_topic WHERE id = ?1 AND user_id = ?2 AND status = 'retired')`).bind(topic.id, job.userID),
+    ]);
+    console.log(JSON.stringify({ event: 'home_card_skipped' }));
     return 'skipped';
   }
   const { card } = result;
+  await env.DB.prepare(`UPDATE home_topic SET skips = 0, skip_reason = NULL WHERE id = ?1 AND user_id = ?2 AND skips > 0 AND ${fence}`)
+    .bind(topic.id, job.userID, job.revision).run();
   await env.DB.prepare(`INSERT INTO home_card (id, user_id, topic_id, contact_id, kind, position, payload_json, connector, generated_at, expires_at)
       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
       WHERE EXISTS (SELECT 1 FROM home_feed WHERE user_id = ?2 AND revision = ?11 AND status = 'running')
@@ -156,7 +171,8 @@ async function review(env: Env, job: HomeJob, run: RunPlan, candidate: ReviewCan
     researchID: (attempt: number) => `home-${job.userID}-${job.revision}-review-${candidate.topicID}-${attempt}`, topicID: candidate.topicID };
   const result = await composeCard({ ...env, META_CHAT_MODEL: run.model }, run.context, topic, row.payloadJSON,
     run.titles.filter(title => title !== row.title), run.model, budget, { authorName: candidate.authorName, excerpts: candidate.excerpts });
-  if (!result) return 'kept';
+  // A reviewer's skip only means its evidence is not better; it does not count as a topic skip.
+  if ('skip' in result) return 'kept';
   const now = Date.now(), fence = `EXISTS (SELECT 1 FROM home_feed WHERE user_id = ?2 AND revision = ?3 AND status = 'running')`;
   const note = Array.from(`${reviewer.name} updated this with newer details from your chats`).slice(0, 160).join('');
   await env.DB.batch([
