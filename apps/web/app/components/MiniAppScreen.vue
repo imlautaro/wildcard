@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { MiniAppAction, MiniAppComponent, MiniAppComposer } from '~/utils/types';
+import type { MiniAppAction, MiniAppComponent, MiniAppComposer, MiniAppItem, MiniAppRowTarget } from '~/utils/types';
 
 // A mini app opens as its own screen: a top bar with the app's menu, the current tab,
-// an optional composer pinned to the bottom and a tab bar for tabbed apps.
+// an optional composer pinned to the bottom and a tab bar for tabbed apps. Toolbar
+// buttons of the current screen sit in the top bar; forms open in a sheet.
 // `base` is `contacts/<id>` (a private app) or `groups/<id>` (shared by the group); `back` is its chat.
 const props = defineProps<{ base: string; appId: string; back: string }>();
 const appID = computed(() => props.appId);
@@ -15,6 +16,8 @@ const notice = ref<string | null>(null);
 const busyAction = ref<string | null>(null);
 // An uncertain submission keeps its execution ID so a retry can never run twice.
 const pendingExecution = ref<{ actionID: string; executionID: string; fields: string } | null>(null);
+// The open form: an action with fields, optionally for one row (prefilled with its values).
+const sheet = ref<{ action: MiniAppAction; row?: MiniAppRowTarget; values?: MiniAppItem } | null>(null);
 const selectedTab = ref<string | null>(null);
 const menuOpen = ref(false);
 const draft = ref('');
@@ -26,6 +29,9 @@ const components = computed(() => {
   return currentTab.value ? value.tabs?.find(t => t.id === currentTab.value!.id)?.view ?? (currentTab.value.id === tabs.value[0]?.id ? value.view : []) : value.view;
 });
 const composer = computed(() => components.value?.find((c): c is MiniAppComposer => c.type === 'composer') ?? null);
+const toolbar = computed(() => components.value?.flatMap(c => c.type === 'toolbar' ? [c] : []) ?? []);
+// Row controls wait while taps are unconfirmed: their row indexes come from the server's view.
+const pending = computed(() => (app.value ? apps.view(app.value.id).taps.length > 0 : false));
 const firstScreen = computed(() => !currentTab.value || currentTab.value.id === tabs.value[0]?.id);
 const permissionNote = 'These tools use your connection permissions, and the service decides what each one does. Data is loaded for you only; it is not sent to the contact or saved to memory. Editing the mini app requires review again.';
 
@@ -34,7 +40,8 @@ const writes = computed(() => app.value?.tools.filter(t => t.role === 'write') ?
 function findAction(components: MiniAppComponent[], id: string): MiniAppAction | null {
   for (const item of components) {
     if (item.type === 'action' && item.id === id) return item;
-    if (item.type === 'tile' && item.action?.id === id) return item.action;
+    if ((item.type === 'tile' || item.type === 'toolbar') && item.action?.id === id) return item.action;
+    if (item.type === 'list' || item.type === 'checklist') { const found = [item.edit, ...(item.actions ?? [])].find(a => a?.id === id); if (found) return found; }
     if (item.type === 'section' || item.type === 'grid') { const found = findAction(item.children, id); if (found) return found; }
   }
   return null;
@@ -54,8 +61,15 @@ function actionByID(id: string): MiniAppAction | Pick<MiniAppAction, 'kind' | 'l
 function press(action: MiniAppAction) {
   menuOpen.value = false;
   if (!app.value) return;
-  if (action.kind === 'state' && !action.confirm && action.updates) void apps.tap(app.value, action.id, action.updates);
+  if (action.fields.length) { error.value = null; sheet.value = { action }; }
+  else if (action.kind === 'state' && !action.confirm && action.updates) void apps.tap(app.value, action.id, action.updates);
   else void run(action.id, {});
+}
+// A submitted sheet closes (and clears) only when the action went through.
+async function submitSheet(fields: Record<string, unknown>) {
+  const open = sheet.value;
+  if (!open) return;
+  if (await run(open.action.id, fields, open.row)) sheet.value = null;
 }
 // A composer row that only appends shows at once; anything else waits for the server.
 function send(item: MiniAppComposer) {
@@ -90,25 +104,32 @@ async function remove() {
   try { await apps.remove(app.value); await navigateTo(props.back, { replace: true }); }
   catch (failure) { error.value = errorMessage(failure); }
 }
-async function run(actionID: string, fields: Record<string, unknown>) {
+async function run(actionID: string, fields: Record<string, unknown>, row?: MiniAppRowTarget): Promise<boolean> {
   const current = app.value, action = actionByID(actionID);
-  if (!current || !action || busyAction.value || (action.confirm && !window.confirm(action.confirm))) return;
-  const serialized = JSON.stringify(fields);
+  if (!current || !action || busyAction.value || (action.confirm && !window.confirm(action.confirm))) return false;
+  const serialized = JSON.stringify({ fields, row });
   const pending = pendingExecution.value;
   const executionID = pending && pending.actionID === actionID && pending.fields === serialized ? pending.executionID : crypto.randomUUID();
   pendingExecution.value = { actionID, executionID, fields: serialized };
   busyAction.value = actionID; notice.value = null; error.value = null;
   try {
-    const status = await apps.run(current, actionID, executionID, fields);
+    const status = await apps.run(current, actionID, executionID, fields, row);
     pendingExecution.value = null;
     // Local state changes show up in the view itself; only external writes report an outcome.
-    if (action.kind === 'state') return;
+    if (action.kind === 'state') return true;
     notice.value = status === 'completed' ? `${action.label}: done.` : status === 'failed' ? `${action.label} failed. Nothing was confirmed by the service.`
       : `${action.label}: the outcome is unknown. Check the service before trying again.`;
+    return true;
   } catch (failure) {
     if (!(failure instanceof ApiError && failure.status === 0)) pendingExecution.value = null;
     error.value = errorMessage(failure);
+    return false;
   } finally { busyAction.value = null; }
+}
+// On touch screens, tapping outside the composer closes the keyboard.
+const composerInput = ref<HTMLInputElement>();
+function blurComposer(event: PointerEvent) {
+  if (event.pointerType === 'touch' && document.activeElement === composerInput.value && !(event.target as HTMLElement).closest('.mini-composer')) composerInput.value?.blur();
 }
 
 onMounted(() => load());
@@ -117,6 +138,12 @@ onMounted(() => load());
 <template>
   <div class="mini-app-screen">
     <PageBar :title="currentTab?.title ?? app?.title ?? 'Mini app'" :back="back" always-back>
+      <template v-if="app?.status === 'enabled'">
+        <template v-for="item in toolbar" :key="item.action.id">
+          <AppIconButton v-if="item.icon === 'plus'" icon="plus" :label="item.action.label" :disabled="busyAction === item.action.id" @click="press(item.action)" />
+          <AppButton v-else variant="text" :disabled="busyAction === item.action.id" @click="press(item.action)">{{ item.action.label }}</AppButton>
+        </template>
+      </template>
       <div v-if="app?.status === 'enabled'" class="mini-menu">
         <AppIconButton icon="more" label="More" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen" />
         <template v-if="menuOpen">
@@ -131,7 +158,7 @@ onMounted(() => load());
         </template>
       </div>
     </PageBar>
-    <div class="page">
+    <div class="page" @pointerdown="blurComposer">
       <AppLoading v-if="!app && !apps.state.value.loaded" fill />
       <AppEmptyState v-else-if="!app" icon="grid" title="Mini app unavailable" :text="apps.state.value.error ?? 'It may have been deleted.'" />
       <div v-else class="page-inner">
@@ -175,17 +202,19 @@ onMounted(() => load());
             {{ view.error }}
             <template #actions><button class="link-button" @click="load(true)">Retry</button></template>
           </AppNotice>
-          <MiniAppView v-if="components" :components="components" :busy-action="busyAction" :state="apps.displayState(app.id)" @action="run"
-            @tap="(id, updates) => apps.tap(app!, id, updates)" @edit="update => apps.tap(app!, null, [update])" @select-tab="tab => selectedTab = tab" />
+          <MiniAppView v-if="components" :components="components" :busy-action="busyAction" :state="apps.displayState(app.id)" :pending="pending" @action="(id, fields) => run(id, fields)"
+            @tap="(id, updates) => apps.tap(app!, id, updates)" @edit="update => apps.tap(app!, null, [update])" @select-tab="tab => selectedTab = tab"
+            @open="(action, row, values) => { error = null; sheet = { action, row, values } }" @row-action="(action, row) => run(action.id, {}, row)" />
           <p v-if="view.value?.remote && firstScreen" class="group-footer">Updated {{ messageTime(view.value.resolvedAt) }}</p>
         </template>
       </div>
     </div>
     <form v-if="composer && app?.status === 'enabled'" class="mini-composer" @submit.prevent="send(composer)">
-      <input v-model="draft" :type="composer.kind === 'number' ? 'number' : 'text'" step="any" :inputmode="composer.kind === 'number' ? 'decimal' : 'text'" maxlength="500"
+      <input ref="composerInput" v-model="draft" :type="composer.kind === 'number' ? 'number' : 'text'" step="any" :inputmode="composer.kind === 'number' ? 'decimal' : 'text'" maxlength="500"
         :placeholder="composer.placeholder ?? composer.label" :aria-label="composer.placeholder ?? composer.label" enterkeyhint="send">
       <button type="submit" class="send" data-ripple :aria-label="composer.label" :disabled="!draft.trim() || busyAction === composer.action"><AppIcon name="send" /></button>
     </form>
+    <MiniAppForm v-if="sheet" :key="`${sheet.action.id}:${sheet.row?.index ?? ''}`" :action="sheet.action" :values="sheet.values" :busy="busyAction === sheet.action.id" :error="error" @submit="submitSheet" @close="sheet = null" />
     <nav v-if="tabs.length" class="mini-tabs" aria-label="Tabs">
       <button v-for="tab in tabs" :key="tab.id" type="button" :aria-current="tab.id === currentTab?.id ? 'page' : undefined" @click="selectedTab = tab.id">
         <AppIcon :name="miniAppIcon(tab.icon)" />{{ tab.title }}

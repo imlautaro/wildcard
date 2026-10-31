@@ -1,4 +1,4 @@
-import type { MiniApp, MiniAppResolution, MiniAppStateValue, MiniAppUpdate } from '~/utils/types';
+import type { MiniApp, MiniAppResolution, MiniAppRowTarget, MiniAppStateValue, MiniAppUpdate } from '~/utils/types';
 
 // Session-owned caches: one app list per base (`contacts/<id>` or `groups/<id>`) and one resolved view per app.
 // Resolved views hold connector data in memory only; nothing is persisted.
@@ -98,10 +98,10 @@ export function useMiniApps(base: MaybeRefOrGetter<string>) {
     return entry.request;
   }
   // The execution ID is created once per confirmed submission and reused for its retries.
-  async function run(app: MiniApp, actionID: string, executionID: string, fields: Record<string, unknown>) {
+  async function run(app: MiniApp, actionID: string, executionID: string, fields: Record<string, unknown>, row?: MiniAppRowTarget) {
     const id = toValue(base), key = `${id}/${app.id}`, entry = view(app.id), revision = entry.revision;
     const outcome = await api<{ status: 'completed' | 'failed' | 'unknown'; resolution?: MiniAppResolution }>(`${id}/mini-apps/${app.id}/actions/${actionID}`,
-      { json: { executionID, revision: app.revision, inputs: entry.inputs, fields, timeZone: timeZone() } });
+      { json: { executionID, revision: app.revision, inputs: entry.inputs, fields, timeZone: timeZone(), ...(row ? { row } : {}) } });
     // State-only apps return the updated view with the action, so a tap needs no extra load.
     if (outcome.resolution) {
       if (views.get(key) === entry && entry.revision === revision) { entry.value = outcome.resolution; entry.loadedAt = Date.now(); entry.error = null; }

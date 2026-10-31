@@ -1,6 +1,6 @@
 import { isRecord } from '../chat/meta';
 import { catalog, connectionColumns, remote, size, validator, type Connection, type RemoteTool } from '../mcp/client';
-import { applyUpdates, directUpdate, evaluate, normalizeState, parseSpec, present, resolvedAction, StepError, toolData, transform, type Context, type ResolvedAction, type ResolvedComponent, type ResolvedTab, type Spec, type ToolUse } from './spec';
+import { applyUpdates, directUpdate, evaluate, isRowAction, normalizeState, parseSpec, present, resolvedAction, rowOwner, selectOptions, StepError, toolData, transform, type Context, type ResolvedAction, type ResolvedComponent, type ResolvedTab, type Spec, type ToolUse } from './spec';
 
 export type GrantedTool = ToolUse & { fingerprint: string };
 // A private app has contactID + userID; a group app has groupID, and replyID is its card's group message.
@@ -112,6 +112,8 @@ function fieldValues(fields: Spec['actions'][number]['fields'], raw: unknown): R
     if (value === undefined || value === '') { if (field.required) return null; continue; }
     if (field.kind === 'number' ? typeof value !== 'number' || !Number.isFinite(value)
       : field.kind === 'toggle' ? typeof value !== 'boolean'
+      // Fixed options are checked here; options from a list are checked against the saved state.
+      : field.kind === 'select' ? typeof value !== 'string' || (!!field.options && !field.options.some(o => o.value === value))
       : field.kind === 'date' ? typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value))
       : typeof value !== 'string' || value.length > 500 || value.includes('\0')) return null;
     values[field.id] = value;
@@ -122,13 +124,18 @@ function fieldValues(fields: Spec['actions'][number]['fields'], raw: unknown): R
 export type ActionOutcome = { status: 'completed' | 'failed' | 'unknown'; replayed: boolean; state?: Record<string, unknown> };
 // Writes run once per client execution ID. An uncertain outcome is never replayed.
 export async function runAction(env: Env, app: MiniAppRow, connectors: Connection[], actionID: string, executionID: string,
-  rawInputs: unknown, rawFields: unknown, timeZone: string): Promise<ActionOutcome | { error: string; status: number }> {
+  rawInputs: unknown, rawFields: unknown, timeZone: string, rawRow?: unknown): Promise<ActionOutcome | { error: string; status: number }> {
   const { spec } = parseSpec(JSON.parse(app.specJSON));
   const action = spec.actions.find(a => a.id === actionID);
   if (!action) return { error: 'Action not found', status: 404 };
   const inputs = validInputs(spec, rawInputs), fields = fieldValues(action.fields, rawFields ?? {});
   if (!inputs || !fields) return { error: 'Check the form values.', status: 400 };
-  if (action.kind === 'state') return runStateAction(env, app, spec, action.set, actionID, executionID, { inputs, fields, timeZone });
+  // A row action names the row it runs on; the list must show this action on its rows.
+  const row = isRecord(rawRow) && typeof rawRow.state === 'string' && Number.isInteger(rawRow.index) && Number(rawRow.index) >= 0 ? { state: rawRow.state, index: Number(rawRow.index) } : undefined;
+  if (isRowAction(action) ? !row || !rowOwner(spec, action.id, row.state) : rawRow !== undefined) return { error: 'This action needs a row of its list.', status: 400 };
+  const listed = action.fields.filter(f => f.from && fields[f.id] !== undefined);
+  const valid = listed.length ? (state: Record<string, unknown>) => listed.every(f => selectOptions(f, state[f.from!]).some(o => o.value === fields[f.id])) : undefined;
+  if (action.kind === 'state') return runStateAction(env, app, spec, action.set, actionID, executionID, { inputs, fields, timeZone, row }, valid);
   const { values: state } = await readState(env.DB, app, spec);
   const args = evaluate(action.arguments, { inputs, state, fields, timeZone, now: Date.now() }) as Record<string, unknown>;
   const argumentsJSON = JSON.stringify(args);
@@ -169,13 +176,14 @@ export async function runStateEdit(env: Env, app: MiniAppRow, executionID: strin
 }
 
 async function runStateAction(env: Env, app: MiniAppRow, spec: Spec, updates: Extract<Spec['actions'][number], { kind: 'state' }>['set'], actionID: string,
-  executionID: string, context: Omit<Context, 'state' | 'now'>): Promise<ActionOutcome | { error: string; status: number }> {
+  executionID: string, context: Omit<Context, 'state' | 'now'>, valid?: (state: Record<string, unknown>) => boolean): Promise<ActionOutcome | { error: string; status: number }> {
   for (let attempt = 0; attempt < 4; attempt++) {
     // One read for both the replay check and the current saved state.
     const row = await env.DB.prepare(`SELECT s.values_json AS valuesJSON, s.version, a.status, a.action_id AS actionID FROM (SELECT 1) LEFT JOIN mini_app_state s ON s.app_id = ?1
       LEFT JOIN mini_app_action a ON a.id = ?2 AND a.app_id = ?1`).bind(app.id, executionID).first<{ valuesJSON: string | null; version: number | null; status: string | null; actionID: string | null }>();
     if (row?.status) return row.actionID === actionID ? { status: row.status as ActionOutcome['status'], replayed: true } : { error: 'This action was already submitted.', status: 409 };
     const current = { values: normalizeState(spec, row?.valuesJSON ? JSON.parse(row.valuesJSON) : null), version: row?.version ?? null };
+    if (valid && !valid(current.values)) return { error: 'Choose one of the listed options.', status: 400 };
     const next = applyUpdates(spec, updates, current.values, { ...context, state: current.values, now: Date.now() });
     if (!next) return { error: 'This change is not valid.', status: 400 };
     const now = Date.now(), valuesJSON = JSON.stringify(next);

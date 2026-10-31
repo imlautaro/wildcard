@@ -786,6 +786,30 @@ from group details) and `/groups/:id/mini-apps/:appID` opens one. Both routes re
 `MiniAppList.vue` and `MiniAppScreen.vue` with a `groups/<id>` base. Behavior, copy and limits match iOS; see
 [mini apps](mini-apps.md) and [caching](caching.md#mini-apps). Browser layout and live
 loads have not been verified.
+
+Forms, toolbar and rows (2026-10-31):
+- Every action with fields opens `MiniAppForm.vue`, an `AppSheet` with its fields.
+  A button opens it, and so does a toolbar button or a list row. Fields can be text,
+  number, date, toggle or select, and select is a native `<select>`.
+  - A select fed by a list shows "No items yet" while that list is empty, and a
+    required one then blocks the submission.
+  - The sheet closes only after the action succeeds, and errors show inside it.
+- `toolbar` components of the current screen or tab render in the top bar, before the
+  ⋯ menu. An adding action shows as a + icon and any other as a text button.
+- On a list over a list state:
+  - Tapping a row's text opens the `edit` action prefilled from the row's `values`.
+  - Row actions are small tonal buttons.
+  - `removable` adds ✕, which sends `remove_item` like a checklist.
+- Checklists work the same way, but only the checkbox toggles.
+- Edits and row actions post `row: {state, index}` with their action and wait for the
+  server's view; they are not optimistic. Row controls of plain lists pause while
+  taps are pending, because their indexes come from the server's view.
+- Only adding buttons (+, increment, append) are prominent, plus a button that is
+  alone in its row. A `choice` bound to a number state compares its value as text.
+- The lesson card is a static row with a real **Start** button.
+- A standalone progress card has full card corners.
+- On touch screens, tapping outside the composer closes the keyboard.
+- None of this has been tried in a browser yet.
 Saved state, checklists, toggles, choices, inputs, progress bars, timers and button
 rows render with the same rules as iOS (`MiniAppView.vue`, `MiniAppTimer.vue`). Taps
 apply instantly and are reconciled with the server (`useMiniApps`).

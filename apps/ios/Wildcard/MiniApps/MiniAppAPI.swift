@@ -51,10 +51,45 @@ struct MiniApp: Decodable, Identifiable, Hashable, Sendable {
 struct MiniAppField: Decodable, Hashable, Sendable {
     let id: String
     let label: String
+    /// text, number, date, toggle or select; unknown kinds render as text.
     let kind: String
     let required: Bool
+    /// Select fields: fixed options, or the current items of a list (possibly empty).
+    let options: [MiniAppOption]?
 }
-struct MiniAppListRow: Decodable, Hashable, Sendable { let title: String; let subtitle: String?; let value: MiniAppScalar? }
+/// `index` is the row's position in its list state; `values` prefill the edit sheet (field id → value).
+struct MiniAppListRow: Decodable, Hashable, Sendable {
+    let title: String; let subtitle: String?; let value: MiniAppScalar?
+    var index: Int? = nil
+    var values: [String: MiniAppStateValue]? = nil
+}
+/// A list of rows; over a list state its rows can be deleted, edited in a sheet or run row actions.
+struct MiniAppList: Decodable, Hashable, Sendable {
+    let items: [MiniAppListRow]
+    let format: String
+    let currency: String?
+    let empty: String
+    let state: String?
+    let removable: Bool
+    /// An action with fields opened prefilled from the tapped row.
+    let edit: MiniAppComponent?
+    /// Field-less actions shown on each row.
+    let actions: [MiniAppComponent]
+    private enum Keys: String, CodingKey { case items, format, currency, empty, state, removable, edit, actions }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        items = try c.decode([MiniAppListRow].self, forKey: .items)
+        format = try c.decodeIfPresent(String.self, forKey: .format) ?? "text"
+        currency = try c.decodeIfPresent(String.self, forKey: .currency)
+        empty = try c.decode(String.self, forKey: .empty)
+        state = try c.decodeIfPresent(String.self, forKey: .state)
+        removable = try c.decodeIfPresent(Bool.self, forKey: .removable) ?? false
+        edit = try c.decodeIfPresent(MiniAppComponent.self, forKey: .edit)
+        actions = try c.decodeIfPresent([MiniAppComponent].self, forKey: .actions) ?? []
+    }
+}
+/// The row a row action or edit runs on.
+struct MiniAppRowRef: Codable, Hashable, Sendable { let state: String; let index: Int }
 struct MiniAppPoint: Decodable, Hashable, Sendable { let x: String; let y: Double }
 
 enum MiniAppScalar: Decodable, Hashable, Sendable {
@@ -158,7 +193,11 @@ struct MiniAppUpdate: Codable, Hashable, Sendable {
 struct MiniAppOption: Decodable, Hashable, Sendable { let value: String; let label: String }
 /// Checklist paths let the client re-derive rows from saved state for instant taps.
 struct MiniAppChecklist: Decodable, Hashable, Sendable {
-    struct Row: Decodable, Hashable, Sendable { let title: String; let subtitle: String?; let value: MiniAppScalar?; let done: Bool? }
+    struct Row: Decodable, Hashable, Sendable {
+        let title: String; let subtitle: String?; let value: MiniAppScalar?; let done: Bool?
+        var index: Int? = nil
+        var values: [String: MiniAppStateValue]? = nil
+    }
     let state: String
     let title: String
     let subtitle: String?
@@ -169,12 +208,33 @@ struct MiniAppChecklist: Decodable, Hashable, Sendable {
     let format: String
     let currency: String?
     let empty: String
+    /// An action with fields opened prefilled from the tapped row; the checkbox stays the toggle.
+    let edit: MiniAppComponent?
+    let actions: [MiniAppComponent]
+    private enum Keys: String, CodingKey { case state, title, subtitle, value, done, removable, items, format, currency, empty, edit, actions }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        state = try c.decode(String.self, forKey: .state)
+        title = try c.decode(String.self, forKey: .title)
+        subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle)
+        value = try c.decodeIfPresent(String.self, forKey: .value)
+        done = try c.decodeIfPresent(String.self, forKey: .done)
+        removable = try c.decode(Bool.self, forKey: .removable)
+        items = try c.decode([Row].self, forKey: .items)
+        format = try c.decodeIfPresent(String.self, forKey: .format) ?? "text"
+        currency = try c.decodeIfPresent(String.self, forKey: .currency)
+        empty = try c.decode(String.self, forKey: .empty)
+        edit = try c.decodeIfPresent(MiniAppComponent.self, forKey: .edit)
+        actions = try c.decodeIfPresent([MiniAppComponent].self, forKey: .actions) ?? []
+    }
 
+    /// Rows re-derived from saved state (with pending taps); edit prefills come from the server's rows by index.
     func rows(from state: [String: MiniAppStateValue]) -> [Row] {
         guard case .list(let items)? = state[self.state] else { return self.items }
-        return items.map { item in
+        let prefills = items.count == self.items.count ? self.items.map(\.values) : []
+        return items.enumerated().map { index, item in
             Row(title: item[title]?.label ?? "—", subtitle: subtitle.flatMap { item[$0]?.label }.flatMap { $0.isEmpty ? nil : $0 }, value: value.flatMap { item[$0]?.scalar },
-                done: done.map { item[$0] == .bool(true) })
+                done: done.map { item[$0] == .bool(true) }, index: index, values: prefills.indices.contains(index) ? prefills[index] : nil)
         }
     }
 }
@@ -227,7 +287,7 @@ indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
     case section(title: String?, children: [MiniAppComponent])
     case stat(label: String, value: MiniAppScalar?, format: String, currency: String?, caption: String?, state: String?)
     case progress(label: String, value: Double?, goal: Double, format: String, currency: String?, caption: String?, state: String?, ring: Bool)
-    case list(items: [MiniAppListRow], format: String, currency: String?, empty: String)
+    case list(MiniAppList)
     case checklist(MiniAppChecklist)
     case chart(kind: String, title: String?, points: [MiniAppPoint], format: String, currency: String?)
     case text(String, style: String)
@@ -240,10 +300,12 @@ indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
     case tile(MiniAppTile)
     case composer(MiniAppComposer)
     case lesson(MiniAppLesson)
+    /// A top-bar button of its screen; an action with fields opens a sheet.
+    case toolbar(action: MiniAppComponent, plus: Bool)
     case notice(code: String)
     case unsupported
 
-    private enum Keys: String, CodingKey { case type, title, children, label, value, format, currency, caption, items, empty, kind, points, text, style, id, confirm, fields, code, state, updates, goal, options, placeholder, seconds, columns }
+    private enum Keys: String, CodingKey { case type, title, children, label, value, format, currency, caption, items, empty, kind, points, text, style, id, confirm, fields, code, state, updates, goal, options, placeholder, seconds, columns, action, icon }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         let format = try c.decodeIfPresent(String.self, forKey: .format) ?? "text"
@@ -256,7 +318,7 @@ indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
         case "progress": self = .progress(label: try c.decode(String.self, forKey: .label), value: try c.decodeIfPresent(Double.self, forKey: .value), goal: try c.decode(Double.self, forKey: .goal),
                                           format: format, currency: currency, caption: caption, state: try c.decodeIfPresent(String.self, forKey: .state),
                                           ring: try c.decodeIfPresent(String.self, forKey: .style) == "ring")
-        case "list": self = .list(items: try c.decode([MiniAppListRow].self, forKey: .items), format: format, currency: currency, empty: try c.decode(String.self, forKey: .empty))
+        case "list": self = .list(try MiniAppList(from: decoder))
         case "checklist": self = .checklist(try MiniAppChecklist(from: decoder))
         case "chart": self = .chart(kind: try c.decode(String.self, forKey: .kind), title: try c.decodeIfPresent(String.self, forKey: .title), points: try c.decode([MiniAppPoint].self, forKey: .points), format: format, currency: currency)
         case "text": self = .text(try c.decode(String.self, forKey: .text), style: try c.decode(String.self, forKey: .style))
@@ -274,6 +336,7 @@ indirect enum MiniAppComponent: Decodable, Hashable, Sendable {
         case "tile": self = .tile(try MiniAppTile(from: decoder))
         case "composer": self = .composer(try MiniAppComposer(from: decoder))
         case "lesson": self = .lesson(try MiniAppLesson(from: decoder))
+        case "toolbar": self = .toolbar(action: try c.decode(MiniAppComponent.self, forKey: .action), plus: try c.decodeIfPresent(String.self, forKey: .icon) == "plus")
         case "notice": self = .notice(code: try c.decode(String.self, forKey: .code))
         default: self = .unsupported
         }
@@ -339,10 +402,11 @@ extension AuthAPI {
         let (data, _) = try await send(path: "\(base)/mini-apps/\(appID)/state", method: "POST", body: body, token: token, timeout: 60)
         return try JSONDecoder().decode(MiniAppOutcome.self, from: data)
     }
+    /// `row` names the list row of a row action or edit; it is omitted otherwise.
     func runMiniAppAction(base: String, appID: String, actionID: String, executionID: UUID, revision: Int, inputs: [String: String],
-                          fields: [String: MiniAppFieldValue], token: String) async throws -> MiniAppOutcome {
-        struct Input: Encodable { let executionID: String; let revision: Int; let inputs: [String: String]; let fields: [String: MiniAppFieldValue]; let timeZone: String }
-        let body = try JSONEncoder().encode(Input(executionID: executionID.uuidString.lowercased(), revision: revision, inputs: inputs, fields: fields, timeZone: TimeZone.current.identifier))
+                          fields: [String: MiniAppFieldValue], row: MiniAppRowRef? = nil, token: String) async throws -> MiniAppOutcome {
+        struct Input: Encodable { let executionID: String; let revision: Int; let inputs: [String: String]; let fields: [String: MiniAppFieldValue]; let timeZone: String; let row: MiniAppRowRef? }
+        let body = try JSONEncoder().encode(Input(executionID: executionID.uuidString.lowercased(), revision: revision, inputs: inputs, fields: fields, timeZone: TimeZone.current.identifier, row: row))
         let (data, _) = try await send(path: "\(base)/mini-apps/\(appID)/actions/\(actionID)", method: "POST", body: body, token: token, timeout: 60)
         return try JSONDecoder().decode(MiniAppOutcome.self, from: data)
     }

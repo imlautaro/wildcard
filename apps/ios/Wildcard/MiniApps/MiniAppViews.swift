@@ -62,12 +62,14 @@ struct MiniAppScreen: View {
     @State private var error: String?
     @State private var notice: String?
     @State private var confirmDelete = false
-    @State private var pendingAction: (id: String, label: String, confirm: String, local: Bool, fields: [String: MiniAppFieldValue])?
+    @State private var pendingAction: (id: String, label: String, confirm: String, local: Bool, fields: [String: MiniAppFieldValue], row: MiniAppRowRef?)?
     @State private var confirming = false
     @State private var runningAction: String?
     @State private var selectedTab = ""
+    /// An action with fields opened as a sheet (from a button, the toolbar or a row's edit).
+    @State private var form: MiniAppFormRequest?
     /// An uncertain submission keeps its execution ID so a retry can never run twice.
-    @State private var execution: (actionID: String, fields: [String: MiniAppFieldValue], id: UUID)?
+    @State private var execution: (actionID: String, fields: [String: MiniAppFieldValue], row: MiniAppRowRef?, id: UUID)?
 
     private var store: MiniAppStore { MiniAppStore.store(for: base, contacts: contacts, groups: groups) }
     private var app: MiniApp? { store.app(base: base, id: appID) }
@@ -80,9 +82,10 @@ struct MiniAppScreen: View {
                     ForEach(tabs, id: \.id) { tab in
                         Tab(tab.title, systemImage: MiniApp.symbol(tab.icon), value: tab.id) {
                             NavigationStack {
-                                enabled(app, components: store.views[key]?.tabs?.first { $0.id == tab.id }?.view, first: tab.id == tabs[0].id)
+                                let components = store.views[key]?.tabs?.first { $0.id == tab.id }?.view
+                                enabled(app, components: components, first: tab.id == tabs[0].id)
                                     .navigationTitle(tab.title)
-                                    .toolbar { toolbar(app) }
+                                    .toolbar { toolbar(app, components: components) }
                             }
                         }
                     }
@@ -100,7 +103,7 @@ struct MiniAppScreen: View {
                     }
                     .navigationTitle(app?.title ?? "Mini app")
                     .navigationBarTitleDisplayMode(app?.isEnabled == true ? .large : .inline)
-                    .toolbar { toolbar(app) }
+                    .toolbar { toolbar(app, components: store.views[key]?.view) }
                 }
             }
         }
@@ -109,19 +112,38 @@ struct MiniAppScreen: View {
         } message: { Text("The contact can build it again later.") }
         .alert(pendingAction?.label ?? "", isPresented: $confirming, presenting: pendingAction) { action in
             Button("Cancel", role: .cancel) { }
-            Button("Continue") { Task { await run(action.id, label: action.label, local: action.local, fields: action.fields) } }
+            Button("Continue") { Task { await run(action.id, label: action.label, local: action.local, fields: action.fields, row: action.row) } }
         } message: { action in Text(action.confirm) }
+        .sheet(item: $form) { request in
+            MiniAppFormSheet(request: request) { values in
+                form = nil
+                self.request(request.actionID, local: request.local, label: request.label, confirm: request.confirm, fields: values, row: request.row)
+            }
+        }
         .task {
             await store.refresh(base: base, using: auth)
             if let app, app.isEnabled { await store.resolve(app, base: base, using: auth) }
         }
     }
 
-    @ToolbarContentBuilder private func toolbar(_ app: MiniApp?) -> some ToolbarContent {
+    @ToolbarContentBuilder private func toolbar(_ app: MiniApp?, components: [MiniAppComponent]?) -> some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close")
         }
         if let app, app.isEnabled {
+            // The screen's own toolbar buttons (at most two), before the ⋯ menu.
+            let buttons = (components ?? []).compactMap { component -> (MiniAppComponent, Bool)? in if case .toolbar(let action, let plus) = component { (action, plus) } else { nil } }
+            ForEach(Array(buttons.prefix(2).enumerated()), id: \.offset) { _, button in
+                if case .action(let id, _, let label, _, _, _, _) = button.0 {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { perform(button.0, app: app) } label: {
+                            if runningAction == id { ProgressView() } else if button.1 { Image(systemName: "plus") } else { Text(label) }
+                        }
+                        .accessibilityLabel(label)
+                        .disabled(runningAction != nil)
+                    }
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     // The app's own menu actions first, then management.
@@ -147,15 +169,16 @@ struct MiniAppScreen: View {
         }
     }
 
-    /// Literal local taps apply instantly; anything else goes through the confirmed path.
+    /// Literal local taps apply instantly; actions with fields open a sheet; anything else goes through the confirmed path.
     private func perform(_ action: MiniAppComponent, app: MiniApp) {
-        guard case .action(let id, let local, let label, let confirm, _, _, let updates) = action else { return }
-        if local, confirm == nil, let updates { store.tap(app, base: base, actionID: id, updates: updates, using: auth) }
+        guard case .action(let id, let local, let label, let confirm, let destructive, let fields, let updates) = action else { return }
+        if !fields.isEmpty { form = MiniAppFormRequest(actionID: id, local: local, label: label, confirm: confirm, destructive: destructive, fields: fields, prefill: [:], row: nil) }
+        else if local, confirm == nil, let updates { store.tap(app, base: base, actionID: id, updates: updates, using: auth) }
         else { request(id, local: local, label: label, confirm: confirm, fields: [:]) }
     }
-    private func request(_ id: String, local: Bool, label: String, confirm: String?, fields: [String: MiniAppFieldValue]) {
-        if let confirm { pendingAction = (id, label, confirm, local, fields); confirming = true }
-        else { Task { await run(id, label: label, local: local, fields: fields) } }
+    private func request(_ id: String, local: Bool, label: String, confirm: String?, fields: [String: MiniAppFieldValue], row: MiniAppRowRef? = nil) {
+        if let confirm { pendingAction = (id, label, confirm, local, fields, row); confirming = true }
+        else { Task { await run(id, label: label, local: local, fields: fields, row: row) } }
     }
     /// A composer row that only appends shows at once; anything else waits for the server.
     private func submit(_ composer: MiniAppComposer, text: String, app: MiniApp) {
@@ -249,7 +272,13 @@ struct MiniAppScreen: View {
                     store.tap(app, base: base, actionID: id, updates: updates, using: auth)
                 } onEdit: { update in
                     store.tap(app, base: base, actionID: nil, updates: [update], using: auth)
-                } onSelectTab: { tab in selectedTab = tab }
+                } onSelectTab: { tab in selectedTab = tab
+                } onForm: { request in form = request
+                } onRow: { action, row in
+                    // Row buttons never apply optimistically: they wait for the server's view.
+                    guard case .action(let id, let local, let label, let confirm, _, _, _) = action else { return }
+                    request(id, local: local, label: label, confirm: confirm, fields: [:], row: row)
+                }
                 // Only connector data can be stale; saved state is always current.
                 if view.remote == true && first {
                     Section { } footer: {
@@ -261,7 +290,9 @@ struct MiniAppScreen: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollDismissesKeyboard(.interactively)
+        .scrollDismissesKeyboard(.immediately)
+        // A tap outside a text field closes the keyboard without swallowing the tap.
+        .simultaneousGesture(TapGesture().onEnded { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) })
         .refreshable { await store.resolve(app, base: base, force: true, using: auth) }
         .safeAreaInset(edge: .bottom) {
             if let composer { MiniAppComposerBar(composer: composer, running: runningAction == composer.action) { submit(composer, text: $0, app: app) } }
@@ -286,14 +317,14 @@ struct MiniAppScreen: View {
         catch { self.error = error.localizedDescription }
     }
 
-    private func run(_ actionID: String, label: String, local: Bool, fields: [String: MiniAppFieldValue]) async {
+    private func run(_ actionID: String, label: String, local: Bool, fields: [String: MiniAppFieldValue], row: MiniAppRowRef? = nil) async {
         guard let app, runningAction == nil else { return }
-        let id = execution.flatMap { $0.actionID == actionID && $0.fields == fields ? $0.id : nil } ?? UUID()
-        execution = (actionID, fields, id)
+        let id = execution.flatMap { $0.actionID == actionID && $0.fields == fields && $0.row == row ? $0.id : nil } ?? UUID()
+        execution = (actionID, fields, row, id)
         runningAction = actionID; notice = nil; error = nil
         defer { runningAction = nil }
         do {
-            let status = try await store.run(app, base: base, actionID: actionID, executionID: id, fields: fields, using: auth)
+            let status = try await store.run(app, base: base, actionID: actionID, executionID: id, fields: fields, row: row, using: auth)
             execution = nil
             // Local state changes show up in the view itself; only external writes report an outcome.
             guard !local else { return }
@@ -440,6 +471,10 @@ struct MiniAppRenderer: View {
     let onEdit: (MiniAppUpdate) -> Void
     /// Tiles that open another tab of the app.
     var onSelectTab: (String) -> Void = { _ in }
+    /// Actions with fields open a sheet form (buttons and row edits).
+    var onForm: (MiniAppFormRequest) -> Void = { _ in }
+    /// A field-less row action on one row of a list.
+    var onRow: (MiniAppComponent, MiniAppRowRef) -> Void = { _, _ in }
 
     private enum Block: Identifiable {
         case stats(Int, [MiniAppComponent]), buttons(Int, [MiniAppComponent]), section(Int, String?, [MiniAppComponent]), grid(Int, Int, [MiniAppComponent]), single(Int, MiniAppComponent)
@@ -455,7 +490,7 @@ struct MiniAppRenderer: View {
                 if case .buttons(let i, let items) = result.last { result[result.count - 1] = .buttons(i, items + [component]) } else { result.append(.buttons(index, [component])) }
             case .section(let title, let children): result.append(.section(index, title, children))
             case .grid(let columns, let children): result.append(.grid(index, columns, children))
-            case .composer: continue
+            case .composer, .toolbar: continue
             default: result.append(.single(index, component))
             }
         }
@@ -481,6 +516,13 @@ struct MiniAppRenderer: View {
             case .grid(_, let columns, let children):
                 Section { MiniAppGrid(columns: columns, children: children, state: state, runningAction: runningAction, press: press, selectTab: onSelectTab) }
                     .listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+            case .single(_, .progress(let label, let value, let goal, let format, let currency, let caption, let stateID, false)):
+                // A top-level bar progress is a card like the grid cards around it.
+                Section {
+                    MiniAppGrid(columns: 1, children: [.progress(label: label, value: value, goal: goal, format: format, currency: currency, caption: caption, state: stateID, ring: false)],
+                                state: state, runningAction: runningAction, press: press, selectTab: onSelectTab)
+                }
+                .listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             case .single(_, let component): Section { rows(component) }
             }
         }
@@ -488,8 +530,26 @@ struct MiniAppRenderer: View {
 
     /// Literal local taps apply instantly; anything else goes through the confirmed path.
     private func press(_ action: MiniAppComponent) {
-        guard case .action(let id, let local, let label, let confirm, _, _, let updates) = action else { return }
-        if local, confirm == nil, let updates { onTap(id, updates) } else { onAction(id, local, label, confirm, [:]) }
+        guard case .action(let id, let local, let label, let confirm, let destructive, let fields, let updates) = action else { return }
+        if !fields.isEmpty { onForm(MiniAppFormRequest(actionID: id, local: local, label: label, confirm: confirm, destructive: destructive, fields: fields, prefill: [:], row: nil)) }
+        else if local, confirm == nil, let updates { onTap(id, updates) } else { onAction(id, local, label, confirm, [:]) }
+    }
+    /// Opens a row's edit action prefilled with the row's values.
+    private func edit(_ action: MiniAppComponent?, row: MiniAppRowRef, values: [String: MiniAppStateValue]?) {
+        guard case .action(let id, let local, let label, let confirm, let destructive, let fields, _)? = action else { return }
+        onForm(MiniAppFormRequest(actionID: id, local: local, label: label, confirm: confirm, destructive: destructive, fields: fields, prefill: values ?? [:], row: row))
+    }
+    /// Compact row buttons; a running one shows progress.
+    @ViewBuilder private func rowButtons(_ actions: [MiniAppComponent], row: MiniAppRowRef) -> some View {
+        ForEach(Array(actions.enumerated()), id: \.offset) { _, action in
+            if case .action(let id, _, let label, _, let destructive, _, _) = action {
+                Button(role: destructive ? .destructive : nil) { onRow(action, row) } label: {
+                    if runningAction == id { ProgressView().controlSize(.small) } else { Text(label).manrope(.footnote, weight: .semibold).lineLimit(1) }
+                }
+                .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small).tint(destructive ? .red : nil)
+                .disabled(runningAction != nil)
+            }
+        }
     }
     private func buttonRow(_ actions: [MiniAppComponent]) -> some View {
         MiniAppButtonRow(actions: actions, runningAction: runningAction, perform: press)
@@ -497,16 +557,31 @@ struct MiniAppRenderer: View {
 
     @ViewBuilder private func rows(_ component: MiniAppComponent) -> some View {
         switch component {
-        case .list(let items, let format, let currency, let empty):
-            if items.isEmpty { Text(empty).foregroundStyle(.secondary) }
-            ForEach(Array(items.enumerated()), id: \.offset) { _, row in
+        case .list(let list):
+            if list.items.isEmpty { Text(list.empty).foregroundStyle(.secondary) }
+            ForEach(Array(list.items.enumerated()), id: \.offset) { offset, row in
+                let ref = list.state.map { MiniAppRowRef(state: $0, index: row.index ?? offset) }
                 HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(row.title).manrope(.body)
-                        if let subtitle = row.subtitle { Text(subtitle).manrope(.footnote).foregroundStyle(.secondary) }
+                    // Tapping the row opens its edit sheet; row buttons sit at the trailing edge.
+                    Button { if let ref { edit(list.edit, row: ref, values: row.values) } } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(row.title).manrope(.body).foregroundStyle(.primary)
+                                if let subtitle = row.subtitle { Text(subtitle).manrope(.footnote).foregroundStyle(.secondary) }
+                            }
+                            Spacer(minLength: 8)
+                            if let value = row.value { Text(MiniAppFormat.text(value, format: list.format, currency: list.currency)).manrope(.body, weight: .semibold).monospacedDigit().foregroundStyle(.primary) }
+                        }
+                        .contentShape(Rectangle())
                     }
-                    Spacer(minLength: 8)
-                    if let value = row.value { Text(MiniAppFormat.text(value, format: format, currency: currency)).manrope(.body, weight: .semibold).monospacedDigit() }
+                    .buttonStyle(.borderless)
+                    .disabled(list.edit == nil || ref == nil || runningAction != nil)
+                    if let ref, !list.actions.isEmpty { rowButtons(list.actions, row: ref) }
+                }
+                .swipeActions {
+                    if list.removable, let ref {
+                        Button(role: .destructive) { onEdit(MiniAppUpdate(state: ref.state, op: "remove_item", index: ref.index)) } label: { Label("Delete", systemImage: "trash") }
+                    }
                 }
             }
         case .chart(let kind, let title, let points, let format, let currency):
@@ -535,8 +610,17 @@ struct MiniAppRenderer: View {
         case .text(let text, let style):
             Text(text).manrope(style == "headline" ? .headline : style == "caption" ? .footnote : .body, weight: style == "headline" ? .bold : .regular)
                 .foregroundStyle(style == "caption" ? Color.secondary : Color.primary)
-        case .action(let id, let local, let label, let confirm, let destructive, let fields, _):
-            MiniAppActionForm(id: id, local: local, label: label, destructive: destructive, fields: fields, running: runningAction) { values in onAction(id, local, label, confirm, values) }
+        case .action(let id, let local, let label, _, let destructive, _, _):
+            // An action with fields is a full-width button that opens its form as a sheet.
+            Button(role: destructive ? .destructive : nil) { press(component) } label: {
+                HStack {
+                    Text(label).manrope(.body, weight: .semibold)
+                    Spacer()
+                    if runningAction == id && !local { ProgressView() } else { Image(systemName: "chevron.up").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary) }
+                }
+                .contentShape(Rectangle())
+            }
+            .disabled(runningAction != nil)
         case .notice(let code):
             Label(MiniAppFormat.issue(code), systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
         case .progress(let label, let value, let goal, let format, let currency, let caption, let stateID, let ring):
@@ -566,25 +650,47 @@ struct MiniAppRenderer: View {
             let rows = checklist.rows(from: state)
             if rows.isEmpty { Text(checklist.empty).foregroundStyle(.secondary) }
             ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                Button {
-                    if let field = checklist.done { onEdit(MiniAppUpdate(state: checklist.state, op: "toggle_item", index: index, field: field)) }
-                } label: {
-                    HStack(spacing: 12) {
-                        if let done = row.done {
-                            Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(done ? Color.green : Color.secondary)
-                                .contentTransition(.symbolEffect(.replace))
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.title).manrope(.body).strikethrough(row.done == true).foregroundStyle(row.done == true ? Color.secondary : Color.primary)
-                            if let subtitle = row.subtitle { Text(subtitle).manrope(.footnote).foregroundStyle(.secondary) }
-                        }
-                        Spacer(minLength: 8)
-                        if let value = row.value { Text(MiniAppFormat.text(value, format: checklist.format, currency: checklist.currency)).manrope(.body, weight: .semibold).monospacedDigit() }
+                let ref = MiniAppRowRef(state: checklist.state, index: row.index ?? index)
+                let toggle = { if let field = checklist.done { onEdit(MiniAppUpdate(state: checklist.state, op: "toggle_item", index: index, field: field)) } }
+                let text = HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.title).manrope(.body).strikethrough(row.done == true).foregroundStyle(row.done == true ? Color.secondary : Color.primary)
+                        if let subtitle = row.subtitle { Text(subtitle).manrope(.footnote).foregroundStyle(.secondary) }
                     }
-                    .contentShape(Rectangle())
+                    Spacer(minLength: 8)
+                    if let value = row.value { Text(MiniAppFormat.text(value, format: checklist.format, currency: checklist.currency)).manrope(.body, weight: .semibold).monospacedDigit().foregroundStyle(.primary) }
                 }
-                .buttonStyle(.plain)
-                .disabled(checklist.done == nil)
+                .contentShape(Rectangle())
+                HStack(spacing: 12) {
+                    if checklist.edit != nil || !checklist.actions.isEmpty {
+                        // With an edit sheet the checkbox is the only toggle; the text opens the sheet.
+                        if let done = row.done {
+                            Button(action: toggle) {
+                                Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(done ? Color.green : Color.secondary)
+                                    .contentTransition(.symbolEffect(.replace))
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel(done ? "Mark as not done" : "Mark as done")
+                        }
+                        Button { edit(checklist.edit, row: ref, values: row.values) } label: { text }
+                            .buttonStyle(.borderless)
+                            .disabled(checklist.edit == nil || runningAction != nil)
+                        if !checklist.actions.isEmpty { rowButtons(checklist.actions, row: ref) }
+                    } else {
+                        Button(action: toggle) {
+                            HStack(spacing: 12) {
+                                if let done = row.done {
+                                    Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(done ? Color.green : Color.secondary)
+                                        .contentTransition(.symbolEffect(.replace))
+                                }
+                                text
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(checklist.done == nil)
+                    }
+                }
                 .swipeActions {
                     if checklist.removable {
                         Button(role: .destructive) { onEdit(MiniAppUpdate(state: checklist.state, op: "remove_item", index: index)) } label: { Label("Delete", systemImage: "trash") }
@@ -615,7 +721,7 @@ struct MiniAppRenderer: View {
             MiniAppLessonRow(lesson: lesson) { score in
                 if let xp = lesson.xp, score > 0 { onEdit(MiniAppUpdate(state: xp, op: "increment", value: .number(Double(score)))) }
             }
-        case .stat, .section, .grid, .composer, .unsupported: EmptyView()
+        case .stat, .section, .grid, .composer, .toolbar, .unsupported: EmptyView()
         }
     }
 }
@@ -627,22 +733,21 @@ private struct MiniAppLessonRow: View {
     @State private var playing = false
 
     var body: some View {
-        Button { playing = true } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "graduationcap.fill").font(.title3.weight(.semibold)).foregroundStyle(.white)
-                    .frame(width: 46, height: 46).background(Color.green.gradient, in: Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(lesson.title).manrope(.body, weight: .bold).foregroundStyle(.primary)
-                    Text("\(lesson.questions.count) questions").manrope(.footnote).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 8)
-                Text("Start").manrope(.subheadline, weight: .bold).foregroundStyle(.white)
-                    .padding(.horizontal, 16).padding(.vertical, 8).background(Color.green, in: Capsule())
+        // The row is information; Start is the one control, styled as a real button.
+        HStack(spacing: 14) {
+            Image(systemName: "graduationcap.fill").font(.title3.weight(.semibold)).foregroundStyle(.white)
+                .frame(width: 46, height: 46).background(Color.green.gradient, in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(lesson.title).manrope(.body, weight: .bold).foregroundStyle(.primary).lineLimit(2)
+                Text("\(lesson.questions.count) questions").manrope(.footnote).foregroundStyle(.secondary)
             }
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button { playing = true } label: { Text("Start").manrope(.subheadline, weight: .bold).padding(.horizontal, 6) }
+                .buttonStyle(.glassProminent).tint(.green).controlSize(.regular)
+                .accessibilityLabel("Start \(lesson.title)")
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 4)
         .fullScreenCover(isPresented: $playing) { MiniAppLessonView(lesson: lesson, complete: complete) }
     }
 }
@@ -997,7 +1102,7 @@ private struct MiniAppStatGrid: View {
 }
 
 /// Field-less actions as large native buttons: short symbols (+, −) share one row,
-/// longer labels stack below. The first non-destructive action is prominent.
+/// longer labels stack below. Only an adding action is prominent (or a lone button).
 private struct MiniAppButtonRow: View {
     let actions: [MiniAppComponent]
     let runningAction: String?
@@ -1011,13 +1116,14 @@ private struct MiniAppButtonRow: View {
             return Item(id: id, label: label, destructive: destructive, local: local, component: component)
         }
     }
-    /// The action that adds (+, increment, append) is prominent; otherwise the first non-destructive one.
+    /// The action that adds (+, increment, append) is prominent. Among several buttons none
+    /// is otherwise, so option-like buttons never look selected; a lone button stays prominent.
     private var primaryID: String? {
         let adds = items.first { item in
             guard !item.destructive, case .action(_, _, _, _, _, _, let updates) = item.component else { return false }
             return item.label.hasPrefix("+") || (updates ?? []).contains { $0.op == "increment" || $0.op == "append" }
         }
-        return (adds ?? items.first { !$0.destructive })?.id
+        return (adds ?? (items.count == 1 ? items.first { !$0.destructive } : nil))?.id
     }
 
     var body: some View {
@@ -1047,25 +1153,47 @@ private struct MiniAppButtonRow: View {
     }
 }
 
-private struct MiniAppActionForm: View {
-    let id: String
+/// An action with fields, presented as a sheet: from a button, the toolbar or a row's edit.
+struct MiniAppFormRequest: Identifiable {
+    let id = UUID()
+    let actionID: String
     let local: Bool
     let label: String
+    let confirm: String?
     let destructive: Bool
     let fields: [MiniAppField]
-    let running: String?
+    /// Field id → the row's current value, for edits.
+    let prefill: [String: MiniAppStateValue]
+    let row: MiniAppRowRef?
+}
+
+/// The form of an action with fields. Select fields offer their options; a list-sourced
+/// select with no items yet is disabled with a hint.
+struct MiniAppFormSheet: View {
+    let request: MiniAppFormRequest
     let submit: ([String: MiniAppFieldValue]) -> Void
+    @Environment(\.dismiss) private var dismiss
     @State private var texts: [String: String] = [:]
     @State private var toggles: [String: Bool] = [:]
     @State private var dates: [String: Date] = [:]
+    @State private var choices: [String: String] = [:]
 
+    private static func day(_ text: String) -> Date? {
+        var strategy = Date.ISO8601FormatStyle().year().month().day(); strategy.timeZone = .current
+        return try? Date(String(text.prefix(10)), strategy: strategy)
+    }
     private var values: [String: MiniAppFieldValue]? {
         var result: [String: MiniAppFieldValue] = [:]
-        for field in fields {
+        for field in request.fields {
             switch field.kind {
             case "toggle": result[field.id] = .toggle(toggles[field.id] ?? false)
             case "date":
-                if let date = dates[field.id] { result[field.id] = .text(date.formatted(.iso8601.year().month().day())) }
+                if let date = dates[field.id] {
+                    var style = Date.ISO8601FormatStyle().year().month().day(); style.timeZone = .current
+                    result[field.id] = .text(date.formatted(style))
+                } else if field.required { return nil }
+            case "select":
+                if let choice = choices[field.id], (field.options ?? []).contains(where: { $0.value == choice }) { result[field.id] = .text(choice) }
                 else if field.required { return nil }
             default:
                 let text = (texts[field.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1080,22 +1208,56 @@ private struct MiniAppActionForm: View {
     }
 
     var body: some View {
-        ForEach(fields, id: \.id) { field in
-            switch field.kind {
-            case "toggle": Toggle(field.label, isOn: Binding(get: { toggles[field.id] ?? false }, set: { toggles[field.id] = $0 }))
-            case "date": DatePicker(field.label, selection: Binding(get: { dates[field.id] ?? .now }, set: { dates[field.id] = $0 }), displayedComponents: .date)
-            default:
-                LabeledContent(field.label) {
-                    TextField(field.required ? "Required" : "Optional", text: Binding(get: { texts[field.id] ?? "" }, set: { texts[field.id] = $0 }))
-                        .multilineTextAlignment(.trailing)
-                        .keyboardType(field.kind == "number" ? .decimalPad : .default)
+        NavigationStack {
+            Form {
+                ForEach(request.fields, id: \.id) { field in
+                    switch field.kind {
+                    case "toggle": Toggle(field.label, isOn: Binding(get: { toggles[field.id] ?? false }, set: { toggles[field.id] = $0 }))
+                    case "date": DatePicker(field.label, selection: Binding(get: { dates[field.id] ?? .now }, set: { dates[field.id] = $0 }), displayedComponents: .date)
+                    case "select":
+                        let options = field.options ?? []
+                        if options.isEmpty {
+                            LabeledContent(field.label) { Text("No items yet").foregroundStyle(.secondary) }
+                        } else {
+                            Picker(field.label, selection: Binding(get: { choices[field.id] ?? "" }, set: { choices[field.id] = $0 })) {
+                                if choices[field.id] == nil { Text(field.required ? "Choose" : "None").tag("") }
+                                ForEach(options, id: \.value) { Text($0.label).tag($0.value) }
+                            }
+                            .pickerStyle(.menu)
+                        }
+                    default:
+                        LabeledContent(field.label) {
+                            TextField(field.required ? "Required" : "Optional", text: Binding(get: { texts[field.id] ?? "" }, set: { texts[field.id] = $0 }))
+                                .multilineTextAlignment(.trailing)
+                                .keyboardType(field.kind == "number" ? .decimalPad : .default)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(request.label)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(role: request.destructive ? .destructive : nil) { if let values { submit(values) } } label: { Text(request.label).manrope(.body, weight: .semibold) }
+                        .disabled(values == nil)
                 }
             }
         }
-        Button(role: destructive ? .destructive : nil) { if let values { submit(values) } } label: {
-            HStack { Text(running == id && !local ? "Working…" : label).manrope(.body, weight: .semibold); if running == id && !local { Spacer(); ProgressView() } }
+        .presentationDetents([.medium, .large])
+        .onAppear {
+            // Edits start from the row's current values.
+            for field in request.fields {
+                guard let value = request.prefill[field.id] else { continue }
+                switch (field.kind, value) {
+                case ("toggle", .bool(let flag)): toggles[field.id] = flag
+                case ("date", .text(let text)): dates[field.id] = Self.day(text)
+                case ("select", _): choices[field.id] = value.label
+                case ("number", .number(let number)): texts[field.id] = number.formatted(.number.grouping(.never))
+                default: texts[field.id] = value.label
+                }
+            }
         }
-        .disabled(running != nil || values == nil)
     }
 }
 

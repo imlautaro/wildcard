@@ -11,7 +11,7 @@ const comparisons = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'after',
 const aggregates = ['sum', 'avg', 'min', 'max', 'count'] as const;
 const arithmetic = ['$add', '$sub', '$mul', '$div', '$min', '$max'] as const;
 const chartKinds = ['bar', 'line', 'area', 'pie'] as const;
-const stateOps = ['increment', 'decrement', 'set', 'toggle', 'append', 'clear', 'pick', 'set_items', 'remove_where', 'toggle_item', 'remove_item'] as const;
+const stateOps = ['increment', 'decrement', 'set', 'toggle', 'append', 'clear', 'pick', 'set_items', 'remove_where', 'toggle_item', 'remove_item', 'update_item', 'assign'] as const;
 type Format = typeof formats[number];
 type Aggregate = typeof aggregates[number];
 type Condition = { field: string; op: typeof comparisons[number]; value: unknown };
@@ -27,12 +27,14 @@ export type Step =
 type Option = { value: string; label: string };
 type Input = { id: string; type: 'segmented'; label: string; options: Option[]; default: string }
   | { id: string; type: 'text' | 'number'; label: string; default: string };
-type Field = { id: string; label: string; kind: 'text' | 'number' | 'date' | 'toggle'; required: boolean };
+// A select field offers literal options or the items of a list state (`from`, labelled by `labelField`).
+export type Field = { id: string; label: string; kind: 'text' | 'number' | 'date' | 'toggle' | 'select'; required: boolean; options?: Option[]; from?: string; labelField?: string };
 export type Scalar = number | string | boolean;
 export type Item = Record<string, Scalar>;
 export type StateValue = Scalar | Item[];
 export type StateVar = { id: string; type: 'number' | 'text' | 'boolean' | 'list'; initial: StateValue };
-export type StateUpdate = { state: string; op: typeof stateOps[number]; value?: unknown; index?: number; field?: string };
+// `from`: pick a random item's `field` from a list state. `mode`: how assign distributes `value` over the items.
+export type StateUpdate = { state: string; op: typeof stateOps[number]; value?: unknown; index?: number; field?: string; from?: string; mode?: 'shuffle' | 'rotate' };
 type ActionBase = { id: string; label: string; style: 'default' | 'destructive'; fields: Field[] };
 // Remote actions call an MCP write tool after confirmation; local actions only update saved state.
 export type Action = (ActionBase & { kind: 'remote'; confirm: string; connectionID: string; tool: string; arguments: Record<string, unknown> })
@@ -42,8 +44,9 @@ export type Component =
   | { type: 'section'; title?: string; children: Component[] }
   | ({ type: 'stat'; label: string; step: string; path?: string; caption?: string } & Value)
   | ({ type: 'progress'; label: string; step: string; path?: string; goal: number | string; caption?: string; style: 'bar' | 'ring' } & Value)
-  | ({ type: 'list'; source: string; title: string; subtitle?: string; value?: string; limit: number; empty?: string } & Value)
-  | ({ type: 'checklist'; state: string; title: string; subtitle?: string; value?: string; done?: string; removable: boolean; empty?: string } & Value)
+  // Lists over a list state can delete rows (removable), open a prefilled sheet on tap (edit) and show row buttons (actions).
+  | ({ type: 'list'; source: string; title: string; subtitle?: string; value?: string; limit: number; empty?: string; removable?: boolean; edit?: string; actions?: string[] } & Value)
+  | ({ type: 'checklist'; state: string; title: string; subtitle?: string; value?: string; done?: string; removable: boolean; empty?: string; edit?: string; actions?: string[] } & Value)
   | ({ type: 'chart'; source: string; kind: typeof chartKinds[number]; x: string; y: string; title?: string } & Value)
   | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
   | { type: 'toggle'; label: string; state: string }
@@ -55,6 +58,8 @@ export type Component =
   | { type: 'grid'; columns: 2 | 3; children: Component[] }
   | ({ type: 'tile'; title: string; caption?: string; icon?: typeof symbolIcons[number]; step?: string; path?: string; tab?: string; action?: string } & Value)
   | { type: 'composer'; action: string; placeholder?: string }
+  // A top-bar button; an action with fields opens a sheet form.
+  | { type: 'toolbar'; action: string }
   // A Duolingo-style lesson: one question at a time with feedback and hearts. Finishing
   // adds the number of correct answers to `xp` (a number state), if set.
   | { type: 'lesson'; title: string; questions: Question[]; hearts: number; xp?: string };
@@ -63,7 +68,7 @@ export type Component =
 export type Question = { prompt: string; options?: string[]; answer: number | string; accept?: string[]; explain?: string };
 export type Tab = { id: string; title: string; icon: typeof symbolIcons[number]; view: Component[] };
 // Tests are scenarios the contact writes with the app; the server runs them before saving it.
-export type TestStep = { tap: string; fields: Record<string, unknown> } | { edit: Record<string, unknown> } | { input: Record<string, string> };
+export type TestStep = { tap: string; fields: Record<string, unknown>; row?: number } | { edit: Record<string, unknown> } | { input: Record<string, string> };
 export type Expectation = { state: string; equals?: unknown; count?: number; includes?: Item } | { step: string; equals: unknown } | { text: string };
 export type Test = { name: string; steps: TestStep[]; expect: Expectation[] };
 // An app has either one `view` or 2–5 `tabs` (a native tab bar); `menu` lists field-less actions in the top bar.
@@ -111,6 +116,7 @@ function isItem(value: unknown): value is Item {
 // Templates are literal JSON plus single-key expressions. Arithmetic is structured
 // ({"$mul": [a, b]}), never parsed from text.
 type Scope = { inputs: Set<string>; states: Set<string>; fields?: Set<string> };
+const fieldKinds = ['text', 'number', 'date', 'toggle', 'select'] as const;
 function template(raw: unknown, name: string, scope: Scope, depth = 0): unknown {
   let value = raw;
   if (depth > 8) return fail(`${name} is nested too deeply.`);
@@ -128,6 +134,8 @@ function template(raw: unknown, name: string, scope: Scope, depth = 0): unknown 
     if (key === '$input') return typeof argument === 'string' && scope.inputs.has(argument) ? value : fail(`${name}: $input must name a declared input.`);
     if (key === '$state') return typeof argument === 'string' && scope.states.has(argument) ? value : fail(`${name}: $state must name a declared state value.`);
     if (key === '$field') return scope.fields && typeof argument === 'string' && scope.fields.has(argument) ? value : fail(`${name}: $field is only available in actions and must name one of its fields.`);
+    // The tapped row of a list, in actions that a list or checklist shows on each row.
+    if (key === '$item') return scope.fields && typeof argument === 'string' && identifier.test(argument) ? value : fail(`${name}: $item is only available in row actions and must name an item field.`);
     if (key === '$date') {
       if (!isRecord(argument)) return fail(`${name}: $date expects {"days": -7, "format": "date"}.`);
       only(argument, ['days', 'format'], `${name}.$date`);
@@ -150,7 +158,7 @@ function template(raw: unknown, name: string, scope: Scope, depth = 0): unknown 
       if (argument.digits !== undefined && (!Number.isInteger(argument.digits) || Number(argument.digits) < 0 || Number(argument.digits) > 6)) fail(`${name}.$round.digits must be 0–6.`);
       return { $round: { value: template(argument.value, `${name}.$round.value`, scope, depth + 1), digits: Number(argument.digits ?? 0) } };
     }
-    return fail(`${name}: unknown expression ${key}. Use $input, $state, $field, $date, $daysSince, $daysUntil, $add, $sub, $mul, $div, $min, $max or $round.`);
+    return fail(`${name}: unknown expression ${key}. Use $input, $state, $field, $item, $date, $daysSince, $daysUntil, $add, $sub, $mul, $div, $min, $max or $round.`);
   }
   if (keys.length > 50) return fail(`${name} has too many keys.`);
   return Object.fromEntries(keys.map(key => [key, template((value as Record<string, unknown>)[key], `${name}.${key}`, scope, depth + 1)]));
@@ -163,11 +171,13 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     // stray bare word between tokens ("…} mais]"). Outside strings neither can be data, so
     // trim the brackets and drop the word at the reported position; anything else fails.
     let source = raw.trim(), parsed: unknown = undefined;
-    for (let attempt = 0; attempt < 8 && parsed === undefined; attempt++) {
+    for (let attempt = 0; attempt < 12 && parsed === undefined; attempt++) {
       try { parsed = JSON.parse(source); } catch (error) {
         const at = Number(/position (\d+)/.exec(error instanceof Error ? error.message : '')?.[1] ?? NaN);
         const stray = Number.isInteger(at) ? /^\s*[\p{L}\p{N}_]+\s*(?=[,\]}])/u.exec(source.slice(at)) : null;
         if (stray && /[}\]"\d]\s*$/.test(source.slice(0, at))) source = source.slice(0, at) + source.slice(at + stray[0].length);
+        // Comments and stray parentheses between tokens are never data either.
+        else if (Number.isInteger(at) && /^\s*(\/\*[^]*?\*\/|\))/.test(source.slice(at)) && /[}\]"\d]\s*$/.test(source.slice(0, at))) source = source.slice(0, at) + source.slice(at).replace(/^\s*(\/\*[^]*?\*\/|\))/, '');
         else if (/[}\]]$/.test(source)) source = source.slice(0, -1).trimEnd();
         else break;
       }
@@ -297,18 +307,35 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     // {state, field, value} without op can only mean setting that field on every item.
     if (raw.op === undefined && raw.field !== undefined) raw = { ...raw, op: 'set_items' };
     if (!isRecord(raw)) return fail(`${where} must be an object.`);
-    only(raw, ['state', 'op', 'value', 'field'], where);
+    only(raw, ['state', 'op', 'value', 'field', 'from', 'mode'], where);
     const target = stateOf(raw.state) ?? fail(`${where}.state must name a declared state value.`);
-    const op = choice(raw.op, stateOps.filter(o => o !== 'toggle_item' && o !== 'remove_item'), `${where}.op`);
-    const needs = { increment: 'number', decrement: 'number', toggle: 'boolean', append: 'list', clear: 'list', set_items: 'list', remove_where: 'list' } as Record<string, string>;
+    const op = choice(raw.op, stateOps.filter(o => o !== 'toggle_item'), `${where}.op`);
+    const needs = { increment: 'number', decrement: 'number', toggle: 'boolean', append: 'list', clear: 'list', set_items: 'list', remove_where: 'list', update_item: 'list', remove_item: 'list', assign: 'list' } as Record<string, string>;
     if (needs[op] && target.type !== needs[op]) fail(`${where}: ${op} needs a ${needs[op]} state.`);
-    if (op === 'set' && target.type === 'list') fail(`${where}: use append, clear or set_items for lists.`);
-    if (['set', 'append', 'pick', 'set_items', 'remove_where'].includes(op) && raw.value === undefined) fail(`${where}.value is required for ${op}.`);
+    if (op === 'set' && target.type === 'list') fail(`${where}: use append, clear, update_item or set_items for lists.`);
+    const named = (raw as Record<string, unknown>).field;
+    const fieldName = (name: string) => typeof named === 'string' && identifier.test(named) ? named : fail(`${where}.field must name the item field, e.g. "${name}".`);
+    if (op === 'pick' && raw.from !== undefined) {
+      // A random item of a list the person filled, e.g. tonight's movie from the candidates.
+      if (target.type === 'list' || target.type === 'boolean') fail(`${where}: pick needs a text or number state.`);
+      if (stateOf(raw.from)?.type !== 'list') fail(`${where}.from must name a list state.`);
+      if (raw.value !== undefined) fail(`${where}: pick takes either from (a list state) or value (literal options), not both.`);
+      return { state: target.id, op, from: raw.from as string, field: fieldName('name') };
+    }
+    if (op === 'assign') {
+      // Spreads value over the items: shuffle deals them at random (teams), rotate moves each item to the next value (weekly chores).
+      if (!Array.isArray(raw.value) || raw.value.length < 2 || raw.value.length > 20 || raw.value.some(v => typeof v !== 'string' && typeof v !== 'number'))
+        fail(`${where}: assign needs value, an array of 2–20 texts or numbers to deal out, e.g. ["Team A","Team B"].`);
+      return { state: target.id, op, field: fieldName('team'), value: raw.value, mode: choice(raw.mode, ['shuffle', 'rotate'] as const, `${where}.mode`, 'shuffle') };
+    }
+    if (raw.from !== undefined || raw.mode !== undefined) fail(`${where}: from is only used with pick, and mode with assign.`);
+    if (['set', 'append', 'pick', 'set_items', 'remove_where', 'update_item'].includes(op) && raw.value === undefined) fail(`${where}.value is required for ${op}.`);
     if (op === 'pick' && (target.type === 'list' || target.type === 'boolean' || !Array.isArray(raw.value) || raw.value.length < 2 || raw.value.length > 50
-      || raw.value.some(v => typeof v !== 'string' && typeof v !== 'number'))) fail(`${where}: pick needs a text or number state and a value array of 2–50 options.`);
+      || raw.value.some(v => typeof v !== 'string' && typeof v !== 'number'))) fail(`${where}: pick needs a text or number state and a value array of 2–50 options, or from a list state.`);
+    if (op === 'update_item' && !isRecord(raw.value)) fail(`${where}: update_item needs value, an object of the fields to change on the tapped row, e.g. {"lastWatered":{"$date":{"format":"date"}}}.`);
     const byField = op === 'set_items' || op === 'remove_where';
-    if (byField && (typeof raw.field !== 'string' || !identifier.test(raw.field))) fail(`${where}.field must name the item field, e.g. "done".`);
-    if (raw.field !== undefined && !byField) fail(`${where}.field is only used with set_items and remove_where.`);
+    if (byField) fieldName('done');
+    if (raw.field !== undefined && !byField) fail(`${where}.field is only used with set_items, remove_where, assign and pick from a list.`);
     return { state: target.id, op, ...(raw.value === undefined ? {} : { value: template(raw.value, `${where}.value`, actionScope) }), ...(byField ? { field: raw.field as string } : {}) };
   };
   const actions: Action[] = list(value.actions, 'actions', 16).map((item, index) => {
@@ -321,10 +348,22 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     const id = unique(actionIDs, item.id, name);
     const fields: Field[] = list(item.fields, `${name}.fields`, 6).map((field, at) => {
       if (!isRecord(field)) return fail(`${name}.fields[${at}] must be an object.`);
-      only(field, ['id', 'label', 'kind', 'required'], `${name}.fields[${at}]`);
-      if (typeof field.id !== 'string' || !identifier.test(field.id)) fail(`${name}.fields[${at}].id is invalid.`);
-      if (field.required !== undefined && typeof field.required !== 'boolean') fail(`${name}.fields[${at}].required must be a boolean.`);
-      return { id: field.id as string, label: text(field.label, `${name}.fields[${at}].label`, 40)!, kind: choice(field.kind, ['text', 'number', 'date', 'toggle'] as const, `${name}.fields[${at}].kind`, 'text'), required: field.required === true };
+      const where = `${name}.fields[${at}]`;
+      only(field, ['id', 'label', 'kind', 'required', 'options', 'from', 'labelField'], where);
+      if (typeof field.id !== 'string' || !identifier.test(field.id)) fail(`${where}.id is invalid.`);
+      if (field.required !== undefined && typeof field.required !== 'boolean') fail(`${where}.required must be a boolean.`);
+      const kind = choice(field.kind ?? (field.options !== undefined || field.from !== undefined ? 'select' : undefined), fieldKinds, `${where}.kind`, 'text');
+      const parsed: Field = { id: field.id as string, label: text(field.label, `${where}.label`, 40)!, kind, required: field.required === true };
+      if (kind !== 'select') {
+        if (field.options !== undefined || field.from !== undefined || field.labelField !== undefined) fail(`${where}: options, from and labelField are only for kind "select".`);
+        return parsed;
+      }
+      // Choose one of fixed options, or one item of a list the person keeps (friends, plants, exercises).
+      if ((field.options === undefined) === (field.from === undefined)) fail(`${where}: a select field needs options (fixed choices) or from (a list state whose items are the choices), not both.`);
+      if (field.options !== undefined) return { ...parsed, options: options(field.options, `${where}.options`, 2, 20) };
+      if (stateOf(field.from)?.type !== 'list') fail(`${where}.from must name a list state.`);
+      if (field.labelField !== undefined && (typeof field.labelField !== 'string' || !identifier.test(field.labelField))) fail(`${where}.labelField must name the item field to show, e.g. "name".`);
+      return { ...parsed, from: field.from as string, labelField: (field.labelField as string | undefined) ?? 'name' };
     });
     if (new Set(fields.map(f => f.id)).size !== fields.length) fail(`${name}.fields ids must be distinct.`);
     const base = { id, label: text(item.label, `${name}.label`, 40)!, style: choice(item.style, ['default', 'destructive'] as const, `${name}.style`, 'default'), fields };
@@ -358,15 +397,28 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     : 'done' in item ? 'checklist' : 'text' in item ? 'text' : undefined;
   const keysByType: Record<string, string[]> = {
     section: ['title', 'children'], stat: ['label', 'step', 'path', 'caption', 'format', 'currency'], progress: ['label', 'step', 'path', 'goal', 'caption', 'style', 'format', 'currency'],
-    list: ['source', 'title', 'subtitle', 'value', 'limit', 'empty', 'format', 'currency'], checklist: ['state', 'title', 'subtitle', 'value', 'done', 'removable', 'empty', 'format', 'currency'],
+    list: ['source', 'title', 'subtitle', 'value', 'limit', 'empty', 'format', 'currency', 'removable', 'edit', 'actions'], checklist: ['state', 'title', 'subtitle', 'value', 'done', 'removable', 'empty', 'format', 'currency', 'edit', 'actions'],
     chart: ['source', 'kind', 'x', 'y', 'title', 'format', 'currency'], text: ['text', 'style'], toggle: ['label', 'state'], choice: ['label', 'state', 'options'],
     input: ['label', 'state', 'placeholder'], timer: ['label', 'minutes'], action: ['action'], grid: ['columns', 'children'],
-    tile: ['title', 'caption', 'icon', 'step', 'path', 'tab', 'action', 'format', 'currency'], composer: ['action', 'placeholder'],
+    tile: ['title', 'caption', 'icon', 'step', 'path', 'tab', 'action', 'format', 'currency'], composer: ['action', 'placeholder'], toolbar: ['action'],
     lesson: ['title', 'questions', 'hearts', 'xp'],
   };
   // Cards in a grid are self-contained; lists, forms and bound controls need full-width rows.
   const gridChildren = ['stat', 'progress', 'chart', 'text', 'action', 'tile'];
   type Place = 'top' | 'section' | 'grid';
+  // Row features need a list state: the edit action opens prefilled with the row; row actions run on the tapped row.
+  const rowFeatures = (item: Record<string, unknown>, name: string, listState: string | undefined) => {
+    if (item.edit === undefined && item.actions === undefined) return {};
+    if (!listState) fail(`${name}: edit and row actions need source to be a list state, or a filter/sort/limit step over one.`);
+    const edit = item.edit === undefined ? undefined : declaredAction(item.edit, `${name}.edit`);
+    if (edit && !actions.find(a => a.id === edit)!.fields.length) fail(`${name}.edit must be an action with fields (the row's values prefill them), e.g. update_item with {"name":{"$field":"name"}}.`);
+    const rowActions = item.actions === undefined ? undefined : list(item.actions, `${name}.actions`, 3, true).map((id, at) => {
+      const action = actions.find(a => a.id === declaredAction(id, `${name}.actions[${at}]`))!;
+      if (action.fields.length) fail(`${name}.actions[${at}]: row buttons run without a form; use edit for an action with fields.`);
+      return action.id;
+    });
+    return { ...(edit ? { edit } : {}), ...(rowActions ? { actions: rowActions } : {}) };
+  };
   const component = (raw: unknown, name: string, place: Place): Component => {
     if (++nodes > 80) return fail('An app supports at most 80 components in total.');
     if (!isRecord(raw)) return fail(`${name} must be an object.`);
@@ -395,10 +447,16 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
         else if (typeof item.goal !== 'number' || !Number.isFinite(item.goal) || item.goal <= 0 || item.goal > 1e12) fail(`${name}.goal must be a positive number or the id of a number state.`);
         return { type: 'progress', label: text(item.label, `${name}.label`, 40)!, step: valueSource(item.step, `${name}.step`), path: path(item.path, `${name}.path`, true), goal: item.goal as number | string,
           caption: text(item.caption, `${name}.caption`, 80, true), style: choice(item.style, ['bar', 'ring'] as const, `${name}.style`, 'bar'), ...format(item, name) };
-      case 'list': only(item, ['type', 'source', 'title', 'subtitle', 'value', 'limit', 'empty', 'format', 'currency'], name);
+      case 'list': {
+        only(item, ['type', 'source', 'title', 'subtitle', 'value', 'limit', 'empty', 'format', 'currency', 'removable', 'edit', 'actions'], name);
         if (item.limit !== undefined && (!Number.isInteger(item.limit) || Number(item.limit) < 1 || Number(item.limit) > 100)) fail(`${name}.limit must be 1–100.`);
-        return { type: 'list', source: listSource(item.source, `${name}.source`), title: path(item.title, `${name}.title`)!, subtitle: path(item.subtitle, `${name}.subtitle`, true), value: path(item.value, `${name}.value`, true), limit: Number(item.limit ?? 20), empty: text(item.empty, `${name}.empty`, 80, true), ...format(item, name) };
-      case 'checklist': only(item, ['type', 'state', 'title', 'subtitle', 'value', 'done', 'removable', 'empty', 'format', 'currency'], name);
+        if (item.removable !== undefined && typeof item.removable !== 'boolean') fail(`${name}.removable must be a boolean.`);
+        const source = listSource(item.source, `${name}.source`), owned = ownerOf(state, data, source);
+        if (item.removable === true && !owned) fail(`${name}: removable needs source to be a list state, or a filter/sort/limit step over one.`);
+        return { type: 'list', source, title: path(item.title, `${name}.title`)!, subtitle: path(item.subtitle, `${name}.subtitle`, true), value: path(item.value, `${name}.value`, true), limit: Number(item.limit ?? (owned ? 100 : 20)), empty: text(item.empty, `${name}.empty`, 80, true),
+          ...(item.removable === true ? { removable: true } : {}), ...rowFeatures(item, name, owned), ...format(item, name) };
+      }
+      case 'checklist': only(item, ['type', 'state', 'title', 'subtitle', 'value', 'done', 'removable', 'empty', 'format', 'currency', 'edit', 'actions'], name);
         if (item.removable !== undefined && typeof item.removable !== 'boolean') fail(`${name}.removable must be a boolean.`);
       {
         const list = bound(item.state, `${name}.state`, ['list']);
@@ -406,7 +464,7 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
         const samples = [...(stateOf(list)!.initial as Item[]), ...actions.flatMap(a => a.kind === 'state' ? a.set.filter(u => u.state === list && u.op === 'append').map(u => u.value) : [])];
         const done = path(item.done, `${name}.done`, true) ?? samples.flatMap(v => isRecord(v) ? Object.keys(v).filter(k => typeof v[k] === 'boolean') : [])[0];
         return { type: 'checklist', state: list, title: path(item.title, `${name}.title`)!, subtitle: path(item.subtitle === '' ? undefined : item.subtitle, `${name}.subtitle`, true), value: path(item.value, `${name}.value`, true),
-          done, removable: item.removable !== false, empty: text(item.empty, `${name}.empty`, 80, true), ...format(item, name) };
+          done, removable: item.removable !== false, empty: text(item.empty, `${name}.empty`, 80, true), ...rowFeatures(item, name, list), ...format(item, name) };
       }
       case 'chart': only(item, ['type', 'source', 'kind', 'x', 'y', 'title', 'format', 'currency'], name);
         return { type: 'chart', source: listSource(item.source, `${name}.source`), kind: choice(item.kind, chartKinds, `${name}.kind`, 'bar'), x: path(item.x, `${name}.x`)!, y: path(item.y, `${name}.y`)!, title: text(item.title, `${name}.title`, 60, true), ...format(item, name) };
@@ -415,7 +473,7 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
       case 'toggle': only(item, ['type', 'label', 'state'], name);
         return { type: 'toggle', label: text(item.label, `${name}.label`, 60)!, state: bound(item.state, `${name}.state`, ['boolean']) };
       case 'choice': only(item, ['type', 'label', 'state', 'options'], name);
-        return { type: 'choice', label: text(item.label, `${name}.label`, 60)!, state: bound(item.state, `${name}.state`, ['text']), options: options(item.options, `${name}.options`, 2, 6) };
+        return { type: 'choice', label: text(item.label, `${name}.label`, 60)!, state: bound(item.state, `${name}.state`, ['text', 'number']), options: options(item.options, `${name}.options`, 2, 6) };
       case 'input': only(item, ['type', 'label', 'state', 'placeholder'], name);
         return { type: 'input', label: text(item.label, `${name}.label`, 60)!, state: bound(item.state, `${name}.state`, ['text', 'number']), placeholder: text(item.placeholder, `${name}.placeholder`, 60, true) };
       case 'timer': only(item, ['type', 'label', 'minutes'], name);
@@ -439,6 +497,11 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
         const action = actions.find(a => a.id === declaredAction(item.action, `${name}.action`))!;
         if (action.fields.length !== 1 || !['text', 'number'].includes(action.fields[0].kind)) fail(`${name}: the composer's action must have exactly one text or number field, e.g. fields:[{"id":"item","label":"Item","kind":"text","required":true}].`);
         return { type: 'composer', action: action.id, placeholder: text(item.placeholder, `${name}.placeholder`, 60, true) };
+      }
+      case 'toolbar': {
+        only(item, ['type', 'action'], name);
+        if (place !== 'top') fail(`${name}: a toolbar button must be at the top level of a view or tab.`);
+        return { type: 'toolbar', action: declaredAction(item.action, `${name}.action`) };
       }
       case 'lesson': {
         only(item, ['type', 'title', 'questions', 'hearts', 'xp'], name);
@@ -466,12 +529,13 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
         return { type: 'lesson', title: text(item.title, `${name}.title`, 60)!, questions, hearts: Number(item.hearts ?? 3),
           ...(item.xp === undefined ? {} : { xp: bound(item.xp, `${name}.xp`, ['number']) }) };
       }
-      default: return fail(`${name}.type must be section, grid, stat, progress, list, checklist, chart, text, toggle, choice, input, timer, action, tile, composer or lesson.`);
+      default: return fail(`${name}.type must be section, grid, stat, progress, list, checklist, chart, text, toggle, choice, input, timer, action, tile, composer, toolbar or lesson.`);
     }
   };
   const viewOf = (raw: unknown, name: string) => {
     const parsed = list(raw, name, 20, true).map((item, index) => component(item, `${name}[${index}]`, 'top'));
     if (parsed.filter(c => c.type === 'composer').length > 1) fail(`${name} supports one composer.`);
+    if (parsed.filter(c => c.type === 'toolbar').length > 2) fail(`${name} supports at most two toolbar buttons.`);
     return parsed;
   };
   if ((value.view === undefined) === (value.tabs === undefined)) fail('spec needs either view (one screen) or tabs (2–5 screens with a tab bar), not both.');
@@ -489,6 +553,18 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
     return action.id;
   });
   if (new Set(menu).size !== menu.length) fail('menu lists an action twice.');
+  // Row actions (update_item, remove_item, $item) run only from the rows of the list they change.
+  const screens = tabs ? tabs.map(t => t.view) : [view!];
+  const walkAll = (items: Component[]): Component[] => items.flatMap(c => c.type === 'section' || c.type === 'grid' ? [c, ...walkAll(c.children)] : [c]);
+  const placed = screens.flatMap(walkAll);
+  for (const action of actions) {
+    if (action.kind !== 'state' || !isRowAction(action)) continue;
+    const owners = placed.flatMap(c => (c.type === 'list' || c.type === 'checklist') && (c.edit === action.id || c.actions?.includes(action.id)) ? [c.type === 'list' ? ownerOf(state, data, c.source) ?? c.source : c.state] : []);
+    const elsewhere = menu.includes(action.id) || placed.some(c => (c.type === 'action' || c.type === 'composer' || c.type === 'toolbar' || c.type === 'tile') && c.action === action.id);
+    if (!owners.length || elsewhere) fail(`Action "${action.id}" changes or reads the tapped row (update_item, remove_item or $item), so it can only be a list's edit or row action (list/checklist "edit" or "actions").`);
+    const targets = new Set(action.set.filter(u => u.op === 'update_item' || u.op === 'remove_item').map(u => u.state));
+    if (targets.size > 1 || [...targets].some(t => owners.some(o => o !== t))) fail(`Action "${action.id}" updates the row of ${[...targets].join(', ')}, but it is shown on the rows of ${owners.join(', ')}; a row action changes the list it is shown on.`);
+  }
   const literal = (raw: unknown, name: string): unknown => {
     if (raw === null || typeof raw === 'boolean' || typeof raw === 'string' || (typeof raw === 'number' && Number.isFinite(raw))) return raw;
     if (Array.isArray(raw) && raw.length <= 50) return raw.map((item, at) => literal(item, `${name}[${at}]`));
@@ -503,13 +579,15 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
       const where = `${name}.steps[${at}]`;
       if (!isRecord(step)) return fail(`${where} must be an object.`);
       if ('tap' in step) {
-        only(step, ['tap', 'fields'], where);
+        only(step, ['tap', 'fields', 'row'], where);
         const action = actions.find(a => a.id === declaredAction(step.tap, `${where}.tap`))!;
+        if (isRowAction(action) !== (step.row !== undefined)) fail(isRowAction(action) ? `${where}: ${action.id} runs on a list row; add row (the 0-based index of the row, e.g. "row":0).` : `${where}.row is only for row actions.`);
+        if (step.row !== undefined && (!Number.isInteger(step.row) || Number(step.row) < 0 || Number(step.row) >= maxItems)) fail(`${where}.row must be a 0-based row index.`);
         if (action.kind === 'remote') fail(`${where}: ${action.id} calls an external tool, which tests cannot run; test only local behavior.`);
         const fields = step.fields === undefined ? {} : isRecord(step.fields) ? step.fields : fail(`${where}.fields must be an object of field values.`);
         const unknown = Object.keys(fields).find(key => !action.fields.some(f => f.id === key));
         if (unknown) fail(`${where}.fields.${unknown} is not a field of ${action.id}.`);
-        return { tap: action.id, fields: literal(fields, `${where}.fields`) as Record<string, unknown> };
+        return { tap: action.id, fields: literal(fields, `${where}.fields`) as Record<string, unknown>, ...(step.row !== undefined ? { row: Number(step.row) } : {}) };
       }
       if ('edit' in step) {
         only(step, ['edit'], where);
@@ -545,6 +623,28 @@ export function parseSpec(raw: unknown): { spec: Spec; tools: ToolUse[] } {
   return { spec: { title: text(value.title, 'title', 60)!, subtitle: text(value.subtitle, 'subtitle', 120, true), icon: choice(value.icon, symbolIcons, 'icon', 'chart'), state, inputs, data, ...(tabs ? { tabs } : { view }), menu, actions, tests }, tools };
 }
 
+// The list state behind a list's rows: the state itself, or a filter/sort/limit chain over it
+// (those steps keep the same item objects, so a row maps back to its index in the state).
+export function ownerOf(state: StateVar[], data: Step[], source: string): string | undefined {
+  let id = source;
+  for (let depth = 0; depth < 16; depth++) {
+    if (state.some(v => v.id === id && v.type === 'list')) return id;
+    const step = data.find(s => s.id === id);
+    if (!step || (step.type !== 'filter' && step.type !== 'sort' && step.type !== 'limit')) return undefined;
+    id = step.from;
+  }
+  return undefined;
+}
+
+// An action that runs on one row of a list: it updates or removes that row, or reads it with $item.
+export function isRowAction(action: Action): boolean {
+  return action.kind === 'state' && (action.set.some(u => u.op === 'update_item' || u.op === 'remove_item') || JSON.stringify(action.set).includes('"$item"'));
+}
+// The list state an action's row comes from, given the component that showed it.
+export function rowOwner(spec: Spec, actionID: string, state: string): boolean {
+  return allComponents(spec).some(c => (c.type === 'list' ? ownerOf(spec.state, spec.data, c.source) : c.type === 'checklist' ? c.state : null) === state && (c.type === 'list' || c.type === 'checklist') && (c.edit === actionID || !!c.actions?.includes(actionID)));
+}
+
 // Every component of the app, in tabs, sections and grids.
 export function allComponents(spec: Spec): Component[] {
   const walk = (items: Component[]): Component[] => items.flatMap(c => c.type === 'section' || c.type === 'grid' ? [c, ...walk(c.children)] : [c]);
@@ -553,7 +653,8 @@ export function allComponents(spec: Spec): Component[] {
 
 // Runtime evaluation ---------------------------------------------------------
 
-export type Context = { inputs: Record<string, string>; state: Record<string, unknown>; fields?: Record<string, unknown>; timeZone: string; now: number };
+// `row` is the tapped row of a row action: its list state and index.
+export type Context = { inputs: Record<string, string>; state: Record<string, unknown>; fields?: Record<string, unknown>; row?: { state: string; index: number }; timeZone: string; now: number };
 function localDate(timestamp: number, timeZone: string) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(timestamp));
   const part = (type: string) => parts.find(p => p.type === type)!.value;
@@ -566,6 +667,11 @@ export function evaluate(value: unknown, context: Context): unknown {
   if ('$input' in value) return context.inputs[String(value.$input)] ?? null;
   if ('$state' in value) return context.state[String(value.$state)] ?? null;
   if ('$field' in value) return context.fields?.[String(value.$field)] ?? null;
+  if ('$item' in value) {
+    const items = context.row ? context.state[context.row.state] : undefined;
+    const item = Array.isArray(items) && context.row ? items[context.row.index] : undefined;
+    return isRecord(item) ? item[String(value.$item)] ?? null : null;
+  }
   if ('$date' in value && isRecord(value.$date)) {
     const timestamp = context.now + Number(value.$date.days ?? 0) * 86_400_000;
     return value.$date.format === 'date' ? localDate(timestamp, context.timeZone) : new Date(timestamp).toISOString();
@@ -678,14 +784,16 @@ export function toolData(result: Record<string, unknown>): unknown {
   throw new StepError('RESULT_NOT_JSON');
 }
 
-type Row = { title: string; subtitle: string | null; value: number | string | null };
+// `index` is the row's position in its list state; `values` prefill the edit sheet's fields.
+type Row = { title: string; subtitle: string | null; value: number | string | null; index?: number; values?: Record<string, Scalar> };
+type RowFeatures = { state: string | null; removable: boolean; edit: ResolvedAction | null; actions: ResolvedAction[] };
 export type ResolvedComponent =
   | { type: 'section'; title: string | null; children: ResolvedComponent[] }
   | { type: 'stat'; label: string; value: number | string | null; format: Format; currency: string | null; caption: string | null; state: string | null }
   | { type: 'progress'; label: string; value: number | null; goal: number; format: Format; currency: string | null; caption: string | null; state: string | null; style: 'bar' | 'ring' }
-  | { type: 'list'; items: Row[]; format: Format; currency: string | null; empty: string }
+  | ({ type: 'list'; items: Row[]; format: Format; currency: string | null; empty: string } & RowFeatures)
   // Checklist paths let clients re-derive rows from saved state for instant taps.
-  | { type: 'checklist'; state: string; title: string; subtitle: string | null; value: string | null; done: string | null; removable: boolean; items: (Row & { done: boolean | null })[]; format: Format; currency: string | null; empty: string }
+  | { type: 'checklist'; state: string; title: string; subtitle: string | null; value: string | null; done: string | null; removable: boolean; items: (Row & { done: boolean | null })[]; format: Format; currency: string | null; empty: string; edit: ResolvedAction | null; actions: ResolvedAction[] }
   | { type: 'chart'; kind: typeof chartKinds[number]; title: string | null; points: { x: string; y: number }[]; format: Format; currency: string | null }
   | { type: 'text'; text: string; style: 'body' | 'caption' | 'headline' }
   | { type: 'toggle'; label: string; state: string; value: boolean }
@@ -698,17 +806,36 @@ export type ResolvedComponent =
   // `append` lets clients show a submitted row at once: `item` plus the typed text under `key`.
   | { type: 'composer'; action: string; field: string; kind: 'text' | 'number'; placeholder: string | null; label: string; confirm: string | null; remote: boolean; append: { state: string; key: string; item: Item } | null }
   // Answers travel with the questions: the lesson is checked on the device for instant feedback.
+  | { type: 'toolbar'; action: ResolvedAction; icon: 'plus' | null }
   | { type: 'lesson'; title: string; hearts: number; xp: string | null; questions: { prompt: string; options: string[] | null; correct: number | null; answers: string[] | null; explain: string | null }[] }
   | { type: 'notice'; code: string };
-export type ResolvedAction = { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: Field[]; updates: StateUpdate[] | null };
+// `row`: the action runs on a list row (send its index). Select fields carry their current options.
+export type ResolvedAction = { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: Field[]; updates: StateUpdate[] | null; row: boolean };
 export type ResolvedTab = { id: string; title: string; icon: string; view: ResolvedComponent[] };
 
 // Literal-only updates let clients show a tap instantly before the server confirms it.
-export function resolvedAction(spec: Spec, id: string): ResolvedAction {
+export function resolvedAction(spec: Spec, id: string, outputs?: Map<string, unknown>): ResolvedAction {
   const action = spec.actions.find(a => a.id === id)!;
   const literal = (value: unknown) => value === undefined || value === null || ['number', 'string', 'boolean'].includes(typeof value);
-  const updates = action.kind === 'state' && !action.fields.length && action.set.every(u => literal(u.value)) ? action.set : null;
-  return { type: 'action', id: action.id, kind: action.kind, label: action.label, confirm: action.confirm ?? null, style: action.style, fields: action.fields, updates };
+  const row = isRowAction(action);
+  const instant = ['increment', 'decrement', 'set', 'toggle', 'append', 'clear', 'set_items', 'remove_where'];
+  const updates = action.kind === 'state' && !row && !action.fields.length && action.set.every(u => instant.includes(u.op) && literal(u.value)) ? action.set : null;
+  const fields = action.fields.map(field => field.from ? { ...field, options: selectOptions(field, outputs?.get(field.from)) } : field);
+  return { type: 'action', id: action.id, kind: action.kind, label: action.label, confirm: action.confirm ?? null, style: action.style, fields, updates, row };
+}
+// The current items of a select field's list, by their label field, without duplicates.
+export function selectOptions(field: Field, items: unknown): Option[] {
+  const labels = (Array.isArray(items) ? items : []).map(item => isRecord(item) ? item[field.labelField ?? 'name'] : undefined)
+    .filter((v): v is string | number => (typeof v === 'string' && v.trim() !== '') || typeof v === 'number').map(v => String(v));
+  return [...new Set(labels)].slice(0, 100).map(v => ({ value: v, label: [...v].slice(0, 40).join('') }));
+}
+// Edit sheets start from the row: each field fed by {"$field": f} in update_item gets the row's current value.
+function prefill(spec: Spec, actionID: string | undefined, state: string): ((item: unknown) => Record<string, Scalar>) | null {
+  const action = actionID ? spec.actions.find(a => a.id === actionID) : undefined;
+  if (!action || action.kind !== 'state') return null;
+  const pairs = action.set.filter(u => u.op === 'update_item' && u.state === state && isRecord(u.value)).flatMap(u => Object.entries(u.value as Record<string, unknown>)
+    .flatMap(([key, v]) => isRecord(v) && typeof v.$field === 'string' && Object.keys(v).length === 1 ? [[v.$field, key] as const] : []));
+  return item => Object.fromEntries(pairs.flatMap(([field, key]) => { const v = isRecord(item) ? item[key] : undefined; return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? [[field, v]] : []; }));
 }
 function composerAppend(action: Action): { state: string; key: string; item: Item } | null {
   if (action.kind !== 'state' || action.confirm || action.set.length !== 1 || action.set[0].op !== 'append' || !isRecord(action.set[0].value)) return null;
@@ -747,7 +874,7 @@ export function present(view: Component[], spec: Spec, outputs: Map<string, unkn
         const state = component.step && !component.path && spec.state.some(v => v.id === component.step) ? component.step : null;
         return { type: 'tile', title: component.title, caption: component.caption ?? null, icon: component.icon ?? null, value: value === undefined ? null : scalar(value),
           format: component.format ?? (typeof value === 'number' ? 'number' : 'text'), currency: component.currency ?? null, state, tab: component.tab ?? null,
-          action: component.action ? resolvedAction(spec, component.action) : null };
+          action: component.action ? resolvedAction(spec, component.action, outputs) : null };
       }
       case 'text': return component;
       case 'timer': return { type: 'timer', label: component.label, seconds: Math.round(component.minutes * 60) };
@@ -757,7 +884,12 @@ export function present(view: Component[], spec: Spec, outputs: Map<string, unkn
         const value = outputs.get(component.state);
         return { type: 'input', label: component.label, state: component.state, value: typeof value === 'number' ? value : String(value ?? ''), kind: typeof value === 'number' ? 'number' : 'text', placeholder: component.placeholder ?? null };
       }
-      case 'action': return resolvedAction(spec, component.action);
+      case 'action': return resolvedAction(spec, component.action, outputs);
+      case 'toolbar': {
+        const action = spec.actions.find(a => a.id === component.action)!;
+        const adds = action.kind === 'state' && action.set.some(u => u.op === 'append');
+        return { type: 'toolbar', action: resolvedAction(spec, component.action, outputs), icon: adds ? 'plus' : null };
+      }
       case 'stat': case 'progress': {
         if (errors.has(component.step)) return { type: 'notice', code: errors.get(component.step)! };
         const value = read(outputs.get(component.step), component.path);
@@ -769,16 +901,24 @@ export function present(view: Component[], spec: Spec, outputs: Map<string, unkn
         return { type: 'stat', label: component.label, value: scalar(value), format: component.format ?? (typeof value === 'number' ? 'number' : 'text'), currency: component.currency ?? null, caption: component.caption ?? null, state };
       }
       case 'checklist': {
-        const items = outputs.get(component.state);
+        const items = outputs.get(component.state), values = prefill(spec, component.edit, component.state);
         return { type: 'checklist', state: component.state, title: component.title, subtitle: component.subtitle ?? null, value: component.value ?? null, done: component.done ?? null, removable: component.removable,
-          items: (Array.isArray(items) ? items : []).slice(0, maxItems).map(item => ({ ...row(item, component), done: component.done ? read(item, component.done) === true : null })),
-          format: component.format ?? 'text', currency: component.currency ?? null, empty: component.empty ?? 'Nothing here yet.' };
+          items: (Array.isArray(items) ? items : []).slice(0, maxItems).map((item, index) => ({ ...row(item, component), done: component.done ? read(item, component.done) === true : null, index, ...(values ? { values: values(item) } : {}) })),
+          format: component.format ?? 'text', currency: component.currency ?? null, empty: component.empty ?? 'Nothing here yet.',
+          edit: component.edit ? resolvedAction(spec, component.edit, outputs) : null, actions: (component.actions ?? []).map(id => resolvedAction(spec, id, outputs)) };
       }
       case 'list': case 'chart': {
         if (errors.has(component.source)) return { type: 'notice', code: errors.get(component.source)! };
         const rows = outputs.get(component.source);
         if (!Array.isArray(rows)) return { type: 'notice', code: 'NOT_A_LIST' };
-        if (component.type === 'list') return { type: 'list', items: rows.slice(0, component.limit).map(item => row(item, component)), format: component.format ?? 'text', currency: component.currency ?? null, empty: component.empty ?? 'Nothing to show.' };
+        if (component.type === 'list') {
+          const owner = ownerOf(spec.state, spec.data, component.source), values = owner ? prefill(spec, component.edit, owner) : null;
+          const all = owner ? outputs.get(owner) as unknown[] : [];
+          return { type: 'list', items: rows.slice(0, component.limit).map(item => ({ ...row(item, component), ...(owner ? { index: all.indexOf(item) } : {}), ...(values ? { values: values(item) } : {}) })),
+            format: component.format ?? 'text', currency: component.currency ?? null, empty: component.empty ?? 'Nothing to show.',
+            state: owner ?? null, removable: component.removable === true, edit: component.edit ? resolvedAction(spec, component.edit, outputs) : null,
+            actions: (component.actions ?? []).map(id => resolvedAction(spec, id, outputs)) };
+        }
         // Pie slices beyond a dozen are unreadable; bars and lines keep up to 60 points.
         const points = rows.slice(0, component.kind === 'pie' ? 12 : 60).flatMap(item => { const y = numeric(read(item, component.y)); return y === null ? [] : [{ x: [...label(read(item, component.x))].slice(0, 40).join(''), y }]; });
         return { type: 'chart', kind: component.kind, title: component.title ?? null, points, format: component.format ?? 'number', currency: component.currency ?? null };
@@ -807,6 +947,7 @@ export function directUpdate(spec: Spec, raw: unknown): StateUpdate | null {
     if (c.type === 'input' && c.state === raw.state && raw.op === 'set' && (typeof raw.value === 'string' || typeof raw.value === 'number')) return { state: c.state, op: 'set', value: raw.value };
     // Finishing a lesson adds its correct answers, at most one per question.
     if (c.type === 'lesson' && c.xp === raw.state && raw.op === 'increment' && Number.isInteger(raw.value) && Number(raw.value) >= 0 && Number(raw.value) <= c.questions.length) return { state: c.xp!, op: 'increment', value: raw.value };
+    if (c.type === 'list' && c.removable && ownerOf(spec.state, spec.data, c.source) === raw.state && raw.op === 'remove_item' && Number.isInteger(raw.index) && Number(raw.index) >= 0) return { state: String(raw.state), op: 'remove_item', index: Number(raw.index) };
     if (c.type === 'checklist' && c.state === raw.state && Number.isInteger(raw.index) && Number(raw.index) >= 0) {
       if (raw.op === 'toggle_item' && c.done) return { state: c.state, op: 'toggle_item', index: Number(raw.index), field: c.done };
       if (raw.op === 'remove_item' && c.removable) return { state: c.state, op: 'remove_item', index: Number(raw.index) };
@@ -816,7 +957,7 @@ export function directUpdate(spec: Spec, raw: unknown): StateUpdate | null {
 }
 export function applyUpdates(spec: Spec, updates: StateUpdate[], current: Record<string, StateValue>, context: Context): Record<string, StateValue> | null {
   const next = { ...current };
-  for (const update of updates) {
+  for (let update of updates) {
     const variable = spec.state.find(v => v.id === update.state)!;
     const value = update.value === undefined ? undefined : evaluate(update.value, { ...context, state: next });
     const items = Array.isArray(next[variable.id]) ? next[variable.id] as Item[] : [];
@@ -825,7 +966,9 @@ export function applyUpdates(spec: Spec, updates: StateUpdate[], current: Record
       case 'clear': next[variable.id] = []; break;
       case 'pick': {
         // Server-side choice: clients wait for the result instead of guessing it.
-        const options = Array.isArray(value) ? value.filter(v => typeof v === 'string' || typeof v === 'number') : [];
+        const source = update.from ? next[update.from] : undefined;
+        const pool = update.from ? (Array.isArray(source) ? (source as Item[]).map(item => item[update.field!]) : []) : value;
+        const options = Array.isArray(pool) ? pool.filter(v => (typeof v === 'string' && v.trim() !== '') || typeof v === 'number') : [];
         if (!options.length) return null;
         const picked = options[Math.floor(Math.random() * options.length)];
         next[variable.id] = variable.type === 'number' ? (numeric(picked) ?? 0) : label(picked);
@@ -848,7 +991,36 @@ export function applyUpdates(spec: Spec, updates: StateUpdate[], current: Record
         next[variable.id] = items.filter(item => item[update.field!] !== value);
         break;
       }
+      case 'assign': {
+        // Deals the values over the items: shuffled and balanced, or each item moved to the next value.
+        const values = (update.value as (string | number)[]), field = update.field!;
+        if (update.mode === 'rotate') {
+          next[variable.id] = items.map((item, index) => {
+            const at = values.findIndex(v => v === item[field]);
+            return { ...item, [field]: values[at < 0 ? index % values.length : (at + 1) % values.length] };
+          });
+        } else {
+          const order = items.map((_, index) => index);
+          for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+          const assigned = [...items];
+          order.forEach((itemIndex, position) => { assigned[itemIndex] = { ...items[itemIndex], [field]: values[position % values.length] }; });
+          next[variable.id] = assigned;
+        }
+        break;
+      }
+      case 'update_item': {
+        // Changes fields of the tapped row; empty values remove the field.
+        const index = context.row?.state === variable.id ? context.row.index : undefined;
+        if (index === undefined || index >= items.length || !isRecord(value)) return null;
+        const changed: Record<string, unknown> = { ...items[index] };
+        for (const [key, v] of Object.entries(value)) { if (v === null || v === undefined || v === '') delete changed[key]; else changed[key] = v; }
+        if (!isItem(changed) || !Object.keys(changed).length) return null;
+        next[variable.id] = items.map((item, at) => at === index ? changed as Item : item);
+        break;
+      }
       case 'toggle_item': case 'remove_item': {
+        // A direct edit names its row; a row action removes the tapped row.
+        if (update.index === undefined && update.op === 'remove_item' && context.row?.state === variable.id) update = { ...update, index: context.row.index };
         if (update.index === undefined || update.index >= items.length) return null;
         next[variable.id] = update.op === 'remove_item' ? items.filter((_, index) => index !== update.index)
           : items.map((item, index) => index === update.index ? { ...item, [update.field!]: item[update.field!] !== true } : item);

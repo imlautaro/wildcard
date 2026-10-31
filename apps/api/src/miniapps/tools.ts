@@ -28,27 +28,50 @@ const specGuide = 'spec (a JSON object, not a string) = {title, subtitle?, icon 
   + 'answer is the 0-based index of the correct option, or for typed questions without options the expected text (accept lists other valid spellings); xp is a number state that grows by the correct answers when a lesson ends; '
   + 'write 5–10 real questions per lesson in the person\'s language, several lessons for a course; test it with {edit:{state:"xp",op:"increment",value:3}}); '
   + '{type:"toggle",label,state} (boolean state, tap to flip); '
-  + '{type:"choice",label,state,options:[{value,label}]} (text state, pick one); {type:"input",label,state,placeholder?} (text/number state, edited in place); '
-  + '{type:"checklist",state,title,done?,subtitle?,value?,removable?,empty?} (list state; rows tap to toggle the boolean "done" field and swipe to delete); '
-  + '{type:"list",source,title,subtitle?,value?,limit?,empty?,format?,currency?} (read-only rows from a step or list state; title/subtitle/value are paths in each row); '
+  + '{type:"choice",label,state,options:[{value,label}]} (text or number state, a segmented control showing the selected option; use it for any set of options such as tip 10/15/20%); {type:"input",label,state,placeholder?} (text/number state, edited in place); '
+  + '{type:"checklist",state,title,done?,subtitle?,value?,removable?,empty?,edit?,actions?} (ONLY for things that get done or bought: the checkbox toggles the boolean "done" field, swipe deletes); '
+  + '{type:"list",source,title,subtitle?,value?,limit?,empty?,format?,currency?,removable?,edit?,actions?} (rows from a step or list state; title/subtitle/value are paths in each row; for a list state, or a filter/sort/limit step over one (e.g. one section per status): removable:true lets the person swipe to delete). '
+  + 'Row features of list and checklist over a list state: edit (an action with fields; tapping a row opens it as a sheet prefilled with the row, and its update_item writes the fields back) and actions (1–3 field-less row buttons, e.g. "Watered today"). '
+  + '{type:"toolbar",action} (a button in the top bar, at most two per screen, top level; an adding action shows as "+"; an action with fields opens as a sheet form). '
   + '{type:"chart",source,kind:bar|line|area|pie,x,y,title?,format?,currency?} (pie: up to 12 slices, e.g. a group step); {type:"timer",label,minutes} (on-device countdown with start/pause/reset); '
   + '{type:"text",text,style:body|caption|headline}; {type:"action",action} (consecutive buttons share one row). '
   + 'format: number|currency|percent|date|datetime|text; currency needs an ISO code. '
   + 'actions (ids separate from state ids): local {id,label,set:[{state,op,value?}],confirm?,style?,fields?} updates saved state instantly. ops: increment/decrement (number, default 1), set (number/text/boolean), toggle (boolean), '
   + 'append (list; value is an object, often from fields, e.g. {"name":{"$field":"item"},"done":false}), clear (list), set_items (list; {field:"done",value:false} sets that field on every item, e.g. to restart a checklist), remove_where (list; {field:"done",value:true} removes matching items, e.g. clear completed), '
-  + 'pick (text/number; value is an array of options, one chosen at random, e.g. a dinner roulette). Omit confirm unless the action is destructive. '
+  + 'pick (text/number; from:"listState",field:"name" chooses a random item of a list the person keeps, e.g. tonight\'s movie from the candidates; or value: an array of fixed options), '
+  + 'assign (list; field:"team",value:["A","B"],mode:"shuffle" deals the values over the items at random and balanced, e.g. two teams from today\'s players; mode:"rotate" moves each item to the next value, e.g. weekly chores), '
+  + 'update_item (list; ONLY in a row\'s edit or row action: value is an object of fields to change on the tapped row, e.g. {"name":{"$field":"name"},"page":{"$field":"page"}} or {"lastWatered":{"$date":{"days":0,"format":"date"}}}), remove_item (list; row action: removes the tapped row). '
+  + 'In row actions {"$item":"field"} reads the tapped row, e.g. append {"plant":{"$item":"name"},"date":…} to a log. Omit confirm unless the action is destructive. '
   + 'remote {id,label,confirm,style?:default|destructive,connectionID,tool,arguments,fields?} runs an external write only after the person taps and confirms. '
-  + 'fields: [{id,label,kind:text|number|date|toggle,required?}] render a form with the button. '
+  + 'fields: [{id,label,kind:text|number|date|toggle|select,required?}] render a form in a sheet opened by the button; a select field has options:[{value,label}] or from:"listState" (with labelField, default "name") to choose one of the items the person keeps, e.g. who paid from the friends list. '
   + 'Prefer the bound components (toggle, choice, input, checklist) over many buttons. Keep labels short (use "+" and "−" for counters) and write all text in the person\'s language. '
   + 'Example counter: {title:"Counter",icon:"bolt",state:[{id:"count",type:"number",initial:0}],view:[{type:"stat",label:"Count",step:"count"},{type:"action",action:"sub"},{type:"action",action:"add"}],actions:[{id:"sub",label:"−",set:[{state:"count",op:"decrement"}]},{id:"add",label:"+",set:[{state:"count",op:"increment"}]}]}. '
   + 'tests (required for apps with local actions or editable components): up to 8 scenarios run on the server before the app is saved, each from the initial state: '
-  + '{name,steps:[{tap:actionId,fields?:{fieldId:value}} | {edit:{state,op,value?,index?}} (what a toggle/choice/input/checklist row sends: op toggle, set, toggle_item or remove_item) | {input:{inputId:value}}],'
+  + '{name,steps:[{tap:actionId,fields?:{fieldId:value},row?:index} (row: the 0-based row, required for edit and row actions) | {edit:{state,op,value?,index?}} (what a toggle/choice/input/checklist row sends: op toggle, set, toggle_item or remove_item) | {input:{inputId:value}}],'
   + 'expect:[{state,equals?|count?|includes?:{field:value}} | {step,equals} | {text}]} (text: something the screen must show). Test the main flow and edge cases, e.g. add two items then check one, or a calculation with known inputs. '
   + 'Example to-do list with an input bar and a menu: {title:"To-do",icon:"check",state:[{id:"items",type:"list",initial:[]}],menu:["clearDone","clearAll"],view:[{type:"checklist",state:"items",title:"name",done:"done",empty:"Nothing to do"},{type:"composer",action:"add",placeholder:"New task"}],'
   + 'actions:[{id:"add",label:"Add",fields:[{id:"item",label:"Task",kind:"text",required:true}],set:[{state:"items",op:"append",value:{"name":{"$field":"item"},"done":false}}]},{id:"clearDone",label:"Uncheck all",set:[{state:"items",op:"set_items",field:"done",value:false}]},{id:"clearAll",label:"Clear list",style:"destructive",confirm:"Delete every task?",set:[{state:"items",op:"clear"}]}],'
   + 'tests:[{name:"add and check",steps:[{tap:"add",fields:{item:"Milk"}},{tap:"add",fields:{item:"Eggs"}},{edit:{state:"items",op:"toggle_item",index:0}}],expect:[{state:"items",count:2},{state:"items",includes:{name:"Milk",done:true}}]},'
   + '{name:"clear",steps:[{tap:"add",fields:{item:"Milk"}},{tap:"clearAll"}],expect:[{state:"items",count:0}]}]}. '
-  + 'Example tabs: tabs:[{id:"home",title:"Home",icon:"home",view:[{type:"grid",children:[{type:"stat",label:"Total",step:"total"},{type:"progress",label:"Goal",step:"total",goal:10,style:"ring"},{type:"tile",title:"History",icon:"list",tab:"history"}]}]},{id:"history",title:"History",icon:"list",view:[{type:"list",source:"log",title:"name"}]}].';
+  + 'Example tabs: tabs:[{id:"home",title:"Home",icon:"home",view:[{type:"grid",children:[{type:"stat",label:"Total",step:"total"},{type:"progress",label:"Goal",step:"total",goal:10,style:"ring"},{type:"tile",title:"History",icon:"list",tab:"history"}]}]},{id:"history",title:"History",icon:"list",view:[{type:"list",source:"log",title:"name"}]}]. '
+  + 'Example of connected data (a shared expenses app): state:[{id:"friends",type:"list",initial:[]},{id:"expenses",type:"list",initial:[]}], view:[{type:"toolbar",action:"addExpense"},{type:"stat",label:"Total",step:"total",format:"currency",currency:"ARS"},'
+  + '{type:"section",title:"Expenses",children:[{type:"list",source:"expenses",title:"what",subtitle:"payer",value:"amount",format:"currency",currency:"ARS",removable:true,edit:"editExpense"}]},{type:"section",title:"Friends",children:[{type:"list",source:"friends",title:"name",removable:true}]},{type:"composer",action:"addFriend",placeholder:"Add a friend"}], '
+  + 'actions:[{id:"addFriend",label:"Add",fields:[{id:"name",label:"Name",kind:"text",required:true}],set:[{state:"friends",op:"append",value:{"name":{"$field":"name"}}}]},'
+  + '{id:"addExpense",label:"New expense",fields:[{id:"what",label:"What",kind:"text",required:true},{id:"amount",label:"Amount",kind:"number",required:true},{id:"payer",label:"Paid by",kind:"select",from:"friends",required:true}],set:[{state:"expenses",op:"append",value:{"what":{"$field":"what"},"amount":{"$field":"amount"},"payer":{"$field":"payer"}}}]},'
+  + '{id:"editExpense",label:"Edit expense",fields:[{id:"what",label:"What",kind:"text",required:true},{id:"amount",label:"Amount",kind:"number",required:true}],set:[{state:"expenses",op:"update_item",value:{"what":{"$field":"what"},"amount":{"$field":"amount"}}}]}], '
+  + 'data:[{id:"total",type:"aggregate",from:"expenses",op:"sum",field:"amount"}].';
+
+// How a good mini app is shaped; the verifier enforces the checkable parts.
+const designGuide = 'Before writing the spec, plan the app: '
+  + '(1) the person\'s main job in one line; (2) each kind of thing the app keeps (one list state per kind, e.g. friends, expenses) and what uses it; (3) what the first screen shows and where adding happens. '
+  + 'Rules: one source of truth: everything that refers to something the person keeps reads it from its list (select fields with from, pick from, row actions), never a parallel copy, free text or fixed options; '
+  + 'one list per kind of thing with a status/category field instead of one list per status or per tab; '
+  + 'a checklist only for things that get done or bought, a list (removable, edit) for everything else; '
+  + 'let people fix mistakes: give lists of records an edit action and removable:true; '
+  + 'adding: a composer for quick one-field entries (shopping items), otherwise a toolbar "+" whose action opens a sheet; never leave a form on the main screen; '
+  + 'show each number once (a progress already shows its value); use choice for any set of options; '
+  + 'simple tools (a scoreboard, a calculator, a randomizer, a timer) fit one screen without tabs; use tabs only for different views of the same data; '
+  + 'numbers in the request (4 friends, a goal of 8) are starting data or editable settings (an input bound to a number state), not fixed structure.';
 
 // System guidance for direct private chats; the evaluation script uses the same text.
 export const miniAppInstruction = 'When the person asks for an app, tool, counter, tracker, checklist or reusable view, build a native mini app with create_mini_app instead of describing one or writing code. '
@@ -64,9 +87,9 @@ export const miniAppTools: ModelTool[] = [{ type: 'function', function: {
     + 'Apps using external tools start disabled: the person must review its tools and enable it from the card in this chat; each later open re-runs its read steps under that grant. '
     + 'Pass miniAppID to replace an existing app (it then needs review again). '
     + 'Before saving, the server verifies the app: automatic checks (every action reachable and runnable, lists that can grow, no data step failing on first open, connector paths checked against the result you inspected) and your tests. '
-    + 'A failing app is NOT saved; you get the problems to fix. Never create placeholder, probe or test apps: every call must be the app the person asked for. Only promise what the catalog below can do: if part of the request is impossible (camera, live AI replies, multiplayer, notifications, arbitrary code, data without a connector) say so and offer the closest app. ' + specGuide,
+    + 'A failing app is NOT saved; you get the problems to fix. Never create placeholder, probe or test apps: every call must be the app the person asked for. Only promise what the catalog below can do: if part of the request is impossible (camera, live AI replies, multiplayer, notifications, arbitrary code, data without a connector) say so and offer the closest app. ' + designGuide + ' ' + specGuide,
   parameters: { type: 'object', additionalProperties: false, required: ['spec'], properties: {
-    miniAppID: { type: 'string', maxLength: 64 }, spec: { type: 'object' },
+    miniAppID: { type: 'string', maxLength: 64 }, spec: { type: 'object', description: 'The app as a JSON object (never a string).' },
   } },
 } }, { type: 'function', function: {
   name: 'list_mini_apps',
@@ -95,7 +118,7 @@ export async function executeMiniAppTool(env: Env, turn: StoredTurn, name: strin
     const miniApps = summarize(results);
     return JSON.stringify({ miniApps, specsOmitted: miniApps.some(app => !('spec' in app)) ? 'Some specs were omitted for size; pass their miniAppID with a complete new spec to change them.' : undefined });
   }
-  if (Object.keys(args).some(key => !['miniAppID', 'spec'].includes(key)) || (args.miniAppID !== undefined && typeof args.miniAppID !== 'string')) return JSON.stringify({ error: 'Provide spec and optionally miniAppID.' });
+  if (Object.keys(args).some(key => !['miniAppID', 'spec', 'design'].includes(key)) || (args.miniAppID !== undefined && typeof args.miniAppID !== 'string')) return JSON.stringify({ error: 'Provide spec and optionally miniAppID.' });
   const prepared = prepareMiniApp(args.spec, turn.timeZone ?? 'UTC', await turnSamples(env.DB, turn.id));
   if ('response' in prepared) return JSON.stringify(prepared.response);
   const { parsed, verification } = prepared;
@@ -142,7 +165,7 @@ export const groupMiniAppTools: ModelTool[] = [{ type: 'function', function: {
     + 'Every member opens the same app and shares its saved state. Only state, inputs, const data and local actions are allowed: no mcp steps, no remote actions, no connectionIDs. '
     + 'The app opens immediately; its card appears under the message you publish next. Pass miniAppID to replace an existing group app. '
     + 'Before saving, the server verifies the app (every action reachable and runnable, lists that can grow, no step failing on first open) and runs your tests. '
-    + 'A failing app is NOT saved; you get the problems to fix. Never create placeholder, probe or test apps. Only promise what the catalog below can do. ' + specGuide,
+    + 'A failing app is NOT saved; you get the problems to fix. Never create placeholder, probe or test apps. Only promise what the catalog below can do. ' + designGuide + ' ' + specGuide,
   parameters: miniAppTools[0]!.function.parameters,
 } }, { type: 'function', function: {
   name: 'list_mini_apps',
@@ -158,7 +181,7 @@ export async function executeGroupMiniAppTool(env: Env, scope: GroupMiniAppScope
     const miniApps = summarize(results);
     return JSON.stringify({ miniApps, specsOmitted: miniApps.some(app => !('spec' in app)) ? 'Some specs were omitted for size; pass their miniAppID with a complete new spec to change them.' : undefined });
   }
-  if (Object.keys(args).some(key => !['miniAppID', 'spec'].includes(key)) || (args.miniAppID !== undefined && typeof args.miniAppID !== 'string')) return JSON.stringify({ error: 'Provide spec and optionally miniAppID.' });
+  if (Object.keys(args).some(key => !['miniAppID', 'spec', 'design'].includes(key)) || (args.miniAppID !== undefined && typeof args.miniAppID !== 'string')) return JSON.stringify({ error: 'Provide spec and optionally miniAppID.' });
   const prepared = prepareMiniApp(args.spec, 'UTC', new Map());
   if ('response' in prepared) return JSON.stringify(prepared.response);
   const { parsed, verification } = prepared;

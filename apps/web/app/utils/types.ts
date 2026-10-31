@@ -160,7 +160,8 @@ export type ReceivedContactInvitation = { id: string; contactName: string; sende
 export type MiniAppFormat = 'number' | 'currency' | 'percent' | 'date' | 'datetime' | 'text';
 export type MiniAppInput = { id: string; type: 'segmented'; label: string; options: { value: string; label: string }[]; default: string }
   | { id: string; type: 'text' | 'number'; label: string; default: string };
-export type MiniAppField = { id: string; label: string; kind: 'text' | 'number' | 'date' | 'toggle'; required: boolean };
+// Select fields always carry their current options (fixed, or the items of a list state, possibly none yet).
+export type MiniAppField = { id: string; label: string; kind: 'text' | 'number' | 'date' | 'toggle' | 'select'; required: boolean; options?: { value: string; label: string }[] };
 export type MiniApp = {
   // turnID anchors a private app's card; replyID is the group message that shows a group app's card.
   id: string; turnID: string | null; replyID: string | null; revision: number; title: string; subtitle: string | null; icon: string;
@@ -172,9 +173,11 @@ export type MiniApp = {
 export type MiniAppComponent =
   | { type: 'section'; title: string | null; children: MiniAppComponent[] }
   | { type: 'stat'; label: string; value: number | string | null; format: MiniAppFormat; currency: string | null; caption: string | null; state: string | null }
-  | { type: 'list'; items: MiniAppRow[]; format: MiniAppFormat; currency: string | null; empty: string }
+  // Lists over a list state (`state`) can delete rows, open an edit sheet on tap and show row buttons.
+  | { type: 'list'; items: MiniAppRow[]; format: MiniAppFormat; currency: string | null; empty: string; state?: string | null; removable?: boolean; edit?: MiniAppAction | null; actions?: MiniAppAction[] }
   | { type: 'progress'; label: string; value: number | null; goal: number; format: MiniAppFormat; currency: string | null; caption: string | null; state: string | null; style?: 'bar' | 'ring' }
-  | { type: 'checklist'; state: string; title: string; subtitle: string | null; value: string | null; done: string | null; removable: boolean; items: (MiniAppRow & { done: boolean | null })[]; format: MiniAppFormat; currency: string | null; empty: string }
+  | { type: 'checklist'; state: string; title: string; subtitle: string | null; value: string | null; done: string | null; removable: boolean; items: (MiniAppRow & { done: boolean | null })[]; format: MiniAppFormat; currency: string | null; empty: string;
+    edit?: MiniAppAction | null; actions?: MiniAppAction[] }
   | { type: 'toggle'; label: string; state: string; value: boolean }
   | { type: 'choice'; label: string; state: string; value: string; options: { value: string; label: string }[] }
   | { type: 'input'; label: string; state: string; value: string | number; kind: 'text' | 'number'; placeholder: string | null }
@@ -185,13 +188,18 @@ export type MiniAppComponent =
   | { type: 'grid'; columns: 2 | 3; children: MiniAppComponent[] }
   | { type: 'tile'; title: string; caption: string | null; icon: string | null; value: number | string | null; format: MiniAppFormat; currency: string | null; state: string | null; tab: string | null; action: MiniAppAction | null }
   | MiniAppComposer
+  // A top-bar button of the screen; an action with fields opens a sheet form.
+  | { type: 'toolbar'; action: MiniAppAction; icon: 'plus' | null }
   | { type: 'lesson'; title: string; hearts: number; xp: string | null; questions: { prompt: string; options: string[] | null; correct: number | null; answers: string[] | null; explain: string | null }[] }
   | { type: 'notice'; code: string };
-export type MiniAppAction = { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: MiniAppField[]; updates: MiniAppUpdate[] | null };
+export type MiniAppAction = { type: 'action'; id: string; kind: 'remote' | 'state'; label: string; confirm: string | null; style: 'default' | 'destructive'; fields: MiniAppField[]; updates: MiniAppUpdate[] | null; row?: boolean };
+// The tapped row a row action or edit runs on.
+export type MiniAppRowTarget = { state: string; index: number };
 // A text bar pinned to the bottom of its screen; `append` lets a submitted row show at once.
 export type MiniAppComposer = { type: 'composer'; action: string; field: string; kind: 'text' | 'number'; placeholder: string | null; label: string; confirm: string | null; remote: boolean;
   append: { state: string; key: string; item: MiniAppItem } | null };
-export type MiniAppRow = { title: string; subtitle: string | null; value: number | string | null };
+// `index`: the row's position in its list state; `values`: the edit sheet's prefilled fields.
+export type MiniAppRow = { title: string; subtitle: string | null; value: number | string | null; index?: number; values?: MiniAppItem };
 export type MiniAppItem = Record<string, number | string | boolean>;
 export type MiniAppStateValue = number | string | boolean | MiniAppItem[];
 export type MiniAppUpdate = { state: string; op: 'increment' | 'decrement' | 'set' | 'toggle' | 'append' | 'clear' | 'pick' | 'set_items' | 'remove_where' | 'toggle_item' | 'remove_item'; value?: MiniAppStateValue | null; index?: number; field?: string };

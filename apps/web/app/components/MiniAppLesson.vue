@@ -44,11 +44,12 @@ const answer = computed(() => question.value.options ? question.value.options[qu
 
 <template>
   <div class="group">
-    <button type="button" class="mini-row mini-lesson-row" data-ripple @click="start">
+    <!-- The row is a card; only Start is a button, so it reads as one. -->
+    <div class="mini-row mini-lesson-row">
       <span class="badge-icon"><AppIcon name="book" /></span>
       <span class="copy"><strong>{{ lesson.title }}</strong><span>{{ lesson.questions.length }} questions</span></span>
-      <span class="start">Start</span>
-    </button>
+      <AppButton class="start" size="small" @click="start">Start</AppButton>
+    </div>
   </div>
   <Teleport to="body">
     <div v-if="playing" class="mini-lesson" role="dialog" aria-modal="true" :aria-label="lesson.title">

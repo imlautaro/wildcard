@@ -282,8 +282,15 @@
 .mini-check .check svg { width: 26px; height: 26px; }
 .mini-check .ring { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--md-on-surface-variant); }
 .mini-check.done strong { text-decoration: line-through; color: var(--md-on-surface-variant); font-weight: 400; }
-.mini-check .remove { opacity: 0.6; }
-.mini-check .remove svg { width: 20px; height: 20px; }
+.mini-row .remove { opacity: 0.6; flex: none; }
+.mini-row .remove svg { width: 20px; height: 20px; }
+/* Tapping a row's text opens its edit sheet. */
+.mini-row-open { border: 0; background: none; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; align-self: stretch; justify-content: center; }
+.mini-row-open:disabled { cursor: default; }
+.mini-row-action { flex: none; }
+/* A standalone progress or ring card reads as its own card, spaced like the stats and grids above it. */
+.mini-app-screen .group:has(> :is(.mini-progress, .mini-ring-card):only-child) > * { border-radius: var(--md-shape-l); }
+.mini-app-screen :is(.mini-stats, .mini-grid, .mini-hero) + .group { margin-top: 4px; }
 .mini-choice { margin-bottom: 8px; }
 .mini-choice .label { display: block; font-size: 13px; font-weight: 600; color: var(--md-on-surface-variant); padding: 0 4px 6px; }
 .mini-timer { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 16px; margin-bottom: 8px; border-radius: var(--md-shape-l); background: var(--surface); }
@@ -352,10 +359,10 @@
 .mini-pie .legend li { display: flex; align-items: center; gap: 8px; }
 .mini-pie .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .mini-pie .amount { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
-.mini-lesson-row { width: 100%; border: 0; text-align: left; color: inherit; }
+.mini-lesson-row { width: 100%; text-align: left; color: inherit; }
 .mini-lesson-row .badge-icon { width: 46px; height: 46px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--md-surface); background: var(--success); }
 .mini-lesson-row .badge-icon svg { width: 24px; height: 24px; }
-.mini-lesson-row .start { padding: 8px 16px; border-radius: 999px; background: var(--success); color: var(--md-surface); font-weight: 700; font-size: 14px; flex: none; }
+.mini-lesson-row .start { flex: none; background: var(--success); color: var(--md-surface); }
 .mini-lesson { position: fixed; inset: 0; z-index: 30; background: var(--md-surface); display: flex; flex-direction: column; max-width: 640px; margin: 0 auto; }
 .mini-lesson header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
 .mini-lesson header .track { flex: 1; height: 10px; border-radius: 5px; background: var(--md-secondary-container); overflow: hidden; }

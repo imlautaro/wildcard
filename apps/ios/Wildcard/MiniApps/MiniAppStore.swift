@@ -102,11 +102,11 @@ final class MiniAppStore {
     }
 
     /// The caller keeps `executionID` for one confirmed submission so a retry never runs twice.
-    func run(_ app: MiniApp, base: String, actionID: String, executionID: UUID, fields: [String: MiniAppFieldValue], using auth: AuthStore) async throws -> String {
+    func run(_ app: MiniApp, base: String, actionID: String, executionID: UUID, fields: [String: MiniAppFieldValue], row: MiniAppRowRef? = nil, using auth: AuthStore) async throws -> String {
         let key = "\(base)/\(app.id)", revision = viewRevisions[key], current = generation
         let outcome = try await auth.withSession { [inputs] api, token in
             try await api.runMiniAppAction(base: base, appID: app.id, actionID: actionID, executionID: executionID,
-                                           revision: app.revision, inputs: inputs[key] ?? [:], fields: fields, token: token)
+                                           revision: app.revision, inputs: inputs[key] ?? [:], fields: fields, row: row, token: token)
         }
         // State-only apps return the updated view with the action, so a tap needs no extra load.
         if let resolution = outcome.resolution {

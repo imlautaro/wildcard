@@ -93,7 +93,7 @@ export function miniAppRoutes(kind: 'contact' | 'group') {
   });
   routes.post('/:appID/actions/:actionID', async c => {
     const body: unknown = await c.req.json().catch(() => null);
-    if (!isRecord(body) || Object.keys(body).some(key => !['executionID', 'revision', 'inputs', 'fields', 'timeZone'].includes(key))
+    if (!isRecord(body) || Object.keys(body).some(key => !['executionID', 'revision', 'inputs', 'fields', 'timeZone', 'row'].includes(key))
       || typeof body.executionID !== 'string' || !uuid.test(body.executionID) || !Number.isInteger(body.revision)) return c.json({ error: 'Provide executionID and revision.' }, 400);
     const timeZone = zone(body.timeZone);
     if (!timeZone) return c.json({ error: 'Provide a valid time zone.' }, 400);
@@ -106,7 +106,7 @@ export function miniAppRoutes(kind: 'contact' | 'group') {
     // Local state taps (a counter's +) stay within the general 120/minute budget; external writes add a strict one.
     const local = parseSpec(JSON.parse(app.specJSON)).spec.actions.find(a => a.id === c.req.param('actionID'))?.kind === 'state';
     if (!local && !(await admitAuthRequest(c.env.DB, owner, 'mini-app-action', 10)).allowed) return c.json({ error: 'Too many actions. Please wait a minute.' }, 429);
-    const outcome = await runAction(c.env, app, connectors, c.req.param('actionID'), body.executionID.toLowerCase(), body.inputs, body.fields, timeZone);
+    const outcome = await runAction(c.env, app, connectors, c.req.param('actionID'), body.executionID.toLowerCase(), body.inputs, body.fields, timeZone, body.row);
     if ('error' in outcome) return c.json({ error: outcome.error }, outcome.status as 400);
     // Apps without remote reads return the updated view directly, so a tap costs no extra load.
     const spec = parseSpec(JSON.parse(app.specJSON)).spec;

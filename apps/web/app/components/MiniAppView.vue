@@ -1,20 +1,26 @@
 <script setup lang="ts">
-import type { MiniAppComponent, MiniAppStateValue, MiniAppUpdate } from '~/utils/types';
+import type { MiniAppAction, MiniAppComponent, MiniAppItem, MiniAppRowTarget, MiniAppStateValue, MiniAppUpdate } from '~/utils/types';
 
 // Renders the server-resolved component tree with the app's grouped-list styling.
 // A lone stat becomes a hero number, consecutive stats share one grid, consecutive
 // field-less actions share one button row and grids lay out cards side by side, like
-// the iOS renderer. Composers are drawn by the page, pinned to the bottom.
-const props = defineProps<{ components: MiniAppComponent[]; busyAction?: string | null; state?: Record<string, MiniAppStateValue> }>();
-const emit = defineEmits<{ action: [id: string, fields: Record<string, unknown>]; tap: [id: string, updates: MiniAppUpdate[]]; edit: [update: MiniAppUpdate]; selectTab: [tab: string] }>();
+// the iOS renderer. Composers and toolbar buttons are drawn by the page. Actions with fields
+// open a sheet form (`open`); rows of a list state can be edited, deleted or run row actions.
+// `pending` (taps not yet confirmed) pauses row controls of lists drawn from the resolved
+// view, whose row indexes are only valid once the server has applied earlier taps.
+const props = defineProps<{ components: MiniAppComponent[]; busyAction?: string | null; state?: Record<string, MiniAppStateValue>; pending?: boolean }>();
+const emit = defineEmits<{ action: [id: string, fields: Record<string, unknown>]; tap: [id: string, updates: MiniAppUpdate[]]; edit: [update: MiniAppUpdate]; selectTab: [tab: string];
+  open: [action: MiniAppAction, row?: MiniAppRowTarget, values?: MiniAppItem]; rowAction: [action: MiniAppAction, row: MiniAppRowTarget] }>();
 type Checklist = Extract<MiniAppComponent, { type: 'checklist' }>;
 // Rows come from saved state (with pending taps applied) when available, so toggles show instantly.
 function checklistRows(list: Checklist) {
   const items = props.state?.[list.state];
   if (!Array.isArray(items)) return list.items;
   const text = (item: Record<string, unknown>, key: string | null) => key && item[key] !== undefined && item[key] !== '' ? String(item[key]) : null;
-  return items.map(item => ({ title: text(item, list.title) ?? '—', subtitle: text(item, list.subtitle),
-    value: list.value && item[list.value] !== undefined ? item[list.value] as number | string : null, done: list.done ? item[list.done] === true : null }));
+  // Edit prefills come from the resolved rows, which share the saved state's order.
+  return items.map((item, index) => ({ title: text(item, list.title) ?? '—', subtitle: text(item, list.subtitle),
+    value: list.value && item[list.value] !== undefined ? item[list.value] as number | string : null, done: list.done ? item[list.done] === true : null,
+    index, values: list.items.find(row => row.index === index)?.values }));
 }
 function saved<T>(stateID: string | null, fallback: T): T | MiniAppStateValue {
   const value = stateID ? props.state?.[stateID] : undefined;
@@ -36,7 +42,7 @@ const blocks = computed(() => props.components.reduce<Block[]>((result, item, in
   const last = result.at(-1);
   if (item.type === 'stat') { if (last?.kind === 'stats') last.items.push(item); else result.push({ kind: 'stats', key: `s${index}`, items: [item] }); }
   else if (item.type === 'action' && !item.fields.length) { if (last?.kind === 'buttons') last.items.push(item); else result.push({ kind: 'buttons', key: `b${index}`, items: [item] }); }
-  else if (item.type === 'composer') return result;
+  else if (item.type === 'composer' || item.type === 'toolbar') return result;
   else result.push({ kind: 'one', key: `c${index}`, item });
   return result;
 }, []));
@@ -70,16 +76,25 @@ function slices(points: { x: string; y: number }[]) {
     return slice;
   });
 }
-// Short symbols (+, −) share one row; longer labels stack below. The first non-destructive action is prominent.
+// Short symbols (+, −) share one row; longer labels stack below.
 const short = (items: Action[]) => items.filter(a => [...a.label].length <= 3);
 const long = (items: Action[]) => items.filter(a => [...a.label].length > 3);
-// The action that adds (+, increment, append) is prominent; otherwise the first non-destructive one.
+// Only the adding action (+, increment, append) is prominent, so peer options never look selected;
+// a lone button stays prominent.
 const primary = (items: Action[]) => (items.find(a => a.style !== 'destructive' && (a.label.startsWith('+') || !!a.updates?.some(u => u.op === 'increment' || u.op === 'append')))
-  ?? items.find(a => a.style !== 'destructive'))?.id;
+  ?? (items.length === 1 && items[0]!.style !== 'destructive' ? items[0] : undefined))?.id;
 function press(action: Action) {
-  if (action.kind === 'state' && !action.confirm && action.updates) emit('tap', action.id, action.updates);
+  if (action.fields.length) emit('open', action);
+  else if (action.kind === 'state' && !action.confirm && action.updates) emit('tap', action.id, action.updates);
   else emit('action', action.id, {});
 }
+// Row controls: an action with fields opens prefilled; a field-less one runs on the row.
+function runRow(action: MiniAppAction, row: MiniAppRowTarget, values?: MiniAppItem) {
+  if (action.fields.length) emit('open', action, row, values);
+  else emit('rowAction', action, row);
+}
+type ListBlock = Extract<MiniAppComponent, { type: 'list' }>;
+const rowTarget = (list: ListBlock, index: number | undefined): MiniAppRowTarget | null => list.state && index !== undefined ? { state: list.state, index } : null;
 
 function chart(points: { x: string; y: number }[], kind: 'bar' | 'line' | 'area' | 'pie') {
   const max = Math.max(0, ...points.map(p => p.y)), min = Math.min(0, ...points.map(p => p.y));
@@ -93,11 +108,6 @@ function chart(points: { x: string; y: number }[], kind: 'bar' | 'line' | 'area'
 function axis(points: { x: string }[]) {
   if (points.length <= 6) return points.map(p => p.x);
   return [points[0]!.x, points[Math.floor(points.length / 2)]!.x, points.at(-1)!.x];
-}
-const forms = reactive<Record<string, Record<string, unknown>>>({});
-function form(id: string) { return (forms[id] ??= {}); }
-function submit(id: string) {
-  emit('action', id, { ...form(id) });
 }
 </script>
 
@@ -125,7 +135,8 @@ function submit(id: string) {
     </div>
     <template v-else-if="block.item.type === 'section'">
       <div v-if="block.item.title" class="group-title">{{ block.item.title }}</div>
-      <MiniAppView :components="block.item.children" :busy-action="busyAction" :state="state" @action="(id, fields) => emit('action', id, fields)" @tap="(id, updates) => emit('tap', id, updates)" @edit="update => emit('edit', update)" @select-tab="tab => emit('selectTab', tab)" />
+      <MiniAppView :components="block.item.children" :busy-action="busyAction" :state="state" :pending="pending" @action="(id, fields) => emit('action', id, fields)" @tap="(id, updates) => emit('tap', id, updates)" @edit="update => emit('edit', update)" @select-tab="tab => emit('selectTab', tab)"
+        @open="(action, row, values) => emit('open', action, row, values)" @row-action="(action, row) => emit('rowAction', action, row)" />
     </template>
     <div v-else-if="block.item.type === 'grid'" class="mini-grid" :style="{ '--columns': block.item.columns }">
       <template v-for="(card, index) in block.item.children" :key="index">
@@ -186,8 +197,14 @@ function submit(id: string) {
         <button v-if="row.done !== null" type="button" class="check" :aria-pressed="row.done" :aria-label="row.title" @click="emit('edit', { state: block.item.state, op: 'toggle_item', index, field: block.item.done! })">
           <AppIcon v-if="row.done" name="check" /><span v-else class="ring" />
         </button>
-        <span class="copy"><strong>{{ row.title }}</strong><span v-if="row.subtitle">{{ row.subtitle }}</span></span>
+        <!-- With an edit action the text opens it; the checkbox stays the only toggle. -->
+        <button v-if="block.item.edit" type="button" class="copy mini-row-open" :disabled="pending" @click="runRow(block.item.edit, { state: block.item.state, index }, row.values)">
+          <strong>{{ row.title }}</strong><span v-if="row.subtitle">{{ row.subtitle }}</span>
+        </button>
+        <span v-else class="copy"><strong>{{ row.title }}</strong><span v-if="row.subtitle">{{ row.subtitle }}</span></span>
         <span v-if="row.value !== null" class="value">{{ miniAppValue(row.value, block.item.format, block.item.currency) }}</span>
+        <AppButton v-for="action in block.item.actions ?? []" :key="action.id" variant="tonal" size="small" class="mini-row-action" :disabled="pending || !!busyAction"
+          @click="runRow(action, { state: block.item.state, index })">{{ busyAction === action.id ? '…' : action.label }}</AppButton>
         <AppIconButton v-if="block.item.removable" icon="close" label="Delete" class="remove" @click="emit('edit', { state: block.item.state, op: 'remove_item', index })" />
       </div>
     </div>
@@ -197,7 +214,8 @@ function submit(id: string) {
     <div v-else-if="block.item.type === 'choice'" class="mini-choice">
       <span class="label">{{ block.item.label }}</span>
       <div class="segmented mini-segmented" role="group" :aria-label="block.item.label">
-        <button v-for="option in block.item.options" :key="option.value" type="button" :aria-pressed="saved(block.item.state, block.item.value) === option.value" @click="emit('edit', { state: block.item.state, op: 'set', value: option.value })">{{ option.label }}</button>
+        <!-- A number state compares as text: option values are strings such as "15". -->
+        <button v-for="option in block.item.options" :key="option.value" type="button" :aria-pressed="String(saved(block.item.state, block.item.value)) === option.value" @click="emit('edit', { state: block.item.state, op: 'set', value: option.value })">{{ option.label }}</button>
       </div>
     </div>
     <div v-else-if="block.item.type === 'input'" class="group">
@@ -211,8 +229,16 @@ function submit(id: string) {
     <div v-else-if="block.item.type === 'list'" class="group">
       <div v-if="!block.item.items.length" class="text-block">{{ block.item.empty }}</div>
       <div v-for="(row, index) in block.item.items" :key="index" class="mini-row">
-        <span class="copy"><strong>{{ row.title }}</strong><span v-if="row.subtitle">{{ row.subtitle }}</span></span>
+        <button v-if="block.item.edit && rowTarget(block.item, row.index)" type="button" class="copy mini-row-open" :disabled="pending" @click="runRow(block.item.edit!, rowTarget(block.item, row.index)!, row.values)">
+          <strong>{{ row.title }}</strong><span v-if="row.subtitle">{{ row.subtitle }}</span>
+        </button>
+        <span v-else class="copy"><strong>{{ row.title }}</strong><span v-if="row.subtitle">{{ row.subtitle }}</span></span>
         <span v-if="row.value !== null" class="value">{{ miniAppValue(row.value, block.item.format, block.item.currency) }}</span>
+        <template v-if="rowTarget(block.item, row.index)">
+          <AppButton v-for="action in block.item.actions ?? []" :key="action.id" variant="tonal" size="small" class="mini-row-action" :disabled="pending || !!busyAction"
+            @click="runRow(action, rowTarget(block.item, row.index)!)">{{ busyAction === action.id ? '…' : action.label }}</AppButton>
+          <AppIconButton v-if="block.item.removable" icon="close" label="Delete" class="remove" :disabled="pending" @click="emit('edit', { state: block.item.state!, op: 'remove_item', index: row.index! })" />
+        </template>
       </div>
     </div>
     <div v-else-if="block.item.type === 'chart'" class="group mini-chart">
@@ -240,16 +266,11 @@ function submit(id: string) {
     </div>
     <p v-else-if="block.item.type === 'text'" class="mini-text" :class="block.item.style">{{ block.item.text }}</p>
     <div v-else-if="block.item.type === 'notice'" class="group"><div class="text-block">{{ miniAppIssue(block.item.code) }}</div></div>
-    <form v-else-if="block.item.type === 'action'" class="group" @submit.prevent="submit(block.item.id)">
-      <label v-for="field in block.item.fields" :key="field.id" :class="field.kind === 'toggle' ? 'toggle' : 'field mini-field'">
-        <span>{{ field.label }}</span>
-        <input v-if="field.kind === 'toggle'" v-model="form(block.item.id)[field.id]" type="checkbox" role="switch">
-        <input v-else-if="field.kind === 'number'" v-model.number="form(block.item.id)[field.id]" type="number" step="any" :required="field.required" inputmode="decimal">
-        <input v-else v-model="form(block.item.id)[field.id]" :type="field.kind === 'date' ? 'date' : 'text'" :required="field.required" maxlength="500">
-      </label>
-      <AppListItem type="submit" :danger="block.item.style === 'destructive'" :disabled="!!busyAction">
+    <!-- An action with fields is a button that opens its form in a sheet. -->
+    <div v-else-if="block.item.type === 'action'" class="mini-buttons">
+      <button type="button" class="mini-button" data-ripple :class="{ danger: block.item.style === 'destructive' }" :disabled="!!busyAction" @click="press(block.item as Action)">
         {{ busyAction === block.item.id && block.item.kind === 'remote' ? 'Working…' : block.item.label }}
-      </AppListItem>
-    </form>
+      </button>
+    </div>
   </template>
 </template>

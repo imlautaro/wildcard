@@ -80,7 +80,10 @@ show the first screen.
 | `clear` | list | Removes every item |
 | `set_items` | list | Sets `field` to `value` on every item, for example to restart a checklist |
 | `remove_where` | list | Removes the items whose `field` equals `value`, for example completed tasks |
-| `pick` | text, number | Picks one of the `value` options at random, on the server |
+| `pick` | text, number | Picks one of the `value` options at random, or with `from` and `field` a random item of a list state, on the server |
+| `assign` | list | Deals `value` (2–20 texts or numbers) over the items' `field`: `mode: "shuffle"` (default) at random and balanced, for example two teams; `mode: "rotate"` moves each item to the next value, for example weekly chores |
+| `update_item` | list | Row actions only: sets the fields in `value` on the tapped row; empty values remove the field |
+| `remove_item` | list | Row actions only: removes the tapped row |
 
 A local action needs no confirmation unless it declares `confirm`, for example for a
 destructive reset. **Remote actions** (`connectionID`, `tool`, `arguments`) always
@@ -101,7 +104,8 @@ the declared options, setting an input, or toggling/removing a checklist row.
 
 A step's `from` may only name an earlier step or a state id, so the graph is acyclic
 by construction. Templates are JSON literals plus structured expressions:
-- `{"$input": id}`, `{"$state": id}`, and `{"$field": id}` (actions only).
+- `{"$input": id}`, `{"$state": id}`, `{"$field": id}` (actions only) and `{"$item": field}` (row actions only:
+  the tapped row's field, for example to log which plant was watered).
 - `{"$date": {"days": -7, "format": "date" | "datetime"}}`, relative to now in the
   viewer's time zone.
 - `{"$daysSince": "YYYY-MM-DD"}` and `{"$daysUntil": …}`, in whole days from today.
@@ -124,9 +128,22 @@ View components:
 - `stat`: a lone stat becomes a large hero number, and consecutive stats share a grid.
 - `progress`: the goal is a number or a number state id. `style: "ring"` draws a
   circular gauge.
-- `list` (read-only) and `checklist` (list state; tap to toggle the boolean `done`
-  field, swipe or ✕ to delete). When `done` is omitted, the first boolean field of
-  the list's items is used.
+- `list` and `checklist`. A checklist is for things that get done or bought: tap to
+  toggle the boolean `done` field, swipe or ✕ to delete. When `done` is omitted, the
+  first boolean field of the list's items is used. A list over a list state, or over a
+  filter/sort/limit step of one (for example one section per status), can be
+  `removable` (swipe or ✕ to delete). Its rows keep their index in the state. Both can declare row features:
+  - `edit`, an action with fields. Tapping a row (in a checklist, the row text; the
+    checkbox still toggles) opens it as a sheet prefilled with the row. The server
+    sends each row's `values` for every field that an `update_item` value fills with
+    `{"$field": …}`.
+  - `actions`, 1–3 field-less row buttons, for example "Watered today".
+
+  Row actions are the only place where `update_item`, `remove_item` and `$item` are
+  allowed. Clients send the row as `row: {state, index}`.
+- `toolbar`: a button in the top bar of its screen (at most two, top level). An adding
+  action shows as **+**. An action with fields opens as a sheet form; a field-less one
+  runs directly.
 - `chart` (`bar`, `line`, `area` or `pie`, a donut with a legend and up to 12
   slices) and `text`.
 - `toggle`, `choice` (segmented) and `input`, each bound to a state value.
@@ -134,7 +151,14 @@ View components:
   stops when the screen closes.
 - `action`: consecutive buttons without fields share one row. Short symbols such as
   `+` and `−` sit side by side. The adding action (`+`, increment or append) is
-  prominent. Actions with fields render as a form.
+  prominent; a lone button may be too, but option-like rows are not. An action with
+  fields renders as a button that opens its form in a sheet.
+- Action fields are `text`, `number`, `date`, `toggle` or `select`. A select field
+  has fixed `options`, or `from` a list state (labelled by `labelField`, default
+  `name`) so a form picks one of the items the person keeps, for example who paid.
+  The resolved action carries the current options. The server checks a submitted
+  value against them.
+- `choice` binds a text or number state.
 - `lesson`: a Duolingo-style quiz card. **Start** opens a full-screen flow with one
   question at a time, a progress bar and hearts (1–5, default 3). Questions are
   multiple choice (2–4 options and the index or text of the correct one) or typed
@@ -165,6 +189,22 @@ spending a retry:
 Anything ambiguous is still rejected.
 
 ## Verification before delivery
+
+Since October 31, 2026 the verifier also rejects apps whose shape the person would
+notice even when every action works (the "design" checks, from the 24-app lab
+feedback):
+- A `pick` from fixed options while the person keeps a list.
+- Two lists that hold the same kind of item (the same fields), split by status or
+  group, instead of one list with a status field.
+- A list of names, and another list where the person types those names again as
+  free text, instead of a select field `from` that list or a row action.
+- Rows showing a boolean field as text (true/false).
+- The same value shown twice on one screen by stat, progress or tile.
+- Several buttons that each `set` the same state to a fixed value, instead of a
+  `choice`.
+
+Tabs that share no saved state produce a warning.
+
 
 `create_mini_app` saves an app only if it passes an offline verification
 (`apps/api/src/miniapps/verify.ts`). The contact receives every problem, the app is
@@ -294,11 +334,18 @@ summary has `replyID` instead of `turnID`.
 | GET | `/` | Up to 20 apps: status (`needs_review`, `enabled`, `needs_reapproval`), inputs, tools, last issues |
 | POST | `/:appID/approval` | `{ revision, allowed }`; enabling binds the current tool fingerprints |
 | POST | `/:appID/resolve` | `{ inputs?, timeZone }`; returns `{ revision, inputs, resolvedAt, view, issues }`, or 409 `REVIEW_REQUIRED` |
-| POST | `/:appID/actions/:actionID` | `{ executionID, revision, inputs?, fields?, timeZone }`; returns `{ status, replayed }`, plus `resolution` for local actions in apps without remote reads |
+| POST | `/:appID/actions/:actionID` | `{ executionID, revision, inputs?, fields?, timeZone, row? }`; `row: {state, index}` is required for row actions (edit and row buttons) and rejected otherwise. Returns `{ status, replayed }`, plus `resolution` for local actions in apps without remote reads |
 | POST | `/:appID/state` | `{ executionID, revision, timeZone, update, inputs? }`; a direct edit from a bound component. Returns `{ status, replayed }`, plus `resolution` for apps without remote reads |
 | DELETE | `/:appID` | Deletes the app, its saved state and its action ledger |
 
 ## Model behavior
+
+The tool description starts with a planning step (the main job, each kind of thing the
+app keeps and what uses it, the first screen) and design rules: one source of truth, one list per kind of thing, a checklist
+only for things that get done, editable records, adding through a composer or a toolbar
+**+** sheet instead of a form on the main screen, each number shown once, `choice` for
+options, and one screen for simple tools. Numbers in the request are data or settings,
+not structure.
 
 All direct private chats expose `create_mini_app` and `list_mini_apps`, and get
 three tool-enabled rounds (scheduled turns keep two) with up to 8,192 completion
@@ -342,7 +389,8 @@ carries a `resolution` replaces the base view, so the display is always the serv
 state plus the taps not yet confirmed. Transient failures retry the same execution
 ID up to twice. Anything else drops the pending taps and reloads. A local tap costs
 about five D1 queries, and no connector lookup when the app has no tools. Updates
-that are not literal (form values, `pick`, computed values) wait for the server.
+that are not literal (form values, `pick`, `assign`, computed values, edits and row
+actions) wait for the server.
 
 ## Evaluation and visual checks
 
