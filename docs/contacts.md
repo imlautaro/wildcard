@@ -344,7 +344,7 @@ so connector data never crosses a link.
   work turns included), the prompt lists the linked contacts (shared name, the alias
   the person saved, description and specialties) and offers two tools:
   - `ask_linked_contact {contactID, question}`: the linked contact answers at once in
-    its own voice, without tools, from its memories of this person, its last eight
+    its own voice, without tools, from its memories of this person (only memories whose source is this person, also for shared contacts), its last eight
     turns with them and up to four earlier turns matching the question. It says so when
     it does not know. The answer is returned to the asking contact, which attributes
     it. The exchange is saved as a note for the linked contact.

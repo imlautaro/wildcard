@@ -154,7 +154,9 @@ async function linkedAnswer(env: Env, turn: StoredTurn, target: LinkRow, callerN
   const personality = (await readPersonality(db, target.agentID)).personality;
   const person = await db.prepare('SELECT name FROM user WHERE id = ?').bind(turn.userID).first<{ name: string }>();
   const scope = { contactID: target.id, userID: turn.userID, beforeSequence: Number.MAX_SAFE_INTEGER, privateConversation: true, contributorModel: model.includes('contributor') };
-  const memories = (await rankMemories(env, await readMemories(db, scope), question, true, true)).slice(0, 12)
+  // Only what this person said: a shared contact also remembers other holders, whose facts must not answer for them.
+  const own = (await readMemories(db, scope)).filter(memory => memory.sourceUserID === turn.userID);
+  const memories = (await rankMemories(env, own, question, true, true)).slice(0, 12)
     .map(memory => ({ fact: clipText(memory.content, 300), from: memory.sourceUserName }));
   const { results: recent } = await db.prepare(`SELECT user_text AS person, COALESCE(assistant_text, '') AS you, created_at AS at FROM chat_turn
     WHERE contact_id = ? AND user_id = ? AND status = 'complete' ORDER BY sequence DESC LIMIT 8`).bind(target.id, turn.userID)

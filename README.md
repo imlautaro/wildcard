@@ -53,7 +53,7 @@ npm run dev
 ```
 
 Wrangler serves the API locally at `http://localhost:8787`. Local setup creates an
-ignored auth secret and applies D1 migrations. Sign in through `/api/v1/auth/sign-in/email` or register through `/api/v1/auth/sign-up/email`. New accounts complete [onboarding](docs/onboarding.md), which creates five personalized AI contacts, generated portraits and an optional Friends, Study or Work group.
+ignored auth secret and applies D1 migrations. Sign in through `/api/v1/auth/sign-in/email` or register through `/api/v1/auth/sign-up/email`. New accounts complete [onboarding](docs/onboarding.md), which can create five personalized AI contacts (in any of six styles, including 3D animated pets or a custom theme), generated portraits and an optional Friends, Study or Work group; the person enters the app while those contacts are still being created.
 Existing accounts are preserved; `/api/v1/me` requires
 a signed bearer session. Unrelated paths return HTTP 404 JSON. See
 [authentication](docs/authentication.md) for the contract and limitations.
