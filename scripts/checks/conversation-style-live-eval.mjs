@@ -19,6 +19,9 @@ const selected = new RegExp(arg('only', '.'));
 const sourceRef = arg('source-ref', 'working-tree');
 const repetitions = Number(arg('repetitions', '1'));
 const callLimit = Number(arg('call-limit', '200'));
+// --model muse-spark-1.3-contributor runs the same evaluation at Contributor rates.
+const evalModel = arg('model', 'muse-spark-1.3');
+if (!['muse-spark-1.3', 'muse-spark-1.3-contributor'].includes(evalModel)) throw Error('Unsupported model.');
 if (!Number.isInteger(repetitions) || repetitions < 1 || repetitions > 3 || !Number.isInteger(callLimit) || callLimit < 1 || callLimit > 400) throw Error('Invalid evaluation bounds.');
 if (!Array.isArray(cases.agents) || cases.agents.length > 5 || !Array.isArray(cases.scenarios)) throw Error('Invalid fictional case format.');
 mkdirSync(output, { recursive: true, mode: 0o700 });
@@ -60,7 +63,7 @@ const h = await import(pathToFileURL(bundle).href);
 const { fixture } = createRequire(import.meta.url)('./personality.cjs');
 const storage = new AsyncLocalStorage();
 const nativeFetch = globalThis.fetch;
-const report = { ...source, model: 'muse-spark-1.3', startedAt: new Date().toISOString(), calls: [], scenarios: [], errors: [] };
+const report = { ...source, model: evalModel, startedAt: new Date().toISOString(), calls: [], scenarios: [], errors: [] };
 const save = () => writeFileSync(join(output, 'results.json'), JSON.stringify(report, null, 2), { mode: 0o600 });
 globalThis.fetch = async (input, options) => {
   const url = new URL(typeof input === 'string' ? input : input.url);
@@ -94,7 +97,7 @@ function database(f) {
 }
 function setup(scenario) {
   const f = fixture();
-  f.sqlite.exec("DELETE FROM chat_group WHERE id='group-b'; DELETE FROM group_agent; UPDATE user SET chat_model='muse-spark-1.3'; UPDATE group_member SET learning_enabled=0;");
+  f.sqlite.exec(`DELETE FROM chat_group WHERE id='group-b'; DELETE FROM group_agent; UPDATE user SET chat_model='${evalModel}'; UPDATE group_member SET learning_enabled=0;`);
   for (const [id, name] of Object.entries(cases.humans)) f.sqlite.prepare('UPDATE user SET name=? WHERE id=?').run(name, id);
   const agents = cases.agents.filter(agent => (scenario.agents ?? cases.agents.map(a => a.id)).includes(agent.id));
   for (const a of agents) {
@@ -123,7 +126,7 @@ function setup(scenario) {
     f.sqlite.exec("INSERT INTO app_setting(key,value,updated_at) VALUES ('voice_messages_enabled','true',0); UPDATE contact SET voice_messages_enabled=1;");
   }
   const DB = database(f);
-  const env = { DB, META_API_KEY:key, META_CHAT_MODEL:'muse-spark-1.3', AI_GATEWAY_ID:'', WEB_RESEARCH_ENABLED:'false',
+  const env = { DB, META_API_KEY:key, META_CHAT_MODEL:evalModel, AI_GATEWAY_ID:'', WEB_RESEARCH_ENABLED:'false',
     CHAT_WORKFLOW:{create:async()=>{throw Error('EVAL_UNEXPECTED_WORKFLOW');}},
     ...(scenario.voice ? { ELEVENLABS_API_KEY: 'fictional-key-never-used-for-synthesis' } : {}) };
   return { ...f, DB, env, agents };

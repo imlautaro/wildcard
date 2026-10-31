@@ -90,6 +90,38 @@ completion-token caps discard useful work. Creative identities influence ideas
 and judgment; even legacy poetic descriptions do not require lyrical language or
 unrelated metaphors. Explicit creative writing can still use imagery and length.
 
+## Two-way conversation (2026-10-31)
+
+Contacts tended to keep conversations going by interviewing the person: in a
+fictional small-talk evaluation, 21 of 24 private replies asked something, and
+"what about you?" was bounced back without anything from the contact's side.
+`reciprocityInstruction` (`personality/conversation.ts`, part of
+`conversationStyle`, so it applies to private replies, groups and initiative) asks
+contacts to bring their own side in social or open-ended chat: an opinion or
+preference, a real take on what was said, a light disagreement, a recommendation,
+something they find interesting within their interests and specialties, a fun fact
+or a callback to an earlier topic. Most social messages should end without a
+question; asking about the person is occasional and specific, never chained turn
+after turn, and "what about you?" gets a real answer instead of a bounced question.
+This stays inside the [embodied identity](personality.md) rules: sharing means views,
+tastes, ideas and knowledge, never invented events, routines or physical experiences.
+
+`questionStreak` counts how many of the contact's latest four replies in the current
+audience contain a question mark. At two or more, the prompt says so and asks for no
+question this turn, including pending learning curiosities, and for a contribution
+instead. `replyDeliveryInstruction` now prefers an observation, opinion or proposal
+over a question in open social exchanges, and the initiative planner prefers openers
+that share something over check-in questions. No client, schema or API change.
+
+Measured with `conversation-style-live-eval.mjs` (new `--model` option, here
+`muse-spark-1.3-contributor`), two fictional Rioplatense small-talk scenarios, two
+repetitions, `--source-ref HEAD` versus the working tree: replies containing a
+question went from 21/24 to 8/23 (one run cut short), and the contacts offered tastes,
+recommendations and takes ("Mi comodín para días así es fideos con huevo revuelto…",
+"Para mí el capítulo del servicio completo es de lo mejor…"). Opening greetings still
+usually ask how the person is. The cases file is kept outside the repository like
+the other fictional live cases.
+
 ## Shared group conversation
 
 The personality classifier distinguishes the trigger author from the reply's
