@@ -36,7 +36,8 @@ const noticeTone = computed(() => home.state.error && !feed.value ? 'error'
   : feed.value?.enabled && feed.value.error && feed.value.error !== 'HOME_NO_CONTACTS' ? 'warning' : 'info');
 
 usePolling(() => home.refresh(homeUpdating(home.state.value)), () => homeUpdating(home.state.value) ? 4000 : 60_000);
-onMounted(() => { void home.refresh(); });
+onMounted(() => { updatesOpened(true); void home.refresh(); });
+onBeforeUnmount(() => updatesOpened(false));
 
 async function run(operation: () => Promise<unknown>) {
   actionError.value = null;

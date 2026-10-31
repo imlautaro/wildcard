@@ -25,6 +25,8 @@ usePolling(async () => {
   await chats.refreshLists();
 }, () => 1000);
 usePolling(() => chats.refreshInvitations(), () => 15_000);
+const updatesUnseen = updatesBadge();
+usePolling(() => refreshUpdatesBadge(), () => 15_000);
 onMounted(() => { void chats.refresh(); });
 </script>
 
@@ -36,12 +38,13 @@ onMounted(() => { void chats.refresh(); });
         <AppIcon name="menu" />
       </button>
       <nav :id="menuID" ref="menu" popover="auto" class="menu chat-menu" aria-label="Main navigation" @toggle="onMenuToggle">
-        <AppMenuItem to="/updates" icon="sparkle" @click="menu?.hidePopover()">Updates</AppMenuItem>
+        <AppMenuItem to="/updates" icon="sparkle" @click="menu?.hidePopover()">Updates<span v-if="updatesUnseen" class="badge" style="margin-inline-start: auto" :aria-label="`${updatesUnseen} new`">{{ updatesUnseen }}</span></AppMenuItem>
         <AppMenuItem to="/account" icon="person" @click="menu?.hidePopover()">My account</AppMenuItem>
       </nav>
       <AppIconButton v-if="archived" icon="back" label="Back to Chats" @click="archived = false" />
     </template>
-    <AppIconButton to="/updates" icon="sparkle" label="Updates" :selected="route.path === '/updates'" />
+    <AppIconButton to="/updates" icon="sparkle" label="Updates" :selected="route.path === '/updates'"
+                   :badge="route.path === '/updates' ? null : updatesUnseen" :badge-label="`${updatesUnseen} new in Updates`" />
     <AppIconButton icon="archive" label="Archived" :selected="archived" @click="archived = !archived; chats.loadAllContacts()" />
     <AppIconButton to="/contacts" icon="plus" label="New chat" variant="filled"
                    :badge="chats.invitationCount.value" :badge-label="`${chats.invitationCount.value} pending invitations`" />

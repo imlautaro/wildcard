@@ -1469,7 +1469,10 @@ deduplicated. `POST /home/refresh`, `POST /home/topics` and `PATCH /home/topics/
 return the whole feed, which replaces the cached one; a mutation increments the
 store revision so a read that started earlier cannot overwrite it. Transient
 failures keep the cached cards; only a failed first load shows an error with Retry.
-Hiding a topic removes its card in the returned feed at once. Contact avatars come
+Hiding a topic removes its card in the returned feed at once. The new-card badge
+count (`GET /home/badge`, every 15 seconds outside Updates) is memory-only; opening
+Updates zeroes it locally, rejects in-flight badge reads by revision and records the
+visit with `POST /home/seen` ([details](updates.md#new-card-badge)). Contact avatars come
 from the existing contact list and private image caches; the lead headline image
 reuses the link preview caches. Server-side, cards stay until replaced, retired,
 hidden or the account is deleted (cascade). Device verification of these paths is

@@ -110,9 +110,30 @@ home.get('/', async c => {
   await c.env.DB.prepare(`INSERT INTO home_feed (user_id, due_at, viewed_at, time_zone) VALUES (?1, ?2, ?2, ?3)
     ON CONFLICT(user_id) DO UPDATE SET viewed_at = ?2, time_zone = COALESCE(?3, home_feed.time_zone)
     WHERE home_feed.viewed_at < ?2 - 600000 OR (?3 IS NOT NULL AND home_feed.time_zone IS NOT ?3)`).bind(owner, now, timeZone).run();
+  await markSeen(c.env, owner, now);
   const due = await c.env.DB.prepare(`SELECT 1 FROM home_feed WHERE user_id = ? AND status = 'idle' AND due_at <= ?`).bind(owner, now).first();
   if (due && homeEnabled(c.env)) c.executionCtx.waitUntil(dispatchHome(c.env, owner).catch(() => console.error(JSON.stringify({ event: 'home_dispatch_deferred' }))));
   return c.json(await homeFeed(c.env, owner));
+});
+
+// Opening Updates (any read of the feed, or this explicit call) clears the badge.
+async function markSeen(env: Env, owner: string, now: number) {
+  await env.DB.prepare('UPDATE home_feed SET seen_at = ?2 WHERE user_id = ?1').bind(owner, now).run();
+}
+
+// Number of cards generated since the person last opened Updates; clients poll it
+// for the Updates tab/button badge. It never starts a curation run.
+home.get('/badge', async c => {
+  const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unseen FROM home_card card
+    JOIN home_feed f ON f.user_id = card.user_id
+    JOIN home_topic t ON t.id = card.topic_id AND t.status = 'active'
+    WHERE card.user_id = ? AND card.generated_at > COALESCE(f.seen_at, f.viewed_at)`).bind(c.get('owner')).first<{ unseen: number }>();
+  return c.json({ unseen: homeEnabled(c.env) ? Math.min(row?.unseen ?? 0, 99) : 0 });
+});
+
+home.post('/seen', async c => {
+  await markSeen(c.env, c.get('owner'), Date.now());
+  return c.json({ unseen: 0 });
 });
 
 home.post('/refresh', async c => {

@@ -134,6 +134,13 @@ extension AuthAPI {
     func homeFeed(timeZone: String, token: String) async throws -> HomeFeed {
         try JSONDecoder().decode(HomeFeed.self, from: try await send(path: "home", token: token, query: [URLQueryItem(name: "timeZone", value: timeZone)]).0)
     }
+    func homeBadge(token: String) async throws -> Int {
+        struct Badge: Decodable { let unseen: Int }
+        return try JSONDecoder().decode(Badge.self, from: try await send(path: "home/badge", token: token).0).unseen
+    }
+    func markHomeSeen(token: String) async throws {
+        _ = try await send(path: "home/seen", method: "POST", body: Data("{}".utf8), token: token)
+    }
     func homeMutation(path: String, method: String = "POST", body: [String: Any] = [:], token: String) async throws -> HomeFeed {
         let data = try JSONSerialization.data(withJSONObject: body)
         return try JSONDecoder().decode(HomeFeed.self, from: try await send(path: "home/\(path)", method: method, body: data, token: token).0)
@@ -149,6 +156,10 @@ final class HomeFeedStore {
     private(set) var feed: HomeFeed?
     private(set) var error: String?
     private(set) var isMutating = false
+    /// Cards generated since Updates was last opened (docs/updates.md#new-card-badge).
+    private(set) var unseen = 0
+    @ObservationIgnored private var badgeRevision = 0
+    @ObservationIgnored private var isOpen = false
     @ObservationIgnored private var request: Task<Void, Never>?
     @ObservationIgnored private var loadedAt: Date?
     @ObservationIgnored private var revision = 0
@@ -183,6 +194,24 @@ final class HomeFeedStore {
         request = task
         await task.value
         request = nil
+    }
+
+    /// Polled by the signed-in shell; never revives a badge cleared while a read was in flight.
+    func refreshBadge(using auth: AuthStore) async {
+        guard !isOpen else { return }
+        let started = badgeRevision
+        guard let value = try? await auth.withSession({ api, token in try await api.homeBadge(token: token) }),
+              started == badgeRevision, !isOpen else { return }
+        unseen = value
+    }
+
+    /// Opening Updates clears the badge at once and records the visit on the server.
+    func setOpen(_ open: Bool, using auth: AuthStore) {
+        isOpen = open
+        guard open else { return }
+        badgeRevision += 1
+        unseen = 0
+        Task { try? await auth.withSession { api, token in try await api.markHomeSeen(token: token) } }
     }
 
     /// Mutations return the whole feed; a newer revision rejects late reads.

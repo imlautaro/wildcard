@@ -1237,7 +1237,9 @@ styles. **Update now**, **Topics** and **Follow** live in the page bar; the card
 menu offers Message, More/Less like this and Hide. A note's suggested reply fills
 the contact's empty composer through `suggestDraft` and is never sent automatically.
 Behavior, copy and caching match the iOS Updates tab (`useHome`, see
-[caching](caching.md#updates-feed)).
+[caching](caching.md#updates-feed)). The sparkle button and the menu item carry the
+[new-card badge](updates.md#new-card-badge) (migration 0076), polled by the chat list
+every 15 seconds and cleared when the Updates page mounts, like the iOS tab badge.
 
 ## Chat-list context menu and message menu (2026-10-30)
 

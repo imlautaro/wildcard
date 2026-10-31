@@ -7,9 +7,34 @@ import type { HomeFeed } from '~/utils/types';
 // seconds while contacts are preparing cards), and every mutation returns the whole
 // feed, which replaces the cached one and rejects older in-flight reads.
 const state = reactive({ value: null as HomeFeed | null, loadedAt: 0, revision: 0, request: null as Promise<void> | null, error: null as string | null, saving: 0 });
+// New-card badge (docs/updates.md#new-card-badge): polled by the chat list, cleared
+// locally and on the server as soon as Updates opens. A badge read that started
+// before the page opened never brings the count back.
+const badge = reactive({ unseen: 0, revision: 0, open: false });
 registerSessionReset(() => {
   state.revision++; state.value = null; state.loadedAt = 0; state.request = null; state.error = null;
+  badge.revision++; badge.unseen = 0; badge.open = false;
 });
+
+export async function refreshUpdatesBadge() {
+  if (badge.open) return;
+  const revision = badge.revision;
+  try {
+    const value = await api<{ unseen: number }>('home/badge');
+    if (badge.revision === revision && !badge.open) badge.unseen = value.unseen;
+  } catch { /* The badge keeps its last known value. */ }
+}
+
+// Called while the Updates page is visible; the feed read also marks it seen.
+export function updatesOpened(open: boolean) {
+  badge.open = open;
+  if (!open) return;
+  badge.revision++;
+  badge.unseen = 0;
+  void api('home/seen', { method: 'POST', json: {} }).catch(() => {});
+}
+
+export function updatesBadge() { return computed(() => badge.unseen); }
 
 // The feed names contacts by the viewer's alias: keep the last feed visible, reject in-flight
 // reads and revalidate in the background once it has been loaded.

@@ -69,6 +69,7 @@ struct HomeView: View {
                         openGroup: { id in destinations.append(.group(id)) }
                     )
                 }
+                .badge(section == .updates ? 0 : updates.unseen)
                 Tab("Account", systemImage: "person.crop.circle", value: Section.account) {
                     AccountView()
                 }
@@ -142,6 +143,16 @@ struct HomeView: View {
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await native.observeAlarmChanges()
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                await updates.refreshBadge(using: auth)
+                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+            }
+        }
+        .onChange(of: section == .updates && destinations.isEmpty, initial: true) { _, open in
+            updates.setOpen(open, using: auth)
         }
         .task(id: native.route?.id) {
             guard let route = native.route else { return }

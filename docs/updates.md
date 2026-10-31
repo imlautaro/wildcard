@@ -43,6 +43,9 @@ This is a first implementation (2026-10-30). See [verification](#verification).
   its page (web).
 - **Coming up**: up to four active schedules due in the next 48 hours and up to
   four open tasks assigned to the person, each opening its chat.
+- **New-card badge**: the Updates tab (iOS) and the Updates button and menu item
+  (web) show how many cards were prepared or refreshed since the person last opened
+  Updates. Opening Updates clears it. See [New-card badge](#new-card-badge).
 
 Fixed interface copy is English like the rest of the app; card text is written by
 the contacts in the language the person uses with them.
@@ -170,6 +173,8 @@ Reads are limited to 90 per minute, writes to 20 per minute.
 | Route | Purpose |
 | --- | --- |
 | `GET /api/v1/home?timeZone=…` | The feed: `enabled`, `status`, `pending`, `briefing`, `progress`, `contributors`, `cards`, `topics`, `apps`, `agenda`. Records the view and the time zone, and starts a due run. |
+| `GET /api/v1/home/badge` | `{ unseen }`: active cards generated after the last visit (capped at 99, `0` when Updates are off). Never starts a run. |
+| `POST /api/v1/home/seen` | Record that Updates was opened (clears the badge). `GET /home` records it too. |
 | `POST /api/v1/home/refresh` | Request an update (409 when Updates are turned off). Returns the feed. |
 | `POST /api/v1/home/topics` `{ text }` | Follow something (1–400 characters, at most 20 active requests). Returns the feed (201). |
 | `PATCH /api/v1/home/topics/:id` `{ status?, feedback? }` | `status`: `active` or `hidden`; `feedback`: `more`, `less` or `null`. Hiding deletes the card. Returns the feed. |
@@ -180,6 +185,17 @@ requested run is due but not yet claimed, so clients can show progress at once.
 
 Mini app opens are counted in `POST …/mini-apps/:appID/resolve` (reloads within ten
 minutes count as one visit) in `mini_app_usage`.
+
+## New-card badge
+
+Migration 0076 adds `home_feed.seen_at`, set on every feed read and by
+`POST /home/seen` (feeds from before it fall back to `viewed_at`). A card counts as
+new when its `generated_at` is later, so refreshed cards count again. Both clients
+poll `GET /home/badge` every 15 seconds while signed in and active (iOS: the signed-in
+shell while the app is in the foreground; web: the chat list), not while Updates is
+the visible page. Opening Updates sets the local count to 0 at once, increments a
+badge revision so a read already in flight cannot bring the count back, and calls
+`POST /home/seen`. The count lives in memory only and is dropped with the session.
 
 ## Caching
 
