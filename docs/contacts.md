@@ -294,6 +294,12 @@ and a member can both set an alias; members cannot rename the shared contact.
   text typed or generated inside messages (an `@Alberdi` mention or a name inside a bot reply is
   stored text and is not rewritten), invitations/sharing (the recipient sees the shared name and sets their own alias),
   and the admin app.
+- Renaming (creator only, `PATCH /contacts/:id`) changes the shared name everywhere in one D1 batch:
+  `contact_agent.name` and every holder's `contact.name`, bumping their `updated_at`. Aliases are untouched,
+  so a holder with an alias keeps seeing it. New invitations, new group messages and the bot's own prompts
+  use the new name; earlier group messages keep their stored `sender_name`. Other holders' clients pick up the
+  new name on their next refresh of the contact list; there is no push for it. Checked on the local workerd
+  D1: a member's attempt changes nothing, the creator's rename updates the agent and all copies.
 - Group messages keep an immutable shared `sender_name` snapshot; the alias is overlaid at read time
   by `agent_id` (`apps/api/src/contacts/alias.ts`). Removing the alias restores the shared name
   everywhere on the next read.

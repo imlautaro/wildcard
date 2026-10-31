@@ -226,9 +226,19 @@ contacts.put('/:id/speech-accent', contactBody, async (c) => {
 contacts.patch('/:id', contactBody, async (c) => {
   const name = contactName(await c.req.json<unknown>().catch(() => null));
   if (!name) return c.json({ error: 'Provide only a name using 1–100 characters without control characters' }, 400);
-  const result = await c.env.DB.prepare(`UPDATE contact SET name = ?1, updated_at = ?2
-    WHERE id = ?3 AND user_id = ?4 AND ${managesAgent} RETURNING ${columns}`)
-    .bind(name, Date.now(), c.req.param('id'), c.get('owner')).first<Contact>();
+  // The creator's rename is the shared name: it updates the agent and every holder's copy in
+  // one batch (aliases are untouched). Earlier group messages keep their sender_name snapshot.
+  const id = c.req.param('id'), owner = c.get('owner'), now = Date.now();
+  const [renamed] = await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE contact_agent SET name = ?1, updated_at = ?2
+      WHERE owner_id = ?4 AND id = (SELECT agent_id FROM contact WHERE id = ?3 AND user_id = ?4) RETURNING id`)
+      .bind(name, now, id, owner),
+    c.env.DB.prepare(`UPDATE contact SET name = ?1, updated_at = ?2
+      WHERE agent_id = (SELECT agent_id FROM contact WHERE id = ?3 AND user_id = ?4)
+        AND EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = ?4)`)
+      .bind(name, now, id, owner),
+  ]);
+  const result = renamed.results[0] ? await c.env.DB.prepare(`SELECT ${columns} FROM contact WHERE id = ? AND user_id = ?`).bind(id, owner).first<Contact>() : null;
   if (!result) return c.json({ error: 'Contact not found' }, 404);
   const updated = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
     .bind(result.id, c.get('owner')).first<Contact>();
