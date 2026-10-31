@@ -4,7 +4,7 @@ import { learningContext, learningQuestionInstruction } from './learning';
 import { assistantEvents, eventTime, temporalContext, temporalInstruction } from './temporal';
 import { privateTaskAccess } from '../tasks/access';
 import { chatImageTools, executeChatImageTool, indexRecentChatImage, withChatImages } from '../photos/chat-images';
-import { imageInstruction, imageTool, generateChatImage, generatedImage } from '../photos/generation';
+import { imageInstruction, imageTool, generateChatImage, generatedImages } from '../photos/generation';
 import { messageInstruction, quoteInstruction, parseMessages, type ContactResponse } from './messages';
 import { profilePhotoTool, profilePhotoInstruction, viewProfilePhoto, withProfilePhotos } from '../photos/model';
 import { executeNativeTool, nativeTools, parseNativeContext } from '../native/actions';
@@ -497,7 +497,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
         .bind(response.replyTo.messageID, turn.contactID, turn.userID, turn.sequence, response.replyTo.side).first()) {
         throw new Error('MODEL_INVALID_RESPONSE');
       }
-      return { ...response, learningRevision, attachment: autonomous ? null : await generatedImage(env,
+      return { ...response, learningRevision, attachments: autonomous ? [] : await generatedImages(env,
         { ...imageScope, turnID: turn.id, attempt: turn.attempt }) };
     }
     messages.push(answer);
@@ -529,7 +529,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       }
       messages.push({ role: 'tool', tool_call_id: call.id, content });
     }
-    if (reactionOnly && (autonomous || !await generatedImage(env, { ...imageScope, turnID: turn.id, attempt: turn.attempt }))) return null;
+    if (reactionOnly && (autonomous || !(await generatedImages(env, { ...imageScope, turnID: turn.id, attempt: turn.attempt })).length)) return null;
     if (miniAppFailed && !repairRound && round === toolRounds - 1) { toolRounds++; repairRound = true; }
     // Announcing a mini app does not use up a building round (once per turn).
     if (miniAppStarted && !startRound) { toolRounds++; startRound = true; }

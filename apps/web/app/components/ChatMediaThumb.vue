@@ -11,5 +11,5 @@ watch(() => useSession().user.value?.id, () => { open.value = false; });
     <img v-if="source" :src="source" :alt="name">
     <span v-else class="spinner" />
   </button>
-  <ChatImageViewer v-if="open && source" :source="source" :name="name" @close="open = false" />
+  <ChatImageViewer v-if="open && source" :images="[{ source, name }]" @close="open = false" />
 </template>

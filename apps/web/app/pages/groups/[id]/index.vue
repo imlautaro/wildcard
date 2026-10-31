@@ -247,7 +247,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
             >{{ senderOf(item.message)?.name ?? item.message.senderName }}</span>
             <MessageReplyQuote v-if="item.message.replyTo" :preview="replyPreview(item.message.replyTo)" interactive @open="showQuoted(item.message.replyTo)" />
             <VoiceMessage v-if="item.message.voice" :voice="item.message.voice" :path="attachmentPath(item.message)" :outgoing="isMine(item.message)" :sender-name="item.message.senderName" :sender-photo="senderPhoto(item.message)" />
-            <MessageAttachment v-else-if="item.message.attachment" :attachment="item.message.attachment" :path="attachmentPath(item.message)" />
+            <MessageAttachment v-else-if="item.message.attachment" :attachment="item.message.attachment" :attachments="item.message.attachments" :path="attachmentPath(item.message)" />
             <div v-if="item.message.text && !item.message.voice" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }"><MessageMarkdown v-if="item.message.agentID" :text="item.message.text" /><template v-else><LinkifiedText :text="item.message.text" /></template><LinkPreviewCard :url="previewLink(item.message.text, !!item.message.agentID)" /></div>
             <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => a.replyID === item.message.id)" :key="app.id" :app="app" :base="`groups/${groupID}`" />
             <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.message.id)" :key="doc.id" :document="doc" :to="`/groups/${groupID}/documents/${doc.id}`" />

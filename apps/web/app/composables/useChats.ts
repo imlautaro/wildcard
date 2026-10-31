@@ -382,7 +382,7 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   const last = cached ? lastGroupChatMessage(cached.messages) : undefined;
   if (last && (last.id === group.lastMessageID || last.createdAt >= (group.lastMessageAt ?? 0))) {
     voice = last.id === group.lastMessageID ? mergeVoice(last.voice, group.lastMessageVoice) : last.voice;
-    preview = last.text ? [...(last.agentID ? plainMessageMarkdown(last.text) : last.text)].slice(0, 500).join('') : last.attachment ? `Attachment: ${last.attachment.name}` : '';
+    preview = last.text ? [...(last.agentID ? plainMessageMarkdown(last.text) : last.text)].slice(0, 500).join('') : (last.attachments?.length ?? 0) > 1 ? `${last.attachments!.length} photos` : last.attachment ? `Attachment: ${last.attachment.name}` : '';
     at = last.createdAt;
     sender = last.senderName;
     userID = last.userID;

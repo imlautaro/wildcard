@@ -43,8 +43,9 @@ async function allowed(env: Env, scope: ChatImageScope): Promise<boolean> {
 function sources(env: Env, scope: ChatImageScope, tail: string, values: (string | number)[] = []) {
   const sql = scope.groupID ? `SELECT gm.id AS messageID, 'group' AS side, gm.sequence, gm.created_at AS createdAt,
     COALESCE(gm.agent_id, gm.user_id) AS senderID, gm.sender_name AS senderName,
-    gm.text AS caption, gm.attachment_json AS attachmentJSON
-    FROM group_message gm WHERE gm.group_id = ?1 AND gm.sequence < ?2
+    gm.text AS caption, album.value AS attachmentJSON
+    FROM group_message gm, json_each(COALESCE(gm.attachments_json, json_array(json(COALESCE(gm.attachment_json, 'null'))))) album
+    WHERE gm.group_id = ?1 AND gm.sequence < ?2
     AND (?3 = 0 OR gm.contributor_consent = 1)
     AND (gm.user_id IS NULL OR EXISTS (SELECT 1 FROM group_member m WHERE m.group_id = gm.group_id
       AND m.user_id = gm.user_id AND m.share_memory = 1 AND (?3 = 0 OR m.contributor_consent = 1)))
@@ -58,9 +59,12 @@ function sources(env: Env, scope: ChatImageScope, tail: string, values: (string 
     SELECT json_extract(part.value, '$.id') AS messageID, 'assistant' AS side, t.sequence,
       json_extract(part.value, '$.createdAt') AS createdAt, c.agent_id AS senderID, c.name AS senderName,
       COALESCE(json_extract(part.value, '$.text'), '') AS caption,
-      json_extract(part.value, '$.attachment') AS attachmentJSON
+      album.value AS attachmentJSON
       FROM chat_turn t JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id,
-        json_each(COALESCE(t.assistant_messages_json, '[]')) part
+        json_each(COALESCE(t.assistant_messages_json, '[]')) part,
+        -- Album images (2–3) are separate sources; a single image stays one source.
+        json_each(CASE WHEN json_type(part.value, '$.attachments') = 'array' THEN json_extract(part.value, '$.attachments')
+          ELSE json_array(json(COALESCE(json_extract(part.value, '$.attachment'), 'null'))) END) album
       WHERE t.contact_id = ?1 AND t.user_id = ?3 AND t.sequence < ?2`;
   return env.DB.prepare(`WITH source AS (${sql}), images AS (
     SELECT source.*, json_extract(attachmentJSON, '$.digest') AS digest,
@@ -183,7 +187,7 @@ export async function withChatImages(env: Env, scope: ChatImageScope, messages: 
       currentMessages.push({ ...message, content: error('Image access changed. Do not use the earlier reference or guess its contents.') });
       continue;
     }
-    if (ref) refs.set(`${ref.messageID}:${ref.side}`, ref);
+    if (ref) refs.set(`${ref.messageID}:${ref.side}:${ref.digest}`, ref);
     currentMessages.push(message);
   }
   const images: ModelMessage[] = [];

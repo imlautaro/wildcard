@@ -106,7 +106,8 @@ export async function museCompletion(env: Env, messages: ModelMessage[], configu
         call.type !== 'function' || !isRecord(call.function) || typeof call.function.name !== 'string' ||
         call.function.name.length > 80 || typeof call.function.arguments !== 'string' ||
         new TextEncoder().encode(call.function.arguments).byteLength >
-          (['create_mini_app', 'create_document', 'edit_document', 'generate_chat_image'].includes(call.function.name) ? 30000
+          (call.function.name === 'generate_chat_image' ? 48000
+            : ['create_mini_app', 'create_document', 'edit_document'].includes(call.function.name) ? 30000
             : ['send_group_message', 'call_mcp_tool', 'create_task_list'].includes(call.function.name) ? 16000
             : ['add_task', 'update_task', 'request_changes', 'add_to_updates'].includes(call.function.name) ? 6000
             : ['research_web', 'start_mini_app', 'ask_linked_contact', 'tell_linked_contact'].includes(call.function.name) ? 4000

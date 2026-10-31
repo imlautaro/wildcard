@@ -2,7 +2,7 @@ import { remoteContext } from '../native/remote';
 import { parseNativeContext } from '../native/actions';
 import { reactionRoutes } from '../reactions/routes';
 import { parsePrivateReply, privateQuotes, privateTarget } from '../replies/data';
-import { mediaPage, parseAttachment, sameAttachment, storedAttachment, type Attachment } from '../chat/attachments';
+import { albumAttachments, albumIndex, mediaPage, parseAttachment, sameAttachment, storedAttachment, type Attachment } from '../chat/attachments';
 import { contactModelAllowed } from '../chat/consent';
 import { validTimeZone } from '../schedules/data';
 import { lingerInChat, readPresence } from '../chat/presence';
@@ -237,13 +237,15 @@ chats.get('/media', async (c) => {
     .all<{ sequence: number; id: string; createdAt: number; attachmentJSON: string | null; assistantMessagesJSON: string | null }>();
   const page = results.slice(0, mediaPage(kind));
   const items = page.flatMap((turn) => {
-    const reply = (JSON.parse(turn.assistantMessagesJSON ?? '[]') as { createdAt: number; attachment?: Attachment | null }[])[0];
+    const reply = (JSON.parse(turn.assistantMessagesJSON ?? '[]') as { createdAt: number; attachment?: Attachment | null; attachments?: Attachment[] | null }[])[0];
+    // A contact-generated album lists each image in order; image addresses it.
+    const album = reply ? albumAttachments(reply.attachment, reply.attachments) : [];
     return [
-      ...(reply?.attachment ? [{ side: 'assistant' as const, createdAt: reply.createdAt, attachment: reply.attachment }] : []),
-      ...(turn.attachmentJSON ? [{ side: 'user' as const, createdAt: turn.createdAt, attachment: JSON.parse(turn.attachmentJSON) as Attachment }] : []),
+      ...album.map((attachment, image) => ({ side: 'assistant' as const, createdAt: reply!.createdAt, attachment, image: album.length > 1 ? image : undefined })),
+      ...(turn.attachmentJSON ? [{ side: 'user' as const, createdAt: turn.createdAt, attachment: JSON.parse(turn.attachmentJSON) as Attachment, image: undefined }] : []),
     ].filter(({ attachment }) => !isVoice(attachment) && attachment.mimeType.startsWith('image/') === (kind === 'image'))
-      .map(({ side, createdAt, attachment }) => ({ messageID: turn.id, side, sequence: turn.sequence, createdAt,
-        name: attachment.name, mimeType: attachment.mimeType, size: attachment.size }));
+      .map(({ side, createdAt, attachment, image }) => ({ messageID: turn.id, side, sequence: turn.sequence, createdAt,
+        ...(image !== undefined ? { image } : {}), name: attachment.name, mimeType: attachment.mimeType, size: attachment.size }));
   });
   return c.json({ items, nextBefore: results.length > page.length ? page[page.length - 1].sequence : null });
 });
@@ -267,10 +269,14 @@ chats.put('/turns/:turnID/attachment/listened', async (c) => {
 chats.get('/turns/:turnID/attachment', async (c) => {
   const turn = await findTurn(c.env.DB, c.req.param('turnID'), c.get('contactID'), c.get('owner'));
   const part = Number(c.req.query('part') ?? '0');
-  if (!Number.isSafeInteger(part) || part < 0 || part > 7) return c.json({ error: 'Attachment not found' }, 404);
+  const image = albumIndex(c.req.query('image'));
+  if (!Number.isSafeInteger(part) || part < 0 || part > 7 || image === null) return c.json({ error: 'Attachment not found' }, 404);
+  const message = turn && c.req.query('side') === 'assistant'
+    ? (JSON.parse(turn.assistantMessagesJSON ?? '[]') as { attachment?: Attachment; attachments?: Attachment[] }[])[part] : null;
+  // image selects a contact-generated album image; human uploads remain single.
   const attachment = turn && (c.req.query('side') === 'assistant'
-    ? (JSON.parse(turn.assistantMessagesJSON ?? '[]') as { attachment?: Attachment }[])[part]?.attachment
-    : storedAttachment(turn));
+    ? message && albumAttachments(message.attachment, message.attachments)[image]
+    : image === 0 ? storedAttachment(turn) : null);
   if (!attachment) return c.json({ error: 'Attachment not found' }, 404);
   const object = await c.env.CONTACT_PHOTOS.get(attachment.key);
   if (!object) return c.json({ error: 'Attachment not found' }, 404);

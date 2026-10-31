@@ -150,6 +150,14 @@ delivered message metadata and use the ownership-checked attachment endpoint wit
 `?side=assistant`. Incoming image/caption UI, quotes and shared image caches match
 on iOS and web. See [generated images](generated-images.md).
 
+A contact-generated [album](generated-images.md#albums) (two or three images on one
+message) keeps `attachment` as its first image and adds `attachments` with every
+image. `GET /api/v1/contacts/:id/chat/turns/:turn/attachment?side=assistant&image=N`
+and `GET /api/v1/groups/:id/messages/:message/attachment?image=N` return album image
+N (0–2); without `image` they return the first or only image as before. Human
+uploads remain single attachments. Quoting an album message shows it as a photo
+(its first image).
+
 ## Shared in this chat
 
 Chat details show a WhatsApp-style **Shared in this chat** section with two tabs:
@@ -171,6 +179,9 @@ Groups list every member's attachments in the group history. The Docs tab lists 
 
 A page covers up to 30 messages for images and 60 for files.
 Each item has `messageID`, `sequence`, `createdAt`, `name`, `mimeType` and `size`.
+Each image of a contact-generated album is a separate item with an `image` index
+(0–2) for the attachment route's `image` query; single attachments omit it. A page
+still counts messages, so an album page can hold more than 30 items.
 `nextBefore` is the sequence cursor for the next page, or `null`. Items reuse the
 existing attachment download routes, so thumbnails share the chat's image cache
 keys and no bytes are downloaded twice. No migration is needed; the queries use the

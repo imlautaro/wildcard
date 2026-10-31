@@ -2917,3 +2917,26 @@ existing assistant metadata and image caches. Rollback through a previously
 pushed compatible revision keeps the additive table and delivered JSON; it does
 not recall delivered images. Disable participant initiative before rollback if
 needed. Verify the fictional-data matrix in [generated images](generated-images.md).
+
+## Contact-generated image albums — migration 0082
+
+Apply `0082_generated_image_albums.sql` after every migration through 0081. It adds
+the nullable `group_message.attachments_json` column (a JSON array, checked) for
+contact-generated albums of two or three images, and recreates the 0048
+`chat_image_index` delete triggers so they cover album images. Receipt tables are unchanged:
+album receipts store arrays in their existing columns, and earlier rows remain
+readable. It uses the already required DB, private CONTACT_PHOTOS bucket,
+META_API_KEY, Muse Image generation/edit access, Spark descriptions, CHAT_WORKFLOW
+and Cron. No new binding, secret, permission, account setting or service is
+required. Optional `imageSearch` relies on the Muse Image `enable_image_search`
+tool being available to the account; its availability, cost and latency are
+unverified.
+
+For an independent account follow the provisioning order above and use
+`npm run db:migrate:local` for local development with fictional data. Production
+applies the additive migration through commit/push and automatic release only;
+verify build status and active source SHA before functional verification. The
+initiative planner budget is now 4,400 completion tokens. Rollback to an earlier
+pushed revision keeps the column; see the compatibility note in
+[generated images](generated-images.md#albums) about album images 2–3 and
+orphan cleanup after rollback.

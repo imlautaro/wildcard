@@ -40,7 +40,9 @@ export async function cleanResources(env: Env, scope?: string): Promise<void> {
           // A reused object is never removed while another message references it.
           const used = await env.DB.prepare(`SELECT 1 FROM chat_turn WHERE json_extract(attachment_json,'$.key')=?1
             UNION ALL SELECT 1 FROM chat_turn t,json_each(COALESCE(t.assistant_messages_json,'[]')) p WHERE json_extract(p.value,'$.attachment.key')=?1
-            UNION ALL SELECT 1 FROM group_message WHERE json_extract(attachment_json,'$.key')=?1 LIMIT 1`).bind(job.resource).first();
+              OR EXISTS (SELECT 1 FROM json_each(COALESCE(json_extract(p.value,'$.attachments'),'[]')) a WHERE json_extract(a.value,'$.key')=?1)
+            UNION ALL SELECT 1 FROM group_message WHERE json_extract(attachment_json,'$.key')=?1
+              OR EXISTS (SELECT 1 FROM json_each(COALESCE(attachments_json,'[]')) a WHERE json_extract(a.value,'$.key')=?1) LIMIT 1`).bind(job.resource).first();
           if (!used) {
             await env.CONTACT_PHOTOS.delete(job.resource);
             if (Date.now()<job.settleAt) {

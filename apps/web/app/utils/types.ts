@@ -59,7 +59,8 @@ export type VoiceInfo = { durationMs: number; ownListenedAt?: number | null; lis
 export type DraftVoice = { blob: Blob; data: string; durationMs: number };
 export type VoiceOption = { id: string; name: string; gender: string | null; age: string | null; accent: string | null; description: string | null };
 // A chat attachment listed in chat details. Private chats set `side`; groups set the sender.
-export type ChatMediaItem = Attachment & { messageID: string; sequence: number; createdAt: number; side?: 'user' | 'assistant';
+// `image` addresses one image of a contact-generated album; absent for single attachments.
+export type ChatMediaItem = Attachment & { messageID: string; sequence: number; createdAt: number; side?: 'user' | 'assistant'; image?: number;
   senderName?: string; userID?: string | null; agentID?: string | null };
 
 // An earlier message quoted by a reply, resolved by the server from current history.
@@ -92,7 +93,7 @@ export type ChatTurn = {
   id: string;
   userText: string;
   assistantText: string | null;
-  assistantMessages?: { id: string; text: string; createdAt: number; replyTo?: ReplyQuote | null; attachment?: Attachment | null; voice?: VoiceInfo | null }[];
+  assistantMessages?: { id: string; text: string; createdAt: number; replyTo?: ReplyQuote | null; attachment?: Attachment | null; attachments?: Attachment[] | null; voice?: VoiceInfo | null }[];
   status: TurnStatus;
   attempt: number;
   createdAt: number;
@@ -147,6 +148,8 @@ export type GroupMessage = {
   text: string;
   createdAt: number;
   attachment: Attachment | null;
+  // Contact-generated album: every image in order, including `attachment`; null otherwise.
+  attachments?: Attachment[] | null;
   // Aggregate recipient state: sent, received, or read; null for legacy messages.
   receiptState?: string | null;
   replyTo?: ReplyQuote | null;

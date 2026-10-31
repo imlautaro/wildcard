@@ -753,7 +753,8 @@ private struct GroupMessageRow: View {
                     ChatAttachmentView(attachment: file, contactID: groupID, turnID: message.id, groupID: groupID,
                                        sentAt: message.createdAt, caption: file.isImage ? message.text : "", receiptState: message.receiptState ?? "sent", fromUser: own, showsReceipt: own, formatsMarkdown: message.agentID != nil,
                                        senderName: own ? nil : (sender?.name ?? message.senderName),
-                                      senderColor: senderColor, replyQuote: replyQuote, onQuoteTap: onQuoteTap)
+                                      senderColor: senderColor, replyQuote: replyQuote, onQuoteTap: onQuoteTap,
+                                      album: message.attachments ?? [])
                 }
                 if message.voice == nil && !message.text.isEmpty && message.attachment?.isImage != true {
                     MessageBubbleView(text: message.text, sentAt: message.createdAt, fromUser: own, receiptState: message.receiptState ?? "sent", showsReceipt: own, formatsMarkdown: message.agentID != nil,

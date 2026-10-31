@@ -1,7 +1,7 @@
 import { privateTaskAccess } from '../tasks/access';
 import { learnFromReply, recordLearningQuestion } from './learning';
 import { privateContact } from '../mcp/client';
-import { generatedImage } from '../photos/generation';
+import { albumFields, generatedImages } from '../photos/generation';
 import { contactModelAllowed } from './consent';
 import { messageDelay, readingDelay, recordingDelay, type ContactResponse } from './messages';
 import { batchStatement, batchIntoNext, shouldHoldReply, waitForComposer } from './pacing';
@@ -35,11 +35,13 @@ async function pauseUntil(step: WorkflowStep, name: string, deadline: number) {
 }
 
 // Null is an intentional reaction-only turn. Old checkpoints contain prose.
+// Workflows checkpointed before albums carry a single attachment field instead.
+const hasImages = (response: ContactResponse | null) => !!(response?.attachments?.length || (response as { attachment?: unknown } | null)?.attachment);
 function replyMessages(reply: ContactResponse | string[] | string | null) {
   const response = reply && typeof reply === 'object' && !Array.isArray(reply) ? reply : null;
   const messages = response ? response.messages : typeof reply === 'string' ? [reply] : Array.isArray(reply) ? reply : [];
   // At most one message per reply is spoken: the first suitable one without an image.
-  const spoken = messages.findIndex((text, index) => voiceSuitable(text) && !(index === 0 && response?.attachment));
+  const spoken = messages.findIndex((text, index) => voiceSuitable(text) && !(index === 0 && hasImages(response)));
   return { response, messages, spoken };
 }
 
@@ -264,12 +266,12 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         // A crash after the transaction but before its checkpoint must not append twice.
         if (previous.length > base + index) return true;
         // Recheck profile versions and conversation access after inference/pauses.
-        const attachment = index === 0 && response?.attachment ? await generatedImage(env, {
+        const album = index === 0 && hasImages(response) ? await generatedImages(env, {
           agentID: (await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ?').bind(delivered.contactID).first<{ id: string }>())!.id,
           userID: delivered.userID, contactID: delivered.contactID, contributor: env.META_CHAT_MODEL.includes('contributor') && !await privateContact(env.DB, delivered.contactID),
           beforeSequence: delivered.sequence + 1, turnID: job.turnID, attempt: job.attempt,
-        }) : null;
-        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${base + index}`, text: messages[index], createdAt: now, ...(attachment ?? voice ? { attachment: attachment ?? voice } : {}), ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
+        }) : [];
+        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${base + index}`, text: messages[index], createdAt: now, ...(album.length ? albumFields(album) : voice ? { attachment: voice } : {}), ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
         const interrupted = `EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = chat_turn.contact_id
           AND newer.user_id = chat_turn.user_id AND newer.sequence > chat_turn.sequence)`;
         const text = next.length ? next.map(message => message.text).join('\n\n') : null;

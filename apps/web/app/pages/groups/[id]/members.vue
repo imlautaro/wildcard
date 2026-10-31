@@ -161,7 +161,7 @@ onMounted(() => run(async () => {
           </div>
         </AppListGroup>
 
-        <ChatMediaTabs :base="`groups/${id}`" :attachment-path="item => `groups/${id}/messages/${item.messageID}/attachment`"
+        <ChatMediaTabs :base="`groups/${id}`" :attachment-path="item => albumImagePath(`groups/${id}/messages/${item.messageID}/attachment`, item.image)"
           :documents-base="`groups/${id}`" :document-route="`/groups/${id}/documents`"
         />
 

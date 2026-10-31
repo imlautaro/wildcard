@@ -141,7 +141,8 @@ struct ChatView: View {
                                                        assistantAttachment: true, sentAt: item.timestamp, caption: reply,
                                                        fromUser: false, showsReceipt: false, formatsMarkdown: true,
                                                        replyQuote: item.message?.replyTo.map(replyPreview),
-                                                       onQuoteTap: { if let quote = item.message?.replyTo { showQuoted(quote, proxy: proxy) } })
+                                                       onQuoteTap: { if let quote = item.message?.replyTo { showQuoted(quote, proxy: proxy) } },
+                                                       album: item.message?.attachments ?? [])
                                 } else {
                                     MessageBubbleView(text: reply, sentAt: item.timestamp, fromUser: false, formatsMarkdown: true,
                                                       replyQuote: item.message?.replyTo.map(replyPreview),

@@ -1,7 +1,7 @@
 import { chatImageTools, executeChatImageTool, indexRecentChatImage, withChatImages } from '../photos/chat-images';
 import { replyDeliveryInstruction } from '../personality/conversation';
 import { currentAudienceInstruction, deliveryPlanInstruction, groupDeliveryInstruction, needsDeliveryReview, sharedWorkInstruction } from './conversation';
-import { imageTool, generateChatImage, generatedImage } from '../photos/generation';
+import { imageTool, generateChatImage, generatedImages } from '../photos/generation';
 import { profilePhotoTool, viewProfilePhoto, withProfilePhotos } from '../photos/model';
 import type { WorkflowStep } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
@@ -332,8 +332,8 @@ async function completeDraft(env: Env, input: GroupInput, step: WorkflowStep, pr
           consumed = true;
           const parsed = parseGroupDecision(answer.content!, input);
           const draft = { ...parsed, responseRequired: input.openingReplyRequired || !!(parsed.text && input.previous?.responseRequired) };
-          if (draft.text !== null && draft.includeImage !== false) draft.attachment = await generatedImage(env, { ...input.scope, beforeSequence: input.throughSequence + 1,
-            turnID: input.scope.reactionJob.turnID, attempt: input.scope.reactionJob.attempt });
+          if (draft.text !== null && draft.includeImage !== false) draft.attachment = (await generatedImages(env, { ...input.scope, beforeSequence: input.throughSequence + 1,
+            turnID: input.scope.reactionJob.turnID, attempt: input.scope.reactionJob.attempt }))[0] ?? null;
           console.log(JSON.stringify({ event: 'group_turn_decision', action: JSON.parse(answer.content!).action,
             openingReplyRequired: input.openingReplyRequired, executions, finalizationAttempt: attempt }));
           return { draft, code: null, consumed };
@@ -407,8 +407,8 @@ async function completeDraft(env: Env, input: GroupInput, step: WorkflowStep, pr
       if (!answer.content || answer.tool_calls?.length) throw new NonRetryableError('MODEL_EMPTY_RESPONSE');
       console.log(JSON.stringify({ event: 'group_reply_recovered', code }));
       return { draft: { text: answer.content, responseRequired: input.openingReplyRequired, invitesReply: false,
-        attachment: await generatedImage(env, { ...input.scope, beforeSequence: input.throughSequence + 1, turnID: input.scope.reactionJob.turnID,
-          attempt: input.scope.reactionJob.attempt }), throughSequence: input.throughSequence }, consumed: true };
+        attachment: (await generatedImages(env, { ...input.scope, beforeSequence: input.throughSequence + 1, turnID: input.scope.reactionJob.turnID,
+          attempt: input.scope.reactionJob.attempt }))[0] ?? null, throughSequence: input.throughSequence }, consumed: true };
     });
     if (recovery.consumed) await acknowledge(`${prefix}-recovery-read`);
     return recovery.draft;

@@ -53,4 +53,4 @@ export function useChatMedia(base: MaybeRefOrGetter<string>, kind: MaybeRefOrGet
   return { state, load };
 }
 
-export const chatMediaItemKey = (item: ChatMediaItem) => `${item.messageID}/${item.side ?? 'group'}`;
+export const chatMediaItemKey = (item: ChatMediaItem) => `${item.messageID}/${item.side ?? 'group'}${item.image ? `/${item.image}` : ''}`;

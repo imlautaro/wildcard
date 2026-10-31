@@ -141,7 +141,15 @@
 .bubble .meta { display: flex; justify-content: flex-end; gap: 4px; font-size: 11px; color: var(--md-on-surface-variant); margin-top: 2px; white-space: nowrap; }
 .bubble.media { padding: 4px; overflow: hidden; }
 /* Photo bubbles keep a fixed width so a caption wraps under the photo instead of widening the bubble. */
-.bubble.media:has(> .chat-image-thumbnail) { width: 300px; max-width: 100%; }
+.bubble.media:has(> .chat-image-thumbnail, > .chat-album) { width: 300px; max-width: 100%; }
+/* Contact-generated albums: 2 side by side, 3 as one wide image over two squares.
+   Grid cells crop to fill; the full-screen viewer shows each whole image. */
+.chat-album { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; overflow: hidden; border-radius: 16px; }
+.chat-album-item { display: block; width: 100%; padding: 0; overflow: hidden; background: var(--hover); cursor: zoom-in; aspect-ratio: 1; }
+.chat-album.count-2 .chat-album-item { aspect-ratio: 3 / 4; }
+.chat-album.count-3 .chat-album-item:first-child { grid-column: 1 / -1; aspect-ratio: 4 / 3; }
+.chat-album-item img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.chat-album-item > .center { height: 100%; }
 .chat-image-thumbnail { display: block; width: 100%; padding: 0; overflow: hidden; border-radius: 16px; background: var(--hover); cursor: zoom-in; }
 /* Preserve the whole composition, including tall portraits and wide scenes. */
 .chat-image-thumbnail .chat-image { display: block; width: 100%; height: auto; max-height: 400px; object-fit: contain; }

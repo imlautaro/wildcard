@@ -36,6 +36,18 @@ export function sameAttachment(turn: Pick<StoredTurn, 'attachmentJSON'>, metadat
   return saved ? !!metadata && saved.digest === metadata.digest && saved.name === metadata.name &&
     saved.mimeType === metadata.mimeType && saved.size === metadata.size : !metadata;
 }
+// Contact-generated albums store every image in attachments (2–3 entries) while
+// attachment stays the first image. Everything else is a single attachment.
+export function albumAttachments(attachment: Attachment | null | undefined, attachments: Attachment[] | null | undefined): Attachment[] {
+  return attachments && attachments.length > 1 ? attachments : attachment ? [attachment] : [];
+}
+// The `image` query parameter selects an album image; absent means the first one.
+export function albumIndex(value: string | undefined): number | null {
+  if (value === undefined) return 0;
+  const index = Number(value);
+  return /^[0-2]$/.test(value) && Number.isSafeInteger(index) ? index : null;
+}
+export const publicMetadata = ({ name, mimeType, size }: Attachment | PublicAttachment): PublicAttachment => ({ name, mimeType, size });
 export function publicAttachment(turn: Pick<StoredTurn, 'attachmentJSON'>): PublicAttachment | null {
   const attachment = storedAttachment(turn);
   return attachment ? { name: attachment.name, mimeType: attachment.mimeType, size: attachment.size } : null;
@@ -65,7 +77,12 @@ export async function cleanAttachments(env: Env): Promise<void> {
       (SELECT 1 FROM chat_turn WHERE json_extract(attachment_json, '$.key') = object_key)
       AND NOT EXISTS (SELECT 1 FROM chat_turn t, json_each(COALESCE(t.assistant_messages_json, '[]')) part
         WHERE json_extract(part.value, '$.attachment.key') = object_key)
+      AND NOT EXISTS (SELECT 1 FROM chat_turn t, json_each(COALESCE(t.assistant_messages_json, '[]')) part,
+        json_each(COALESCE(json_extract(part.value, '$.attachments'), '[]')) album
+        WHERE json_extract(album.value, '$.key') = object_key)
       AND NOT EXISTS (SELECT 1 FROM group_message WHERE json_extract(attachment_json, '$.key') = object_key)
+      AND NOT EXISTS (SELECT 1 FROM group_message gm, json_each(COALESCE(gm.attachments_json, '[]')) album
+        WHERE json_extract(album.value, '$.key') = object_key)
     ORDER BY created_at LIMIT 20`).bind(Date.now() - 86400000).all<{ key: string }>();
   for (const { key } of results) {
     await env.CONTACT_PHOTOS.delete(key);

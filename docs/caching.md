@@ -1073,7 +1073,9 @@ private chats and `GroupConversationCache` for groups, eight entries LRU) and
 `useChatMedia` on web (24 entries). Lists hold metadata only; thumbnails load
 through `PrivateImageCache`/`usePrivateImage` with the same resource keys as chat
 bubbles (`contact/:id/attachment/:turn`, `contact/:id/assistant-attachment/:turn`,
-`group/:id/attachment/:message`).
+`group/:id/attachment/:message`). Contact-generated album images 2–3 add
+`/image/N` to those iOS keys and `image=N` to the web paths; image 0 keeps the
+original key ([albums](generated-images.md#albums)).
 
 - Reopening details shows the cached page immediately, including empty results,
   and revalidates the first page in the background (iOS on every visit, web after

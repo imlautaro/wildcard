@@ -186,7 +186,7 @@ invalidation. It has **not been run for this change**. Static success is not a
 functional pass. Tests, builds, live inference and client interaction require their
 separately authorized validation scope.
 
-Classification and optional image proposals share the existing planner call (3,400 completion tokens including
+Classification and optional image (or [album](generated-images.md#albums)) proposals share the existing planner call (4,400 completion tokens including
 reasoning, existing provider timeout); it does not add a second inference call.
 The new ambient phase can add up to six bounded evaluations per social source,
 so cost and cadence still need measurement before making quality claims.

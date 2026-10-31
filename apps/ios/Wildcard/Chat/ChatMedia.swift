@@ -10,7 +10,9 @@ struct ChatMediaItem: Decodable, Hashable, Sendable, Identifiable {
     let size: Int
     let side: String?
     let senderName: String?
-    var id: String { "\(messageID)/\(side ?? "group")" }
+    /// One image of a contact-generated album; nil for single attachments.
+    var image: Int? = nil
+    var id: String { "\(messageID)/\(side ?? "group")\(image.map { "/\($0)" } ?? "")" }
     var attachment: ChatAttachment { ChatAttachment(name: name, mimeType: mimeType, size: size) }
 }
 
@@ -107,8 +109,7 @@ struct ChatMediaSection: View {
         } header: { Text("Shared in this chat") }
         .task(id: "\(auth.user?.id ?? "")|\(scope.cacheKey(kind))") { await load() }
         .fullScreenCover(item: $viewing) { item in
-            AttachmentImageViewer(attachment: item.attachment, contactID: contactID, turnID: item.messageID,
-                                  groupID: groupID, assistantAttachment: item.side == "assistant")
+            AttachmentImageViewer(images: [.init(name: item.name, resource: resource(item))])
         }
     }
 
@@ -123,9 +124,9 @@ struct ChatMediaSection: View {
 
     private func resource(_ item: ChatMediaItem) -> CachedImageResource {
         switch scope {
-        case .group(let id): return .groupAttachment(groupID: id, messageID: item.messageID)
+        case .group(let id): return .groupAttachment(groupID: id, messageID: item.messageID, image: item.image ?? 0)
         case .contact(let id):
-            return item.side == "assistant" ? .assistantAttachment(contactID: id, turnID: item.messageID)
+            return item.side == "assistant" ? .assistantAttachment(contactID: id, turnID: item.messageID, image: item.image ?? 0)
                 : .attachment(contactID: id, turnID: item.messageID)
         }
     }
@@ -237,9 +238,9 @@ private struct ChatMediaFileRow: View {
             do {
                 let bytes = try await auth.withSession { api, token in
                     switch scope {
-                    case .group(let id): return try await api.groupAttachment(groupID: id, messageID: item.messageID, token: token)
+                    case .group(let id): return try await api.groupAttachment(groupID: id, messageID: item.messageID, image: item.image ?? 0, token: token)
                     case .contact(let id):
-                        return try await api.chatAttachment(contactID: id, turnID: item.messageID, assistant: item.side == "assistant", token: token)
+                        return try await api.chatAttachment(contactID: id, turnID: item.messageID, assistant: item.side == "assistant", image: item.image ?? 0, token: token)
                     }
                 }
                 try Task.checkCancellation()

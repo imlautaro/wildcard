@@ -1,4 +1,4 @@
-import { generatedImage } from '../photos/generation';
+import { generatedImages } from '../photos/generation';
 import { learnFromReply, recordLearningQuestion } from '../chat/learning';
 import { messageDelay, recordingDelay } from '../chat/messages';
 import { safeErrorCode } from '../chat/meta';
@@ -53,12 +53,16 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
   const contributor = env.META_CHAT_MODEL.includes('contributor');
   const access = `(${publicationAccess(contributor)}) AND (${groupLearningUnchanged(draft)})`;
   let attachment: Attachment | null = voice;
+  let album: Attachment[] = [];
+  // draft.attachment marks that the draft carries generated images; the album is
+  // re-resolved here so revoked references or replaced avatars drop their images.
   if (draft.attachment && draft.text) {
     const scope = await env.DB.prepare(`SELECT r.agent_id AS agentID, r.group_id AS groupID,
       COALESCE(source.user_id, source.requester_id) AS userID FROM group_reply r
       JOIN group_message source ON source.id = r.source_id WHERE r.id = ? AND r.attempt = ?`)
       .bind(job.turnID, job.attempt).first<{ agentID: string; groupID: string; userID: string }>();
-    if (scope) attachment = await generatedImage(env, { ...scope, contributor, beforeSequence: draft.throughSequence + 1, turnID: job.turnID, attempt: job.attempt });
+    if (scope) album = await generatedImages(env, { ...scope, contributor, beforeSequence: draft.throughSequence + 1, turnID: job.turnID, attempt: job.attempt });
+    attachment = album[0] ?? null;
   }
   const bindings = [job.turnID, job.attempt, draft.text, Date.now(), env.META_CHAT_MODEL.includes('contributor') ? 1 : 0,
     draft.throughSequence];
@@ -67,13 +71,13 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
   const results = await env.DB.batch([
     env.DB.prepare(`UPDATE group_reply AS r SET status = 'failed' WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
       AND NOT (${groupLearningUnchanged(draft)})`).bind(job.turnID, job.attempt),
-    env.DB.prepare(`INSERT INTO group_message (id, group_id, agent_id, sender_name, text, created_at, contributor_consent, exchange_id, requester_id, reply_to_id, attachment_json)
+    env.DB.prepare(`INSERT INTO group_message (id, group_id, agent_id, sender_name, text, created_at, contributor_consent, exchange_id, requester_id, reply_to_id, attachment_json, attachments_json)
       SELECT r.id, r.group_id, r.agent_id, a.name, ?3, ?4, ?5, source.exchange_id, source.requester_id,
         (SELECT gm.id FROM group_message gm WHERE gm.id = ?7 AND gm.group_id = r.group_id
-          AND gm.sequence <= ?6 AND gm.task_id IS NULL AND ${visibleMessage.replaceAll('?3', '?5')}), ?8
+          AND gm.sequence <= ?6 AND gm.task_id IS NULL AND ${visibleMessage.replaceAll('?3', '?5')}), ?8, ?9
       FROM group_reply r JOIN contact_agent a ON a.id = r.agent_id JOIN group_message source ON source.id = r.source_id
       WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running' AND ?3 IS NOT NULL
-      AND ${access} AND ${unchangedHistory} AND ${groupEnergyAvailable('r')} ON CONFLICT(id) DO NOTHING`).bind(...bindings, draft.replyToID ?? null, attachment ? JSON.stringify(attachment) : null),
+      AND ${access} AND ${unchangedHistory} AND ${groupEnergyAvailable('r')} ON CONFLICT(id) DO NOTHING`).bind(...bindings, draft.replyToID ?? null, attachment ? JSON.stringify(attachment) : null, album.length > 1 ? JSON.stringify(album) : null),
     env.DB.prepare(`UPDATE group_reply AS r SET status = CASE WHEN ?7 = 0 AND EXISTS (SELECT 1 FROM group_message saved WHERE saved.id = r.id) THEN 'running' ELSE 'complete' END WHERE r.id = ?1 AND r.attempt = ?2 AND r.status = 'running'
       AND (EXISTS (SELECT 1 FROM group_message saved WHERE saved.id = r.id)
         OR (NOT (${groupEnergyAvailable('r')}))

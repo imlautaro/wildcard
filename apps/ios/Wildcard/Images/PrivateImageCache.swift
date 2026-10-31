@@ -8,8 +8,10 @@ enum CachedImageResource: Hashable, Sendable {
     case accountAvatar(version: String)
     case groupAvatar(groupID: String, version: String)
     case groupMemberAvatar(groupID: String, kind: String, memberID: String, version: String)
-    case groupAttachment(groupID: String, messageID: String)
-    case assistantAttachment(contactID: String, turnID: String)
+    /// `image` selects one image of a contact-generated album (docs/generated-images.md#albums);
+    /// 0 is the message's first or only image and keeps the original key.
+    case groupAttachment(groupID: String, messageID: String, image: Int = 0)
+    case assistantAttachment(contactID: String, turnID: String, image: Int = 0)
     case attachment(contactID: String, turnID: String)
     case linkPreview(hash: String, version: Int)
 
@@ -19,8 +21,8 @@ enum CachedImageResource: Hashable, Sendable {
         case let .accountAvatar(version): return "account/avatar/\(version)"
         case let .groupAvatar(id, version): return "group/\(id)/avatar/\(version)"
         case let .groupMemberAvatar(group, kind, member, version): return "group/\(group)/member/\(kind)/\(member)/avatar/\(version)"
-        case let .groupAttachment(id, message): return "group/\(id)/attachment/\(message)"
-        case let .assistantAttachment(id, turn): return "contact/\(id)/assistant-attachment/\(turn)"
+        case let .groupAttachment(id, message, image): return "group/\(id)/attachment/\(message)\(image > 0 ? "/image/\(image)" : "")"
+        case let .assistantAttachment(id, turn, image): return "contact/\(id)/assistant-attachment/\(turn)\(image > 0 ? "/image/\(image)" : "")"
         case let .attachment(id, turn): return "contact/\(id)/attachment/\(turn)"
         case let .linkPreview(hash, version): return "link/\(hash)/\(version)"
         }
@@ -243,8 +245,8 @@ extension AuthStore {
                 case let .groupAvatar(id, version): return try await api.groupPhoto(id: id, version: version, token: token)
                 case let .groupMemberAvatar(group, kind, member, _):
                     return try await api.send(path: "groups/\(group)/photos/\(kind)/\(member)", token: token).0
-                case let .groupAttachment(id, message): return try await api.groupAttachment(groupID: id, messageID: message, token: token)
-                case let .assistantAttachment(id, turn): return try await api.chatAttachment(contactID: id, turnID: turn, assistant: true, token: token)
+                case let .groupAttachment(id, message, image): return try await api.groupAttachment(groupID: id, messageID: message, image: image, token: token)
+                case let .assistantAttachment(id, turn, image): return try await api.chatAttachment(contactID: id, turnID: turn, assistant: true, image: image, token: token)
                 case let .attachment(id, turn): return try await api.chatAttachment(contactID: id, turnID: turn, token: token)
                 case let .linkPreview(hash, _): return try await api.send(path: "link-previews/\(hash)/image", token: token).0
                 }

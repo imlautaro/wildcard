@@ -317,6 +317,9 @@ chat. Selfies use the contact avatar; named members use their avatars. Internal
 visual descriptions support finding earlier scenes without exposing labels in chat. Both clients show images
 with captions; migrations 0044/0048 and the existing Meta/R2 services are required. See
 [infrastructure setup](docs/infrastructure.md#contact-generated-chat-images).
+When content needs several visuals (a comparison, before/after, steps), a contact
+can send an [album of two or three images](docs/generated-images.md#albums) on
+one message (migration 0082, [setup](docs/infrastructure.md#contact-generated-image-albums--migration-0082)).
 
 New contacts can be created manually or [generated with AI](docs/contact-generation.md)
 on iOS and web, reusing saved onboarding context with bot-only selectors. Creators

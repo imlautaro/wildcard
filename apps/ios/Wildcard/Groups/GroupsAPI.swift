@@ -90,6 +90,8 @@ struct GroupMessage: Decodable, Identifiable, Equatable {
     let text: String
     let createdAt: Double
     let attachment: ChatAttachment?
+    /// A contact-generated album: every image in order, including `attachment`; nil otherwise.
+    var attachments: [ChatAttachment]? = nil
     var replyTo: MessageReplyQuote? = nil
     /// Voice message metadata; human voice messages have empty `text`, contact ones keep the spoken text.
     var voice: MessageVoice? = nil

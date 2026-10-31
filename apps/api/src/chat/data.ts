@@ -2,7 +2,7 @@ import { publicAttachment, storedAttachment, type PublicAttachment, type Attachm
 import { isVoice, publicVoice, type PublicVoice } from '../voice/speech';
 import type { ReplyQuote, ReplyTarget } from '../replies/data';
 export type ChatState = 'queued' | 'running' | 'complete' | 'failed';
-export type AssistantMessage = { id: string; text: string; createdAt: number; attachment?: Attachment | PublicAttachment | null; replyTo?: ReplyQuote | ReplyTarget | null };
+export type AssistantMessage = { id: string; text: string; createdAt: number; attachment?: Attachment | PublicAttachment | null; attachments?: (Attachment | PublicAttachment)[] | null; replyTo?: ReplyQuote | ReplyTarget | null };
 export type ChatTurn = {
   assistantVoiceListenedJSON?: string;
   assistantMessagesJSON?: string | null;
@@ -47,6 +47,10 @@ export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }, r
         attachment: message.attachment && !isVoice(message.attachment) ? {
           name: message.attachment.name, mimeType: message.attachment.mimeType, size: message.attachment.size,
         } : null,
+        // A contact-generated album lists every image, including the first; older
+        // clients keep reading attachment and show only that first image.
+        attachments: message.attachments && message.attachments.length > 1
+          ? message.attachments.map(({ name, mimeType, size }) => ({ name, mimeType, size })) : null,
         replyTo: message.replyTo && resolveQuote
           ? resolveQuote({ replyToID: message.replyTo.messageID, replyToSide: message.replyTo.side }) : null,
       };

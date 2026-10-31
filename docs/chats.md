@@ -821,8 +821,9 @@ tail. Private reactions, quotes, sounds, unread counts and push retain turn-leve
 identity. See [successive contact messages](reply-messages.md) for limits, recovery,
 legacy history, cache behavior and verification steps.
 
-Contacts may send a contextual generated image with their first reply message,
-optionally referencing current authorized avatars. The delivered assistant entry
+Contacts may send a contextual generated image, or an album of two or three when
+the content needs several visuals, with their first reply message, optionally
+referencing current authorized avatars. See [albums](generated-images.md#albums). The delivered assistant entry
 contains attachment metadata; both clients use the ordinary incoming image/caption
 UI and private image cache. See [generated images](generated-images.md).
 

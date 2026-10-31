@@ -10,7 +10,7 @@ import { deliverGroupPush } from './push';
 import media from './media';
 import { taskRoutes } from '../tasks/routes';
 import { documentRoutes } from '../documents/routes';
-import { parseAttachment, sameAttachment, publicAttachment, storedAttachment } from '../chat/attachments';
+import { parseAttachment, sameAttachment, publicAttachment, publicMetadata, storedAttachment, type Attachment } from '../chat/attachments';
 import { registerChatObject, discardChatObject } from '../chat/object-storage';
 import { isVoice, parseVoice, publicVoice } from '../voice/speech';
 import { Hono } from 'hono';
@@ -70,7 +70,7 @@ g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (S
   (SELECT id FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageID,
   (SELECT user_id FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageUserID,
   (SELECT ${receiptState('gm')} FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL AND gm.event_json IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageReceiptState, g.created_at AS createdAt, g.photo_version AS photoVersion,
-  (SELECT CASE WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
+  (SELECT CASE WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN text = '' AND attachments_json IS NOT NULL THEN json_array_length(attachments_json) || ' photos' WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
   (SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageAt,
   (SELECT ${agentDisplayName('lm.agent_id', 'lm.sender_name', 'm.user_id')} FROM group_message lm WHERE lm.group_id = g.id AND lm.task_id IS NULL AND lm.event_json IS NULL ORDER BY lm.sequence DESC LIMIT 1) AS lastMessageSenderName,
   COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt`;
@@ -103,7 +103,7 @@ groups.get('/', async (c) => {
     WHERE m.user_id = ? ORDER BY updatedAt DESC, g.id LIMIT 100`).bind(c.get('owner')).all<GroupSummary>();
   const { results: activity } = await c.env.DB.prepare(`SELECT gm.id AS messageID, gm.sequence, gm.group_id AS groupID,
     g.name AS groupName, ${agentDisplayName('gm.agent_id', 'gm.sender_name', 'm.user_id')} AS senderName, gm.agent_id AS agentID, gm.created_at AS sentAt,
-    CASE WHEN json_extract(gm.attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END AS text
+    CASE WHEN json_extract(gm.attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN gm.text = '' AND gm.attachments_json IS NOT NULL THEN json_array_length(gm.attachments_json) || ' photos' WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END AS text
     FROM group_message gm JOIN group_member m ON m.group_id = gm.group_id JOIN chat_group g ON g.id = gm.group_id
     WHERE m.user_id = ? AND gm.sequence > m.last_read_sequence AND gm.user_id IS NOT m.user_id AND gm.task_id IS NULL AND gm.event_json IS NULL
     ORDER BY gm.sequence DESC LIMIT 50`).bind(c.get('owner')).all<Record<string, unknown> & { text: string; agentID: string | null }>();
@@ -362,13 +362,13 @@ groups.get('/:id/messages', async (c) => {
   const before = Number(c.req.query('before') ?? Number.MAX_SAFE_INTEGER);
   if (!Number.isSafeInteger(before) || before < 1) return c.json({ error: 'Invalid history cursor' }, 400);
   const { results } = await c.env.DB.prepare(`SELECT ${receiptState('group_message')} AS receiptState, sequence, id, user_id AS userID, agent_id AS agentID,
-    ${agentDisplayName('group_message.agent_id', 'group_message.sender_name', '?3')} AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON, reply_to_id AS replyToID,
+    ${agentDisplayName('group_message.agent_id', 'group_message.sender_name', '?3')} AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON, attachments_json AS attachmentsJSON, reply_to_id AS replyToID,
     (SELECT listened_at FROM group_voice_playback WHERE message_id = group_message.id AND user_id = ?3) AS ownListenedAt,
     voice_listened_at AS voiceListenedAt, voice_transcribed_at AS voiceTranscribedAt, event_json AS eventJSON,
     ${eventTextColumn('group_message', '?3')} AS eventText FROM group_message
     WHERE group_id = ?1 AND sequence < ?2 AND task_id IS NULL AND sequence >= ${userHistoryStart('?1', '?3')}
     ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before, c.get('owner'))
-    .all<{ ownListenedAt: number | null; sequence: number; attachmentJSON: string | null; replyToID: string | null; text: string; agentID: string | null; voiceListenedAt: number | null; voiceTranscribedAt: number | null; eventJSON: string | null; eventText: string | null }>();
+    .all<{ ownListenedAt: number | null; sequence: number; attachmentJSON: string | null; attachmentsJSON: string | null; replyToID: string | null; text: string; agentID: string | null; voiceListenedAt: number | null; voiceTranscribedAt: number | null; eventJSON: string | null; eventText: string | null }>();
   const page = results.slice(0, 50);
   // A member without past history still sees what a reply quotes (the replier chose to
   // surface it), flagged beforeJoin so clients neither scroll to nor download it.
@@ -376,14 +376,16 @@ groups.get('/:id/messages', async (c) => {
   const quotes = await groupQuotes(c.env.DB, c.req.param('id'), c.get('owner'), page, historyStart);
   const current=await c.env.DB.prepare('SELECT history_revision AS value FROM chat_group WHERE id=?').bind(c.req.param('id')).first<{value:number}>();
   if (!epoch || epoch.value!==current?.value) return c.json({error:'Group was cleared. Refresh history.'},409);
-  return c.json({ historyRevision:epoch.value, historyStart: historyStart || null, messages: page.reverse().map(({ attachmentJSON, replyToID, voiceListenedAt, voiceTranscribedAt, ownListenedAt, eventJSON, eventText, ...message }) => {
+  return c.json({ historyRevision:epoch.value, historyStart: historyStart || null, messages: page.reverse().map(({ attachmentJSON, attachmentsJSON, replyToID, voiceListenedAt, voiceTranscribedAt, ownListenedAt, eventJSON, eventText, ...message }) => {
     // Membership notices render as centered banners with viewer-resolved names.
-    if (eventJSON) return { ...message, text: eventText ?? message.text, event: membershipEvent(eventJSON), attachment: null, voice: null, replyTo: null };
+    if (eventJSON) return { ...message, text: eventText ?? message.text, event: membershipEvent(eventJSON), attachment: null, attachments: null, voice: null, replyTo: null };
     // Contacts' voice messages keep their spoken text; people's transcripts stay behind long press.
     const voice = publicVoice(storedAttachment({ attachmentJSON }), message.agentID ? null : voiceListenedAt,
       message.agentID ? message.text : voiceTranscribedAt ? message.text : null);
     return { ...message, text: voice && !message.agentID ? '' : message.text,
-      attachment: voice ? null : publicAttachment({ attachmentJSON }), voice: voice ? { ...voice, ownListenedAt } : null, replyTo: quotes({ replyToID }), event: null };
+      attachment: voice ? null : publicAttachment({ attachmentJSON }),
+      // Contact-generated album: every image in order, including the first.
+      attachments: !voice && attachmentsJSON ? (JSON.parse(attachmentsJSON) as Attachment[]).map(publicMetadata) : null, voice: voice ? { ...voice, ownListenedAt } : null, replyTo: quotes({ replyToID }), event: null };
   }), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 // Aggregate-only refresh for retained history; recheck membership in the query.

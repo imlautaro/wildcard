@@ -74,7 +74,10 @@ struct ChatAttachmentView: View {
     var senderColor: Color? = nil
     var replyQuote: MessageReplyPreview? = nil
     var onQuoteTap: (() -> Void)? = nil
+    /// A contact-generated album (2–3 images, docs/generated-images.md#albums); empty otherwise.
+    var album: [ChatAttachment] = []
     @Environment(AuthStore.self) private var auth
+    @State private var viewingAlbumImage: Int?
     @State private var loading = false
     @State private var previewURL: URL?
     @State private var error: String?
@@ -83,8 +86,13 @@ struct ChatAttachmentView: View {
     @State private var showImage = false
     @State private var documentTask: Task<Void, Never>?
 
-    private var imageResource: CachedImageResource {
-        groupID.map { .groupAttachment(groupID: $0, messageID: turnID) } ?? (assistantAttachment ? .assistantAttachment(contactID: contactID, turnID: turnID) : .attachment(contactID: contactID, turnID: turnID))
+    private var imageResource: CachedImageResource { resource(image: 0) }
+    private func resource(image: Int) -> CachedImageResource {
+        groupID.map { .groupAttachment(groupID: $0, messageID: turnID, image: image) } ?? (assistantAttachment ? .assistantAttachment(contactID: contactID, turnID: turnID, image: image) : .attachment(contactID: contactID, turnID: turnID))
+    }
+    private var albumImages: [ChatAttachment] { album.count > 1 ? Array(album.prefix(3)) : [] }
+    private var viewerImages: [AttachmentImageViewer.Item] {
+        (albumImages.isEmpty ? [attachment] : albumImages).enumerated().map { .init(name: $1.name, resource: resource(image: $0)) }
     }
     private var standaloneImage: Bool { caption.isEmpty && senderName == nil && replyQuote == nil }
     private var imageBubbleRadius: CGFloat { standaloneImage ? 20 : 0 }
@@ -99,7 +107,7 @@ struct ChatAttachmentView: View {
             VStack(alignment: .trailing, spacing: 6) {
                 if attachment.isImage {
                     if standaloneImage {
-                        imageButton
+                        media
                     } else {
                         VStack(alignment: .leading, spacing: 0) {
                             if let senderName {
@@ -110,7 +118,7 @@ struct ChatAttachmentView: View {
                                 MessageReplyQuoteView(preview: replyQuote, action: onQuoteTap)
                                     .padding(.horizontal, 8).padding(.top, senderName == nil ? 8 : 0).padding(.bottom, 6)
                             }
-                            imageButton
+                            media
                             if !caption.isEmpty {
                                 MessageTextContentView(text: caption, sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt, fillsWidth: true, formatsMarkdown: formatsMarkdown)
                                     .padding(.horizontal, 16).padding(.vertical, 12)
@@ -133,7 +141,7 @@ struct ChatAttachmentView: View {
         }
         .frame(maxWidth: .infinity, alignment: fromUser ? .trailing : .leading)
         .task(id: "\(auth.user?.id ?? "")/\(turnID)/\(imageAttempt)") {
-            guard attachment.isImage, thumbnail == nil else { return }
+            guard attachment.isImage, albumImages.isEmpty, thumbnail == nil else { return }
             loading = true
             error = nil
             defer { loading = false }
@@ -155,7 +163,10 @@ struct ChatAttachmentView: View {
             }
         }
         .fullScreenCover(isPresented: $showImage) {
-            AttachmentImageViewer(attachment: attachment, contactID: contactID, turnID: turnID, groupID: groupID, assistantAttachment: assistantAttachment)
+            AttachmentImageViewer(images: viewerImages)
+        }
+        .fullScreenCover(item: Binding(get: { viewingAlbumImage.map(AlbumSelection.init) }, set: { viewingAlbumImage = $0?.id })) { selection in
+            AttachmentImageViewer(images: viewerImages, start: selection.id)
         }
         .sheet(isPresented: Binding(get: { previewURL != nil }, set: { if !$0 { clearPreview() } })) {
             if let previewURL { AttachmentQuickLook(url: previewURL).ignoresSafeArea() }
@@ -164,6 +175,47 @@ struct ChatAttachmentView: View {
             documentTask?.cancel()
             clearPreview()
         }
+    }
+
+    @ViewBuilder private var media: some View {
+        if albumImages.isEmpty { imageButton } else { albumGrid }
+    }
+
+    private func albumCell(_ index: Int, aspect: CGFloat) -> some View {
+        AlbumThumbnail(resource: resource(image: index), name: albumImages[index].name, position: index + 1,
+                       count: albumImages.count, placeholder: bubbleColor) { viewingAlbumImage = index }
+            .aspectRatio(aspect, contentMode: .fit)
+    }
+
+    /// Two images side by side, or one wide image over two squares. Cells crop to
+    /// fill; the full-screen viewer pages through the complete images.
+    private var albumGrid: some View {
+        VStack(spacing: 2) {
+            if albumImages.count == 3 { albumCell(0, aspect: 4.0 / 3.0) }
+            HStack(spacing: 2) {
+                ForEach(albumImages.count == 3 ? [1, 2] : [0, 1], id: \.self) { index in
+                    albumCell(index, aspect: albumImages.count == 3 ? 1 : 3.0 / 4.0)
+                }
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if caption.isEmpty {
+                MessageMetadataView(sentAt: sentAt, fromUser: fromUser, receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt)
+                    .padding(.horizontal, 7).padding(.vertical, 4)
+                    .background(.black.opacity(0.6), in: Capsule())
+                    .environment(\.colorScheme, .dark)
+                    .padding(8)
+                    .allowsHitTesting(false)
+            }
+        }
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: caption.isEmpty ? 16 : 2,
+                                          bottomTrailingRadius: caption.isEmpty ? 16 : 2, topTrailingRadius: 16))
+        .padding(2)
+        .background(bubbleColor, in: MessageBubbleShape(cornerRadius: imageBubbleRadius, fromUser: fromUser))
+        .clipShape(MessageBubbleShape(cornerRadius: imageBubbleRadius, fromUser: fromUser))
+        .frame(width: 260)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(albumImages.count) photos")
     }
 
     private var imageButton: some View {
@@ -275,33 +327,86 @@ struct ChatAttachmentView: View {
     }
 }
 
-struct AttachmentImageViewer: View {
-    let attachment: ChatAttachment
-    let contactID: String
-    let turnID: String
-    var groupID: String? = nil
-    var assistantAttachment = false
+private struct AlbumSelection: Identifiable { let id: Int }
+
+/// One album cell; bytes come from the shared account-scoped image cache.
+private struct AlbumThumbnail: View {
+    let resource: CachedImageResource
+    let name: String
+    let position: Int
+    let count: Int
+    let placeholder: Color
+    let open: () -> Void
     @Environment(AuthStore.self) private var auth
-    @Environment(\.dismiss) private var dismiss
     @State private var image: UIImage?
-    @State private var error: String?
+    @State private var failed = false
     @State private var attempt = 0
+
+    private var shown: UIImage? { image ?? auth.images.cachedImage(resource, maxPixelSize: 520) }
+
+    var body: some View {
+        Button {
+            if shown != nil { open() } else { attempt += 1 }
+        } label: {
+            placeholder
+                .overlay {
+                    if let shown {
+                        Image(uiImage: shown).resizable().scaledToFill()
+                    } else if failed {
+                        Image(systemName: "arrow.clockwise").accessibilityLabel("Retry loading image")
+                    } else {
+                        ProgressView()
+                    }
+                }
+                .clipped()
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open photo \(position) of \(count) full screen: \(name)")
+        .task(id: "\(auth.user?.id ?? "")/\(resource.key)/\(attempt)") {
+            guard image == nil else { return }
+            failed = false
+            do { image = try await auth.cachedImage(resource, maxPixelSize: 520) }
+            catch is CancellationError { }
+            catch { if !Task.isCancelled { failed = true } }
+        }
+    }
+}
+
+/// Full-screen viewer; several images (a contact-generated album) page horizontally.
+struct AttachmentImageViewer: View {
+    struct Item: Identifiable {
+        let name: String
+        let resource: CachedImageResource
+        var id: String { resource.key }
+    }
+    let images: [Item]
+    @State private var selection: Int
+    @Environment(\.dismiss) private var dismiss
+
+    init(images: [Item], start: Int = 0) {
+        self.images = images
+        _selection = State(initialValue: min(max(start, 0), max(images.count - 1, 0)))
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea()
-            Group {
-                if let image {
-                    ZoomableAttachmentImage(image: image, onDismiss: { dismiss() })
-                        .accessibilityLabel(attachment.name)
-                } else if let error {
-                    VStack(spacing: 16) {
-                        Text(error).manrope().multilineTextAlignment(.center)
-                        Button("Retry") { attempt += 1 }
-                    }.padding(32).frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ProgressView("Loading image…").frame(maxWidth: .infinity, maxHeight: .infinity)
+            if images.count > 1 {
+                TabView(selection: $selection) {
+                    ForEach(Array(images.enumerated()), id: \.element.id) { index, item in
+                        AttachmentImagePage(item: item, onDismiss: { dismiss() }).tag(index)
+                    }
                 }
+                .tabViewStyle(.page(indexDisplayMode: .always))
+                .ignoresSafeArea()
+                Text("\(selection + 1) / \(images.count)").manrope(.footnote).monospacedDigit()
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.top, 26).frame(maxWidth: .infinity, alignment: .center)
+                    .accessibilityLabel("Image \(selection + 1) of \(images.count)")
+            } else if let item = images.first {
+                AttachmentImagePage(item: item, onDismiss: { dismiss() })
             }
             Button { dismiss() } label: {
                 Image(systemName: "xmark").font(.system(size: 18, weight: .semibold))
@@ -313,11 +418,35 @@ struct AttachmentImageViewer: View {
         }
         .foregroundStyle(.white)
         .preferredColorScheme(.dark)
+    }
+}
+
+private struct AttachmentImagePage: View {
+    let item: AttachmentImageViewer.Item
+    let onDismiss: () -> Void
+    @Environment(AuthStore.self) private var auth
+    @State private var image: UIImage?
+    @State private var error: String?
+    @State private var attempt = 0
+
+    var body: some View {
+        Group {
+            if let image {
+                ZoomableAttachmentImage(image: image, onDismiss: onDismiss)
+                    .accessibilityLabel(item.name)
+            } else if let error {
+                VStack(spacing: 16) {
+                    Text(error).manrope().multilineTextAlignment(.center)
+                    Button("Retry") { attempt += 1 }
+                }.padding(32).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ProgressView("Loading image…").frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
         .task(id: attempt) {
             error = nil
             do {
-                let resource: CachedImageResource = groupID.map { .groupAttachment(groupID: $0, messageID: turnID) } ?? (assistantAttachment ? .assistantAttachment(contactID: contactID, turnID: turnID) : .attachment(contactID: contactID, turnID: turnID))
-                image = try await auth.cachedImage(resource, maxPixelSize: 4096)
+                image = try await auth.cachedImage(item.resource, maxPixelSize: 4096)
             } catch is CancellationError { }
             catch {
                 guard !Task.isCancelled else { return }

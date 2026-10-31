@@ -980,6 +980,12 @@ No draft bytes are returned during generation; server checkpoints contain metada
 only. See [generated images](generated-images.md) for scope, setup, retry limits
 and pending live verification.
 
+Contact-generated [albums](generated-images.md#albums) (two or three images on
+one message) render in `MessageAttachment.vue` as a grid and open
+`ChatImageViewer.vue`, which pages with arrow buttons, keyboard arrows and swipe.
+Album images use `albumImagePath` (`utils/album.ts`) for `image=N` paths in both
+bubbles and chat-details media, matching iOS behavior and cache rules.
+
 
 Image generation uses current avatars for requested selfies and named members, and
 can retrieve photos sent by people or contacts in this same chat as scene/edit

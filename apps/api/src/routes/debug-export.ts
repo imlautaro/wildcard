@@ -37,7 +37,7 @@ const debugDatasets: Record<string, Dataset> = {
     columns: 'r.group_id, r.agent_id, r.added_by, r.joined_at',
     where: `r.group_id IN (${groups})` },
   group_message: { table: 'group_message',
-    columns: 'r.sequence, r.id, r.group_id, r.user_id, r.agent_id, r.sender_name, r.contributor_consent, r.round_enqueued, r.text, r.created_at, r.attachment_json, r.request_id, r.receipts_tracked, r.exchange_id, r.requester_id, r.reply_to_id, r.task_id, r.voice_listened_at, r.voice_transcribed_at',
+    columns: 'r.sequence, r.id, r.group_id, r.user_id, r.agent_id, r.sender_name, r.contributor_consent, r.round_enqueued, r.text, r.created_at, r.attachment_json, r.attachments_json, r.request_id, r.receipts_tracked, r.exchange_id, r.requester_id, r.reply_to_id, r.task_id, r.voice_listened_at, r.voice_transcribed_at',
     where: `r.group_id IN (${groups})` },
   group_reply: { table: 'group_reply',
     columns: 'r.sequence, r.id, r.group_id, r.agent_id, r.source_id, r.status, r.attempt, r.workflow_id, r.created_at, r.plan_rank, r.plan_role, r.plan_angle, r.plan_tools, r.draft_ready_at',

@@ -6,8 +6,9 @@ chooses the prompt and relevant references; ordinary chat should
 not be decorated with unnecessary images. This is a model decision, not a promise
 that every suitable moment will produce an image.
 
-One response can generate one image with up to three references total, combining
-current profile photos and earlier images from the same conversation. Selfies and
+One response makes one `generate_chat_image` call, producing one image or an
+[album](#albums) of two or three images; each image has up to three references,
+combining current profile photos and earlier images from the same conversation. Selfies and
 requests depicting the contact itself instruct it to use its own current avatar.
 Requests depicting named members instruct it to use every depicted member's current
 avatar (two contacts together use both). These are explicit model instructions;
@@ -80,7 +81,8 @@ The API uses `muse-image-1.0` with the existing `META_API_KEY`, using
 `/v1/images/generations` for text and `/v1/images/edits` for references. Inputs use
 private base64 data URLs, never public avatar URLs. The JSON reference shape and
 output options follow the [Meta image guide](https://dev.meta.ai/docs/image-generation).
-Web/image search and shell tools are disabled; the output is one JPEG whose
+Web search and shell tools are disabled; provider image search is enabled only per
+image as described under [albums](#albums). Each output is one JPEG whose
 aspect ratio the contact chooses from context (2:3, 3:2, 3:4, 4:3, 9:16, 16:9 or
 1:1). Portrait selfies, wide scenes and square compositions are all supported;
 explicit format requests take priority. The provider size sets framing rather
@@ -192,7 +194,8 @@ R2 registry, immutable attachment metadata and existing assistant image endpoint
 serve both clients. A source-linked D1 receipt cascades on source/history deletion;
 unpublished objects follow the existing 24-hour grace cleanup. Already delivered
 images remain ordinary history. No new image cache, public URL or client polling
-is introduced. The planner completion budget is 3,400 tokens including reasoning;
+is introduced. The planner completion budget is 4,400 tokens including reasoning
+(3,400 before 0082 albums);
 an image also adds the existing Muse request and bounded description call.
 
 Verify vertical selfies, horizontal scenes, explicit square requests, extreme
@@ -208,3 +211,109 @@ variants, lifecycle harness syntax and `git diff --check` passed. The private-cl
 regression fixture now covers initiative receipts and R2 cleanup, but was not run.
 No tests, builds, live inference, browser/device checks, remote migrations or
 deployment were performed.
+
+## Albums
+
+A contact can send two or three images as one album on one message when the
+content genuinely needs several distinct visuals: a comparison (for example two
+engines side by side), before/after, or a short sequence of steps. The model
+instruction keeps one image as the norm and forbids near-duplicate variations or
+filler. This is a model decision; static validation does not prove when the model
+chooses an album.
+
+**Tool shape.** `generate_chat_image` takes `images`: 1–3 entries, each with its own
+`prompt` (up to 4,000 characters), `aspectRatio`, `profileReferences`,
+`chatImageReferences` (up to three references per image) and `imageSearch`. The tool
+argument limit for this call is 48,000 bytes. Distinct references are loaded once
+and share one 8 MiB budget across the album. Album images are independent provider
+requests that run concurrently, so an album takes about as long as its slowest
+image (each request keeps the 150-second timeout) and fits the existing four-minute
+group/initiative steps and the private eight-minute preparation step. Provider cost
+and description cost (one Spark vision request per delivered image) scale with the
+number of images.
+
+**Image search.** `imageSearch: true` sets Muse Image `enable_image_search` so
+informative real-world subjects (machines, places, species, techniques) can be
+grounded in public reference images. The server forces it off for any image that
+has profile or chat references, so avatars and earlier conversation photos are
+never combined with a public search, and the instruction forbids personal or
+private details in such prompts. Results remain generated illustrations, not real
+photos. Provider behavior, cost, latency and accuracy with image search enabled
+are **unverified**; confirm them with live inference before relying on it.
+
+**Receipts.** Migrations 0044/0079 keep one receipt per response or initiative
+episode, so a response still never starts a second generation. Album receipts store
+`attachment_json` as an array of delivered images and `references_json` as an aligned
+array of per-image reference arrays; rows written before 0082 (one object, one flat
+array) remain readable. R2 keys are `generated/<receipt id>/<index>.jpg`; earlier
+single images keep `generated/<receipt id>.jpg`. If some images fail, the receipt
+completes with the images that succeeded and the tool result tells the contact to
+caption only those, without retrying. If all fail, the receipt is `failed` and any
+stored object is queued for cleanup. At publication, each image is checked
+individually: an image whose reference changed or whose object is missing is
+dropped, and the rest of the album is still delivered.
+
+**Message shape.** A delivered message keeps `attachment` as its first image, so
+older clients, previews and existing SQL keep working, and adds `attachments` with
+every image in order (including the first) only when the album has two or more
+images. Private turns store this in the first assistant message JSON. Groups add the
+nullable `group_message.attachments_json` column (migration
+`0082_generated_image_albums.sql`); group history returns `attachments` alongside
+`attachment`. Older clients show only the first image of an album with its caption.
+
+**Endpoints and media.** `GET .../turns/:turn/attachment?side=assistant&image=N` and
+`GET /groups/:id/messages/:message/attachment?image=N` select album image N (0–2).
+Without `image`, the first or only image is returned, exactly as before; `part`
+still selects the assistant message for voice. Chat details media lists each album
+image as its own item with an `image` index. `search_chat_images`,
+`view_chat_image` and generation references see every album image (the immutable
+digest distinguishes them). Registry cleanup and the reused-object check recognize
+album keys, so delivered album images are never removed as orphans. 0082 also
+recreates the `chat_image_index` delete triggers from 0048 so deleting a turn or
+group message removes the internal descriptions of every album image immediately,
+not only the first.
+
+**Group context and previews.** Group context marks an album's first image with
+`albumImages`. A group preview with empty text shows "N photos"; album messages
+normally carry a caption.
+
+**Clients.** Both clients render albums of two images side by side and of three
+as one wide image over two squares. Album cells crop to fill (unlike single images,
+which preserve the full composition); the full-screen viewer shows each complete
+image and pages through the album: swipe with a page indicator and counter on iOS
+(`TabView`), and arrow buttons, keyboard arrows, horizontal swipe and a counter on
+web. Chat details media cells open a single-image viewer.
+
+**Cache.** Album images use the existing private image caches. Image 0 keeps the
+original keys/paths (`contact/:id/assistant-attachment/:turn`,
+`group/:id/attachment/:message`, and the same web paths), so a single image and an
+album's first image share an entry; later images add `/image/N` on iOS and
+`&image=N`/`?image=N` on web. No new cache, retention, eviction or account-switch
+behavior is introduced; access loss and account changes clear album images like
+any other chat image.
+
+**Compatibility and rollback.** 0082 is additive (one nullable column). Workflows
+checkpointed before this change still publish their single image. Rolling back to
+an earlier pushed revision keeps the column and delivered JSON; old code shows the
+first image of each album and ignores the rest, and its media/cleanup queries do
+not see album images 2–3, which could then be removed by orphan cleanup after the
+24-hour grace period. Avoid rolling back past this change once albums have been
+delivered, or accept losing those extra images.
+
+**Validation performed.** API TypeScript, web `npm run typecheck`, the whole-app
+iOS `swiftc -typecheck`, migrations 0001–0082 on local workerd D1, and `EXPLAIN` on
+local D1 for the changed SQL (image sources, cleanup, registry, group context
+marker, receipt update), literal checks of the album JSON expansion, and the
+recreated delete-trigger bodies exercised on scratch D1 tables (album rows removed,
+unrelated rows kept). The real triggers were not exercised against seeded chat rows. No tests,
+builds, live inference, browser/device runs, remote migration or deployment were
+performed.
+
+**Verify with fictional data:** a direct comparison request producing a two- and a
+three-image album in a private chat and in a group; captions that describe each
+image in order; partial failure (one image fails); an album using avatars plus an
+informative image with `imageSearch`; reference revocation dropping one image;
+initiative albums; full-screen paging on iOS and web, cache reopen, offline
+recovery, account switching; media grid entries and downloads for images 2–3;
+`search_chat_images` finding album images; conversation clear/delete cleanup; and
+an older client showing only the first image.

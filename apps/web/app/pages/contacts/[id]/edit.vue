@@ -110,7 +110,7 @@ onBeforeUnmount(() => { if (voicePlayer.key?.startsWith('voices/')) stopVoicePla
 
 // Media paths match the chat bubbles, so thumbnails share the private image cache.
 function mediaPath(item: ChatMediaItem) {
-  return `contacts/${id.value}/chat/turns/${item.messageID}/attachment${item.side === 'assistant' ? '?side=assistant' : ''}`;
+  return albumImagePath(`contacts/${id.value}/chat/turns/${item.messageID}/attachment${item.side === 'assistant' ? '?side=assistant' : ''}`, item.image);
 }
 
 const savePhoto = (photo: Blob | null) => run(async () => {

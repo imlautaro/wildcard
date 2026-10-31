@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readPhoto, validPhoto, removePhoto } from '../photos/storage';
-import { storedAttachment, attachmentLimit, mediaPage } from '../chat/attachments';
+import { storedAttachment, attachmentLimit, mediaPage, albumAttachments, albumIndex, type Attachment } from '../chat/attachments';
 import { userHistoryStart } from './history-access';
 import { normalizedRecording, transcribeRecording, TranscriptionFailure } from '../chat/transcription';
 
@@ -58,16 +58,17 @@ media.get('/media', async (c) => {
     return c.json({ error: 'Choose image or file media with a valid cursor' }, 400);
   }
   const { results } = await c.env.DB.prepare(`SELECT sequence, id AS messageID, user_id AS userID, agent_id AS agentID,
-    sender_name AS senderName, created_at AS createdAt, attachment_json AS attachmentJSON FROM group_message
+    sender_name AS senderName, created_at AS createdAt, attachment_json AS attachmentJSON, attachments_json AS attachmentsJSON FROM group_message
     WHERE group_id = ?1 AND sequence < ?2 AND attachment_json IS NOT NULL AND sequence >= ${userHistoryStart('?1', '?5')}
     AND json_extract(attachment_json, '$.mimeType') NOT LIKE 'audio/%'
     AND (json_extract(attachment_json, '$.mimeType') LIKE 'image/%') = (?3 = 'image')
     ORDER BY sequence DESC LIMIT ?4`).bind(c.req.param('id'), before, kind, mediaPage(kind) + 1, c.get('owner'))
-    .all<{ sequence: number; messageID: string; userID: string | null; agentID: string | null; senderName: string; createdAt: number; attachmentJSON: string }>();
+    .all<{ sequence: number; messageID: string; userID: string | null; agentID: string | null; senderName: string; createdAt: number; attachmentJSON: string; attachmentsJSON: string | null }>();
   const page = results.slice(0, mediaPage(kind));
-  return c.json({ items: page.map(({ attachmentJSON, ...message }) => {
-    const { name, mimeType, size } = storedAttachment({ attachmentJSON })!;
-    return { ...message, name, mimeType, size };
+  // Album images are listed individually, in album order; image addresses each one.
+  return c.json({ items: page.flatMap(({ attachmentJSON, attachmentsJSON, ...message }) => {
+    const album = albumAttachments(storedAttachment({ attachmentJSON }), attachmentsJSON ? JSON.parse(attachmentsJSON) as Attachment[] : null);
+    return album.map(({ name, mimeType, size }, image) => ({ ...message, ...(album.length > 1 ? { image } : {}), name, mimeType, size }));
   }), nextBefore: results.length > page.length ? page[page.length - 1].sequence : null });
 });
 media.put('/messages/:messageID/attachment/listened', async (c) => {
@@ -82,12 +83,14 @@ media.put('/messages/:messageID/attachment/listened', async (c) => {
   return row ? c.json(row) : c.json({ error: 'Voice message not found' }, 404);
 });
 media.get('/messages/:messageID/attachment', async (c) => {
-  const row = await c.env.DB.prepare(`SELECT attachment_json AS attachmentJSON FROM group_message
+  const image = albumIndex(c.req.query('image'));
+  if (image === null) return c.json({ error: 'Attachment unavailable' }, 404);
+  const row = await c.env.DB.prepare(`SELECT attachment_json AS attachmentJSON, attachments_json AS attachmentsJSON FROM group_message
     WHERE id = ?1 AND group_id = ?2 AND EXISTS (
       SELECT 1 FROM group_member WHERE group_id = group_message.group_id AND user_id = ?3)
       AND sequence >= ${userHistoryStart('?2', '?3')}`)
-    .bind(c.req.param('messageID'), c.req.param('id'), c.get('owner')).first<{ attachmentJSON: string | null }>();
-  const attachment = row && storedAttachment(row);
+    .bind(c.req.param('messageID'), c.req.param('id'), c.get('owner')).first<{ attachmentJSON: string | null; attachmentsJSON: string | null }>();
+  const attachment = row && albumAttachments(storedAttachment(row), row.attachmentsJSON ? JSON.parse(row.attachmentsJSON) as Attachment[] : null)[image];
   if (!attachment) return c.json({ error: 'Attachment unavailable' }, 404);
   const object = await c.env.CONTACT_PHOTOS.get(attachment.key);
   if (!object || object.size !== attachment.size || object.size > attachmentLimit) return c.json({ error: 'Attachment unavailable' }, 404);

@@ -38,6 +38,8 @@ struct AssistantMessage: Decodable, Equatable, Sendable, Identifiable {
     let createdAt: Double
     var replyTo: MessageReplyQuote? = nil
     var attachment: ChatAttachment? = nil
+    /// A contact-generated album: every image in order, including `attachment`; nil otherwise.
+    var attachments: [ChatAttachment]? = nil
     var voice: MessageVoice? = nil
 }
 
@@ -173,10 +175,12 @@ extension AuthAPI {
         return try JSONDecoder().decode(ChatSubmission.self, from: data)
     }
 
-    /// `part` selects one message of a multi-message reply (contact voice messages).
-    func chatAttachment(contactID: String, turnID: String, assistant: Bool = false, part: Int? = nil, token: String) async throws -> Data {
+    /// `part` selects one message of a multi-message reply (contact voice messages);
+    /// `image` selects one image of a contact-generated album (0 is the first or only one).
+    func chatAttachment(contactID: String, turnID: String, assistant: Bool = false, part: Int? = nil, image: Int = 0, token: String) async throws -> Data {
         var query = assistant ? [URLQueryItem(name: "side", value: "assistant")] : []
         if let part { query.append(URLQueryItem(name: "part", value: String(part))) }
+        if image > 0 { query.append(URLQueryItem(name: "image", value: String(image))) }
         let (data, _) = try await send(path: "contacts/\(contactID)/chat/turns/\(turnID)/attachment", token: token, query: query, timeout: 60)
         return data
     }

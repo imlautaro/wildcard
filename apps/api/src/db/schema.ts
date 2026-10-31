@@ -371,6 +371,7 @@ export const groupMessage = sqliteTable('group_message', {
   requesterId: text('requester_id').references(() => user.id, { onDelete: 'set null' }),
   receiptsTracked: integer('receipts_tracked').notNull().default(0),
   attachmentJSON: text('attachment_json'),
+  attachmentsJSON: text('attachments_json'),
   requestId: text('request_id').references((): AnySQLiteColumn => groupRequest.id, { onDelete: 'set null' }),
   taskId: text('task_id').references((): AnySQLiteColumn => task.id, { onDelete: 'set null' }),
   replyToId: text('reply_to_id').references((): AnySQLiteColumn => groupMessage.id, { onDelete: 'set null' }),
@@ -386,7 +387,8 @@ export const groupMessage = sqliteTable('group_message', {
   createdAt: date('created_at').notNull(),
 }, (t) => [index('group_message_exchange_idx').on(t.exchangeId, t.sequence), index('group_message_history_idx').on(t.groupId, desc(t.sequence)),
   uniqueIndex('group_message_request_idx').on(t.requestId).where(sql`${t.requestId} IS NOT NULL`),
-  check('group_attachment_json', sql`${t.attachmentJSON} IS NULL OR json_valid(${t.attachmentJSON})`)]);
+  check('group_attachment_json', sql`${t.attachmentJSON} IS NULL OR json_valid(${t.attachmentJSON})`),
+  check('group_attachments_json', sql`${t.attachmentsJSON} IS NULL OR (json_valid(${t.attachmentsJSON}) AND json_type(${t.attachmentsJSON}) = 'array')`)]);
 export const groupExchange = sqliteTable('group_exchange', {
   rootId: text('root_id').primaryKey().references(() => groupMessage.id, { onDelete: 'cascade' }),
   botMessages: integer('bot_messages').notNull().default(0),
