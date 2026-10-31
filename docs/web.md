@@ -1248,3 +1248,12 @@ group typing wording is shared with iOS.
 No cache, API contract or storage change beyond the formatted `replyActivity`
 string. Verified statically only (web typecheck, API typecheck, `EXPLAIN` of the
 group summary query on local D1); browser behavior is not verified.
+
+## Contact alias (2026-10-31, migration 0075)
+
+Contact edit (`/contacts/:id/edit`) has an **Alias** row for every holder, owner or member. It opens a
+sheet ("Only you see this name. Others still see {realName}.") with Save, Cancel and Remove alias; a blank
+value clears it. The owner's rename field starts from `realName ?? name`; members see the display name
+and, when an alias is set, a line with the shared name. Everything else reads the server-resolved `name`.
+Static typecheck only (`npm run typecheck`); browser behavior is not verified. API contract:
+[contacts](contacts.md#contact-alias-private-display-name).

@@ -276,9 +276,10 @@ export async function learningSnapshot(db: D1Database, kind: 'contact' | 'group'
     : await db.prepare(`SELECT m.learning_enabled AS enabled FROM group_member m JOIN chat_group g ON g.id = m.group_id
         WHERE m.group_id = ? AND m.user_id = ? AND g.clearing = 0`).bind(id, userID).first<{ enabled: number }>();
   if (!settings) return null;
-  const profiles = (await db.prepare(`SELECT l.agent_id AS agentID, a.name AS agentName, l.reviewed_at AS reviewedAt,
+  const profiles = (await db.prepare(`SELECT l.agent_id AS agentID, COALESCE(ct.alias, a.name) AS agentName, l.reviewed_at AS reviewedAt,
     l.profile_json AS profile FROM conversation_learning l JOIN contact_agent a ON a.id = l.agent_id
-    WHERE l.scope_key = ? AND l.user_id = ? ORDER BY a.name LIMIT 8`).bind(`${kind}:${id}`, userID)
+    LEFT JOIN contact ct ON ct.agent_id = a.id AND ct.user_id = l.user_id
+    WHERE l.scope_key = ? AND l.user_id = ? ORDER BY COALESCE(ct.alias, a.name) LIMIT 8`).bind(`${kind}:${id}`, userID)
     .all<{ agentID: string; agentName: string; reviewedAt: number; profile: string }>()).results;
   return { enabled: settings.enabled === 1, profiles: profiles.map(({ profile, ...p }) => ({ ...p, items: storedItems(profile, Date.now()) })) };
 }

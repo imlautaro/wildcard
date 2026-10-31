@@ -74,6 +74,12 @@ final class DocumentCaches {
         }
     }
 
+    /// Cached names are server-resolved per viewer; keep the entries visible but force revalidation.
+    func invalidateAll() {
+        lists.invalidateAll()
+        documents.invalidateAll()
+    }
+
     func forget(_ base: String) {
         lists.remove(id: base)
         // Open documents are dropped by their own 404 or by LRU; the list is the entry point.

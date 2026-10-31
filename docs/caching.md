@@ -1474,3 +1474,21 @@ from the existing contact list and private image caches; the lead headline image
 reuses the link preview caches. Server-side, cards stay until replaced, retired,
 hidden or the account is deleted (cascade). Device verification of these paths is
 pending.
+
+## Contact alias invalidation
+
+`setAlias` (`useChats`) bumps the chat-list generation so older reads are rejected, applies the returned
+contact immediately and refreshes the lists in the background. Web caches holding server-resolved names are
+updated or dropped: cached groups are patched in place (message and quote `senderName`, drafts and pending
+quotes, agent members, typing names, reactions) with their revision bumped and in-flight detail reads
+discarded; tasks, documents, group message info and conversation-learning caches are forgotten; the Updates
+feed stays visible and refetches. Account switches and access loss clear these as before. iOS: `ContactsStore.setAlias` updates the
+known contact and list row at once (stale responses rejected by generation, concurrent mutations blocked),
+invalidates the contact's learning, task and document snapshots and bumps `aliasRevision`; `HomeView` reacts by
+invalidating groups and marking the Updates feed stale (`HomeFeed.markStale`, content stays visible until the
+refetch). `GroupConversationCache.aliasChanged()` discards inactive group conversations (refetched on open) and
+calls `invalidateDetails()` on visible or send-pending ones. Known limits: those retained conversations may keep
+already-loaded messages under the old name until their next refresh; private-chat reactions/quotes and group MCP
+connection snapshots are not explicitly invalidated.
+Verification: change an alias, then reopen a group with that bot, its members, quotes, a task list and Updates,
+and confirm the other member's view is unchanged. Not run on a device or browser.

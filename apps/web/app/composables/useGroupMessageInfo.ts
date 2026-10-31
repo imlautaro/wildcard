@@ -7,6 +7,11 @@ registerSessionReset(() => {
   for (const entry of entries.values()) { entry.value = null; entry.unavailable = true; }
   entries.clear();
 });
+// Recipient names follow contact aliases, so an alias change drops every snapshot.
+export function forgetAllGroupMessageInfo() {
+  for (const entry of entries.values()) { entry.value = null; entry.unavailable = true; }
+  entries.clear();
+}
 export function forgetGroupMessageInfo(groupID: string) {
   for (const [key, entry] of entries) if (key.startsWith(`${groupID}/`)) {
     entry.value = null; entry.unavailable = true; entries.delete(key);

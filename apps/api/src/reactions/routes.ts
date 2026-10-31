@@ -1,3 +1,4 @@
+import { aliasMap } from '../contacts/alias';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
@@ -23,7 +24,9 @@ export function reactionRoutes(group: boolean) {
       WHERE r.${target} IN (SELECT value FROM json_each(?)) AND ${visible} AND ${permission.sql}
       ORDER BY r.side, r.emoji, actorID`)
       .bind(JSON.stringify(ids), id, ...(group ? [] : [owner]), ...permission.values).all<Reaction>();
-    return c.json({ reactions: results });
+    // Reactions are viewer-facing, so contacts appear under this user's private alias.
+    const aliases = await aliasMap(c.env.DB, owner, results.map(r => r.actorID.startsWith('agent/') ? r.actorID.slice(6) : null));
+    return c.json({ reactions: results.map(r => ({ ...r, name: aliases.get(r.actorID.slice(6)) ?? r.name })) });
   });
   routes.put('/', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }), async (c) => {
     const b = await c.req.json<Record<string, unknown>>().catch(() => null);

@@ -1,3 +1,4 @@
+import { agentDisplayName } from '../contacts/alias';
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 import { replyActivityLabel, type ReplyActivityEntry } from '../../../../shared/activity';
 import { learningRoutes } from '../chat/learning-routes';
@@ -48,7 +49,7 @@ const summary = `
       'ownListenedAt', (SELECT listened_at FROM group_voice_playback WHERE message_id = gm.id AND user_id = m.user_id), 'transcript', NULL) END
     FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageVoiceJSON,
 g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (SELECT json_group_array(json_object('name', name, 'activity', activity)) FROM (
-    SELECT a.name AS name, CASE WHEN p.researching_until > unixepoch('subsec') * 1000 THEN 'researching'
+    SELECT ${agentDisplayName('a.id', 'a.name', 'm.user_id')} AS name, CASE WHEN p.researching_until > unixepoch('subsec') * 1000 THEN 'researching'
       WHEN p.recording_until > unixepoch('subsec') * 1000 THEN 'recording' ELSE 'typing' END AS activity
     FROM group_reply r JOIN agent_attention attention ON attention.turn_id = r.id AND attention.attempt = r.attempt AND attention.agent_id = r.agent_id
     JOIN agent_presence p ON p.agent_id = r.agent_id JOIN contact_agent a ON a.id = r.agent_id
@@ -63,7 +64,7 @@ g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (S
   (SELECT ${receiptState('gm')} FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageReceiptState, g.created_at AS createdAt, g.photo_version AS photoVersion,
   (SELECT CASE WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
   (SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageAt,
-  (SELECT sender_name FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageSenderName,
+  (SELECT ${agentDisplayName('lm.agent_id', 'lm.sender_name', 'm.user_id')} FROM group_message lm WHERE lm.group_id = g.id AND lm.task_id IS NULL ORDER BY lm.sequence DESC LIMIT 1) AS lastMessageSenderName,
   COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt`;
 
 groups.use('*', async (c, next) => {
@@ -93,7 +94,7 @@ groups.get('/', async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT ${summary} FROM chat_group g JOIN group_member m ON m.group_id = g.id
     WHERE m.user_id = ? ORDER BY updatedAt DESC, g.id LIMIT 100`).bind(c.get('owner')).all<GroupSummary>();
   const { results: activity } = await c.env.DB.prepare(`SELECT gm.id AS messageID, gm.sequence, gm.group_id AS groupID,
-    g.name AS groupName, gm.sender_name AS senderName, gm.agent_id AS agentID, gm.created_at AS sentAt,
+    g.name AS groupName, ${agentDisplayName('gm.agent_id', 'gm.sender_name', 'm.user_id')} AS senderName, gm.agent_id AS agentID, gm.created_at AS sentAt,
     CASE WHEN json_extract(gm.attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END AS text
     FROM group_message gm JOIN group_member m ON m.group_id = gm.group_id JOIN chat_group g ON g.id = gm.group_id
     WHERE m.user_id = ? AND gm.sequence > m.last_read_sequence AND gm.user_id IS NOT m.user_id AND gm.task_id IS NULL
@@ -179,10 +180,10 @@ groups.get('/:id', async (c) => {
   const group = await c.env.DB.prepare(`SELECT ${summary} FROM chat_group g JOIN group_member m ON m.group_id = g.id
     WHERE g.id = ? AND m.user_id = ?`).bind(id, owner).first<GroupSummary>();
   const { results: members } = await c.env.DB.prepare(`SELECT u.id, 'user' AS kind, u.name, u.photo_version AS photoVersion,
-    m.can_invite AS canInvite, NULL AS addedBy FROM group_member m JOIN user u ON u.id = m.user_id WHERE m.group_id = ?
-    UNION ALL SELECT a.id, 'agent', a.name, a.photo_version, 0, ga.added_by FROM group_agent ga
-    JOIN contact_agent a ON a.id = ga.agent_id WHERE ga.group_id = ?`).bind(id, id).all();
-  const { results: replies } = await c.env.DB.prepare(`SELECT r.id, r.agent_id AS agentID, a.name, r.status,
+    m.can_invite AS canInvite, NULL AS addedBy FROM group_member m JOIN user u ON u.id = m.user_id WHERE m.group_id = ?1
+    UNION ALL SELECT a.id, 'agent', ${agentDisplayName('a.id', 'a.name', '?2')}, a.photo_version, 0, ga.added_by FROM group_agent ga
+    JOIN contact_agent a ON a.id = ga.agent_id WHERE ga.group_id = ?1`).bind(id, owner).all();
+  const { results: replies } = await c.env.DB.prepare(`SELECT r.id, r.agent_id AS agentID, ${agentDisplayName('a.id', 'a.name', '?3')} AS name, r.status,
     r.source_id AS sourceID, source.sequence AS sourceSequence, r.attempt,
     source.task_id AS taskID, (SELECT title FROM task WHERE id = source.task_id) AS taskTitle,
     EXISTS (SELECT 1 FROM agent_attention attention JOIN agent_presence presence ON presence.agent_id = attention.agent_id
@@ -196,7 +197,7 @@ groups.get('/:id', async (c) => {
     JOIN contact_agent a ON a.id = r.agent_id WHERE r.group_id = ?1 AND r.status IN ('queued', 'running', 'failed')
     AND (r.status != 'failed' OR NOT EXISTS (SELECT 1 FROM group_message later
       WHERE later.group_id = r.group_id AND later.agent_id = r.agent_id AND later.sequence > source.sequence))
-    ORDER BY (r.status = 'failed'), r.sequence DESC LIMIT 80`).bind(id, Date.now()).all();
+    ORDER BY (r.status = 'failed'), r.sequence DESC LIMIT 80`).bind(id, Date.now(), owner).all();
   const { results: privateSharing } = await c.env.DB.prepare(`SELECT ga.agent_id AS agentID,
     EXISTS (SELECT 1 FROM group_private_sharing s WHERE s.group_id = ga.group_id
       AND s.agent_id = ga.agent_id AND s.user_id = ?2) AS enabled,
@@ -346,13 +347,13 @@ groups.get('/:id/messages', async (c) => {
   const before = Number(c.req.query('before') ?? Number.MAX_SAFE_INTEGER);
   if (!Number.isSafeInteger(before) || before < 1) return c.json({ error: 'Invalid history cursor' }, 400);
   const { results } = await c.env.DB.prepare(`SELECT ${receiptState('group_message')} AS receiptState, sequence, id, user_id AS userID, agent_id AS agentID,
-    sender_name AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON, reply_to_id AS replyToID,
+    ${agentDisplayName('group_message.agent_id', 'group_message.sender_name', '?3')} AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON, reply_to_id AS replyToID,
     (SELECT listened_at FROM group_voice_playback WHERE message_id = group_message.id AND user_id = ?3) AS ownListenedAt,
     voice_listened_at AS voiceListenedAt, voice_transcribed_at AS voiceTranscribedAt FROM group_message
     WHERE group_id = ?1 AND sequence < ?2 AND task_id IS NULL ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before, c.get('owner'))
     .all<{ ownListenedAt: number | null; sequence: number; attachmentJSON: string | null; replyToID: string | null; text: string; agentID: string | null; voiceListenedAt: number | null; voiceTranscribedAt: number | null }>();
   const page = results.slice(0, 50);
-  const quotes = await groupQuotes(c.env.DB, c.req.param('id'), page);
+  const quotes = await groupQuotes(c.env.DB, c.req.param('id'), c.get('owner'), page);
   const current=await c.env.DB.prepare('SELECT history_revision AS value FROM chat_group WHERE id=?').bind(c.req.param('id')).first<{value:number}>();
   if (!epoch || epoch.value!==current?.value) return c.json({error:'Group was cleared. Refresh history.'},409);
   return c.json({ historyRevision:epoch.value, messages: page.reverse().map(({ attachmentJSON, replyToID, voiceListenedAt, voiceTranscribedAt, ownListenedAt, ...message }) => {
@@ -388,7 +389,7 @@ groups.get('/:id/message-info', async c => {
     .bind(groupID, messageID, owner).first<{ tracked: number }>();
   if (!message) return c.json({ error: 'Message unavailable' }, 404);
   const { results } = await c.env.DB.prepare(`SELECT r.recipient_kind AS kind, r.recipient_id AS id,
-    COALESCE(u.name, a.name, 'Former member') AS name, r.delivered_at AS deliveredAt, r.read_at AS readAt
+    COALESCE(u.name, ${agentDisplayName('a.id', 'a.name', '?3')}, 'Former member') AS name, r.delivered_at AS deliveredAt, r.read_at AS readAt
     FROM group_message_receipt r JOIN group_message gm ON gm.id = r.message_id
     LEFT JOIN user u ON r.recipient_kind = 'user' AND u.id = r.recipient_id
     LEFT JOIN contact_agent a ON r.recipient_kind = 'agent' AND a.id = r.recipient_id

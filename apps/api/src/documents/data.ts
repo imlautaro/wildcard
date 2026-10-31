@@ -15,30 +15,30 @@ const scopeWhere = (scope: DocumentScope) => scope.kind === 'group'
   ? { sql: 'd.group_id = ?', binds: [scope.groupID] }
   : { sql: 'd.contact_id = ? AND d.user_id = ?', binds: [scope.contactID, scope.userID] };
 
-async function names(db: D1Database, scope: DocumentScope) {
-  const members = new Map((await taskMembers(db, scope)).map(member => [`${member.kind}:${member.id}`, member.name]));
+async function names(db: D1Database, scope: DocumentScope, viewerID?: string) {
+  const members = new Map((await taskMembers(db, scope, viewerID)).map(member => [`${member.kind}:${member.id}`, member.name]));
   return (kind: string, id: string) => members.get(`${kind}:${id}`) ?? 'Former member';
 }
 // Plain text for list previews: drop Markdown markers, collapse whitespace.
 const preview = (body: string) => body.replace(/[#>*_`~|[\]()-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
 
-export async function listDocuments(db: D1Database, scope: DocumentScope) {
+export async function listDocuments(db: D1Database, scope: DocumentScope, viewerID?: string) {
   const where = scopeWhere(scope);
   const { results } = await db.prepare(`SELECT ${columns} FROM chat_document d WHERE ${where.sql} ORDER BY d.updated_at DESC LIMIT ${documentLimits.documents}`)
     .bind(...where.binds).all<Row>();
-  const name = await names(db, scope);
+  const name = await names(db, scope, viewerID);
   return results.map(({ body, researchJSON, ...doc }) => ({ ...doc, research: researchJSON ? JSON.parse(researchJSON) as ResearchProvenance : null, length: body.length, preview: preview(body),
     createdByName: name(doc.createdByKind, doc.createdByID), updatedByName: name(doc.updatedByKind, doc.updatedByID) }));
 }
 
-export async function readDocument(db: D1Database, scope: DocumentScope, id: string) {
+export async function readDocument(db: D1Database, scope: DocumentScope, id: string, viewerID?: string) {
   const where = scopeWhere(scope);
   const doc = await db.prepare(`SELECT ${columns} FROM chat_document d WHERE d.id = ? AND ${where.sql}`).bind(id, ...where.binds).first<Row>();
   if (!doc) throw new DocumentError('Document not found in this chat.', 404);
   const { results } = await db.prepare(`SELECT revision, summary, author_kind AS authorKind, author_id AS authorID, created_at AS createdAt
     FROM chat_document_revision WHERE document_id = ? ORDER BY revision DESC LIMIT 20`).bind(id)
     .all<{ revision: number; summary: string | null; authorKind: string; authorID: string; createdAt: number }>();
-  const name = await names(db, scope);
+  const name = await names(db, scope, viewerID);
   const { researchJSON, ...content } = doc;
   return { ...content, research: researchJSON ? JSON.parse(researchJSON) as ResearchProvenance : null,
     createdByName: name(doc.createdByKind, doc.createdByID), updatedByName: name(doc.updatedByKind, doc.updatedByID),

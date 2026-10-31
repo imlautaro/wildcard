@@ -12,6 +12,8 @@ final class ContactsStore {
     private(set) var isMutating = false
     private(set) var error: String?
     private(set) var totalUnreadCount = 0
+    /// Bumps after a private alias change so shells can refresh server-resolved names (groups, Updates).
+    private(set) var aliasRevision = 0
     /// A message an Updates note suggested sending, prefilled once when its chat opens (memory only).
     var suggestedDrafts: [String: String] = [:]
     private let readAcknowledgements = ReadAcknowledgementQueue()
@@ -333,6 +335,18 @@ final class ContactsStore {
             isMutating = false
             throw error
         }
+    }
+
+    /// Sets or clears this user's private alias. The server resolves it in groups, Updates and push
+    /// titles, so cached names there are invalidated and revalidated by the shell via `aliasRevision`.
+    func setAlias(contactID: String, alias: String?, using auth: AuthStore) async throws {
+        try await updateContact(contactID: contactID, using: auth) { api, token in
+            try await api.setContactAlias(id: contactID, alias: alias, token: token)
+        }
+        learningSnapshots.invalidateAll()
+        taskSnapshots.invalidateAll()
+        documentCaches.invalidateAll()
+        aliasRevision += 1
     }
 
     func setInitiative(contactID: String, enabled: Bool, using auth: AuthStore) async throws {

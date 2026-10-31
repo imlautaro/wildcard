@@ -22,12 +22,12 @@ function accessRoutes(group: boolean) {
   routes.get('/', async c => {
     const owner = c.get('owner');
     const { results } = group
-      ? await c.env.DB.prepare(`SELECT m.id, m.name, a.id AS agentID, a.name AS agentName,
+      ? await c.env.DB.prepare(`SELECT m.id, m.name, a.id AS agentID, COALESCE(ct.alias, a.name) AS agentName,
           EXISTS (SELECT 1 FROM mcp_group_access x WHERE x.group_id = ga.group_id AND x.agent_id = ga.agent_id AND x.connection_id = m.id) AS granted
         FROM group_agent ga JOIN contact_agent a ON a.id = ga.agent_id AND a.owner_id = ?2
         JOIN contact ct ON ct.agent_id = a.id AND ct.user_id = ?2
         JOIN mcp_contact_access ca ON ca.contact_id = ct.id JOIN mcp_connector m ON m.id = ca.connection_id AND m.user_id = ?2
-        WHERE ga.group_id = ?1 AND ga.added_by = ?2 ORDER BY a.name, m.name`).bind(c.req.param('groupID'), owner).all()
+        WHERE ga.group_id = ?1 AND ga.added_by = ?2 ORDER BY COALESCE(ct.alias, a.name), m.name`).bind(c.req.param('groupID'), owner).all()
       : await c.env.DB.prepare(`SELECT m.id, m.name,
           EXISTS (SELECT 1 FROM mcp_contact_access x WHERE x.contact_id = ?1 AND x.connection_id = m.id) AS granted
         FROM mcp_connector m WHERE m.user_id = ?2 ORDER BY m.name, m.id`).bind(c.req.param('contactID'), owner).all();

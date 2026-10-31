@@ -13,6 +13,8 @@ export function forgetDocuments(base: string) {
   drop(lists, base);
   for (const key of [...docs.keys()]) if (key.startsWith(`${base}/`)) drop(docs, key);
 }
+// Documents hold server-resolved author names, which follow contact aliases.
+export function forgetAllDocuments() { for (const key of [...lists.keys()]) drop(lists, key); for (const key of [...docs.keys()]) drop(docs, key); }
 export class DocumentConflict extends Error {
   constructor(message: string, readonly current: ChatDocument | null) { super(message); }
 }

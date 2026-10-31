@@ -200,6 +200,16 @@ struct HomeView: View {
         }
         .environment(contacts)
         .environment(invitations)
+        .onChange(of: contacts.aliasRevision) { _, _ in
+            // Groups, Updates and shared boards render names the server resolved with the old alias.
+            groups.conversations.aliasChanged()
+            updates.markStale()
+            sync.request()
+            Task {
+                await groups.refresh(using: auth, refreshInvitations: false)
+                await updates.refresh(using: auth, force: true)
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { MessageSounds.shared.activate(userID: auth.user?.id); native.reloadDrafts() }
             else { MessageSounds.shared.deactivate() }

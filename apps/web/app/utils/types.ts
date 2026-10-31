@@ -17,7 +17,11 @@ export type Contact = {
   clearing?: number;
   onboardingChat?: number;
   id: string;
+  // The name this account reads: its private alias when set, else the shared name.
   name: string;
+  // The shared name other participants see, and this account's private alias (null when unset).
+  realName?: string;
+  alias?: string | null;
   initiativeEnabled?: number;
   // The contact's shared voice and this participant's voice-reply opt-in (0 or 1).
   speechAccent?: string | null;

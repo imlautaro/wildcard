@@ -35,7 +35,7 @@ export async function homeFeed(env: Env, owner: string) {
   const [state, cards, topics, apps, schedules, tasks] = await Promise.all([
     env.DB.prepare(`SELECT status, generated_at AS generatedAt, briefing, progress_json AS progressJSON, error_code AS errorCode,
       due_at AS dueAt, requested_at AS requestedAt FROM home_feed WHERE user_id = ?`).bind(owner).first<FeedRow>(),
-    env.DB.prepare(`SELECT card.id, card.topic_id AS topicID, card.contact_id AS contactID, c.name AS contactName, c.photo_version AS photoVersion,
+    env.DB.prepare(`SELECT card.id, card.topic_id AS topicID, card.contact_id AS contactID, COALESCE(c.alias, c.name) AS contactName, c.photo_version AS photoVersion,
         card.payload_json AS payloadJSON, card.connector, card.generated_at AS generatedAt, t.reason, t.source, t.feedback
       FROM home_card card JOIN home_topic t ON t.id = card.topic_id AND t.status = 'active'
       LEFT JOIN contact c ON c.id = card.contact_id AND c.user_id = card.user_id
@@ -44,18 +44,18 @@ export async function homeFeed(env: Env, owner: string) {
       .bind(owner).all<HomeTopicRow>(),
     // Enabled mini apps the person opens, plus ones created in the last three days.
     env.DB.prepare(`SELECT a.id, a.spec_json AS specJSON, a.contact_id AS contactID, a.group_id AS groupID,
-        COALESCE(c.name, g.name) AS ownerName, COALESCE(u.opens, 0) AS opens
+        COALESCE(c.alias, c.name, g.name) AS ownerName, COALESCE(u.opens, 0) AS opens
       FROM mini_app a LEFT JOIN mini_app_usage u ON u.app_id = a.id AND u.user_id = ?1
       LEFT JOIN contact c ON c.id = a.contact_id AND c.user_id = ?1 LEFT JOIN chat_group g ON g.id = a.group_id
       WHERE a.approved_revision = a.revision AND (u.opens > 0 OR a.created_at > ?2)
         AND (a.user_id = ?1 OR EXISTS (SELECT 1 FROM group_member m WHERE m.group_id = a.group_id AND m.user_id = ?1))
       ORDER BY COALESCE(u.opens, 0) DESC, COALESCE(u.last_opened_at, a.created_at) DESC LIMIT 8`).bind(owner, now - 3 * 86_400_000)
       .all<{ id: string; specJSON: string; contactID: string | null; groupID: string | null; ownerName: string | null; opens: number }>(),
-    env.DB.prepare(`SELECT s.id, s.instruction AS title, s.next_at AS at, s.contact_id AS contactID, c.name FROM contact_schedule s
+    env.DB.prepare(`SELECT s.id, s.instruction AS title, s.next_at AS at, s.contact_id AS contactID, COALESCE(c.alias, c.name) AS name FROM contact_schedule s
       JOIN contact c ON c.id = s.contact_id AND c.user_id = s.user_id
       WHERE s.user_id = ?1 AND s.status = 'active' AND s.next_at < ?2 ORDER BY s.next_at LIMIT 4`).bind(owner, now + 2 * 86_400_000)
       .all<{ id: string; title: string; at: number; contactID: string; name: string }>(),
-    env.DB.prepare(`SELECT t.id, t.title, l.contact_id AS contactID, l.group_id AS groupID, COALESCE(c.name, g.name) AS name FROM task t
+    env.DB.prepare(`SELECT t.id, t.title, l.contact_id AS contactID, l.group_id AS groupID, COALESCE(c.alias, c.name, g.name) AS name FROM task t
       JOIN task_list l ON l.id = t.list_id AND l.status = 'active'
       LEFT JOIN contact c ON c.id = l.contact_id AND c.user_id = ?1 LEFT JOIN chat_group g ON g.id = l.group_id
       WHERE t.assignee_kind = 'user' AND t.assignee_id = ?1 AND t.status IN ('open', 'in_progress')
@@ -73,7 +73,7 @@ export async function homeFeed(env: Env, owner: string) {
     pending: state?.status !== 'running' && !!state && state.dueAt <= now && (state.requestedAt !== null || state.generatedAt === null) && homeEnabled(env),
     generatedAt: state?.generatedAt ?? null, briefing: state?.briefing ?? null, error: state?.errorCode ?? null,
     progress: progress ? { ...progress, contactName: [...contributors.values()].find(item => item.id === progress.contactID)?.name
-      ?? (await env.DB.prepare('SELECT name FROM contact WHERE id = ? AND user_id = ?').bind(progress.contactID, owner).first<{ name: string }>())?.name ?? null } : null,
+      ?? (await env.DB.prepare('SELECT COALESCE(alias, name) AS name FROM contact WHERE id = ? AND user_id = ?').bind(progress.contactID, owner).first<{ name: string }>())?.name ?? null } : null,
     contributors: [...contributors.values()],
     cards: cards.results.map(card => ({ id: card.id, topicID: card.topicID, contactID: card.contactID, contactName: card.contactName,
       contactPhotoVersion: card.photoVersion, reason: card.reason, source: card.source, feedback: card.feedback, connector: card.connector === 1,

@@ -737,6 +737,23 @@ final class GroupConversationCache {
         return store
     }
 
+    /// A private contact alias changed. Messages, members, reactions and task boards hold names the server
+    /// resolved for this viewer, so drop idle conversations (they refetch when opened) and force busy
+    /// ones (visible, sending, pending voice) to refetch details without losing their pending state.
+    func aliasChanged() {
+        for (id, store) in entries {
+            if store.isRetained || store.isSending || store.isLoadingMore
+                || store.pendingID != nil || store.failedVoice != nil || !store.reactions.pending.isEmpty {
+                store.invalidateDetails()
+            } else {
+                remove(id: id)
+            }
+        }
+        learning.invalidateAll()
+        tasks.invalidateAll()
+        documents.invalidateAll()
+    }
+
     func remove(id: String) {
         learning.remove(id: id)
         lastAccess.removeValue(forKey: id)

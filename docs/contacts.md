@@ -17,6 +17,7 @@ from that verified session; clients cannot provide or change ownership. A contac
 | POST | `/api/v1/contacts` | Create using `{ "name": "My contact" }`; returns 201 |
 | GET | `/api/v1/contacts/:id` | Read your contact |
 | PATCH | `/api/v1/contacts/:id` | Creator renames using `{ "name": "New name" }` |
+| PATCH | `/api/v1/contacts/:id/alias` | Any holder sets or clears their private alias using `{ "alias": "Berdi" }` or `{ "alias": null }`; returns the contact |
 | DELETE | `/api/v1/contacts/:id` | Creator deletes the whole agent; a member leaves and deletes their private conversation; returns 204 |
 
 A contact contains the private conversation `id`, shared `agentID`, `role` (`owner` or `member`), `name`, nullable `photoVersion`, `createdAt`, and `updatedAt`; timestamps are Unix
@@ -271,3 +272,40 @@ when `GET /me` reports `features.voiceMessages`. See [voice messages](voice.md).
 ## Lifecycle actions
 
 Both clients expose [archive, clear and delete](chat-lifecycle.md). A clear affects only this participant's private conversation, optionally keeping extracted knowledge. Creator deletion now also removes the agent's authored group messages/media and assigned work; member deletion keeps other participants' access. External deletion failures are durably retried.
+
+## Contact alias (private display name)
+
+Each user can give a contact a private display name. It exists only on that user's own
+`contact` row (`contact.alias`, nullable, migration `0075_contact_alias.sql`), so
+other participants, shared invitations and groups keep showing the shared name. A creator
+and a member can both set an alias; members cannot rename the shared contact.
+
+- Contact responses: `name` is the **display name** (`alias`, else the shared name), `realName`
+  is the shared name and `alias` is the raw value or `null`. The creator-only rename edits
+  `realName`; clients must populate the rename field from `realName`, not `name`.
+- `PATCH /api/v1/contacts/:id/alias` accepts only `alias`: 1–100 code points, no control
+  characters, trimmed. `null` or a blank string clears it. 404 when the caller does not hold the contact.
+- Resolved by the server for the requesting user (alias, else shared name): contact list/detail,
+  direct and group push titles/subtitles, the Updates feed (cards, progress, schedules, tasks, mini
+  apps), group message `senderName`, quoted messages, group list preview/activity, group members,
+  typing/research/recording activity, message info receipts, reactions, task and document
+  assignee/author names, conversation-learning profiles and MCP group access.
+- Never resolved: model prompts and tool results (the bot still knows itself and its peers by the shared name),
+  text typed or generated inside messages (an `@Alberdi` mention or a name inside a bot reply is
+  stored text and is not rewritten), invitations/sharing (the recipient sees the shared name and sets their own alias),
+  and the admin app.
+- Group messages keep an immutable shared `sender_name` snapshot; the alias is overlaid at read time
+  by `agent_id` (`apps/api/src/contacts/alias.ts`). Removing the alias restores the shared name
+  everywhere on the next read.
+- Caching: caches that hold server-resolved names (group conversation/members/list, tasks, documents,
+  reactions, learning, Updates feed) are invalidated and refetched after an alias change; see
+  [caching](caching.md) and [web](web.md).
+- Verification (October 31, 2026): the overlay SQL was exercised on the local workerd D1 with two users
+  holding the same agent (alias for one only): messages, quotes, members, group summary,
+  activity and contact rows returned the alias for the holder and the shared name for the other.
+  Push delivery, both clients and the remaining queries were checked statically only.
+
+**iOS:** the contact editor (`ContactEditorView`) has an **Alias** section for every holder, with its own Save alias
+and Remove alias buttons because members have no toolbar Save; the rename field is populated from the shared
+name. `Contact.realName`/`alias` decode optionally so older cached snapshots still load. Static typecheck
+only; not run on a simulator or device.

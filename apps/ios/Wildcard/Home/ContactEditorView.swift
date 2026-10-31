@@ -5,6 +5,9 @@ struct ContactEditorView: View {
     @Environment(ContactsStore.self) private var contacts
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
+    /// Draft of this user's private alias; saved separately because every participant may set it.
+    @State private var aliasText: String
+    @State private var aliasSaving = false
     @State private var error: String?
     @State private var saving = false
     @State private var contactID: String?
@@ -14,11 +17,14 @@ struct ContactEditorView: View {
     @State private var creationMode = "manual"
     /// Opens the chat with a contact this editor created.
     private let onCreated: ((String) -> Void)?
+    private var storedAlias: String? { contactID.flatMap { contacts.contact(id: $0) }?.alias }
     private var canEdit: Bool { contactID.flatMap { contacts.contact(id: $0) }?.canManage ?? true }
 
     init(contact: Contact? = nil, onCreated: ((String) -> Void)? = nil) {
         _contactID = State(initialValue: contact?.id)
-        _name = State(initialValue: contact?.name ?? "")
+        // The name field edits the shared name; the display name may be this user's alias.
+        _name = State(initialValue: contact?.sharedName ?? "")
+        _aliasText = State(initialValue: contact?.alias ?? "")
         self.onCreated = onCreated
     }
 
@@ -58,6 +64,28 @@ struct ContactEditorView: View {
             }
             }
             if let contactID {
+                Section {
+                    TextField("Alias", text: $aliasText)
+                        .textInputAutocapitalization(.words)
+                        .submitLabel(.done)
+                        .disabled(aliasSaving || contacts.isMutating)
+                    if aliasText.trimmingCharacters(in: .whitespacesAndNewlines) != (storedAlias ?? "") {
+                        Button("Save alias") { saveAlias(contactID, clear: false) }
+                            .disabled(aliasSaving || contacts.isMutating)
+                    }
+                    if storedAlias != nil {
+                        Button("Remove alias", role: .destructive) { saveAlias(contactID, clear: true) }
+                            .disabled(aliasSaving || contacts.isMutating)
+                    }
+                } header: {
+                    Text("Alias")
+                } footer: {
+                    Text("Only you see this name. Others still see \(contacts.contact(id: contactID)?.sharedName ?? name).")
+                }
+                .onChange(of: storedAlias) { old, new in
+                    // Follow a refreshed alias unless the draft has unsaved edits.
+                    if aliasText == (old ?? "") { aliasText = new ?? "" }
+                }
                 Section {
                     Toggle(isOn: Binding(
                         get: { contacts.contact(id: contactID)?.initiativeEnabled != 0 },
@@ -132,6 +160,28 @@ struct ContactEditorView: View {
                     Button(contactID == nil ? "Create" : "Save", action: save)
                         .disabled(saving || contacts.isMutating || editingIdentity)
                 }
+            }
+        }
+    }
+
+    private func saveAlias(_ contactID: String, clear: Bool) {
+        guard !aliasSaving, !contacts.isMutating else { return }
+        let trimmed = clear ? "" : aliasText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.unicodeScalars.count <= 100,
+              !trimmed.unicodeScalars.contains(where: { $0.value < 0x20 || (0x7f...0x9f).contains($0.value) }) else {
+            error = "Use an alias with at most 100 characters and no control characters."
+            return
+        }
+        aliasSaving = true
+        error = nil
+        Task {
+            defer { aliasSaving = false }
+            do {
+                try await contacts.setAlias(contactID: contactID, alias: trimmed.isEmpty ? nil : trimmed, using: auth)
+                aliasText = contacts.contact(id: contactID)?.alias ?? ""
+            } catch is CancellationError {
+            } catch {
+                self.error = error.localizedDescription
             }
         }
     }

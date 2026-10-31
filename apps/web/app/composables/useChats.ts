@@ -275,6 +275,19 @@ async function setInitiative(id: string, enabled: boolean): Promise<Contact | nu
   return result.contact;
 }
 
+// Sets or clears (null) this account's private alias. The response is authoritative, so it is
+// applied even if a list refresh ran meanwhile; the generation bump rejects reads begun before it.
+async function setAlias(id: string, alias: string | null): Promise<Contact> {
+  const result = await api<{ contact: Contact }>(`contacts/${id}/alias`, { method: 'PATCH', json: { alias } });
+  generation += 1;
+  upsertContact(result.contact);
+  // Other caches hold names the server resolved with the previous alias.
+  applyContactAlias(result.contact.agentID, result.contact.name);
+  forgetAllTasks(); forgetAllDocuments(); forgetAllGroupMessageInfo(); forgetAllConversationLearning(); staleHome();
+  void refreshLists().catch(() => {});
+  return result.contact;
+}
+
 function upsertContact(contact: Contact) {
   const index = contacts.value.findIndex((item) => item.id === contact.id);
   if (index === -1) contacts.value = [contact, ...contacts.value];
@@ -410,7 +423,7 @@ export function useChats() {
   return {
     contacts, groups, rows, archivedRows, directory, totalUnread, nextCursor, loaded, contactsLoaded, groupsLoaded, allContactsLoaded, error,
     contactInvitations, groupInvitations, invitationCount, contributorModel,
-    archiveChat, clearChat, deleteChatContact, refresh, refreshLists, refreshInvitations, loadMore, loadAllContacts, setInitiative, upsertContact, removeContact, updateGroup, removeGroup, applyRead,
+    archiveChat, clearChat, deleteChatContact, refresh, refreshLists, refreshInvitations, loadMore, loadAllContacts, setInitiative, setAlias, upsertContact, removeContact, updateGroup, removeGroup, applyRead,
   };
 }
 

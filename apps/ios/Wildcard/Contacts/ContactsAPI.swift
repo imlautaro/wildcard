@@ -2,7 +2,12 @@ import Foundation
 
 struct Contact: Codable, Hashable, Identifiable, Sendable {
     let id: String
+    /// The name shown to this user: their private alias when set, otherwise the shared name.
     let name: String
+    /// The shared name every participant sees (absent in snapshots from older servers).
+    var realName: String? = nil
+    /// This user's private display name for the contact; nobody else sees it.
+    var alias: String? = nil
     var archivedAt: Double? = nil
     var historyRevision: Int? = nil
     var clearing: Int? = nil
@@ -29,6 +34,8 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     var lastMessageReadAt: Double? = nil
     var lastReadSequence: Int?
     var canManage: Bool { role != "member" }
+    /// The name the creator edits and other participants see.
+    var sharedName: String { realName ?? name }
 }
 
 struct ContactsPage: Decodable, Sendable {
@@ -79,6 +86,14 @@ extension AuthAPI {
         let body = try JSONEncoder().encode(ContactInput(name: name))
         let path = id.map { "contacts/\($0)" } ?? "contacts"
         let (data, _) = try await send(path: path, method: id == nil ? "POST" : "PATCH", body: body, token: token)
+        return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
+    }
+
+    /// Sets or clears (nil) this user's private alias; any participant may do it.
+    func setContactAlias(id: String, alias: String?, token: String) async throws -> Contact {
+        let value: Any = alias ?? NSNull()
+        let body = try JSONSerialization.data(withJSONObject: ["alias": value])
+        let (data, _) = try await send(path: "contacts/\(id)/alias", method: "PATCH", body: body, token: token)
         return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
     }
 

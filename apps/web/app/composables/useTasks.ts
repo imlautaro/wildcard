@@ -8,6 +8,8 @@ const boards = shallowReactive(new Map<string, Entry>());
 function invalidate(key: string) { const entry = boards.get(key); if (entry) entry.revision++; boards.delete(key); }
 registerSessionReset(() => { for (const key of [...boards.keys()]) invalidate(key); });
 export function forgetTasks(base: string) { invalidate(base); }
+// Boards hold server-resolved assignee names, which follow contact aliases.
+export function forgetAllTasks() { for (const key of [...boards.keys()]) invalidate(key); }
 
 export function useTasks(base: MaybeRefOrGetter<string>) {
   function entry(key: string) {

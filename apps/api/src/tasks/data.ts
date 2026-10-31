@@ -1,3 +1,4 @@
+import { agentDisplayName } from '../contacts/alias';
 import { monitorLimits, monitorURL } from '../monitors/check';
 
 // Shared to-do lists. Humans (routes) and contacts (tools) use the same mutations, so
@@ -36,18 +37,19 @@ const scopeWhere = (scope: TaskScope, alias = 'l') => scope.kind === 'group'
   : { sql: `${alias}.contact_id = ? AND ${alias}.user_id = ?`, binds: [scope.contactID, scope.userID] };
 
 /** Members who can own a task: the person and the contact in a private chat, or group members. */
-export async function taskMembers(db: D1Database, scope: TaskScope) {
+export async function taskMembers(db: D1Database, scope: TaskScope, viewerID?: string) {
+  // Only user-facing reads pass a viewer; prompts keep the shared contact name.
   const { results } = scope.kind === 'group'
     ? await db.prepare(`SELECT 'user' AS kind, u.id, u.name FROM group_member m JOIN user u ON u.id = m.user_id WHERE m.group_id = ?1
-        UNION ALL SELECT 'agent', a.id, a.name FROM group_agent ga JOIN contact_agent a ON a.id = ga.agent_id WHERE ga.group_id = ?1`)
-      .bind(scope.groupID).all<{ kind: 'user' | 'agent'; id: string; name: string }>()
+        UNION ALL SELECT 'agent', a.id, ${viewerID ? agentDisplayName('a.id', 'a.name', '?2') : 'a.name'} FROM group_agent ga JOIN contact_agent a ON a.id = ga.agent_id WHERE ga.group_id = ?1`)
+      .bind(...(viewerID ? [scope.groupID, viewerID] : [scope.groupID])).all<{ kind: 'user' | 'agent'; id: string; name: string }>()
     : await db.prepare(`SELECT 'user' AS kind, u.id, u.name FROM user u WHERE u.id = ?2
-        UNION ALL SELECT 'agent', c.agent_id, c.name FROM contact c WHERE c.id = ?1 AND c.user_id = ?2 AND c.agent_id IS NOT NULL`)
+        UNION ALL SELECT 'agent', c.agent_id, ${viewerID ? 'COALESCE(c.alias, c.name)' : 'c.name'} FROM contact c WHERE c.id = ?1 AND c.user_id = ?2 AND c.agent_id IS NOT NULL`)
       .bind(scope.contactID, scope.userID).all<{ kind: 'user' | 'agent'; id: string; name: string }>();
   return results;
 }
 
-export async function readTaskLists(db: D1Database, scope: TaskScope, includeCanceled = true) {
+export async function readTaskLists(db: D1Database, scope: TaskScope, includeCanceled = true, viewerID?: string) {
   const where = scopeWhere(scope);
   const { results: lists } = await db.prepare(`SELECT l.id, l.title, l.status, l.created_by_kind AS createdByKind,
     l.created_by_id AS createdByID, l.created_at AS createdAt, l.updated_at AS updatedAt FROM task_list l
@@ -69,7 +71,7 @@ export async function readTaskLists(db: D1Database, scope: TaskScope, includeCan
     COALESCE((SELECT json_group_array(d.blocked_by_id) FROM task_dependency d WHERE d.task_id = t.id), '[]') AS blockedByJSON
     FROM task t WHERE t.list_id IN (SELECT value FROM json_each(?)) ORDER BY t.position`)
     .bind(JSON.stringify(lists.map(list => list.id))).all<Row>();
-  const members = new Map((await taskMembers(db, scope)).map(member => [`${member.kind}:${member.id}`, member.name]));
+  const members = new Map((await taskMembers(db, scope, viewerID)).map(member => [`${member.kind}:${member.id}`, member.name]));
   const byID = new Map(tasks.map(task => [task.id, task]));
   return lists.map(list => ({ ...list, tasks: tasks.filter(task => task.listID === list.id).map(({ blockedByJSON, workDueAt, monitorChecksJSON, monitorPending, ...task }) => {
     const blockedBy = JSON.parse(blockedByJSON) as string[];

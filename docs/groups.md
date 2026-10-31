@@ -1146,3 +1146,13 @@ tools without new web research (agent-assigned tasks start the existing
 Account research budgets rose to 30 per day (global 300) because a deep round uses
 two or three searches. Live checks (Contributor model) chose deep for "can you do a
 better research about this", quick for a plain lookup and project for a moving plan.
+
+## Contact aliases in groups
+
+A bot appears in a group under the shared name for everyone except a member who gave that contact a private
+alias: that member sees the alias on messages, quoted messages, the members list, typing/researching/recording
+activity, the chat-list preview and unread activity, read-receipt details, reactions, task and document names,
+learning profiles and push subtitles. Other members still see the shared name. `group_message.sender_name`
+stays the shared snapshot; the API overlays the viewer's alias by `agent_id` on each read. Message text,
+mentions and anything the model writes are not rewritten. A member who holds no contact for the bot has no
+alias to apply. See [contacts](contacts.md#contact-alias-private-display-name).

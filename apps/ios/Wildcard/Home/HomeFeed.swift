@@ -155,6 +155,15 @@ final class HomeFeedStore {
 
     var isStale: Bool { loadedAt.map { Date.now.timeIntervalSince($0) > 60 } ?? true }
 
+    /// Names in cards and the briefing are resolved per viewer; after an alias change drop the freshness
+    /// window and reject in-flight reads, keeping the last feed on screen until the refetch lands.
+    func markStale() {
+        revision += 1
+        request?.cancel()
+        request = nil
+        loadedAt = nil
+    }
+
     func refresh(using auth: AuthStore, force: Bool = false) async {
         if let request { await request.value; return }
         if !force, !isStale, feed?.isUpdating != true { return }

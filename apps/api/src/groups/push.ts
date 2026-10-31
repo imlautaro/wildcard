@@ -1,6 +1,7 @@
 import { providerToken, sendAPNS, type PushEnvironment } from '../push/delivery';
 import { groupMessagePayload } from '../push/payload';
 import { totalUnreadMessages } from '../lib/unread';
+import { agentDisplayName } from '../contacts/alias';
 
 type Delivery = { messageID: string; groupID: string; userID: string; deviceID: string; sessionID: string;
   token: string; environment: 'development' | 'production'; attempts: number; expiresAt: number };
@@ -33,7 +34,7 @@ export async function deliverGroupPush(env: PushEnvironment, messageID?: string)
         WHERE message_id = ?2 AND device_id = ?3 AND session_id = ?4 AND next_at <= ?5 RETURNING message_id`)
         .bind(now + 120_000, item.messageID, item.deviceID, item.sessionID, now).first();
       if (!claim) return;
-      const alert = await env.DB.prepare(`SELECT g.name AS groupName, gm.sender_name AS senderName, gm.agent_id AS agentID,
+      const alert = await env.DB.prepare(`SELECT g.name AS groupName, ${agentDisplayName('gm.agent_id', 'gm.sender_name', '?2')} AS senderName, gm.agent_id AS agentID,
         CASE WHEN json_extract(gm.attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END AS text,
         gm.sequence, gm.created_at AS sentAt FROM group_message gm JOIN chat_group g ON g.id = gm.group_id
         JOIN group_member m ON m.group_id = gm.group_id AND m.user_id = ?2

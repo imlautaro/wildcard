@@ -35,15 +35,15 @@ export function taskRoutes(kind: 'contact' | 'group') {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TaskError('Expected a JSON object.');
     return value;
   };
-  const board = async (env: Env, scope: TaskScope) => ({ lists: await readTaskLists(env.DB, scope), members: await taskMembers(env.DB, scope) });
+  const board = async (env: Env, scope: TaskScope, viewer: string) => ({ lists: await readTaskLists(env.DB, scope, true, viewer), members: await taskMembers(env.DB, scope, viewer) });
   // Assignments may be due now; start those turns without waiting for the Cron.
   const respond = async (c: TaskContext) => {
     c.executionCtx.waitUntil(dispatchTasks(c.env).catch(() => undefined));
-    return c.json(await board(c.env, c.get('taskScope')));
+    return c.json(await board(c.env, c.get('taskScope'), c.get('owner')));
   };
   const actor = (c: TaskContext) => ({ kind: 'user' as const, id: c.get('owner') });
 
-  routes.get('/', async c => c.json(await board(c.env, c.get('taskScope'))));
+  routes.get('/', async c => c.json(await board(c.env, c.get('taskScope'), c.get('owner'))));
   routes.post('/lists', async c => {
     const value = await body(c);
     if (typeof value.id !== 'string' || !uuid.test(value.id)) throw new TaskError('Provide a list UUID.');

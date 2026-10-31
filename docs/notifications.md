@@ -448,3 +448,11 @@ completed response turn, using its joined delivered text. A stopped burst preser
 its delivered prefix. Group parts use individual message notifications, receipts
 and unread counts. See [successive messages](reply-messages.md) for limitations and
 fictional-data device verification; static checks do not establish APNs delivery.
+
+## Contact alias in notifications
+
+Direct reply pushes use the recipient's own alias for the title; group pushes resolve the bot sender's
+`subtitle` per recipient (`agentDisplayName` against the recipient user), so two members of the same group can
+receive different sender names for the same bot message. The group title and message text are
+unchanged. See [contacts](contacts.md#contact-alias-private-display-name). Not verified on a device; changing
+an alias does not rewrite notifications already delivered.

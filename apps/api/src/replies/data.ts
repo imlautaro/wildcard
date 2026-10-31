@@ -1,6 +1,7 @@
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 import { publicAttachment, type PublicAttachment } from '../chat/attachments';
 import { isRecord } from '../chat/meta';
+import { agentDisplayName } from '../contacts/alias';
 
 export type ReplySide = 'user' | 'assistant' | 'group';
 export type ReplyTarget = { messageID: string; side: ReplySide };
@@ -59,13 +60,13 @@ export async function privateQuotes(db: D1Database, contactID: string, userID: s
     turn.replyToID ? rows.get(turn.replyToID) : undefined) : null;
 }
 
-export async function groupQuotes(db: D1Database, groupID: string,
+export async function groupQuotes(db: D1Database, groupID: string, viewerID: string,
   messages: { replyToID: string | null }[]): Promise<(message: { replyToID: string | null }) => ReplyQuote | null> {
   const ids = [...new Set(messages.flatMap((message) => message.replyToID ? [message.replyToID] : []))];
-  const { results } = ids.length ? await db.prepare(`SELECT id, user_id AS userID, agent_id AS agentID, sender_name AS senderName,
+  const { results } = ids.length ? await db.prepare(`SELECT id, user_id AS userID, agent_id AS agentID, ${agentDisplayName('group_message.agent_id', 'group_message.sender_name', '?3')} AS senderName,
     text AS userText, NULL AS assistantText, attachment_json AS attachmentJSON
     FROM group_message WHERE group_id = ?1 AND id IN (SELECT value FROM json_each(?2))`)
-    .bind(groupID, JSON.stringify(ids)).all<QuoteRow>() : { results: [] };
+    .bind(groupID, JSON.stringify(ids), viewerID).all<QuoteRow>() : { results: [] };
   const rows = new Map(results.map((row) => [row.id, row]));
   return (message) => message.replyToID ? quote({ messageID: message.replyToID, side: 'group' }, rows.get(message.replyToID)) : null;
 }

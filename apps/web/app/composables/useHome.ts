@@ -11,6 +11,13 @@ registerSessionReset(() => {
   state.revision++; state.value = null; state.loadedAt = 0; state.request = null; state.error = null;
 });
 
+// The feed names contacts by the viewer's alias: keep the last feed visible, reject in-flight
+// reads and revalidate in the background once it has been loaded.
+export function staleHome() {
+  state.revision++; state.request = null; state.loadedAt = 0;
+  if (state.value) void useHome().refresh(true);
+}
+
 export function homeUpdating(feed: HomeFeed | null) { return !!feed && (feed.status === 'updating' || feed.pending); }
 
 export function useHome() {

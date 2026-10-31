@@ -80,6 +80,7 @@ export const contact = sqliteTable('contact', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  alias: text('alias'),
   createdAt: date('created_at').notNull(),
   updatedAt: date('updated_at').notNull(),
 }, (table) => [

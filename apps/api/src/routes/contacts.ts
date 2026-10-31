@@ -6,6 +6,7 @@ import { miniAppRoutes } from '../miniapps/routes';
 import { taskRoutes } from '../tasks/routes';
 import { documentRoutes } from '../documents/routes';
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
+import { aliasBody } from '../contacts/alias';
 import { learningRoutes } from '../chat/learning-routes';
 import { accountEnvironment } from '../lib/model-preference';
 import { readEnergy } from '../groups/energy';
@@ -23,9 +24,9 @@ import personality from '../personality/routes';
 import generation from '../contacts/generation';
 import { listVoices, voiceRepliesAvailable, type Voice } from '../voice/catalog';
 
-type Contact = { archivedAt?: number | null; historyRevision?: number; clearing?: number; speechAccent: string | null; onboardingChat?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageVoiceJSON?: string | null; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
+type Contact = { archivedAt?: number | null; historyRevision?: number; clearing?: number; speechAccent: string | null; onboardingChat?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; realName: string; alias: string | null; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageVoiceJSON?: string | null; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
 const columns = `archived_at AS archivedAt, history_revision AS historyRevision, clearing, (SELECT speech_accent FROM contact_agent WHERE id = contact.agent_id) AS speechAccent, onboarding_chat AS onboardingChat, initiative_enabled AS initiativeEnabled, voice_messages_enabled AS voiceMessagesEnabled,
-  (SELECT voice_id FROM contact_agent WHERE id = contact.agent_id) AS voiceID, (SELECT voice_name FROM contact_agent WHERE id = contact.agent_id) AS voiceName, id, agent_id AS agentID, name, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
+  (SELECT voice_id FROM contact_agent WHERE id = contact.agent_id) AS voiceID, (SELECT voice_name FROM contact_agent WHERE id = contact.agent_id) AS voiceName, id, agent_id AS agentID, COALESCE(alias, name) AS name, name AS realName, alias, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
   CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
 const managesAgent = `EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = contact.user_id)`;
 const selection = `${columns},
@@ -232,6 +233,18 @@ contacts.patch('/:id', contactBody, async (c) => {
   const updated = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
     .bind(result.id, c.get('owner')).first<Contact>();
   return c.json({ contact: updated ?? result });
+});
+
+// The alias is this user's private display name; any account holding the contact may set it.
+contacts.patch('/:id/alias', contactBody, async (c) => {
+  const body = aliasBody(await c.req.json<unknown>().catch(() => null));
+  if (!body) return c.json({ error: 'Provide only an alias using 1–100 characters without control characters, or null to clear it' }, 400);
+  const result = await c.env.DB.prepare(`UPDATE contact SET alias = ?1, updated_at = ?2 WHERE id = ?3 AND user_id = ?4 RETURNING id`)
+    .bind(body.alias, Date.now(), c.req.param('id'), c.get('owner')).first<{ id: string }>();
+  if (!result) return c.json({ error: 'Contact not found' }, 404);
+  const updated = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
+    .bind(result.id, c.get('owner')).first<Contact>();
+  return c.json({ contact: updated ? contactPreview(updated) : null });
 });
 
 contacts.get('/:id/photo', async (c) => {

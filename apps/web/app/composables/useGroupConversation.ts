@@ -109,6 +109,26 @@ export function updateGroupPrivateSharing(id: string, agentID: string, enabled: 
       ? { ...permission, enabled: enabled ? 1 : 0 } : permission) };
 }
 
+// A contact alias is private to this account but shows inside every cached group, so a change
+// patches the cached names in place (no refetch flash), rejects reads started before it, and
+// refetches receipts/reactions lazily through their own caches.
+export function applyContactAlias(agentID: string | null | undefined, name: string) {
+  if (!agentID) return;
+  const quote = (value: ReplyQuote | null | undefined) => value?.agentID === agentID ? { ...value, senderName: name } : value;
+  for (const [id, entry] of groups) {
+    entry.revision += 1;
+    detailsRequests.delete(id);
+    entry.messages = entry.messages.map(message => message.agentID === agentID ? { ...message, senderName: name }
+      : message.replyTo?.agentID === agentID ? { ...message, replyTo: quote(message.replyTo) } : message);
+    entry.replyTo = quote(entry.replyTo) ?? null;
+    if (entry.pending?.replyTo) entry.pending = { ...entry.pending, replyTo: quote(entry.pending.replyTo) ?? null };
+    if (entry.snapshot) entry.snapshot = { ...entry.snapshot,
+      members: entry.snapshot.members.map(member => member.kind === 'agent' && member.id === agentID ? { ...member, name } : member),
+      replies: entry.snapshot.replies.map(reply => reply.agentID === agentID ? { ...reply, name } : reply) };
+    entry.reactions.rows = entry.reactions.rows.map(row => row.actorID === `agent/${agentID}` ? { ...row, name } : row);
+  }
+}
+
 export function invalidateGroupDetails(id: string) {
   const entry = groups.get(id);
   if (entry) entry.revision += 1;

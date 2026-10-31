@@ -32,6 +32,21 @@ const rename = (name: string) => run(async () => {
   apply((await api<{ contact: Contact }>(`contacts/${id.value}`, { method: 'PATCH', json: { name } })).contact);
 });
 
+// The shared name only its creator can change; the alias is this account's private display name.
+const realName = computed(() => contact.value?.realName ?? contact.value?.name ?? '');
+const aliasSheet = ref(false);
+const aliasDraft = ref('');
+const aliasValid = computed(() => { const value = aliasDraft.value.trim(); return [...value].length <= 100 && !/[\u0000-\u001f\u007f-\u009f]/u.test(value); });
+function openAlias() { aliasDraft.value = contact.value?.alias ?? ''; aliasSheet.value = true; }
+const saveAlias = (alias: string | null) => run(async () => {
+  const value = alias?.trim() || null;
+  if (value !== (contact.value?.alias ?? null)) {
+    const updated = await chats.setAlias(id.value, value);
+    if (session.user.value?.id === ownerID) contact.value = { ...contact.value!, ...updated };
+  }
+  aliasSheet.value = false;
+});
+
 const setInitiative = (event: Event) => run(async () => {
   const input = event.target as HTMLInputElement;
   try {
@@ -127,11 +142,13 @@ const voiceChoiceInfo = computed(() => `Accent guides regional wording in text a
     <AppLoading v-if="!contact && busy" fill />
     <div v-else-if="!contact" class="page-inner"><AppNotice>{{ error ?? 'This contact is no longer available.' }}</AppNotice></div>
     <div v-else class="page-inner">
-      <IdentityEditor :name="contact.name" :path="contactPhotoPath(contact)" :editable="canManage" :renamable="canManage" show-name :busy="busy" @photo="savePhoto" @rename="rename" />
+      <IdentityEditor :name="canManage ? realName : contact.name" :path="contactPhotoPath(contact)" :editable="canManage" :renamable="canManage" show-name :busy="busy" @photo="savePhoto" @rename="rename" />
       <p v-if="!canManage" class="identity-subtitle">Shared contact · managed by its creator</p>
+      <p v-if="contact.alias && !canManage" class="identity-subtitle">Others see {{ realName }}</p>
       <AppNotice v-if="error">{{ error }}</AppNotice>
 
       <AppListGroup>
+        <AppListItem icon="person" opens :value="contact.alias ?? 'None'" :disabled="busy" @click="openAlias">Alias</AppListItem>
         <AppSwitch icon="initiative" label="Conversation initiative" :info="initiativeInfo" :checked="contact.initiativeEnabled !== 0" :disabled="busy" @change="setInitiative" />
         <template v-if="voiceFeature">
           <AppSwitch icon="mic" label="Voice messages" :info="voiceInfo" :checked="contact.voiceMessagesEnabled === 1" :disabled="busy" @change="setVoiceMessages" />
@@ -161,6 +178,18 @@ const voiceChoiceInfo = computed(() => `Accent guides regional wording in text a
           <AppListItem icon="delete" danger :disabled="busy" @click="remove">Delete contact and data</AppListItem>
         </AppListGroup>
       </div>
+
+      <AppSheet v-if="aliasSheet" title="Alias" @close="aliasSheet = false">
+        <form @submit.prevent="aliasValid && saveAlias(aliasDraft)">
+          <AppListGroup><div class="field"><input v-model="aliasDraft" type="text" maxlength="100" :placeholder="realName" aria-label="Alias" autofocus></div></AppListGroup>
+          <p class="small muted">Only you see this name. Others still see {{ realName }}.</p>
+          <div class="actions-row">
+            <AppButton v-if="contact.alias" variant="text" :disabled="busy" @click="saveAlias(null)">Remove alias</AppButton>
+            <AppButton variant="text" @click="aliasSheet = false">Cancel</AppButton>
+            <AppButton type="submit" :disabled="busy || !aliasValid">Save</AppButton>
+          </div>
+        </form>
+      </AppSheet>
 
       <AppSheet v-if="voiceSheet" title="Voice" @close="voiceSheet = false">
         <template #header><InfoButton label="Voice" :text="voiceChoiceInfo" /></template>

@@ -27,7 +27,7 @@ export function documentRoutes(kind: 'contact' | 'group') {
   routes.onError(async (error, c) => {
     if (!(error instanceof TaskError)) throw error;
     const documentID = c.req.param('documentID');
-    const current = error.status === 409 && documentID ? await readDocument(c.env.DB, c.get('documentScope'), documentID).catch(() => null) : null;
+    const current = error.status === 409 && documentID ? await readDocument(c.env.DB, c.get('documentScope'), documentID, c.get('owner')).catch(() => null) : null;
     return c.json({ error: error.message, ...(current ? { document: current } : {}) }, error.status);
   });
   const json = async (request: Request) => {
@@ -37,19 +37,19 @@ export function documentRoutes(kind: 'contact' | 'group') {
   };
   const actor = (owner: string) => ({ kind: 'user' as const, id: owner });
 
-  routes.get('/', async c => c.json({ documents: await listDocuments(c.env.DB, c.get('documentScope')) }));
-  routes.get('/:documentID', async c => c.json({ document: await readDocument(c.env.DB, c.get('documentScope'), c.req.param('documentID')) }));
+  routes.get('/', async c => c.json({ documents: await listDocuments(c.env.DB, c.get('documentScope'), c.get('owner')) }));
+  routes.get('/:documentID', async c => c.json({ document: await readDocument(c.env.DB, c.get('documentScope'), c.req.param('documentID'), c.get('owner')) }));
   routes.post('/', async c => {
     const value = await json(c.req.raw);
     if (typeof value.id !== 'string' || !uuid.test(value.id)) throw new TaskError('Provide a document UUID.');
     const id = await createDocument(c.env.DB, c.get('documentScope'), actor(c.get('owner')), value.id.toLowerCase(), value.title, value.body ?? '', null);
-    return c.json({ document: await readDocument(c.env.DB, c.get('documentScope'), id) }, 201);
+    return c.json({ document: await readDocument(c.env.DB, c.get('documentScope'), id, c.get('owner')) }, 201);
   });
   routes.put('/:documentID', async c => {
     const value = await json(c.req.raw), scope = c.get('documentScope'), id = c.req.param('documentID');
     if (typeof value.baseRevision !== 'number' || !Number.isSafeInteger(value.baseRevision)) throw new TaskError('Provide the baseRevision you edited.');
     await saveDocument(c.env.DB, scope, actor(c.get('owner')), id, value.baseRevision, { title: value.title, body: value.body }, value.summary);
-    return c.json({ document: await readDocument(c.env.DB, scope, id) });
+    return c.json({ document: await readDocument(c.env.DB, scope, id, c.get('owner')) });
   });
   routes.delete('/:documentID', async c => {
     await deleteDocument(c.env.DB, c.get('documentScope'), c.req.param('documentID'));

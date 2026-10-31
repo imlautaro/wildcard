@@ -10,6 +10,8 @@ type Entry = { value: ConversationLearning | null; revision: number; request: Pr
 const snapshots = shallowReactive(new Map<string, Entry>());
 registerSessionReset(() => snapshots.clear());
 export function forgetConversationLearning(base: string) { snapshots.delete(base); }
+// Profiles name the contact, which follows its alias.
+export function forgetAllConversationLearning() { snapshots.clear(); }
 
 function snapshot(base: string): Entry {
   const existing = snapshots.get(base);
