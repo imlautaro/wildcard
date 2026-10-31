@@ -626,6 +626,27 @@ Sanitized `chat_reply_failed`, `chat_reply_recovered` and
 failed turns retain the sanitized code rather than a generic generation error.
 See [caching](caching.md#reply-failure-presentation) for cache/device verification.
 
+## Garbled characters
+
+Contact replies occasionally showed sequences such as `ðŸ˜€` or `â€™` instead of an
+emoji or a curly apostrophe (reported 2026-10-31). That is UTF-8 text decoded as
+Windows-1252. The API decodes provider responses as UTF-8 and neither client decodes
+message text with another encoding, and no affected rows exist in local data, so the
+garbled text most likely comes from the model output itself; the exact source is
+unconfirmed. `shared/mojibake.ts` (`repairMojibake`) repairs it in `museCompletion`
+(`chat/meta.ts`), which every contact reply, group message, initiative message,
+Updates card, document and tool argument passes through, and in the web research
+report (`research/model.ts`). Earlier assistant messages in model history are repaired
+before each request so the model is not invited to imitate them.
+
+Only sequences that decode to a plausible character are rewritten: Latin-1 letters
+(`Ã©` → `é`), general punctuation, arrows and symbols, variation selectors, CJK
+punctuation and emoji. An emoji fragment whose remaining bytes were lost (`ðŸ`
+followed by ordinary text) is removed. Ordinary text, including accented Spanish,
+Portuguese and French, is left unchanged. Stored messages are not rewritten; messages
+that already contain garbled text keep it. Offline regression:
+`node scripts/checks/mojibake.mjs`. No client change.
+
 ## Bot message Markdown
 
 Both iOS and web format bot replies in private chats and groups, including replies

@@ -1,4 +1,5 @@
 import { NonRetryableError } from 'cloudflare:workflows';
+import { repairMojibake } from '../../../../shared/mojibake';
 
 export type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
 export type ModelMessage =
@@ -32,7 +33,8 @@ export async function museCompletion(env: Env, messages: ModelMessage[], configu
   if (model !== 'muse-spark-1.3' && model !== 'muse-spark-1.3-contributor') {
     throw new NonRetryableError('MODEL_NOT_CONFIGURED');
   }
-  const query = { model, messages, max_completion_tokens: options.maxTokens ?? 4096,
+  // Earlier garbled replies in history would invite the model to imitate them.
+  const query = { model, messages: messages.map(m => m.role === 'assistant' && typeof m.content === 'string' ? { ...m, content: repairMojibake(m.content) } : m), max_completion_tokens: options.maxTokens ?? 4096,
     reasoning_effort: options.reasoning ?? 'low', stream: false,
     ...(options.tools?.length ? { tools: options.tools, tool_choice: 'auto' } : {}),
     ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
@@ -91,7 +93,9 @@ export async function museCompletion(env: Env, messages: ModelMessage[], configu
   if (!isRecord(choice) || choice.finish_reason === 'length') throw new Error('MODEL_INCOMPLETE_RESPONSE');
   const message = choice.message;
   if (!isRecord(message)) throw new Error('MODEL_EMPTY_RESPONSE');
-  const content = typeof message.content === 'string' ? message.content.trim() : null;
+  // Model text sometimes arrives with UTF-8 emoji decoded as Windows-1252 ("ðŸ˜€"); repair it
+  // here so every reply, card, document and tool argument is stored correctly (shared/mojibake.ts).
+  const content = typeof message.content === 'string' ? repairMojibake(message.content).trim() : null;
   if (content && Array.from(content).length > 20_000) throw new NonRetryableError('MODEL_RESPONSE_TOO_LARGE');
   if (Array.isArray(message.tool_calls) && message.tool_calls.length) {
     if (!options.tools?.length || message.tool_calls.length > 4) throw new Error('MODEL_INVALID_TOOL_CALLS');
@@ -105,10 +109,10 @@ export async function museCompletion(env: Env, messages: ModelMessage[], configu
           (['create_mini_app', 'create_document', 'edit_document', 'generate_chat_image'].includes(call.function.name) ? 30000
             : ['send_group_message', 'call_mcp_tool', 'create_task_list'].includes(call.function.name) ? 16000
             : ['add_task', 'update_task', 'request_changes', 'add_to_updates'].includes(call.function.name) ? 6000
-            : call.function.name === 'research_web' ? 4000
+            : ['research_web', 'start_mini_app'].includes(call.function.name) ? 4000
             : ['create_schedule', 'update_schedule', 'ask_agent_in_group'].includes(call.function.name) ? 6000 : 1000) ||
         toolCalls.some((previous) => previous.id === call.id)) throw new Error('MODEL_INVALID_TOOL_CALLS');
-      toolCalls.push({ id: call.id, type: 'function', function: { name: call.function.name, arguments: call.function.arguments } });
+      toolCalls.push({ id: call.id, type: 'function', function: { name: call.function.name, arguments: repairMojibake(call.function.arguments) } });
     }
     return { role: 'assistant', content, tool_calls: toolCalls };
   }

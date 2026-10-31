@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it';
+import { repairMojibake } from '../../../../shared/mojibake';
 import { isRecord } from '../chat/meta';
 import { validChatModel } from '../lib/model-preference';
 
@@ -215,7 +216,7 @@ export async function synthesizeResearchResponse(env: Env, value: unknown, query
   const choice = response.choices[0];
   if (!isRecord(choice) || choice.finish_reason !== 'stop' || !isRecord(choice.message) || typeof choice.message.content !== 'string') throw new Error('MODEL_RESEARCH_INCOMPLETE');
   let report: unknown;
-  try { report = JSON.parse(choice.message.content); } catch { throw new Error('MODEL_RESEARCH_INVALID_JSON'); }
+  try { report = JSON.parse(repairMojibake(choice.message.content)); } catch { throw new Error('MODEL_RESEARCH_INVALID_JSON'); }
   if (!isRecord(report) || !Array.isArray(report.sections) || !report.sections.length || report.sections.length > 12
     || typeof report.limitations !== 'string') throw new Error('MODEL_RESEARCH_INVALID_REPORT');
   const cited = new Set<number>(), blocks: string[] = [];
