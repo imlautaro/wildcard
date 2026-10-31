@@ -77,9 +77,11 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
     <div v-if="content.kind === 'headlines'" class="headlines">
       <a v-if="lead" class="headline-lead" :href="lead.url" target="_blank" rel="noreferrer noopener" :class="{ inert: !lead.url }">
         <img v-if="image" :src="image" alt="" loading="lazy">
-        <strong>{{ lead.title }}</strong>
-        <span v-if="lead.summary" class="summary">{{ lead.summary }}</span>
-        <span v-if="lead.source || lead.time" class="meta">{{ [lead.source, lead.time].filter(Boolean).join(' · ') }}</span>
+        <span class="headline-text">
+          <strong>{{ lead.title }}</strong>
+          <span v-if="lead.summary" class="summary">{{ lead.summary }}</span>
+          <span v-if="lead.source || lead.time" class="meta">{{ [lead.source, lead.time].filter(Boolean).join(' · ') }}</span>
+        </span>
       </a>
       <a v-for="(item, index) in rest" :key="index" class="headline-row" :href="item.url" target="_blank" rel="noreferrer noopener" :class="{ inert: !item.url }">
         <span class="dot" />
@@ -155,9 +157,8 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
         <AppAvatar :name="card.contactName ?? '?'" :path="avatar" :size="34" />
         <p class="bubble-text">{{ content.text }}</p>
       </div>
-      <AppButton v-if="card.contactID" variant="tonal" icon="reply" class="note-reply" @click="act(content.prompt ? 'reply' : 'message', content.prompt)">
-        {{ content.prompt ?? 'Reply' }}
-      </AppButton>
+      <HomeReplyTemplate v-if="card.contactID && content.prompt" :prompt="content.prompt" class="note-reply" @use="text => act('reply', text)" />
+      <AppButton v-else-if="card.contactID" variant="tonal" icon="reply" class="note-reply" @click="act('message')">Reply</AppButton>
     </div>
 
     <ol v-else class="list">
@@ -207,9 +208,15 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
 .inert { pointer-events: none; }
 a { color: inherit; }
 
-.headlines { display: flex; flex-direction: column; }
+.headlines { display: flex; flex-direction: column; container-type: inline-size; }
 .headline-lead { display: flex; flex-direction: column; gap: var(--space-1-5); padding-bottom: var(--space-3); }
-.headline-lead img { width: 100%; height: 190px; object-fit: cover; border-radius: 18px; margin-bottom: var(--space-1); }
+.headline-lead img { width: 100%; aspect-ratio: 16 / 9; max-height: 190px; object-fit: cover; border-radius: 18px; margin-bottom: var(--space-1); }
+.headline-text { display: flex; flex-direction: column; gap: var(--space-1-5); min-width: 0; }
+/* Wide cards (desktop) put the image beside the text instead of stretching it into a banner. */
+@container (min-width: 440px) {
+  .headline-lead:has(> img) { display: grid; grid-template-columns: clamp(140px, 36%, 300px) minmax(0, 1fr); align-items: start; gap: var(--space-4); }
+  .headline-lead img { height: auto; max-height: none; aspect-ratio: 4 / 3; margin: 0; }
+}
 .headline-lead strong { font-size: 20px; line-height: 1.25; }
 .lead .headline-lead strong { font-size: 22px; }
 .summary { color: var(--md-on-surface-variant); font-size: 15px; }
@@ -275,7 +282,7 @@ tr.highlight td:first-child { border-radius: var(--md-shape-s) 0 0 var(--md-shap
 .note { display: flex; flex-direction: column; gap: var(--space-3); }
 .note-row { display: flex; align-items: flex-start; gap: 10px; }
 .bubble-text { margin: 0; padding: 10px 14px; border-radius: 6px 20px 20px 20px; background: color-mix(in srgb, var(--card-accent) 12%, transparent); font-size: 15px; line-height: 1.45; }
-.note-reply { align-self: flex-start; margin-left: 44px; text-align: left; height: auto; min-height: 40px; padding-block: var(--space-2); }
+.note-reply { align-self: flex-start; margin-left: 44px; max-width: calc(100% - 44px); }
 
 .list { list-style: none; margin: 0; padding: 0; }
 .list li + li { border-top: 1px solid var(--md-outline-variant); }

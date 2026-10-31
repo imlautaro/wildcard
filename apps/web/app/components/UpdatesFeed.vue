@@ -139,7 +139,7 @@ function origin(topic: HomeFeed['topics'][number]) {
         text="As you chat, they’ll bring news, figures and reminders about what matters to you here. You can also tell them what to follow.">
         <template #actions><AppButton @click="following = true">Follow something</AppButton></template>
       </AppEmptyState>
-      <AppButton v-if="feed?.cards.length" variant="tonal" block icon="sparkle" @click="following = true">Ask your contacts to follow something</AppButton>
+      <AppButton v-if="feed?.cards.length" variant="text" icon="sparkle" class="follow-more" @click="following = true">Ask your contacts to follow something</AppButton>
     </div>
 
     <AppSheet v-if="following" title="Follow in Updates" @close="following = false">
@@ -208,6 +208,7 @@ h3 { font-size: 15px; font-weight: 700; margin: 0 0 var(--space-2); }
 .placeholder.wide { height: 260px; }
 @keyframes pulse { from { opacity: 1; } to { opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) { .placeholder { animation: none; } }
+.follow-more { align-self: center; }
 .home-empty { flex: none; padding: var(--space-8) var(--space-6); border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); }
 .follow-input { width: 100%; padding: var(--space-3) var(--space-4); border: 1px solid var(--md-outline); border-radius: var(--md-shape-xs); background: transparent;
   font: var(--type-body-large); resize: vertical; outline: none; }

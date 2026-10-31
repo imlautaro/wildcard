@@ -26,7 +26,7 @@ export const kindGuide: Record<CardKind, string> = {
   metrics: 'Key figures as tiles. items: 1-6 {label (max 40), value (formatted, max 24), unit (max 12), change (max 16, e.g. "+1.2%"), trend ("up", "down" or "flat"), caption (max 80)}.',
   chart: 'One series chart. style: "line" or "bar". points: 2-31 {label (max 16, e.g. a date), value (number)} in chronological order. unit (max 12), value (current headline value, max 24), change (max 16), trend, summary (one sentence, max 200).',
   tracker: 'Progress of a process or wait (application, shipment, goal). figure (the key number, max 24, e.g. "14.5 months"), figureLabel (what it means, max 80), status (max 120), progress (0 to 1, optional), steps: 0-6 {label (max 60), state ("done", "current" or "upcoming"), detail (max 80)}, note (max 280).',
-  note: 'A short personal note from you to the person. text (max 500): a useful tip, reminder or thought grounded in what you know. prompt (max 200, optional): a message the person could send you to continue, in their language.',
+  note: 'A short personal note from you to the person. text (max 500): a useful tip, reminder or thought grounded in what you know. prompt (max 200, optional): a message the person could send you to continue, in their language. Write ____ (four underscores) for any detail only they can supply; they fill each blank in before sending.',
   list: 'Generic list. items: 1-8 {title (max 120), detail (max 160), trailing (short value or date, max 24), url (optional https URL from evidence)}.',
 };
 

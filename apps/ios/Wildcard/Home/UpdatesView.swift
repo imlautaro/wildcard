@@ -160,10 +160,10 @@ struct UpdatesView: View {
             }
             Button { following = true } label: {
                 Label("Ask your contacts to follow something", systemImage: "sparkles")
-                    .manrope(.subheadline, weight: .semibold).frame(maxWidth: .infinity).padding(.vertical, 14)
+                    .manrope(.subheadline, weight: .semibold).foregroundStyle(.tint).frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .glassEffect(.regular.interactive(), in: Capsule())
             .padding(.top, 4)
         }
     }

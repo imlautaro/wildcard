@@ -417,17 +417,130 @@ private struct HomeNote: View {
                     .background(accent.opacity(0.12), in: UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 20, bottomTrailingRadius: 20, topTrailingRadius: 20, style: .continuous))
             }
             if card.contactID != nil {
-                Button { act(card.content.prompt.map { .reply($0) } ?? .message) } label: {
-                    Label(card.content.prompt ?? "Reply", systemImage: "arrowshape.turn.up.left.fill")
-                        .manrope(.subheadline, weight: .semibold).lineLimit(2).multilineTextAlignment(.leading)
+                if let prompt = card.content.prompt {
+                    HomeReplyTemplate(prompt: prompt, accent: accent) { act(.reply($0)) }
+                        .padding(.leading, 44)
+                } else {
+                    Button { act(.message) } label: {
+                        Label("Reply", systemImage: "arrowshape.turn.up.left.fill")
+                            .manrope(.subheadline, weight: .semibold)
+                            .padding(.horizontal, 14).padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.tint(accent.opacity(0.25)).interactive(), in: Capsule())
+                    .padding(.leading, 44)
+                    .accessibilityHint("Opens the chat")
+                }
+            }
+        }
+    }
+}
+
+/// A note's suggested reply. Plain text is one wrapping button. A template with blanks (runs of
+/// underscores) shows the sentence with its blanks marked and one field per blank; the completed
+/// text goes to the chat's composer and is never sent from here.
+private struct HomeReplyTemplate: View {
+    let prompt: String
+    let accent: Color
+    let use: (String) -> Void
+    @State private var values: [String] = []
+    @FocusState private var focus: Int?
+
+    private struct Segment { let text: String; let blank: Int? }
+
+    private var segments: [Segment] {
+        var result: [Segment] = []
+        var current = ""
+        var blank = 0
+        var index = prompt.startIndex
+        while index < prompt.endIndex {
+            guard prompt[index] == "_" else { current.append(prompt[index]); index = prompt.index(after: index); continue }
+            var end = index
+            while end < prompt.endIndex, prompt[end] == "_" { end = prompt.index(after: end) }
+            if prompt.distance(from: index, to: end) >= 2 {
+                if !current.isEmpty { result.append(Segment(text: current, blank: nil)); current = "" }
+                result.append(Segment(text: String(prompt[index..<end]), blank: blank)); blank += 1
+            } else { current.append(contentsOf: prompt[index..<end]) }
+            index = end
+        }
+        if !current.isEmpty { result.append(Segment(text: current, blank: nil)) }
+        return result
+    }
+    private var blankCount: Int { segments.filter { $0.blank != nil }.count }
+    private func value(_ blank: Int) -> String { values.indices.contains(blank) ? values[blank].trimmingCharacters(in: .whitespacesAndNewlines) : "" }
+    private var complete: Bool { blankCount > 0 && (0..<blankCount).allSatisfy { !value($0).isEmpty } }
+    private var completed: String { segments.map { $0.blank.map(value) ?? $0.text }.joined() }
+
+    /// The sentence with each blank shown as its value, or a marked gap while empty.
+    private var preview: AttributedString {
+        var result = AttributedString()
+        for segment in segments {
+            guard let blank = segment.blank else { result += AttributedString(segment.text); continue }
+            var part = AttributedString(value(blank).isEmpty ? "\u{2002}\u{2002}\u{2002}\u{2002}" : value(blank))
+            part.foregroundColor = accent
+            part.underlineStyle = .single
+            result += part
+        }
+        return result
+    }
+
+    /// The few words before a blank, so each field says what it is for.
+    private func hint(_ blank: Int) -> String {
+        guard let position = segments.firstIndex(where: { $0.blank == blank }), position > 0, segments[position - 1].blank == nil else { return "Blank \(blank + 1)" }
+        let words = segments[position - 1].text.split(separator: " ").suffix(3).joined(separator: " ")
+        return words.isEmpty ? "Blank \(blank + 1)" : "\(words) …"
+    }
+
+    private func submit(_ blank: Int) {
+        if blank + 1 < blankCount { focus = blank + 1 } else if complete { use(completed) }
+    }
+
+    var body: some View {
+        if blankCount == 0 {
+            Button { use(prompt) } label: {
+                Label(prompt, systemImage: "arrowshape.turn.up.left.fill")
+                    .manrope(.subheadline, weight: .semibold).lineLimit(3).multilineTextAlignment(.leading)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular.tint(accent.opacity(0.25)).interactive(), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .accessibilityHint("Opens the chat with this message ready to send")
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(preview).manrope(.subheadline).fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 8) {
+                    ForEach(0..<blankCount, id: \.self) { blank in
+                        TextField(hint(blank), text: binding(blank))
+                            .manrope(.subheadline)
+                            .focused($focus, equals: blank)
+                            .submitLabel(blank + 1 < blankCount ? .next : .done)
+                            .onSubmit { submit(blank) }
+                            .padding(.horizontal, 12).padding(.vertical, 10)
+                            .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                }
+                Button { use(completed) } label: {
+                    Label("Continue in chat", systemImage: "arrowshape.turn.up.left.fill")
+                        .manrope(.subheadline, weight: .semibold)
                         .padding(.horizontal, 14).padding(.vertical, 10)
                 }
                 .buttonStyle(.plain)
                 .glassEffect(.regular.tint(accent.opacity(0.25)).interactive(), in: Capsule())
-                .padding(.leading, 44)
+                .disabled(!complete).opacity(complete ? 1 : 0.5)
                 .accessibilityHint("Opens the chat with this message ready to send")
             }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .onAppear { reset() }
+            .onChange(of: prompt) { reset() }
         }
+    }
+
+    private func reset() { values = Array(repeating: "", count: blankCount) }
+    private func binding(_ blank: Int) -> Binding<String> {
+        Binding(get: { values.indices.contains(blank) ? values[blank] : "" },
+                set: { if values.indices.contains(blank) { values[blank] = $0 } })
     }
 }
 
