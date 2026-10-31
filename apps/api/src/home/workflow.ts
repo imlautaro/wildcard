@@ -4,6 +4,8 @@ import { accountModel, standardModel } from '../lib/model-preference';
 import { cardLifetimes } from './cards';
 import { composeCard, homeLimits, planHome, type ComposeContext, type PlannedTopic } from './curator';
 import { readSignals } from './signals';
+import { reviewCandidates, type ReviewCandidate } from './review';
+import type { CardKind } from './cards';
 
 export type HomeJob = { kind: 'home'; userID: string; revision: number; force: boolean };
 type ComposeJob = PlannedTopic & { id: string; position: number; previous: string | null };
@@ -137,6 +139,37 @@ async function compose(env: Env, job: HomeJob, run: RunPlan, index: number, rese
   return 'published';
 }
 
+// A better-informed contact reviews one card; a revision moves the topic to that contact.
+async function review(env: Env, job: HomeJob, run: RunPlan, candidate: ReviewCandidate, research: { remaining: number }): Promise<string> {
+  if (!await current(env, job)) return 'HOME_SUPERSEDED';
+  const row = await env.DB.prepare(`SELECT t.title, t.brief, t.reason, t.kind, card.payload_json AS payloadJSON, card.position
+    FROM home_topic t JOIN home_card card ON card.topic_id = t.id AND card.user_id = t.user_id
+    WHERE t.id = ? AND t.user_id = ? AND t.status = 'active' AND card.connector = 0 AND card.contact_id IS ?`)
+    .bind(candidate.topicID, job.userID, candidate.authorID).first<{ title: string; brief: string; reason: string | null; kind: CardKind; payloadJSON: string; position: number }>();
+  const reviewer = run.context.contacts.find(contact => contact.id === candidate.reviewerID);
+  if (!row || !reviewer) return 'skipped';
+  await env.DB.prepare(`UPDATE home_feed SET progress_json = ?1 WHERE user_id = ?2 AND revision = ?3 AND status = 'running'`)
+    .bind(JSON.stringify({ total: 1, done: 0, title: row.title, contactID: reviewer.id }), job.userID, job.revision).run();
+  const topic = { id: candidate.topicID, title: row.title, brief: row.brief, reason: row.reason ?? '', kind: row.kind,
+    contactID: reviewer.id, research: false, connector: false };
+  const budget = { get research() { return research.remaining; }, set research(value: number) { research.remaining = value; },
+    researchID: (attempt: number) => `home-${job.userID}-${job.revision}-review-${candidate.topicID}-${attempt}`, topicID: candidate.topicID };
+  const result = await composeCard({ ...env, META_CHAT_MODEL: run.model }, run.context, topic, row.payloadJSON,
+    run.titles.filter(title => title !== row.title), run.model, budget, { authorName: candidate.authorName, excerpts: candidate.excerpts });
+  if (!result) return 'kept';
+  const now = Date.now(), fence = `EXISTS (SELECT 1 FROM home_feed WHERE user_id = ?2 AND revision = ?3 AND status = 'running')`;
+  const note = Array.from(`${reviewer.name} updated this with newer details from your chats`).slice(0, 160).join('');
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE home_card SET contact_id = ?4, kind = ?5, payload_json = ?6, revision = revision + 1, generated_at = ?7, expires_at = ?8
+      WHERE topic_id = ?1 AND user_id = ?2 AND ${fence}`)
+      .bind(candidate.topicID, job.userID, job.revision, reviewer.id, result.card.kind, JSON.stringify(result.card), now, now + cardLifetimes[result.card.kind]),
+    env.DB.prepare(`UPDATE home_topic SET contact_id = ?4, reason = ?5, updated_at = ?6 WHERE id = ?1 AND user_id = ?2 AND status = 'active' AND ${fence}`)
+      .bind(candidate.topicID, job.userID, job.revision, reviewer.id, note, now),
+  ]);
+  console.log(JSON.stringify({ event: 'home_card_reviewed', outcome: 'revised' }));
+  return 'revised';
+}
+
 export async function runHome(env: Env, job: HomeJob, step: WorkflowStep) {
   let error: string | null = null;
   try {
@@ -156,6 +189,17 @@ export async function runHome(env: Env, job: HomeJob, step: WorkflowStep) {
         });
         research.remaining = outcome.research;
         if (outcome.outcome === 'HOME_SUPERSEDED') return;
+      }
+      // Better-informed contacts review cards (docs/updates.md#contacts-review-cards).
+      const reviews = await step.do('home-review-plan', async () => await current(env, job)
+        ? reviewCandidates(env.DB, job.userID, run.context, Date.now()) : []);
+      for (let index = 0; index < reviews.length; index++) {
+        const outcome = await step.do(`home-review-${index}`, { retries: { limit: 1, delay: '15 seconds' }, timeout: '6 minutes' },
+          () => review(env, job, run, reviews[index]!, research)).catch(cause => {
+          console.error(JSON.stringify({ event: 'home_review_failed', code: safeErrorCode(cause) }));
+          return 'failed';
+        });
+        if (outcome === 'HOME_SUPERSEDED') return;
       }
     }
   } catch (cause) {

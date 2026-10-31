@@ -1,4 +1,5 @@
 import { NonRetryableError } from 'cloudflare:workflows';
+import { reviewInstruction, type ReviewExcerpt } from './review';
 import { clipText, keywords } from '../chat/memory';
 import { isRecord, museCompletion, safeErrorCode, type ModelMessage, type ModelTool } from '../chat/meta';
 import { catalog, connectionColumns, remote, size, validator, type Connection, type RemoteTool } from '../mcp/client';
@@ -121,7 +122,8 @@ export type ComposeBudget = { research: number; researchID: (index: number) => s
 
 /** One contact prepares one card. Returns null when it honestly has nothing to show. */
 export async function composeCard(env: Env, context: ComposeContext, topic: PlannedTopic & { id: string },
-  previous: string | null, others: string[], model: string, budget: ComposeBudget): Promise<{ card: HomeCard; connector: boolean } | null> {
+  previous: string | null, others: string[], model: string, budget: ComposeBudget,
+  review?: { authorName: string; excerpts: ReviewExcerpt[] }): Promise<{ card: HomeCard; connector: boolean } | null> {
   const contact = context.contacts.find(item => item.id === topic.contactID);
   if (!contact) return null;
   const terms = keywords(`${topic.title} ${topic.brief}`);
@@ -151,6 +153,7 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
         + 'sources (0-5 {title, url} of the evidence used), plus the fields of its kind.',
       `${topic.kind}: ${kindGuide[topic.kind]}`,
       `Other kinds: ${kinds.map(kind => `${kind}: ${kindGuide[kind]}`).join(' ')}`,
+      ...(review ? [reviewInstruction(review.authorName)] : []),
       untrusted,
     ].join('\n') },
     { role: 'user', content: JSON.stringify({
@@ -160,6 +163,7 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
       previousCard: previous ? JSON.parse(previous) : undefined,
       otherCardsInUpdates: others,
       ...(topic.connector ? { connectors: context.connectors } : {}),
+      ...(review ? { yourConversationAboutThis: review.excerpts.map(excerpt => ({ date: date(excerpt.at, context.timeZone), person: excerpt.person, you: excerpt.you })) } : {}),
     }) },
   ];
   let connectorCalls = 0, connectorUsed = false, researched = 0, repaired = false;

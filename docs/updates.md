@@ -102,6 +102,9 @@ directly by an API request, with one durable step per stage:
 3. **Finish**. The next automatic run is due when the first card expires (between
    one and twelve hours later), or ten minutes after a failed run.
 
+4. **Review** (since 2026-10-31, see [contacts review cards](#contacts-review-cards)).
+   Contacts who know more about a card's topic revise it.
+
 Runs are fenced by a per-person revision: a newer claim makes an older instance's
 writes no-ops, and a run that has not finished after 45 minutes can be claimed
 again. Automatic runs happen only while the person opened Updates in the last three
@@ -110,6 +113,45 @@ days; a feed that was never opened never runs.
 Triggers: the first Updates view, **Update now**/pull to refresh, following a topic,
 showing a hidden topic again, a contact's `add_to_updates` (picked up by the minute
 Cron once the person has opened Updates) and card expiry.
+
+## Contacts review cards
+
+A card used to be written only by the contact the editor assigned, so a contact who
+knew little about a project could publish a weak card while another contact, with
+whom the person had talked much more and more recently, knew better. After the cards
+of a run are composed, `home/review.ts` checks the feed without any model call:
+
+1. For up to eight non-connector cards, it builds a full-text query from the card
+   title's specific words (at least four letters, common words removed) and counts,
+   per contact, the person's completed private chat turns from the last 60 days that
+   match, with the latest match time. Scheduled, task and group-request turns,
+   archived and still-being-created contacts, and connector-isolated contacts are
+   excluded.
+2. A card becomes a review candidate when another contact has at least two matches,
+   its latest match is newer than the card, and it has more matches or a more recent
+   match than the card's author. The most recent such contact is the reviewer; at
+   most two cards are reviewed per run.
+3. The reviewer composes the card again with the usual card prompt, the previous card
+   and up to six of its own matching conversation turns (dated, clipped to 400
+   characters per side, marked untrusted), told to publish a revision only if its
+   conversation adds newer or more complete facts and to skip otherwise. Web research
+   and connectors are not used in a review.
+4. A revision replaces the card (new revision and generation time, so it shows in the
+   [badge](#new-card-badge)), moves the topic to the reviewer and sets the reason shown
+   on the card to "{contact} updated this with newer details from your chats". A skip
+   keeps the card. Each review is its own Workflow step with one retry and the run's
+   revision fence.
+
+Reviews happen during curation runs, so a better-informed contact catches up at the
+next automatic or requested run (one to twelve hours, or **Update now**), not
+immediately after a chat. The reviewer reads only its own conversation with the
+person, which already belongs to the person's own data used by Updates.
+
+Checked on 2026-10-31 with `muse-spark-1.3-contributor` and fictional data: given a
+"Proyecto Lumen" note saying the project was still an idea, a reviewer whose chat said
+the beta launched with 40 users and payments come next published a tracker with
+those facts; with only an older "still thinking about the idea" excerpt it skipped.
+The review SQL was run on the local workerd D1.
 
 ## What Updates reads
 
