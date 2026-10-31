@@ -145,7 +145,7 @@
 /* Contact-generated albums: 2 side by side, 3 as one wide image over two squares.
    Grid cells crop to fill; the full-screen viewer shows each whole image. */
 .chat-album { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; overflow: hidden; border-radius: 16px; }
-.chat-album-item { display: block; width: 100%; padding: 0; overflow: hidden; background: var(--hover); cursor: zoom-in; aspect-ratio: 1; }
+.chat-album-item { display: block; width: 100%; padding: 0; overflow: hidden; border-radius: 0; background: var(--hover); cursor: zoom-in; aspect-ratio: 1; }
 .chat-album.count-2 .chat-album-item { aspect-ratio: 3 / 4; }
 .chat-album.count-3 .chat-album-item:first-child { grid-column: 1 / -1; aspect-ratio: 4 / 3; }
 .chat-album-item img { display: block; width: 100%; height: 100%; object-fit: cover; }
