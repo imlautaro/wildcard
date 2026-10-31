@@ -163,6 +163,13 @@ async function onVoice(clip: DraftVoice) {
 
 // One-second tick while visible, like the iOS session synchronizer.
 const { now: pollNow } = usePolling(refresh, () => 1000);
+// The Tasks button only shows while this chat has an active list (docs/tasks.md#opening-tasks);
+// the board is otherwise reachable from the chat details. Uses the shared board cache.
+const taskBoard = useTasks(() => `contacts/${contactID.value}`);
+const hasTasks = computed(() => !!taskBoard.state.value.value?.lists.some(list => list.status === 'active'));
+usePolling(() => taskBoard.refresh(), () => 20_000);
+onMounted(() => { void taskBoard.refresh(); });
+watch(contactID, () => { void taskBoard.refresh(); });
 
 watch(contactID, async () => {
   fetched.value = null;
@@ -195,7 +202,7 @@ onBeforeUnmount(() => {
         </div>
       </NuxtLink>
     </template>
-    <AppIconButton :to="`/contacts/${contactID}/tasks`" icon="tasks" label="Tasks" />
+    <AppIconButton v-if="hasTasks" :to="`/contacts/${contactID}/tasks`" icon="tasks" label="Tasks" />
   </PageBar>
 
   <AppEmptyState v-if="state.unavailable" icon="person" title="Contact unavailable" text="This contact is no longer available.">

@@ -155,6 +155,13 @@ watch(items, () => nextTick(observeRows));
 
 // One-second tick while visible, like the iOS session synchronizer.
 const { now: pollNow } = usePolling(refresh, () => 1000);
+// The Tasks button only shows while this chat has an active list (docs/tasks.md#opening-tasks);
+// the board is otherwise reachable from the chat details. Uses the shared board cache.
+const taskBoard = useTasks(() => `groups/${groupID.value}`);
+const hasTasks = computed(() => !!taskBoard.state.value.value?.lists.some(list => list.status === 'active'));
+usePolling(() => taskBoard.refresh(), () => 20_000);
+onMounted(() => { void taskBoard.refresh(); });
+watch(groupID, () => { void taskBoard.refresh(); });
 watch(groupID, async () => { rescan(); await pollNow(); });
 onMounted(async () => {
   observer = new IntersectionObserver((entries) => {
@@ -192,7 +199,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
         </div>
       </NuxtLink>
     </template>
-    <AppIconButton :to="`/groups/${groupID}/tasks`" icon="tasks" label="Tasks" />
+    <AppIconButton v-if="hasTasks" :to="`/groups/${groupID}/tasks`" icon="tasks" label="Tasks" />
   </PageBar>
 
   <AppEmptyState v-if="state.unavailable" icon="people" title="Group unavailable" text="This group is no longer available.">

@@ -113,13 +113,14 @@ Matching iOS:
   `DocumentScreen`): viewer, Write/Preview editor, revisions, conflicts and delete;
   cards inside the sender's reply bubble and the Docs tab in details, matching iOS. See [documents](documents.md).
 - **Tasks** (`/contacts/:id/tasks`, `/groups/:id/tasks`, `TaskBoard`), opened from the
-  chat bar or details, matching iOS. A contact on a task work turn shows a "Working on
+  chat bar (only while the chat has an active list, see
+  [opening Tasks](tasks.md#opening-tasks)) or details, matching iOS. A contact on a task work turn shows a "Working on
   “…”" row in the chat and in the header; the board marks contact tasks in progress with
   **Working** while execution is active. Both clients also show next step, evidence,
   blocked reason and work-turn consumption, with **Pause work**, **Resume work** and
   **Cancel task** in the editor. Pausing/reassignment/reopening retains the budget.
-  Updates replace the existing session board cache; no separate downloads or polling
-  are added. See [persistent work](persistent-work.md) and [tasks](tasks.md#seeing-the-work).
+  Updates replace the existing session board cache. The chat page refreshes that
+  cache every 20 seconds to decide whether to show the bar button. See [persistent work](persistent-work.md) and [tasks](tasks.md#seeing-the-work).
 - **Shared in this chat** on contact details (`/contacts/:id/edit`) and group details
   (`/groups/:id/members`): Media and Docs tabs (`ChatMediaTabs`). See
   [attachments](attachments.md#shared-in-this-chat).

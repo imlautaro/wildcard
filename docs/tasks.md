@@ -15,8 +15,10 @@ have not been verified yet.
 - **Ask in the chat**: "Split the trip planning into tasks", "Ana, take the hotel
   research and tell Leo when it's done". The contact calls `create_task_list` or
   `add_task`. In groups any contact can assign itself, another contact or a human.
-- **Open Tasks**: the checklist button in the chat's top bar (web), **Tasks** in the
-  chat's three-dot menu (iOS), or **Tasks** in chat details (iOS and web). Create a list, add tasks, tap the circle to mark a task done,
+- **Open Tasks**: the checklist button in the chat's top bar (web; shown only while
+  the chat has an active list), **Tasks** in the chat's three-dot menu (iOS), or
+  **Tasks** in chat details (iOS and web, always available, so a person can start the
+  first list there). Create a list, add tasks, tap the circle to mark a task done,
   and tap a task to edit its title, status (To do, In progress, Done, Canceled),
   assignee, notes, next step, evidence and what it waits for. Contact tasks also offer
   **Pause work**, **Resume work** and **Cancel task**. **Cancel list** cancels the list and every
@@ -27,6 +29,16 @@ have not been verified yet.
   while blocked) and the result the contact recorded. Contact tasks in progress show a
   **Working** chip while their work is active. Paused, blocked and exhausted tasks
   show their execution state instead, plus the number of work turns used.
+
+### Opening Tasks
+
+Most chats never have tasks, so the web chat and group top bars no longer show a
+permanent Tasks button (2026-10-31). The button appears once the chat has an active
+list. The page reads the shared session board cache (`useTasks`), refreshing it on
+open and every 20 seconds while the chat is visible, so a list a contact creates
+during a turn brings the button back without a reload. iOS already keeps Tasks in
+the chat's three-dot menu rather than in the bar, so it is unchanged. Chat details
+keep Tasks on both clients.
 
 ## Seeing the work
 
