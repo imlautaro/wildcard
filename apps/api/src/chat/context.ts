@@ -65,6 +65,9 @@ const tools: ModelTool[] = [
       properties: { turnID: { type: 'string' }, offset: { type: 'integer', description: 'Optional nonnegative Unicode character offset, at most 20000. Applies to both message texts.' } }, required: ['turnID'] } } },
 ];
 
+// The mini app evaluation (scripts/checks/mini-app-eval.mjs --production) offers the same tools.
+export { tools as privateChatTools };
+
 type HistoryRow = { errorCode: string | null; id: string; sequence: number; userText: string; assistantText: string; createdAt: number; updatedAt: number; assistantMessagesJSON: string | null; attachmentJSON: string | null;
   replyToID: string | null; replyToSide: string | null };
 const historyColumns = `id, sequence, error_code AS errorCode,

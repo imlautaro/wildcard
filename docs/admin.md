@@ -62,6 +62,8 @@ the `AdminAPI` binding.
 | DELETE | `/api/v1/admin/users/:id` | Body `{ "email": "<the account's email>" }`. 202 `{ deleted: true, cleanup: "pending" }`; D1 deletion committed, external cleanup queued |
 | GET | `/api/v1/admin/settings` | Every declared setting with its value, default and last change |
 | PUT | `/api/v1/admin/settings/:key` | Body `{ "value": true \| false }`. Saves the value and records an event |
+| GET | `/api/v1/admin/lab/contacts` | The calling admin's own contacts `{ id, name, miniApps, labApps }` for the [mini app lab](#mini-app-lab) |
+| POST | `/api/v1/admin/lab/contacts/:id/mini-apps` | Body `{ apps: [{ title, spec }], replace?, timeZone? }`. Imports into the admin's own chat; returns `{ results: [{ title, ok, id?, problems? }] }` |
 
 User rows never include password hashes, tokens or session metadata. "Contacts"
 counts the account's conversations (`contact` rows). "Agents" counts the contacts
@@ -163,8 +165,32 @@ visible; other errors appear in a banner. Each cache has a revision counter that
 rejects late responses after a newer request, a mutation, or a sign-out. Deleting
 an account removes its row and refreshes the overview. Saving a setting replaces
 the settings list with the server's response and refreshes the overview.
-Changing the search query drops the previous results. Sign-out and session expiry
+Changing the search query drops the previous results. The lab's contact list is cached the same way; an import revalidates it and the overview. Sign-out and session expiry
 clear every cache. Nothing is written to browser storage.
+
+## Mini app lab
+
+**Lab** (`/mini-apps`) imports a bundle of generated mini app specs into one of
+**your own** chats, so you can try them on a device from Contact → Mini apps
+instead of asking a contact for each one. It exists to evaluate and improve the
+mini app generator (`scripts/checks/mini-app-eval.mjs` writes the bundles).
+
+- Only the calling admin's own `contact` rows are listed or written; there is no
+  way to target another account.
+- Each app goes through the same parsing and offline verification as
+  `create_mini_app` (`prepareMiniApp`, in the browser's time zone) and must be
+  state-only: `mcp` steps and remote actions are rejected, so nothing needs review
+  and apps are enabled on import.
+- The per-chat cap of 20 still applies and is re-checked inside each insert. Use
+  two contacts for larger sets. **Replace previous lab apps** deletes only that
+  chat's `lab:%` apps (with their saved state, via cascade) in the same batch.
+- Rows use `lab:<uuid>` ids and no `turn_id`, so no chat bubble shows their card;
+  they appear in the Mini apps list (the first bundle entry first) and in Updates
+  like any app. Clearing or deleting the chat removes them.
+- Each import records a `mini_app.lab_import` admin event with counts. Limit: 10
+  imports per admin per minute, 1 MB per request.
+- No migration, binding or secret. It is admin-only tooling, so iOS and the web app
+  have no changes; they show lab apps through the existing mini app routes.
 
 ## Local development
 

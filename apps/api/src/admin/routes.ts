@@ -4,6 +4,8 @@ import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { cleanResources } from '../chat/cleanup';
 import { isSettingKey, listSettings, readSetting } from './settings';
+import { isRecord } from '../chat/meta';
+import { prepareMiniApp } from '../miniapps/tools';
 
 type UserRow = {
   id: string; name: string; email: string; createdAt: number; onboardingRequired: number;
@@ -115,6 +117,100 @@ admin.delete('/users/:id', bodyLimit({ maxSize: 1024 }), async (c) => {
   c.executionCtx.waitUntil(cleanResources(c.env));
   // A committed account deletion is distinct from asynchronous external erasure.
   return c.json({ deleted: true, cleanup: 'pending' }, 202);
+});
+
+// Mini app lab: imports generated specs into one of the calling admin's OWN chats so
+// they can be tried on a device through the normal Contact → Mini apps list. Never
+// another account's contacts. State-only apps; same parsing and offline verification
+// as create_mini_app; the per-chat cap of 20 still applies. Rows use `lab:<uuid>` ids
+// and no turn, so no chat bubble shows a card.
+const labCap = 20;
+const labTimeZone = (value: unknown) => {
+  if (value === undefined) return 'UTC';
+  if (typeof value !== 'string' || value.length > 64) return null;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: value }); return value; } catch { return null; }
+};
+
+admin.get('/lab/contacts', async (c) => {
+  const { results } = await c.env.DB.prepare(`SELECT c.id, COALESCE(c.alias, c.name) AS name,
+      (SELECT COUNT(*) FROM mini_app a WHERE a.contact_id = c.id AND a.user_id = c.user_id) AS miniApps,
+      (SELECT COUNT(*) FROM mini_app a WHERE a.contact_id = c.id AND a.user_id = c.user_id AND a.id LIKE 'lab:%') AS labApps
+    FROM contact c WHERE c.user_id = ? ORDER BY COALESCE(c.alias, c.name) COLLATE NOCASE, c.id LIMIT 200`)
+    .bind(c.get('admin')).all<{ id: string; name: string; miniApps: number; labApps: number }>();
+  return c.json({ contacts: results });
+});
+
+admin.post('/lab/contacts/:id/mini-apps', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'Bundle too large (1 MB max).' }, 413) }), async (c) => {
+  const actor = c.get('admin');
+  const admission = await admitAuthRequest(c.env.DB, actor, 'admin-mini-app-lab', 10);
+  if (!admission.allowed) {
+    c.header('Retry-After', String(admission.retryAfter));
+    return c.json({ error: 'Too many imports. Please wait a minute.' }, 429);
+  }
+  const contactID = c.req.param('id');
+  const contact = await c.env.DB.prepare('SELECT id, clearing FROM contact WHERE id = ? AND user_id = ?')
+    .bind(contactID, actor).first<{ id: string; clearing: number }>();
+  if (!contact) return c.json({ error: 'Contact not found in your account.' }, 404);
+  if (contact.clearing) return c.json({ error: 'This chat is being cleared. Try again shortly.' }, 409);
+  const body = await c.req.json<unknown>().catch(() => null);
+  if (!isRecord(body) || Object.keys(body).some((key) => !['apps', 'replace', 'timeZone'].includes(key))
+    || !Array.isArray(body.apps) || !body.apps.length || body.apps.length > labCap
+    || (body.replace !== undefined && typeof body.replace !== 'boolean')) {
+    return c.json({ error: `Provide apps (1–${labCap} entries of {title, spec}), and optionally replace and timeZone.` }, 422);
+  }
+  const timeZone = labTimeZone(body.timeZone);
+  if (!timeZone) return c.json({ error: 'Invalid timeZone.' }, 422);
+
+  type Result = { title: string; ok: boolean; id?: string; problems?: string[] };
+  const results: Result[] = [];
+  const accepted: { index: number; id: string; title: string; specJSON: string }[] = [];
+  body.apps.forEach((entry, index) => {
+    const title = isRecord(entry) && typeof entry.title === 'string' ? entry.title.trim() : '';
+    if (!isRecord(entry) || !title || [...title].length > 60 || !isRecord(entry.spec)) {
+      results.push({ title: title || `App ${index + 1}`, ok: false, problems: ['Each app needs a title (1–60 characters) and a spec object.'] });
+      return;
+    }
+    const prepared = prepareMiniApp({ ...entry.spec, title }, timeZone, new Map());
+    if ('response' in prepared) {
+      const response = prepared.response as { error?: unknown; problems?: unknown };
+      const problems = [String(response.error ?? 'Invalid spec.'), ...(Array.isArray(response.problems) ? response.problems.map(String) : [])];
+      results.push({ title, ok: false, problems });
+      return;
+    }
+    if (prepared.parsed.tools.length) {
+      results.push({ title, ok: false, problems: ['Lab apps are state-only: remove mcp steps and remote actions.'] });
+      return;
+    }
+    const id = `lab:${crypto.randomUUID()}`;
+    accepted.push({ index: results.length, id, title, specJSON: JSON.stringify(prepared.parsed.spec) });
+    results.push({ title, ok: true, id });
+  });
+
+  // One transaction: optional replacement, then inserts that each re-check the cap,
+  // so concurrent chat creations cannot push the chat past 20. Lists sort by
+  // updated_at descending, so the first bundle entry gets the newest timestamp.
+  const now = Date.now();
+  const statements = [
+    ...(body.replace ? [c.env.DB.prepare("DELETE FROM mini_app WHERE contact_id = ? AND user_id = ? AND id LIKE 'lab:%'").bind(contactID, actor)] : []),
+    ...accepted.map((app, order) => c.env.DB.prepare(`INSERT INTO mini_app (id, contact_id, user_id, turn_id, revision, title, spec_json, tools_json, approved_revision, created_at, updated_at)
+      SELECT ?1, ?2, ?3, NULL, 1, ?4, ?5, '[]', 1, ?6, ?6
+      WHERE (SELECT COUNT(*) FROM mini_app WHERE contact_id = ?2 AND user_id = ?3) < ${labCap} RETURNING id`)
+      .bind(app.id, contactID, actor, app.title, app.specJSON, now + accepted.length - order)),
+  ];
+  let outcomes: D1Result[] = [];
+  if (statements.length) {
+    try { outcomes = await c.env.DB.batch(statements); }
+    catch { return c.json({ error: 'Could not import. The chat may be being cleared; try again.' }, 409); }
+  }
+  const offset = body.replace ? 1 : 0;
+  accepted.forEach((app, order) => {
+    if (outcomes[offset + order]?.results.length) return;
+    results[app.index] = { title: app.title, ok: false, problems: [`This chat already has ${labCap} mini apps. Delete some or use "Replace previous lab apps".`] };
+  });
+  const imported = results.filter((result) => result.ok).length;
+  await c.env.DB.prepare('INSERT INTO admin_event (id, actor_id, action, target, details_json, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(crypto.randomUUID(), actor, 'mini_app.lab_import', contactID, JSON.stringify({ imported, rejected: results.length - imported, replaced: !!body.replace }), now).run();
+  return c.json({ results });
 });
 
 admin.get('/settings', async (c) => c.json({ settings: await listSettings(c.env.DB) }));

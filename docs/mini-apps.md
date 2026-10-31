@@ -390,6 +390,16 @@ These runs did not use connectors, a real chat turn, or a physical device. The n
 layouts were typechecked on iOS (Simulator SDK) and web (`vue-tsc`) but not rendered
 in the Simulator or a browser.
 
+## Mini app lab (admin import)
+
+To evaluate the generator on a device, a super admin can import generated specs
+into one of their own chats from the admin panel's **Lab** page
+(`POST /api/v1/admin/lab/contacts/:id/mini-apps`, see
+[admin](admin.md#mini-app-lab)). Imports are state-only, verified with the same
+`prepareMiniApp`, capped at 20 per chat, use `lab:<uuid>` ids with no turn (so no
+chat card), and need no migration. The iOS and web apps are unchanged: lab apps
+open from Contact → Mini apps like any other.
+
 ## Setup and verification
 
 Apply additive migrations `0037_mini_apps.sql` and `0038_mini_app_state.sql`

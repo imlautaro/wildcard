@@ -38,3 +38,7 @@ export type Overview = {
   registrationEnabled: boolean;
   events: AdminEvent[];
 };
+
+export type LabContact = { id: string; name: string; miniApps: number; labApps: number };
+
+export type LabResult = { title: string; ok: boolean; id?: string; problems?: string[] };
