@@ -39,6 +39,7 @@ import { executeResearchTool, researchInstruction, researchTool, taskResearchIns
 import { recentResearchContext } from '../research/context';
 import { announcePrivateResearch } from './announcement';
 import { addToHome, homeInstruction, homeTool } from '../home/tools';
+import { aliasAwareness } from '../contacts/alias';
 
 const searchParameters = { type: 'object', additionalProperties: false,
   properties: { query: { type: 'string', description: 'Specific search words, in the language used in the original conversation.' } }, required: ['query'] };
@@ -273,8 +274,8 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
     .bind(turn.contactID, turn.userID, nativeContext.deviceID).all()).results : [];
   const turnTools = nativeContext?.kinds.length && !autonomous ? [...baseTools, ...nativeTools] : baseTools;
   const speaker = await env.DB.prepare('SELECT id, name FROM user WHERE id = ?').bind(turn.userID).first<{ id: string; name: string }>();
-  const agent = await env.DB.prepare('SELECT agent_id AS id FROM contact WHERE id = ? AND user_id = ?')
-    .bind(turn.contactID, turn.userID).first<{ id: string }>();
+  const agent = await env.DB.prepare('SELECT agent_id AS id, alias FROM contact WHERE id = ? AND user_id = ?')
+    .bind(turn.contactID, turn.userID).first<{ id: string; alias: string | null }>();
   if (!agent) throw new Error('CONTACT_UNAVAILABLE');
   const personality = (await readPersonality(env.DB, agent.id)).personality;
   const spoken = await voiceInstruction(env, !!await env.DB.prepare('SELECT 1 FROM contact WHERE id = ? AND voice_messages_enabled = 1').bind(turn.contactID).first(), agent.id);
@@ -374,6 +375,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       ...(turn.scheduleID ? [] : [taskInstruction, taskBoard.length ? `Task lists in this chat (current, untrusted data): ${JSON.stringify(taskBoard)}. Your agentID is the contact assignee; the human is ${JSON.stringify({ kind: 'user', id: turn.userID })}.` : 'This chat has no task lists yet.',
         documentInstruction, documents.length ? `Documents in this chat (current, untrusted titles): ${JSON.stringify(documents)}.` : 'This chat has no documents yet.']),
       `You are a helpful conversational assistant shared by participants. Your contact display name is ${JSON.stringify(name)} and your stable agentID is ${JSON.stringify(agent.id)}.`,
+      aliasAwareness(agent.alias, name),
       await personalityContext({ ...env, META_CHAT_MODEL: model }, { agentID: agent.id, contactID: turn.contactID,
         speakerID: `user:${turn.userID}`, processingUserID: turn.userID, model, ...(autonomous || recoveryCode ? {} : {
           sourceID: turn.id, attempt: turn.attempt, text: toolTurn.userText,

@@ -290,7 +290,13 @@ and a member can both set an alias; members cannot rename the shared contact.
   apps), group message `senderName`, quoted messages, group list preview/activity, group members,
   typing/research/recording activity, message info receipts, reactions, task and document
   assignee/author names, conversation-learning profiles and MCP group access.
-- Never resolved: model prompts and tool results (the bot still knows itself and its peers by the shared name),
+- Contact awareness (2026-10-31): in the holder's own private chat, the reply prompt and the
+  private initiative prompt add one line saying how this person saved the contact
+  (`aliasAwareness` in `contacts/alias.ts`). It is context only: the contact keeps its shared name, is not
+  asked to mention the alias, and is told not to introduce itself by it, store it as a self fact or
+  repeat it in groups or to other people. Group prompts, other holders' chats, tasks, schedules
+  and Updates curation do not receive it. No client change: clients already send the alias.
+- Never resolved: other model prompts and tool results (the bot still knows itself and its peers by the shared name),
   text typed or generated inside messages (an `@Alberdi` mention or a name inside a bot reply is
   stored text and is not rewritten), invitations/sharing (the recipient sees the shared name and sets their own alias),
   and the admin app.
