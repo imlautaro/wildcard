@@ -20,11 +20,11 @@ const image = usePrivateImage(() => ready.value?.imageVersion
 </template>
 
 <style scoped>
-.link-card { display: flex; flex-direction: column; margin: 6px 0 4px; border-radius: 12px; overflow: hidden; color: inherit; text-decoration: none;
+.link-card { display: flex; flex-direction: column; margin: var(--space-1-5) 0 var(--space-1); border-radius: var(--md-shape-m); overflow: hidden; color: inherit; text-decoration: none;
   background: color-mix(in srgb, currentColor 7%, transparent); max-width: 320px; }
 .link-card-image { width: 100%; max-height: 168px; object-fit: cover; display: block; }
-.link-card-text { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; min-width: 0; }
-.link-card-site { font-size: 0.75rem; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.link-card-title { font-weight: 600; font-size: 0.875rem; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.link-card-text { display: flex; flex-direction: column; gap: var(--space-0-5); padding: var(--space-2) 10px; min-width: 0; }
+.link-card-site { font: var(--type-body-small); opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-card-title { font: var(--type-title-small); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .link-card-description { font-size: 0.8125rem; opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 </style>

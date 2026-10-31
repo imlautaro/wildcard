@@ -1,36 +1,19 @@
-import { appIcons } from './app/utils/icons';
-
 // The browser only talks to this Worker. Server routes forward /api/v1/* to the
 // API Worker through a service binding and keep the session token in a cookie.
+// The design system (tokens, components, icons, ripple, font) comes from the
+// shared Wildcard UI layer; main.css holds only this app's own styles.
 export default defineNuxtConfig({
+  extends: ['../../packages/ui'],
   compatibilityDate: '2026-10-26',
   ssr: false,
   devtools: { enabled: false },
-  modules: ['@nuxt/icon'],
   css: ['~/assets/css/main.css'],
-  // Material Symbols ship in the client bundle only: no Iconify API requests and
-  // no multi-megabyte collection inside the Worker.
-  icon: {
-    mode: 'svg',
-    provider: 'none',
-    fallbackToApi: false,
-    serverBundle: false,
-    clientBundle: { icons: Object.values(appIcons).flat(), scan: false },
-  },
   app: {
     head: {
       title: 'Wildcard',
       titleTemplate: 'Wildcard',
-      htmlAttrs: { lang: 'en' },
-      meta: [
-        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
-        { name: 'color-scheme', content: 'light dark' },
-        { name: 'theme-color', content: '#faf8ff', media: '(prefers-color-scheme: light)' },
-        { name: 'theme-color', content: '#121318', media: '(prefers-color-scheme: dark)' },
-      ],
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg?v=0c69391a81ea' },
-        { rel: 'preload', href: '/fonts/Manrope.ttf', as: 'font', type: 'font/ttf', crossorigin: '' },
       ],
     },
   },

@@ -116,32 +116,29 @@ onMounted(() => run(async () => {
 
 <template>
   <PageBar :title="snapshot?.group.name ?? 'Group'" :back="`/groups/${id}`" always-back>
-    <button type="button" class="icon-button" aria-label="Refresh details" :disabled="busy" @click="run(load)"><AppIcon name="refresh" /></button>
+    <AppIconButton icon="refresh" label="Refresh details" :disabled="busy" @click="run(load)" />
   </PageBar>
   <div class="page">
     <div class="page-inner">
-      <p v-if="error && !sheet" class="notice" style="margin: 0 0 12px">{{ error }}</p>
-      <p v-if="notice" class="group-footer" role="status" style="padding-top: 8px">{{ notice }}</p>
-      <div v-if="!snapshot && busy" class="center"><span class="spinner" /> Loading…</div>
+      <AppNotice v-if="error && !sheet">{{ error }}</AppNotice>
+      <AppNotice v-if="notice" tone="success">{{ notice }}</AppNotice>
+      <AppLoading v-if="!snapshot && busy" fill />
       <template v-if="snapshot">
         <IdentityEditor :name="snapshot.group.name" :path="groupPhotoPath(snapshot.group)" show-name />
         <p class="identity-subtitle">{{ snapshot.members.length }} {{ snapshot.members.length === 1 ? 'member' : 'members' }}</p>
 
-        <div class="group" style="margin-top: 20px">
-          <button type="button" class="button-row opens" @click="sheet = 'sharing'">
-            <AppIcon name="chat" />Discuss my private chats<span class="row-value">{{ sharingSummary }}</span>
-          </button>
-          <NuxtLink :to="`/groups/${id}/connections`" class="button-row"><AppIcon name="link" />Connections</NuxtLink>
-          <NuxtLink :to="`/groups/${id}/learning`" class="button-row"><AppIcon name="person" />Conversation learning</NuxtLink>
-          <NuxtLink :to="`/groups/${id}/mini-apps`" class="button-row"><AppIcon name="grid" />Mini apps</NuxtLink>
-          <NuxtLink :to="`/groups/${id}/tasks`" class="button-row"><AppIcon name="tasks" />Tasks</NuxtLink>
-        </div>
+        <AppListGroup>
+          <AppListItem icon="chat" opens :value="sharingSummary" @click="sheet = 'sharing'">Discuss my private chats</AppListItem>
+          <AppListItem :to="`/groups/${id}/connections`" icon="link">Connections</AppListItem>
+          <AppListItem :to="`/groups/${id}/learning`" icon="person">Conversation learning</AppListItem>
+          <AppListItem :to="`/groups/${id}/mini-apps`" icon="grid">Mini apps</AppListItem>
+          <AppListItem :to="`/groups/${id}/tasks`" icon="tasks">Tasks</AppListItem>
+        </AppListGroup>
 
-        <div class="group-title">Members</div>
-        <div class="group">
+        <AppListGroup title="Members">
           <template v-if="snapshot.canInvite">
-            <button type="button" class="button-row" :disabled="busy" @click="sheet = 'invite'"><AppIcon name="mail" />Invite people</button>
-            <button type="button" class="button-row" :disabled="busy" @click="sheet = 'add'"><AppIcon name="group-add" />Add a contact</button>
+            <AppListItem icon="mail" :disabled="busy" @click="sheet = 'invite'">Invite people</AppListItem>
+            <AppListItem icon="group-add" :disabled="busy" @click="sheet = 'add'">Add a contact</AppListItem>
           </template>
           <div v-for="member in snapshot.members" :key="`${member.kind}/${member.id}`" class="field member-row">
             <AppAvatar :name="member.name" :path="photoPath(member)" :size="40" />
@@ -149,26 +146,25 @@ onMounted(() => run(async () => {
               {{ member.kind === 'user' && member.id === user?.id ? `${member.name} (You)` : member.name }}
               <span class="small">{{ memberRole(member) }}</span>
             </span>
-            <button v-if="canManage(member)" type="button" class="icon-button" :aria-label="`Manage ${member.name}`" :disabled="busy" @click="managing = member"><AppIcon name="more" /></button>
+            <AppIconButton v-if="canManage(member)" icon="more" :label="`Manage ${member.name}`" :disabled="busy" @click="managing = member" />
           </div>
-        </div>
+        </AppListGroup>
 
         <ChatMediaTabs :base="`groups/${id}`" :attachment-path="item => `groups/${id}/messages/${item.messageID}/attachment`"
           :documents-base="`groups/${id}`" :document-route="`/groups/${id}/documents`"
         />
 
-        <div class="group" style="margin-top: 20px">
+        <AppListGroup class="lifecycle-group">
           <ChatLifecycleActions :archived="archived" :can-clear="isOwner" :busy="busy" group
             @archive="run(() => chats.archiveChat('group', id, !archived))"
             @clear="memory => run(() => chats.clearChat('group', id, memory))"
           />
-          <button type="button" class="button-row danger" :disabled="busy" @click="leave"><AppIcon :name="isOwner ? 'delete' : 'logout'" />{{ isOwner ? 'Delete group' : 'Leave group' }}</button>
-        </div>
+          <AppListItem danger :icon="isOwner ? 'delete' : 'logout'" :disabled="busy" @click="leave">{{ isOwner ? 'Delete group' : 'Leave group' }}</AppListItem>
+        </AppListGroup>
 
         <AppSheet v-if="sheet === 'sharing'" title="Discuss my private chats" @close="sheet = null">
           <template #header><InfoButton label="Discuss my private chats" :text="sharingInfo" /></template>
-          <div class="group">
-            <!-- The switch shows the saved state until the confirmed change is stored. -->
+          <AppListGroup>
             <label v-for="permission in snapshot.privateSharing ?? []" :key="permission.agentID" class="toggle">
               <span class="two-line">
                 {{ snapshot.members.find(member => member.kind === 'agent' && member.id === permission.agentID)?.name ?? 'Contact' }}
@@ -180,8 +176,8 @@ onMounted(() => run(async () => {
               >
             </label>
             <div v-if="!snapshot.privateSharing?.length" class="text-block">Add a contact to manage private chat sharing.</div>
-          </div>
-          <p v-if="error" class="notice" style="margin: 12px 0 0">{{ error }}</p>
+          </AppListGroup>
+          <AppNotice v-if="error">{{ error }}</AppNotice>
         </AppSheet>
 
         <AppSheet v-if="sheet === 'invite'" title="Invite people" @close="sheet = null">
@@ -189,17 +185,17 @@ onMounted(() => run(async () => {
           <form id="invite-form" class="group" @submit.prevent="invite">
             <div class="field"><input v-model="email" type="email" placeholder="Email of an existing account" aria-label="Email" autocomplete="off" autofocus></div>
           </form>
-          <p v-if="error" class="notice" style="margin: 12px 0 0">{{ error }}</p>
+          <AppNotice v-if="error">{{ error }}</AppNotice>
           <template #actions>
-            <button type="button" class="button text" @click="sheet = null">Cancel</button>
-            <button type="submit" form="invite-form" class="button" :disabled="busy || !email.trim()">Invite</button>
+            <AppButton variant="text" @click="sheet = null">Cancel</AppButton>
+            <AppButton type="submit" form="invite-form" :disabled="busy || !email.trim()">Invite</AppButton>
           </template>
         </AppSheet>
 
         <AppSheet v-if="sheet === 'add'" title="Add a contact" @close="sheet = null">
-          <div v-if="!addable.length" class="group"><div class="text-block">Only contacts you created can be added. All of them are already in this group.</div></div>
+          <AppListGroup v-if="!addable.length"><div class="text-block">Only contacts you created can be added. All of them are already in this group.</div></AppListGroup>
           <template v-else>
-            <div class="group">
+            <AppListGroup>
               <div class="field">
                 <label for="add-contact">Contact</label>
                 <AppSelect
@@ -207,7 +203,7 @@ onMounted(() => run(async () => {
                   :options="addable.map(contact => ({ value: contact.id, label: contact.name }))"
                 />
               </div>
-            </div>
+            </AppListGroup>
             <!-- Consent covers this text, so it stays visible beside the checkboxes. -->
             <ConsentFields
               v-model:share-memory="shareMemory" v-model:contributor-consent="contributorConsent"
@@ -217,20 +213,20 @@ onMounted(() => run(async () => {
               contributor-note="Your selected model is Contributor. Messages and memories sent to Meta may be used for model training."
             />
           </template>
-          <p v-if="error" class="notice" style="margin: 12px 0 0">{{ error }}</p>
+          <AppNotice v-if="error">{{ error }}</AppNotice>
           <template #actions>
-            <button type="button" class="button text" @click="sheet = null">Cancel</button>
-            <button v-if="addable.length" type="button" class="button" :disabled="!contactID || !consented || busy" @click="addContact">Add</button>
+            <AppButton variant="text" @click="sheet = null">Cancel</AppButton>
+            <AppButton v-if="addable.length" :disabled="!contactID || !consented || busy" @click="addContact">Add</AppButton>
           </template>
         </AppSheet>
 
         <AppSheet v-if="managing" :title="managing.name" @close="managing = null">
-          <div class="group">
-            <button v-if="isOwner && managing.kind === 'user' && managing.id !== user?.id" type="button" class="button-row" :disabled="busy" @click="togglePermission(managing)">
-              <AppIcon name="mail" />{{ managing.canInvite ? 'Stop allowing invites' : 'Allow invites' }}
-            </button>
-            <button v-if="canRemove(managing)" type="button" class="button-row danger" :disabled="busy" @click="remove(managing)"><AppIcon name="delete" />Remove from group</button>
-          </div>
+          <AppListGroup>
+            <AppListItem v-if="isOwner && managing.kind === 'user' && managing.id !== user?.id" icon="mail" :disabled="busy" @click="togglePermission(managing)">
+              {{ managing.canInvite ? 'Stop allowing invites' : 'Allow invites' }}
+            </AppListItem>
+            <AppListItem v-if="canRemove(managing)" danger icon="delete" :disabled="busy" @click="remove(managing)">Remove from group</AppListItem>
+          </AppListGroup>
         </AppSheet>
       </template>
     </div>
@@ -239,4 +235,7 @@ onMounted(() => run(async () => {
 
 <style scoped>
 .member-row .two-line { flex: 1; min-width: 0; }
+/* The groups after the identity header and after the media tabs don't follow another group. */
+.identity-subtitle { margin-bottom: var(--space-5); }
+:deep(.lifecycle-group) { margin-top: var(--space-5); }
 </style>

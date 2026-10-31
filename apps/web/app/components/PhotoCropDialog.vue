@@ -93,10 +93,10 @@ onBeforeUnmount(() => { active = false; pointers.clear(); dialog.value?.close();
         </div>
         <label :for="zoomID" class="small">Photo zoom</label>
         <input :id="zoomID" v-model.number="zoom" type="range" min="1" max="4" step="0.01" :disabled="saving" :aria-valuetext="`${Math.round(zoom * 100)}%`">
-        <p v-if="problem" class="notice" role="alert">{{ problem }}</p>
+        <AppNotice v-if="problem">{{ problem }}</AppNotice>
         <div class="crop-actions">
-          <button type="button" class="button text" autofocus @click="emit('cancel')">Cancel</button>
-          <button type="button" class="button" :disabled="saving" @click="save">{{ saving ? 'Preparing…' : 'Use Photo' }}</button>
+          <AppButton variant="text" autofocus @click="emit('cancel')">Cancel</AppButton>
+          <AppButton :disabled="saving" @click="save">{{ saving ? 'Preparing…' : 'Use Photo' }}</AppButton>
         </div>
       </div>
     </dialog>
@@ -104,15 +104,15 @@ onBeforeUnmount(() => { active = false; pointers.clear(); dialog.value?.close();
 </template>
 
 <style scoped>
-.photo-crop-dialog { width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; padding: 24px; border: 0; border-radius: var(--md-shape-xl); background: var(--md-surface-container-high); color: var(--md-on-surface); box-shadow: var(--md-elevation-3); }
+.photo-crop-dialog { width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; padding: var(--space-6); border: 0; border-radius: var(--md-shape-xl); background: var(--md-surface-container-high); color: var(--md-on-surface); box-shadow: var(--md-elevation-3); }
 .photo-crop-dialog::backdrop { background: var(--md-scrim); }
-.crop-content { display: flex; flex-direction: column; gap: 16px; }
-.crop-content h2 { font-size: 24px; font-weight: 600; }
-.crop-content p { margin: 0; }
+.crop-content { display: flex; flex-direction: column; gap: var(--space-4); }
+.crop-content h2 { font: var(--type-headline-small); letter-spacing: var(--tracking-headline); }
+.crop-content p, .crop-content > .notice { margin: 0; }
 .crop-viewport { position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; border-radius: var(--md-shape-l); cursor: grab; touch-action: none; user-select: none; }
 .crop-viewport:active { cursor: grabbing; }
 .crop-viewport canvas { display: block; width: 100%; height: 100%; }
 .crop-guide { position: absolute; inset: 1px; border: 2px solid rgb(255 255 255 / 90%); border-radius: 50%; box-shadow: 0 0 0 100px rgb(0 0 0 / 45%); pointer-events: none; }
-.crop-content input[type='range'] { width: 100%; margin: 0; accent-color: var(--accent); }
-.crop-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.crop-content input[type='range'] { width: 100%; margin: 0; accent-color: var(--md-primary); }
+.crop-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 </style>

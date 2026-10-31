@@ -22,9 +22,9 @@ onBeforeUnmount(() => clearInterval(tick));
     <span class="label">{{ label }}</span>
     <span class="value" :class="{ done: left === 0 }">{{ shown }}</span>
     <div class="row">
-      <button v-if="endsAt !== null" type="button" class="mini-button" @click="pause">Pause</button>
-      <button v-else type="button" class="mini-button primary" @click="start">{{ remaining === null || left === 0 ? 'Start' : 'Resume' }}</button>
-      <button type="button" class="mini-button" @click="reset">Reset</button>
+      <button v-if="endsAt !== null" type="button" class="mini-button" data-ripple @click="pause">Pause</button>
+      <button v-else type="button" class="mini-button primary" data-ripple @click="start">{{ remaining === null || left === 0 ? 'Start' : 'Resume' }}</button>
+      <button type="button" class="mini-button" data-ripple @click="reset">Reset</button>
     </div>
   </div>
 </template>

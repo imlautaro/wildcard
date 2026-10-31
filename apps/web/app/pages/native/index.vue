@@ -22,25 +22,29 @@ const topic = ref<(typeof topics)[number] | null>(null);
   <PageBar title="Native experiments" back="/account" always-back />
   <div class="page"><div class="page-inner">
     <div class="identity">
-      <span class="native-glyph" style="width: 64px; height: 64px; border-radius: 16px"><AppIcon name="iphone" style="width: 34px; height: 34px" /></span>
+      <span class="native-glyph hero-glyph"><AppIcon name="iphone" /></span>
       <h2 class="identity-title">Try it on your iPhone</h2>
-      <p class="muted" style="margin: 0; text-align: center; max-width: 460px">Enable a contact in the iOS app’s Native experiments, then ask in its private chat.</p>
+      <p class="muted intro">Enable a contact in the iOS app’s Native experiments, then ask in its private chat.</p>
     </div>
 
-    <div class="group-title">What you can try</div>
-    <div class="group">
+    <AppListGroup title="What you can try">
       <div v-for="item in capabilities" :key="item.title" class="native-row">
         <span class="native-glyph" :data-kind="item.kind"><AppIcon :name="item.icon" /></span>
         <div><strong>{{ item.title }}</strong><p>{{ item.text }}</p></div>
       </div>
-    </div>
+    </AppListGroup>
 
-    <div class="group-title">Learn more</div>
-    <div class="group">
-      <button v-for="item in topics" :key="item.title" type="button" class="button-row opens" @click="topic = item"><AppIcon :name="item.icon" />{{ item.title }}</button>
-    </div>
+    <AppListGroup title="Learn more">
+      <AppListItem v-for="item in topics" :key="item.title" :icon="item.icon" opens @click="topic = item">{{ item.title }}</AppListItem>
+    </AppListGroup>
     <AppSheet v-if="topic" :title="topic.title" @close="topic = null">
       <p v-for="paragraph in topic.paragraphs" :key="paragraph" class="sheet-text">{{ paragraph }}</p>
     </AppSheet>
   </div></div>
 </template>
+
+<style scoped>
+.hero-glyph { width: 64px; height: 64px; border-radius: var(--md-shape-l); }
+.hero-glyph :deep(svg) { width: 34px; height: 34px; }
+.intro { max-width: 460px; margin: 0; text-align: center; }
+</style>

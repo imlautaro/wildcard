@@ -4,8 +4,6 @@ const emit = defineEmits<{ archive: []; clear: [clearMemory: boolean] }>();
 </script>
 
 <template>
-  <button type="button" class="button-row" :disabled="busy" @click="emit('archive')">
-    <AppIcon name="archive" />{{ archived ? 'Unarchive' : 'Archive' }}
-  </button>
+  <AppListItem icon="archive" :disabled="busy" @click="emit('archive')">{{ archived ? 'Unarchive' : 'Archive' }}</AppListItem>
   <ChatClearActions v-if="canClear" :busy="busy" :group="group" @clear="memory => emit('clear', memory)" />
 </template>

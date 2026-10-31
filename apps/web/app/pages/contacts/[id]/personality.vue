@@ -80,66 +80,61 @@ onMounted(async () => {
 
 <template>
   <PageBar title="Personality" :back="`/contacts/${id}/edit`" always-back>
-    <button type="button" class="icon-button" aria-label="Refresh personality" :disabled="busy" @click="discardAndRefresh"><AppIcon name="refresh" /></button>
+    <AppIconButton icon="refresh" label="Refresh personality" :disabled="busy" @click="discardAndRefresh" />
   </PageBar>
   <div class="page"><form class="page-inner" @submit.prevent="submit">
-    <p v-if="error || loadError" class="notice">{{ error ?? loadError }}</p>
-    <div v-if="!value && busy" class="center"><span class="spinner" /> Loading personality…</div>
+    <AppNotice v-if="error || loadError">{{ error ?? loadError }}</AppNotice>
+    <AppLoading v-if="!value && busy" label="Loading personality…" fill />
     <template v-if="value">
-        <div class="group">
-          <div v-if="canEdit" class="button-row-with-info">
-            <button type="button" class="button-row" :disabled="busy" @click="generateDraft"><AppIcon name="star" />{{ draft.description ? 'Regenerate with AI' : 'Generate with AI' }}</button>
-            <InfoButton label="Generate with AI" :text="info.generate" />
-          </div>
-          <label class="toggle">
-            <span class="toggle-label"><AppIcon name="person" />Personality experiment<InfoButton label="Personality experiment" :text="info.experiment" /></span>
-            <input v-model="draft.enabled" type="checkbox" role="switch" :disabled="!canEdit || busy">
-          </label>
+      <AppListGroup>
+        <div v-if="canEdit" class="button-row-with-info">
+          <AppListItem icon="star" :disabled="busy" @click="generateDraft">{{ draft.description ? 'Regenerate with AI' : 'Generate with AI' }}</AppListItem>
+          <InfoButton label="Generate with AI" :text="info.generate" />
         </div>
-        <div class="group-title info-title">Stable identity <InfoButton label="Stable identity" :text="info.identity" /></div>
-        <div class="group">
-          <div class="field personality-field"><textarea v-model="draft.description" :readonly="!canEdit" :disabled="busy" rows="5" aria-label="Stable identity" placeholder="Values, ways of thinking, humor, and conversational quirks. Two or three sentences are enough." /></div>
-        </div>
-        <div class="group-title info-title">Specialties <InfoButton label="Specialties" :text="info.specialties" /></div>
-        <div class="group">
-          <div class="field personality-field"><textarea v-model="draft.specialties" :readonly="!canEdit" :disabled="busy" rows="4" aria-label="Specialties" placeholder="Things this contact is especially good at." /></div>
-        </div>
-        <div class="group-title info-title">Birthday <InfoButton label="Birthday" :text="info.birthday" /></div>
-        <div class="group">
-          <div class="field"><label for="birth-date">Date of birth</label><input id="birth-date" :value="draft.birthDate ?? ''" type="date" :disabled="!canEdit || busy" min="1900-01-01" :max="latestBirthday" @input="draft.birthDate = ($event.target as HTMLInputElement).value || null"></div>
-          <div class="field"><label for="birth-zone">Time zone</label><AppSelect id="birth-zone" v-model="draft.timeZone" variant="plain" :options="timeZoneOptions" :disabled="!canEdit || busy" /></div>
-          <div v-if="facts?.age != null" class="button-row static">Age<span class="row-value">{{ facts.age }}{{ facts.isBirthday ? ' · Birthday today' : '' }}</span></div>
-        </div>
-        <div class="group" style="margin-top: 20px">
-          <button type="button" class="button-row opens" @click="temperamentOpen = true"><AppIcon name="chart" />Temperament<span class="row-value">{{ personalityTraits.length }} traits</span></button>
-        </div>
-      <p v-if="!valid" class="notice">Use a birthday at least 18 years ago, a valid time zone, description up to 2,000 characters, specialties up to 1,000 characters, and whole-number traits from 1 to 10.</p>
+        <AppSwitch v-model="draft.enabled" icon="person" label="Personality experiment" :info="info.experiment" :disabled="!canEdit || busy" />
+      </AppListGroup>
+      <AppListGroup title="Stable identity" :info="info.identity">
+        <div class="field personality-field"><textarea v-model="draft.description" :readonly="!canEdit" :disabled="busy" rows="5" aria-label="Stable identity" placeholder="Values, ways of thinking, humor, and conversational quirks. Two or three sentences are enough." /></div>
+      </AppListGroup>
+      <AppListGroup title="Specialties" :info="info.specialties">
+        <div class="field personality-field"><textarea v-model="draft.specialties" :readonly="!canEdit" :disabled="busy" rows="4" aria-label="Specialties" placeholder="Things this contact is especially good at." /></div>
+      </AppListGroup>
+      <AppListGroup title="Birthday" :info="info.birthday">
+        <div class="field"><label for="birth-date">Date of birth</label><input id="birth-date" :value="draft.birthDate ?? ''" type="date" :disabled="!canEdit || busy" min="1900-01-01" :max="latestBirthday" @input="draft.birthDate = ($event.target as HTMLInputElement).value || null"></div>
+        <div class="field"><label for="birth-zone">Time zone</label><AppSelect id="birth-zone" v-model="draft.timeZone" variant="plain" :options="timeZoneOptions" :disabled="!canEdit || busy" /></div>
+        <AppListItem v-if="facts?.age != null" plain :value="`${facts.age}${facts.isBirthday ? ' · Birthday today' : ''}`">Age</AppListItem>
+      </AppListGroup>
+      <AppListGroup>
+        <AppListItem icon="chart" opens :value="`${personalityTraits.length} traits`" @click="temperamentOpen = true">Temperament</AppListItem>
+      </AppListGroup>
+      <AppNotice v-if="!valid">Use a birthday at least 18 years ago, a valid time zone, description up to 2,000 characters, specialties up to 1,000 characters, and whole-number traits from 1 to 10.</AppNotice>
       <p v-if="saved && !dirty" class="group-footer" role="status">Saved.</p>
-      <button v-if="canEdit" type="submit" class="button block" style="margin-top: 12px" :disabled="busy || !valid || !dirty">Save personality</button>
+      <AppButton v-if="canEdit" type="submit" block class="save" :disabled="busy || !valid || !dirty">Save personality</AppButton>
 
       <AppSheet v-if="temperamentOpen" title="Temperament" @close="temperamentOpen = false">
         <template #header><InfoButton label="Temperament" :text="info.temperament" /></template>
-        <div class="group">
+        <AppListGroup>
           <label v-for="trait in personalityTraits" :key="trait.key" class="personality-trait">
             <span>{{ trait.label }} <output>{{ draft.traits[trait.key] }}</output></span>
             <input v-model.number="draft.traits[trait.key]" type="range" min="1" max="10" step="1" :aria-label="trait.label" :disabled="!canEdit || busy">
             <small><span>{{ trait.low }}</span><span>{{ trait.high }}</span></small>
           </label>
-        </div>
-        <template #actions><button type="button" class="button" @click="temperamentOpen = false">Done</button></template>
+        </AppListGroup>
+        <template #actions><AppButton @click="temperamentOpen = false">Done</AppButton></template>
       </AppSheet>
     </template>
-    <button v-else-if="!busy" type="button" class="button-row" @click="reload">Retry</button>
+    <AppButton v-else-if="!busy" variant="text" icon="refresh" @click="reload">Retry</AppButton>
   </form></div>
 </template>
 
 <style scoped>
-.personality-field { padding-top: 12px; padding-bottom: 12px; }
+.personality-field { padding-top: var(--space-3); padding-bottom: var(--space-3); }
 .personality-field textarea { font-size: 16px; color: var(--md-on-surface); width: 100%; }
+.save { margin-top: var(--space-3); }
 .personality-trait > span { font-weight: 500; }
 .personality-trait output { font-weight: 700; color: var(--md-primary); font-variant-numeric: tabular-nums; }
-.personality-trait { display: flex; flex-direction: column; padding: 16px; gap: 10px; }
-.personality-trait > span, .personality-trait small { display: flex; justify-content: space-between; gap: 12px; }
-.personality-trait small { color: var(--secondary); }
-.personality-trait input { width: 100%; accent-color: var(--accent); }
+.personality-trait { display: flex; flex-direction: column; padding: var(--space-4); gap: var(--space-2); }
+.personality-trait > span, .personality-trait small { display: flex; justify-content: space-between; gap: var(--space-3); }
+.personality-trait small { color: var(--md-on-surface-variant); }
+.personality-trait input { width: 100%; accent-color: var(--md-primary); }
 </style>

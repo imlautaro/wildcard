@@ -190,29 +190,25 @@ defineExpose({ focus: () => textarea.value?.focus() });
   <div class="composer">
     <form @submit.prevent="submit">
       <div v-if="recording" class="voice-recording" :class="{ locked }" role="status">
-        <button v-if="locked" type="button" class="icon-button" aria-label="Delete recording" @click="discardRecording"><AppIcon name="delete" /></button>
+        <AppIconButton v-if="locked" icon="delete" label="Delete recording" danger @click="discardRecording" />
         <span class="voice-dot" aria-hidden="true" />
         <span class="voice-timer">{{ recorder.phase.value === 'requesting' ? 'Waiting for the microphone…' : recorder.phase.value === 'processing' ? 'Sending…' : clock(recorder.elapsedMs.value) }}</span>
         <span v-if="recorder.phase.value === 'processing'" />
         <span v-else-if="!locked" class="voice-slide" :style="{ transform: `translateX(${drag.x}px)`, opacity: 1 + drag.x / cancelDistance }">‹ Slide to cancel</span>
         <span v-else class="voice-slide">Recording</span>
       </div>
-      <template v-else>
-        <button type="button" class="icon-button" aria-label="Attach images or PDFs" :disabled="disabled || preparing" @click="picker?.click()">
-          <AppIcon name="attach" />
-        </button>
-      </template>
+      <AppIconButton v-else icon="attach" label="Attach images or PDFs" size="large" :disabled="disabled || preparing" @click="picker?.click()" />
       <input ref="picker" type="file" multiple class="visually-hidden" :accept="attachmentTypes.join(',')" tabindex="-1" @change="choose">
       <div v-show="!recording" class="input">
         <div v-if="reply" class="draft-reply">
           <MessageReplyQuote :preview="reply" />
-          <button type="button" class="icon-button" aria-label="Cancel reply" :disabled="disabled" @click="emit('cancelReply')"><AppIcon name="close" /></button>
+          <AppIconButton icon="close" label="Cancel reply" size="small" :disabled="disabled" @click="emit('cancelReply')" />
         </div>
         <div v-for="item in attachments" :key="item.previewURL ?? item.name + item.size" class="draft-attachment">
           <img v-if="item.previewURL" :src="item.previewURL" alt="">
-          <AppIcon v-else name="file" style="width: 28px; height: 28px; color: var(--accent)" />
+          <AppIcon v-else name="file" class="draft-file" />
           <span class="name">{{ item.name }} · {{ fileSize(item.size) }}</span>
-          <button type="button" class="icon-button" :aria-label="`Remove ${item.name}`" @click="removeAttachment(item)"><AppIcon name="close" /></button>
+          <AppIconButton icon="close" :label="`Remove ${item.name}`" size="small" @click="removeAttachment(item)" />
         </div>
         <div v-if="preparing" class="draft-attachment muted"><span class="spinner" /> Preparing attachment…</div>
         <textarea
@@ -225,7 +221,7 @@ defineExpose({ focus: () => textarea.value?.focus() });
           <AppIcon name="lock" /><AppIcon name="arrow-up" />
         </div>
         <button
-          ref="micButton" type="button" class="send mic" :class="{ recording: recording && !locked, locked }"
+          ref="micButton" type="button" class="send mic" data-ripple :class="{ recording: recording && !locked, locked }"
           :aria-label="locked ? 'Stop and send voice message' : 'Record a voice message'"
           :title="locked ? undefined : 'Hold to record, release to send'"
           :disabled="(disabled || sending) && !recording"
@@ -233,7 +229,7 @@ defineExpose({ focus: () => textarea.value?.focus() });
           @click="micClick" @keydown="micKey" @contextmenu.prevent
         ><AppIcon :name="locked ? 'stop' : 'mic'" /></button>
       </div>
-      <button v-else type="submit" class="send" :disabled="!canSend" aria-label="Send"><AppIcon name="send" /></button>
+      <button v-else type="submit" class="send" data-ripple :disabled="!canSend" aria-label="Send"><AppIcon name="send" /></button>
     </form>
     <p v-if="length > 4000" class="hint">Messages can contain up to 4,000 characters.</p>
     <p v-else-if="problem" class="hint">{{ problem }}</p>
@@ -242,16 +238,24 @@ defineExpose({ focus: () => textarea.value?.focus() });
 </template>
 
 <style scoped>
-.voice-recording { flex: 1; min-width: 0; min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 16px; overflow: hidden; border-radius: 24px; background: var(--md-surface-container-high); color: var(--md-on-surface-variant); font-size: 14px; user-select: none; }
-.voice-recording.locked { padding-left: 4px; }
-.voice-recording .icon-button { width: 40px; height: 40px; color: var(--md-error); }
+.voice-recording {
+  flex: 1; min-width: 0; min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 var(--space-4); overflow: hidden;
+  border-radius: var(--md-shape-full); background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+  font: var(--type-body-medium); user-select: none;
+}
+.voice-recording.locked { padding-left: var(--space-1); }
 .voice-timer { color: var(--md-on-surface); font-variant-numeric: tabular-nums; }
 .voice-slide { margin-left: auto; white-space: nowrap; }
-.voice-dot { width: 10px; height: 10px; flex: none; border-radius: 999px; background: var(--md-error); animation: voice-pulse 1.2s ease-in-out infinite; }
+.voice-dot { width: 10px; height: 10px; flex: none; border-radius: var(--md-shape-full); background: var(--md-error); animation: voice-pulse 1.2s ease-in-out infinite; }
+.draft-file { width: 28px; height: 28px; flex: none; color: var(--md-primary); }
 .mic-slot { position: relative; flex: none; }
 .send.mic { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .send.recording { background: var(--md-error); color: var(--md-on-error); transform: scale(1.15); }
-.voice-lock { position: absolute; bottom: calc(100% + 8px); left: 50%; margin-left: -18px; width: 36px; padding: 8px 0; border-radius: 18px; display: flex; flex-direction: column; align-items: center; background: var(--md-surface-container-high); color: var(--md-on-surface-variant); box-shadow: var(--md-elevation-1); pointer-events: none; }
+.voice-lock {
+  position: absolute; bottom: calc(100% + var(--space-2)); left: 50%; margin-left: -18px; width: 36px; padding: var(--space-2) 0;
+  border-radius: var(--md-shape-full); display: flex; flex-direction: column; align-items: center; background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant); box-shadow: var(--md-elevation-1); pointer-events: none;
+}
 .voice-lock svg { width: 18px; height: 18px; }
 .hint.info { color: var(--md-on-surface-variant); }
 @keyframes voice-pulse { 50% { opacity: 0.3; } }

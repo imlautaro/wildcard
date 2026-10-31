@@ -27,6 +27,7 @@ const components = computed(() => {
 });
 const composer = computed(() => components.value?.find((c): c is MiniAppComposer => c.type === 'composer') ?? null);
 const firstScreen = computed(() => !currentTab.value || currentTab.value.id === tabs.value[0]?.id);
+const permissionNote = 'These tools use your connection permissions, and the service decides what each one does. Data is loaded for you only; it is not sent to the contact or saved to memory. Editing the mini app requires review again.';
 
 const reads = computed(() => app.value?.tools.filter(t => t.role === 'read') ?? []);
 const writes = computed(() => app.value?.tools.filter(t => t.role === 'write') ?? []);
@@ -117,56 +118,51 @@ onMounted(() => load());
   <div class="mini-app-screen">
     <PageBar :title="currentTab?.title ?? app?.title ?? 'Mini app'" :back="back" always-back>
       <div v-if="app?.status === 'enabled'" class="mini-menu">
-        <button type="button" class="icon-button" aria-label="More" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen"><AppIcon name="more" /></button>
+        <AppIconButton icon="more" label="More" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen" />
         <template v-if="menuOpen">
           <div class="backdrop" @click="menuOpen = false" />
-          <div class="items" role="menu">
-            <button v-for="action in view.value?.menu ?? []" :key="action.id" type="button" role="menuitem" :class="{ danger: action.style === 'destructive' }" :disabled="busyAction === action.id" @click="press(action)">{{ action.label }}</button>
-            <hr v-if="view.value?.menu?.length">
-            <button type="button" role="menuitem" :disabled="!!view.request" @click="menuOpen = false; load(true)">Refresh</button>
-            <button type="button" role="menuitem" :disabled="busy" @click="menuOpen = false; approve(false)">Disable</button>
-            <button type="button" role="menuitem" class="danger" @click="remove">Delete mini app</button>
+          <div class="menu" role="menu">
+            <AppMenuItem v-for="action in view.value?.menu ?? []" :key="action.id" role="menuitem" :danger="action.style === 'destructive'" :disabled="busyAction === action.id" @click="press(action)">{{ action.label }}</AppMenuItem>
+            <hr v-if="view.value?.menu?.length" class="menu-divider">
+            <AppMenuItem role="menuitem" :disabled="!!view.request" @click="menuOpen = false; load(true)">Refresh</AppMenuItem>
+            <AppMenuItem role="menuitem" :disabled="busy" @click="menuOpen = false; approve(false)">Disable</AppMenuItem>
+            <AppMenuItem role="menuitem" danger @click="remove">Delete mini app</AppMenuItem>
           </div>
         </template>
       </div>
     </PageBar>
     <div class="page">
-      <div v-if="!app && !apps.state.value.loaded" class="center"><span class="spinner" /> Loading…</div>
-      <div v-else-if="!app" class="empty"><h2>Mini app unavailable</h2><p>{{ apps.state.value.error ?? 'It may have been deleted.' }}</p></div>
+      <AppLoading v-if="!app && !apps.state.value.loaded" fill />
+      <AppEmptyState v-else-if="!app" icon="grid" title="Mini app unavailable" :text="apps.state.value.error ?? 'It may have been deleted.'" />
       <div v-else class="page-inner">
-        <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
-        <p v-if="notice" class="group-footer" role="status" style="padding: 0 4px 12px">{{ notice }}</p>
+        <AppNotice v-if="error">{{ error }}</AppNotice>
+        <AppNotice v-if="notice" tone="info">{{ notice }}</AppNotice>
 
         <template v-if="app.status !== 'enabled'">
           <div class="identity">
-            <span class="mini-app-glyph" style="width: 64px; height: 64px; border-radius: 16px"><AppIcon :name="miniAppIcon(app.icon)" /></span>
+            <span class="mini-app-glyph review-glyph"><AppIcon :name="miniAppIcon(app.icon)" /></span>
             <h2>{{ app.title }}</h2>
-            <p v-if="app.subtitle" class="muted" style="margin: 0; text-align: center">{{ app.subtitle }}</p>
+            <p v-if="app.subtitle" class="identity-subtitle">{{ app.subtitle }}</p>
           </div>
-          <p class="group-footer" style="padding: 0 4px 12px">
+          <AppNotice :tone="app.status === 'needs_reapproval' ? 'warning' : 'info'">
             {{ app.status === 'needs_reapproval' ? 'A connection or tool changed since you enabled this mini app. Review it again to keep using it.' : 'Your contact built this mini app. Review what it can do before enabling it.' }}
-          </p>
-          <div class="group-title">Runs each time you open or refresh</div>
-          <div class="group">
+          </AppNotice>
+          <AppListGroup title="Runs each time you open or refresh" :footer="writes.length ? undefined : permissionNote">
             <div v-if="!reads.length" class="text-block">No automatic reads.</div>
             <div v-for="tool in reads" :key="`${tool.connectionID}/${tool.toolName}`" class="mini-row"><span class="copy"><strong>{{ tool.toolName }}</strong><span>{{ tool.connectionName }}</span></span></div>
-          </div>
-          <template v-if="writes.length">
-            <div class="group-title">Only when you tap and confirm</div>
-            <div class="group">
-              <div v-for="tool in writes" :key="`${tool.connectionID}/${tool.toolName}`" class="mini-row"><span class="copy"><strong>{{ tool.toolName }}</strong><span>{{ tool.connectionName }}</span></span></div>
-            </div>
-          </template>
-          <p class="group-footer">These tools use your connection permissions, and the service decides what each one does. Data is loaded for you only; it is not sent to the contact or saved to memory. Editing the mini app requires review again.</p>
-          <button type="button" class="button block" :disabled="busy" @click="approve(true)">Enable mini app</button>
-          <div class="group" style="margin-top: 20px"><button type="button" class="button-row danger" @click="remove">Delete mini app</button></div>
+          </AppListGroup>
+          <AppListGroup v-if="writes.length" title="Only when you tap and confirm" :footer="permissionNote">
+            <div v-for="tool in writes" :key="`${tool.connectionID}/${tool.toolName}`" class="mini-row"><span class="copy"><strong>{{ tool.toolName }}</strong><span>{{ tool.connectionName }}</span></span></div>
+          </AppListGroup>
+          <AppButton block class="enable-button" :disabled="busy" @click="approve(true)">Enable mini app</AppButton>
+          <AppListGroup><AppListItem danger @click="remove">Delete mini app</AppListItem></AppListGroup>
         </template>
 
         <template v-else>
           <h2 class="mini-title">{{ currentTab?.title ?? app.title }}</h2>
           <template v-if="firstScreen">
             <template v-for="input in app.inputs" :key="input.id">
-              <div v-if="input.type === 'segmented'" class="mini-segmented" role="group" :aria-label="input.label">
+              <div v-if="input.type === 'segmented'" class="segmented mini-segmented" role="group" :aria-label="input.label">
                 <button v-for="option in input.options" :key="option.value" type="button" :aria-pressed="(view.inputs[input.id] ?? input.default) === option.value" @click="setInput(input.id, option.value)">{{ option.label }}</button>
               </div>
               <div v-else class="group">
@@ -174,18 +170,21 @@ onMounted(() => load());
               </div>
             </template>
           </template>
-          <div v-if="!view.value && view.request" class="center"><span class="spinner" /> Loading data…</div>
-          <p v-else-if="view.error" class="notice" style="margin: 0 0 12px">{{ view.error }} <button class="link-button" @click="load(true)">Retry</button></p>
+          <AppLoading v-if="!view.value && view.request" label="Loading data…" />
+          <AppNotice v-else-if="view.error" :tone="view.value ? 'warning' : 'error'">
+            {{ view.error }}
+            <template #actions><button class="link-button" @click="load(true)">Retry</button></template>
+          </AppNotice>
           <MiniAppView v-if="components" :components="components" :busy-action="busyAction" :state="apps.displayState(app.id)" @action="run"
             @tap="(id, updates) => apps.tap(app!, id, updates)" @edit="update => apps.tap(app!, null, [update])" @select-tab="tab => selectedTab = tab" />
-          <p v-if="view.value?.remote && firstScreen" class="group-footer" style="padding-top: 4px">Updated {{ messageTime(view.value.resolvedAt) }}</p>
+          <p v-if="view.value?.remote && firstScreen" class="group-footer">Updated {{ messageTime(view.value.resolvedAt) }}</p>
         </template>
       </div>
     </div>
     <form v-if="composer && app?.status === 'enabled'" class="mini-composer" @submit.prevent="send(composer)">
       <input v-model="draft" :type="composer.kind === 'number' ? 'number' : 'text'" step="any" :inputmode="composer.kind === 'number' ? 'decimal' : 'text'" maxlength="500"
         :placeholder="composer.placeholder ?? composer.label" :aria-label="composer.placeholder ?? composer.label" enterkeyhint="send">
-      <button type="submit" class="send" :aria-label="composer.label" :disabled="!draft.trim() || busyAction === composer.action"><AppIcon name="send" /></button>
+      <button type="submit" class="send" data-ripple :aria-label="composer.label" :disabled="!draft.trim() || busyAction === composer.action"><AppIcon name="send" /></button>
     </form>
     <nav v-if="tabs.length" class="mini-tabs" aria-label="Tabs">
       <button v-for="tab in tabs" :key="tab.id" type="button" :aria-current="tab.id === currentTab?.id ? 'page' : undefined" @click="selectedTab = tab.id">
@@ -194,3 +193,11 @@ onMounted(() => load());
     </nav>
   </div>
 </template>
+
+<style scoped>
+/* The layer's .menu surface, anchored under the More button above the backdrop. */
+.mini-menu .menu { position: absolute; right: 0; top: 44px; z-index: 6; min-width: 224px; transform-origin: top right; }
+.review-glyph { width: 64px; height: 64px; border-radius: var(--md-shape-l); }
+/* AppListGroup renders a fragment, so the space before the Delete group sits on the button. */
+.enable-button { margin-bottom: var(--space-5); }
+</style>

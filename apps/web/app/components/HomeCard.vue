@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { HomeCard } from '~/utils/types';
-import type { AppIconName } from '~/utils/icons';
 
 // One Updates card of the closed catalog (docs/updates.md#cards), drawn with Material 3
 // surfaces like the iOS HomeCards layouts. `lead` is the first, larger card.
@@ -60,15 +59,16 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
         <p v-if="content.subtitle">{{ content.subtitle }}</p>
       </div>
       <div class="mini-menu">
-        <button type="button" class="icon-button" aria-label="Card options" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen"><AppIcon name="more" /></button>
+        <AppIconButton icon="more" label="Card options" :tooltip="false" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen" />
         <template v-if="menuOpen">
           <div class="backdrop" @click="menuOpen = false" />
-          <div class="items" role="menu">
-            <button v-if="card.contactID && card.contactName" type="button" role="menuitem" @click="act('message')"><AppIcon name="chat" /> Message {{ card.contactName }}</button>
-            <button type="button" role="menuitem" @click="act('more')"><AppIcon name="thumb-up" :filled="card.feedback === 'more'" /> More like this</button>
-            <button type="button" role="menuitem" @click="act('less')"><AppIcon name="thumb-down" :filled="card.feedback === 'less'" /> Less like this</button>
-            <hr>
-            <button type="button" role="menuitem" class="danger" @click="act('hide')"><AppIcon name="hide" /> Hide from Updates</button>
+          <div class="menu card-menu" role="menu">
+            <AppMenuItem v-if="card.contactID && card.contactName" icon="chat" role="menuitem" @click="act('message')">Message {{ card.contactName }}</AppMenuItem>
+            <!-- Raw items: AppMenuItem can't fill its glyph, which shows the current feedback. -->
+            <button type="button" class="menu-item" role="menuitem" @click="act('more')"><AppIcon name="thumb-up" :filled="card.feedback === 'more'" /><span>More like this</span></button>
+            <button type="button" class="menu-item" role="menuitem" @click="act('less')"><AppIcon name="thumb-down" :filled="card.feedback === 'less'" /><span>Less like this</span></button>
+            <hr class="menu-divider">
+            <AppMenuItem icon="hide" danger role="menuitem" @click="act('hide')">Hide from Updates</AppMenuItem>
           </div>
         </template>
       </div>
@@ -155,9 +155,9 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
         <AppAvatar :name="card.contactName ?? '?'" :path="avatar" :size="34" />
         <p class="bubble-text">{{ content.text }}</p>
       </div>
-      <button v-if="card.contactID" type="button" class="button secondary note-reply" @click="act(content.prompt ? 'reply' : 'message', content.prompt)">
-        <AppIcon name="reply" /> {{ content.prompt ?? 'Reply' }}
-      </button>
+      <AppButton v-if="card.contactID" variant="tonal" icon="reply" class="note-reply" @click="act(content.prompt ? 'reply' : 'message', content.prompt)">
+        {{ content.prompt ?? 'Reply' }}
+      </AppButton>
     </div>
 
     <ol v-else class="list">
@@ -182,7 +182,8 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
 </template>
 
 <style scoped>
-.home-card { --card-accent: #1a73e8; display: flex; flex-direction: column; gap: 14px; padding: 16px; border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); min-width: 0; break-inside: avoid; }
+/* The accents are the catalog's fixed palette (docs/updates.md#cards), not theme roles. */
+.home-card { --card-accent: #1a73e8; display: flex; flex-direction: column; gap: 14px; padding: var(--space-4); border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); min-width: 0; break-inside: avoid; }
 .home-card.lead { background: linear-gradient(180deg, color-mix(in srgb, var(--card-accent) 14%, var(--md-surface-container-low)), var(--md-surface-container-low) 55%); }
 .accent-blue { --card-accent: #1a73e8; } .accent-green { --card-accent: #188038; } .accent-orange { --card-accent: #e8710a; }
 .accent-red { --card-accent: #d93025; } .accent-purple { --card-accent: #9334e6; } .accent-teal { --card-accent: #12838f; }
@@ -192,74 +193,74 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
   .accent-red { --card-accent: #f28b82; } .accent-purple { --card-accent: #c58af9; } .accent-teal { --card-accent: #78d9ec; }
   .accent-pink { --card-accent: #ff8bcb; } .accent-indigo { --card-accent: #9fa8da; } .accent-gray { --card-accent: #bdc1c6; }
 }
-.home-card-header { display: flex; align-items: flex-start; gap: 12px; }
+.home-card-header { display: flex; align-items: flex-start; gap: var(--space-3); }
 .home-card-icon { width: 36px; height: 36px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--md-shape-m);
   color: var(--card-accent); background: color-mix(in srgb, var(--card-accent) 14%, transparent); }
 .home-card-icon :deep(svg) { width: 20px; height: 20px; }
 .home-card-titles { flex: 1; min-width: 0; }
 .home-card-titles h2 { font-size: 17px; font-weight: 700; }
 .lead .home-card-titles h2 { font-size: 20px; }
-.home-card-titles p { margin: 2px 0 0; font-size: 13px; color: var(--md-on-surface-variant); }
-.home-card-header .mini-menu { margin: -6px -6px 0 0; }
-.home-card-header .mini-menu .items button { gap: 12px; }
-.home-card-header .mini-menu .items :deep(svg) { width: 20px; height: 20px; color: var(--md-on-surface-variant); }
+.home-card-titles p { margin: var(--space-0-5) 0 0; font-size: 13px; color: var(--md-on-surface-variant); }
+.home-card-header .mini-menu { margin: calc(-1 * var(--space-1-5)) calc(-1 * var(--space-1-5)) 0 0; }
+/* The layer's .menu is only the surface; it drops down from the options button. */
+.card-menu { position: absolute; right: 0; top: 44px; z-index: 6; min-width: 224px; transform-origin: top right; }
 .inert { pointer-events: none; }
 a { color: inherit; }
 
 .headlines { display: flex; flex-direction: column; }
-.headline-lead { display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; }
-.headline-lead img { width: 100%; height: 190px; object-fit: cover; border-radius: 18px; margin-bottom: 4px; }
+.headline-lead { display: flex; flex-direction: column; gap: var(--space-1-5); padding-bottom: var(--space-3); }
+.headline-lead img { width: 100%; height: 190px; object-fit: cover; border-radius: 18px; margin-bottom: var(--space-1); }
 .headline-lead strong { font-size: 20px; line-height: 1.25; }
 .lead .headline-lead strong { font-size: 22px; }
 .summary { color: var(--md-on-surface-variant); font-size: 15px; }
-.meta { font-size: 12px; font-weight: 600; color: var(--md-on-surface-variant); }
+.meta { font: var(--type-label-medium); color: var(--md-on-surface-variant); }
 .headline-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--md-outline-variant); }
-.headline-row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--card-accent); margin-top: 8px; flex: none; }
-.headline-row .copy { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 15px; }
+.headline-row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--card-accent); margin-top: var(--space-2); flex: none; }
+.headline-row .copy { flex: 1; display: flex; flex-direction: column; gap: var(--space-0-5); min-width: 0; font-size: 15px; }
 .headline-row .open { width: 16px; height: 16px; color: var(--md-outline); margin-top: 3px; }
 
-.matches { display: flex; flex-direction: column; gap: 8px; }
-.match { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--md-shape-l); background: var(--md-surface-container); }
-.teams { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.teams div { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; font-weight: 500; }
+.matches { display: flex; flex-direction: column; gap: var(--space-2); }
+.match { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border-radius: var(--md-shape-l); background: var(--md-surface-container); }
+.teams { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1-5); }
+.teams div { display: flex; justify-content: space-between; gap: var(--space-2); font-size: 15px; font-weight: 500; }
 .teams div.wins { font-weight: 700; }
 .teams b { font-size: 18px; font-variant-numeric: tabular-nums; }
-.teams small { color: var(--md-on-surface-variant); font-size: 12px; }
-.status { flex: none; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; color: var(--card-accent);
+.teams small { color: var(--md-on-surface-variant); font: var(--type-body-small); }
+.status { flex: none; padding: var(--space-1-5) 10px; border-radius: var(--md-shape-full); font-size: 12px; font-weight: 700; color: var(--card-accent);
   background: color-mix(in srgb, var(--card-accent) 14%, transparent); font-variant-numeric: tabular-nums; }
-.status.live { color: #fff; background: #d93025; }
+.status.live { color: var(--md-on-error); background: var(--md-error); }
 
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
-th { text-align: right; font-size: 12px; font-weight: 700; color: var(--md-on-surface-variant); padding: 6px 8px; }
-td { text-align: right; padding: 7px 8px; white-space: nowrap; }
+th { text-align: right; font-size: 12px; font-weight: 700; color: var(--md-on-surface-variant); padding: var(--space-1-5) var(--space-2); }
+td { text-align: right; padding: 7px var(--space-2); white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; }
 tr.highlight td { font-weight: 700; background: color-mix(in srgb, var(--card-accent) 14%, transparent); }
-tr.highlight td:first-child { border-radius: 8px 0 0 8px; } tr.highlight td:last-child { border-radius: 0 8px 8px 0; }
-.caption { margin: 6px 0 0; font-size: 12px; color: var(--md-on-surface-variant); }
+tr.highlight td:first-child { border-radius: var(--md-shape-s) 0 0 var(--md-shape-s); } tr.highlight td:last-child { border-radius: 0 var(--md-shape-s) var(--md-shape-s) 0; }
+.caption { margin: var(--space-1-5) 0 0; font: var(--type-body-small); color: var(--md-on-surface-variant); }
 
-.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
-.metric { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: var(--md-shape-l); background: var(--md-surface-container); min-width: 0; }
-.metric .label { font-size: 12px; font-weight: 600; color: var(--md-on-surface-variant); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-2); }
+.metric { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3); border-radius: var(--md-shape-l); background: var(--md-surface-container); min-width: 0; }
+.metric .label { font: var(--type-label-medium); color: var(--md-on-surface-variant); }
 .metric .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .metric .value small, .chart-value small { font-size: 12px; font-weight: 600; color: var(--md-on-surface-variant); margin-left: 3px; white-space: nowrap; }
-.change { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; font-weight: 700; color: var(--md-on-surface-variant); }
+.change { display: inline-flex; align-items: center; gap: var(--space-0-5); font-size: 13px; font-weight: 700; color: var(--md-on-surface-variant); }
 .change :deep(svg) { width: 16px; height: 16px; }
 .change.up { color: var(--md-success); } .change.down { color: var(--md-error); }
 
 .chart > svg { width: 100%; height: 170px; display: block; overflow: visible; }
-.chart-value { display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; }
+.chart-value { display: flex; align-items: baseline; gap: var(--space-1-5); margin-bottom: var(--space-2); }
 .chart-value strong { font-size: 32px; font-variant-numeric: tabular-nums; }
-.axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--md-on-surface-variant); margin-top: 6px; }
+.axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--md-on-surface-variant); margin-top: var(--space-1-5); }
 
-.tracker { display: flex; flex-direction: column; gap: 6px; }
+.tracker { display: flex; flex-direction: column; gap: var(--space-1-5); }
 .figure { font-size: 34px; font-weight: 800; color: var(--card-accent); line-height: 1.1; }
 .figure-label { font-size: 14px; font-weight: 500; color: var(--md-on-surface-variant); }
-.tracker .meter { height: 8px; border-radius: 4px; margin: 8px 0 4px; background: color-mix(in srgb, var(--card-accent) 16%, transparent); }
+.tracker .meter { height: 8px; border-radius: var(--md-shape-xs); margin: var(--space-2) 0 var(--space-1); background: color-mix(in srgb, var(--card-accent) 16%, transparent); }
 .tracker .meter span { display: block; height: 100%; border-radius: inherit; background: var(--card-accent); }
-.status-line { margin: 4px 0; font-size: 15px; }
-.steps { list-style: none; margin: 4px 0 0; padding: 0; }
-.steps li { position: relative; display: flex; gap: 12px; padding-bottom: 12px; }
+.status-line { margin: var(--space-1) 0; font-size: 15px; }
+.steps { list-style: none; margin: var(--space-1) 0 0; padding: 0; }
+.steps li { position: relative; display: flex; gap: var(--space-3); padding-bottom: var(--space-3); }
 .steps li:not(:last-child)::before { content: ''; position: absolute; left: 10px; top: 24px; bottom: 0; width: 2px; background: var(--md-outline-variant); }
 .steps li.done:not(:last-child)::before { background: color-mix(in srgb, var(--card-accent) 50%, transparent); }
 .marker { color: var(--card-accent); flex: none; }
@@ -268,26 +269,27 @@ tr.highlight td:first-child { border-radius: 8px 0 0 8px; } tr.highlight td:last
 .steps .copy { display: flex; flex-direction: column; gap: 1px; font-size: 15px; }
 .steps li.current strong { font-weight: 800; }
 .steps li.upcoming strong { color: var(--md-on-surface-variant); font-weight: 500; }
-.steps small { font-size: 12px; color: var(--md-on-surface-variant); }
-.tracker-note { margin: 4px 0 0; padding: 12px; border-radius: var(--md-shape-l); font-size: 14px; color: var(--md-on-surface-variant); background: color-mix(in srgb, var(--card-accent) 8%, transparent); }
+.steps small { font: var(--type-body-small); color: var(--md-on-surface-variant); }
+.tracker-note { margin: var(--space-1) 0 0; padding: var(--space-3); border-radius: var(--md-shape-l); font: var(--type-body-medium); color: var(--md-on-surface-variant); background: color-mix(in srgb, var(--card-accent) 8%, transparent); }
 
-.note { display: flex; flex-direction: column; gap: 12px; }
+.note { display: flex; flex-direction: column; gap: var(--space-3); }
 .note-row { display: flex; align-items: flex-start; gap: 10px; }
 .bubble-text { margin: 0; padding: 10px 14px; border-radius: 6px 20px 20px 20px; background: color-mix(in srgb, var(--card-accent) 12%, transparent); font-size: 15px; line-height: 1.45; }
-.note-reply { align-self: flex-start; margin-left: 44px; text-align: left; height: auto; min-height: 40px; padding-block: 8px; }
+.note-reply { align-self: flex-start; margin-left: 44px; text-align: left; height: auto; min-height: 40px; padding-block: var(--space-2); }
 
 .list { list-style: none; margin: 0; padding: 0; }
 .list li + li { border-top: 1px solid var(--md-outline-variant); }
-.list a { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; }
+.list a { display: flex; align-items: flex-start; gap: var(--space-3); padding: 10px 0; }
 .list .index { width: 16px; flex: none; font-size: 13px; font-weight: 700; color: var(--card-accent); padding-top: 1px; }
-.list .copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
+.list .copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-0-5); font-size: 15px; }
 .list small { font-size: 13px; color: var(--md-on-surface-variant); }
-.list .trailing { font-size: 12px; font-weight: 600; color: var(--md-on-surface-variant); text-align: right; }
+.list .trailing { font: var(--type-label-medium); color: var(--md-on-surface-variant); text-align: right; }
 
-.home-card-footer { display: flex; flex-direction: column; gap: 8px; }
-.attribution { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--md-on-surface-variant); }
-.sources { display: flex; flex-wrap: wrap; gap: 6px; }
-.sources .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+.home-card-footer { display: flex; flex-direction: column; gap: var(--space-2); }
+.attribution { display: flex; align-items: center; gap: var(--space-1-5); font: var(--type-body-small); color: var(--md-on-surface-variant); }
+.sources { display: flex; flex-wrap: wrap; gap: var(--space-1-5); }
+/* Link chips: AppChip renders a <span>, so these stay `a.chip`. */
+.sources .chip { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) 10px; border-radius: var(--md-shape-full); font: var(--type-label-medium);
   color: var(--md-on-surface-variant); background: var(--md-surface-container-high); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sources .chip :deep(svg) { width: 14px; height: 14px; flex: none; }
 </style>

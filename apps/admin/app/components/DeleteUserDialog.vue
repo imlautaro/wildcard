@@ -6,13 +6,10 @@ import type { UserSummary } from '~/utils/types';
 const props = defineProps<{ user: UserSummary }>();
 const emit = defineEmits<{ close: []; deleted: [] }>();
 const { deleteUser } = useAdmin();
-const dialog = ref<HTMLDialogElement | null>(null);
 const email = ref('');
 const busy = ref(false);
 const error = ref<string | null>(null);
 const matches = computed(() => email.value.trim().toLowerCase() === props.user.email.toLowerCase());
-
-onMounted(() => dialog.value?.showModal());
 
 async function confirm() {
   if (!matches.value || busy.value) return;
@@ -28,17 +25,15 @@ async function confirm() {
   }
 }
 
-function cancel(event?: Event) {
-  if (busy.value) { event?.preventDefault(); return; }
-  emit('close');
+// Escape, a backdrop press and Cancel are ignored while the deletion runs.
+function cancel() {
+  if (!busy.value) emit('close');
 }
 </script>
 
 <template>
-  <dialog ref="dialog" class="dialog" aria-labelledby="delete-title" @cancel="cancel" @close="cancel()">
-    <form method="dialog" @submit.prevent="confirm">
-      <AppIcon name="delete" class="dialog-icon" />
-      <h2 id="delete-title">Delete {{ user.name }}?</h2>
+  <AppSheet :title="`Delete ${user.name}?`" icon="delete" danger @close="cancel">
+    <form :id="`delete-${user.id}`" @submit.prevent="confirm">
       <p>This permanently deletes <strong>{{ user.email }}</strong> and everything it owns. It can't be undone.</p>
       <ul class="consequences">
         <li>{{ plural(user.contacts, 'contact') }} and their chats, memories, tasks, documents and mini apps.</li>
@@ -48,17 +43,17 @@ function cancel(event?: Event) {
         <li>Shared task lists they created, tasks they created, were assigned or authorized for research/monitoring, documents they created or last edited, and their document revisions.</li>
       </ul>
       <p>Files and background workflows are removed asynchronously, with automatic retries if a service is unavailable.</p>
-      <label class="text-field">
-        <input v-model="email" type="email" autocomplete="off" placeholder=" " :disabled="busy" required>
-        <span>Type the email to confirm</span>
-      </label>
-      <p v-if="error" class="notice" role="alert" style="margin: 0 0 16px">{{ error }}</p>
-      <div class="dialog-actions">
-        <button type="button" class="button text" :disabled="busy" @click="cancel()">Cancel</button>
-        <button type="submit" class="button danger" :disabled="!matches || busy">
-          <span v-if="busy" class="spinner" /> Delete account
-        </button>
-      </div>
+      <AppTextField v-model="email" label="Type the email to confirm" type="email" autocomplete="off" :disabled="busy" required />
+      <AppNotice v-if="error">{{ error }}</AppNotice>
     </form>
-  </dialog>
+    <template #actions>
+      <AppButton variant="text" :disabled="busy" @click="cancel">Cancel</AppButton>
+      <AppButton type="submit" :form="`delete-${user.id}`" variant="danger" :disabled="!matches" :loading="busy">Delete account</AppButton>
+    </template>
+  </AppSheet>
 </template>
+
+<style scoped>
+form > p { margin: 0 0 var(--space-3); color: var(--md-on-surface-variant); font: var(--type-body-medium); }
+.consequences { display: grid; gap: var(--space-1-5); margin: 0 0 var(--space-5); padding-left: var(--space-5); color: var(--md-on-surface-variant); font: var(--type-body-medium); }
+</style>

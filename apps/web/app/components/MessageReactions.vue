@@ -17,7 +17,8 @@ const key = computed(() => `${props.messageID}/${props.side}`);
 const rows = computed(() => props.cache.rows.filter((row) => row.messageID === props.messageID && row.side === props.side));
 const own = computed(() => rows.value.find((row) => row.actorID === `user/${user.value?.id}`)?.emoji);
 const summaries = computed(() => reactionEmojis.map((emoji) => ({ emoji, rows: rows.value.filter((row) => row.emoji === emoji) })).filter((value) => value.rows.length));
-const hasMenu = computed(() => props.replyable || !!props.receiptGroupID || props.voice || !!own.value || rows.value.length > 0);
+const hasActions = computed(() => props.replyable || !!props.receiptGroupID || props.voice || !!own.value);
+const hasMenu = computed(() => hasActions.value || rows.value.length > 0);
 function choose(emoji: string | null) {
   open.value = false;
   void setMessageReaction(props.cache, props.path, props.messageID, props.side, emoji);
@@ -126,31 +127,38 @@ onBeforeUnmount(() => {
         <div ref="bar" class="reaction-panel reaction-picker" role="group" aria-label="Message reactions" :style="boxStyle(position?.bar)">
           <button v-for="emoji in reactionEmojis" :key="emoji" :disabled="cache.busy.includes(key)" :aria-pressed="own === emoji" :aria-label="`React ${emoji}`" @click="choose(own === emoji ? null : emoji)">{{ emoji }}</button>
         </div>
-        <div v-if="hasMenu" ref="menu" class="reaction-panel reaction-menu" role="group" aria-label="Message actions" :style="boxStyle(position?.menu)">
-          <button v-if="replyable" @click="reply"><AppIcon name="reply" /> Reply</button>
-          <button v-if="receiptGroupID" @click="open = false; showsReaders = true"><AppIcon name="check" /> Message info</button>
-          <button v-if="voice" @click="viewTranscript"><AppIcon name="file" /> View transcript</button>
-          <button v-if="own" :disabled="cache.busy.includes(key)" @click="choose(null)"><AppIcon name="close" /> Remove reaction</button>
-          <div v-if="rows.length" class="reaction-people"><div v-for="row in rows" :key="row.actorID">{{ row.emoji }} {{ row.name }}</div></div>
+        <div v-if="hasMenu" ref="menu" class="menu reaction-menu" role="group" aria-label="Message actions" :style="boxStyle(position?.menu)">
+          <AppMenuItem v-if="replyable" icon="reply" @click="reply">Reply</AppMenuItem>
+          <AppMenuItem v-if="receiptGroupID" icon="check" @click="open = false; showsReaders = true">Message info</AppMenuItem>
+          <AppMenuItem v-if="voice" icon="file" @click="viewTranscript">View transcript</AppMenuItem>
+          <AppMenuItem v-if="own" icon="close" :disabled="cache.busy.includes(key)" @click="choose(null)">Remove reaction</AppMenuItem>
+          <template v-if="rows.length">
+            <hr v-if="hasActions" class="menu-divider">
+            <div class="reaction-people"><div v-for="row in rows" :key="row.actorID">{{ row.emoji }} {{ row.name }}</div></div>
+          </template>
         </div>
       </div>
     </Teleport>
     <GroupMessageInfo v-if="receiptGroupID && showsReaders" :group-i-d="receiptGroupID" :message-i-d="messageID" @close="showsReaders = false" />
     <VoiceTranscriptDialog v-if="voice && showsTranscript" :transcript="transcript ?? null" @close="showsTranscript = false" />
     <div v-if="cache.pending[key] && cache.errors[key]" role="status" class="reaction-error">
-      {{ cache.errors[key] }} <button @click="choose(cache.pending[key]!.emoji)">Retry reaction</button>
+      {{ cache.errors[key] }} <button class="link-button" @click="choose(cache.pending[key]!.emoji)">Retry reaction</button>
     </div>
   </div>
 </template>
 
 <style scoped>
 .reaction-message { position: relative; min-width: 0; max-width: min(78%, 560px); }
-.reaction-badges { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
-.reaction-badge, .reaction-trigger { display: inline-flex; align-items: center; gap: 2px; min-height: 26px; border: 1px solid var(--md-outline-variant); border-radius: 8px; padding: 2px 8px; background: var(--md-surface-container-low); color: var(--md-on-surface-variant); font-size: 13px; cursor: pointer; }
+.reaction-badges { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; margin-top: var(--space-0-5); }
+.reaction-badge, .reaction-trigger {
+  display: inline-flex; align-items: center; gap: var(--space-0-5); min-height: 26px; border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-s); padding: var(--space-0-5) var(--space-2); background: var(--md-surface-container-low);
+  color: var(--md-on-surface-variant); font-size: 13px; cursor: pointer;
+}
 .reaction-badge.selected { border-color: transparent; background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
-.message-actions { position: absolute; top: 50%; left: 100%; padding-left: 8px; z-index: 1; display: flex; gap: 3px; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity 120ms; }
-:global(.bubble-row.outgoing .message-actions) { left: auto; right: 100%; padding-left: 0; padding-right: 8px; flex-direction: row-reverse; }
-.reaction-trigger { padding: 2px 6px; border-radius: 999px; box-shadow: var(--md-elevation-1); }
+.message-actions { position: absolute; top: 50%; left: 100%; padding-left: var(--space-2); z-index: 1; display: flex; gap: 3px; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity 120ms; }
+:global(.bubble-row.outgoing .message-actions) { left: auto; right: 100%; padding-left: 0; padding-right: var(--space-2); flex-direction: row-reverse; }
+.reaction-trigger { padding: var(--space-0-5) var(--space-1-5); border-radius: var(--md-shape-full); box-shadow: var(--md-elevation-1); }
 .reaction-trigger svg { width: 16px; height: 16px; }
 /* The whole conversation row is the hover target, so the pointer can reach the buttons from any direction. */
 :global(.bubble-row:hover .message-actions), .reaction-message:focus-within .message-actions { opacity: 1; pointer-events: auto; }
@@ -159,21 +167,20 @@ onBeforeUnmount(() => {
 .reaction-overlay { display: contents; }
 /* The scrim catches presses; its dimming is the spotlight's shadow, so the message itself stays bright. */
 .reaction-scrim { position: fixed; inset: 0; z-index: 49; overflow: hidden; animation: reaction-fade 150ms var(--md-ease); }
-.reaction-spotlight { position: fixed; border-radius: 20px; box-shadow: 0 0 0 200vmax var(--md-scrim); pointer-events: none; }
+.reaction-spotlight { position: fixed; border-radius: var(--md-shape-l-plus); box-shadow: 0 0 0 200vmax var(--md-scrim); pointer-events: none; }
 .reaction-panel { position: fixed; z-index: 50; background: var(--md-surface-container); color: var(--md-on-surface); box-shadow: var(--md-elevation-2); animation: reaction-fade 150ms var(--md-ease); }
 @keyframes reaction-fade { from { opacity: 0; } }
-.reaction-picker { border-radius: 999px; padding: 6px; display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 16px); }
-.reaction-picker button { background: transparent; border: 0; font-size: 22px; line-height: 1; cursor: pointer; padding: 6px; border-radius: 999px; }
+.reaction-picker { border-radius: var(--md-shape-full); padding: var(--space-1-5); display: flex; gap: var(--space-0-5); flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 16px); }
+.reaction-picker button { background: transparent; border: 0; font-size: 22px; line-height: 1; cursor: pointer; padding: var(--space-1-5); border-radius: var(--md-shape-full); }
 .reaction-picker button:hover:not(:disabled) { background: var(--hover); }
 .reaction-picker button[aria-pressed=true] { background: var(--md-secondary-container); }
-.reaction-menu { min-width: 200px; max-width: min(280px, calc(100vw - 16px)); padding: 8px 0; border-radius: var(--md-shape-m); }
-.reaction-menu button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 0 16px; border: 0; background: transparent; color: inherit; font-size: 14px; text-align: left; cursor: pointer; }
-.reaction-menu button:hover:not(:disabled) { background: var(--hover); }
-.reaction-menu button svg { width: 20px; height: 20px; color: var(--md-on-surface-variant); }
-.reaction-people { padding: 8px 16px 0; font-size: 13px; max-height: 140px; overflow-y: auto; color: var(--md-on-surface-variant); }
-.reaction-menu button + .reaction-people { margin-top: 8px; border-top: 1px solid var(--md-outline-variant); }
+/* The layer's .menu surface, placed like the picker. It fades instead of scaling in, so
+   place() measures its real size. */
+.reaction-menu { position: fixed; z-index: 50; max-width: min(280px, calc(100vw - 16px)); animation: reaction-fade 150ms var(--md-ease); }
+.reaction-people { padding: var(--space-1-5) var(--space-3) var(--space-1); font-size: 13px; max-height: 140px; overflow-y: auto; color: var(--md-on-surface-variant); }
 .reaction-error { font-size: 12px; max-width: 280px; }
-@media (prefers-reduced-motion: reduce) { .reaction-scrim, .reaction-panel { animation: none; } }
+.reaction-error .link-button { min-height: 28px; padding: 0 var(--space-2); font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .reaction-scrim, .reaction-panel, .reaction-menu { animation: none; } }
 /* Touch screens open the same menu with a long press, so the hover actions stay hidden. */
 @media (hover: none) { :global(.bubble-row:hover .reaction-message .message-actions) { opacity: 0; pointer-events: none; } }
 </style>

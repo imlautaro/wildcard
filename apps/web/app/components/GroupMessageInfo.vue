@@ -11,9 +11,9 @@ onMounted(now);
 
 <template>
   <AppSheet title="Message info" @close="emit('close')">
-    <p v-if="!entry.value && entry.request" role="status">Loading…</p>
-    <p v-if="entry.error" role="status">{{ entry.error }}</p>
-    <button class="link-button" :disabled="!!entry.request || entry.unavailable" @click="refresh">Refresh</button>
+    <AppLoading v-if="!entry.value && entry.request" />
+    <AppNotice v-if="entry.error" tone="warning">{{ entry.error }}</AppNotice>
+    <AppButton variant="text" :disabled="!!entry.request || entry.unavailable" @click="refresh">Refresh</AppButton>
     <template v-if="entry.value">
       <p v-if="!entry.value.tracked">Read information is unavailable for this older message.</p>
       <template v-else>
@@ -31,6 +31,6 @@ onMounted(now);
 
 <style scoped>
 .people { list-style: none; padding: 0; }
-.people li { display: flex; flex-direction: column; gap: 3px; padding: 8px 0; }
+.people li { display: flex; flex-direction: column; gap: 3px; padding: var(--space-2) 0; }
 .people span, .muted { color: var(--md-on-surface-variant); font-size: 13px; }
 </style>

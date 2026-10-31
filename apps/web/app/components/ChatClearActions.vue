@@ -19,5 +19,5 @@ function clear() {
     <span>Also delete memory learned in this chat</span>
     <input v-model="clearMemory" type="checkbox" :disabled="busy">
   </label>
-  <button type="button" class="button-row danger" :disabled="busy" @click="clear">Clear chat</button>
+  <AppListItem danger :disabled="busy" @click="clear">Clear chat</AppListItem>
 </template>

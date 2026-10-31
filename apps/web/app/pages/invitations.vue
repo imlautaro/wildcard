@@ -61,7 +61,7 @@ onMounted(() => chats.refresh());
   <PageBar title="Invitations" back="/contacts" always-back />
   <div class="page">
     <div class="page-inner">
-      <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
+      <AppNotice v-if="error">{{ error }}</AppNotice>
       <template v-if="selected">
         <div class="group-title">Join {{ selected.kind === 'contact' ? selected.invitation.contactName : selected.invitation.groupName }}</div>
         <ConsentFields
@@ -73,14 +73,13 @@ onMounted(() => chats.refresh());
             ? 'Messages and shared memories sent to Meta may be used to train its models.'
             : 'This installation uses Meta\'s Contributor model. Group messages and shared memories sent to Meta may be used for model training.'"
         />
-        <div class="actions-row" style="margin-bottom: 24px">
-          <button type="button" class="button text" @click="selected = null">Cancel</button>
-          <button type="button" class="button" :disabled="!consented || busy" @click="accept">Accept</button>
+        <div class="actions-row">
+          <AppButton variant="text" @click="selected = null">Cancel</AppButton>
+          <AppButton :disabled="!consented || busy" @click="accept">Accept</AppButton>
         </div>
       </template>
 
-      <div class="group-title">Contact invitations</div>
-      <div class="group">
+      <AppListGroup title="Contact invitations">
         <div v-if="!chats.contactInvitations.value.length" class="text-block">No contact invitations</div>
         <div v-for="invitation in chats.contactInvitations.value" :key="invitation.id" class="field">
           <span class="two-line">
@@ -90,10 +89,9 @@ onMounted(() => chats.refresh());
           <button type="button" class="link-button danger" :disabled="busy" @click="decline('contact', invitation.id)">Decline</button>
           <button type="button" class="link-button" :disabled="busy" @click="choose({ kind: 'contact', invitation })">Review</button>
         </div>
-      </div>
+      </AppListGroup>
 
-      <div class="group-title">Group invitations</div>
-      <div class="group">
+      <AppListGroup title="Group invitations">
         <div v-if="!chats.groupInvitations.value.length" class="text-block">No group invitations</div>
         <div v-for="invitation in chats.groupInvitations.value" :key="invitation.id" class="field">
           <span class="two-line">
@@ -103,7 +101,7 @@ onMounted(() => chats.refresh());
           <button type="button" class="link-button danger" :disabled="busy" @click="decline('group', invitation.id)">Decline</button>
           <button type="button" class="link-button" :disabled="busy" @click="choose({ kind: 'group', invitation })">Review</button>
         </div>
-      </div>
+      </AppListGroup>
     </div>
   </div>
 </template>

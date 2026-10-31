@@ -47,7 +47,8 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
       <template v-if="options">
         <fieldset :disabled="locked || busy" class="onboarding-fields">
           <div class="pair">
-            <label class="text-field"><input v-model="draft.name" autocomplete="given-name" maxlength="100" placeholder=" " required><span>Your name</span></label>
+            <AppTextField v-model="draft.name" label="Your name" autocomplete="given-name" maxlength="100" required />
+            <!-- Raw field: AppTextField's model is a string and the age is a number. -->
             <label class="text-field"><input v-model.number="draft.age" type="number" min="1" max="120" step="1" placeholder=" " :required="!locked"><span>Your age</span></label>
           </div>
           <div class="pair">
@@ -57,19 +58,17 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
           <AppSelect v-model="draft.country" label="Country" :disabled="locked || busy" :options="options.countries.map(option => ({ value: option.code, label: option.name }))" />
           <AppSelect v-model="draft.style" label="Agent appearance" :disabled="locked || busy" :options="options.styles.map(option => ({ value: option.code, label: option.name }))" />
           <AppSelect v-model="draft.circleType" label="Your circle" :disabled="locked || busy" :options="circleOptions" />
-          <label v-if="draft.circleType !== 'friends'" class="text-field">
-            <input v-model="draft.occupation" maxlength="200" placeholder=" " :required="!locked">
-            <span>{{ draft.circleType === 'study' ? 'What are you studying?' : 'What do you do for work?' }}</span>
-          </label>
+          <AppTextField v-if="draft.circleType !== 'friends'" v-model="draft.occupation" :label="draft.circleType === 'study' ? 'What are you studying?' : 'What do you do for work?'"
+                        maxlength="200" :required="!locked" />
           <label class="check-row"><input v-model="draft.createGroup" type="checkbox"><span>Create a group with my five contacts</span></label>
         </fieldset>
         <p class="hint info-title">About your contacts <InfoButton label="About your contacts" text="Your contacts will have names common in your country and speak your preferred language. Contacts in every style are adults, usually within two years of your age, with a minimum age of 18. Gender does not determine your contacts’ personalities. Friends have varied interests. Study and work teams use your field to create complementary contacts." /></p>
-        <div class="group consent">
+        <AppListGroup class="consent">
           <label class="check-row">
             <input v-model="draft.sharedMemoryConsent" type="checkbox" :disabled="locked || busy">
             <span>I agree to enable shared memory for my five AI contacts. If I create a group, its members can read the full group history. Facts shared in private or group chats may become shared memories recalled by these contacts in other chats; private transcripts remain access controlled. Setup uses Meta Standard processing.</span>
           </label>
-        </div>
+        </AppListGroup>
         <div v-if="running" role="status" aria-live="polite" class="progress">
           <span class="spinner" />
           <div>
@@ -77,26 +76,31 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
             <p>You can close the app. Your circle will keep taking shape.</p>
           </div>
         </div>
-        <p v-if="snapshot?.status === 'failed'" role="alert" class="notice" style="margin: 0 0 16px">We could not finish your circle. Retry to continue with your saved preferences and portraits.</p>
-        <button v-if="!running && snapshot?.status !== 'complete'" type="submit" class="button block" :disabled="!ready || busy">
+        <AppNotice v-if="snapshot?.status === 'failed'">We could not finish your circle. Retry to continue with your saved preferences and portraits.</AppNotice>
+        <AppButton v-if="!running && snapshot?.status !== 'complete'" type="submit" block :disabled="!ready || busy">
           {{ busy ? 'Saving…' : locked ? 'Retry setup' : 'Create my circle' }}
-        </button>
+        </AppButton>
       </template>
-      <div v-else role="status" class="center"><span class="spinner" /> Loading your preferences…</div>
-      <p v-if="error" class="notice" role="alert" style="margin: 16px 0 0">{{ error }} <button type="button" class="link-button" @click="update">Refresh</button></p>
-      <button type="button" class="button text block" style="margin-top: 8px" @click="signOut">Sign out</button>
+      <AppLoading v-else label="Loading your preferences…" />
+      <AppNotice v-if="error" class="refresh-error">
+        {{ error }}
+        <template #actions><button type="button" class="link-button" @click="update">Refresh</button></template>
+      </AppNotice>
+      <AppButton variant="text" block class="sign-out" @click="signOut">Sign out</AppButton>
     </form>
   </main>
 </template>
 
 <style scoped>
 .auth-card { max-width: 560px; }
-.eyebrow { margin: 0 0 8px; text-align: center; font-size: 12px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--md-primary); }
+.eyebrow { margin: 0 0 var(--space-2); text-align: center; font: var(--type-label-medium); font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--md-primary); }
 .onboarding-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
-.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 var(--space-3); }
 @media (max-width: 480px) { .pair { grid-template-columns: 1fr; } }
-.hint { margin: -4px 4px 16px; font-size: 13px; color: var(--md-on-surface-variant); }
-.consent { margin-bottom: 16px; }
-.progress { display: flex; align-items: flex-start; gap: 12px; margin: 0 0 16px; padding: 16px; border-radius: var(--md-shape-m); background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
-.progress p { margin: 4px 0 0; font-size: 14px; }
+.hint { margin: calc(-1 * var(--space-1)) var(--space-1) var(--space-4); font-size: 13px; color: var(--md-on-surface-variant); }
+.onboarding :deep(.consent) { margin-bottom: var(--space-4); }
+.progress { display: flex; align-items: flex-start; gap: var(--space-3); margin: 0 0 var(--space-4); padding: var(--space-4); border-radius: var(--md-shape-m); background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.progress p { margin: var(--space-1) 0 0; font: var(--type-body-medium); }
+.refresh-error { margin: var(--space-4) 0 0; }
+.sign-out { margin-top: var(--space-2); }
 </style>

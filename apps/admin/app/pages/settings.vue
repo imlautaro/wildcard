@@ -5,7 +5,8 @@ const saving = ref<string | null>(null);
 const failure = ref<string | null>(null);
 onMounted(loadSettings);
 
-async function toggle(key: string, input: HTMLInputElement) {
+async function toggle(key: string, event: Event) {
+  const input = event.target as HTMLInputElement;
   if (saving.value) return;
   saving.value = key;
   failure.value = null;
@@ -20,25 +21,21 @@ async function toggle(key: string, input: HTMLInputElement) {
 
 <template>
   <div class="page">
-    <header class="bar"><h1 class="title">Flags</h1></header>
+    <AppTopBar title="Flags" contained />
     <div class="page-inner">
-      <p v-if="failure ?? errors.settings" class="notice" role="alert">{{ failure ?? errors.settings }}</p>
-      <div v-if="!settings && !errors.settings" class="center"><span class="spinner" /> Loading…</div>
-      <template v-if="settings">
-        <div class="group">
-          <label v-for="setting in settings" :key="setting.key" class="toggle">
-            <span class="two-line">
-              <span>{{ setting.label }}</span>
-              <span class="small">{{ setting.description }}</span>
-              <span class="small code-key">{{ setting.key }}<template v-if="setting.updatedAt"> · changed {{ formatDateTime(setting.updatedAt) }}</template></span>
-            </span>
-            <span v-if="saving === setting.key" class="spinner" />
-            <input type="checkbox" role="switch" :checked="setting.value" :disabled="saving !== null"
-                   @change="toggle(setting.key, $event.target as HTMLInputElement)">
-          </label>
-        </div>
-        <p class="group-footer">Changes apply to the API on the next request, without a release. New flags are declared in <code>apps/api/src/admin/settings.ts</code>.</p>
-      </template>
+      <AppNotice v-if="failure ?? errors.settings">{{ failure ?? errors.settings }}</AppNotice>
+      <AppLoading v-if="!settings && !errors.settings" fill />
+      <AppListGroup v-if="settings">
+        <AppSwitch v-for="setting in settings" :key="setting.key" :checked="setting.value" :disabled="saving !== null"
+                   :busy="saving === setting.key" @change="toggle(setting.key, $event)">
+          {{ setting.label }}
+          <template #supporting>
+            {{ setting.description }}
+            <span class="code-key">{{ setting.key }}<template v-if="setting.updatedAt"> · changed {{ formatDateTime(setting.updatedAt) }}</template></span>
+          </template>
+        </AppSwitch>
+        <template #footer>Changes apply to the API on the next request, without a release. New flags are declared in <code>apps/api/src/admin/settings.ts</code>.</template>
+      </AppListGroup>
     </div>
   </div>
 </template>

@@ -6,7 +6,7 @@ defineProps<{ document: ChatDocumentSummary; to: string }>();
 </script>
 
 <template>
-  <NuxtLink :to="to" class="mini-app-card">
+  <NuxtLink :to="to" class="mini-app-card" data-ripple>
     <span class="mini-app-glyph"><AppIcon name="file" /></span>
     <span class="copy"><strong>{{ document.title }}</strong><span v-if="document.research">Web research · {{ document.research.sources.filter(source => source.cited).length }} cited sources</span><span>{{ document.preview || 'Empty document' }}</span></span>
     <AppIcon name="chevron" class="chevron" />

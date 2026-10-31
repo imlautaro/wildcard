@@ -82,46 +82,40 @@ onBeforeUnmount(() => { token.value = ''; clientSecret.value = ''; });
 <template>
   <PageBar title="Connections" back="/account" always-back>
     <InfoButton label="Connections" :text="`${notice}\n\n${supported}`" />
-    <button type="button" class="icon-button" aria-label="Refresh connections" :disabled="busy" @click="refresh()"><AppIcon name="refresh" /></button>
+    <AppIconButton icon="refresh" label="Refresh connections" :disabled="busy" @click="refresh()" />
   </PageBar>
   <div class="page"><div class="page-inner">
-    <p v-if="error && !detailID && !formOpen" class="notice" role="alert" style="margin: 0 0 12px">{{ error }}</p>
+    <AppNotice v-if="error && !detailID && !formOpen">{{ error }}</AppNotice>
     <div class="group-title">Servers</div>
-    <div v-if="connections === null" class="center"><span class="spinner" /> Loading connections…</div>
-    <div v-else class="group">
+    <AppLoading v-if="connections === null" label="Loading connections…" />
+    <AppListGroup v-else>
       <div v-if="!connections.length" class="text-block">No connections yet.</div>
-      <button v-for="connection in connections" :key="connection.id" type="button" class="button-row opens" @click="detailID = connection.id">
-        <AppIcon name="link" />{{ connection.name }}<span class="row-value">{{ summary(connection) }}</span>
-      </button>
-      <button type="button" class="button-row" :disabled="busy" @click="openForm"><AppIcon name="plus" />Add server</button>
-    </div>
+      <AppListItem v-for="connection in connections" :key="connection.id" icon="link" opens :value="summary(connection)" @click="detailID = connection.id">{{ connection.name }}</AppListItem>
+      <AppListItem icon="plus" :disabled="busy" @click="openForm">Add server</AppListItem>
+    </AppListGroup>
 
     <AppSheet v-if="detail" :title="detail.name" @close="detailID = null">
-      <div class="group">
-        <div class="button-row static">Access<span class="row-value">{{ authLabel(detail) }}</span></div>
+      <AppListGroup>
+        <AppListItem plain :value="authLabel(detail)">Access</AppListItem>
         <div class="text-block">
-          <p style="overflow-wrap: anywhere">{{ detail.url }}</p>
-          <p v-if="detail.oauthIssuer" style="overflow-wrap: anywhere">Issuer: {{ detail.oauthIssuer }}<br>Requested scopes: {{ detail.oauthScope }}</p>
+          <p class="wrap">{{ detail.url }}</p>
+          <p v-if="detail.oauthIssuer" class="wrap">Issuer: {{ detail.oauthIssuer }}<br>Requested scopes: {{ detail.oauthScope }}</p>
         </div>
-      </div>
-      <div class="group" style="margin-top: 12px">
+      </AppListGroup>
+      <AppListGroup>
         <div v-if="detail.authType === 'oauth' && detail.oauthConfigured" class="button-row-with-info">
-          <button type="button" class="button-row" :disabled="busy" @click="authorize(detail.id)"><AppIcon name="key" />{{ detail.authenticated ? 'Reauthorize' : 'Authorize' }}</button>
+          <AppListItem icon="key" :disabled="busy" @click="authorize(detail.id)">{{ detail.authenticated ? 'Reauthorize' : 'Authorize' }}</AppListItem>
           <InfoButton label="Reauthorize" text="Reauthorizing clears existing tool permissions. Review and enable them again afterward." />
         </div>
-        <button v-if="detail.authType === 'oauth'" type="button" class="button-row" :disabled="busy" @click="configureFromDetail(detail)"><AppIcon name="gear" />Configure OAuth</button>
-        <button v-if="detail.tools.length" type="button" class="button-row" :disabled="busy || detail.tools.every(tool => tool.allowed) || (detail.authType === 'oauth' && !detail.authenticated)" @click="enableAll(detail)"><AppIcon name="check" />Enable all tools</button>
-        <button type="button" class="button-row" :disabled="busy" @click="mutate(`/${detail.id}/refresh`, 'POST', {})"><AppIcon name="refresh" />Refresh tools</button>
-      </div>
+        <AppListItem v-if="detail.authType === 'oauth'" icon="gear" :disabled="busy" @click="configureFromDetail(detail)">Configure OAuth</AppListItem>
+        <AppListItem v-if="detail.tools.length" icon="check" :disabled="busy || detail.tools.every(tool => tool.allowed) || (detail.authType === 'oauth' && !detail.authenticated)" @click="enableAll(detail)">Enable all tools</AppListItem>
+        <AppListItem icon="refresh" :disabled="busy" @click="mutate(`/${detail.id}/refresh`, 'POST', {})">Refresh tools</AppListItem>
+      </AppListGroup>
       <template v-if="detail.tools.length">
         <div class="group-title">Tools</div>
-        <label v-if="detail.tools.length > 10" class="search-field" style="margin: 0 0 8px">
-          <AppIcon name="search" />
-          <input v-model="toolQuery" type="search" maxlength="200" placeholder="Search tools" aria-label="Search tools">
-        </label>
-        <div class="group">
+        <AppSearchField v-if="detail.tools.length > 10" v-model="toolQuery" label="Search tools" maxlength="200" class="tool-search" />
+        <AppListGroup>
           <div v-if="!visibleTools(detail).length" class="text-block">No matches</div>
-          <!-- The switch shows the saved permission until the confirmed change is stored. -->
           <label v-for="tool in visibleTools(detail)" :key="tool.fingerprint" class="toggle">
             <span class="toggle-label">
               <span class="two-line"><strong>{{ tool.name }}</strong><span class="small">{{ tool.allowed ? 'Runs without asking' : 'Asks before running' }}</span></span>
@@ -130,21 +124,21 @@ onBeforeUnmount(() => { token.value = ''; clientSecret.value = ''; });
             <input type="checkbox" role="switch" :checked="tool.allowed" :disabled="busy" :aria-label="`Allow ${tool.name} without asking again`"
               @change="($event.target as HTMLInputElement).checked = tool.allowed; permission(detail.id, tool)">
           </label>
-        </div>
+        </AppListGroup>
       </template>
-      <div class="group" style="margin-top: 12px">
-        <button type="button" class="button-row danger" :disabled="busy" @click="disconnect(detail.id)"><AppIcon name="close" />Disconnect</button>
-      </div>
-      <p v-if="error" class="notice" role="alert" style="margin: 12px 0 0">{{ error }}</p>
+      <AppListGroup>
+        <AppListItem icon="close" danger :disabled="busy" @click="disconnect(detail.id)">Disconnect</AppListItem>
+      </AppListGroup>
+      <AppNotice v-if="error">{{ error }}</AppNotice>
     </AppSheet>
 
     <AppSheet v-if="formOpen" :title="configureID ? 'Configure OAuth' : 'Add server'" @close="cancelForm">
       <template #header><InfoButton label="Supported servers" :text="supported" /></template>
       <form id="mcp-form" @submit.prevent="connect">
-        <div v-if="!configureID" class="group">
-          <button type="button" class="button-row" @click="gmail"><AppIcon name="mail" />Use Gmail settings</button>
-        </div>
-        <div class="group" style="margin-top: 12px">
+        <AppListGroup v-if="!configureID">
+          <AppListItem icon="mail" @click="gmail">Use Gmail settings</AppListItem>
+        </AppListGroup>
+        <AppListGroup>
           <div class="field"><label for="mcp-name">Name</label><input id="mcp-name" v-model="name" :readonly="!!configureID" placeholder="My server" maxlength="80" required></div>
           <div class="field"><label for="mcp-url">URL</label><input id="mcp-url" v-model="url" :readonly="!!configureID" type="url" placeholder="https://example.com/mcp" aria-label="HTTPS endpoint" maxlength="2048" required></div>
           <div class="field">
@@ -155,38 +149,38 @@ onBeforeUnmount(() => { token.value = ''; clientSecret.value = ''; });
             />
           </div>
           <div v-if="authType === 'bearer'" class="field"><label for="mcp-token">Token</label><input id="mcp-token" v-model="token" type="password" placeholder="Optional" aria-label="Bearer token (optional)" autocomplete="off" maxlength="4096"></div>
-        </div>
-        <template v-if="authType === 'oauth'">
-          <div class="group-title info-title">OAuth <InfoButton label="OAuth" :text="oauthInfo" /></div>
-          <div class="group">
-            <p v-if="!callbackURL" class="text-block" style="color: var(--danger)">OAuth requires a public HTTPS API configuration.</p>
-            <details class="text-block" :open="advancedOAuth" @toggle="advancedOAuth = ($event.target as HTMLDetailsElement).open">
-              <summary>Advanced (optional)</summary>
-              <div class="oauth-fields">
-                <label class="text-field"><input v-model="issuer" type="url" placeholder=" " aria-label="Authorization server override"><span>Authorization server (automatic when empty)</span></label>
-                <label class="text-field"><input v-model="scope" placeholder=" " aria-label="Requested scopes override" maxlength="2000"><span>Scopes (automatic when empty)</span></label>
-                <label class="text-field"><input v-model="clientID" placeholder=" " aria-label="OAuth client ID" autocomplete="off" maxlength="2048"><span>Client ID (only if required)</span></label>
-                <label class="text-field"><input v-model="clientSecret" type="password" placeholder=" " aria-label="OAuth client secret" autocomplete="off" maxlength="4096"><span>Client secret (if required)</span></label>
-              </div>
-              <p v-if="callbackURL" style="overflow-wrap: anywhere">OAuth redirect URI: <span class="code">{{ callbackURL }}</span></p>
-            </details>
-          </div>
-        </template>
+        </AppListGroup>
+        <AppListGroup v-if="authType === 'oauth'" title="OAuth" :info="oauthInfo">
+          <p v-if="!callbackURL" class="text-block callback-missing">OAuth requires a public HTTPS API configuration.</p>
+          <details class="text-block" :open="advancedOAuth" @toggle="advancedOAuth = ($event.target as HTMLDetailsElement).open">
+            <summary>Advanced (optional)</summary>
+            <div class="oauth-fields">
+              <AppTextField v-model="issuer" label="Authorization server (automatic when empty)" type="url" aria-label="Authorization server override" />
+              <AppTextField v-model="scope" label="Scopes (automatic when empty)" aria-label="Requested scopes override" maxlength="2000" />
+              <AppTextField v-model="clientID" label="Client ID (only if required)" aria-label="OAuth client ID" autocomplete="off" maxlength="2048" />
+              <AppTextField v-model="clientSecret" label="Client secret (if required)" type="password" aria-label="OAuth client secret" autocomplete="off" maxlength="4096" />
+            </div>
+            <p v-if="callbackURL" class="wrap">OAuth redirect URI: <span class="code">{{ callbackURL }}</span></p>
+          </details>
+        </AppListGroup>
         <!-- Consent covers this text, so it stays visible beside the checkbox. -->
-        <div class="group" style="margin-top: 12px">
+        <AppListGroup>
           <p class="text-block">{{ notice }}</p>
           <label class="check-row"><input v-model="consent" type="checkbox" required><span>I accept these data access and privacy terms.</span></label>
-        </div>
-        <p v-if="error" class="notice" role="alert" style="margin: 12px 0 0">{{ error }}</p>
+        </AppListGroup>
+        <AppNotice v-if="error">{{ error }}</AppNotice>
       </form>
       <template #actions>
-        <button type="button" class="button text" @click="cancelForm">Cancel</button>
-        <button type="submit" form="mcp-form" class="button" :disabled="busy || !consent || !name.trim() || !url.trim()">{{ authType === 'oauth' ? 'Continue' : 'Connect' }}</button>
+        <AppButton variant="text" @click="cancelForm">Cancel</AppButton>
+        <AppButton type="submit" form="mcp-form" :disabled="busy || !consent || !name.trim() || !url.trim()">{{ authType === 'oauth' ? 'Continue' : 'Connect' }}</AppButton>
       </template>
     </AppSheet>
   </div></div>
 </template>
 
 <style scoped>
-.oauth-fields { --field-bg: var(--md-surface-container); padding-top: 12px; }
+.oauth-fields { --field-bg: var(--md-surface-container); padding-top: var(--space-3); }
+.wrap { overflow-wrap: anywhere; }
+.callback-missing { color: var(--md-error); }
+.tool-search { margin-bottom: var(--space-2); }
 </style>

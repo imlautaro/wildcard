@@ -22,12 +22,15 @@ apps/
     Wildcard.xcodeproj/       # Xcode project
     WildcardTests/
     WildcardUITests/
+packages/
+  ui/                        # Wildcard UI: Nuxt layer with the web/admin design system
 shared/
   messageMarkdown.ts         # Shared web/API Markdown rendering and plain summaries
 docs/
   infrastructure.md          # Reproducible provisioning and automatic releases
   authentication.md          # Auth contract, session behavior, and limitations
   web.md                     # Web app architecture, features, and limitations
+  design-system.md           # Wildcard UI layer: tokens, components, spacing rules
   admin.md                   # Super admin panel, account deletion, and runtime flags
   mini-apps.md               # Contact-built native mini apps over MCP tools
   tasks.md                   # Shared to-do lists and contact work turns
@@ -149,7 +152,9 @@ The [web app](docs/web.md) is a Nuxt 4 SPA served by a separate Worker,
 keeps the session token in an `httpOnly` cookie, so the API needs no CORS. It covers
 auth, account, the unified chat list, private and group chats with attachments,
 contacts, and contact sharing. Voice dictation, push, and schedules are not
-available on the web yet. With the API running locally:
+available on the web yet. Its look comes from the shared
+[design system](docs/design-system.md) layer in `packages/ui`, which the admin panel
+extends too. With the API running locally:
 
 ```sh
 npm run dev:web        # http://localhost:3000

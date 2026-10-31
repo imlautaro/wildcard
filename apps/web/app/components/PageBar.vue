@@ -5,9 +5,11 @@ const props = defineProps<{ title?: string; back?: string; alwaysBack?: boolean 
 </script>
 
 <template>
-  <header class="bar">
-    <NuxtLink :to="props.back ?? '/'" class="icon-button" :class="{ back: !alwaysBack }" aria-label="Back"><AppIcon name="back" /></NuxtLink>
-    <slot name="title"><h1 class="title">{{ title }}</h1></slot>
+  <AppTopBar :title="title">
+    <template #leading>
+      <AppIconButton :to="props.back ?? '/'" icon="back" label="Back" :tooltip="false" :class="{ back: !alwaysBack }" />
+    </template>
+    <template v-if="$slots.title" #title><slot name="title" /></template>
     <slot />
-  </header>
+  </AppTopBar>
 </template>

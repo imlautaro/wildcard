@@ -153,7 +153,10 @@ The [web app](web.md) is a separate Worker, `wildcard-web`, configured in
 binding is the `API` service binding to `wildcard-api`, plus the static-assets
 `ASSETS` binding that Nitro adds at build time. `npm run build:web` merges the
 versioned Wrangler file into `apps/web/.output/server/wrangler.json` with `main`
-and `assets`. The release deploys that generated file.
+and `assets`. The release deploys that generated file. The build also compiles the
+shared [design system layer](design-system.md) `packages/ui` (an npm workspace that
+`apps/web` and `apps/admin` extend), so the Workers Builds root must stay `/`; the
+layer needs no resource, binding or secret.
 
 Provisioning (after the API Worker exists, because the service binding names it):
 
@@ -166,9 +169,11 @@ Provisioning (after the API Worker exists, because the service binding names it)
    account read; the web release needs no D1, R2, or Workflows permission. Disable
    preview builds.
 3. Optional: set build watch paths so web-only pushes don't rebuild the API and the
-   reverse. For example, include `apps/web/**`, `package.json`, `package-lock.json`,
-   and `scripts/release-web.mjs` for the web project, and exclude `apps/web/**` for
-   the API project. Verify the option in your dashboard before relying on it. Without
+   reverse. For example, include `apps/web/**`, `packages/ui/**`, `package.json`,
+   `package-lock.json`, and `scripts/release-web.mjs` for the web project, and exclude
+   `apps/web/**` and `packages/ui/**` for the API project. `packages/ui` is the shared
+   [design system layer](design-system.md): leaving it out of the web or admin watch
+   paths means a design-system change ships to neither app. Verify the option in your dashboard before relying on it. Without
    it, every push runs both pipelines, and each releases only its own Worker.
 4. Push a commit. `scripts/release-web.mjs` applies the same guards as the API
    release (Workers Builds only, production branch, clean checkout, HEAD equal to
@@ -218,8 +223,9 @@ Provisioning, after the API Worker has released a version that exports `AdminAPI
    `npm ci && npm run typecheck:admin && npm run build:admin`, deploy command
    `npm run release:admin`. Use a credential limited to Workers Scripts edit and
    account read. Disable preview builds. Optionally set watch paths (`apps/admin/**`,
-   `package.json`, `package-lock.json`, `scripts/release-admin.mjs`), and add
-   `apps/admin/**` to the other projects' excludes.
+   `packages/ui/**`, `package.json`, `package-lock.json`, `scripts/release-admin.mjs`),
+   and add `apps/admin/**` to the other projects' excludes (`packages/ui/**` stays
+   included in the web project).
 3. Push a commit. `scripts/release-admin.mjs` applies the same guards as the web
    release (Workers Builds only, production branch, clean checkout, HEAD equal to
    `WORKERS_CI_COMMIT_SHA`) and tags the version with the commit. If the admin

@@ -1,0 +1,215 @@
+/* Wildcard UI tokens: Material 3 color roles plus the Wildcard layer on top of
+   them (spacing, type, shape, elevation, motion). Components read only these
+   variables, so a theme change happens here. See docs/design-system.md. */
+
+/* Every design system rule lives in one of these cascade layers. App styles stay
+   unlayered and therefore always win, whatever order Nuxt loads the files in. */
+@layer ui.reset, ui.tokens, ui.base, ui.components, ui.utilities;
+
+/* Manrope is bundled from apps/ios/Wildcard/Fonts (SIL OFL, see /fonts/OFL.txt). */
+@font-face {
+  font-family: 'Manrope';
+  src: url('/fonts/Manrope.ttf') format('truetype');
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@layer ui.tokens {
+  /* Color roles come from a tonal-spot scheme seeded with the brand blue
+     (#045de3, the iOS AccentColor), which stays the light primary. Neutrals keep
+     a faint blue cast so surfaces read cool and quiet next to the brand. */
+  :root {
+    --md-primary: #045de3;
+    --md-on-primary: #ffffff;
+    --md-primary-container: #dae3ff;
+    --md-on-primary-container: #0f3478;
+    --md-secondary: #545e76;
+    --md-secondary-container: #dfe5f9;
+    --md-on-secondary-container: #2b3549;
+    --md-tertiary: #7a4f9a;
+    --md-tertiary-container: #f3daff;
+    --md-on-tertiary-container: #4a2468;
+    --md-error: #ba1a1a;
+    --md-on-error: #ffffff;
+    --md-error-container: #ffdad6;
+    --md-on-error-container: #8c0009;
+    --md-success: #1b7a3d;
+    --md-success-container: #d5f5dc;
+    --md-on-success-container: #0b4a22;
+    --md-warning: #8f4e00;
+    --md-warning-container: #ffe3c4;
+    --md-on-warning-container: #5c3200;
+    --md-surface: #f9f9fc;
+    --md-surface-dim: #d9dae0;
+    --md-surface-bright: #f9f9fc;
+    --md-surface-container-lowest: #ffffff;
+    --md-surface-container-low: #f3f4f8;
+    --md-surface-container: #edeef3;
+    --md-surface-container-high: #e7e8ee;
+    --md-surface-container-highest: #e1e2e9;
+    --md-on-surface: #181b21;
+    --md-on-surface-variant: #444852;
+    --md-outline: #747884;
+    --md-outline-variant: #c4c6d0;
+    --md-inverse-surface: #2d3036;
+    --md-inverse-on-surface: #eff0f7;
+    --md-inverse-primary: #b0c6ff;
+    --md-scrim: rgb(9 14 28 / 36%);
+
+    /* Elevation: soft, layered shadows tinted with the neutral hue instead of
+       pure black, so raised surfaces look lit rather than outlined. */
+    --ui-shadow: 222 40% 14%;
+    --md-elevation-1: 0 1px 2px hsl(var(--ui-shadow) / 0.08), 0 1px 3px 1px hsl(var(--ui-shadow) / 0.05);
+    --md-elevation-2: 0 1px 2px hsl(var(--ui-shadow) / 0.08), 0 4px 12px -2px hsl(var(--ui-shadow) / 0.12);
+    --md-elevation-3: 0 2px 4px hsl(var(--ui-shadow) / 0.06), 0 10px 24px -6px hsl(var(--ui-shadow) / 0.18);
+    --md-elevation-4: 0 4px 8px hsl(var(--ui-shadow) / 0.06), 0 24px 56px -12px hsl(var(--ui-shadow) / 0.28);
+
+    /* State layer opacities (Material 3). */
+    --ui-state-hover: 0.08;
+    --ui-state-focus: 0.1;
+    --ui-state-press: 0.1;
+    --ui-state-dragged: 0.16;
+    --hover: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --md-primary: #b0c6ff;
+      --md-on-primary: #002c70;
+      --md-primary-container: #20448f;
+      --md-on-primary-container: #dae3ff;
+      --md-secondary: #bcc6e0;
+      --md-secondary-container: #3a4458;
+      --md-on-secondary-container: #dfe5f9;
+      --md-tertiary: #e3b8ff;
+      --md-tertiary-container: #613a80;
+      --md-on-tertiary-container: #f3daff;
+      --md-error: #ffb4ab;
+      --md-on-error: #690005;
+      --md-error-container: #93000a;
+      --md-on-error-container: #ffdad6;
+      --md-success: #82d69a;
+      --md-success-container: #0f5129;
+      --md-on-success-container: #c8f1d1;
+      --md-warning: #ffb95c;
+      --md-warning-container: #6a3b00;
+      --md-on-warning-container: #ffdcbd;
+      --md-surface: #111318;
+      --md-surface-dim: #111318;
+      --md-surface-bright: #37393f;
+      --md-surface-container-lowest: #0c0e13;
+      --md-surface-container-low: #191b21;
+      --md-surface-container: #1d2026;
+      --md-surface-container-high: #282a31;
+      --md-surface-container-highest: #33353c;
+      --md-on-surface: #e2e2e9;
+      --md-on-surface-variant: #c4c6d0;
+      --md-outline: #8e909b;
+      --md-outline-variant: #44474f;
+      --md-inverse-surface: #e2e2e9;
+      --md-inverse-on-surface: #2d3036;
+      --md-inverse-primary: #045de3;
+      --md-scrim: rgb(0 0 0 / 56%);
+      --ui-shadow: 230 50% 2%;
+      --md-elevation-1: 0 1px 2px hsl(var(--ui-shadow) / 0.4), 0 1px 3px 1px hsl(var(--ui-shadow) / 0.2);
+      --md-elevation-2: 0 1px 2px hsl(var(--ui-shadow) / 0.4), 0 4px 12px -2px hsl(var(--ui-shadow) / 0.4);
+      --md-elevation-3: 0 2px 4px hsl(var(--ui-shadow) / 0.3), 0 10px 24px -6px hsl(var(--ui-shadow) / 0.5);
+      --md-elevation-4: 0 4px 8px hsl(var(--ui-shadow) / 0.3), 0 24px 56px -12px hsl(var(--ui-shadow) / 0.6);
+      color-scheme: dark;
+    }
+  }
+
+  :root {
+    /* Spacing: a 4 px grid. Layouts use these steps only. */
+    --space-0-5: 2px;
+    --space-1: 4px;
+    --space-1-5: 6px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* Typography: Material 3 roles set in Manrope, with tighter tracking on
+       large sizes and slightly heavier weights than Roboto needs. */
+    --font-sans: 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    --type-display-small: 700 36px / 44px var(--font-sans);
+    --type-headline-medium: 700 28px / 36px var(--font-sans);
+    --type-headline-small: 650 24px / 32px var(--font-sans);
+    --type-title-large: 650 22px / 28px var(--font-sans);
+    --type-title-medium: 600 16px / 24px var(--font-sans);
+    --type-title-small: 600 14px / 20px var(--font-sans);
+    --type-body-large: 400 16px / 24px var(--font-sans);
+    --type-body-medium: 400 14px / 20px var(--font-sans);
+    --type-body-small: 400 12px / 16px var(--font-sans);
+    --type-label-large: 600 14px / 20px var(--font-sans);
+    --type-label-medium: 600 12px / 16px var(--font-sans);
+    --type-label-small: 600 11px / 16px var(--font-sans);
+    --tracking-display: -0.025em;
+    --tracking-headline: -0.02em;
+    --tracking-title: -0.01em;
+    --tracking-label: 0.01em;
+
+    /* Shape: the Material 3 Expressive scale. */
+    --md-shape-xs: 4px;
+    --md-shape-s: 8px;
+    --md-shape-m: 12px;
+    --md-shape-l: 16px;
+    --md-shape-l-plus: 20px;
+    --md-shape-xl: 28px;
+    --md-shape-xl-plus: 32px;
+    --md-shape-full: 999px;
+    /* Segmented lists: one rounded block whose items meet with small inner corners. */
+    --ui-group-radius: 24px;
+    --ui-group-item-radius: 6px;
+    --ui-group-gap: 2px;
+
+    /* Motion: Material 3 easing, plus a gentle spring for shape morphs. */
+    --md-ease: cubic-bezier(0.2, 0, 0, 1);
+    --md-ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+    --md-ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+    --ui-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+    --md-motion-short: 150ms;
+    --md-motion-medium: 250ms;
+    --md-motion-long: 400ms;
+
+    /* Layout */
+    --ui-bar-height: 64px;
+    --ui-page-width: 720px;
+    --ui-page-width-wide: 1120px;
+    --ui-page-gutter: 16px;
+    --ui-pane-gap: 8px;
+    --ui-pane-radius: 24px;
+
+    /* Older names used across pages and scoped styles, mapped onto the roles.
+       Use the --md-* roles in new code. */
+    --accent: var(--md-primary);
+    --accent-contrast: var(--md-on-primary);
+    --background: var(--md-surface);
+    --grouped: var(--md-surface);
+    --surface: var(--md-surface-container);
+    --text: var(--md-on-surface);
+    --secondary: var(--md-on-surface-variant);
+    --tertiary: var(--md-outline);
+    --separator: var(--md-outline-variant);
+    --danger: var(--md-error);
+    --success: var(--md-success);
+    --warning: var(--md-warning);
+    --selected: var(--md-secondary-container);
+    --radius: var(--md-shape-m);
+  }
+
+  @media (min-width: 600px) {
+    :root { --ui-page-gutter: 24px; }
+  }
+  @media (min-width: 1280px) {
+    :root { --ui-pane-gap: 12px; }
+  }
+}

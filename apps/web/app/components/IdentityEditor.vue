@@ -76,22 +76,26 @@ async function choose(event: Event) {
       <span>{{ name || 'Add name' }}</span><AppIcon name="compose" />
     </button>
     <h2 v-else-if="showName" class="identity-title">{{ name }}</h2>
-    <p v-if="problem" class="small" style="color: var(--danger); margin: 0">{{ problem }}</p>
+    <p v-if="problem" class="small problem">{{ problem }}</p>
   </div>
   <PhotoCropDialog v-if="source" :source="source" @cancel="cancel" @save="confirm" />
   <AppSheet v-if="choosingPhoto" title="Photo" @close="choosingPhoto = false">
-    <div class="group">
-      <button type="button" class="button-row" @click="choosingPhoto = false; picker?.click()"><AppIcon name="image" />Choose photo</button>
-      <button type="button" class="button-row danger" @click="choosingPhoto = false; emit('photo', null)"><AppIcon name="delete" />Remove photo</button>
-    </div>
+    <AppListGroup>
+      <AppListItem icon="image" @click="choosingPhoto = false; picker?.click()">Choose photo</AppListItem>
+      <AppListItem icon="delete" danger @click="choosingPhoto = false; emit('photo', null)">Remove photo</AppListItem>
+    </AppListGroup>
   </AppSheet>
   <AppSheet v-if="renaming" title="Name" @close="renaming = false">
     <form @submit.prevent="rename">
-      <div class="group"><div class="field"><input v-model="draftName" type="text" maxlength="100" aria-label="Name" autofocus></div></div>
+      <AppListGroup><div class="field"><input v-model="draftName" type="text" maxlength="100" aria-label="Name" autofocus></div></AppListGroup>
       <div class="actions-row">
-        <button type="button" class="button text" @click="renaming = false">Cancel</button>
-        <button type="submit" class="button" :disabled="!validName">Save</button>
+        <AppButton variant="text" @click="renaming = false">Cancel</AppButton>
+        <AppButton type="submit" :disabled="!validName">Save</AppButton>
       </div>
     </form>
   </AppSheet>
 </template>
+
+<style scoped>
+.problem { margin: 0; color: var(--md-error); }
+</style>

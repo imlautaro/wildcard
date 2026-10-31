@@ -3,7 +3,9 @@
 // matching the iOS sheets. A bottom sheet on narrow screens and a centered dialog
 // otherwise. Built on <dialog>, so focus stays inside and Escape or a backdrop press
 // emits `close`. AppSelect menus opened inside teleport into the dialog's top layer.
-defineProps<{ title: string }>();
+// With `icon` it becomes a Material basic dialog: a centered icon and headline and
+// no close button, so the actions slot must offer the way out. `wide` fits forms.
+defineProps<{ title: string; icon?: AppIconName; danger?: boolean; wide?: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLDialogElement>();
 const titleID = useId();
@@ -16,12 +18,13 @@ function backdrop(event: MouseEvent) { if (event.target === dialog.value) emit('
 
 <template>
   <Teleport to="body">
-    <dialog ref="dialog" class="sheet" :aria-labelledby="titleID" @cancel.prevent="emit('close')" @click="backdrop">
+    <dialog ref="dialog" class="sheet" :class="{ dialog: icon, wide }" :aria-labelledby="titleID" @cancel.prevent="emit('close')" @click="backdrop">
       <div class="sheet-panel">
+        <AppIcon v-if="icon" :name="icon" class="sheet-icon" :class="{ danger }" />
         <header class="sheet-header">
           <h2 :id="titleID">{{ title }}</h2>
           <slot name="header" />
-          <button type="button" class="icon-button" aria-label="Close" @click="emit('close')"><AppIcon name="close" /></button>
+          <AppIconButton v-if="!icon" icon="close" label="Close" :tooltip="false" @click="emit('close')" />
         </header>
         <div class="sheet-body"><slot /></div>
         <div v-if="$slots.actions" class="sheet-actions"><slot name="actions" /></div>

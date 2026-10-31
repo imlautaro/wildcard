@@ -209,7 +209,7 @@ onBeforeUnmount(() => { open.value = false; clearTimeout(typedTimer); });
     >
       <span v-if="label && variant === 'outlined'" class="select-label">{{ label }}</span>
       <span class="select-value" :class="{ placeholder: !selected }">{{ selected?.label ?? placeholder ?? '' }}</span>
-      <AppIcon name="dropdown" class="select-arrow" />
+      <AppIcon name="expand" class="select-arrow" />
     </button>
     <Teleport :to="container">
       <div v-if="open" ref="menu" class="select-menu" :class="{ searchable }" :style="position">

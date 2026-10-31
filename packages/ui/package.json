@@ -1,0 +1,10 @@
+{
+  "name": "@wildcard/ui",
+  "private": true,
+  "type": "module",
+  "main": "./nuxt.config.ts",
+  "dependencies": {
+    "@iconify-json/material-symbols": "1.2.97",
+    "@nuxt/icon": "2.6.2"
+  }
+}

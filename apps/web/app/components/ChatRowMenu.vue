@@ -68,25 +68,16 @@ const remove = () => act((target) => {
 </script>
 
 <template>
-  <div :id="menuID" ref="menu" popover="auto" class="chat-menu row-menu" :aria-label="row ? `${row.name} actions` : 'Chat actions'"
+  <div :id="menuID" ref="menu" popover="auto" class="menu row-menu" :aria-label="row ? `${row.name} actions` : 'Chat actions'"
        :style="position ? { top: `${position.top}px`, left: `${position.left}px` } : { visibility: 'hidden' }" @contextmenu.prevent>
     <template v-if="row">
-      <NuxtLink :to="detailsPath" class="row" @click="menu?.hidePopover()">
-        <AppIcon name="info" />
-        <span>{{ row.kind === 'contact' ? 'Contact details' : 'Group details' }}</span>
-      </NuxtLink>
-      <button type="button" class="row" data-ripple :disabled="busy" @click="archive">
-        <AppIcon name="archive" />
-        <span>{{ row.archived ? 'Unarchive' : 'Archive' }}</span>
-      </button>
-      <button v-if="row.canClear" type="button" class="row danger" data-ripple :disabled="busy" @click="clear">
-        <AppIcon name="x-circle" />
-        <span>Clear chat…</span>
-      </button>
-      <button v-if="row.canDelete" type="button" class="row danger" data-ripple :disabled="busy" @click="remove">
-        <AppIcon name="delete" />
-        <span>Delete contact…</span>
-      </button>
+      <AppMenuItem :to="detailsPath" icon="info" @click="menu?.hidePopover()">{{ row.kind === 'contact' ? 'Contact details' : 'Group details' }}</AppMenuItem>
+      <AppMenuItem icon="archive" :disabled="busy" @click="archive">{{ row.archived ? 'Unarchive' : 'Archive' }}</AppMenuItem>
+      <template v-if="row.canClear || row.canDelete">
+        <hr class="menu-divider">
+        <AppMenuItem v-if="row.canClear" icon="x-circle" danger :disabled="busy" @click="clear">Clear chat…</AppMenuItem>
+        <AppMenuItem v-if="row.canDelete" icon="delete" danger :disabled="busy" @click="remove">Delete contact…</AppMenuItem>
+      </template>
     </template>
   </div>
   <AppSheet v-if="clearing" :title="`Clear ${clearing.name}`" @close="clearing = null">
@@ -95,8 +86,5 @@ const remove = () => act((target) => {
 </template>
 
 <style scoped>
-.row-menu { inset: auto; }
-.row-menu .row { cursor: pointer; }
-.row-menu .row svg { width: 24px; height: 24px; color: var(--md-on-surface-variant); flex: none; }
-.row-menu .row.danger, .row-menu .row.danger svg { color: var(--md-error); }
+.row-menu { position: fixed; inset: auto; }
 </style>

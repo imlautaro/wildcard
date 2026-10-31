@@ -24,21 +24,17 @@ function deleted() {
 
 <template>
   <div class="page">
-    <header class="bar"><h1 class="title">Users</h1>
-      <button class="icon-button" type="button" aria-label="Refresh" @click="loadUsers()"><AppIcon name="refresh" /></button>
-    </header>
+    <AppTopBar title="Users" contained="wide">
+      <AppIconButton icon="refresh" label="Refresh" @click="loadUsers()" />
+    </AppTopBar>
     <div class="page-inner wide">
-      <label class="search">
-        <AppIcon name="search" />
-        <input v-model="search" type="search" placeholder="Search by name or email" aria-label="Search users" maxlength="100">
-        <button v-if="search" class="icon-button" type="button" aria-label="Clear search" @click="search = ''"><AppIcon name="close" /></button>
-      </label>
-      <p v-if="message" class="notice success" role="status">{{ message }}
-        <button class="icon-button" type="button" aria-label="Dismiss" @click="message = null"><AppIcon name="close" /></button>
-      </p>
-      <p v-if="errors.users" class="notice" role="alert">{{ errors.users }}</p>
-      <div v-if="!users && !errors.users" class="center"><span class="spinner" /> Loading…</div>
-      <p v-else-if="users && !users.length" class="empty">{{ usersQuery ? 'No accounts match this search.' : 'No accounts yet.' }}</p>
+      <AppSearchField v-model="search" label="Search users" placeholder="Search by name or email" maxlength="100" />
+      <AppNotice v-if="message" tone="success" dismissible @dismiss="message = null">{{ message }}</AppNotice>
+      <AppNotice v-if="errors.users">{{ errors.users }}</AppNotice>
+      <AppLoading v-if="!users && !errors.users" fill />
+      <AppEmptyState v-else-if="users && !users.length" :icon="usersQuery ? 'search' : 'people'"
+                     :title="usersQuery ? 'No matches' : 'No accounts yet'"
+                     :text="usersQuery ? 'No accounts match this search.' : 'Accounts appear here once people sign up.'" />
       <div v-else-if="users" class="table" role="table" aria-label="Accounts">
         <div class="table-row head" role="row">
           <span role="columnheader">Account</span>
@@ -51,7 +47,11 @@ function deleted() {
         </div>
         <div v-for="user in users" :key="user.id" class="table-row" role="row">
           <span role="cell" class="account">
-            <strong>{{ user.name }}<span v-if="user.superAdmin" class="chip">Super admin</span><span v-if="user.onboardingRequired" class="chip muted-chip">Setup pending</span></strong>
+            <strong>
+              <span>{{ user.name }}</span>
+              <AppChip v-if="user.superAdmin" tone="primary">Super admin</AppChip>
+              <AppChip v-if="user.onboardingRequired">Setup pending</AppChip>
+            </strong>
             <span class="small muted">{{ user.email }}</span>
           </span>
           <span role="cell" class="num" data-label="Contacts">{{ formatNumber(user.contacts) }}</span>
@@ -60,14 +60,13 @@ function deleted() {
           <span role="cell" data-label="Joined">{{ formatDate(user.createdAt) }}</span>
           <span role="cell" data-label="Last seen">{{ user.lastActiveAt ? formatDate(user.lastActiveAt) : '—' }}</span>
           <span role="cell" class="actions">
-            <button class="icon-button danger" type="button" :disabled="user.superAdmin"
-                    :aria-label="user.superAdmin ? 'Super admins can\'t be deleted here' : `Delete ${user.email}`"
-                    :title="user.superAdmin ? 'Remove from SUPER_ADMIN_USER_IDS first' : 'Delete account'"
-                    @click="deleting = user; message = null"><AppIcon name="delete" /></button>
+            <AppIconButton icon="delete" :disabled="user.superAdmin"
+                           :label="user.superAdmin ? 'Super admins can\'t be deleted here' : `Delete ${user.email}`"
+                           @click="deleting = user; message = null" />
           </span>
         </div>
       </div>
-      <div v-if="usersNext" class="center"><button class="button outlined" type="button" @click="loadMoreUsers">Load more</button></div>
+      <div v-if="usersNext" class="center"><AppButton variant="outlined" @click="loadMoreUsers">Load more</AppButton></div>
       <p class="group-footer">Contacts are the conversations an account has; agents are the contacts it created, including shared ones. Last seen is when a session was last refreshed, accurate to about a day.</p>
     </div>
     <DeleteUserDialog v-if="deleting" :user="deleting" @close="deleting = null" @deleted="deleted" />

@@ -8,7 +8,7 @@ const status = computed(() => ({ needs_review: 'Review to enable', needs_reappro
 </script>
 
 <template>
-  <NuxtLink :to="`/${base}/mini-apps/${app.id}`" class="mini-app-card" :class="{ review: app.status !== 'enabled' }">
+  <NuxtLink :to="`/${base}/mini-apps/${app.id}`" class="mini-app-card" :class="{ review: app.status !== 'enabled' }" data-ripple>
     <span class="mini-app-glyph"><AppIcon :name="miniAppIcon(app.icon)" /></span>
     <span class="copy">
       <strong>{{ app.title }}</strong>

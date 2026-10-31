@@ -124,10 +124,10 @@ function seek(event: Event) {
 </template>
 
 <style scoped>
-.voice-message { width: min(290px, 66vw); padding-top: 2px; white-space: normal; }
+.voice-message { width: min(290px, 66vw); padding-top: var(--space-0-5); white-space: normal; }
 .voice-controls { display: flex; align-items: center; gap: 10px; }
 .voice-avatar { position: relative; width: 44px; height: 44px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
-.voice-speed { width: 44px; height: 44px; flex: none; border: 2px solid transparent; border-radius: 50%; background: var(--md-surface-container-highest); background-clip: padding-box; color: inherit; font: inherit; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+.voice-speed { width: 44px; height: 44px; flex: none; border: 2px solid transparent; border-radius: var(--md-shape-full); background: var(--md-surface-container-highest); background-clip: padding-box; color: inherit; font: var(--type-label-medium); font-variant-numeric: tabular-nums; cursor: pointer; }
 .voice-speed:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
 .voice-play { width: 44px; height: 44px; flex: none; border: 0; border-radius: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--md-on-surface-variant); cursor: pointer; }
 .voice-play svg { width: 24px; height: 24px; }
@@ -143,11 +143,11 @@ function seek(event: Event) {
 .voice-track input[type='range']::-webkit-slider-runnable-track { height: 44px; background: transparent; }
 .voice-track input[type='range']::-moz-range-track { height: 44px; background: transparent; }
 .voice-thumb { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; background: var(--md-on-surface-variant); transform: translate(-50%, -50%); pointer-events: none; }
-.voice-waveform:focus-within { outline: 2px solid var(--md-primary); outline-offset: 3px; border-radius: 4px; }
+.voice-waveform:focus-within { outline: 2px solid var(--md-primary); outline-offset: 3px; border-radius: var(--md-shape-xs); }
 .voice-track input[type='range']:disabled { cursor: default; }
-.voice-info { display: flex; align-items: center; gap: 4px; min-height: 16px; font-size: 12px; color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums; }
+.voice-info { display: flex; align-items: center; gap: var(--space-1); min-height: 16px; font: var(--type-body-small); color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums; }
 .voice-error { color: var(--md-error); }
-.voice-mic { position: absolute; bottom: -1px; left: -1px; display: inline-flex; padding: 2px; border-radius: 50%; background: var(--incoming); color: var(--md-on-surface-variant); }
+.voice-mic { position: absolute; bottom: -1px; left: -1px; display: inline-flex; padding: var(--space-0-5); border-radius: var(--md-shape-full); background: var(--incoming); color: var(--md-on-surface-variant); }
 .voice-message-outgoing .voice-mic { background: var(--outgoing); }
 .listened .voice-mic, .listened .voice-thumb { color: var(--read); }
 .listened .voice-thumb { background: var(--read); }

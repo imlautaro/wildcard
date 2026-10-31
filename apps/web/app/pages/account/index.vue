@@ -53,49 +53,44 @@ onMounted(async () => {
         <span>{{ user?.email }}</span>
         <InfoButton label="Your profile" text="Group members and people you share contacts with can see your name and photo." />
       </p>
-      <p v-if="error && !modelSheet" class="notice" style="margin: 12px 0">{{ error }}</p>
+      <AppNotice v-if="error && !modelSheet">{{ error }}</AppNotice>
 
-      <div class="group" style="margin-top: 20px">
-        <button type="button" class="button-row opens" @click="openModelSheet">
-          <AppIcon name="model" />Chat model<span class="row-value">{{ models.find(model => model.value === currentModel)?.label ?? currentModel }}</span>
-        </button>
-        <NuxtLink class="button-row" to="/account/connections"><AppIcon name="link" />Connections</NuxtLink>
-        <NuxtLink class="button-row" to="/native"><AppIcon name="iphone" />Native experiments</NuxtLink>
-      </div>
-      <div class="group" style="margin-top: 20px">
-        <button type="button" class="button-row opens" @click="exportSheet = true"><AppIcon name="file" />Export debug JSON</button>
-      </div>
-      <div class="group" style="margin-top: 20px">
-        <button type="button" class="button-row danger" :disabled="busy" @click="leave"><AppIcon name="logout" />Sign out</button>
-      </div>
-      <p class="group-footer" style="padding-top: 8px">Scheduled messages and push notifications are available in the iOS app.</p>
+      <AppListGroup>
+        <AppListItem icon="model" opens :value="models.find(model => model.value === currentModel)?.label ?? currentModel" @click="openModelSheet">Chat model</AppListItem>
+        <AppListItem icon="link" to="/account/connections">Connections</AppListItem>
+        <AppListItem icon="iphone" to="/native">Native experiments</AppListItem>
+      </AppListGroup>
+      <AppListGroup>
+        <AppListItem icon="file" opens @click="exportSheet = true">Export debug JSON</AppListItem>
+      </AppListGroup>
+      <AppListGroup footer="Scheduled messages and push notifications are available in the iOS app.">
+        <AppListItem icon="logout" danger :disabled="busy" @click="leave">Sign out</AppListItem>
+      </AppListGroup>
 
       <AppSheet v-if="exportSheet" title="Export debug JSON" @close="cancel(); exportSheet = false">
         <p>Download your private and group chat history, including archived chats, contacts, local memories, reply status, schedules, tasks, documents and mini apps.</p>
         <p class="group-footer">This file contains private text and group participants. Review it before sharing with an AI or anyone else. Credentials, other people's private chats and media files are excluded. Nothing is sent to an AI by this download. Downloads are limited to 100 MB; exports over this limit fail without saving a partial file.</p>
-        <p v-if="progress" role="status" aria-live="polite" style="margin-top: 12px">{{ progress }}</p>
-        <p v-if="exportError" class="notice" role="alert" style="margin-top: 12px">{{ exportError }}</p>
+        <p v-if="progress" role="status" aria-live="polite">{{ progress }}</p>
+        <AppNotice v-if="exportError">{{ exportError }}</AppNotice>
         <template #actions>
-          <button type="button" class="button text" @click="cancel(); exportSheet = false">{{ exporting ? 'Cancel export' : 'Close' }}</button>
-          <button type="button" class="button" :disabled="exporting" @click="download">{{ exporting ? 'Exporting…' : 'Download JSON' }}</button>
+          <AppButton variant="text" @click="cancel(); exportSheet = false">{{ exporting ? 'Cancel export' : 'Close' }}</AppButton>
+          <AppButton :disabled="exporting" @click="download">{{ exporting ? 'Exporting…' : 'Download JSON' }}</AppButton>
         </template>
       </AppSheet>
 
       <AppSheet v-if="modelSheet" title="Chat model" @close="modelSheet = false">
         <template #header><InfoButton label="Chat model" :text="modelInfo" /></template>
-        <div class="group" role="radiogroup" aria-label="Chat model">
+        <AppListGroup role="radiogroup" aria-label="Chat model">
           <label v-for="model in models" :key="model.value" class="choice-row">
             <input v-model="chatModel" type="radio" name="chat-model" :value="model.value" :disabled="busy" @change="contributorConsent = false">
             <span><strong>Muse Spark 1.3 · {{ model.label }}</strong><span class="small muted">{{ model.detail }}</span></span>
           </label>
-          <label v-if="chatModel === 'muse-spark-1.3-contributor' && modelChanged" class="toggle">
-            <span>I agree to Meta's Contributor data use</span><input v-model="contributorConsent" type="checkbox" role="switch" :disabled="busy">
-          </label>
-        </div>
-        <p v-if="error" class="notice" style="margin: 12px 0 0">{{ error }}</p>
+          <AppSwitch v-if="chatModel === 'muse-spark-1.3-contributor' && modelChanged" v-model="contributorConsent" :disabled="busy">I agree to Meta's Contributor data use</AppSwitch>
+        </AppListGroup>
+        <AppNotice v-if="error">{{ error }}</AppNotice>
         <template #actions>
-          <button type="button" class="button text" @click="modelSheet = false">Cancel</button>
-          <button type="button" class="button" :disabled="busy || !modelChanged || (chatModel === 'muse-spark-1.3-contributor' && !contributorConsent)" @click="saveChatModel">Save</button>
+          <AppButton variant="text" @click="modelSheet = false">Cancel</AppButton>
+          <AppButton :disabled="busy || !modelChanged || (chatModel === 'muse-spark-1.3-contributor' && !contributorConsent)" @click="saveChatModel">Save</AppButton>
         </template>
       </AppSheet>
     </div>
@@ -103,5 +98,5 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.account-email { display: flex; align-items: center; justify-content: center; gap: 4px; overflow-wrap: anywhere; }
+.account-email { display: flex; align-items: center; justify-content: center; gap: var(--space-1); margin-bottom: var(--space-5); overflow-wrap: anywhere; }
 </style>

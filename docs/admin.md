@@ -10,9 +10,14 @@
 - turn runtime flags on or off, with no release needed;
 - see recent admin actions.
 
-It uses the web app's Material 3 tokens, Manrope, Material Symbols and press
-ripple. Navigation is a Material 3 navigation rail, which becomes a bottom
-navigation bar below 720 px.
+Its look comes from the [design system](design-system.md) layer in `packages/ui`,
+shared with the web app: tokens, Manrope, Material Symbols, the press ripple and the
+`App*` components (`AppTopBar`, `AppListGroup`, `AppSwitch`, `AppSheet`, …).
+`apps/admin/app/assets/css/main.css` keeps only the admin shell, the users table and
+the overview stats. Navigation is a Material 3 navigation rail, which becomes a
+bottom navigation bar below 720 px. Page bars line up with the content column
+(`AppTopBar contained`), and account deletion is a basic dialog (`AppSheet` with an
+icon) that ignores Escape, backdrop presses and Cancel while the deletion runs.
 
 ## Access model
 

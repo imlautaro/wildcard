@@ -17,11 +17,11 @@ useHead({ titleTemplate: (title) => (title ? `${title} · Wildcard Admin` : 'Wil
       <div class="rail-mark" aria-hidden="true"><AppIcon name="shield" filled /></div>
       <NuxtLink v-for="item in destinations" :key="item.to" :to="item.to" class="rail-item"
                 :class="{ active: active(item.to) }" :aria-current="active(item.to) ? 'page' : undefined">
-        <span class="indicator"><AppIcon :name="item.icon" :filled="active(item.to)" /></span>
+        <span class="indicator" data-ripple><AppIcon :name="item.icon" :filled="active(item.to)" /></span>
         <span class="label">{{ item.label }}</span>
       </NuxtLink>
       <button class="rail-item sign-out" type="button" :title="user ? `Signed in as ${user.email}` : undefined" @click="signOut">
-        <span class="indicator"><AppIcon name="logout" /></span>
+        <span class="indicator" data-ripple><AppIcon name="logout" /></span>
         <span class="label">Sign out</span>
       </button>
     </nav>

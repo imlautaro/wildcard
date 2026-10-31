@@ -1,12 +1,10 @@
-// Material press ripple for the shared interactive classes in main.css. One
-// delegated listener keeps templates unchanged: add `data-ripple` to opt another
+// Material press ripple for the interactive classes in assets/css/components.css.
+// One delegated listener keeps templates unchanged: add `data-ripple` to opt another
 // element in, or `data-no-ripple` to opt one out. The wave lives in its own
 // clipping layer so hosts keep overflow visible (badges sit outside icon buttons).
 const rippleHosts = [
-  '.button', '.icon-button', '.link-button', '.button-row', '.fab', '.send',
-  'a.row', 'a.mini-row', '.mini-tile-row', '.mini-lesson-row', '.mini-app-card',
-  '.mini-button', '.mini-card-button', '.mini-tile', '.mini-segmented button',
-  '.mini-menu .items button', '.mini-lesson .options button', '.select-option', '[data-ripple]',
+  '.button', '.icon-button', '.link-button', '.button-row', '.fab', '.menu-item', '.select-option',
+  '.segmented button', 'label.toggle', 'label.choice-row', 'label.check-row', '[data-ripple]',
 ].join(', ');
 
 // Touch presses wait briefly so a scroll that starts on a row doesn't flash it.
@@ -21,6 +19,8 @@ export default defineNuxtPlugin(() => {
     const host = target instanceof Element ? target.closest<HTMLElement>(rippleHosts) : null;
     if (!host || host.closest('[data-no-ripple]')) return null;
     if (host.matches(':disabled') || host.getAttribute('aria-disabled') === 'true') return null;
+    // A row label is as disabled as the control it wraps.
+    if (host instanceof HTMLLabelElement && (host.control as HTMLInputElement | null)?.disabled) return null;
     return host;
   }
 

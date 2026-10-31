@@ -41,27 +41,18 @@ async function copyID() {
       <p class="lead">This Wildcard account can't use the admin panel. To grant access, add its user ID to <code>SUPER_ADMIN_USER_IDS</code> in <code>apps/api/wrangler.jsonc</code> and release the API.</p>
       <div v-if="forbiddenUserID" class="id-row">
         <span class="code">{{ forbiddenUserID }}</span>
-        <button class="icon-button" type="button" :aria-label="copied ? 'Copied' : 'Copy user ID'" @click="copyID"><AppIcon name="copy" :filled="copied" /></button>
+        <AppIconButton :icon="copied ? 'done' : 'copy'" :label="copied ? 'Copied' : 'Copy user ID'" @click="copyID" />
       </div>
-      <button class="button block" type="button" @click="signOut">Use another account</button>
+      <AppButton block @click="signOut">Use another account</AppButton>
     </div>
     <form v-else class="auth-card" @submit.prevent="submit">
       <div class="mark" aria-hidden="true"><AppIcon name="shield" filled /></div>
       <h1>Wildcard Admin</h1>
       <p class="lead">Sign in with a super admin's Wildcard account.</p>
-      <label class="text-field">
-        <input v-model="email" type="email" autocomplete="username" placeholder=" " required>
-        <span>Email</span>
-      </label>
-      <label class="text-field">
-        <input v-model="password" type="password" autocomplete="current-password" placeholder=" " minlength="8" maxlength="128" required>
-        <span>Password</span>
-      </label>
-      <p v-if="error" class="notice" role="alert" style="margin: 0 0 16px">{{ error }}</p>
-      <button type="submit" class="button block" :disabled="!valid || busy">
-        <span v-if="busy" class="spinner" />
-        Sign in
-      </button>
+      <AppTextField v-model="email" label="Email" type="email" autocomplete="username" required />
+      <AppTextField v-model="password" label="Password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required />
+      <AppNotice v-if="error">{{ error }}</AppNotice>
+      <AppButton type="submit" block :disabled="!valid" :loading="busy">Sign in</AppButton>
     </form>
   </div>
 </template>

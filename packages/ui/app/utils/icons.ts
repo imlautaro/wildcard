@@ -1,9 +1,9 @@
-// Material Symbols (Rounded) for each semantic icon name. Each entry has the
-// outline glyph used by default and the filled glyph for selected or emphasized
-// states. nuxt.config.ts bundles exactly these icons into the client, so a new
-// icon only needs an entry here. Verify names against
-// node_modules/@iconify-json/material-symbols/icons.json; not every symbol has
-// an outline variant.
+// Material Symbols (Rounded) for each semantic icon name, shared by every app that
+// extends this layer. Each entry has the outline glyph used by default and the
+// filled glyph for selected or emphasized states. The layer's nuxt.config.ts
+// bundles exactly these icons into the client, so a new icon only needs an entry
+// here. Verify names against node_modules/@iconify-json/material-symbols/icons.json;
+// not every symbol has an outline variant.
 export const appIcons = {
   menu: ['material-symbols:menu-rounded', 'material-symbols:menu-rounded'],
   compose: ['material-symbols:edit-outline-rounded', 'material-symbols:edit-rounded'],
@@ -59,6 +59,7 @@ export const appIcons = {
   heart: ['material-symbols:favorite-outline-rounded', 'material-symbols:favorite-rounded'],
   more: ['material-symbols:more-vert-rounded', 'material-symbols:more-vert-rounded'],
   dropdown: ['material-symbols:arrow-drop-down-rounded', 'material-symbols:arrow-drop-down-rounded'],
+  expand: ['material-symbols:expand-more-rounded', 'material-symbols:expand-more-rounded'],
   done: ['material-symbols:check-rounded', 'material-symbols:check-rounded'],
   search: ['material-symbols:search-rounded', 'material-symbols:search-rounded'],
   copy: ['material-symbols:content-copy-outline-rounded', 'material-symbols:content-copy-rounded'],
@@ -87,6 +88,13 @@ export const appIcons = {
   'thumb-up': ['material-symbols:thumb-up-outline-rounded', 'material-symbols:thumb-up-rounded'],
   'thumb-down': ['material-symbols:thumb-down-outline-rounded', 'material-symbols:thumb-down-rounded'],
   sparkle: ['material-symbols:auto-awesome-outline-rounded', 'material-symbols:auto-awesome-rounded'],
+  // Status glyphs for notices.
+  error: ['material-symbols:error-outline-rounded', 'material-symbols:error-rounded'],
+  // Admin panel destinations.
+  dashboard: ['material-symbols:dashboard-outline-rounded', 'material-symbols:dashboard-rounded'],
+  flag: ['material-symbols:flag-outline-rounded', 'material-symbols:flag-rounded'],
+  shield: ['material-symbols:shield-person-outline-rounded', 'material-symbols:shield-person-rounded'],
+  history: ['material-symbols:history-rounded', 'material-symbols:history-rounded'],
 } as const satisfies Record<string, readonly [outline: string, filled: string]>;
 
 export type AppIconName = keyof typeof appIcons;

@@ -110,10 +110,10 @@ function submit(id: string) {
     </div>
     <div v-else-if="block.kind === 'buttons'" class="mini-buttons">
       <div v-if="short(block.items).length" class="row">
-        <button v-for="action in short(block.items)" :key="action.id" type="button" class="mini-button symbol" :class="{ primary: action.id === primary(block.items), danger: action.style === 'destructive' }"
+        <button v-for="action in short(block.items)" :key="action.id" type="button" class="mini-button symbol" data-ripple :class="{ primary: action.id === primary(block.items), danger: action.style === 'destructive' }"
           :disabled="!!busyAction && action.kind === 'remote'" @click="press(action)">{{ action.label === '-' ? '−' : action.label }}</button>
       </div>
-      <button v-for="action in long(block.items)" :key="action.id" type="button" class="mini-button" :class="{ primary: action.id === primary(block.items), danger: action.style === 'destructive' }"
+      <button v-for="action in long(block.items)" :key="action.id" type="button" class="mini-button" data-ripple :class="{ primary: action.id === primary(block.items), danger: action.style === 'destructive' }"
         :disabled="!!busyAction && action.kind === 'remote'" @click="press(action)">{{ busyAction === action.id && action.kind === 'remote' ? 'Working…' : action.label }}</button>
     </div>
     <div v-else-if="block.kind === 'stats'" class="mini-stats">
@@ -129,9 +129,9 @@ function submit(id: string) {
     </template>
     <div v-else-if="block.item.type === 'grid'" class="mini-grid" :style="{ '--columns': block.item.columns }">
       <template v-for="(card, index) in block.item.children" :key="index">
-        <button v-if="card.type === 'action'" type="button" class="mini-card mini-card-button" :class="{ danger: card.style === 'destructive' }"
+        <button v-if="card.type === 'action'" type="button" class="mini-card mini-card-button" data-ripple :class="{ danger: card.style === 'destructive' }"
           :disabled="!!busyAction && card.kind === 'remote'" @click="press(card)">{{ busyAction === card.id && card.kind === 'remote' ? 'Working…' : card.label }}</button>
-        <button v-else-if="card.type === 'tile'" type="button" class="mini-card mini-tile" :disabled="!card.tab && !card.action" @click="openTile(card)">
+        <button v-else-if="card.type === 'tile'" type="button" class="mini-card mini-tile" data-ripple :disabled="!card.tab && !card.action" @click="openTile(card)">
           <AppIcon :name="miniAppIcon(card.icon)" class="icon" />
           <span v-if="card.value !== null || card.state" class="value">{{ shown(card) }}</span>
           <strong>{{ card.title }}</strong>
@@ -160,7 +160,7 @@ function submit(id: string) {
       </template>
     </div>
     <div v-else-if="block.item.type === 'tile'" class="group">
-      <button type="button" class="mini-row mini-tile-row" :disabled="!block.item.tab && !block.item.action" @click="openTile(block.item)">
+      <button type="button" class="mini-row mini-tile-row" data-ripple :disabled="!block.item.tab && !block.item.action" @click="openTile(block.item)">
         <span class="mini-app-glyph small-glyph"><AppIcon :name="miniAppIcon(block.item.icon)" /></span>
         <span class="copy"><strong>{{ block.item.title }}</strong><span v-if="block.item.caption">{{ block.item.caption }}</span></span>
         <span v-if="block.item.value !== null || block.item.state" class="value">{{ shown(block.item) }}</span>
@@ -188,7 +188,7 @@ function submit(id: string) {
         </button>
         <span class="copy"><strong>{{ row.title }}</strong><span v-if="row.subtitle">{{ row.subtitle }}</span></span>
         <span v-if="row.value !== null" class="value">{{ miniAppValue(row.value, block.item.format, block.item.currency) }}</span>
-        <button v-if="block.item.removable" type="button" class="icon-button remove" aria-label="Delete" @click="emit('edit', { state: block.item.state, op: 'remove_item', index })"><AppIcon name="close" /></button>
+        <AppIconButton v-if="block.item.removable" icon="close" label="Delete" class="remove" @click="emit('edit', { state: block.item.state, op: 'remove_item', index })" />
       </div>
     </div>
     <div v-else-if="block.item.type === 'toggle'" class="group">
@@ -196,7 +196,7 @@ function submit(id: string) {
     </div>
     <div v-else-if="block.item.type === 'choice'" class="mini-choice">
       <span class="label">{{ block.item.label }}</span>
-      <div class="mini-segmented" role="group" :aria-label="block.item.label">
+      <div class="segmented mini-segmented" role="group" :aria-label="block.item.label">
         <button v-for="option in block.item.options" :key="option.value" type="button" :aria-pressed="saved(block.item.state, block.item.value) === option.value" @click="emit('edit', { state: block.item.state, op: 'set', value: option.value })">{{ option.label }}</button>
       </div>
     </div>
@@ -247,9 +247,9 @@ function submit(id: string) {
         <input v-else-if="field.kind === 'number'" v-model.number="form(block.item.id)[field.id]" type="number" step="any" :required="field.required" inputmode="decimal">
         <input v-else v-model="form(block.item.id)[field.id]" :type="field.kind === 'date' ? 'date' : 'text'" :required="field.required" maxlength="500">
       </label>
-      <button type="submit" class="button-row" :class="{ danger: block.item.style === 'destructive' }" :disabled="!!busyAction">
+      <AppListItem type="submit" :danger="block.item.style === 'destructive'" :disabled="!!busyAction">
         {{ busyAction === block.item.id && block.item.kind === 'remote' ? 'Working…' : block.item.label }}
-      </button>
+      </AppListItem>
     </form>
   </template>
 </template>

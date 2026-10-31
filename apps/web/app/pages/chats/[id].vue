@@ -195,14 +195,12 @@ onBeforeUnmount(() => {
         </div>
       </NuxtLink>
     </template>
-    <NuxtLink :to="`/contacts/${contactID}/tasks`" class="icon-button" aria-label="Tasks" title="Tasks"><AppIcon name="tasks" /></NuxtLink>
+    <AppIconButton :to="`/contacts/${contactID}/tasks`" icon="tasks" label="Tasks" />
   </PageBar>
 
-  <div v-if="state.unavailable" class="empty">
-    <h2>Contact unavailable</h2>
-    <p>This contact is no longer available.</p>
-    <NuxtLink to="/" class="button secondary">Back to Chats</NuxtLink>
-  </div>
+  <AppEmptyState v-if="state.unavailable" icon="person" title="Contact unavailable" text="This contact is no longer available.">
+    <template #actions><AppButton to="/" variant="tonal">Back to Chats</AppButton></template>
+  </AppEmptyState>
   <template v-else>
     <div v-if="showRemote" class="remote-native-bar">
       <span class="native-glyph small" data-kind="timer"><AppIcon name="iphone" /></span>
@@ -217,7 +215,7 @@ onBeforeUnmount(() => {
           id="remote-device" v-model="state.remoteDeviceID" variant="tonal" class="device-select" :disabled="!!state.pending || !remote.state.value.loaded"
           :options="[{ value: null, label: 'No remote device' }, ...remote.state.value.devices.map(device => ({ value: device.id, label: `${device.name} · ${device.id.slice(-6)}` }))]"
         />
-        <button type="button" class="icon-button" title="Refresh devices" aria-label="Refresh devices" @click="remote.refresh(true)"><AppIcon name="refresh" /></button>
+        <AppIconButton icon="refresh" label="Refresh devices" @click="remote.refresh(true)" />
         <button v-if="state.remoteDeviceID" type="button" class="link-button danger" @click="revokeRemote">Revoke access</button>
       </div>
     </div>
@@ -226,17 +224,14 @@ onBeforeUnmount(() => {
       <div ref="messageContent" class="message-content">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
-        <button class="link-button" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</button>
+        <AppButton variant="text" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</AppButton>
       </div>
-      <div v-if="!state.loaded && !state.error" class="center"><span class="spinner" /> Loading messages…</div>
-      <div v-if="state.error" class="notice" role="status">
+      <AppLoading v-if="!state.loaded && !state.error" label="Loading messages…" />
+      <AppNotice v-if="state.error" tone="warning">
         {{ state.error }}
-        <button class="link-button" @click="refresh">Retry</button>
-      </div>
-      <div v-if="state.loaded && !state.turns.length && !state.pending" class="empty">
-        <h2>Start a conversation</h2>
-        <p>Send your first message.</p>
-      </div>
+        <template #actions><button class="link-button" @click="refresh">Retry</button></template>
+      </AppNotice>
+      <AppEmptyState v-if="state.loaded && !state.turns.length && !state.pending" icon="chat" title="Start a conversation" text="Send your first message." />
 
       <template v-for="item in items" :key="item.key">
         <div v-if="item.kind === 'day'" class="day">{{ item.label }}</div>
@@ -253,7 +248,7 @@ onBeforeUnmount(() => {
             <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
             <MessageAttachment :attachment="state.pending.attachment" :path="null" :local-url="state.pending.attachment.previewURL" />
             <div v-if="state.pending.text && state.pending.attachment.previewURL" class="caption"><LinkifiedText :text="state.pending.text" /></div>
-            <div class="meta" style="padding: 0 6px 2px">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div>
+            <div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div>
           </div>
         </div>
         <div v-if="state.pending.text && !state.pending.attachment?.previewURL" class="bubble-row outgoing">
@@ -283,7 +278,7 @@ onBeforeUnmount(() => {
                   <MessageReplyQuote v-if="item.turn.replyTo" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />
                   <MessageAttachment :attachment="item.turn.attachment" :path="attachmentPath(item.turn)" />
                   <div v-if="item.turn.userText && item.turn.attachment.mimeType.startsWith('image/')" class="caption"><LinkifiedText :text="item.turn.userText" /></div>
-                  <div class="meta" style="padding: 0 6px 2px">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
+                  <div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
                 </div>
                 <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble"><MessageReplyQuote v-if="item.turn.replyTo && !item.turn.attachment" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" /><LinkifiedText :text="item.turn.userText" /><LinkPreviewCard :url="previewLink(item.turn.userText, false)" /><div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
                 </template>
@@ -345,17 +340,22 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.remote-native-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--separator); background: var(--background); }
+.remote-native-bar {
+  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--md-outline-variant); background: var(--md-surface);
+}
 .remote-copy { flex: 1; min-width: 0; }
-.remote-copy label { display: block; font-size: 14px; font-weight: 700; }
-.remote-copy p { margin: 1px 0 0; font-size: 12px; color: var(--secondary); }
-.remote-copy p.error { color: var(--danger); }
-.remote-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.remote-copy label { display: block; font: var(--type-label-large); font-weight: 700; }
+.remote-copy p { margin: 1px 0 0; font: var(--type-body-small); color: var(--md-on-surface-variant); }
+.remote-copy p.error { color: var(--md-error); }
+.remote-actions { display: flex; align-items: center; gap: var(--space-1); flex: none; }
 .device-select { min-width: 0; max-width: 220px; }
-.remote-actions .icon-button svg { width: 18px; height: 18px; }
+.remote-actions :deep(.icon-button svg) { width: 18px; height: 18px; }
+/* Media bubbles have a 4 px inset, so the time needs its own side padding. */
+.bubble.media > .meta { padding: 0 var(--space-1-5) var(--space-0-5); }
 @media (max-width: 560px) {
   .remote-native-bar { flex-wrap: wrap; }
-  .remote-actions { width: 100%; padding-left: 38px; }
+  .remote-actions { width: 100%; padding-left: calc(26px + var(--space-3)); }
   .device-select { flex: 1; max-width: none; }
 }
 </style>

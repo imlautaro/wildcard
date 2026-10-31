@@ -31,6 +31,9 @@ const notice = computed(() => {
   return feed.value.error === 'HOME_NO_CONTACTS' ? 'Add a contact so they can start curating your updates.'
     : 'Your contacts couldn’t finish your updates. They’ll try again in a few minutes.';
 });
+// A failed first load is an error; the other notices explain the feed's state.
+const noticeTone = computed(() => home.state.error && !feed.value ? 'error'
+  : feed.value?.enabled && feed.value.error && feed.value.error !== 'HOME_NO_CONTACTS' ? 'warning' : 'info');
 
 usePolling(() => home.refresh(homeUpdating(home.state.value)), () => homeUpdating(home.state.value) ? 4000 : 60_000);
 onMounted(() => { void home.refresh(); });
@@ -71,13 +74,12 @@ function origin(topic: HomeFeed['topics'][number]) {
 
 <template>
   <div class="page home-page">
-    <header class="bar">
-      <NuxtLink to="/" class="icon-button back" aria-label="Back"><AppIcon name="back" /></NuxtLink>
-      <h1 class="title">Updates</h1>
-      <button class="icon-button" aria-label="Topics" title="Topics" @click="managing = true"><AppIcon name="list" /></button>
-      <button class="icon-button" aria-label="Update now" title="Update now" :disabled="!feed?.enabled || updating || busy" @click="run(home.update)"><AppIcon name="refresh" /></button>
-      <button class="icon-button primary" aria-label="Follow something in Updates" title="Follow something" @click="following = true"><AppIcon name="plus" /></button>
-    </header>
+    <AppTopBar title="Updates">
+      <template #leading><AppIconButton to="/" icon="back" label="Back" class="back" :tooltip="false" /></template>
+      <AppIconButton icon="list" label="Topics" @click="managing = true" />
+      <AppIconButton icon="refresh" label="Update now" :disabled="!feed?.enabled || updating || busy" @click="run(home.update)" />
+      <AppIconButton icon="plus" label="Follow something in Updates" variant="filled" @click="following = true" />
+    </AppTopBar>
     <div class="home-inner">
       <section class="home-hero">
         <p class="home-date">{{ today }}</p>
@@ -100,8 +102,11 @@ function origin(topic: HomeFeed['topics'][number]) {
         </template>
         <template v-else><span class="spinner" /><span class="grow">Your contacts are preparing updates…</span></template>
       </div>
-      <div v-if="notice" class="notice">{{ notice }} <button v-if="home.state.error && !feed" class="link-button" @click="home.refresh(true)">Retry</button></div>
-      <div v-if="actionError" class="notice">{{ actionError }}</div>
+      <AppNotice v-if="notice" :tone="noticeTone">
+        {{ notice }}
+        <template v-if="home.state.error && !feed" #actions><button class="link-button" @click="home.refresh(true)">Retry</button></template>
+      </AppNotice>
+      <AppNotice v-if="actionError">{{ actionError }}</AppNotice>
 
       <section v-if="feed?.agenda.length" class="home-agenda">
         <h3>Coming up</h3>
@@ -129,15 +134,11 @@ function origin(topic: HomeFeed['topics'][number]) {
       <div v-else-if="updating || (!feed && !home.state.error)" class="home-grid">
         <div v-for="index in 3" :key="index" class="placeholder" :class="{ wide: index === 1 }" />
       </div>
-      <div v-else-if="feed?.enabled" class="home-empty">
-        <AppIcon name="sparkle" />
-        <h3>Your contacts are getting to know you</h3>
-        <p>As you chat, they’ll bring news, figures and reminders about what matters to you here. You can also tell them what to follow.</p>
-        <button class="button" @click="following = true">Follow something</button>
-      </div>
-      <button v-if="feed?.cards.length" class="button secondary block follow" @click="following = true">
-        <AppIcon name="sparkle" /> Ask your contacts to follow something
-      </button>
+      <AppEmptyState v-else-if="feed?.enabled" class="home-empty" icon="sparkle" title="Your contacts are getting to know you"
+        text="As you chat, they’ll bring news, figures and reminders about what matters to you here. You can also tell them what to follow.">
+        <template #actions><AppButton @click="following = true">Follow something</AppButton></template>
+      </AppEmptyState>
+      <AppButton v-if="feed?.cards.length" variant="tonal" block icon="sparkle" @click="following = true">Ask your contacts to follow something</AppButton>
     </div>
 
     <AppSheet v-if="following" title="Follow in Updates" @close="following = false">
@@ -147,8 +148,8 @@ function origin(topic: HomeFeed['topics'][number]) {
         <p class="muted small">Your contacts decide how to show it and who keeps it up to date. Public questions may be searched on the web.</p>
       </form>
       <template #actions>
-        <button type="button" class="button text" @click="following = false">Cancel</button>
-        <button type="submit" form="home-follow" class="button" :disabled="!followText.trim() || busy">Add</button>
+        <AppButton variant="text" @click="following = false">Cancel</AppButton>
+        <AppButton type="submit" form="home-follow" :disabled="!followText.trim() || busy">Add</AppButton>
       </template>
     </AppSheet>
 
@@ -157,10 +158,10 @@ function origin(topic: HomeFeed['topics'][number]) {
       <ul class="topics">
         <li v-for="topic in feed?.topics ?? []" :key="topic.id" :class="{ hidden: topic.status === 'hidden' }">
           <span class="copy"><strong>{{ topic.title }}</strong><small>{{ topic.status === 'hidden' ? 'Hidden' : origin(topic) }}</small></span>
-          <button type="button" class="button outlined" :disabled="busy"
+          <AppButton variant="outlined" :disabled="busy"
             @click="run(() => home.setTopic(topic.id, { status: topic.status === 'hidden' ? 'active' : 'hidden' }))">
             {{ topic.status === 'hidden' ? 'Show' : 'Hide' }}
-          </button>
+          </AppButton>
         </li>
         <li v-if="!feed?.topics.length" class="muted">Nothing yet.</li>
       </ul>
@@ -171,22 +172,24 @@ function origin(topic: HomeFeed['topics'][number]) {
 <style scoped>
 .home-page { display: flex; flex-direction: column; }
 .home-page .bar { background: var(--md-surface); }
-.home-inner { width: 100%; max-width: 1040px; margin: 0 auto; padding: 0 20px 48px; display: flex; flex-direction: column; gap: 16px; }
-.home-hero { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
-.home-date { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--md-on-surface-variant); }
+.home-inner { width: 100%; max-width: 1040px; margin: 0 auto; padding: 0 var(--space-5) var(--space-12); display: flex; flex-direction: column; gap: var(--space-4); }
+/* The column's gap spaces the notices. */
+.home-inner > .notice { margin: 0; }
+.home-hero { display: flex; flex-direction: column; gap: var(--space-1-5); padding-top: var(--space-1); }
+.home-date { margin: 0; font: var(--type-label-medium); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--md-on-surface-variant); }
 .home-greeting { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; }
 .home-briefing { margin: 0; font-size: 17px; color: var(--md-on-surface-variant); max-width: 720px; }
-.home-curators { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--md-on-surface-variant); margin-top: 4px; }
+.home-curators { display: flex; align-items: center; gap: var(--space-2); font-size: 13px; font-weight: 600; color: var(--md-on-surface-variant); margin-top: var(--space-1); }
 .home-curators .stack { display: inline-flex; }
-.home-curators .stack > * + * { margin-left: -4px; }
+.home-curators .stack > * + * { margin-left: calc(-1 * var(--space-1)); }
 .home-curators .stack :deep(.avatar) { box-shadow: 0 0 0 2px var(--md-surface); }
-.home-status { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 999px; background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container); font-size: 14px; font-weight: 600; align-self: flex-start; max-width: 100%; }
+.home-status { display: flex; align-items: center; gap: 10px; padding: 10px var(--space-4); border-radius: var(--md-shape-full); background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container); font: var(--type-label-large); align-self: flex-start; max-width: 100%; }
 .home-status .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-status .count { font-variant-numeric: tabular-nums; opacity: 0.8; }
-h3 { font-size: 15px; font-weight: 700; margin: 0 0 8px; }
-.home-agenda { padding: 16px; border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); }
-.agenda-row { display: flex; align-items: center; gap: 12px; padding: 8px; margin: 0 -8px; border-radius: var(--md-shape-l); color: inherit; }
+h3 { font-size: 15px; font-weight: 700; margin: 0 0 var(--space-2); }
+.home-agenda { padding: var(--space-4); border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); }
+.agenda-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2); margin: 0 calc(-1 * var(--space-2)); border-radius: var(--md-shape-l); color: inherit; }
 .agenda-icon { width: 36px; height: 36px; flex: none; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
   color: var(--md-primary); background: color-mix(in srgb, var(--md-primary) 14%, transparent); }
 .agenda-icon.task { color: var(--md-warning); background: color-mix(in srgb, var(--md-warning) 14%, transparent); }
@@ -194,29 +197,24 @@ h3 { font-size: 15px; font-weight: 700; margin: 0 0 8px; }
 .agenda-row .copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 15px; }
 .agenda-row small { font-size: 12px; color: var(--md-on-surface-variant); }
 .agenda-row .chevron { color: var(--md-outline); }
-.apps-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
-.app-tile { width: 84px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; border-radius: var(--md-shape-l);
-  color: inherit; font-size: 12px; font-weight: 600; text-align: center; }
-.app-tile .mini-app-glyph { width: 56px; height: 56px; border-radius: 16px; }
-.home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+.apps-row { display: flex; gap: var(--space-3); overflow-x: auto; padding-bottom: var(--space-1); }
+.app-tile { width: 84px; flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-1-5); padding: var(--space-2) var(--space-1);
+  border-radius: var(--md-shape-l); color: inherit; font: var(--type-label-medium); text-align: center; }
+.app-tile .mini-app-glyph { width: 56px; height: 56px; border-radius: var(--md-shape-l); }
+.home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: var(--space-4); align-items: start; }
 .home-grid .wide { grid-column: 1 / -1; }
 .placeholder { height: 180px; border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); animation: pulse 1.4s ease-in-out infinite alternate; }
 .placeholder.wide { height: 260px; }
 @keyframes pulse { from { opacity: 1; } to { opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) { .placeholder { animation: none; } }
-.home-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 32px 24px; border-radius: var(--md-shape-xl);
-  background: var(--md-surface-container-low); color: var(--md-on-surface-variant); }
-.home-empty :deep(svg) { width: 40px; height: 40px; color: var(--md-primary); }
-.home-empty h3 { color: var(--md-on-surface); margin: 0; }
-.home-empty p { margin: 0 0 8px; max-width: 420px; }
-.follow { gap: 8px; }
-.follow-input { width: 100%; padding: 12px 16px; border: 1px solid var(--md-outline); border-radius: var(--md-shape-xs); background: transparent;
-  font-size: 16px; resize: vertical; outline: none; }
+.home-empty { flex: none; padding: var(--space-8) var(--space-6); border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); }
+.follow-input { width: 100%; padding: var(--space-3) var(--space-4); border: 1px solid var(--md-outline); border-radius: var(--md-shape-xs); background: transparent;
+  font: var(--type-body-large); resize: vertical; outline: none; }
 .follow-input:focus { border-color: var(--md-primary); box-shadow: inset 0 0 0 1px var(--md-primary); }
-.topics { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.topics li { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
-.topics .copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.topics small { font-size: 12px; color: var(--md-on-surface-variant); }
+.topics { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.topics li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
+.topics .copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-0-5); }
+.topics small { font: var(--type-body-small); color: var(--md-on-surface-variant); }
 .topics li.hidden strong { color: var(--md-on-surface-variant); }
-@media (max-width: 860px) { .home-grid { grid-template-columns: minmax(0, 1fr); } .home-inner { padding: 0 12px 32px; } .home-greeting { font-size: 28px; } }
+@media (max-width: 860px) { .home-grid { grid-template-columns: minmax(0, 1fr); } .home-inner { padding: 0 var(--space-3) var(--space-8); } .home-greeting { font-size: 28px; } }
 </style>

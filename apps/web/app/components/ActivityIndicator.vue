@@ -15,7 +15,7 @@ const label = computed(() => `${props.name ? `${props.name} is ` : ''}${props.ac
 </template>
 
 <style scoped>
-.activity { display: inline-flex; align-items: center; gap: 8px; }
+.activity { display: inline-flex; align-items: center; gap: var(--space-2); }
 .activity-dots { display: inline-flex; gap: 3px; flex: none; }
 .activity-dots span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: typing 1.2s infinite ease-in-out; }
 .activity-dots span:nth-child(2) { animation-delay: 0.15s; }

@@ -53,15 +53,16 @@ async function create() {
       <AppSelect v-model="mode" label="Create contact" :options="[{ value: 'manual', label: 'Manually' }, { value: 'ai', label: 'Generate with AI' }]" />
       <form v-if="mode === 'manual'" @submit.prevent="create">
         <IdentityEditor :name="name || '?'" :path="null" />
-        <div class="group">
+        <AppListGroup>
           <div class="field"><input v-model="name" type="text" placeholder="Name" aria-label="Name" maxlength="100" autofocus></div>
-        </div>
-        <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
-        <button type="submit" class="button block" :disabled="!valid || busy">Create Contact</button>
+        </AppListGroup>
+        <AppNotice v-if="error">{{ error }}</AppNotice>
+        <AppButton type="submit" block :disabled="!valid || busy">Create Contact</AppButton>
       </form>
       <form v-else @submit.prevent="generation.submit">
+        <!-- Outlined selects follow, not a list group, so the title stays markup. -->
         <div class="group-title info-title">Your bot <InfoButton label="Your bot" text="These fields describe your bot. Your saved onboarding preferences are reused without asking for your details again. Generation uses Meta Standard processing." /></div>
-        <fieldset :disabled="generation.busy.value || !!job" style="border: 0; padding: 0" v-if="options">
+        <fieldset v-if="options" class="bot-fields" :disabled="generation.busy.value || !!job">
           <AppSelect v-model="draft.style" label="Visual style" :options="options.styles.map(o => ({ value: o.code, label: o.name }))" />
           <AppSelect v-model="draft.purpose" label="Relationship" :options="[{ value: 'friends', label: 'Friend' }, { value: 'study', label: 'Study partner' }, { value: 'work', label: 'Work colleague' }]" />
           <label class="field">Age<input v-model.number="draft.age" type="number" min="18" max="120" step="1" required></label>
@@ -69,12 +70,19 @@ async function create() {
           <AppSelect v-model="draft.language" label="Preferred language" :options="options.languages.map(o => ({ value: o.code, label: o.name }))" />
           <AppSelect v-model="draft.country" label="Country" :options="options.countries.map(o => ({ value: o.code, label: o.name }))" />
         </fieldset>
-        <p v-else class="group-footer">Loading options…</p>
+        <AppLoading v-else label="Loading options…" />
         <p v-if="running" class="group-footer" role="status">Creating your contact and portrait… You can close the app and return later.</p>
-        <p v-if="job?.status === 'failed'" class="notice">Could not finish creating the contact. Create again to reuse the saved identity and portrait.</p>
-        <p v-if="generation.error.value" class="notice">{{ generation.error.value }} <button type="button" class="link-button" @click="generation.refresh">Refresh</button></p>
-        <button type="submit" class="button block" :disabled="!ready || generation.busy.value || running">Create Contact</button>
+        <AppNotice v-if="job?.status === 'failed'">Could not finish creating the contact. Create again to reuse the saved identity and portrait.</AppNotice>
+        <AppNotice v-if="generation.error.value">
+          {{ generation.error.value }}
+          <template #actions><button type="button" class="link-button" @click="generation.refresh">Refresh</button></template>
+        </AppNotice>
+        <AppButton type="submit" block :disabled="!ready || generation.busy.value || running">Create Contact</AppButton>
       </form>
     </div>
   </div>
 </template>
+
+<style scoped>
+.bot-fields { border: 0; padding: 0; }
+</style>

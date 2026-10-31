@@ -44,3 +44,8 @@ async function open() {
   </button>
   <ChatImageViewer v-if="showImage && source" :source="source" :name="attachment.name" @close="showImage = false" />
 </template>
+
+<style scoped>
+/* The layer's .link-button doesn't wrap; long file names must. */
+.file { white-space: normal; }
+</style>

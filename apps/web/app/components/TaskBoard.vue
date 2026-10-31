@@ -108,9 +108,9 @@ const cancelList = (list: TaskList) => run(async () => {
 
 <template>
   <div class="page-inner">
-    <div v-if="!board && !tasks.state.value.error" class="center"><span class="spinner" /> Loading…</div>
+    <AppLoading v-if="!board && !tasks.state.value.error" />
     <template v-else>
-      <p v-if="error ?? tasks.state.value.error" class="notice" style="margin: 0 0 12px">{{ error ?? tasks.state.value.error }}</p>
+      <AppNotice v-if="error ?? tasks.state.value.error">{{ error ?? tasks.state.value.error }}</AppNotice>
       <form class="group" @submit.prevent="createList">
         <div class="field">
           <input v-model="newList" type="text" maxlength="200" placeholder="New list" aria-label="New list title">
@@ -120,20 +120,21 @@ const cancelList = (list: TaskList) => run(async () => {
       <p v-if="!board?.lists.length" class="group-footer">Lists keep shared work in this chat. Contacts can create them, take tasks, wait for blockers, and report results. You can also ask in the chat, for example “Split the trip planning into tasks.”</p>
 
       <template v-for="list in board?.lists ?? []" :key="list.id">
-        <div class="group-title task-list-title">
-          <span>{{ list.title }}</span>
-          <span v-if="list.status === 'canceled'" class="chip">Canceled</span>
-          <span v-else class="small muted">{{ list.tasks.filter(t => t.status === 'done').length }}/{{ list.tasks.filter(t => t.status !== 'canceled').length }}</span>
-        </div>
-        <div class="group">
+        <AppListGroup>
+          <template #title>
+            <span class="task-list-name">{{ list.title }}</span>
+            <AppChip v-if="list.status === 'canceled'">Canceled</AppChip>
+            <span v-else class="small muted">{{ list.tasks.filter(t => t.status === 'done').length }}/{{ list.tasks.filter(t => t.status !== 'canceled').length }}</span>
+          </template>
           <div v-for="task in list.tasks" :key="task.id" class="task-row" :class="{ finished: ['done', 'canceled'].includes(task.status) }">
             <div class="task-line">
+              <!-- Raw markup: AppIconButton only fills its glyph through `selected`, which would add aria-pressed. -->
               <button type="button" class="icon-button task-check" :disabled="busy || list.status === 'canceled' || task.status === 'canceled'"
                 :aria-label="task.status === 'done' ? `Mark “${task.title}” not done` : `Mark “${task.title}” done`" @click="toggle(task)">
                 <AppIcon :name="task.status === 'done' ? 'check' : task.status === 'canceled' ? 'block' : task.blocked ? 'clock' : 'circle'" :filled="task.status === 'done'" />
               </button>
               <button type="button" class="task-copy link-button" :disabled="list.status === 'canceled'" @click="edit(task)">
-                <span class="task-title">{{ task.title }}<span v-if="task.assigneeKind === 'agent' && task.status === 'in_progress' && !workLabel(task)" class="chip primary task-working"><span class="live-dot" aria-hidden="true" />Working</span></span>
+                <span class="task-title">{{ task.title }}<AppChip v-if="task.assigneeKind === 'agent' && task.status === 'in_progress' && !workLabel(task)" tone="primary" class="task-working"><span class="live-dot" aria-hidden="true" />Working</AppChip></span>
                 <span class="small muted">{{ detail(list, task) }}</span>
                 <span v-if="task.nextStep" class="small">Next step: {{ task.nextStep }}</span>
                 <span v-if="task.blockedReason" class="small">Blocked: {{ task.blockedReason }}</span>
@@ -170,9 +171,9 @@ const cancelList = (list: TaskList) => run(async () => {
               </div>
               <div v-if="task.assigneeKind === 'agent' && task.workState && !['done', 'canceled'].includes(task.status)" class="task-actions">
                 <InfoButton label="Work" text="Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget." />
-                <button v-if="task.workState === 'active'" type="button" class="button secondary" :disabled="busy" @click="controlWork(task, 'paused')">Pause work</button>
-                <button v-else type="button" class="button secondary" :disabled="busy || task.workUsed >= task.workLimit" @click="controlWork(task, 'active')">Resume work</button>
-                <button type="button" class="button secondary" :disabled="busy" @click="run(async () => { await tasks.updateTask(task.id, originalTask(task).version, { status: 'canceled' }); editing = null; })">Cancel task</button>
+                <AppButton v-if="task.workState === 'active'" variant="tonal" :disabled="busy" @click="controlWork(task, 'paused')">Pause work</AppButton>
+                <AppButton v-else variant="tonal" :disabled="busy || task.workUsed >= task.workLimit" @click="controlWork(task, 'active')">Resume work</AppButton>
+                <AppButton variant="tonal" :disabled="busy" @click="run(async () => { await tasks.updateTask(task.id, originalTask(task).version, { status: 'canceled' }); editing = null; })">Cancel task</AppButton>
               </div>
               <fieldset v-if="list.tasks.length > 1" class="task-blockers">
                 <legend class="small muted">Waits for</legend>
@@ -182,8 +183,8 @@ const cancelList = (list: TaskList) => run(async () => {
               </fieldset>
             </form>
             <template #actions>
-              <button type="button" class="button text" :disabled="busy" @click="editing = null">Close</button>
-              <button type="submit" :form="`task-form-${task.id}`" class="button" :disabled="busy || !form.title.trim() || form.monitorKeywords.trim().length > 300">Save</button>
+              <AppButton variant="text" :disabled="busy" @click="editing = null">Close</AppButton>
+              <AppButton type="submit" :form="`task-form-${task.id}`" :disabled="busy || !form.title.trim() || form.monitorKeywords.trim().length > 300">Save</AppButton>
             </template>
             </AppSheet>
           </div>
@@ -191,9 +192,15 @@ const cancelList = (list: TaskList) => run(async () => {
             <input v-model="drafts[list.id]" type="text" maxlength="300" placeholder="Add a task" :aria-label="`Add a task to ${list.title}`">
             <button type="submit" class="link-button" :disabled="busy || !drafts[list.id]?.trim()">Add</button>
           </form>
+        </AppListGroup>
+        <div v-if="list.status === 'active'" class="actions-row">
+          <AppButton variant="danger-text" size="small" :disabled="busy" @click="cancelList(list)">Cancel list</AppButton>
         </div>
-        <button v-if="list.status === 'active'" type="button" class="link-button danger small task-cancel" :disabled="busy" @click="cancelList(list)">Cancel list</button>
       </template>
     </template>
   </div>
 </template>
+
+<style scoped>
+.task-list-name { flex: 1; min-width: 0; }
+</style>

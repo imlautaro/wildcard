@@ -29,59 +29,41 @@ onMounted(() => { void chats.refresh(); });
 </script>
 
 <template>
-  <header class="bar">
-    <button class="icon-button" aria-label="Menu" title="Menu" :popovertarget="menuID"
-            :aria-controls="menuID" :aria-expanded="menuOpen">
-      <AppIcon name="menu" />
-    </button>
-    <nav :id="menuID" ref="menu" popover="auto" class="chat-menu" aria-label="Main navigation" @toggle="onMenuToggle">
-      <NuxtLink to="/updates" class="row" @click="menu?.hidePopover()">
-        <AppIcon name="sparkle" />
-        <span>Updates</span>
-      </NuxtLink>
-      <NuxtLink to="/account" class="row" @click="menu?.hidePopover()">
-        <AppIcon name="person" />
-        <span>My account</span>
-      </NuxtLink>
-    </nav>
-    <button v-if="archived" class="icon-button" aria-label="Back to Chats" title="Back to Chats" @click="archived=false">
-      <AppIcon name="back" />
-    </button>
-    <h1 class="title">{{ archived ? 'Archived' : 'Chats' }}</h1>
-    <NuxtLink to="/updates" class="icon-button" aria-label="Updates" title="Updates" :class="{ active: route.path === '/updates' }">
-      <AppIcon name="sparkle" :filled="route.path === '/updates'" />
-    </NuxtLink>
-    <button class="icon-button" aria-label="Archived" title="Archived" :aria-pressed="archived" @click="archived=!archived; chats.loadAllContacts()">
-      <AppIcon name="archive" :filled="archived" />
-    </button>
-    <NuxtLink to="/contacts" class="icon-button primary" aria-label="New chat" title="New chat">
-      <AppIcon name="plus" />
-      <span v-if="chats.invitationCount.value" class="badge" :aria-label="`${chats.invitationCount.value} pending invitations`">{{ chats.invitationCount.value }}</span>
-    </NuxtLink>
-  </header>
-  <div v-if="actionError" class="notice" role="alert">
-    {{ actionError }}
-    <button class="link-button" @click="actionError = null">Dismiss</button>
-  </div>
-  <div v-if="chats.error.value && visibleRows.length" class="notice" role="status">
+  <AppTopBar :title="archived ? 'Archived' : 'Chats'">
+    <template #leading>
+      <button class="icon-button" aria-label="Menu" title="Menu" :popovertarget="menuID"
+              :aria-controls="menuID" :aria-expanded="menuOpen">
+        <AppIcon name="menu" />
+      </button>
+      <nav :id="menuID" ref="menu" popover="auto" class="menu chat-menu" aria-label="Main navigation" @toggle="onMenuToggle">
+        <AppMenuItem to="/updates" icon="sparkle" @click="menu?.hidePopover()">Updates</AppMenuItem>
+        <AppMenuItem to="/account" icon="person" @click="menu?.hidePopover()">My account</AppMenuItem>
+      </nav>
+      <AppIconButton v-if="archived" icon="back" label="Back to Chats" @click="archived = false" />
+    </template>
+    <AppIconButton to="/updates" icon="sparkle" label="Updates" :selected="route.path === '/updates'" />
+    <AppIconButton icon="archive" label="Archived" :selected="archived" @click="archived = !archived; chats.loadAllContacts()" />
+    <AppIconButton to="/contacts" icon="plus" label="New chat" variant="filled"
+                   :badge="chats.invitationCount.value" :badge-label="`${chats.invitationCount.value} pending invitations`" />
+  </AppTopBar>
+  <AppNotice v-if="actionError" dismissible @dismiss="actionError = null">{{ actionError }}</AppNotice>
+  <AppNotice v-if="chats.error.value && visibleRows.length" tone="warning">
     {{ chats.error.value }}
-    <button class="link-button" @click="chats.refresh()">Retry</button>
-  </div>
+    <template #actions><button class="link-button" @click="chats.refresh()">Retry</button></template>
+  </AppNotice>
   <div class="scroll">
-    <div v-if="!chats.loaded.value && !chats.error.value" class="center"><span class="spinner" /> Loading chats…</div>
-    <div v-else-if="chats.error.value && !visibleRows.length" class="empty">
-      <p>{{ chats.error.value }}</p>
-      <button class="button secondary" @click="chats.refresh()">Try again</button>
-    </div>
-    <div v-else-if="!visibleRows.length" class="empty">
-      <h2>{{ archived ? 'No archived chats' : 'No chats yet' }}</h2>
-      <p>Open a contact to start a conversation.</p>
-      <NuxtLink to="/contacts" class="button">Open Contacts</NuxtLink>
-    </div>
+    <AppLoading v-if="!chats.loaded.value && !chats.error.value" label="Loading chats…" />
+    <AppEmptyState v-else-if="chats.error.value && !visibleRows.length" icon="error" :text="chats.error.value">
+      <template #actions><AppButton variant="tonal" icon="refresh" @click="chats.refresh()">Try again</AppButton></template>
+    </AppEmptyState>
+    <AppEmptyState v-else-if="!visibleRows.length" :icon="archived ? 'archive' : 'chat'"
+                   :title="archived ? 'No archived chats' : 'No chats yet'" text="Open a contact to start a conversation.">
+      <template #actions><AppButton to="/contacts" icon="plus">Open Contacts</AppButton></template>
+    </AppEmptyState>
     <ul v-else class="list">
       <li v-for="row in visibleRows" :key="`${row.kind}/${row.id}`">
-        <NuxtLink :to="rowPath(row)" class="row" :class="{ active: route.path === rowPath(row), unread: row.unread }" @contextmenu="rowMenu?.show(row, $event)">
-          <AppAvatar :name="row.name" :path="row.photoPath" :size="48" />
+        <NuxtLink :to="rowPath(row)" class="row" data-ripple :class="{ active: route.path === rowPath(row), unread: row.unread }" @contextmenu="rowMenu?.show(row, $event)">
+          <AppAvatar :name="row.name" :path="row.photoPath" :size="52" />
           <div class="body">
             <div class="top">
               <strong>{{ row.name }}</strong>
@@ -101,7 +83,7 @@ onMounted(() => { void chats.refresh(); });
       </li>
     </ul>
     <div v-if="chats.nextCursor.value" class="center">
-      <button class="link-button" @click="chats.loadMore()">Load older chats</button>
+      <AppButton variant="text" @click="chats.loadMore()">Load older chats</AppButton>
     </div>
   </div>
   <ChatRowMenu ref="rowMenu" @error="message => actionError = message" />

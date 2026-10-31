@@ -8,7 +8,7 @@ useMessageSoundPlayback();
     <div class="auth-card empty">
       <h2>Wildcard is unavailable</h2>
       <p>Check your connection and try again.</p>
-      <button class="button" @click="restore().then(() => $router.replace($route.fullPath))">Try again</button>
+      <AppButton @click="restore().then(() => $router.replace($route.fullPath))">Try again</AppButton>
     </div>
   </div>
   <NuxtLayout v-else>

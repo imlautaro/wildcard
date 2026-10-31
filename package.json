@@ -4,7 +4,8 @@
   "workspaces": [
     "apps/api",
     "apps/web",
-    "apps/admin"
+    "apps/admin",
+    "packages/ui"
   ],
   "engines": {
     "node": ">=24"

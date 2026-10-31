@@ -44,7 +44,7 @@ const answer = computed(() => question.value.options ? question.value.options[qu
 
 <template>
   <div class="group">
-    <button type="button" class="mini-row mini-lesson-row" @click="start">
+    <button type="button" class="mini-row mini-lesson-row" data-ripple @click="start">
       <span class="badge-icon"><AppIcon name="book" /></span>
       <span class="copy"><strong>{{ lesson.title }}</strong><span>{{ lesson.questions.length }} questions</span></span>
       <span class="start">Start</span>
@@ -53,7 +53,7 @@ const answer = computed(() => question.value.options ? question.value.options[qu
   <Teleport to="body">
     <div v-if="playing" class="mini-lesson" role="dialog" aria-modal="true" :aria-label="lesson.title">
       <header>
-        <button type="button" class="icon-button" aria-label="Close" @click="playing = false"><AppIcon name="close" /></button>
+        <AppIconButton icon="close" label="Close" @click="playing = false" />
         <div class="track"><div class="fill" :style="{ width: `${(index + (result === null ? 0 : 1)) / lesson.questions.length * 100}%` }" /></div>
         <span class="hearts" :aria-label="`${hearts} hearts`"><AppIcon name="heart" filled />{{ hearts }}</span>
       </header>
@@ -62,14 +62,14 @@ const answer = computed(() => question.value.options ? question.value.options[qu
         <h2>{{ failed ? 'Out of hearts' : 'Lesson complete!' }}</h2>
         <p>{{ correct }} of {{ lesson.questions.length }} correct</p>
         <p v-if="!failed && lesson.xp && correct" class="xp">+{{ correct }} XP</p>
-        <button type="button" class="mini-button primary" @click="failed ? start() : done()">{{ failed ? 'Try again' : 'Done' }}</button>
-        <button v-if="failed" type="button" class="link-button" @click="playing = false">Close</button>
+        <button type="button" class="mini-button primary" data-ripple @click="failed ? start() : done()">{{ failed ? 'Try again' : 'Done' }}</button>
+        <AppButton v-if="failed" variant="text" @click="playing = false">Close</AppButton>
       </section>
       <template v-else>
         <section class="question">
           <h2>{{ question.prompt }}</h2>
           <div v-if="question.options" class="options">
-            <button v-for="(option, at) in question.options" :key="at" type="button" :disabled="result !== null"
+            <button v-for="(option, at) in question.options" :key="at" type="button" data-ripple :disabled="result !== null"
               :class="{ chosen: selected === at, right: result !== null && at === question.correct, wrong: result === false && selected === at }" @click="selected = at">{{ option }}</button>
           </div>
           <textarea v-else v-model="typed" rows="2" placeholder="Type your answer" :disabled="result !== null" @keydown.enter.prevent="ready && result === null && check()" />
@@ -80,7 +80,7 @@ const answer = computed(() => question.value.options ? question.value.options[qu
             <span v-if="!result">{{ answer }}</span>
             <span v-if="question.explain" class="explain">{{ question.explain }}</span>
           </div>
-          <button type="button" class="mini-button primary" :disabled="result === null && !ready" @click="result === null ? check() : advance()">{{ result === null ? 'Check' : 'Continue' }}</button>
+          <button type="button" class="mini-button primary" data-ripple :disabled="result === null && !ready" @click="result === null ? check() : advance()">{{ result === null ? 'Check' : 'Continue' }}</button>
         </footer>
       </template>
     </div>

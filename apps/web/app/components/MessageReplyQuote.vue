@@ -24,23 +24,21 @@ const active = computed(() => props.interactive && props.preview.quote.available
 <style scoped>
 .reply-quote {
   display: flex; flex-direction: column; gap: 1px; width: 100%; min-width: 0; margin: 0; padding: 5px 10px 5px 11px;
-  border: 0; border-radius: 10px; background: rgba(0, 0, 0, 0.06); color: inherit; font: inherit; text-align: left;
+  border: 0; border-radius: 10px; background: color-mix(in srgb, var(--md-on-surface) 7%, transparent); color: inherit; font: inherit; text-align: left;
   white-space: normal; position: relative; overflow: hidden; cursor: default;
 }
 .reply-quote::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--quote-light); }
 .reply-quote.active { cursor: pointer; }
-.reply-quote.active:hover { background: rgba(0, 0, 0, 0.1); }
+.reply-quote.active:hover { background: color-mix(in srgb, var(--md-on-surface) 11%, transparent); }
 .reply-quote:disabled { opacity: 1; }
 .author { font-size: 13px; font-weight: 700; color: var(--quote-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .text {
-  font-size: 13px; color: var(--secondary); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  font-size: 13px; color: var(--md-on-surface-variant); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow-wrap: anywhere;
 }
-.text svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
+.text svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: var(--space-1); }
 .text.unavailable { font-style: italic; }
 @media (prefers-color-scheme: dark) {
-  .reply-quote { background: rgba(255, 255, 255, 0.08); }
-  .reply-quote.active:hover { background: rgba(255, 255, 255, 0.12); }
   .reply-quote::before { background: var(--quote-dark); }
   .author { color: var(--quote-dark); }
 }

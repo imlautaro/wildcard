@@ -12,33 +12,31 @@ onMounted(() => { void refresh(); });
 </script>
 
 <template>
-  <button type="button" class="button-row opens" @click="open = true">
-    <AppIcon name="bolt" />Group energy
-    <span class="row-value">{{ energy ? `${energy.points} / ${energy.capacity}` : busy ? 'Loading…' : '—' }}</span>
-  </button>
+  <AppListItem icon="bolt" opens :value="energy ? `${energy.points} / ${energy.capacity}` : busy ? 'Loading…' : '—'" @click="open = true">Group energy</AppListItem>
   <AppSheet v-if="open" title="Group energy" @close="open = false">
     <template #header>
       <InfoButton label="Group energy" text="Each group message uses one point. One point recharges every five minutes, even offline. Private replies do not use energy." />
     </template>
-    <div class="group">
+    <AppListGroup>
       <div v-if="energy" class="text-block">
         <p class="energy-points"><strong>{{ energy.points }}</strong> / {{ energy.capacity }}</p>
         <div class="meter" :class="{ low: energy.points <= 5 }" role="progressbar" :aria-valuenow="energy.points" aria-valuemin="0" :aria-valuemax="energy.capacity">
           <span :style="{ width: `${Math.min(100, (energy.points / energy.capacity) * 100)}%` }" />
         </div>
-        <p v-if="nextPoint" style="margin-top: 10px">Next point at {{ nextPoint }}</p>
+        <p v-if="nextPoint" class="next-point">Next point at {{ nextPoint }}</p>
       </div>
-      <div v-else-if="busy" class="center"><span class="spinner" /> Loading energy…</div>
-      <button type="button" class="button-row" :disabled="busy || !energy" @click="reset"><AppIcon name="refresh" />Reset to 50</button>
-    </div>
-    <div v-if="error" class="text-block">
-      <p style="color: var(--danger)">{{ error }}</p>
-      <button type="button" class="link-button" style="padding-left: 0" :disabled="busy" @click="refresh()">Retry</button>
-    </div>
+      <AppLoading v-else-if="busy" label="Loading energy…" />
+      <AppListItem icon="refresh" :disabled="busy || !energy" @click="reset">Reset to 50</AppListItem>
+    </AppListGroup>
+    <AppNotice v-if="error">
+      {{ error }}
+      <template #actions><button type="button" class="link-button" :disabled="busy" @click="refresh()">Retry</button></template>
+    </AppNotice>
   </AppSheet>
 </template>
 
 <style scoped>
 .energy-points { font-size: 15px; color: var(--md-on-surface); }
-.energy-points strong { font-size: 28px; }
+.energy-points strong { font: var(--type-headline-medium); }
+.next-point { margin-top: var(--space-3); }
 </style>

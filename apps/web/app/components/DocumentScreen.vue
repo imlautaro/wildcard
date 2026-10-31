@@ -14,6 +14,7 @@ const busy = ref(false);
 const error = ref<string | null>(null);
 const conflict = ref<string | null>(null);
 const draft = reactive({ title: '', body: '', baseRevision: 0, summary: '' });
+const modes: { value: boolean; label: string }[] = [{ value: false, label: 'Write' }, { value: true, label: 'Preview' }];
 
 let timer: ReturnType<typeof setInterval> | undefined;
 onMounted(() => {
@@ -57,28 +58,28 @@ async function remove() {
 <template>
   <PageBar :title="editing ? 'Edit document' : (doc?.title ?? 'Document')" :back="back" always-back>
     <template v-if="doc && !editing">
-      <button type="button" class="icon-button" aria-label="Revisions" title="Revisions" @click="showHistory = !showHistory"><AppIcon name="clock" /></button>
-      <button type="button" class="icon-button" aria-label="Edit" title="Edit" @click="startEditing"><AppIcon name="compose" /></button>
+      <AppIconButton icon="clock" label="Revisions" @click="showHistory = !showHistory" />
+      <AppIconButton icon="compose" label="Edit" @click="startEditing" />
     </template>
     <template v-else-if="editing">
-      <button type="button" class="link-button" :disabled="busy" @click="editing = false">Cancel</button>
-      <button type="button" class="button" :disabled="busy || !draft.title.trim() || !changed" @click="save">Save</button>
+      <AppButton variant="text" :disabled="busy" @click="editing = false">Cancel</AppButton>
+      <AppButton :disabled="busy || !draft.title.trim() || !changed" @click="save">Save</AppButton>
     </template>
   </PageBar>
   <div class="page">
     <div class="page-inner document-page">
-      <p v-if="error ?? entry.error" class="notice" style="margin: 0 0 12px">{{ error ?? entry.error }}</p>
-      <div v-if="!doc && !entry.error" class="center"><span class="spinner" /> Loading…</div>
+      <AppNotice v-if="error ?? entry.error">{{ error ?? entry.error }}</AppNotice>
+      <AppLoading v-if="!doc && !entry.error" />
       <template v-else-if="doc && editing">
-        <div v-if="conflict" class="notice document-conflict">
-          <span>{{ conflict }}</span>
-          <span><button type="button" class="link-button" @click="useTheirs">Use their version</button> · <button type="button" class="link-button" @click="keepMine">Keep mine and save over it</button></span>
-        </div>
+        <AppNotice v-if="conflict" tone="warning">
+          {{ conflict }}
+          <template #actions>
+            <button type="button" class="link-button" @click="useTheirs">Use their version</button>
+            <button type="button" class="link-button" @click="keepMine">Keep mine and save over it</button>
+          </template>
+        </AppNotice>
         <input v-model="draft.title" class="document-title-input" type="text" maxlength="200" aria-label="Title">
-        <div class="segmented" role="group" aria-label="Editor mode">
-          <button type="button" :aria-pressed="!preview" @click="preview = false">Write</button>
-          <button type="button" :aria-pressed="preview" @click="preview = true">Preview</button>
-        </div>
+        <AppSegmented v-model="preview" :options="modes" label="Editor mode" />
         <textarea v-if="!preview" v-model="draft.body" class="document-editor" maxlength="100000" aria-label="Markdown" placeholder="Write in Markdown…" />
         <MessageMarkdown v-else class="document-body" :text="draft.body || '*Nothing to preview.*'" />
         <input v-model="draft.summary" class="document-summary" type="text" maxlength="300" placeholder="What changed? (optional)" aria-label="Change summary">
@@ -96,17 +97,19 @@ async function remove() {
             </li>
           </ul>
         </details>
-        <div v-if="showHistory" class="group">
+        <AppListGroup v-if="showHistory">
           <div v-for="revision in doc.revisions" :key="revision.revision" class="text-block">
             <strong>{{ revision.revision }}</strong> · {{ revision.authorName }} · {{ fullDate(revision.createdAt) }}<br>
             <span class="small muted">{{ revision.summary ?? 'No summary' }}</span>
           </div>
-        </div>
+        </AppListGroup>
         <MessageMarkdown v-if="doc.body.trim()" class="document-body" :text="doc.body" />
-        <div v-else class="empty"><p>This document is empty. Edit it, or ask a contact in the chat to write it.</p></div>
-        <button type="button" class="link-button danger small task-cancel" :disabled="busy" @click="remove">Delete document</button>
+        <AppEmptyState v-else icon="doc" text="This document is empty. Edit it, or ask a contact in the chat to write it." />
+        <div class="actions-row">
+          <AppButton variant="danger-text" size="small" :disabled="busy" @click="remove">Delete document</AppButton>
+        </div>
       </template>
-      <div v-else class="empty"><h2>Document unavailable</h2><p>It was deleted or you no longer have access.</p></div>
+      <AppEmptyState v-else icon="error" title="Document unavailable" text="It was deleted or you no longer have access." />
     </div>
   </div>
 </template>

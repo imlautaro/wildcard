@@ -186,22 +186,21 @@ The web app follows Material 3 rather than the iOS look. The user scoped this
 change to the web client: iOS keeps its native SwiftUI design, and behavior, copy,
 and caching still match across clients. Manrope stays the typeface on both.
 
-- **Tokens.** `app/assets/css/main.css` defines Material 3 color roles (`--md-*`)
-  from a tonal-spot scheme seeded with the brand blue `#045de3`, which stays the
-  light-mode primary. Dark mode uses the scheme's dark roles. Shape, elevation,
-  and motion scales live beside them. Older names (`--accent`, `--surface`,
-  `--separator`, …) remain as aliases so page and scoped styles keep working; use the
-  `--md-*` roles in new code.
-- **Components.** The shared classes keep their names and markup. `.button` is
-  filled; `.button.secondary` (tonal), `.button.outlined`, and `.button.text` are the
-  alternatives, with one filled action per task area. `.link-button` is a text
-  button and `.icon-button` a standard 40 px icon button. `.group` renders a
-  Material 3 expressive list: items separated by 2 px gaps inside one rounded block.
-  `a.button-row` (navigation) trails a chevron; `button.button-row` (action) keeps
-  the primary color. `.toggle` inputs are Material switches, `.text-field` is an
-  outlined field with a floating label (used on sign-in), `.icon-button.primary`
-  is the solid primary **+** action for **New chat** in the chat-list header, and
-  `.mini-tabs` is a navigation bar with an active indicator pill.
+- **Design system layer.** Since October 30, 2026 tokens, component styles, the
+  press ripple, the icon registry, Manrope and the shared `App*` Vue components live
+  in the Nuxt layer `packages/ui`, which the web app and the admin panel both extend.
+  [docs/design-system.md](design-system.md) is the catalog: tokens, the Wildcard
+  customization over Material 3, every component, spacing rules, state layers,
+  icons and how to extend the system. `app/assets/css/main.css` keeps only the web's
+  own surfaces (chat shell, chat list, conversation, native tools, mini apps, tasks
+  and documents) and stays unlayered, so it overrides the layer.
+- **Templates.** Pages and components use the layer components (`AppButton`,
+  `AppIconButton`, `AppTopBar`/`PageBar`, `AppListGroup`, `AppListItem`, `AppSwitch`,
+  `AppTextField`, `AppSearchField`, `AppNotice`, `AppEmptyState`, `AppLoading`,
+  `AppChip`, `AppMenuItem`, `AppSheet`, `AppSelect`, `InfoButton`) instead of
+  hand-written class markup and inline spacing. Web-specific interactive elements
+  (chat rows, the composer's send buttons, mini-app controls) opt into the ripple
+  with `data-ripple`.
 - **Forms.** `AppSelect` replaces every native `<select>`: a Material menu listbox
   following the WAI-ARIA select-only combobox pattern (arrow keys, Home/End,
   type-ahead, Escape, outside press). Its `outlined` variant has a floating `label`,
@@ -248,22 +247,6 @@ and caching still match across clients. Manrope stays the typeface on both.
   Account, Back restoring Archived selection, and Chats/Contacts at 390 px.
   Scroll restoration with populated history, dark mode, offline recovery and
   account switching were not rechecked.
-- **State layers and ripple.** Interactive classes get a `currentColor` overlay
-  (8% hover, 10% focus and press). `app/plugins/ripple.client.ts` adds the press
-  ripple with one delegated `pointerdown` listener; the host list there and in
-  `main.css` must stay in sync. Add `data-ripple` to opt an element in, or
-  `data-no-ripple` to opt one out. Touch presses wait 90 ms and cancel when the
-  pointer moves more than 10 px, so starting a scroll doesn't flash a row. Disabled
-  controls and `prefers-reduced-motion` get no ripple. The wave renders in its own
-  clipping layer, so hosts keep `overflow: visible` (icon-button badges).
-- **Icons.** `AppIcon` renders Material Symbols (Rounded) through `@nuxt/icon` in SVG
-  mode, so CSS that sizes `svg` still applies. `app/utils/icons.ts` maps each
-  semantic name to an outline and a filled symbol (`<AppIcon name="heart" filled />`);
-  `nuxt.config.ts` bundles exactly those icons into the client (about 80 icons,
-  ~40 KB uncompressed). The provider is `none` with no API fallback and no server
-  bundle, so the app never requests icons from Iconify and the Worker doesn't carry
-  the multi-megabyte collection. Add new icons to the map only after confirming the
-  name exists in `@iconify-json/material-symbols`.
 
 Verification (October 29, 2026): `npm run typecheck:web` passes. A headless Chrome
 harness using the real `main.css`, real Material Symbols, and representative

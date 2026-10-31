@@ -25,7 +25,11 @@ onMounted(async () => {
 <template>
   <PageBar title="Authorization" />
   <div class="page"><div class="page-inner">
-    <div class="group" style="margin-top: 8px"><p class="text-block" role="status" style="color: var(--text)">{{ message }}</p></div>
-    <div class="actions-row"><NuxtLink :to="destination" class="button">Return to Connections</NuxtLink></div>
+    <AppListGroup><p class="text-block message" role="status">{{ message }}</p></AppListGroup>
+    <div class="actions-row"><AppButton :to="destination">Return to Connections</AppButton></div>
   </div></div>
 </template>
+
+<style scoped>
+.message { color: var(--md-on-surface); }
+</style>

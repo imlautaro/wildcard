@@ -32,10 +32,9 @@ onMounted(() => { if (!chats.loaded.value) void chats.refresh(); });
   <PageBar title="New Group" back="/contacts" always-back />
   <div class="page">
     <form class="page-inner" @submit.prevent="create">
-      <div class="group">
+      <AppListGroup footer="After creating the group, add your contacts and invite people by email.">
         <div class="field"><input v-model="name" type="text" placeholder="Group name" aria-label="Group name" maxlength="100" autofocus></div>
-      </div>
-      <p class="group-footer">After creating the group, add your contacts and invite people by email.</p>
+      </AppListGroup>
       <div class="group-title">Shared memory</div>
       <ConsentFields
         v-model:share-memory="shareMemory" v-model:contributor-consent="contributorConsent"
@@ -44,8 +43,12 @@ onMounted(() => { if (!chats.loaded.value) void chats.refresh(); });
         memory-label="I accept shared memory"
         contributor-note="Your selected model is Contributor. Group messages and shared memories sent to Meta may be used for model training."
       />
-      <p v-if="error" class="notice" style="margin: 12px 0">{{ error }}</p>
-      <button type="submit" class="button block" style="margin-top: 12px" :disabled="!valid || busy">Create Group</button>
+      <AppNotice v-if="error">{{ error }}</AppNotice>
+      <AppButton type="submit" block :disabled="!valid || busy">Create Group</AppButton>
     </form>
   </div>
 </template>
+
+<style scoped>
+.page-inner > .button { margin-top: var(--space-3); }
+</style>

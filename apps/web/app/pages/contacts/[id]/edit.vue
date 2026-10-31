@@ -124,66 +124,59 @@ const voiceChoiceInfo = computed(() => `Accent guides regional wording in text a
 <template>
   <PageBar :title="contact?.name ?? 'Contact'" :back="`/chats/${id}`" always-back />
   <div class="page">
-    <div v-if="!contact && busy" class="center"><span class="spinner" /> Loading…</div>
-    <div v-else-if="!contact" class="page-inner"><p class="notice">{{ error ?? 'This contact is no longer available.' }}</p></div>
+    <AppLoading v-if="!contact && busy" fill />
+    <div v-else-if="!contact" class="page-inner"><AppNotice>{{ error ?? 'This contact is no longer available.' }}</AppNotice></div>
     <div v-else class="page-inner">
       <IdentityEditor :name="contact.name" :path="contactPhotoPath(contact)" :editable="canManage" :renamable="canManage" show-name :busy="busy" @photo="savePhoto" @rename="rename" />
       <p v-if="!canManage" class="identity-subtitle">Shared contact · managed by its creator</p>
-      <p v-if="error" class="notice" style="margin: 12px 0">{{ error }}</p>
+      <AppNotice v-if="error">{{ error }}</AppNotice>
 
-      <div class="group" style="margin-top: 12px">
-        <label class="toggle">
-          <span class="toggle-label"><AppIcon name="initiative" />Conversation initiative<InfoButton label="Conversation initiative" :text="initiativeInfo" /></span>
-          <input type="checkbox" role="switch" :checked="contact.initiativeEnabled !== 0" :disabled="busy" @change="setInitiative">
-        </label>
+      <AppListGroup>
+        <AppSwitch icon="initiative" label="Conversation initiative" :info="initiativeInfo" :checked="contact.initiativeEnabled !== 0" :disabled="busy" @change="setInitiative" />
         <template v-if="voiceFeature">
-          <label class="toggle">
-            <span class="toggle-label"><AppIcon name="mic" />Voice messages<InfoButton label="Voice messages" :text="voiceInfo" /></span>
-            <input type="checkbox" role="switch" :checked="contact.voiceMessagesEnabled === 1" :disabled="busy" @change="setVoiceMessages">
-          </label>
-          <button type="button" class="button-row opens" @click="openVoiceSheet">
-            <AppIcon name="voice" />Voice<span class="row-value">{{ voiceSummary }}</span>
-          </button>
+          <AppSwitch icon="mic" label="Voice messages" :info="voiceInfo" :checked="contact.voiceMessagesEnabled === 1" :disabled="busy" @change="setVoiceMessages" />
+          <AppListItem icon="voice" opens :value="voiceSummary" @click="openVoiceSheet">Voice</AppListItem>
         </template>
         <ContactEnergySection v-if="contact.role === 'owner'" :contact-id="id" />
-      </div>
+      </AppListGroup>
 
-      <div class="group" style="margin-top: 20px">
-        <NuxtLink :to="`/contacts/${id}/personality`" class="button-row"><AppIcon name="person" />Personality</NuxtLink>
-        <NuxtLink :to="`/contacts/${id}/learning`" class="button-row"><AppIcon name="person" />Conversation learning</NuxtLink>
-        <NuxtLink :to="`/contacts/${id}/connections`" class="button-row"><AppIcon name="link" />Connections</NuxtLink>
-        <NuxtLink :to="`/contacts/${id}/mini-apps`" class="button-row"><AppIcon name="grid" />Mini apps</NuxtLink>
-        <NuxtLink :to="`/contacts/${id}/tasks`" class="button-row"><AppIcon name="tasks" />Tasks</NuxtLink>
-        <NuxtLink v-if="canManage" :to="`/contacts/${id}/sharing`" class="button-row"><AppIcon name="share" />Share contact</NuxtLink>
-      </div>
+      <AppListGroup>
+        <AppListItem :to="`/contacts/${id}/personality`" icon="person">Personality</AppListItem>
+        <AppListItem :to="`/contacts/${id}/learning`" icon="person">Conversation learning</AppListItem>
+        <AppListItem :to="`/contacts/${id}/connections`" icon="link">Connections</AppListItem>
+        <AppListItem :to="`/contacts/${id}/mini-apps`" icon="grid">Mini apps</AppListItem>
+        <AppListItem :to="`/contacts/${id}/tasks`" icon="tasks">Tasks</AppListItem>
+        <AppListItem v-if="canManage" :to="`/contacts/${id}/sharing`" icon="share">Share contact</AppListItem>
+      </AppListGroup>
 
       <ChatMediaTabs :base="`contacts/${id}/chat`" :attachment-path="mediaPath" :documents-base="`contacts/${id}`" :document-route="`/contacts/${id}/documents`" />
 
-      <div class="group" style="margin-top: 20px">
-        <ChatLifecycleActions :archived="archived" :can-clear="true" :busy="busy"
-          @archive="run(() => chats.archiveChat('contact', id, !archived))"
-          @clear="memory => run(() => chats.clearChat('contact', id, memory))"
-        />
-        <button type="button" class="button-row danger" :disabled="busy" @click="remove"><AppIcon name="delete" />Delete contact and data</button>
+      <!-- The media tabs end with a grid, a list or a button, so this section sets its own gap. -->
+      <div class="lifecycle">
+        <AppListGroup>
+          <ChatLifecycleActions :archived="archived" :can-clear="true" :busy="busy"
+            @archive="run(() => chats.archiveChat('contact', id, !archived))"
+            @clear="memory => run(() => chats.clearChat('contact', id, memory))"
+          />
+          <AppListItem icon="delete" danger :disabled="busy" @click="remove">Delete contact and data</AppListItem>
+        </AppListGroup>
       </div>
 
       <AppSheet v-if="voiceSheet" title="Voice" @close="voiceSheet = false">
         <template #header><InfoButton label="Voice" :text="voiceChoiceInfo" /></template>
-        <div class="group">
+        <AppListGroup>
           <div class="field">
             <label for="speech-accent">Accent</label>
             <AppSelect id="speech-accent" v-model="speechAccent" variant="plain" :options="accentOptions" :disabled="!canManage || busy" />
           </div>
-          <div v-if="!canManage" class="button-row static">Voice<span class="row-value">{{ contact.voiceName ?? 'Automatic' }}</span></div>
-        </div>
+          <AppListItem v-if="!canManage" plain :value="contact.voiceName ?? 'Automatic'">Voice</AppListItem>
+        </AppListGroup>
         <template v-if="canManage">
+          <!-- The search field sits between the title and the rows, so the title stays markup. -->
           <div class="group-title">Voice</div>
-          <label v-if="(voiceCatalog.voices.value?.length ?? 0) > 10" class="search-field voice-search">
-            <AppIcon name="search" />
-            <input v-model="voiceQuery" type="search" placeholder="Search voices" aria-label="Search voices" autocomplete="off">
-          </label>
-          <div class="group voice-options" role="radiogroup" aria-label="Contact voice">
-            <div v-if="!voiceCatalog.voices.value && !voiceCatalog.error.value" class="voice-row"><span class="spinner" /> Loading voices…</div>
+          <AppSearchField v-if="(voiceCatalog.voices.value?.length ?? 0) > 10" v-model="voiceQuery" label="Search voices" class="voice-search" autocomplete="off" />
+          <AppListGroup class="voice-options" role="radiogroup" aria-label="Contact voice">
+            <AppLoading v-if="!voiceCatalog.voices.value && !voiceCatalog.error.value" label="Loading voices…" />
             <div v-else-if="!voiceCatalog.voices.value" class="voice-row">
               <span class="muted">{{ voiceCatalog.error.value }}</span>
               <button type="button" class="link-button" @click="voiceCatalog.load(true)">Retry</button>
@@ -194,6 +187,7 @@ const voiceChoiceInfo = computed(() => `Accent guides regional wording in text a
                 <input type="radio" name="contact-voice" :checked="contact.voiceID === voice.id" :disabled="busy" @change="chooseVoice(voice.id)">
                 <span><strong>{{ voice.name }}</strong><span v-if="voiceDetails(voice)" class="small muted">{{ voiceDetails(voice) }}</span></span>
               </label>
+              <!-- Raw markup: AppIconButton can't show a spinner while the sample loads. -->
               <button
                 type="button" class="icon-button" :disabled="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.loading"
                 :aria-label="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.playing ? `Pause ${voice.name} sample` : `Play ${voice.name} sample`"
@@ -203,19 +197,21 @@ const voiceChoiceInfo = computed(() => `Accent guides regional wording in text a
                 <AppIcon v-else :name="voicePlayer.failed === voicePreviewPath(voice.id) ? 'refresh' : voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.playing ? 'pause' : 'play'" />
               </button>
             </div>
-          </div>
+          </AppListGroup>
         </template>
-        <p v-if="error" class="notice" style="margin: 12px 0 0">{{ error }}</p>
+        <AppNotice v-if="error">{{ error }}</AppNotice>
       </AppSheet>
     </div>
   </div>
 </template>
 
 <style scoped>
-.voice-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; margin: 0; }
-.voice-search { margin: 0 0 8px; }
-.voice-option { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 4px 8px 4px 16px; }
-.voice-option label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.identity-subtitle { margin-bottom: var(--space-3); }
+.lifecycle { margin-top: var(--space-5); }
+.voice-row { display: flex; align-items: center; gap: var(--space-3); min-height: 56px; padding: var(--space-2) var(--space-4); margin: 0; }
+.voice-search { margin: 0 0 var(--space-2); }
+.voice-option { display: flex; align-items: center; gap: var(--space-2); min-height: 56px; padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4); }
+.voice-option label { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-3); cursor: pointer; }
 .voice-option label > span { display: flex; flex-direction: column; min-width: 0; }
 .voice-option input { accent-color: var(--md-primary); width: 20px; height: 20px; flex: none; }
 </style>

@@ -192,31 +192,26 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
         </div>
       </NuxtLink>
     </template>
-    <NuxtLink :to="`/groups/${groupID}/tasks`" class="icon-button" aria-label="Tasks" title="Tasks"><AppIcon name="tasks" /></NuxtLink>
+    <AppIconButton :to="`/groups/${groupID}/tasks`" icon="tasks" label="Tasks" />
   </PageBar>
 
-  <div v-if="state.unavailable" class="empty">
-    <h2>Group unavailable</h2>
-    <p>This group is no longer available.</p>
-    <NuxtLink to="/" class="button secondary">Back to Chats</NuxtLink>
-  </div>
+  <AppEmptyState v-if="state.unavailable" icon="people" title="Group unavailable" text="This group is no longer available.">
+    <template #actions><AppButton to="/" variant="tonal">Back to Chats</AppButton></template>
+  </AppEmptyState>
   <template v-else>
     <div class="message-viewport">
     <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" tabindex="0" @scroll.passive="onScroll" @wheel.passive="onWheel" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @keydown="onKeydown">
       <div ref="messageContent" class="message-content">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
-        <button class="link-button" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</button>
+        <AppButton variant="text" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</AppButton>
       </div>
-      <div v-if="!state.loaded && !state.error" class="center"><span class="spinner" /> Loading messages…</div>
-      <div v-if="state.error" class="notice" role="status">
+      <AppLoading v-if="!state.loaded && !state.error" label="Loading messages…" />
+      <AppNotice v-if="state.error" tone="warning">
         {{ state.error }}
-        <button class="link-button" @click="refresh">Retry</button>
-      </div>
-      <div v-if="state.loaded && !state.messages.length && !state.pending" class="empty">
-        <h2>Start the conversation</h2>
-        <p>Send your first message.</p>
-      </div>
+        <template #actions><button class="link-button" @click="refresh">Retry</button></template>
+      </AppNotice>
+      <AppEmptyState v-if="state.loaded && !state.messages.length && !state.pending" icon="chat" title="Start the conversation" text="Send your first message." />
 
       <template v-for="item in items" :key="item.key">
         <div v-if="item.kind === 'day'" class="day">{{ item.label }}</div>

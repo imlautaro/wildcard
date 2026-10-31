@@ -12,35 +12,37 @@ function describe(event: { action: string; target: string | null; details: Recor
   }
   return event.target ?? '';
 }
+const stats = computed(() => overview.value ? [
+  { icon: 'people', value: overview.value.totals.users, caption: 'Accounts' },
+  { icon: 'sparkle', value: overview.value.totals.newUsers, caption: 'New in the last 7 days' },
+  { icon: 'person', value: overview.value.totals.contacts, caption: 'Contacts' },
+  { icon: 'initiative', value: overview.value.totals.groupCount, caption: 'Groups' },
+] as const : []);
 </script>
 
 <template>
   <div class="page">
-    <header class="bar"><h1 class="title">Overview</h1>
-      <button class="icon-button" type="button" aria-label="Refresh" @click="loadOverview"><AppIcon name="refresh" /></button>
-    </header>
+    <AppTopBar title="Overview" contained="wide">
+      <AppIconButton icon="refresh" label="Refresh" @click="loadOverview" />
+    </AppTopBar>
     <div class="page-inner wide">
-      <p v-if="errors.overview" class="notice" role="alert">{{ errors.overview }}</p>
-      <div v-if="!overview && !errors.overview" class="center"><span class="spinner" /> Loading…</div>
+      <AppNotice v-if="errors.overview">{{ errors.overview }}</AppNotice>
+      <AppLoading v-if="!overview && !errors.overview" fill />
       <template v-if="overview">
         <section class="stats" aria-label="Totals">
-          <div class="stat"><span class="value">{{ formatNumber(overview.totals.users) }}</span><span class="caption">Accounts</span></div>
-          <div class="stat"><span class="value">{{ formatNumber(overview.totals.newUsers) }}</span><span class="caption">New in the last 7 days</span></div>
-          <div class="stat"><span class="value">{{ formatNumber(overview.totals.contacts) }}</span><span class="caption">Contacts</span></div>
-          <div class="stat"><span class="value">{{ formatNumber(overview.totals.groupCount) }}</span><span class="caption">Groups</span></div>
+          <div v-for="stat in stats" :key="stat.caption" class="stat">
+            <span class="stat-icon" aria-hidden="true"><AppIcon :name="stat.icon" /></span>
+            <span class="value">{{ formatNumber(stat.value) }}</span>
+            <span class="caption">{{ stat.caption }}</span>
+          </div>
         </section>
-        <div class="group-title">Registration</div>
-        <div class="group">
-          <NuxtLink to="/settings" class="button-row">
-            <span class="status-dot" :class="{ on: overview.registrationEnabled }" aria-hidden="true" />
-            <span class="two-line">
-              <span>{{ overview.registrationEnabled ? 'Open' : 'Closed' }}</span>
-              <span class="small">{{ overview.registrationEnabled ? 'Anyone can create an account.' : 'Only existing accounts can sign in.' }}</span>
-            </span>
-          </NuxtLink>
-        </div>
-        <div class="group-title">Recent admin activity</div>
-        <div v-if="overview.events.length" class="group">
+        <AppListGroup title="Registration">
+          <AppListItem to="/settings" :supporting="overview.registrationEnabled ? 'Anyone can create an account.' : 'Only existing accounts can sign in.'">
+            <template #leading><span class="status-dot" :class="{ on: overview.registrationEnabled }" aria-hidden="true" /></template>
+            {{ overview.registrationEnabled ? 'Open' : 'Closed' }}
+          </AppListItem>
+        </AppListGroup>
+        <AppListGroup v-if="overview.events.length" title="Recent admin activity">
           <div v-for="event in overview.events" :key="event.id" class="field">
             <AppIcon :name="event.action === 'user.delete' ? 'delete' : 'flag'" class="leading" />
             <span class="two-line">
@@ -49,8 +51,11 @@ function describe(event: { action: string; target: string | null; details: Recor
             </span>
             <time class="small muted">{{ formatDateTime(event.createdAt) }}</time>
           </div>
-        </div>
-        <p v-else class="group-footer">No admin actions yet.</p>
+        </AppListGroup>
+        <template v-else>
+          <div class="group-title">Recent admin activity</div>
+          <AppEmptyState icon="history" text="No admin actions yet." />
+        </template>
       </template>
     </div>
   </div>

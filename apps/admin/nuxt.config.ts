@@ -1,35 +1,21 @@
-import { appIcons } from './app/utils/icons';
-
 // Super admin panel. Like apps/web, the browser only talks to this Worker: server
 // routes forward an allowlist of /api/v1/* paths to the API's AdminAPI entrypoint
-// through a service binding and keep the session token in a cookie.
+// through a service binding and keep the session token in a cookie. The design
+// system comes from the shared Wildcard UI layer, as in apps/web.
 export default defineNuxtConfig({
+  extends: ['../../packages/ui'],
   compatibilityDate: '2026-10-26',
   ssr: false,
   devtools: { enabled: false },
-  modules: ['@nuxt/icon'],
   css: ['~/assets/css/main.css'],
-  icon: {
-    mode: 'svg',
-    provider: 'none',
-    fallbackToApi: false,
-    serverBundle: false,
-    clientBundle: { icons: Object.values(appIcons).flat(), scan: false },
-  },
   app: {
     head: {
       title: 'Wildcard Admin',
-      htmlAttrs: { lang: 'en' },
       meta: [
-        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
-        { name: 'color-scheme', content: 'light dark' },
         { name: 'robots', content: 'noindex, nofollow' },
-        { name: 'theme-color', content: '#faf8ff', media: '(prefers-color-scheme: light)' },
-        { name: 'theme-color', content: '#121318', media: '(prefers-color-scheme: dark)' },
       ],
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg?v=80154fe8f96b' },
-        { rel: 'preload', href: '/fonts/Manrope.ttf', as: 'font', type: 'font/ttf', crossorigin: '' },
       ],
     },
   },

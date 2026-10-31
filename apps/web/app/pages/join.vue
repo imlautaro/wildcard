@@ -46,7 +46,7 @@ watch(code, () => { preview.value = null; });
         </div>
       </form>
       <p class="group-footer">Paste the code you received from the contact's creator.</p>
-      <p v-if="error" class="notice" style="margin: 0 0 12px">{{ error }}</p>
+      <AppNotice v-if="error">{{ error }}</AppNotice>
       <template v-if="preview">
         <div class="group-title">Join {{ preview.name }}</div>
         <ConsentFields
@@ -60,7 +60,7 @@ watch(code, () => { preview.value = null; });
           contributor-note="Messages and shared memories sent to Meta may be used to train its models."
         />
         <p class="group-footer">Expires {{ fullDate(preview.expiresAt) }}.</p>
-        <button type="button" class="button block" :disabled="!consented || busy" @click="join">Join Contact</button>
+        <AppButton block :disabled="!consented || busy" @click="join">Join Contact</AppButton>
       </template>
     </div>
   </div>
