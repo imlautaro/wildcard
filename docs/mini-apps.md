@@ -347,7 +347,7 @@ only for things that get done, editable records, adding through a composer or a 
 options, and one screen for simple tools. Numbers in the request are data or settings,
 not structure.
 
-All direct private chats expose `create_mini_app` and `list_mini_apps`, and get
+All direct private chats expose `start_mini_app`, `create_mini_app` and `list_mini_apps`, and get
 three tool-enabled rounds (scheduled turns keep two) with up to 8,192 completion
 tokens, within the six-execution budget. If `create_mini_app` fails in the last
 round (for example, after `list_mcp_tools` and `call_mcp_tool`), the turn gets one
@@ -364,6 +364,31 @@ and fall back to the existing tool-free recovery reply. Creation requires the li
 can create one new app (`<turnID>:app`), so a replayed Workflow step returns the
 original instead of a duplicate. Each chat holds up to 20 apps. The tool result tells
 the model that the app is disabled until reviewed, so it does not claim to show data.
+
+### Announcing the build (2026-10-31)
+
+Writing a spec takes tens of seconds, which used to leave the chat on "typing…" with
+no message until the app was ready. Private chats now also expose `start_mini_app`
+(`announcement`, 1–300 characters). `miniAppInstruction` asks the contact to call it
+alone, first, before a new app or a substantial change (not for a quick fix or when it
+must ask a question first). It writes the announcement as the turn's first bubble
+through the same helper as [web research announcements](web-research.md)
+(`chat/announcement.ts`: only while the attempt holds attention and before any other
+bubble, so a replay cannot announce twice), then the turn keeps running and the final
+reply follows as more bubbles. The tool result tells the model not to repeat the
+announcement. Calling it grants one extra tool round per turn, so building keeps its
+three rounds (plus the repair round). The bubble is stored with `announcement: true`;
+clients ignore the field, and reply recovery uses it to treat an announcement-only
+turn as unanswered, so a build that times out after announcing still gets the
+tool-free recovery reply. No client change: the announcement is an ordinary contact
+message on iOS and web, and the typing indicator continues while the app is built.
+
+Checked on 2026-10-31 with `mini-app-eval.mjs --production --only 1,2,3,4` on
+`muse-spark-1.3-contributor` (the eval mirrors the extra round and records
+`announcement`): all four turns called `start_mini_app` first with a short
+Rioplatense message, and the two finished builds did not repeat it. Two builds timed
+out while generating the spec, the existing reliability issue; production now
+answers those with the recovery reply after the announcement.
 
 ## Cache
 

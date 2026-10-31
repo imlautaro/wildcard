@@ -456,7 +456,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   // lets the contact repair a rejected mini app spec once. A mini app that fails
   // verification in the last round earns one more round to fix it.
   // Task turns may read a document, edit it and record progress, so they keep three rounds.
-  let toolRounds = turn.scheduleID ? 2 : 3, repairRound = false;
+  let toolRounds = turn.scheduleID ? 2 : 3, repairRound = false, startRound = false;
   for (let round = 0; round <= toolRounds; round++) {
     if (turn.taskID && !await contactModelAllowed(env, turn.contactID, turn.userID)) throw new Error('MODEL_CONSENT_REQUIRED');
     if (turn.taskID && !await env.DB.prepare(`SELECT id FROM chat_turn WHERE id = ? AND ${privateTaskAccess('chat_turn')}`).bind(turn.id).first()) return null;
@@ -479,7 +479,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
         { ...imageScope, turnID: turn.id, attempt: turn.attempt }) };
     }
     messages.push(answer);
-    let reactionOnly = false, miniAppFailed = false;
+    let reactionOnly = false, miniAppFailed = false, miniAppStarted = false;
     for (const call of answer.tool_calls) {
       if (['send_group_message', 'ask_agent_in_group'].includes(call.function.name)) groupPublicationCalls++;
       let content: string;
@@ -492,6 +492,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
             : JSON.stringify({ error: 'This tool is not permitted in this conversation.' });
           if (call.function.name === reactionTool.function.name && JSON.parse(content).endTurn === true) reactionOnly = true;
           if (call.function.name === 'create_mini_app' && 'error' in JSON.parse(content)) miniAppFailed = true;
+          if (call.function.name === 'start_mini_app') miniAppStarted = true;
           if (['get_group_excerpt', 'search_group_messages'].includes(call.function.name)) {
             const result = JSON.parse(content);
             if (Array.isArray(result.results)) processedGroupResults.push(...result.results);
@@ -508,6 +509,8 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
     }
     if (reactionOnly && (autonomous || !await generatedImage(env, { ...imageScope, turnID: turn.id, attempt: turn.attempt }))) return null;
     if (miniAppFailed && !repairRound && round === toolRounds - 1) { toolRounds++; repairRound = true; }
+    // Announcing a mini app does not use up a building round (once per turn).
+    if (miniAppStarted && !startRound) { toolRounds++; startRound = true; }
   }
   throw new Error('MODEL_TOOL_BUDGET_EXCEEDED');
 }

@@ -126,7 +126,7 @@ for (const [index, { prompt, title: label }] of prompts.entries()) {
   try {
     // Same shape as production private chats: three tool rounds, one more to repair a
     // mini app that failed verification in the last round, then a final answer.
-    let toolRounds = 3, repairRound = false;
+    let toolRounds = 3, repairRound = false, started = false;
     for (let round = 0; round <= toolRounds && record.reply === null; round++) {
       if (round === toolRounds) messages.push({ role: 'system', content: 'Tool budget exhausted. Answer using the available evidence; acknowledge any missing detail.' });
       const request = production ? [...messages, { role: 'system', content: h.replyDeliveryInstruction }] : messages;
@@ -146,6 +146,12 @@ for (const [index, { prompt, title: label }] of prompts.entries()) {
         try {
           const args = JSON.parse(call.function.arguments);
           if (call.function.name === 'list_mini_apps') content = JSON.stringify({ miniApps: [] });
+          else if (call.function.name === 'start_mini_app') {
+            // Production sends this as the turn's first bubble and grants one extra round.
+            record.announcement = args.announcement ?? null;
+            if (!started) { toolRounds++; started = true; }
+            content = JSON.stringify({ announced: true, nextStep: 'Your message was already sent. Build the app now with create_mini_app (after inspecting connector data if needed). Do not repeat or rephrase the announcement in your final reply.' });
+          }
           else if (call.function.name !== 'create_mini_app') {
             record.otherTools.push(call.function.name);
             content = JSON.stringify({ error: 'This tool is unavailable in this conversation right now.' });

@@ -129,9 +129,10 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         try {
           const recovery = await step.do('recover-response', { retries: { limit: 0, delay: '1 second' }, timeout: '1 minute' }, async () => {
             const turn = await activeTurn(env.DB, job);
-            // A research announcement alone is not a reply; the turn can still recover.
-            const announcedOnly = !!turn?.assistantMessagesJSON && JSON.parse(turn.assistantMessagesJSON).length === 1
-              && !!await env.DB.prepare('SELECT 1 FROM web_research WHERE chat_turn_id = ?').bind(job.turnID).first();
+            // A research or mini app announcement alone is not a reply; the turn can still recover.
+            const bubbles = turn?.assistantMessagesJSON ? JSON.parse(turn.assistantMessagesJSON) as { announcement?: boolean }[] : [];
+            const announcedOnly = bubbles.length === 1 && (bubbles[0]!.announcement === true
+              || !!await env.DB.prepare('SELECT 1 FROM web_research WHERE chat_turn_id = ?').bind(job.turnID).first());
             if (!turn || turn.status !== 'running' || (turn.assistantText && !announcedOnly) || turn.scheduleID || turn.groupRequestID || turn.taskID) return null;
             const contact = await env.DB.prepare('SELECT name FROM contact WHERE id = ? AND user_id = ?')
               .bind(turn.contactID, turn.userID).first<{ name: string }>();

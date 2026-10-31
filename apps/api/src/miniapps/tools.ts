@@ -3,6 +3,7 @@ import type { StoredTurn } from '../chat/data';
 import { parseSpec, SpecError } from './spec';
 import { bindTools, contactConnectors, miniAppColumns, type MiniAppRow } from './runtime';
 import { turnSamples, verifySpec, type Verification } from './verify';
+import { announcePrivateMessage } from '../chat/announcement';
 
 const specGuide = 'spec (a JSON object, not a string) = {title, subtitle?, icon (same catalog as tab icons), state?, inputs?, data?, view | tabs, menu?, actions?}. '
   + 'The app opens full screen like a native app. Use view (array of components) for one screen, or tabs for 2–5 screens with a native bottom tab bar: tabs:[{id,title,icon,view}] '
@@ -75,11 +76,21 @@ const designGuide = 'Before writing the spec, plan the app: '
 
 // System guidance for direct private chats; the evaluation script uses the same text.
 export const miniAppInstruction = 'When the person asks for an app, tool, counter, tracker, checklist or reusable view, build a native mini app with create_mini_app instead of describing one or writing code. '
+  + 'Building takes a while, so before a new app or a substantial change first call start_mini_app ALONE, with a short message in your own voice and the conversation language saying you are building it now; it is sent right away. Then inspect any connector data and call create_mini_app; your final reply continues from that message without repeating it. Skip start_mini_app for a quick fix or when the request is unclear and you need to ask first. '
   + 'Use saved state and local actions for things that only need to remember values. create_mini_app verifies each app (automatic checks plus your tests) and saves it only if it passes. '
   + 'Mention a mini app only when create_mini_app returned its miniAppID. If it keeps failing, or the request needs something mini apps cannot do, tell the person plainly which part could not be built and why, '
   + 'and offer the closest version instead of handing over something broken.';
 
-export const miniAppTools: ModelTool[] = [{ type: 'function', function: {
+export const startMiniAppTool: ModelTool = { type: 'function', function: {
+  name: 'start_mini_app',
+  description: 'Send the person a short message right away saying you are building their mini app now (for example that you are on it and it will be ready in a moment), so they are not left waiting in silence. '
+    + 'Call it alone, once, before list_mcp_tools/call_mcp_tool and create_mini_app. It builds nothing: create_mini_app still does the work, in a later round that this call does not use up.',
+  parameters: { type: 'object', additionalProperties: false, required: ['announcement'], properties: {
+    announcement: { type: 'string', minLength: 1, maxLength: 300, description: 'Short message in your own voice and the conversation language, sent before you start building.' },
+  } },
+} };
+
+export const miniAppTools: ModelTool[] = [startMiniAppTool, { type: 'function', function: {
   name: 'create_mini_app',
   description: 'Build or update a native mini app for THIS person when they ask for an app, tool, counter, tracker, checklist, dashboard or reusable view. '
     + 'Apps without external tools (only state, inputs, const data and local actions) open immediately. '
@@ -112,6 +123,16 @@ function summarize(results: MiniAppRow[]) {
 
 export async function executeMiniAppTool(env: Env, turn: StoredTurn, name: string, args: Record<string, unknown>): Promise<string> {
   if (turn.scheduleID || turn.groupRequestID) return JSON.stringify({ error: 'Mini apps require a direct private human request.' });
+  if (name === startMiniAppTool.function.name) {
+    if (Object.keys(args).join(',') !== 'announcement' || typeof args.announcement !== 'string' || !args.announcement.trim() || args.announcement.includes('\0')) {
+      return JSON.stringify({ error: 'Provide announcement, a short message.' });
+    }
+    // The same first-bubble rule as research announcements: once per turn, before any reply bubble.
+    const sent = await announcePrivateMessage(env, turn.id, turn.attempt, Array.from(args.announcement.trim()).slice(0, 300).join(''));
+    return JSON.stringify(sent
+      ? { announced: true, nextStep: 'Your message was already sent. Build the app now with create_mini_app (after inspecting connector data if needed). Do not repeat or rephrase the announcement in your final reply.' }
+      : { announced: false, nextStep: 'A message was already sent in this turn; nothing new was sent. Build the app now with create_mini_app.' });
+  }
   if (name === 'list_mini_apps') {
     const { results } = await env.DB.prepare(`SELECT ${miniAppColumns} FROM mini_app WHERE contact_id = ? AND user_id = ? ORDER BY updated_at DESC LIMIT 20`)
       .bind(turn.contactID, turn.userID).all<MiniAppRow>();

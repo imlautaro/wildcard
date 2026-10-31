@@ -294,7 +294,8 @@ and a member can both set an alias; members cannot rename the shared contact.
   private initiative prompt add one line saying how this person saved the contact
   (`aliasAwareness` in `contacts/alias.ts`). It is context only: the contact keeps its shared name, is not
   asked to mention the alias, and is told not to introduce itself by it, store it as a self fact or
-  repeat it in groups or to other people. Group prompts, other holders' chats, tasks, schedules
+  repeat it in groups or to other people. Its own task and scheduled turns in that chat get it too;
+  group prompts, other holders' chats
   and Updates curation do not receive it. No client change: clients already send the alias.
 - Never resolved: other model prompts and tool results (the bot still knows itself and its peers by the shared name),
   text typed or generated inside messages (an `@Alberdi` mention or a name inside a bot reply is
