@@ -108,6 +108,14 @@ const togglePrivateSharing = (permission: GroupPrivateSharing) => run(async () =
   await loadGroupDetails(groupID);
 });
 
+// Owner only (the API returns 403 otherwise); the chat list keeps its own copy of the name.
+const rename = (name: string) => run(async () => {
+  const groupID = id.value;
+  await api(`groups/${groupID}`, { method: 'PATCH', json: { name } });
+  chats.updateGroup(groupID, { name });
+  await loadGroupDetails(groupID);
+});
+
 const leave = () => run(async () => {
   const message = isOwner.value
     ? 'Delete group? This deletes the group, its messages and memories sourced from those messages for everyone.'
@@ -134,7 +142,7 @@ onMounted(() => run(async () => {
       <AppNotice v-if="notice" tone="success">{{ notice }}</AppNotice>
       <AppLoading v-if="!snapshot && busy" fill />
       <template v-if="snapshot">
-        <IdentityEditor :name="snapshot.group.name" :path="groupPhotoPath(snapshot.group)" show-name />
+        <IdentityEditor :name="snapshot.group.name" :path="groupPhotoPath(snapshot.group)" :renamable="isOwner" show-name :busy="busy" @rename="rename" />
         <p class="identity-subtitle">{{ snapshot.members.length }} {{ snapshot.members.length === 1 ? 'member' : 'members' }}</p>
 
         <AppListGroup>
