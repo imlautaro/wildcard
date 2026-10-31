@@ -114,7 +114,8 @@ function setup(scenario) {
           .run(`contact-${a.id}-${userID}`, userID,a.id,a.name);
       }
     }
-    f.sqlite.prepare('INSERT INTO group_agent(group_id,agent_id,added_by,joined_at) VALUES (?,?,?,0)').run('group-a',a.id,'owner');
+    // Optional scenario.groupAgents keeps the other agents out of the group (for example a linked contact that never saw it).
+    if (!scenario.groupAgents || scenario.groupAgents.includes(a.id)) f.sqlite.prepare('INSERT INTO group_agent(group_id,agent_id,added_by,joined_at) VALUES (?,?,?,0)').run('group-a',a.id,'owner');
   }
   f.sqlite.exec('UPDATE contact SET learning_enabled=0');
   // Optional linked contacts for one human: scenario.links = [[agentA, agentB, userID?]].

@@ -1,4 +1,4 @@
-import { clipText, keywords } from '../chat/memory';
+import { clipText, topicTerms } from '../chat/memory';
 import type { HomeSignals } from './signals';
 
 // Contacts review each other's Updates cards (docs/updates.md#contacts-review-cards).
@@ -13,14 +13,12 @@ export type ReviewCandidate = { topicID: string; authorID: string | null; author
 
 export const reviewLimits = { perRun: 2, windowDays: 60, minimumHits: 2, excerpts: 6 };
 
-// Common short words that would match almost every conversation.
-const stopwords = new Set(['para', 'como', 'este', 'esta', 'estos', 'estas', 'pero', 'porque', 'sobre', 'entre', 'desde', 'hasta', 'cuando',
-  'donde', 'todo', 'todos', 'nada', 'algo', 'with', 'from', 'this', 'that', 'what', 'your', 'about', 'there', 'their', 'have', 'will', 'more',
-  'news', 'update', 'updates', 'today', 'week', 'semana', 'hoy', 'novedades', 'mañana', 'tomorrow', 'latest', 'último', 'últimos', 'ultimo']);
+// Topic stopwords (chat/memory.ts) plus words every news card title shares.
+const stopwords = new Set(['news', 'update', 'updates', 'today', 'week', 'semana', 'hoy', 'novedades', 'mañana', 'tomorrow', 'latest', 'último', 'últimos', 'ultimo']);
 
 /** FTS terms from a topic title: specific words only, quoted so they cannot inject operators. */
 export function reviewTerms(title: string): string | null {
-  const terms = keywords(title).filter(term => [...term].length >= 4 && !stopwords.has(term)).slice(0, 6);
+  const terms = topicTerms(title, 6, stopwords);
   return terms.length ? terms.map(term => `"${term}"*`).join(' OR ') : null;
 }
 

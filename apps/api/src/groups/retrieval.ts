@@ -1,7 +1,7 @@
 import { privateSharingTools, searchAuthorizedPrivateMessages } from './private-sharing';
 import { readAgentMemories, selectAgentMemories } from '../chat/agent-memory';
 import { groupMemories, localGroupMemories } from './memory';
-import { byteLength, clipText, keywords, selectMemories } from '../chat/memory';
+import { byteLength, clipText, keywords, selectMemories, topicMatch } from '../chat/memory';
 import { rankMemories } from '../chat/semantic-memory';
 import { agentHistoryStart, userHistoryStart } from './history-access';
 import { isRecord, type ModelTool, type ToolCall } from '../chat/meta';
@@ -51,10 +51,10 @@ const messageAccess = `${access} AND gm.sequence < ?6
     AND (gm.agent_id IS NULL OR EXISTS (SELECT 1 FROM group_agent author
       WHERE author.group_id = gm.group_id AND author.agent_id = gm.agent_id))`;
 
-function pack(rows: Record<string, unknown>[]) {
+function pack(rows: Record<string, unknown>[], budget = 3600) {
   const results: Record<string, unknown>[] = [];
   for (const row of rows) {
-    if (byteLength(JSON.stringify({ results: [...results, row], truncated: true })) > 3600) break;
+    if (byteLength(JSON.stringify({ results: [...results, row], truncated: true })) > budget) break;
     results.push(row);
   }
   return { results, truncated: results.length < rows.length };
@@ -116,6 +116,39 @@ export async function searchGroupMessages(db: D1Database, scope: GroupRetrievalS
   const packed = pack(results.slice(0, 4).map((r) => ({ ...r, groupName: clipText(String(r.groupName), 140),
     senderName: clipText(String(r.senderName), 100), text: clipText(String(r.text), 600), textTruncated: true })));
   return { ...packed, hasMore: results.length > 4 || packed.truncated, nextBefore: packed.results.at(-1)?.sequence ?? null };
+}
+
+/**
+ * Group statements most relevant to a topic (bm25 over topic words, not recency), for
+ * context prefetch before the model answers. Same access rules as search_group_messages;
+ * returns no rows when the text has no topic words. Not paginated: the tool covers that.
+ */
+export async function relevantGroupMessages(db: D1Database, scope: GroupRetrievalScope, text: string, limit = 5) {
+  const match = topicMatch(text);
+  if (!match) return { results: [] as Record<string, unknown>[], truncated: false };
+  const { results } = await db.prepare(`SELECT gm.sequence, gm.id AS messageID, g.id AS groupID,
+    g.name AS groupName, gm.user_id AS userID, gm.agent_id AS agentID, gm.sender_name AS senderName,
+    snippet(group_message_search, 0, '', '', ' … ', 64) AS text, gm.created_at AS createdAt
+    FROM group_message_search JOIN group_message gm ON gm.sequence = group_message_search.rowid
+    JOIN chat_group g ON g.id = gm.group_id
+    WHERE group_message_search MATCH ?5 AND ${messageAccess}
+    ORDER BY bm25(group_message_search) LIMIT ?7`).bind(scope.agentID, scope.userID, scope.contributor ? 1 : 0,
+      scope.groupID ?? null, match, scope.beforeSequence ?? Number.MAX_SAFE_INTEGER, limit).all<Record<string, unknown>>();
+  // A topic usually spans adjacent statements that do not repeat its words: add the
+  // neighbors of the two best hits, then present everything in conversation order.
+  const nearby: Record<string, unknown>[] = [];
+  for (const hit of results.slice(0, 2)) {
+    const excerpt = await groupExcerpt(db, scope, String(hit.messageID), 0);
+    if ('results' in excerpt) nearby.push(...excerpt.results);
+  }
+  const rows = new Map<string, Record<string, unknown>>();
+  for (const row of [...results.map((r): Record<string, unknown> => ({ ...r, groupName: clipText(String(r.groupName), 140), textTruncated: true })), ...nearby]) {
+    if (!rows.has(String(row.messageID))) rows.set(String(row.messageID), row);
+  }
+  const ordered = [...rows.values()].map((r): Record<string, unknown> => ({ ...r, senderName: clipText(String(r.senderName), 100), text: clipText(String(r.text), 700) }));
+  // Keep the best hits within the budget first, then restore conversation order.
+  const kept = pack(ordered.sort((a, b) => Number(b.messageID === results[0]?.messageID) - Number(a.messageID === results[0]?.messageID)), 6000);
+  return { results: kept.results.sort((a, b) => String(a.groupID).localeCompare(String(b.groupID)) || Number(a.sequence) - Number(b.sequence)), truncated: kept.truncated };
 }
 
 async function groupExcerpt(db: D1Database, scope: GroupRetrievalScope, messageID: string, offset: number) {

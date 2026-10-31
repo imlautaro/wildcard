@@ -323,6 +323,42 @@ and Remove alias buttons because members have no toolbar Save; the rename field 
 name. `Contact.realName`/`alias` decode optionally so older cached snapshots still load. Static typecheck
 only; not run on a simulator or device.
 
+## Topic recall
+
+Since 2026-10-31, before a private reply the API looks up what was already said about
+the topic, instead of relying on the twelve most recent turns. The topic words come
+from the current message plus the previous one (`topicTerms` in `chat/memory.ts`:
+words of four or more characters minus Spanish/English function words and recall
+verbs such as "contame", "hablamos", "remember"). With them it prefetches, ranked by
+FTS5 `bm25`:
+
+- up to five group statements (`relevantGroupMessages` in `groups/retrieval.ts`) with
+  the same access rules as `search_group_messages`; with no topic words the block falls
+  back to the previous behavior (recent statements matching the message's words);
+- up to four earlier turns of this private chat older than the recent history
+  (`relatedPrivateTurns`), as clipped snippets with turn IDs for
+  `get_conversation_excerpt`.
+
+The prompt adds `topicRecallInstruction`: for a question about a specific topic or a
+request for details, check that evidence, search groups and earlier messages when it
+looks partial, answer with everything relevant from both, and never ask the person to
+repeat what can be looked up. Linked answers use the same helpers (see below). Search
+remains lexical: a topic discussed with entirely different words is found only when the
+model searches again with those words. The group block also includes the statements
+next to the two best hits, since a topic spans adjacent messages that do not repeat its
+words.
+
+Checked on 2026-10-31 with `conversation-style-live-eval.mjs` on
+`muse-spark-1.3-contributor` and fictional chats (new optional `scenario.groupAgents`
+keeps other agents out of the group). A surprise party planned in a group, then ten
+unrelated group messages, then "qué teníamos armado para el cumple de Juli?" in the
+private chat: before, the contact answered only with the date from the private chat
+(2 of 2 runs); after, it listed every group detail (2 of 2). A linked contact outside the
+group asked for the details: before, the other contact said it knew nothing (2 of 2);
+after, it read the group and the asking contact relayed every detail (3 of 3). The new
+SQL was prepared and run on the local workerd D1. Not verified on devices or with real
+chats.
+
 ## Linked contacts
 
 Since 2026-10-31 a person can give two of their own contacts access to each other
@@ -343,11 +379,20 @@ so connector data never crosses a link.
 - **In private chats** (not in connector-isolated chats or scheduled messages; task
   work turns included), the prompt lists the linked contacts (shared name, the alias
   the person saved, description and specialties) and offers two tools:
-  - `ask_linked_contact {contactID, question}`: the linked contact answers at once in
-    its own voice, without tools, from its memories of this person (only memories whose source is this person, also for shared contacts), its last eight
-    turns with them and up to four earlier turns matching the question. It says so when
-    it does not know. The answer is returned to the asking contact, which attributes
-    it. The exchange is saved as a note for the linked contact.
+  - `ask_linked_contact {contactID, question}`: the linked contact comes online
+    (presence `online` for 90 seconds, `connectAgent`) and checks what it talked about
+    with this person before answering: its memories of this person (only memories whose
+    source is this person, also for shared contacts), its last eight turns with them,
+    up to six earlier private turns and six group statements ranked by relevance to the
+    question ([topic recall](#topic-recall)), and the groups it shares with them. When
+    that looks partial it may run up to two rounds (six calls) of retrieval-only tools:
+    `search_messages` over its own private chat with this person, and
+    `search_group_messages`/`get_group_excerpt` with this person's group access (groups
+    both are in, from when each joined). It then answers in its own voice with the
+    concrete details it found and where they came from, briefly for a simple question;
+    it says so when it does not know. The answer is returned to the asking contact,
+    which is told to pass the details along rather than shrink them. The exchange is
+    saved as a note for the linked contact.
   - `tell_linked_contact {contactID, message}`: saves a note. The linked contact sees
     notes from the last seven days in its next private turns with the person; a note
     newer than its last reply is marked new and passed along once, naturally ("Vale

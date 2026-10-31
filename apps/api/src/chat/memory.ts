@@ -29,6 +29,32 @@ export function keywords(query: string): string[] {
     .filter((word) => word.length >= 2).slice(0, 12);
 }
 
+// Function words and question/recall verbs (Spanish and English, compared without
+// accents) that would match almost every message and say nothing about the topic.
+export const topicStopwords = new Set(['para', 'como', 'este', 'esta', 'esto', 'estos', 'estas', 'pero', 'porque', 'sobre', 'entre', 'desde',
+  'hasta', 'cuando', 'donde', 'todo', 'todos', 'toda', 'todas', 'nada', 'algo', 'cosa', 'cosas', 'tambien', 'ahora', 'despues', 'antes', 'bueno',
+  'entonces', 'aunque', 'mismo', 'misma', 'otro', 'otra', 'otros', 'otras', 'cual', 'cuales', 'quien', 'quienes', 'muchos', 'mucho', 'mucha',
+  'poco', 'poca', 'bien', 'aca', 'aqui', 'alla', 'ella', 'ellos', 'ellas', 'nosotros', 'vos', 'usted', 'ustedes', 'sabes', 'saber', 'sabe',
+  'sabias', 'acordas', 'acuerdas', 'recordas', 'recuerdas', 'acuerdo', 'contame', 'cuentame', 'contarme', 'contar', 'conto', 'decime', 'dime',
+  'dijo', 'dijiste', 'dijeron', 'hablamos', 'hablaron', 'hablaste', 'hablado', 'hablar', 'charlamos', 'tema', 'temas', 'quiero', 'queria',
+  'puedes', 'podes', 'puede', 'podrias', 'tenes', 'tienes', 'tiene', 'tenia', 'habia', 'hay', 'estaba', 'estan', 'eran', 'fue', 'fueron',
+  'hace', 'hacer', 'hiciste', 'favor', 'gracias', 'hola', 'grupo', 'chat', 'with', 'from', 'this', 'that', 'these', 'those', 'what', 'which',
+  'your', 'about', 'there', 'their', 'they', 'them', 'then', 'than', 'have', 'will', 'would', 'could', 'should', 'just', 'like', 'also', 'been',
+  'were', 'more', 'know', 'tell', 'told', 'talk', 'talked', 'said', 'remember', 'please', 'thanks', 'something', 'anything', 'group']);
+
+const plain = (word: string) => word.normalize('NFD').replace(/\p{M}/gu, '');
+
+/** Topic words of a message for full-text recall: specific words only, never FTS operators. */
+export function topicTerms(text: string, limit = 6, extraStopwords?: Set<string>): string[] {
+  return keywords(text).filter(term => [...term].length >= 4 && !topicStopwords.has(plain(term)) && !extraStopwords?.has(term)).slice(0, limit);
+}
+
+/** An FTS5 OR query over topic words (quoted prefixes), or null when the text has none. */
+export function topicMatch(text: string, limit = 6): string | null {
+  const terms = topicTerms(text, limit);
+  return terms.length ? terms.map(term => `"${term}"*`).join(' OR ') : null;
+}
+
 export async function readMemories(db: D1Database, scope: MemoryScope, ownOnly = false): Promise<Memory[]> {
   const { results } = await db.prepare(`SELECT ${memoryColumns.split(',').map((s) => `m.${s.trim()}`).join(',')},
     m.user_id AS sourceUserID, u.name AS sourceUserName,
@@ -174,4 +200,25 @@ export async function maintainMemories(bindings: Env, scope: MemoryScope): Promi
     WHERE contact_id = ?1 AND user_id = ?2 AND last_sequence = ?4`)
     .bind(scope.contactID, scope.userID, turns[turns.length - 1].sequence, state.sequence));
   await env.DB.batch(statements);
+}
+
+export type RelatedTurn = { turnID: string; sequence: number; date: string; person: string; you: string };
+
+/**
+ * Earlier private turns with this person most relevant to a topic (bm25 over topic words),
+ * strictly before `beforeSequence` so callers can skip what is already in recent history.
+ */
+export async function relatedPrivateTurns(db: D1Database, contactID: string, userID: string, text: string,
+  beforeSequence: number, limit = 4, bytes = 500): Promise<RelatedTurn[]> {
+  const match = topicMatch(text);
+  if (!match || beforeSequence <= 0) return [];
+  const { results } = await db.prepare(`SELECT t.id AS turnID, t.sequence, t.created_at AS at,
+      snippet(chat_turn_search, 0, '', '', ' … ', 48) AS person, snippet(chat_turn_search, 1, '', '', ' … ', 64) AS you
+    FROM chat_turn_search JOIN chat_turn t ON t.sequence = chat_turn_search.rowid
+    WHERE chat_turn_search MATCH ?1 AND t.contact_id = ?2 AND t.user_id = ?3 AND t.sequence < ?4
+      AND (t.status = 'complete' OR t.error_code = 'MESSAGE_BATCHED')
+    ORDER BY bm25(chat_turn_search) LIMIT ?5`).bind(match, contactID, userID, beforeSequence, limit)
+    .all<{ turnID: string; sequence: number; at: number; person: string | null; you: string | null }>();
+  return results.map(row => ({ turnID: row.turnID, sequence: row.sequence, date: new Date(row.at).toISOString().slice(0, 10),
+    person: clipText(row.person ?? '', bytes), you: clipText(row.you ?? '', bytes) }));
 }

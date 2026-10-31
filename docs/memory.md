@@ -242,6 +242,8 @@ There is no automatic unrelated eviction or new user-facing memory editor.
 
 Private reply context now includes a bounded page of shared groups/current member
 identities and relevant original group statements, with stable agent/user IDs.
+Since 2026-10-31 those statements are ranked by relevance to the topic, and earlier
+related private turns are added too ([topic recall](contacts.md#topic-recall)).
 This lets bot 1 discover bot 2 through a common group and recall bot 2's answer.
 Group statements are stored/indexed once, not copied to every observing agent.
 The self profile of bot 2 is not exposed to bot 1; bot 1 retrieves what bot 2 said
