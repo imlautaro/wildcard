@@ -27,11 +27,15 @@ struct MessageReplyQuoteView: View {
     var action: (() -> Void)? = nil
     /// Bubbles tint the quote; the composer places it on its own glass card.
     var tinted = true
-    private var label: String { "Reply to \(preview.author): \(MessageReplySummary.description(preview.quote))" }
+    private var beforeJoin: Bool { preview.quote.beforeJoin == true }
+    private var label: String {
+        "Reply to \(preview.author): \(MessageReplySummary.description(preview.quote))" + (beforeJoin ? ". Before you joined" : "")
+    }
 
     var body: some View {
         // Only an available quote with an action is a button; others stay plain content.
-        if let action, preview.quote.available {
+        // A quote from before the viewer joined cannot be opened: its message is outside their history.
+        if let action, preview.quote.available, !beforeJoin {
             Button(action: action) { quote }
                 .buttonStyle(.plain)
                 .accessibilityLabel(label)
@@ -49,6 +53,9 @@ struct MessageReplyQuoteView: View {
                 Text(preview.author).manrope(.caption, weight: .semibold)
                     .foregroundStyle(preview.color).lineLimit(1)
                 MessageReplySummary(quote: preview.quote)
+                if beforeJoin {
+                    Text("Before you joined").manrope(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                }
             }
             .padding(.vertical, 6)
             Spacer(minLength: 0)

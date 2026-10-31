@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readPhoto, validPhoto, removePhoto } from '../photos/storage';
 import { storedAttachment, attachmentLimit, mediaPage } from '../chat/attachments';
+import { userHistoryStart } from './history-access';
 import { normalizedRecording, transcribeRecording, TranscriptionFailure } from '../chat/transcription';
 
 const media = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
@@ -58,10 +59,10 @@ media.get('/media', async (c) => {
   }
   const { results } = await c.env.DB.prepare(`SELECT sequence, id AS messageID, user_id AS userID, agent_id AS agentID,
     sender_name AS senderName, created_at AS createdAt, attachment_json AS attachmentJSON FROM group_message
-    WHERE group_id = ?1 AND sequence < ?2 AND attachment_json IS NOT NULL
+    WHERE group_id = ?1 AND sequence < ?2 AND attachment_json IS NOT NULL AND sequence >= ${userHistoryStart('?1', '?5')}
     AND json_extract(attachment_json, '$.mimeType') NOT LIKE 'audio/%'
     AND (json_extract(attachment_json, '$.mimeType') LIKE 'image/%') = (?3 = 'image')
-    ORDER BY sequence DESC LIMIT ?4`).bind(c.req.param('id'), before, kind, mediaPage(kind) + 1)
+    ORDER BY sequence DESC LIMIT ?4`).bind(c.req.param('id'), before, kind, mediaPage(kind) + 1, c.get('owner'))
     .all<{ sequence: number; messageID: string; userID: string | null; agentID: string | null; senderName: string; createdAt: number; attachmentJSON: string }>();
   const page = results.slice(0, mediaPage(kind));
   return c.json({ items: page.map(({ attachmentJSON, ...message }) => {
@@ -82,8 +83,9 @@ media.put('/messages/:messageID/attachment/listened', async (c) => {
 });
 media.get('/messages/:messageID/attachment', async (c) => {
   const row = await c.env.DB.prepare(`SELECT attachment_json AS attachmentJSON FROM group_message
-    WHERE id = ? AND group_id = ? AND EXISTS (
-      SELECT 1 FROM group_member WHERE group_id = group_message.group_id AND user_id = ?)`)
+    WHERE id = ?1 AND group_id = ?2 AND EXISTS (
+      SELECT 1 FROM group_member WHERE group_id = group_message.group_id AND user_id = ?3)
+      AND sequence >= ${userHistoryStart('?2', '?3')}`)
     .bind(c.req.param('messageID'), c.req.param('id'), c.get('owner')).first<{ attachmentJSON: string | null }>();
   const attachment = row && storedAttachment(row);
   if (!attachment) return c.json({ error: 'Attachment unavailable' }, 404);

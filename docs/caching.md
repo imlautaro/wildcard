@@ -569,6 +569,12 @@ separate reply cache, request or disk storage exists. Pending sends keep their r
 target with the idempotency UUID. Reaching an older quoted original pages history
 through the existing **Load earlier** path, bounded to 20 pages.
 
+Membership notices (`event`) and `beforeJoin` quotes (migration 0081) flow through the
+existing group history cache (`useGroupConversation` on web) and group snapshot; no new
+cache, request or storage is added. A `beforeJoin` quote never pages history or fetches
+its attachment. Cached history keeps `event`; chat-list freshness and previews compare
+against the last non-notice message, matching the API's summary fields.
+
 ## MCP connection metadata
 
 Both clients cache one session-owned account catalog with at most sixteen 256 KB

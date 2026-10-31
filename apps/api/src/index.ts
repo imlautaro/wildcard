@@ -22,6 +22,7 @@ import app from './app';
 import adminApp from './admin/app';
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { recoverChats } from './chat/dispatch';
+import { dispatchWelcomes } from './groups/membership';
 import { prunePersonalityEvents } from './personality/engine';
 
 export { OnboardingWorkflow } from './onboarding/workflow';
@@ -53,6 +54,7 @@ export default {
     ctx.waitUntil(dispatchInitiatives(env));
     ctx.waitUntil(recoverChats(env));
     ctx.waitUntil(recoverGroups(env));
+    ctx.waitUntil(dispatchWelcomes(env));
     ctx.waitUntil(dispatchGroupRequests(env));
     ctx.waitUntil(expirePresence(env.DB));
     ctx.waitUntil(expireLinkPreviews(env).catch(() => console.error(JSON.stringify({ event: 'link_preview_expiry_deferred' }))));

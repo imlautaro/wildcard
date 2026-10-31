@@ -52,6 +52,12 @@ export function peekGroupConversation(id: string): GroupConversation | undefined
   return groups.get(id);
 }
 
+// Membership notices stay out of the chat preview and summary comparisons (the API's
+// lastMessage* fields skip them), so list code compares against the last real message.
+export function lastGroupChatMessage(messages: GroupMessage[]): GroupMessage | undefined {
+  return messages.findLast((message) => !message.event);
+}
+
 function entryFor(id: string): GroupConversation {
   let entry = groups.get(id);
   if (entry) {
@@ -244,7 +250,7 @@ async function fetchGroupConversation(id: string, visible: boolean) {
     // Others' new messages sound in the visible group (see useMessageSounds).
     if (wasLoaded) {
       for (const message of fetched) {
-        if (!known.has(message.id) && (message.agentID !== null || message.userID !== user.value?.id)) replyShown(`group/${id}`, message.id, message.createdAt);
+        if (!known.has(message.id) && !message.event && (message.agentID !== null || message.userID !== user.value?.id)) replyShown(`group/${id}`, message.id, message.createdAt);
       }
     }
     if (!hadOlder) entry.nextBefore = cursor;
@@ -274,7 +280,8 @@ async function fetchGroupConversation(id: string, visible: boolean) {
 
     await refreshReactions(entry.reactions, `groups/${id}/reactions`, entry.messages.map((message) => message.id));
     if (visible || visibleConversationKey() === `group/${id}`) {
-      const others = entry.messages.filter((message) => message.userID !== user.value?.id).map((message) => message.id);
+      // Notices have no recipient receipts.
+      const others = entry.messages.filter((message) => !message.event && message.userID !== user.value?.id).map((message) => message.id);
       await acknowledge(id, others, 'received');
     }
     const pendingRead = receiptsFor(id).pendingRead;

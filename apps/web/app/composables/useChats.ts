@@ -114,7 +114,7 @@ function warm() {
   }
   for (const group of groups.value) {
     const cached = peekGroupConversation(group.id);
-    if (cached?.loaded && (cached.pending || (group.lastMessageID && group.lastMessageID !== cached.messages.at(-1)?.id))) {
+    if (cached?.loaded && (cached.pending || (group.lastMessageID && group.lastMessageID !== lastGroupChatMessage(cached.messages)?.id))) {
       due.push(() => loadGroupConversation(group.id));
     }
   }
@@ -179,7 +179,7 @@ async function refreshLists() {
       const id = visible.slice('group/'.length);
       const summary = groupList.value.groups.find((group) => group.id === id);
       const cached = peekGroupConversation(id);
-      if (summary && (!cached?.loaded || (summary.lastMessageID && summary.lastMessageID !== cached.messages.at(-1)?.id))) {
+      if (summary && (!cached?.loaded || (summary.lastMessageID && summary.lastMessageID !== lastGroupChatMessage(cached.messages)?.id))) {
         await loadGroupConversation(id, true);
       }
     }
@@ -379,7 +379,7 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   let userID = group.lastMessageUserID ?? null;
   let receiptState = group.lastMessageReceiptState ?? null;
   let sending = false;
-  const last = cached?.messages.at(-1);
+  const last = cached ? lastGroupChatMessage(cached.messages) : undefined;
   if (last && (last.id === group.lastMessageID || last.createdAt >= (group.lastMessageAt ?? 0))) {
     voice = last.id === group.lastMessageID ? mergeVoice(last.voice, group.lastMessageVoice) : last.voice;
     preview = last.text ? [...(last.agentID ? plainMessageMarkdown(last.text) : last.text)].slice(0, 500).join('') : last.attachment ? `Attachment: ${last.attachment.name}` : '';

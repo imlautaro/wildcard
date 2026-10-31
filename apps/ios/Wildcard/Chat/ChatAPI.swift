@@ -11,6 +11,8 @@ struct MessageReplyQuote: Codable, Equatable, Sendable {
     let text: String
     var previewText: String? = nil
     let attachment: ChatAttachment?
+    /// Group quotes of a message from before the viewer joined: shown, but not tappable and without a file.
+    var beforeJoin: Bool? = nil
 }
 
 /// A recorded or synthesized voice message. `transcript` is `nil` until transcription

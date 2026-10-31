@@ -8,9 +8,17 @@ struct GroupConsentFields: View {
     let contributor: Bool
     @Binding var shareMemory: Bool
     @Binding var contributorConsent: Bool
+    /// False for an invitation without earlier messages; the history sentence then describes the invitee's floor.
+    var seesEarlierMessages = true
+    /// True when reviewing consent as a current member (past tense for the floor).
+    var alreadyMember = false
+    private var historySentence: String {
+        !seesEarlierMessages && alreadyMember ? "You can read messages from when you joined." : seesEarlierMessages ? "Members can read the group's history, including messages sent before they joined, unless they were added without earlier messages."
+            : "You'll see messages from when you join."
+    }
     var body: some View {
         Section("Shared memory") {
-            Text("Group members can see your name and profile photo. Everyone in this group can read its full history, including messages sent before they joined. Contacts use shared memories from their other conversations. What you say here can become a shared memory and be recalled in other chats with these contacts. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.")
+            Text("Group members can see your name and profile photo. \(historySentence) Contacts use shared memories from their other conversations. What you say here can become a shared memory and be recalled in other chats with these contacts. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.")
                 .manrope(.footnote).foregroundStyle(.secondary)
             Toggle("I accept shared memory", isOn: $shareMemory)
             if contributor {
@@ -127,7 +135,8 @@ struct GroupInvitationsView: View {
             NavigationStack {
                 Form {
                     Text("Join \(invitation.groupName)").manrope(.title3, weight: .semibold)
-                    GroupConsentFields(contributor: groups.contributorModel, shareMemory: $shareMemory, contributorConsent: $contributorConsent)
+                    GroupConsentFields(contributor: groups.contributorModel, shareMemory: $shareMemory, contributorConsent: $contributorConsent,
+                                       seesEarlierMessages: invitation.includeHistory?.value != false)
                     if let error { Text(error).foregroundStyle(.red) }
                     Button("Accept invitation") {
                         busy = true
@@ -235,7 +244,8 @@ struct GroupChatView: View {
     }
     /// Scroll to a quoted message, paging earlier history within a bound when needed.
     private func showQuoted(_ quote: MessageReplyQuote, proxy: ScrollViewProxy) {
-        guard quote.available else { return }
+        // A quote from before the viewer joined is outside their history; never page toward it.
+        guard quote.available, quote.beforeJoin != true else { return }
         historyPosition.followsLatest = false
         quoteTask?.cancel()
         quoteTask = Task {
@@ -277,16 +287,22 @@ struct GroupChatView: View {
                         }
                     }
                     ForEach(store.messages) { message in
-                        GroupMessageRow(message: message, groupID: groupID, members: store.snapshot?.members ?? [],
-                                        documents: (groups.conversations.documents.list("groups/\(groupID)").value ?? []).filter { $0.sourceID == message.id },
-                                        apps: groups.conversations.miniApps.apps(base: "groups/\(groupID)", replyID: message.id),
-                                        isNew: store.newIncomingMessageIDs.contains(message.id),
-                                        replyQuote: message.replyTo.map(replyPreview),
-                                        canReply: store.snapshot != nil,
-                                        onQuoteTap: { if let quote = message.replyTo { showQuoted(quote, proxy: proxy) } },
-                                        onReply: { reply(to: message) })
-                            .messageHighlight(highlightedMessage == message.id)
-                            .id(message.id)
+                        if message.event != nil {
+                            // Membership notices: a centered banner without bubble, sender, receipts or actions.
+                            GroupEventBanner(text: message.text)
+                                .id(message.id)
+                        } else {
+                            GroupMessageRow(message: message, groupID: groupID, members: store.snapshot?.members ?? [],
+                                            documents: (groups.conversations.documents.list("groups/\(groupID)").value ?? []).filter { $0.sourceID == message.id },
+                                            apps: groups.conversations.miniApps.apps(base: "groups/\(groupID)", replyID: message.id),
+                                            isNew: store.newIncomingMessageIDs.contains(message.id),
+                                            replyQuote: message.replyTo.map(replyPreview),
+                                            canReply: store.snapshot != nil,
+                                            onQuoteTap: { if let quote = message.replyTo { showQuoted(quote, proxy: proxy) } },
+                                            onReply: { reply(to: message) })
+                                .messageHighlight(highlightedMessage == message.id)
+                                .id(message.id)
+                        }
                         ForEach(failedReplies(for: message)) { reply in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("\(reply.name) couldn't finish replying to this message.")
@@ -504,7 +520,7 @@ struct GroupChatView: View {
             guard isVisible, scenePhase == .active else { return }
             sync.request(.group(groupID))
             while !Task.isCancelled {
-                await store.acknowledge(store.messages.map(\.id), state: "received", id: groupID, auth: auth)
+                await store.acknowledge(store.messages.filter { $0.event == nil }.map(\.id), state: "received", id: groupID, auth: auth)
                 animateNewMessages = true
                 do { try await Task.sleep(for: .seconds(3)) } catch { return }
             }
@@ -674,6 +690,21 @@ struct GroupChatView: View {
         }
     }
 
+}
+
+/// A membership notice such as "Lautaro added Mila", shown as a muted centered capsule.
+private struct GroupEventBanner: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .manrope(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 12).padding(.vertical, 5)
+            .background(.quaternary.opacity(0.6), in: Capsule())
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .combine)
+    }
 }
 
 private struct GroupMessageRow: View {

@@ -28,17 +28,23 @@ function failedRepliesFor(message: GroupMessage) {
     && !state.value.messages.some((later) => later.agentID === reply.agentID && later.sequence > message.sequence));
 }
 
-type Item = { kind: 'day'; key: string; label: string } | { kind: 'message'; key: string; message: GroupMessage; first: boolean; last: boolean };
+// Membership notices (`event`) render as centered banners and break bubble runs.
+type Item = { kind: 'day'; key: string; label: string } | { kind: 'event'; key: string; message: GroupMessage }
+  | { kind: 'message'; key: string; message: GroupMessage; first: boolean; last: boolean };
 const items = computed<Item[]>(() => {
   const result: Item[] = [];
   let day = '';
   const messages = state.value.messages;
   messages.forEach((message, index) => {
     const label = dayLabel(message.createdAt);
-    const sender = (value: GroupMessage | undefined) => value && `${value.userID ?? ''}/${value.agentID ?? ''}`;
+    const sender = (value: GroupMessage | undefined) => value && (value.event ? `event/${value.id}` : `${value.userID ?? ''}/${value.agentID ?? ''}`);
     if (label !== day) {
       day = label;
       result.push({ kind: 'day', key: `day-${message.sequence}`, label });
+    }
+    if (message.event) {
+      result.push({ kind: 'event', key: message.id, message });
+      return;
     }
     const previous = messages[index - 1];
     const next = messages[index + 1];
@@ -92,7 +98,8 @@ function startReply(message: GroupMessage) {
 const highlighted = ref<string | null>(null);
 let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 async function showQuoted(quote: ReplyQuote) {
-  if (!quote.available) return;
+  // Quotes from before the viewer joined cannot be opened (that history is not readable).
+  if (!quote.available || quote.beforeJoin) return;
   for (let pages = 0; pages < 20 && !state.value.messages.some((message) => message.id === quote.messageID); pages += 1) {
     const cursor = state.value.nextBefore;
     if (!cursor) break;
@@ -222,6 +229,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
 
       <template v-for="item in items" :key="item.key">
         <div v-if="item.kind === 'day'" class="day">{{ item.label }}</div>
+        <div v-else-if="item.kind === 'event'" class="system-banner" role="note">{{ item.message.text }}</div>
         <div
           v-else :id="`message-${item.message.id}`" class="bubble-row"
           :class="[isMine(item.message) ? 'outgoing' : 'incoming', { highlighted: highlighted === item.message.id }]" :style="{ marginTop: item.first ? '6px' : '0' }"
@@ -249,7 +257,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
           </div>
           </MessageReactions>
         </div>
-        <template v-if="item.kind === 'message'">
+        <template v-if="item.kind !== 'day'">
           <div v-for="reply in failedRepliesFor(item.message)" :key="reply.id" class="status-line" role="status">
             {{ reply.name }} couldn't finish replying to this message.
             <button class="link-button" :disabled="activeReplies.length > 0" @click="retryReply(reply.id)">Retry reply</button>

@@ -33,6 +33,10 @@ Quotes inside bubbles use the author's group sender color (the same FNV-1a palet
 as sender names), the accent color for your own messages, and the contact's stable
 palette color in private chats. When the original is not in loaded history, the
 client loads earlier pages (at most 20 pages of 50 messages) before scrolling. A
+quote of a group message from before the reader joined, when they joined without
+earlier messages, carries `beforeJoin: true`: it shows its clipped text (files become a
+"Photo"/"Attachment" label) and is not tappable (see
+[join banners and welcomes](groups.md#join-banners-and-welcomes)). A
 quote whose original no longer exists shows **Original message unavailable** and is
 not interactive. On iOS, a quote inside a PDF bubble is informational only; tapping
 the bubble still opens the document.

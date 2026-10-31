@@ -67,6 +67,9 @@ struct GroupMembersView: View {
                                 Text(member.name).manrope(.body, weight: .semibold)
                                 Text(member.kind == "agent" ? "Contact" : (member.id == snapshot.group.ownerID ? "Owner" : member.canInvite == 1 ? "Can invite" : "Member"))
                                     .manrope(.caption).foregroundStyle(.secondary)
+                                if member.joinedWithoutHistory {
+                                    Text("Joined without earlier messages").manrope(.caption).foregroundStyle(.secondary)
+                                }
                             }
                             Spacer()
                             if canInvite || canRemove {
@@ -158,7 +161,9 @@ struct GroupMembersView: View {
             NavigationStack {
                 Form {
                     // Consent covers this text, so GroupConsentFields keeps it visible.
-                    GroupConsentFields(contributor: snapshot?.contributorModel == true, shareMemory: $shareMemory, contributorConsent: $contributorConsent)
+                    GroupConsentFields(contributor: snapshot?.contributorModel == true, shareMemory: $shareMemory, contributorConsent: $contributorConsent,
+                        seesEarlierMessages: !(snapshot?.members.first { $0.kind == "user" && $0.id == auth.user?.id }?.joinedWithoutHistory ?? false),
+                        alreadyMember: true)
                     if let error { Text(error).foregroundStyle(.red) }
                 }
                 .disabled(busy)

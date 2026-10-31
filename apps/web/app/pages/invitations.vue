@@ -13,9 +13,18 @@ const contactDisclosure = [
   'Start your own empty chat with this contact. Its memories and presence are shared with other participants. Your schedules and notifications belong to you.',
   'The contact can share remembered facts about you with other participants. Your original messages and attachments are private. The creator can remove your access.',
 ];
+const historyClause = "Members can read the group's history, including messages sent before they joined, unless they were added without earlier messages.";
 const groupDisclosure = [
-  'Group members can see your name and profile photo. Everyone in this group can read its full history, including messages sent before they joined. Contacts use shared memories from their other conversations. What you say here can become a shared memory and be recalled in other chats with these contacts. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.',
+  `Group members can see your name and profile photo. ${historyClause} Contacts use shared memories from their other conversations. What you say here can become a shared memory and be recalled in other chats with these contacts. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.`,
 ];
+// An invitation without earlier messages replaces the full-history clause.
+const withoutHistory = (invitation: GroupInvitation) => invitation.includeHistory === 0 || invitation.includeHistory === false;
+const disclosure = computed(() => {
+  const current = selected.value;
+  if (!current) return [];
+  if (current.kind === 'contact') return contactDisclosure;
+  return withoutHistory(current.invitation) ? groupDisclosure.map(text => text.replace(historyClause, "You'll see messages from when you join.")) : groupDisclosure;
+});
 
 function choose(next: typeof selected.value) {
   selected.value = next;
@@ -67,7 +76,7 @@ onMounted(() => chats.refresh());
         <ConsentFields
           v-model:share-memory="shareMemory" v-model:contributor-consent="contributorConsent"
           :contributor-model="chats.contributorModel.value"
-          :disclosure="selected.kind === 'contact' ? contactDisclosure : groupDisclosure"
+          :disclosure="disclosure"
           :memory-label="selected.kind === 'contact' ? 'I agree to shared memories' : 'I accept shared memory'"
           :contributor-note="selected.kind === 'contact'
             ? 'Messages and shared memories sent to Meta may be used to train its models.'

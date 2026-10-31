@@ -1,23 +1,25 @@
 <script setup lang="ts">
 import type { ReplyPreview } from '~/utils/replies';
 
-// A quoted message inside a bubble or the composer. Clicking shows the original.
+// A quoted message inside a bubble or the composer. Clicking shows the original, except
+// for quotes from before the viewer joined (`beforeJoin`), which are text only.
 const props = defineProps<{ preview: ReplyPreview; interactive?: boolean }>();
 const emit = defineEmits<{ open: [] }>();
 const summary = computed(() => quoteSummary(props.preview.quote));
-const active = computed(() => props.interactive && props.preview.quote.available);
+const active = computed(() => props.interactive && props.preview.quote.available && !props.preview.quote.beforeJoin);
 </script>
 
 <template>
   <button
     type="button" class="reply-quote" :class="{ active }" :disabled="!active"
     :style="{ '--quote-light': preview.color.light, '--quote-dark': preview.color.dark }"
-    :aria-label="`Reply to ${preview.author}: ${summary}`" @click.stop="emit('open')"
+    :aria-label="`Reply to ${preview.author}: ${summary}${preview.quote.beforeJoin ? ' (before you joined)' : ''}`" @click.stop="emit('open')"
   >
     <span class="author">{{ preview.author }}</span>
     <span class="text" :class="{ unavailable: !preview.quote.available }">
       <AppIcon v-if="preview.quote.available && preview.quote.attachment" :name="preview.quote.attachment.mimeType.startsWith('image/') ? 'image' : 'file'" />{{ summary }}
     </span>
+    <span v-if="preview.quote.beforeJoin" class="before-join">Before you joined</span>
   </button>
 </template>
 
@@ -38,6 +40,7 @@ const active = computed(() => props.interactive && props.preview.quote.available
 }
 .text svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: var(--space-1); }
 .text.unavailable { font-style: italic; }
+.before-join { font: var(--type-label-small); color: var(--md-on-surface-variant); opacity: 0.8; }
 @media (prefers-color-scheme: dark) {
   .reply-quote::before { background: var(--quote-dark); }
   .author { color: var(--quote-dark); }

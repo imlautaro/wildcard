@@ -21,6 +21,8 @@ import { photoResponse } from '../photos/storage';
 import { dispatchGroup } from './workflow';
 import { groupSourceAccess } from './request-access';
 import { miniAppRoutes } from '../miniapps/routes';
+import { agentJoinStatements, userJoinStatements } from './membership';
+import { eventTextColumn, parseMembershipEvent, userHistoryStart } from './history-access';
 
 import { clearGroup, cleanResources, cleanupPending } from '../chat/cleanup';
 
@@ -28,6 +30,11 @@ const groups = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 const contributor = (env: Env) => env.META_CHAT_MODEL.includes('contributor');
 const accepted = (b: Record<string, unknown> | null, env: Env) => b?.shareMemory === true && (!contributor(env) || b.contributorConsent === true);
 const validName = (v: unknown) => typeof v === 'string' && v.trim().length > 0 && Array.from(v.trim()).length <= 100 && !/[\u0000-\u001f\u007f-\u009f]/u.test(v);
+function membershipEvent(json: string) {
+  const event = parseMembershipEvent(json);
+  return event ? { kind: event.kind, memberKind: event.memberKind, memberID: event.memberID, actorID: event.actorID,
+    invitedByID: event.invitedByID ?? null, includesHistory: event.includesHistory } : null;
+}
 const membership = (db: D1Database, id: string, user: string) => db.prepare(`SELECT m.can_invite AS canInvite,
   g.owner_id AS ownerID FROM group_member m JOIN chat_group g ON g.id = m.group_id
   WHERE m.group_id = ? AND m.user_id = ?`).bind(id, user).first<{ canInvite: number; ownerID: string }>();
@@ -42,12 +49,13 @@ function groupPreview(row: GroupSummary) {
     lastMessagePreview: source == null ? null : [...(row.lastMessageUserID == null ? plainMessageMarkdown(source) : source)].slice(0, 500).join('') };
 }
 // Task work triggers (task_id set, no sender) are internal: the assignee's own reply is
-// the visible event, so they never count as unread, preview or history.
+// the visible event, so they never count as unread, preview or history. Membership
+// notices (event_json) appear in history only: no unread count, preview or push.
 const summary = `
   (SELECT CASE WHEN json_extract(gm.attachment_json, '$.mimeType') LIKE 'audio/%' THEN
     json_object('durationMs', json_extract(gm.attachment_json, '$.durationMs'), 'listenedAt', gm.voice_listened_at,
       'ownListenedAt', (SELECT listened_at FROM group_voice_playback WHERE message_id = gm.id AND user_id = m.user_id), 'transcript', NULL) END
-    FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageVoiceJSON,
+    FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL AND gm.event_json IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageVoiceJSON,
 g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (SELECT json_group_array(json_object('name', name, 'activity', activity)) FROM (
     SELECT ${agentDisplayName('a.id', 'a.name', 'm.user_id')} AS name, CASE WHEN p.researching_until > unixepoch('subsec') * 1000 THEN 'researching'
       WHEN p.recording_until > unixepoch('subsec') * 1000 THEN 'recording' ELSE 'typing' END AS activity
@@ -58,14 +66,14 @@ g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (S
     ORDER BY r.sequence LIMIT 50)) AS replyActivityJSON,
   m.last_read_sequence AS lastReadSequence,
   (SELECT COUNT(*) FROM group_message gm WHERE gm.group_id = g.id AND gm.sequence > m.last_read_sequence
-    AND gm.user_id IS NOT m.user_id AND gm.task_id IS NULL) AS unreadCount, g.id, g.name, g.owner_id AS ownerID,
-  (SELECT id FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageID,
-  (SELECT user_id FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageUserID,
-  (SELECT ${receiptState('gm')} FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageReceiptState, g.created_at AS createdAt, g.photo_version AS photoVersion,
-  (SELECT CASE WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
-  (SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageAt,
-  (SELECT ${agentDisplayName('lm.agent_id', 'lm.sender_name', 'm.user_id')} FROM group_message lm WHERE lm.group_id = g.id AND lm.task_id IS NULL ORDER BY lm.sequence DESC LIMIT 1) AS lastMessageSenderName,
-  COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt`;
+    AND gm.user_id IS NOT m.user_id AND gm.task_id IS NULL AND gm.event_json IS NULL) AS unreadCount, g.id, g.name, g.owner_id AS ownerID,
+  (SELECT id FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageID,
+  (SELECT user_id FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageUserID,
+  (SELECT ${receiptState('gm')} FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL AND gm.event_json IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageReceiptState, g.created_at AS createdAt, g.photo_version AS photoVersion,
+  (SELECT CASE WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
+  (SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageAt,
+  (SELECT ${agentDisplayName('lm.agent_id', 'lm.sender_name', 'm.user_id')} FROM group_message lm WHERE lm.group_id = g.id AND lm.task_id IS NULL AND lm.event_json IS NULL ORDER BY lm.sequence DESC LIMIT 1) AS lastMessageSenderName,
+  COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt`;
 
 groups.use('*', async (c, next) => {
   const session = await readBearerSession(c.env, c.req.raw.headers);
@@ -97,7 +105,7 @@ groups.get('/', async (c) => {
     g.name AS groupName, ${agentDisplayName('gm.agent_id', 'gm.sender_name', 'm.user_id')} AS senderName, gm.agent_id AS agentID, gm.created_at AS sentAt,
     CASE WHEN json_extract(gm.attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN gm.text = '' AND gm.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(gm.attachment_json, '$.name') ELSE gm.text END AS text
     FROM group_message gm JOIN group_member m ON m.group_id = gm.group_id JOIN chat_group g ON g.id = gm.group_id
-    WHERE m.user_id = ? AND gm.sequence > m.last_read_sequence AND gm.user_id IS NOT m.user_id AND gm.task_id IS NULL
+    WHERE m.user_id = ? AND gm.sequence > m.last_read_sequence AND gm.user_id IS NOT m.user_id AND gm.task_id IS NULL AND gm.event_json IS NULL
     ORDER BY gm.sequence DESC LIMIT 50`).bind(c.get('owner')).all<Record<string, unknown> & { text: string; agentID: string | null }>();
   return c.json({ groups: results.map(groupPreview), activity: activity.map((item) => ({ ...item,
     text: [...item.text].slice(0, 500).join(''), previewText: [...(item.agentID ? plainMessageMarkdown(item.text) : item.text)].slice(0, 500).join('') })), contributorModel: contributor(c.env) });
@@ -117,7 +125,7 @@ groups.post('/', async (c) => {
   return await membership(c.env.DB, id, owner) ? c.json({ id }, 201) : c.json({ error: 'Group limit reached' }, 409);
 });
 groups.get('/invitations', async (c) => {
-  const { results } = await c.env.DB.prepare(`SELECT i.id, g.name AS groupName, u.name AS senderName, i.expires_at AS expiresAt
+  const { results } = await c.env.DB.prepare(`SELECT i.id, g.name AS groupName, u.name AS senderName, i.expires_at AS expiresAt, (i.include_history = 1) AS includeHistory
     FROM group_invite i JOIN chat_group g ON g.id = i.group_id JOIN user u ON u.id = i.sender_id
     JOIN group_member m ON m.group_id = i.group_id AND m.user_id = i.sender_id
     WHERE i.recipient_id = ?1 AND i.expires_at > ?2 AND (m.can_invite = 1 OR g.owner_id = i.sender_id)
@@ -128,8 +136,8 @@ groups.post('/invitations/:inviteID/accept', async (c) => {
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (!accepted(b, c.env)) return c.json({ error: 'Accept shared memory and model data use' }, 400);
   const owner = c.get('owner'), inviteID = c.req.param('inviteID'), now = Date.now();
-  const invite = await c.env.DB.prepare(`SELECT group_id AS id FROM group_invite WHERE id = ? AND recipient_id = ? AND expires_at > ?`)
-    .bind(inviteID, owner, now).first<{ id: string }>();
+  const invite = await c.env.DB.prepare(`SELECT group_id AS id, sender_id AS senderID FROM group_invite WHERE id = ? AND recipient_id = ? AND expires_at > ?`)
+    .bind(inviteID, owner, now).first<{ id: string; senderID: string }>();
   if (!invite) return c.json({ error: 'Invitation unavailable' }, 404);
   await c.env.DB.batch([
     c.env.DB.prepare(`INSERT INTO group_member (group_id, user_id, share_memory, contributor_consent, joined_at)
@@ -140,6 +148,8 @@ groups.post('/invitations/:inviteID/accept', async (c) => {
       AND (SELECT COUNT(*) FROM group_member WHERE user_id = ?2) < 100
       ON CONFLICT(group_id, user_id) DO NOTHING`)
       .bind(inviteID, owner, now, b?.contributorConsent === true ? 1 : 0),
+    // The notice and history floor read the invitation, so they run before it is deleted.
+    ...userJoinStatements(c.env.DB, { groupID: invite.id, userID: owner, inviterID: invite.senderID, inviteID, now }),
     c.env.DB.prepare(`DELETE FROM group_invite WHERE id = ?1 AND recipient_id = ?2
       AND EXISTS (SELECT 1 FROM group_member WHERE group_id = group_invite.group_id AND user_id = ?2)`)
       .bind(inviteID, owner),
@@ -180,8 +190,8 @@ groups.get('/:id', async (c) => {
   const group = await c.env.DB.prepare(`SELECT ${summary} FROM chat_group g JOIN group_member m ON m.group_id = g.id
     WHERE g.id = ? AND m.user_id = ?`).bind(id, owner).first<GroupSummary>();
   const { results: members } = await c.env.DB.prepare(`SELECT u.id, 'user' AS kind, u.name, u.photo_version AS photoVersion,
-    m.can_invite AS canInvite, NULL AS addedBy FROM group_member m JOIN user u ON u.id = m.user_id WHERE m.group_id = ?1
-    UNION ALL SELECT a.id, 'agent', ${agentDisplayName('a.id', 'a.name', '?2')}, a.photo_version, 0, ga.added_by FROM group_agent ga
+    m.can_invite AS canInvite, NULL AS addedBy, (m.history_start IS NULL) AS includesHistory FROM group_member m JOIN user u ON u.id = m.user_id WHERE m.group_id = ?1
+    UNION ALL SELECT a.id, 'agent', ${agentDisplayName('a.id', 'a.name', '?2')}, a.photo_version, 0, ga.added_by, (ga.history_start IS NULL) FROM group_agent ga
     JOIN contact_agent a ON a.id = ga.agent_id WHERE ga.group_id = ?1`).bind(id, owner).all();
   const { results: replies } = await c.env.DB.prepare(`SELECT r.id, r.agent_id AS agentID, ${agentDisplayName('a.id', 'a.name', '?3')} AS name, r.status,
     r.source_id AS sourceID, source.sequence AS sourceSequence, r.attempt,
@@ -249,13 +259,16 @@ groups.post('/:id/agents', async (c) => {
   const id = c.req.param('id'), owner = c.get('owner');
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (typeof b?.contactID !== 'string' || !accepted(b, c.env)) return c.json({ error: 'Select your own contact and confirm shared memory and model data use' }, 400);
+  if (b.includeHistory !== undefined && typeof b.includeHistory !== 'boolean') return c.json({ error: 'includeHistory must be a boolean' }, 400);
   const agent = await c.env.DB.prepare(`SELECT a.id FROM contact c JOIN contact_agent a ON a.id = c.agent_id
     WHERE c.id = ? AND c.user_id = ? AND a.owner_id = ?`).bind(b.contactID, owner, owner).first<{ id: string }>();
   if (!agent) return c.json({ error: 'Only the contact creator can add it to a group' }, 403);
+  const now = Date.now();
   await c.env.DB.batch([
     c.env.DB.prepare(`INSERT INTO group_agent (group_id, agent_id, added_by, joined_at)
       SELECT ?1, ?3, ?2, ?4 WHERE ${mayInvite} AND (SELECT COUNT(*) FROM group_agent WHERE group_id = ?1) < 8
-      ON CONFLICT(group_id, agent_id) DO NOTHING`).bind(id, owner, agent.id, Date.now()),
+      ON CONFLICT(group_id, agent_id) DO NOTHING`).bind(id, owner, agent.id, now),
+    ...agentJoinStatements(c.env.DB, { groupID: id, agentID: agent.id, actorID: owner, now, includeHistory: b.includeHistory !== false }),
     c.env.DB.prepare(`UPDATE contact_agent SET memory_shared = 1 WHERE id = ?3 AND owner_id = ?2
       AND EXISTS (SELECT 1 FROM group_agent WHERE group_id = ?1 AND agent_id = ?3)`)
       .bind(id, owner, agent.id),
@@ -269,15 +282,17 @@ groups.post('/:id/invitations', async (c) => {
   if (!member || (!member.canInvite && member.ownerID !== owner)) return c.json({ error: 'Invitation permission required' }, 403);
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (typeof b?.email !== 'string' || b.email.length > 254) return c.json({ error: 'Provide an existing account email' }, 400);
+  if (b.includeHistory !== undefined && typeof b.includeHistory !== 'boolean') return c.json({ error: 'includeHistory must be a boolean' }, 400);
   const recipient = await c.env.DB.prepare('SELECT id FROM user WHERE email = ? COLLATE NOCASE')
     .bind(b.email.trim()).first<{ id: string }>();
   if (!recipient) return c.json({ error: 'No existing account uses this email' }, 404);
   if (await membership(c.env.DB, id, recipient.id)) return c.json({ error: 'This user is already a member' }, 409);
-  const result = await c.env.DB.prepare(`INSERT INTO group_invite (id, group_id, sender_id, recipient_id, expires_at)
-    SELECT ?3, ?1, ?2, ?4, ?5 WHERE ${mayInvite}
+  const result = await c.env.DB.prepare(`INSERT INTO group_invite (id, group_id, sender_id, recipient_id, expires_at, include_history)
+    SELECT ?3, ?1, ?2, ?4, ?5, ?7 WHERE ${mayInvite}
     AND (SELECT COUNT(*) FROM group_invite WHERE group_id = ?1 AND expires_at > ?6) < 20
-    ON CONFLICT(group_id, recipient_id) DO UPDATE SET sender_id = excluded.sender_id, expires_at = excluded.expires_at
-    RETURNING id`).bind(id, owner, crypto.randomUUID(), recipient.id, Date.now() + 86_400_000, Date.now()).first();
+    ON CONFLICT(group_id, recipient_id) DO UPDATE SET sender_id = excluded.sender_id, expires_at = excluded.expires_at,
+      include_history = excluded.include_history
+    RETURNING id`).bind(id, owner, crypto.randomUUID(), recipient.id, Date.now() + 86_400_000, Date.now(), b.includeHistory === false ? 0 : 1).first();
   return result ? c.body(null, 204) : c.json({ error: 'Invitation unavailable or limit reached' }, 409);
 });
 groups.patch('/:id/members/:userID', async (c) => {
@@ -349,19 +364,26 @@ groups.get('/:id/messages', async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT ${receiptState('group_message')} AS receiptState, sequence, id, user_id AS userID, agent_id AS agentID,
     ${agentDisplayName('group_message.agent_id', 'group_message.sender_name', '?3')} AS senderName, text, created_at AS createdAt, attachment_json AS attachmentJSON, reply_to_id AS replyToID,
     (SELECT listened_at FROM group_voice_playback WHERE message_id = group_message.id AND user_id = ?3) AS ownListenedAt,
-    voice_listened_at AS voiceListenedAt, voice_transcribed_at AS voiceTranscribedAt FROM group_message
-    WHERE group_id = ?1 AND sequence < ?2 AND task_id IS NULL ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before, c.get('owner'))
-    .all<{ ownListenedAt: number | null; sequence: number; attachmentJSON: string | null; replyToID: string | null; text: string; agentID: string | null; voiceListenedAt: number | null; voiceTranscribedAt: number | null }>();
+    voice_listened_at AS voiceListenedAt, voice_transcribed_at AS voiceTranscribedAt, event_json AS eventJSON,
+    ${eventTextColumn('group_message', '?3')} AS eventText FROM group_message
+    WHERE group_id = ?1 AND sequence < ?2 AND task_id IS NULL AND sequence >= ${userHistoryStart('?1', '?3')}
+    ORDER BY sequence DESC LIMIT 51`).bind(c.req.param('id'), before, c.get('owner'))
+    .all<{ ownListenedAt: number | null; sequence: number; attachmentJSON: string | null; replyToID: string | null; text: string; agentID: string | null; voiceListenedAt: number | null; voiceTranscribedAt: number | null; eventJSON: string | null; eventText: string | null }>();
   const page = results.slice(0, 50);
-  const quotes = await groupQuotes(c.env.DB, c.req.param('id'), c.get('owner'), page);
+  // A member without past history still sees what a reply quotes (the replier chose to
+  // surface it), flagged beforeJoin so clients neither scroll to nor download it.
+  const historyStart = (await c.env.DB.prepare(`SELECT ${userHistoryStart('?1', '?2')} AS value`).bind(c.req.param('id'), c.get('owner')).first<{ value: number }>())?.value ?? 0;
+  const quotes = await groupQuotes(c.env.DB, c.req.param('id'), c.get('owner'), page, historyStart);
   const current=await c.env.DB.prepare('SELECT history_revision AS value FROM chat_group WHERE id=?').bind(c.req.param('id')).first<{value:number}>();
   if (!epoch || epoch.value!==current?.value) return c.json({error:'Group was cleared. Refresh history.'},409);
-  return c.json({ historyRevision:epoch.value, messages: page.reverse().map(({ attachmentJSON, replyToID, voiceListenedAt, voiceTranscribedAt, ownListenedAt, ...message }) => {
+  return c.json({ historyRevision:epoch.value, historyStart: historyStart || null, messages: page.reverse().map(({ attachmentJSON, replyToID, voiceListenedAt, voiceTranscribedAt, ownListenedAt, eventJSON, eventText, ...message }) => {
+    // Membership notices render as centered banners with viewer-resolved names.
+    if (eventJSON) return { ...message, text: eventText ?? message.text, event: membershipEvent(eventJSON), attachment: null, voice: null, replyTo: null };
     // Contacts' voice messages keep their spoken text; people's transcripts stay behind long press.
     const voice = publicVoice(storedAttachment({ attachmentJSON }), message.agentID ? null : voiceListenedAt,
       message.agentID ? message.text : voiceTranscribedAt ? message.text : null);
     return { ...message, text: voice && !message.agentID ? '' : message.text,
-      attachment: voice ? null : publicAttachment({ attachmentJSON }), voice: voice ? { ...voice, ownListenedAt } : null, replyTo: quotes({ replyToID }) };
+      attachment: voice ? null : publicAttachment({ attachmentJSON }), voice: voice ? { ...voice, ownListenedAt } : null, replyTo: quotes({ replyToID }), event: null };
   }), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 // Aggregate-only refresh for retained history; recheck membership in the query.
@@ -440,7 +462,7 @@ groups.put('/:id/read', async (c) => {
     SELECT id FROM group_message WHERE group_id = ? AND sequence <= ?)`)
     .bind(id, owner, id, member.lastReadSequence).run();
   const unread = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM group_message WHERE group_id = ?
-    AND sequence > ? AND user_id IS NOT ? AND task_id IS NULL`).bind(id, member.lastReadSequence, owner).first<{ count: number }>();
+    AND sequence > ? AND user_id IS NOT ? AND task_id IS NULL AND event_json IS NULL`).bind(id, member.lastReadSequence, owner).first<{ count: number }>();
   return c.json({ ...member, unreadCount: unread?.count ?? 0 });
 });
 groups.post('/:id/messages', async (c) => {
@@ -472,7 +494,8 @@ groups.post('/:id/messages', async (c) => {
     return c.json({ id: b.id });
   }
   // Quotes stay inside this group; membership was checked by the route middleware.
-  if (replyToID && !await c.env.DB.prepare('SELECT 1 FROM group_message WHERE id = ? AND group_id = ?').bind(replyToID, id).first()) {
+  if (replyToID && !await c.env.DB.prepare(`SELECT 1 FROM group_message WHERE id = ?1 AND group_id = ?2 AND event_json IS NULL
+    AND sequence >= ${userHistoryStart('?2', '?3')}`).bind(replyToID, id, owner).first()) {
     return c.json({ error: 'The message you are replying to is no longer available' }, 400);
   }
   const now = Date.now();

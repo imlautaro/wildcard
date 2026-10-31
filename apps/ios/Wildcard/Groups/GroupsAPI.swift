@@ -42,7 +42,29 @@ struct GroupMember: Decodable, Hashable, Identifiable {
     let photoVersion: String?
     let canInvite: Int
     let addedBy: String?
+    /// 0 when the member joined without earlier messages; missing for older payloads (full history).
+    var includesHistory: LenientBool? = nil
     var identity: String { "\(kind)/\(id)" }
+    var joinedWithoutHistory: Bool { includesHistory?.value == false }
+}
+/// A flag the API sends as a JSON boolean or as a SQLite 0/1 integer.
+struct LenientBool: Decodable, Hashable, Sendable {
+    let value: Bool
+    init(_ value: Bool) { self.value = value }
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let bool = try? container.decode(Bool.self) { value = bool }
+        else { value = try container.decode(Int.self) != 0 }
+    }
+}
+/// A membership notice ("Lautaro added Mila"); the message `text` is the viewer-resolved banner.
+struct GroupMembershipEvent: Decodable, Equatable {
+    var kind: String? = nil
+    var memberKind: String? = nil
+    var memberID: String? = nil
+    var actorID: String? = nil
+    var invitedByID: String? = nil
+    var includesHistory: LenientBool? = nil
 }
 struct GroupReply: Decodable, Identifiable {
     var isTyping: Int? = nil
@@ -71,6 +93,8 @@ struct GroupMessage: Decodable, Identifiable, Equatable {
     var replyTo: MessageReplyQuote? = nil
     /// Voice message metadata; human voice messages have empty `text`, contact ones keep the spoken text.
     var voice: MessageVoice? = nil
+    /// Non-nil for membership notices, which render as centered banners rather than messages.
+    var event: GroupMembershipEvent? = nil
 }
 struct GroupPrivateSharing: Decodable, Identifiable {
     let agentID: String
@@ -88,6 +112,8 @@ struct GroupSnapshot: Decodable {
 }
 struct GroupMessagesPage: Decodable {
     var historyRevision: Int? = nil
+    /// The viewer's history floor (their join notice sequence) when they joined without earlier messages.
+    var historyStart: Int? = nil
     let messages: [GroupMessage]
     let nextBefore: Int?
 }
@@ -96,6 +122,8 @@ struct GroupInvitation: Decodable, Identifiable {
     let groupName: String
     let senderName: String
     let expiresAt: Double
+    /// False when the inviter chose that the invitee only sees messages from when they join.
+    var includeHistory: LenientBool? = nil
 }
 struct GroupListResponse: Decodable {
     let groups: [ChatGroup]
@@ -471,7 +499,8 @@ final class GroupChatStore {
     var pendingText: String? { pending.map { value in messages.contains(where: { $0.id == value.id }) ? nil : value.text } ?? nil }
 
     func needsRefresh(for group: ChatGroup) -> Bool {
-        !invalidated && (pending != nil || !pendingReadIDs.isEmpty || group.lastMessageID != messages.last?.id || messages.contains {
+        // The list's last message excludes membership notices, so compare against the last real message.
+        !invalidated && (pending != nil || !pendingReadIDs.isEmpty || group.lastMessageID != messages.last(where: { $0.event == nil })?.id || messages.contains {
             $0.userID == accountID && $0.userID != nil && $0.agentID == nil &&
                 ($0.receiptState == "sent" || $0.receiptState == "received")
         })
@@ -486,7 +515,8 @@ final class GroupChatStore {
     func preview(for group: ChatGroup) -> ChatGroup {
         guard !invalidated else { return group }
         var result = group
-        if let message = messages.last,
+        // Membership notices never become the chat preview.
+        if let message = messages.last(where: { $0.event == nil }),
            message.id == group.lastMessageID || message.createdAt >= (group.lastMessageAt ?? 0) {
             result.lastMessageID = message.id
             result.lastMessageVoice = message.voice
@@ -569,7 +599,7 @@ final class GroupChatStore {
             if messages.isEmpty { nextBefore = cursor }
             let knownIDs = Set(messages.map(\.id))
             newIncomingMessageIDs.formUnion(incoming.filter {
-                !knownIDs.contains($0.id) && $0.userID != auth.user?.id && $0.sequence > (state.group.lastReadSequence ?? 0)
+                !knownIDs.contains($0.id) && $0.event == nil && $0.userID != auth.user?.id && $0.sequence > (state.group.lastReadSequence ?? 0)
             }.map(\.id))
             merge(incoming)
             await reactions.refresh(path: "groups/\(id)/reactions", ids: messages.map(\.id), auth: auth)

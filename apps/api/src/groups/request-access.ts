@@ -59,9 +59,10 @@ export function groupSourceAccess(reply: string, contributor: boolean) {
     ${contributor ? 'AND requester.contributor_consent = 1 AND root.contributor_consent = 1' : ''}`;
   // D1 allows at most five compound SELECT terms (`too many terms in compound SELECT`),
   // so task notices share the human-author and human-root branches instead of adding
-  // their own: a Tasks message (no sender, task_id set) is authored by its requester.
+  // their own: a Tasks message (no sender, task_id set) is authored by its requester,
+  // and so is a membership notice (event_json set), which can start a welcome round.
   const taskAuthor = (message: string) => `COALESCE(${message}.user_id,
-    CASE WHEN ${message}.task_id IS NOT NULL AND ${message}.agent_id IS NULL THEN ${message}.requester_id END)`;
+    CASE WHEN (${message}.task_id IS NOT NULL OR ${message}.event_json IS NOT NULL) AND ${message}.agent_id IS NULL THEN ${message}.requester_id END)`;
   return `EXISTS (
     SELECT 1 FROM group_message source JOIN group_member author
       ON author.group_id = source.group_id AND author.user_id = ${taskAuthor('source')}

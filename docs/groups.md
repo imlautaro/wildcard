@@ -92,7 +92,9 @@ Web refresh is an icon in the page bar; iOS uses pull to refresh.
 Creation, acceptance and adding a contact require an unchecked, explicit shared
 memory confirmation. With the Contributor model they also require separate
 Contributor data-use consent. Group details can renew consent for future messages.
-The disclosure covers full group history (including messages before joining),
+The disclosure covers group history (including messages before joining unless the
+inviter or adder turned off **Can see earlier messages**; see
+[join banners and welcomes](#join-banners-and-welcomes)),
 member names and profile photos, access to existing shared contact memories, and
 future memories from human group messages being recalled in other conversations.
 Consent is mandatory for membership in this version; there is no private-memory
@@ -300,13 +302,13 @@ photos and mutations require current membership. Responses have `no-store`.
 | PUT or DELETE /:id/photo | Owner replaces/removes the JPEG avatar |
 | GET /:id/messages/:messageID/attachment | Download a group message file |
 | POST /:id/transcriptions | Transcribe a bounded WAV for a member (older clients only; see [voice messages](voice.md)) |
-| POST /:id/agents | Add owned `contactID`, with explicit consent |
+| POST /:id/agents | Add owned `contactID`, with explicit consent and optional `includeHistory` (default `true`) |
 | DELETE /:id/agents/:agentID | Remove a contact from this group |
-| POST /:id/invitations | Invite an existing account by `email` |
+| POST /:id/invitations | Invite an existing account by `email`, optional `includeHistory` (default `true`); `GET /invitations` returns it |
 | PATCH /:id/members/:userID | Owner changes `canInvite` |
 | DELETE /:id/members/:userID | Remove a human or leave |
 | DELETE /:id | Owner deletes group |
-| GET /:id/messages?before=sequence | History, `messages` (with nullable [`replyTo`](replies.md#api) quotes) and `nextBefore` |
+| GET /:id/messages?before=sequence | History from the member's `historyStart` (null = full), `messages` (with nullable [`replyTo`](replies.md#api) quotes and nullable membership `event`) and `nextBefore` |
 | PUT /:id/read | Acknowledge displayed `sequence` for the current member |
 | POST /:id/messages | Submit UUID `id`, `text`, optional base64 `attachment` and optional `replyToID`; HTTP 202 after persistence |
 | POST /:id/replies/:replyID/retry | Retry a failed reply after active work finishes |
@@ -1156,3 +1158,98 @@ learning profiles and push subtitles. Other members still see the shared name. `
 stays the shared snapshot; the API overlays the viewer's alias by `agent_id` on each read. Message text,
 mentions and anything the model writes are not rewritten. A member who holds no contact for the bot has no
 alias to apply. See [contacts](contacts.md#contact-alias-private-display-name).
+
+## Join banners and welcomes
+
+Migration `0081_group_join_events.sql`. Adding a contact or accepting an invitation
+writes a membership notice into the shared history, ordered by `sequence` like any
+message: **"Lautaro added Mila"** for a contact, **"Ana joined · invited by
+Lautaro"** for a person. People are never added directly; they join by accepting an
+invitation, so the notice names them as the actor and records the inviter.
+
+A notice is a `group_message` row with `event_json` (`kind: member_joined`,
+`memberKind` `user`/`agent`, `memberID`, `actorID`, optional `invitedByID`,
+`includesHistory`), no user or agent sender, and `requester_id` set to the human
+whose action produced it (the adder, or the invitee). History returns it with
+`event` (those fields) and a viewer-resolved `text` (current names and contact
+aliases). Clients render it as a centered banner without bubble, avatar, receipts,
+reactions, reply or message info. Notices do not count as unread, do not appear as
+the chat preview or Home activity, and send no push. Duplicate or refused adds write
+nothing.
+
+**Debounced welcome.** Every join upserts `group_welcome` with `due_at = now + 2
+minutes`, keeping the first notice's sequence, so adding three contacts in a row
+produces one welcome. The minute cron (`dispatchWelcomes`) claims due rows
+atomically and enqueues one round sourced on the latest notice. That round covers
+every notice after the last human message or earlier welcome. It is skipped when a
+human wrote after the latest notice (that message's own round already sees the
+banners), when the actor left or revoked shared memory, while the group is
+clearing, when Contributor consent is missing, or when the reply queue is full. The
+[round coordinator](#round-coordinator-migration-0071) treats it as a membership
+trigger: each newly added contact introduces itself, and one existing contact (two
+for four or more newcomers) welcomes everyone together. Contacts receive
+`round.trigger.membership` (`joined` with `seesEarlierMessages`/`youJoined`,
+`addedBy`) and are told not to welcome people one by one or to cite earlier
+messages to someone who cannot read them. Welcomes use normal energy, publication,
+history-watermark and finite exchange rules; a new human message supersedes a
+queued welcome like any other round. No learned-context fence applies to a notice.
+
+**Past-history access.** The invite form and the add-contact sheet offer **Can see
+earlier messages** (on by default, the previous behavior). The choice is stored on
+the invitation (`include_history`) and, on joining, as `history_start` on
+`group_member`/`group_agent`: the sequence of the member's own join notice. `NULL`
+means full history; memberships before 0081 keep full history. With a floor:
+
+- People: history, shared media and attachment downloads start at their notice;
+  they cannot reply to an earlier message (HTTP 400). Group details show
+  "Joined without earlier messages".
+- Quotes: when someone replies to an earlier message, the member still sees the
+  clipped quote (200 characters; the replier chose to surface it) with
+  `beforeJoin: true` and no file (a "Photo"/"Attachment: name" label instead).
+  Clients show it as not tappable and never download it. Contacts see the same
+  quoted snippet in their context.
+- Contacts: model context and `search_group_messages`/`get_group_excerpt` start at
+  their notice. The round coordinator, which only picks speakers and angles, still
+  reads the 16 most recent messages. A newly added
+  contact has no group memories from before it joined.
+- Private chats: when a person asks a contact about a group, retrieval also starts
+  at that person's floor.
+
+Consent text (create, invitation, add, iOS consent review) now reads "Members can
+read the group's history, including messages sent before they joined, unless they
+were added without earlier messages." An invitation without history replaces it
+with "You'll see messages from when you join."; on iOS, the consent review for a
+member who joined without history shows "You can read messages from when you
+joined." (web has no consent review screen).
+
+Limits: existing contacts and people remember earlier discussion and may mention it;
+the floor restricts reading, searching and downloading, not what others say. Group
+tasks, documents and mini apps are shared workspace items and stay visible.
+Reactions, receipts and message info of older messages are not exposed through
+history because those rows are never returned. Re-adding a removed member writes a
+new notice and floor.
+
+Verification (2026-10-31): API type check; all new/changed statements prepared on
+local workerd D1 (52 `EXPLAIN`s, including `groupSourceAccess` embedding); a
+Miniflare D1 scenario covering two consecutive contact adds plus a duplicate, an
+invited person without history, viewer text, quotes with `beforeJoin`, welcome
+batching, suppression by a later human message, round enqueueing for all contacts,
+source access and unread exclusion. Not verified: live model welcomes, client
+rendering on devices/browsers.
+
+**iOS.** `GroupChatView` renders a message with `event` as a muted centered capsule
+(`GroupEventBanner`) with the server text and no avatar, sender name, receipts,
+reactions, swipe-to-reply, context menu, message info or new-message sound; a failed
+welcome reply sourced on the notice shows the usual Retry row under it. Notices
+are skipped for "received" acknowledgements, for the cached chat preview, and when
+comparing the list's `lastMessageID` with the newest cached message (warm refresh);
+read state still advances by sequence. A `beforeJoin` quote is shown with a "Before
+you joined" caption, is not a button, and never pages earlier history. The add-contact
+sheet and the invite form have the **Can see earlier messages** toggle (sent as
+`includeHistory`). When an invitation has `includeHistory` 0, the accept sheet uses
+"You'll see messages from when you join." in place of the full-history sentence of
+the consent text. Group details show "Joined
+without earlier messages" for members with `includesHistory` 0. Flags decode as JSON
+booleans or 0/1 integers; new fields are optional and flow through the existing
+in-memory `GroupConversationCache` (nothing is persisted to disk). Verified with the
+static `swiftc -typecheck` of the app target only; device rendering is unverified.

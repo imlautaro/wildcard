@@ -3,6 +3,7 @@ import { readAgentMemories, selectAgentMemories } from '../chat/agent-memory';
 import { groupMemories, localGroupMemories } from './memory';
 import { byteLength, clipText, keywords, selectMemories } from '../chat/memory';
 import { rankMemories } from '../chat/semantic-memory';
+import { agentHistoryStart, userHistoryStart } from './history-access';
 import { isRecord, type ModelTool, type ToolCall } from '../chat/meta';
 
 export type GroupRetrievalScope = { agentID: string; userID: string; contributor: boolean; groupID?: string; contactID?: string; beforeSequence?: number; reactionJob?: { turnID: string; attempt: number }; mcp?: { id: string; attempt: number; contactID: string; userID: string; groupID: string; agentID: string } };
@@ -38,7 +39,11 @@ const access = `EXISTS (SELECT 1 FROM group_agent ga JOIN group_member member ON
     AND (?3 = 0 OR member.contributor_consent = 1)) AND (?4 IS NULL OR g.id = ?4)
   AND (g.id = ?4 OR NOT EXISTS (SELECT 1 FROM mcp_private_group p WHERE p.group_id = g.id))`;
 
+// Past-history access: the agent never reads before its own join; in private retrieval
+// (no current group, ?4 NULL) neither does the human it is talking to.
 const messageAccess = `${access} AND gm.sequence < ?6
+    AND gm.sequence >= ${agentHistoryStart('gm.group_id', '?1')}
+    AND (?4 IS NOT NULL OR gm.sequence >= ${userHistoryStart('gm.group_id', '?2')})
     AND (?3 = 0 OR gm.contributor_consent = 1)
     AND (gm.user_id IS NULL OR EXISTS (SELECT 1 FROM group_member author
       WHERE author.group_id = gm.group_id AND author.user_id = gm.user_id AND author.share_memory = 1

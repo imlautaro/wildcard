@@ -11,6 +11,9 @@ const email = ref('');
 const contactID = ref('');
 const shareMemory = ref(false);
 const contributorConsent = ref(false);
+// "Can see earlier messages" for the next invite or added contact; on by default.
+const includeHistory = ref(true);
+const historyHelp = "Off: they'll only see messages from when they join.";
 const busy = ref(false);
 const error = ref<string | null>(null);
 const notice = ref<string | null>(null);
@@ -28,6 +31,13 @@ const sharingSummary = computed(() => {
   return permissions.length ? `${permissions.filter(permission => permission.enabled).length} of ${permissions.length} on` : 'No contacts';
 });
 const sharingInfo = 'Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat.';
+// Missing (older cached snapshot) means full history.
+const withoutHistory = (member: GroupMember) => member.includesHistory === 0 || member.includesHistory === false;
+// Each sheet starts with history on, so an earlier "off" does not carry over.
+function openSheet(next: 'invite' | 'add') {
+  includeHistory.value = true;
+  sheet.value = next;
+}
 function memberRole(member: GroupMember) {
   return member.kind === 'agent' ? 'Contact' : member.id === snapshot.value?.group.ownerID ? 'Owner' : member.canInvite ? 'Can invite' : 'Member';
 }
@@ -61,14 +71,14 @@ async function run(task: () => Promise<void>) {
 }
 
 const invite = () => run(async () => {
-  await api(`groups/${id.value}/invitations`, { json: { email: email.value.trim() } });
+  await api(`groups/${id.value}/invitations`, { json: { email: email.value.trim(), includeHistory: includeHistory.value } });
   notice.value = `Invitation sent to ${email.value.trim()}. It appears in their Invitations and expires after 24 hours.`;
   email.value = '';
   sheet.value = null;
 });
 
 const addContact = () => run(async () => {
-  await api(`groups/${id.value}/agents`, { json: { contactID: contactID.value, shareMemory: true, contributorConsent: contributorConsent.value } });
+  await api(`groups/${id.value}/agents`, { json: { contactID: contactID.value, shareMemory: true, contributorConsent: contributorConsent.value, includeHistory: includeHistory.value } });
   contactID.value = '';
   sheet.value = null;
   await load();
@@ -137,14 +147,15 @@ onMounted(() => run(async () => {
 
         <AppListGroup title="Members">
           <template v-if="snapshot.canInvite">
-            <AppListItem icon="mail" :disabled="busy" @click="sheet = 'invite'">Invite people</AppListItem>
-            <AppListItem icon="group-add" :disabled="busy" @click="sheet = 'add'">Add a contact</AppListItem>
+            <AppListItem icon="mail" :disabled="busy" @click="openSheet('invite')">Invite people</AppListItem>
+            <AppListItem icon="group-add" :disabled="busy" @click="openSheet('add')">Add a contact</AppListItem>
           </template>
           <div v-for="member in snapshot.members" :key="`${member.kind}/${member.id}`" class="field member-row">
             <AppAvatar :name="member.name" :path="photoPath(member)" :size="40" />
             <span class="two-line">
               {{ member.kind === 'user' && member.id === user?.id ? `${member.name} (You)` : member.name }}
               <span class="small">{{ memberRole(member) }}</span>
+              <span v-if="withoutHistory(member)" class="small">Joined without earlier messages</span>
             </span>
             <AppIconButton v-if="canManage(member)" icon="more" :label="`Manage ${member.name}`" :disabled="busy" @click="managing = member" />
           </div>
@@ -185,6 +196,9 @@ onMounted(() => run(async () => {
           <form id="invite-form" class="group" @submit.prevent="invite">
             <div class="field"><input v-model="email" type="email" placeholder="Email of an existing account" aria-label="Email" autocomplete="off" autofocus></div>
           </form>
+          <AppListGroup>
+            <AppSwitch v-model="includeHistory" label="Can see earlier messages" :supporting="historyHelp" :disabled="busy" />
+          </AppListGroup>
           <AppNotice v-if="error">{{ error }}</AppNotice>
           <template #actions>
             <AppButton variant="text" @click="sheet = null">Cancel</AppButton>
@@ -203,6 +217,7 @@ onMounted(() => run(async () => {
                   :options="addable.map(contact => ({ value: contact.id, label: contact.name }))"
                 />
               </div>
+              <AppSwitch v-model="includeHistory" label="Can see earlier messages" :supporting="historyHelp" :disabled="busy" />
             </AppListGroup>
             <!-- Consent covers this text, so it stays visible beside the checkboxes. -->
             <ConsentFields

@@ -1323,3 +1323,27 @@ private image caches; no extra polling or persistence is added. Apply migration
 layout, captions, full-screen viewing, replay, opt-out during generation, offline
 reopen and account changes with fictional data; runtime/device checks are pending.
 See [generated images](generated-images.md) and [initiative](initiative.md).
+
+## Join banners and history access (0081)
+
+Group history rows with a non-null `event` (membership notices, migration 0081) render
+in `pages/groups/[id]/index.vue` as a centered, muted pill (`.system-banner` in
+`assets/css/main.css`, M3 tokens) showing the server's ready-made `text` ("Lautaro added
+Mila", "Ana joined · invited by Lautaro"). Notices have no bubble, avatar, sender name,
+receipts, reactions, reply, message info or context menu; they break consecutive-bubble
+runs, take no sender color, are not acknowledged as received/read (no receipt rows), do
+not chime, and are skipped when comparing the cached history with the chat list's
+`lastMessageID` and when building the chat preview (`lastGroupChatMessage`). The unread
+watermark still advances by sequence. A failed welcome round shows the usual retry line
+under its notice.
+
+Quotes with `beforeJoin` keep their clipped text but are not tappable (no scroll or
+earlier-page loading, no download) and show a **Before you joined** caption. In group
+details, the invite form and the add-contact sheet have **Can see earlier messages**
+(on by default, reset each time a sheet opens) with "Off: they'll only see messages
+from when they join.", sent as `includeHistory`. Members whose `includesHistory` is 0
+show **Joined without earlier messages**. On `/invitations`, a group invitation with
+`includeHistory` off replaces the full-history sentence of the consent text with
+"You'll see messages from when you join." No new caches; see
+[groups](groups.md#join-banners-and-welcomes). Verified statically (type check); browser/device rendering, keyboard and
+screen-reader behavior are unverified.

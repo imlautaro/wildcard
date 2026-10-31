@@ -39,7 +39,7 @@ onMounted(() => { if (!chats.loaded.value) void chats.refresh(); });
       <ConsentFields
         v-model:share-memory="shareMemory" v-model:contributor-consent="contributorConsent"
         :contributor-model="chats.contributorModel.value"
-        :disclosure="['Group members can see your name and profile photo. Everyone in this group can read its full history, including messages sent before they joined. Contacts use shared memories from their other conversations. What you say here can become a shared memory and be recalled in other chats with these contacts. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.']"
+        :disclosure="['Group members can see your name and profile photo. Members can read the group\'s history, including messages sent before they joined, unless they were added without earlier messages. Contacts use shared memories from their other conversations. What you say here can become a shared memory and be recalled in other chats with these contacts. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.']"
         memory-label="I accept shared memory"
         contributor-note="Your selected model is Contributor. Group messages and shared memories sent to Meta may be used for model training."
       />

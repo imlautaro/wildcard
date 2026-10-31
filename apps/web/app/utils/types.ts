@@ -74,6 +74,9 @@ export type ReplyQuote = {
   text: string;
   previewText?: string;
   attachment: Attachment | null;
+  // A group quote of a message from before the viewer joined without earlier history:
+  // shown as text only, never opened or downloaded (docs/groups.md#join-banners-and-welcomes).
+  beforeJoin?: boolean;
 };
 
 export type TurnStatus = 'queued' | 'running' | 'complete' | 'failed';
@@ -126,10 +129,15 @@ export type ChatGroup = {
   unreadCount?: number | null;
   lastReadSequence?: number | null;
 };
-export type GroupMember = { id: string; kind: 'user' | 'agent'; name: string; photoVersion: string | null; canInvite: number; addedBy: string | null };
+// includesHistory is 0 when the member joined without earlier messages; missing means full history.
+export type GroupMember = { id: string; kind: 'user' | 'agent'; name: string; photoVersion: string | null; canInvite: number; addedBy: string | null;
+  includesHistory?: number | boolean };
 // taskID/taskTitle are set when the reply is a task work turn (its trigger is hidden from the transcript).
 export type GroupReply = { replyActivity?: string; isTyping?: number; id: string; agentID: string; name: string; status: string; sourceID?: string; sourceSequence?: number; attempt?: number;
   taskID?: string | null; taskTitle?: string | null };
+// A membership notice in group history; its message `text` is the ready-to-show banner.
+export type GroupMessageEvent = { kind: 'member_joined'; memberKind: 'user' | 'agent'; memberID: string; actorID: string;
+  invitedByID: string | null; includesHistory: boolean };
 export type GroupMessage = {
   sequence: number;
   id: string;
@@ -143,11 +151,14 @@ export type GroupMessage = {
   receiptState?: string | null;
   replyTo?: ReplyQuote | null;
   voice?: VoiceInfo | null;
+  // Non-null for membership notices, which render as banners without a sender.
+  event?: GroupMessageEvent | null;
 };
 export type GroupPrivateSharing = { agentID: string; enabled: number; available: number };
 export type GroupSnapshot = { privateSharing?: GroupPrivateSharing[]; group: ChatGroup; members: GroupMember[]; replies: GroupReply[]; canInvite: boolean; contributorModel: boolean };
-export type GroupMessagesPage = { historyRevision?: number; messages: GroupMessage[]; nextBefore: number | null };
-export type GroupInvitation = { id: string; groupName: string; senderName: string; expiresAt: number };
+export type GroupMessagesPage = { historyRevision?: number; historyStart?: number | null; messages: GroupMessage[]; nextBefore: number | null };
+// includeHistory is 0/false when the invitee will only see messages from when they join.
+export type GroupInvitation = { id: string; groupName: string; senderName: string; expiresAt: number; includeHistory?: number | boolean };
 
 export type ContactSharing = {
   members: { id: string; name: string; role: string }[];

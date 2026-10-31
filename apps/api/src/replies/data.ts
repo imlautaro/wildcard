@@ -8,9 +8,9 @@ export type ReplyTarget = { messageID: string; side: ReplySide };
 // Display data for a quoted message, resolved from current conversation history on
 // every read. Private quotes omit sender identity: the side determines the author.
 export type ReplyQuote = ReplyTarget & { available: boolean; userID: string | null; agentID: string | null;
-  senderName: string | null; text: string; previewText?: string; attachment: PublicAttachment | null };
+  senderName: string | null; text: string; previewText?: string; attachment: PublicAttachment | null; beforeJoin?: boolean };
 type QuoteRow = { id: string; userID: string | null; agentID: string | null; senderName: string | null;
-  userText: string; assistantText: string | null; attachmentJSON: string | null };
+  userText: string; assistantText: string | null; attachmentJSON: string | null; sequence?: number };
 
 const quoteLength = 200;
 export function quoteText(text: string, length = quoteLength): string {
@@ -60,13 +60,22 @@ export async function privateQuotes(db: D1Database, contactID: string, userID: s
     turn.replyToID ? rows.get(turn.replyToID) : undefined) : null;
 }
 
+// historyStart: the viewer's first readable sequence (0 = full history). A quote of an
+// earlier message keeps its clipped text but no file: the viewer cannot open it.
 export async function groupQuotes(db: D1Database, groupID: string, viewerID: string,
-  messages: { replyToID: string | null }[]): Promise<(message: { replyToID: string | null }) => ReplyQuote | null> {
+  messages: { replyToID: string | null }[], historyStart = 0): Promise<(message: { replyToID: string | null }) => ReplyQuote | null> {
   const ids = [...new Set(messages.flatMap((message) => message.replyToID ? [message.replyToID] : []))];
   const { results } = ids.length ? await db.prepare(`SELECT id, user_id AS userID, agent_id AS agentID, ${agentDisplayName('group_message.agent_id', 'group_message.sender_name', '?3')} AS senderName,
-    text AS userText, NULL AS assistantText, attachment_json AS attachmentJSON
+    text AS userText, NULL AS assistantText, attachment_json AS attachmentJSON, sequence
     FROM group_message WHERE group_id = ?1 AND id IN (SELECT value FROM json_each(?2))`)
     .bind(groupID, JSON.stringify(ids), viewerID).all<QuoteRow>() : { results: [] };
   const rows = new Map(results.map((row) => [row.id, row]));
-  return (message) => message.replyToID ? quote({ messageID: message.replyToID, side: 'group' }, rows.get(message.replyToID)) : null;
+  return (message) => {
+    if (!message.replyToID) return null;
+    const row = rows.get(message.replyToID);
+    const result = quote({ messageID: message.replyToID, side: 'group' }, row);
+    if (!row || (row.sequence ?? 0) >= historyStart) return result;
+    const marker = result.attachment ? result.attachment.mimeType.startsWith('image/') ? 'Photo' : `Attachment: ${result.attachment.name}` : '';
+    return { ...result, beforeJoin: true, attachment: null, text: result.text || marker, previewText: result.previewText || marker };
+  };
 }

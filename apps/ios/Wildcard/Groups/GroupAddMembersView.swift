@@ -8,6 +8,7 @@ struct InviteGroupUserView: View {
     private var store: GroupChatStore { groups.conversations.store(for: groupID) }
     private var snapshot: GroupSnapshot? { store.snapshot }
     @State private var email = ""
+    @State private var includeHistory = true
     @State private var busy = false
     @State private var error: String?
 
@@ -18,6 +19,7 @@ struct InviteGroupUserView: View {
                     .keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                 Text("They will receive an invitation in Wildcard and can choose whether to join the group.")
                     .manrope(.footnote).foregroundStyle(.secondary)
+                GroupHistoryAccessToggle(includeHistory: $includeHistory)
                 Button("Send invitation", action: invite)
                     .disabled(busy || snapshot?.canInvite != true || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
@@ -40,7 +42,7 @@ struct InviteGroupUserView: View {
         Task {
             defer { busy = false }
             do {
-                _ = try await GroupService.data("\(groupID)/invitations", method: "POST", input: ["email": email], auth: auth)
+                _ = try await GroupService.data("\(groupID)/invitations", method: "POST", input: ["email": email, "includeHistory": includeHistory], auth: auth)
                 store.invalidateDetails()
                 try await store.refreshDetails(id: groupID, auth: auth)
                 await groups.refresh(using: auth)
@@ -48,6 +50,16 @@ struct InviteGroupUserView: View {
             } catch is CancellationError { }
             catch { self.error = error.localizedDescription }
         }
+    }
+}
+
+/// Whether a new member can read the group's messages from before they join (on by default).
+struct GroupHistoryAccessToggle: View {
+    @Binding var includeHistory: Bool
+    var body: some View {
+        Toggle("Can see earlier messages", isOn: $includeHistory)
+        Text("Off: they'll only see messages from when they join.")
+            .manrope(.footnote).foregroundStyle(.secondary)
     }
 }
 
@@ -141,6 +153,7 @@ struct AddGroupContactConsentView: View {
     private var snapshot: GroupSnapshot? { store.snapshot }
     @State private var shareMemory = false
     @State private var contributorConsent = false
+    @State private var includeHistory = true
     @State private var busy = false
     @State private var error: String?
     private var contact: Contact? { contacts.contact(id: contactID) }
@@ -168,6 +181,9 @@ struct AddGroupContactConsentView: View {
                     Toggle("I accept Contributor data use", isOn: $contributorConsent)
                 }
             }
+            Section("Group history") {
+                GroupHistoryAccessToggle(includeHistory: $includeHistory)
+            }
             if let error { Text(error).manrope(.footnote).foregroundStyle(.red) }
             if inGroup { Text("This contact is already in the group.").manrope(.footnote).foregroundStyle(.secondary) }
             Button("Add contact", action: addContact)
@@ -193,7 +209,7 @@ struct AddGroupContactConsentView: View {
             defer { busy = false }
             do {
                 _ = try await GroupService.data("\(groupID)/agents", method: "POST", input: ["contactID": contactID,
-                    "shareMemory": shareMemory, "contributorConsent": contributorConsent], auth: auth)
+                    "shareMemory": shareMemory, "contributorConsent": contributorConsent, "includeHistory": includeHistory], auth: auth)
                 store.invalidateDetails()
                 try await store.refreshDetails(id: groupID, auth: auth)
                 await groups.refresh(using: auth)
