@@ -3,6 +3,9 @@ const chats = useChats();
 const archived = ref(false);
 const visibleRows = computed(() => archived.value ? chats.archivedRows.value : chats.rows.value);
 const route = useRoute();
+const wide = useWideLayout();
+// Updates is also the pane beside the list on wide screens whenever no chat is open.
+const updatesOpen = computed(() => route.path === '/updates' || (route.path === '/' && wide.value));
 const menuID = useId();
 const menu = ref<HTMLElement>();
 const menuOpen = ref(false);
@@ -58,8 +61,8 @@ onMounted(() => { void chats.refresh(); });
       </nav>
       <AppIconButton v-if="archived" icon="back" label="Back to Chats" @click="archived = false" />
     </template>
-    <AppIconButton to="/updates" icon="sparkle" label="Updates" :selected="route.path === '/updates'"
-                   :badge="route.path === '/updates' ? null : updatesUnseen" :badge-label="`${updatesUnseen} new in Updates`" />
+    <AppIconButton to="/updates" icon="sparkle" label="Updates" :selected="updatesOpen"
+                   :badge="updatesOpen ? null : updatesUnseen" :badge-label="`${updatesUnseen} new in Updates`" />
     <AppIconButton icon="archive" label="Archived" :selected="archived" @click="archived = !archived; chats.loadAllContacts()" />
     <AppIconButton to="/contacts" icon="plus" label="New chat" variant="filled"
                    :badge="chats.invitationCount.value" :badge-label="`${chats.invitationCount.value} pending invitations`" />

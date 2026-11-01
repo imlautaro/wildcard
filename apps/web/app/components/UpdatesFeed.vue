@@ -4,6 +4,7 @@ import type { HomeCard, HomeFeed } from '~/utils/types';
 // Updates: the feed a person's contacts curate together (docs/updates.md). On wide
 // screens it fills the content pane beside the chat list; cards flow into two
 // columns, the lead card spans both.
+const route = useRoute();
 const home = useHome();
 const chats = useChats();
 const { user } = useSession();
@@ -76,7 +77,7 @@ function origin(topic: HomeFeed['topics'][number]) {
 <template>
   <div class="page home-page">
     <AppTopBar title="Updates">
-      <template #leading><AppIconButton to="/" icon="back" label="Back" class="back" :tooltip="false" /></template>
+      <template v-if="route.path !== '/'" #leading><AppIconButton to="/" icon="back" label="Back" class="back" :tooltip="false" /></template>
       <AppIconButton icon="list" label="Topics" @click="managing = true" />
       <AppIconButton icon="refresh" label="Update now" :disabled="!feed?.enabled || updating || busy" @click="run(home.update)" />
       <AppIconButton icon="plus" label="Follow something in Updates" variant="filled" @click="following = true" />
