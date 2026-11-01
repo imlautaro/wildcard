@@ -26,7 +26,9 @@ export default defineNuxtConfig({
   },
   nitro: {
     preset: 'cloudflare_module',
-    cloudflare: { deployConfig: true, nodeCompat: true },
+    // `wrangler` takes the same shape as wrangler.json and is merged into the generated
+    // .output/server/wrangler.json (https://nitro.build/deploy/providers/cloudflare).
+    cloudflare: { deployConfig: true, nodeCompat: true, wrangler: { preview_urls: true } },
     routeRules: {
       '/**': { headers: {
         'X-Content-Type-Options': 'nosniff',

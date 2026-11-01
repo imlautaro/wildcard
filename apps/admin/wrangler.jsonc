@@ -8,7 +8,7 @@
     "nodejs_compat"
   ],
   "workers_dev": true,
-  "preview_urls": false,
+  // preview_urls is set in nuxt.config.ts (nitro.cloudflare.wrangler), which overrides this file.
   "observability": {
     "redact_query_string": true,
     "enabled": true,
