@@ -37,10 +37,13 @@ export function updatesOpened(open: boolean) {
 export function updatesBadge() { return computed(() => badge.unseen); }
 
 // The feed names contacts by the viewer's alias: keep the last feed visible, reject in-flight
-// reads and revalidate in the background once it has been loaded.
+// reads and revalidate in the background once it has been loaded. A rejected in-flight
+// read is re-issued at once even before the first feed arrives: otherwise a first load
+// racing the contact list would stay on the skeleton until the next 60-second poll.
 export function staleHome() {
+  const waiting = !!state.request;
   state.revision++; state.request = null; state.loadedAt = 0;
-  if (state.value) void useHome().refresh(true);
+  if (state.value || waiting) void useHome().refresh(true);
 }
 
 /** The timeline, newest first; an API without posts gets one text-less post per card. */
