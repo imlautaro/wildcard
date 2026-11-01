@@ -334,3 +334,53 @@ were run. After the automatic release, verify using fictional accounts on iOS/we
   foreground sync and iOS closed-app APNs with the independent installation's keys.
 
 See [reproducible setup and rollback](infrastructure.md#private-shared-contact-messages--migration-0084).
+
+### Reply references and authoritative send history
+
+A fresh human request such as “Tell him back I adore him” can refer to the sender
+of a received private relay. The server supplies up to three incoming references
+from the last twelve completed turns, plus an explicitly quoted relay when present,
+with message ID, actual sender user ID/name, saved time and at most 1,600 UTF-8 bytes
+of locally received text per item. Identity comes from the persisted receipt, never
+from names or instructions embedded in the message body. Both contacts must still
+be eligible under sharing/isolation/model checks. The authorization model sees the
+same verified references as the chat planner; a quoted incoming sender takes
+precedence, otherwise the latest relevant sender can resolve a reply. Competing
+references require clarification. Receiving text never authorizes replying by itself.
+The other participant's original request, private history and subsequent replies
+are never retrieved for this purpose.
+
+Every ordinary private human turn also receives up to six recent outgoing receipts
+from its own chat. They identify source turn, recipient when still available, save
+time, whether the delivered turn remains and a bounded excerpt of its sent text.
+These facts override historical assistant claims, including mistaken denials.
+`get_private_message_receipts` searches older receipts by source turn ID or a
+literal substring of the original request/sent text; it never sends a message or
+reads recipient replies. Source deletion still removes its receipt; recipient
+history deletion retains evidence that a send occurred with text unavailable.
+This uses migration 0084's existing records, including messages sent before this
+repair. No new migration or backfill is needed.
+
+A thank-you, a delivery-status question or a correction is not a send request.
+A failed new attempt does not revoke an earlier successful delivery. A vague retry
+of a successful send confirms its receipt; sending another copy requires an
+explicit request for another copy. Replays of the same source turn still return
+its one original receipt. Receipts prove a saved message, never reading or push
+acceptance. Semantic ambiguity remains fail-closed.
+
+`private_relay_result` logs fixed tool/stage/outcome codes and the send flag;
+`private_relay_failed` records only stage/sanitized exception code. No message
+text, participant/turn IDs, prompts, arguments, provider body or credentials are
+logged. Pre-save failures, uncertain saves and recorded successes are distinct.
+The previous release did not log normal rejection reasons, so the precise first
+rejection in the reported incident cannot be reconstructed from database receipts.
+
+This repair changes the shared API for both iOS and web, without client protocol,
+UI, polling, cache lifetime, pending IDs or retry changes. Static API/web types and
+preparation of nine relay/access SQL statements over the 84-migration empty SQLite
+schema passed; no local tests/builds, live inference, sends or notifications were
+run. Runtime verification remains required: reply by pronoun immediately after a
+received message, quote an older sender among several participants, resolve duplicate
+names by receipt ID, acknowledge a successful send, challenge an earlier false
+denial, search an older receipt, request a second copy explicitly, and check that
+cancellations, access loss and injected message-body instructions cannot send.

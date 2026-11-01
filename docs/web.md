@@ -1401,3 +1401,11 @@ browser push. No new route, view-local fetch, cache or protocol field is require
 The shared API release and migration 0084 enable both clients; updated binaries/web
 assets are needed only for the sharing-help copy. See [behavior, limits and pending
 verification](sharing.md#private-messages-between-shared-contact-participants).
+
+The [reply/history repair](sharing.md#reply-references-and-authoritative-send-history)
+also applies to both clients: received relay sender metadata resolves explicit
+human reply requests, while recent saved-send receipts and an older-receipt lookup
+anchor delivery-status answers. Neither client fetches another user's history or
+adds a cache. Existing migration 0084 receipts work without a backfill or app
+reinstall. Model semantics and the two-account browser/device round trip remain
+unverified by static checks.

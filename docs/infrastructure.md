@@ -3050,3 +3050,23 @@ before reverting that path, or prefer a forward fix that disables the private to
 while retaining `privateRelayAllowed` notification checks. Do not down-migrate,
 delete receipts or replay old human requests. Delivered history remains readable
 by compatible older clients.
+
+### Private relay reply/history repair
+
+The reply/history repair requires only the existing migration 0084 installation;
+there is no new schema, resource, binding, dependency, secret or model setting.
+Independent production/staging installations use their existing D1/Meta/Workflow
+configuration and the ordinary committed/pushed automatic release. It reads old
+receipts immediately; no backfill or data rewrite is necessary. iOS/web share the
+API behavior and existing protocol, so no native rebuild is needed for the fix.
+The new receipt lookup is internal to model tools, not an HTTP endpoint.
+
+`private_relay_result` and `private_relay_failed` use existing Workers Logs with
+bounded outcome/stage codes and no conversation contents or IDs. Verify the
+[reply and receipt cases](sharing.md#reply-references-and-authoritative-send-history)
+with fictional accounts. Static checks do not prove semantic model behavior or
+notification delivery. Rollback uses a committed/pushed automatic release, retaining
+migration 0084, its receipts and existing push access guards. An older release
+continues delivery but loses the corrected reply references and receipt grounding;
+prefer a forward fix if those behaviors need adjustment. Never replay real past
+requests to validate a release.

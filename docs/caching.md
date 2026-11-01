@@ -1594,3 +1594,13 @@ Loaded messages survive transient refresh failures; account switch, confirmed ac
 loss and deletion retain existing invalidation/late-response guards. Reopen/back,
 empty history, mutation visibility, offline recovery, revocation and account switching
 require the fictional-account device/browser checks in the feature guide.
+
+Reply resolution and delivery-history answers now receive bounded request-local
+server receipt snapshots: at most three incoming references (last twelve completed
+turns or an explicit quote) and six outgoing receipts, with 1,600-byte text excerpts.
+Older own receipts are searched only on a model tool request. These reads use the
+existing D1 data and live access checks, add no client endpoint/cache/disk retention,
+and are refreshed per turn; changes to another account's history are not polled
+by the requester. Existing iOS/web chat caches, account isolation, pending IDs,
+mutation refresh and late-response guards remain unchanged. Verify pronoun replies,
+reopen, offline recovery, revocation and account switching after release.
