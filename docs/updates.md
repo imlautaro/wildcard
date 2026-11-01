@@ -185,8 +185,9 @@ comments, a composer ("Reply to {contact}…") and **Continue in chat with {cont
   comment, in one to three sentences unless asked for more, from its post, the card,
   earlier comments on the post and matching things contacts remember about the person.
   It may run one `research_web` search (For you daily budgets) and never invents
-  figures. Here it can only reply: for reminders, tasks or a longer talk it points to
-  the private chat. Connector posts and connector-isolated contacts are answered with
+  figures. It cannot act from the comments: for reminders, tasks or a longer talk it
+  may [write to the person privately](#private-messages-from-comments), or otherwise
+  points to the private chat. Connector posts and connector-isolated contacts are answered with
   Standard and without research or memories; otherwise the account model is used,
   falling back to Standard when the contact lacks Contributor consent.
 - **Continue in chat**: opens the private chat with the post attached to the next
@@ -199,6 +200,43 @@ comments, a composer ("Reply to {contact}…") and **Continue in chat with {cont
   (the web restarts its timer at once instead of waiting out the 60-second one).
 - **Retention**: comments are deleted with their post (14 days, hidden topic, account
   deletion).
+
+## Private messages from comments
+
+Since 2026-11-01 (migration 0088) the contact answering a comment can also decide to
+write to the person in its private chat, as a message it starts itself. The comment
+still gets its short reply ("te escribo por privado…"), and the private message arrives in
+the chat with the post attached above it, like a [Continue in chat](#continue-in-chat)
+message but on the contact's side.
+
+- **When**: the model decides, through an optional `privateMessage` next to `reply` in
+  the comment's JSON answer. It is told to write privately only when the conversation is
+  better one-on-one (the person asks it to do something such as a reminder, task or
+  plan, shares something personal, or wants a longer talk), and to set it to `null` for
+  most comments. The message must stand on its own, offer the next step or ask the one
+  question it needs, and never claim it already did something: tools only run once the
+  person answers in the chat.
+- **Limits**: at most one private message per post; only while the person allows the
+  contact to message first (**Initiative**, `contact.initiative_enabled`); never for
+  connector posts; not while the chat is being cleared or the contact is archived. When
+  any of these rules it out, the option is not offered and the old "continue in the
+  private chat" wording applies. It is not counted against, and does not start,
+  [conversation initiative](initiative.md) budgets, and like new human input it ends a
+  pending initiative episode in that chat; its push follows the normal reply push
+  (suppressed while that chat is open).
+- **Storage**: a `chat_turn` with `user_text = ''`, `status = 'complete'`, the post in
+  `home_post_id`/`home_post_json`, and `home_comment_id` naming the comment. Its ID is
+  `home-dm-<comment id>` and `home_comment_id` is unique, and it is written in the same D1
+  batch that completes the comment, only while the comment is still pending, so a
+  Workflow retry cannot send it twice.
+- **Context**: in later turns the contact reads it as its own message, marked as written
+  privately after a comment on that post (no "replying to your post" marker on the
+  person's side); the [discussion context](#comments) still includes the comments.
+- **Clients**: the feed's comments carry `privateMessage: true`, shown under the reply as
+  **Messaged you privately**, which opens the chat (it does not attach the post again).
+  In the chat, both clients show the post reference above the contact's first bubble
+  when the turn has a `homePost` and no content from the person. Older clients ignore
+  the flag and show the message without the post.
 
 ## Continue in chat
 
@@ -213,7 +251,7 @@ message shows it above the bubble, and tapping it opens the post (web
   person's, written by this chat's contact, and not a connector post (`400` otherwise);
   for connector posts the button only opens the chat, because connector content never
   enters a private chat.
-- **The contact reads the live post**: for that message the chat context says it answers a
+- **The contact reads the live post**: for a message the person sends this way the chat context says it answers a
   post the contact itself published, with the post text, the clipped card and up to six
   comments, so it talks about it directly. Later turns keep a short marker with the
   post's title and text. Messages answering a post are never batched with others.
@@ -488,6 +526,15 @@ Performed on 2026-10-30, before any release:
 Not verified: deployed behavior, iOS rendering on a simulator or device, Workflow replay in Cloudflare, connector reads against a live MCP server, and concurrency between Cron
 and request-triggered dispatches. Card accuracy depends on the research provider;
 figures can be days old, which cards are instructed to state.
+
+Private messages from comments (2026-11-01): API, web and iOS static type checks;
+migrations through 0088 on a scratch local workerd D1, where the comment insert, the
+retry and a second comment on the same post wrote exactly one message, and the feed and
+history queries returned the flag and `homeCommentID`. A local `replyToComment` run
+through `getPlatformProxy` with `muse-spark-1.3-contributor`: a Spanish comment asking
+for a reminder and a rainy-day option got a short reply plus a private message asking to
+confirm the time (nothing claimed as done); a casual comment got only a reply. Not
+verified: rendering on web or iOS, push delivery, deployed behavior.
 
 ## Limitations
 

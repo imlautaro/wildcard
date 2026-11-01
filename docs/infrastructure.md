@@ -2927,6 +2927,18 @@ stop spending immediately (in-flight runs finish their current card). Keep the
 tables; deleting `home_card`/`home_topic` rows only clears feeds, and dropping them
 requires a release of code that no longer reads them.
 
+## Private messages from comments — migration 0088
+
+Apply `apps/api/migrations/0088_home_comment_private_message.sql` after 0087. It adds the
+nullable `chat_turn.home_comment_id` (the For you comment after which the contact wrote
+that message itself; no foreign key, comments expire with their post) and a unique
+partial index on it, which keeps it to one message per comment. Additive: existing rows
+stay `NULL`, and clients that ignore the new `privateMessage` comment flag still show the
+message. Release order does not matter. No new resource, binding, var or secret. Local:
+`npm run db:migrate:local --workspace @wildcard/api`. Validated on the local workerd D1;
+not yet applied to staging or production. Rollback: release code that ignores the column
+and keep it. See [Updates](updates.md#private-messages-from-comments).
+
 ## Chat replies to For you posts — migration 0087
 
 Apply `apps/api/migrations/0087_chat_home_post.sql` after 0086. It adds two nullable

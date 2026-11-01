@@ -43,7 +43,7 @@ import { addToHome, homeInstruction, homeTool } from '../home/tools';
 import { aliasAwareness } from '../contacts/alias';
 import { executeLinkTool, linkContext, linkToolNames, linkTools } from '../contacts/links';
 import { updatesDiscussion } from '../home/comments';
-import { postReferenceMarker, referencedPosts } from '../home/references';
+import { postReferenceMarker, privateMessageMarker, referencedPosts } from '../home/references';
 
 // The person expects a contact to remember everything it talked about with them, here and in
 // shared groups, not only the recent messages (docs/contacts.md#topic-recall).
@@ -82,7 +82,7 @@ const tools: ModelTool[] = [
 export { tools as privateChatTools };
 
 type HistoryRow = { errorCode: string | null; id: string; sequence: number; userText: string; assistantText: string; createdAt: number; updatedAt: number; assistantMessagesJSON: string | null; attachmentJSON: string | null;
-  replyToID: string | null; replyToSide: string | null; homePostID: string | null; homePostJSON: string | null };
+  replyToID: string | null; replyToSide: string | null; homePostID: string | null; homePostJSON: string | null; homeCommentID: string | null };
 const historyColumns = `id, sequence, error_code AS errorCode,
   CASE WHEN attachment_json IS NULL THEN user_text
     WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN CASE WHEN user_text = ''
@@ -90,7 +90,8 @@ const historyColumns = `id, sequence, error_code AS errorCode,
     ELSE user_text || '\n[Attached file: ' || json_extract(attachment_json, '$.name') || '; bytes omitted from history]' END AS userText,
   COALESCE(assistant_text, '') AS assistantText, created_at AS createdAt, updated_at AS updatedAt,
   assistant_messages_json AS assistantMessagesJSON, attachment_json AS attachmentJSON,
-  reply_to_id AS replyToID, reply_to_side AS replyToSide, home_post_id AS homePostID, home_post_json AS homePostJSON`;
+  reply_to_id AS replyToID, reply_to_side AS replyToSide, home_post_id AS homePostID, home_post_json AS homePostJSON,
+  home_comment_id AS homeCommentID`;
 
 // Mark the quoted message inline so the model reads each reply in its intended context.
 function replyMarker(quote: ReplyQuote | null): string {
@@ -342,7 +343,8 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   // Voice messages are represented by their transcripts, never as files.
   const file = (row: { attachmentJSON: string | null }) => !!row.attachmentJSON && !isVoice(storedAttachment(row));
   const historicalAttachmentID = !file(turn) ? results.find(file)?.id : undefined;
-  for (const prior of results.map((row) => ({ ...row, userText: postReferenceMarker(row, posts, false) + replyMarker(quotes(row)) + row.userText }))) {
+  for (const prior of results.map((row) => ({ ...row, userText: postReferenceMarker(row, posts, false) + replyMarker(quotes(row)) + row.userText,
+    assistantText: row.assistantText && privateMessageMarker(row, posts) + row.assistantText }))) {
     const humanTiming = prior.userText || prior.attachmentJSON
       ? `[Historical message time: ${JSON.stringify(eventTime({ messageID: prior.id, at: prior.createdAt }, turn.timeZone))}]\n` : '';
     const botTiming = prior.assistantText

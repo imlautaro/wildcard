@@ -278,6 +278,8 @@ onBeforeUnmount(() => {
             <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply"
               :voice="!!assistantVoice(item)" :transcript="item.text ?? null" @reply="startReply(item.turn, 'assistant')">
               <div class="bubble" :class="{ media: item.first && item.turn.assistantMessages?.[0]?.attachment }">
+                <!-- A message the contact wrote itself after a comment on its For you post carries the post (docs/updates.md#private-messages-from-comments). -->
+                <MessagePostReference v-if="item.first && item.turn.homePost && !item.turn.userText && !item.turn.attachment && !item.turn.voice" :post="item.turn.homePost" interactive />
                 <MessageReplyQuote v-if="item.first && item.turn.assistantMessages?.[0]?.replyTo" :preview="replyPreview(item.turn.assistantMessages[0].replyTo)" interactive @open="showQuoted(item.turn.assistantMessages[0].replyTo)" />
                 <MessageAttachment v-if="item.first && item.turn.assistantMessages?.[0]?.attachment" :attachment="item.turn.assistantMessages[0].attachment" :attachments="item.turn.assistantMessages[0].attachments" :path="`contacts/${contactID}/chat/turns/${item.turn.id}/attachment?side=assistant`" />
                 <VoiceMessage v-if="assistantVoice(item)" :voice="assistantVoice(item)!" :path="assistantVoicePath(item)" :sender-name="contact?.name" :sender-photo="contact ? contactPhotoPath(contact) : null" />

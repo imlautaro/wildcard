@@ -522,7 +522,18 @@ struct HomePostDetailView: View {
                             row(user: true, name: "You", at: comment.createdAt) { Text(comment.text) }
                             row(user: false, name: name, at: comment.repliedAt) {
                                 switch comment.status {
-                                case "complete": Text(comment.reply ?? "")
+                                case "complete":
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(comment.reply ?? "")
+                                        // The contact also wrote privately; that message already carries this post.
+                                        if comment.privateMessage == true, let id = post.contactID {
+                                            Button { openContact(id) } label: {
+                                                Label("Messaged you privately", systemImage: "bubble.left")
+                                                    .manrope(.subheadline, weight: .semibold)
+                                            }
+                                            .buttonStyle(.plain).foregroundStyle(.tint)
+                                        }
+                                    }
                                 case "pending": TypingDots().accessibilityLabel("\(name) is replying")
                                 default: Text("\(name) couldn’t answer this one. Try again or continue in the chat.").italic().foregroundStyle(.secondary)
                                 }

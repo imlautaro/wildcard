@@ -277,7 +277,9 @@ export type HomePost = Omit<HomeCard, 'generatedAt'> & {
   /** The person's comments with the contact's replies, oldest first (docs/updates.md#comments). */
   comments?: HomeComment[];
 };
-export type HomeComment = { id: string; text: string; reply: string | null; status: 'pending' | 'complete' | 'failed'; createdAt: number; repliedAt: number | null };
+export type HomeComment = { id: string; text: string; reply: string | null; status: 'pending' | 'complete' | 'failed'; createdAt: number; repliedAt: number | null;
+  /** The contact also wrote to the person in its private chat (docs/updates.md#private-messages-from-comments); absent on older APIs. */
+  privateMessage?: boolean };
 export type HomeFeed = {
   enabled: boolean; status: 'idle' | 'updating'; pending: boolean; generatedAt: number | null; briefing: string | null; error: string | null;
   /** Absent on older APIs; setup is a welcome state rather than an error. */

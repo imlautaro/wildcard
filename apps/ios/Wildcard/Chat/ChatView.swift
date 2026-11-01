@@ -139,6 +139,15 @@ struct ChatView: View {
                             let apps = isFirst ? contacts.miniApps.apps(base: "contacts/\(contactID)", turnID: turn.id) : []
                             let documents = isFirst ? (contacts.documentCaches.list("contacts/\(contactID)").value ?? []).filter { $0.sourceID == turn.id } : []
                             let voiceMessage = item.message?.voice
+                            // A message the contact wrote itself after a comment on its For you post carries the post
+                            // (docs/updates.md#private-messages-from-comments).
+                            if isFirst, turn.userText.isEmpty, turn.attachment == nil, turn.voice == nil, let post = turn.homePost {
+                                HStack {
+                                    MessagePostReferenceView(post: post, action: openPost.map { open in { open(post.id) } })
+                                        .frame(maxWidth: 300)
+                                    Spacer(minLength: 40)
+                                }
+                            }
                             Group {
                                 if let voiceMessage, let message = item.message {
                                     VoiceMessageView(resource: .contactVoice(contactID: contactID, turnID: turn.id,

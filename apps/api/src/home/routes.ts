@@ -79,10 +79,11 @@ export async function homeFeed(env: Env, owner: string) {
     homeSetup(env.DB, owner),
   ]);
   const { results: comments } = posts.results.length ? await env.DB.prepare(`SELECT id, post_id AS postID, text, reply_text AS reply, status,
-      created_at AS createdAt, replied_at AS repliedAt FROM home_comment
+      created_at AS createdAt, replied_at AS repliedAt,
+      EXISTS (SELECT 1 FROM chat_turn dm WHERE dm.home_comment_id = home_comment.id AND dm.user_id = home_comment.user_id) AS privateMessage FROM home_comment
     WHERE user_id = ? AND post_id IN (SELECT value FROM json_each(?)) ORDER BY created_at`)
     .bind(owner, JSON.stringify(posts.results.map(post => post.id)))
-    .all<{ id: string; postID: string; text: string; reply: string | null; status: string; createdAt: number; repliedAt: number | null }>() : { results: [] };
+    .all<{ id: string; postID: string; text: string; reply: string | null; status: string; createdAt: number; repliedAt: number | null; privateMessage: number }>() : { results: [] };
   const progress = state?.progressJSON ? JSON.parse(state.progressJSON) as { total: number; done: number; title: string; contactID: string } : null;
   const contributors = new Map<string, { id: string; name: string; photoVersion: string | null }>();
   for (const card of [...cards.results, ...posts.results]) if (card.contactID && card.contactName) contributors.set(card.contactID, { id: card.contactID, name: card.contactName, photoVersion: card.photoVersion });
@@ -108,7 +109,9 @@ export async function homeFeed(env: Env, owner: string) {
       // The person's comments and the contact's replies, oldest first (docs/updates.md#comments).
       comments: comments.filter(comment => comment.postID === post.id).map(comment => ({ id: comment.id, text: comment.text, reply: comment.reply,
         status: comment.status === 'pending' && comment.createdAt < now - commentLimits.pendingFor ? 'failed' : comment.status,
-        createdAt: comment.createdAt, repliedAt: comment.repliedAt })) })),
+        createdAt: comment.createdAt, repliedAt: comment.repliedAt,
+        // The contact also wrote to the person in its private chat after this comment.
+        privateMessage: comment.privateMessage === 1 })) })),
     topics: topics.results.map(topic => ({ id: topic.id, title: topic.title, source: topic.source, status: topic.status, feedback: topic.feedback,
       contactID: topic.contactID, hasCard: cards.results.some(card => card.topicID === topic.id) })),
     apps: apps.results.flatMap(app => {

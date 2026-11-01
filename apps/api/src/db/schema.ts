@@ -150,6 +150,8 @@ export const chatTurn = sqliteTable('chat_turn', {
   // The For you post this message answers (migration 0087); no foreign key, posts expire.
   homePostId: text('home_post_id'),
   homePostJson: text('home_post_json'),
+  // The comment on that post after which the contact wrote this message itself (migration 0088).
+  homeCommentId: text('home_comment_id'),
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
   id: text('id').notNull().unique(),
   contactId: text('contact_id').notNull(),

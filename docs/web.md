@@ -1303,7 +1303,10 @@ Since migration 0086 it is a timeline of [posts](updates.md#posts) (`HomePost`):
 contact's text above the card in a rounded frame, with a per-card accent, inline SVG
 charts and the link preview image for the lead headline. `?thread=<topic>` shows a
 topic's posts as a thread, `?post=<id>` one post with its [comments](updates.md#comments)
-(`HomePostComments`: composer, typing dots while the contact answers, Continue in chat), and a sticky **N new posts** pill appears when posts arrive
+(`HomePostComments`: composer, typing dots while the contact answers, Continue in chat,
+and **Messaged you privately** under a reply after which the contact
+[wrote privately](updates.md#private-messages-from-comments); the chat shows that
+message's post above the contact's bubble), and a sticky **N new posts** pill appears when posts arrive
 while the page is scrolled down. `homePosts()` falls back to text-less posts from
 `cards` when the API has no `posts` (for example a branch Preview against an older
 production API). **Update now**, **Topics** and **Follow** live in the page bar, and a

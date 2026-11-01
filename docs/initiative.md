@@ -10,7 +10,9 @@ new service. Migration **0065** adds adaptive initiative to 0032–0033.
 A completed reply to a direct human request starts a continuation episode. Its
 first review is due after 30 seconds; personality and response history can defer
 it before inference. New human input or an attachment invalidates the old episode
-and any draft immediately. Scheduled messages, autonomous task work, group results
+and any draft immediately, as does a message the contact writes privately after a
+[For you comment](updates.md#private-messages-from-comments) (which never starts one
+either). Scheduled messages, autonomous task work, group results
 and proactive messages do not start episodes. There is no history backfill or
 restart of stopped plans on upgrade.
 

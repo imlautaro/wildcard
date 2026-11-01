@@ -6,7 +6,9 @@ import type { HomePost } from '~/utils/types';
 // written in the background; the feed polls until it arrives. "Continue in chat" opens the
 // contact's private chat with this post attached to the next message, so the contact answers
 // about this exact post (docs/updates.md#continue-in-chat). Connector posts never enter a
-// private chat, so for them it only opens the chat.
+// private chat, so for them it only opens the chat. The contact may also decide to write to the
+// person privately after a comment (docs/updates.md#private-messages-from-comments); that reply
+// then links to the chat, where the message already carries the post.
 const props = defineProps<{ post: HomePost }>();
 const home = useHome();
 const { user } = useSession();
@@ -58,6 +60,9 @@ onMounted(() => input.value?.focus({ preventScroll: true }));
         <div class="bubble-copy">
           <p class="head"><strong>{{ name }}</strong><span v-if="comment.repliedAt">{{ age(comment.repliedAt) }}</span></p>
           <p v-if="comment.status === 'complete'" class="body">{{ comment.reply }}</p>
+          <NuxtLink v-if="comment.status === 'complete' && comment.privateMessage && post.contactID" class="private" :to="`/chats/${post.contactID}`">
+            <AppIcon name="chat" />Messaged you privately
+          </NuxtLink>
           <p v-else-if="comment.status === 'pending'" class="body typing" role="status" :aria-label="`${name} is replying`"><span /><span /><span /></p>
           <p v-else class="body failed">{{ name }} couldn’t answer this one. Try again or continue in the chat.</p>
         </div>
@@ -82,6 +87,9 @@ onMounted(() => input.value?.focus({ preventScroll: true }));
 .head { display: flex; align-items: baseline; gap: var(--space-1-5); margin: 0; font-size: 14px; }
 .head span { color: var(--md-on-surface-variant); }
 .body { margin: var(--space-0-5) 0 0; font-size: 15px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.private { display: inline-flex; align-items: center; gap: var(--space-1); margin-top: var(--space-1); font: var(--type-label-large); color: var(--md-primary); text-decoration: none; }
+.private:hover { text-decoration: underline; }
+.private svg { width: 16px; height: 16px; }
 .failed { color: var(--md-on-surface-variant); font-style: italic; }
 .typing { display: inline-flex; gap: 4px; padding: var(--space-1-5) 0; }
 .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--md-on-surface-variant); animation: blink 1.2s infinite ease-in-out; }

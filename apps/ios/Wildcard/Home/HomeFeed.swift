@@ -103,6 +103,8 @@ struct HomeComment: Decodable, Hashable, Sendable, Identifiable {
     let status: String
     let createdAt: Double
     let repliedAt: Double?
+    /// The contact also wrote to the person in its private chat (docs/updates.md#private-messages-from-comments); absent on older APIs.
+    var privateMessage: Bool? = nil
 }
 
 extension HomePost {
