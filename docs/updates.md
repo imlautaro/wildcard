@@ -33,8 +33,8 @@ This is a first implementation (2026-10-30). See [verification](#verification).
 - **Follow something** (**+**, or the "What should your contacts follow?" box above
   the timeline): describe what to follow ("processing times for my I-130"). The
   curator picks the layout and the contact on the next run.
-- **Post actions**: the heart is **More like this** and the bubble opens the
-  contact's chat. ⋯ (or a long press on iOS) offers **Message {contact}**, **Less like
+- **Post actions**: the heart is **More like this** and the bubble (with the comment
+  count) opens the post to [comment](#comments) on it. ⋯ (or a long press on iOS) offers **Message {contact}**, **Less like
   this** and **Hide from Updates**. Feedback is per topic, so every post on a topic shows
   the same heart. Hidden topics never come back unless the person shows them again in
   **Topics**.
@@ -46,7 +46,7 @@ This is a first implementation (2026-10-30). See [verification](#verification).
   of chips above the timeline.
 - **Threads**: tapping a post's text or age (web) or the post (iOS) opens every post on
   its topic, oldest first, joined by a line, with the cards expanded and **Reply to
-  {contact} in chat**. A post with **N posts in this thread** has older ones. The web
+  A post with **N posts in this thread** has older ones. The web
   keeps it in the address (`?thread=<topic>`), iOS pushes it on the navigation stack.
 - **Notes** can suggest a reply. Tapping it opens the chat with the message in the
   composer (only if the composer is empty); it is never sent automatically.
@@ -117,6 +117,36 @@ post:
 
 Clients fall back to one text-less post per card when the API has no `posts` field (an
 API from before migration 0086), so either can be released first.
+
+## Comments
+
+Since 2026-11-01 (migration 0086, `home_comment`) the person can comment on a post and
+the contact who wrote it answers there, like the replies under a Threads post. The
+bubble on a post opens it (web `?post=<id>`, iOS a pushed **Post** view) with the
+comments, a composer ("Reply to {contact}…") and **Continue in chat with {contact}**.
+
+- **One row per exchange**: the person's text (1–1,000 characters) and the contact's
+  reply (`pending`, `complete` or `failed`), like a chat turn. One reply is pending at a
+  time per post (`409` otherwise), at most 20 comments per post; a reply that has not
+  arrived in five minutes shows as failed and no longer blocks commenting.
+- **Reply**: `POST /home/posts/:id/comments` starts a `home-comment` instance of
+  `CHAT_WORKFLOW` (one retry). The contact answers in its voice and the language of the
+  comment, in one to three sentences unless asked for more, from its post, the card,
+  earlier comments on the post and matching things contacts remember about the person.
+  It may run one `research_web` search (Updates daily budgets) and never invents
+  figures. Here it can only reply: for reminders, tasks or a longer talk it points to
+  the private chat. Connector posts and connector-isolated contacts are answered with
+  Standard and without research or memories; otherwise the account model is used,
+  falling back to Standard when the contact lacks Contributor consent.
+- **Continue in chat**: the contact's private chat context includes, as untrusted
+  history, the two most recent posts the person commented on in the last three days
+  (post text, clipped card and the comments), excluding connector posts, so the contact
+  picks the discussion up without the person repeating it. Not in connector-isolated
+  chats, schedules or tasks.
+- **Polling**: while a reply is pending, the clients poll the feed every few seconds
+  (the web restarts its timer at once instead of waiting out the 60-second one).
+- **Retention**: comments are deleted with their post (14 days, hidden topic, account
+  deletion).
 
 ## How curation works
 
@@ -276,12 +306,13 @@ Reads are limited to 90 per minute, writes to 20 per minute.
 
 | Route | Purpose |
 | --- | --- |
-| `GET /api/v1/home?timeZone=…` | The feed: `enabled`, `status`, `pending`, `briefing`, `progress`, `contributors`, `cards`, `posts` (newest first; each `{ id, topicID, contactID, contactName, contactPhotoVersion, text, replyTo, reason, source, feedback, connector, createdAt, content }`), `topics`, `apps`, `agenda`. Records the view and the time zone, and starts a due run. |
+| `GET /api/v1/home?timeZone=…` | The feed: `enabled`, `status`, `pending`, `briefing`, `progress`, `contributors`, `cards`, `posts` (newest first; each `{ id, topicID, contactID, contactName, contactPhotoVersion, text, replyTo, reason, source, feedback, connector, createdAt, content, comments }`, comments `{ id, text, reply, status, createdAt, repliedAt }`), `topics`, `apps`, `agenda`. Records the view and the time zone, and starts a due run. |
 | `GET /api/v1/home/badge` | `{ unseen }`: posts of active topics published after the last visit (capped at 99, `0` when Updates are off). Never starts a run. |
 | `POST /api/v1/home/seen` | Record that Updates was opened (clears the badge). `GET /home` records it too. |
 | `POST /api/v1/home/refresh` | Request an update (409 when Updates are turned off). Returns the feed. |
 | `POST /api/v1/home/topics` `{ text }` | Follow something (1–400 characters, at most 20 active requests). Returns the feed (201). |
-| `PATCH /api/v1/home/topics/:id` `{ status?, feedback? }` | `status`: `active` or `hidden`; `feedback`: `more`, `less` or `null`. Hiding deletes the card. Returns the feed. |
+| `POST /api/v1/home/posts/:id/comments` `{ text }` | Comment on a post (1–1,000 characters); its contact answers in the background. `409` while a reply is pending or at 20 comments, `404` when the post or its contact is gone. Returns the feed (201). |
+| `PATCH /api/v1/home/topics/:id` `{ status?, feedback? }` | `status`: `active` or `hidden`; `feedback`: `more`, `less` or `null`. Hiding deletes the card and its posts. Returns the feed. |
 
 `enabled` is `false` when `HOME_FEED_ENABLED` is not `"true"` or no model key is
 configured; apps and agenda are still returned. `pending` is true when a first or
@@ -331,7 +362,7 @@ on (`"true"`) or off. Runs use the existing `CHAT_WORKFLOW`, minute Cron, D1 and
 `META_API_KEY`; no new service, binding or secret. See
 [infrastructure](infrastructure.md#updates-feed-migration-0074). Migration
 `0086_home_posts.sql` adds `home_post` ([posts](#posts)), cascading with the account and
-the topic.
+the topic, and `home_comment` ([comments](#comments)), cascading with the post.
 
 ## Verification
 
@@ -348,9 +379,15 @@ Posts, performed on 2026-11-01 on the `updates-posts` branch, before any release
   was one, and a review published as a reply ("Actualizo lo de Tomás: …").
 - Web rendering against a local mock API (desktop light timeline and thread, phone
   dark timeline) with headless Chrome.
+- Comments: the comment, reply, feed, discussion and cascade statements on the local
+  D1; two live replies through `replyToComment` against that D1 (Standard model,
+  research off): it answered the match time from the card and said it did not know
+  the broadcast, and for a reminder request pointed to the private chat. On the web
+  mock, sending a comment showed the typing dots and then the reply without reloading.
 
-Not verified for posts: a deployed curation run, iOS rendering on a simulator or
-device, the new-posts pill on either client with live polling, and how often contacts
+Not verified for posts and comments: a deployed curation run or comment reply (the
+Workflow path), a private chat actually continuing a discussion, research in a reply,
+iOS rendering on a simulator or device, the new-posts pill on either client with live polling, and how often contacts
 choose `no_news` over days of real use.
 
 Performed on 2026-10-30, before any release:

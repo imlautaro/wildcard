@@ -2931,7 +2931,9 @@ requires a release of code that no longer reads them.
 
 Apply `apps/api/migrations/0086_home_posts.sql` after 0085. It adds `home_post`
 (cascading with the account and the topic; contact and replied-to post set to null)
-and copies every current `home_card` row into it as a post without text. Additive: an
+and `home_comment` (comments and contact replies, cascading with the post), and copies
+every current `home_card` row into `home_post` as a post without text. Comment replies
+run as `home-comment` instances of the existing `CHAT_WORKFLOW`. Additive: an
 older API ignores the table, and both clients fall back to `cards` when `posts` is
 absent, so the API and clients can be released in either order. No new resource,
 binding, var or secret. Local: `npm run db:migrate:local --workspace @wildcard/api`.

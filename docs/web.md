@@ -1289,12 +1289,13 @@ full width with a back button on narrow ones; `/` keeps the "Select a chat" pane
 Since migration 0086 it is a timeline of [posts](updates.md#posts) (`HomePost`): the
 contact's text above the card in a rounded frame, with a per-card accent, inline SVG
 charts and the link preview image for the lead headline. `?thread=<topic>` shows a
-topic's posts as a thread, and a sticky **N new posts** pill appears when posts arrive
+topic's posts as a thread, `?post=<id>` one post with its [comments](updates.md#comments)
+(`HomePostComments`: composer, typing dots while the contact answers, Continue in chat), and a sticky **N new posts** pill appears when posts arrive
 while the page is scrolled down. `homePosts()` falls back to text-less posts from
 `cards` when the API has no `posts` (for example a branch Preview against an older
 production API). **Update now**, **Topics** and **Follow** live in the page bar, and a
-"What should your contacts follow?" box opens Follow; the heart is More like this and
-⋯ offers Message, Less like this and Hide. A note's suggested reply fills
+"What should your contacts follow?" box opens Follow; the heart is More like this, the
+bubble opens the post's comments and ⋯ offers Message, Less like this and Hide. A note's suggested reply fills
 the contact's empty composer through `suggestDraft` and is never sent automatically.
 Behavior, copy and caching match the iOS Updates tab (`useHome`, see
 [caching](caching.md#updates-feed)). The sparkle button and the menu item carry the
