@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import type { HomeCard } from '~/utils/types';
+import type { HomeCard, HomeCardContent } from '~/utils/types';
 
-// One Updates card of the closed catalog (docs/updates.md#cards), drawn with Material 3
-// surfaces like the iOS HomeCards layouts. `lead` is the first, larger card.
-const props = defineProps<{ card: HomeCard; lead?: boolean }>();
+// One Updates card of the closed catalog (docs/updates.md#cards), drawn as a post in a
+// timeline: the contact who prepared it (avatar, name, time) comes first, the topic is a small
+// label, and the body shows one headline, figure or line of each kind until "Show more".
+const props = defineProps<{ card: HomeCard }>();
 const emit = defineEmits<{ action: [kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: string] }>();
 const content = computed(() => props.card.content);
 const menuOpen = ref(false);
+const expanded = ref(false);
 const icons: Record<string, AppIconName> = { news: 'news', sport: 'sport', trophy: 'trophy', chart: 'chart', money: 'money', globe: 'globe',
   calendar: 'calendar', clock: 'clock', book: 'book', heart: 'heart', star: 'star', bolt: 'bolt', list: 'list', check: 'check', person: 'person',
   chat: 'chat', home: 'home', folder: 'folder', cart: 'cart', plane: 'plane', doc: 'doc', weather: 'weather' };
@@ -18,16 +20,42 @@ const preview = useLinkPreview(() => lead.value?.url ?? null);
 const image = usePrivateImage(() => preview.value?.status === 'ready' && preview.value.imageVersion
   ? `link-previews/${preview.value.hash}/image?v=${preview.value.imageVersion}` : null);
 const avatar = computed(() => props.card.contactID ? contactPhotoPath({ id: props.card.contactID, photoVersion: props.card.contactPhotoVersion }) : null);
-const attribution = computed(() => [props.card.contactName ?? 'A contact', relativeTime(props.card.generatedAt), props.card.reason].filter(Boolean).join(' · '));
+const name = computed(() => props.card.contactName ?? 'A contact');
+const time = computed(() => relativeTime(props.card.generatedAt));
+
+// How much of each kind shows before "Show more".
+const collapsedCount: Partial<Record<HomeCardContent['kind'], number>> = { matches: 2, metrics: 3, list: 3 };
+const collapsedRows = 4;
+const items = computed(() => content.value.items ?? []);
+const shownItems = computed(() => {
+  const cap = collapsedCount[content.value.kind];
+  return expanded.value || cap === undefined ? items.value : items.value.slice(0, cap);
+});
+const shownRest = computed(() => expanded.value ? rest.value : []);
+const rows = computed(() => (content.value.rows ?? []).map((cells, index) => ({ cells, index })));
+const keptRow = (row: { index: number }) => row.index < collapsedRows || row.index === content.value.highlight;
+const shownRows = computed(() => expanded.value ? rows.value : rows.value.filter(keptRow));
+const hidden = computed(() => {
+  const kind = content.value.kind;
+  if (kind === 'headlines') return rest.value.length;
+  if (kind === 'table') return rows.value.filter(row => !keptRow(row)).length;
+  const cap = collapsedCount[kind];
+  return cap === undefined ? 0 : Math.max(0, items.value.length - cap);
+});
+const extras = computed(() => content.value.kind === 'chart' ? !!content.value.summary
+  : content.value.kind === 'tracker' ? !!(content.value.steps?.length || content.value.note) : false);
+const expandable = computed(() => hidden.value > 0 || extras.value || !!props.card.reason || content.value.sources.length > 0);
 const live = (status?: string) => !!status && /live|vivo|'/i.test(status);
 const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; } };
 
+// Compact, like a timeline: "now", "27m", "2h", "3d", then the date.
 function relativeTime(at: number) {
-  const minutes = Math.round((Date.now() - at) / 60_000);
-  const format = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-  if (Math.abs(minutes) < 60) return format.format(-minutes, 'minute');
-  if (Math.abs(minutes) < 60 * 24) return format.format(-Math.round(minutes / 60), 'hour');
-  return format.format(-Math.round(minutes / 1440), 'day');
+  const minutes = Math.max(0, Math.round((Date.now() - at) / 60_000));
+  if (minutes < 1) return 'now';
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60 * 24) return `${Math.round(minutes / 60)}h`;
+  if (minutes < 60 * 24 * 7) return `${Math.round(minutes / 1440)}d`;
+  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(at);
 }
 
 // Smooth line/area or bars in a 100×100 box, like the mini app charts.
@@ -51,141 +79,147 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
 </script>
 
 <template>
-  <article class="home-card" :class="[`accent-${content.accent}`, { lead }]">
-    <header class="home-card-header">
-      <span class="home-card-icon"><AppIcon :name="icon" filled /></span>
-      <div class="home-card-titles">
-        <h2>{{ content.title }}</h2>
-        <p v-if="content.subtitle">{{ content.subtitle }}</p>
-      </div>
-      <div class="mini-menu">
-        <AppIconButton icon="more" label="Card options" :tooltip="false" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen" />
-        <template v-if="menuOpen">
-          <div class="backdrop" @click="menuOpen = false" />
-          <div class="menu card-menu" role="menu">
-            <AppMenuItem v-if="card.contactID && card.contactName" icon="chat" role="menuitem" @click="act('message')">Message {{ card.contactName }}</AppMenuItem>
-            <!-- Raw items: AppMenuItem can't fill its glyph, which shows the current feedback. -->
-            <button type="button" class="menu-item" role="menuitem" @click="act('more')"><AppIcon name="thumb-up" :filled="card.feedback === 'more'" /><span>More like this</span></button>
-            <button type="button" class="menu-item" role="menuitem" @click="act('less')"><AppIcon name="thumb-down" :filled="card.feedback === 'less'" /><span>Less like this</span></button>
-            <hr class="menu-divider">
-            <AppMenuItem icon="hide" danger role="menuitem" @click="act('hide')">Hide from Updates</AppMenuItem>
-          </div>
-        </template>
-      </div>
-    </header>
-
-    <div v-if="content.kind === 'headlines'" class="headlines">
-      <a v-if="lead" class="headline-lead" :href="lead.url" target="_blank" rel="noreferrer noopener" :class="{ inert: !lead.url }">
-        <img v-if="image" :src="image" alt="" loading="lazy">
-        <span class="headline-text">
-          <strong>{{ lead.title }}</strong>
-          <span v-if="lead.summary" class="summary">{{ lead.summary }}</span>
-          <span v-if="lead.source || lead.time" class="meta">{{ [lead.source, lead.time].filter(Boolean).join(' · ') }}</span>
-        </span>
-      </a>
-      <a v-for="(item, index) in rest" :key="index" class="headline-row" :href="item.url" target="_blank" rel="noreferrer noopener" :class="{ inert: !item.url }">
-        <span class="dot" />
-        <span class="copy"><strong>{{ item.title }}</strong><span v-if="item.source || item.time" class="meta">{{ [item.source, item.time].filter(Boolean).join(' · ') }}</span></span>
-        <AppIcon v-if="item.url" name="open-in-new" class="open" />
-      </a>
-    </div>
-
-    <div v-else-if="content.kind === 'matches'" class="matches">
-      <div v-for="(match, index) in content.items" :key="index" class="match">
-        <div class="teams">
-          <div :class="{ wins: (match.homeScore ?? 0) > (match.awayScore ?? 0) }"><span>{{ match.home }}</span><b v-if="match.homeScore != null">{{ match.homeScore }}</b></div>
-          <div :class="{ wins: (match.awayScore ?? 0) > (match.homeScore ?? 0) }"><span>{{ match.away }}</span><b v-if="match.awayScore != null">{{ match.awayScore }}</b></div>
-          <small v-if="match.detail">{{ match.detail }}</small>
+  <article class="home-card" :class="`accent-${content.accent}`">
+    <AppAvatar class="post-avatar" :name="name" :path="avatar" :size="40" />
+    <div class="post-main">
+      <header class="post-head">
+        <strong class="who">{{ name }}</strong>
+        <span class="when">· {{ time }}</span>
+        <div class="mini-menu">
+          <AppIconButton icon="more" label="Card options" size="small" :tooltip="false" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen" />
+          <template v-if="menuOpen">
+            <div class="backdrop" @click="menuOpen = false" />
+            <div class="menu card-menu" role="menu">
+              <AppMenuItem v-if="card.contactID && card.contactName" icon="chat" role="menuitem" @click="act('message')">Message {{ card.contactName }}</AppMenuItem>
+              <AppMenuItem icon="hide" danger role="menuitem" @click="act('hide')">Hide from Updates</AppMenuItem>
+            </div>
+          </template>
         </div>
-        <span class="status" :class="{ live: live(match.status) }">{{ match.status }}</span>
-      </div>
-    </div>
+      </header>
+      <p class="topic">
+        <span class="topic-pill"><AppIcon :name="icon" filled />{{ content.title }}</span>
+        <span v-if="content.subtitle" class="topic-subtitle">{{ content.subtitle }}</span>
+      </p>
 
-    <div v-else-if="content.kind === 'table'" class="table-wrap">
-      <table>
-        <thead><tr><th v-for="(column, index) in content.columns" :key="index">{{ column }}</th></tr></thead>
-        <tbody><tr v-for="(row, index) in content.rows" :key="index" :class="{ highlight: index === content.highlight }"><td v-for="(cell, column) in row" :key="column">{{ cell }}</td></tr></tbody>
-      </table>
-      <p v-if="content.caption" class="caption">{{ content.caption }}</p>
-    </div>
-
-    <div v-else-if="content.kind === 'metrics'" class="metrics">
-      <div v-for="(item, index) in content.items" :key="index" class="metric">
-        <span class="label">{{ item.label }}</span>
-        <span class="value">{{ item.value }}<small v-if="item.unit">{{ item.unit }}</small></span>
-        <span v-if="item.change || item.trend" class="change" :class="item.trend"><AppIcon v-if="item.trend" :name="trendIcon(item.trend)" />{{ item.change }}</span>
-        <span v-if="item.caption" class="caption">{{ item.caption }}</span>
+      <div v-if="content.kind === 'headlines'" class="headlines">
+        <a v-if="lead" class="headline-lead" :href="lead.url" target="_blank" rel="noreferrer noopener" :class="{ inert: !lead.url }">
+          <img v-if="image" :src="image" alt="" loading="lazy">
+          <span class="headline-text">
+            <strong>{{ lead.title }}</strong>
+            <span v-if="lead.summary" class="summary">{{ lead.summary }}</span>
+            <span v-if="lead.source || lead.time" class="meta">{{ [lead.source, lead.time].filter(Boolean).join(' · ') }}</span>
+          </span>
+        </a>
+        <a v-for="(item, index) in shownRest" :key="index" class="headline-row" :href="item.url" target="_blank" rel="noreferrer noopener" :class="{ inert: !item.url }">
+          <span class="dot" />
+          <span class="copy"><strong>{{ item.title }}</strong><span v-if="item.source || item.time" class="meta">{{ [item.source, item.time].filter(Boolean).join(' · ') }}</span></span>
+          <AppIcon v-if="item.url" name="open-in-new" class="open" />
+        </a>
       </div>
-    </div>
 
-    <div v-else-if="content.kind === 'chart'" class="chart">
-      <div v-if="content.value || content.change" class="chart-value">
-        <strong>{{ content.value }}</strong><small v-if="content.unit">{{ content.unit }}</small>
-        <span v-if="content.change" class="change" :class="content.trend"><AppIcon :name="trendIcon(content.trend)" />{{ content.change }}</span>
+      <div v-else-if="content.kind === 'matches'" class="matches">
+        <div v-for="(match, index) in shownItems" :key="index" class="match">
+          <div class="teams">
+            <div :class="{ wins: (match.homeScore ?? 0) > (match.awayScore ?? 0) }"><span>{{ match.home }}</span><b v-if="match.homeScore != null">{{ match.homeScore }}</b></div>
+            <div :class="{ wins: (match.awayScore ?? 0) > (match.homeScore ?? 0) }"><span>{{ match.away }}</span><b v-if="match.awayScore != null">{{ match.awayScore }}</b></div>
+            <small v-if="match.detail">{{ match.detail }}</small>
+          </div>
+          <span class="status" :class="{ live: live(match.status) }">{{ match.status }}</span>
+        </div>
       </div>
-      <svg v-if="chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="content.title">
-        <template v-if="chart.bar">
-          <rect v-for="(bar, index) in chart.bars" :key="index" :x="bar.x" :y="bar.y" :width="bar.width" :height="Math.max(bar.height, 0.5)" rx="1.4" fill="var(--card-accent)"><title>{{ bar.point.label }}: {{ bar.point.value }}</title></rect>
-        </template>
-        <template v-else>
-          <polygon :points="chart.area" fill="color-mix(in srgb, var(--card-accent) 18%, transparent)" />
-          <polyline :points="chart.line" fill="none" stroke="var(--card-accent)" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round" />
-        </template>
-      </svg>
-      <div v-if="chart" class="axis"><span v-for="(label, index) in chart.labels" :key="index">{{ label }}</span></div>
-      <p v-if="content.summary" class="caption">{{ content.summary }}</p>
-    </div>
 
-    <div v-else-if="content.kind === 'tracker'" class="tracker">
-      <strong class="figure">{{ content.figure }}</strong>
-      <span class="figure-label">{{ content.figureLabel }}</span>
-      <div v-if="content.progress != null" class="meter" role="progressbar" :aria-valuenow="Math.round(content.progress * 100)" aria-valuemin="0" aria-valuemax="100">
-        <span :style="{ width: `${Math.round(content.progress * 100)}%` }" />
+      <div v-else-if="content.kind === 'table'" class="table-wrap">
+        <table>
+          <thead><tr><th v-for="(column, index) in content.columns" :key="index">{{ column }}</th></tr></thead>
+          <tbody><tr v-for="row in shownRows" :key="row.index" :class="{ highlight: row.index === content.highlight }"><td v-for="(cell, column) in row.cells" :key="column">{{ cell }}</td></tr></tbody>
+        </table>
+        <p v-if="content.caption && expanded" class="caption">{{ content.caption }}</p>
       </div>
-      <p v-if="content.status" class="status-line">{{ content.status }}</p>
-      <ol v-if="content.steps?.length" class="steps">
-        <li v-for="(step, index) in content.steps" :key="index" :class="step.state">
-          <span class="marker"><AppIcon :name="step.state === 'done' ? 'check' : 'circle'" :filled="step.state !== 'upcoming'" /></span>
-          <span class="copy"><strong>{{ step.label }}</strong><small v-if="step.detail">{{ step.detail }}</small></span>
+
+      <div v-else-if="content.kind === 'metrics'" class="metrics">
+        <div v-for="(item, index) in shownItems" :key="index" class="metric">
+          <span class="label">{{ item.label }}</span>
+          <span class="value">{{ item.value }}<small v-if="item.unit">{{ item.unit }}</small></span>
+          <span v-if="item.change || item.trend" class="change" :class="item.trend"><AppIcon v-if="item.trend" :name="trendIcon(item.trend)" />{{ item.change }}</span>
+          <span v-if="item.caption && expanded" class="caption">{{ item.caption }}</span>
+        </div>
+      </div>
+
+      <div v-else-if="content.kind === 'chart'" class="chart" :class="{ compact: !expanded }">
+        <div v-if="content.value || content.change" class="chart-value">
+          <strong>{{ content.value }}</strong><small v-if="content.unit">{{ content.unit }}</small>
+          <span v-if="content.change" class="change" :class="content.trend"><AppIcon :name="trendIcon(content.trend)" />{{ content.change }}</span>
+        </div>
+        <svg v-if="chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="content.title">
+          <template v-if="chart.bar">
+            <rect v-for="(bar, index) in chart.bars" :key="index" :x="bar.x" :y="bar.y" :width="bar.width" :height="Math.max(bar.height, 0.5)" rx="1.4" fill="var(--card-accent)"><title>{{ bar.point.label }}: {{ bar.point.value }}</title></rect>
+          </template>
+          <template v-else>
+            <polygon :points="chart.area" fill="color-mix(in srgb, var(--card-accent) 18%, transparent)" />
+            <polyline :points="chart.line" fill="none" stroke="var(--card-accent)" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round" />
+          </template>
+        </svg>
+        <div v-if="chart" class="axis"><span v-for="(label, index) in chart.labels" :key="index">{{ label }}</span></div>
+        <p v-if="content.summary && expanded" class="caption">{{ content.summary }}</p>
+      </div>
+
+      <div v-else-if="content.kind === 'tracker'" class="tracker">
+        <strong class="figure">{{ content.figure }}</strong>
+        <span class="figure-label">{{ content.figureLabel }}</span>
+        <div v-if="content.progress != null" class="meter" role="progressbar" :aria-valuenow="Math.round(content.progress * 100)" aria-valuemin="0" aria-valuemax="100">
+          <span :style="{ width: `${Math.round(content.progress * 100)}%` }" />
+        </div>
+        <p v-if="content.status" class="status-line">{{ content.status }}</p>
+        <ol v-if="content.steps?.length && expanded" class="steps">
+          <li v-for="(step, index) in content.steps" :key="index" :class="step.state">
+            <span class="marker"><AppIcon :name="step.state === 'done' ? 'check' : 'circle'" :filled="step.state !== 'upcoming'" /></span>
+            <span class="copy"><strong>{{ step.label }}</strong><small v-if="step.detail">{{ step.detail }}</small></span>
+          </li>
+        </ol>
+        <p v-if="content.note && expanded" class="tracker-note">{{ content.note }}</p>
+      </div>
+
+      <div v-else-if="content.kind === 'note'" class="note">
+        <p class="note-text">{{ content.text }}</p>
+        <HomeReplyTemplate v-if="card.contactID && content.prompt" :prompt="content.prompt" class="note-reply" @use="text => act('reply', text)" />
+      </div>
+
+      <ol v-else class="list">
+        <li v-for="(item, index) in shownItems" :key="index">
+          <a :href="item.url" target="_blank" rel="noreferrer noopener" :class="{ inert: !item.url }">
+            <span class="index">{{ index + 1 }}</span>
+            <span class="copy"><strong>{{ item.title }}</strong><small v-if="item.detail">{{ item.detail }}</small></span>
+            <span v-if="item.trailing" class="trailing">{{ item.trailing }}</span>
+          </a>
         </li>
       </ol>
-      <p v-if="content.note" class="tracker-note">{{ content.note }}</p>
-    </div>
 
-    <div v-else-if="content.kind === 'note'" class="note">
-      <div class="note-row">
-        <AppAvatar :name="card.contactName ?? '?'" :path="avatar" :size="34" />
-        <p class="bubble-text">{{ content.text }}</p>
+      <div v-if="expanded && (card.reason || content.sources.length)" class="post-details">
+        <p v-if="card.reason" class="reason">{{ card.reason }}</p>
+        <span v-if="content.sources.length" class="sources">
+          <a v-for="source in content.sources" :key="source.url" :href="source.url" target="_blank" rel="noreferrer noopener" :title="source.title" class="chip">
+            <AppIcon name="link" />{{ host(source.url) }}
+          </a>
+        </span>
       </div>
-      <HomeReplyTemplate v-if="card.contactID && content.prompt" :prompt="content.prompt" class="note-reply" @use="text => act('reply', text)" />
-      <AppButton v-else-if="card.contactID" variant="tonal" icon="reply" class="note-reply" @click="act('message')">Reply</AppButton>
+
+      <footer class="post-actions">
+        <AppIconButton icon="thumb-up" label="More like this" size="small" :selected="card.feedback === 'more'" @click="act('more')" />
+        <AppIconButton icon="thumb-down" label="Less like this" size="small" :selected="card.feedback === 'less'" @click="act('less')" />
+        <AppIconButton v-if="card.contactID && content.kind !== 'note'" icon="chat" label="Reply in chat" size="small" @click="act('message')" />
+        <AppButton v-if="expandable" variant="text" size="small" class="expand" :aria-expanded="expanded" @click="expanded = !expanded">
+          {{ expanded ? 'Show less' : hidden ? `Show ${hidden} more` : 'Show more' }}
+        </AppButton>
+      </footer>
     </div>
-
-    <ol v-else class="list">
-      <li v-for="(item, index) in content.items" :key="index">
-        <a :href="item.url" target="_blank" rel="noreferrer noopener" :class="{ inert: !item.url }">
-          <span class="index">{{ index + 1 }}</span>
-          <span class="copy"><strong>{{ item.title }}</strong><small v-if="item.detail">{{ item.detail }}</small></span>
-          <span v-if="item.trailing" class="trailing">{{ item.trailing }}</span>
-        </a>
-      </li>
-    </ol>
-
-    <footer class="home-card-footer">
-      <span class="attribution"><AppAvatar :name="card.contactName ?? '?'" :path="avatar" :size="18" />{{ attribution }}</span>
-      <span v-if="content.sources.length" class="sources">
-        <a v-for="source in content.sources" :key="source.url" :href="source.url" target="_blank" rel="noreferrer noopener" :title="source.title" class="chip">
-          <AppIcon name="link" />{{ host(source.url) }}
-        </a>
-      </span>
-    </footer>
   </article>
 </template>
 
 <style scoped>
 /* The accents are the catalog's fixed palette (docs/updates.md#cards), not theme roles. */
-.home-card { --card-accent: #1a73e8; display: flex; flex-direction: column; gap: 14px; padding: var(--space-4); border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); min-width: 0; break-inside: avoid; }
-.home-card.lead { background: linear-gradient(180deg, color-mix(in srgb, var(--card-accent) 14%, var(--md-surface-container-low)), var(--md-surface-container-low) 55%); }
+/* A post: avatar column, then the content column. Posts are separated by the feed's dividers. */
+.home-card { --card-accent: #1a73e8; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: var(--space-3); padding: var(--space-4) var(--space-4) var(--space-2); min-width: 0; }
+.home-card + .home-card { border-top: 1px solid var(--md-outline-variant); }
 .accent-blue { --card-accent: #1a73e8; } .accent-green { --card-accent: #188038; } .accent-orange { --card-accent: #e8710a; }
 .accent-red { --card-accent: #d93025; } .accent-purple { --card-accent: #9334e6; } .accent-teal { --card-accent: #12838f; }
 .accent-pink { --card-accent: #d01884; } .accent-indigo { --card-accent: #3f51b5; } .accent-gray { --card-accent: #5f6368; }
@@ -194,22 +228,23 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
 :root[data-theme="dark"] .accent-purple { --card-accent: #c58af9; } :root[data-theme="dark"] .accent-teal { --card-accent: #78d9ec; }
 :root[data-theme="dark"] .accent-pink { --card-accent: #ff8bcb; } :root[data-theme="dark"] .accent-indigo { --card-accent: #9fa8da; }
 :root[data-theme="dark"] .accent-gray { --card-accent: #bdc1c6; }
-.home-card-header { display: flex; align-items: flex-start; gap: var(--space-3); }
-.home-card-icon { width: 36px; height: 36px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--md-shape-m);
-  color: var(--card-accent); background: color-mix(in srgb, var(--card-accent) 14%, transparent); }
-.home-card-icon :deep(svg) { width: 20px; height: 20px; }
-.home-card-titles { flex: 1; min-width: 0; }
-.home-card-titles h2 { font-size: 17px; font-weight: 700; }
-.lead .home-card-titles h2 { font-size: 20px; }
-.home-card-titles p { margin: var(--space-0-5) 0 0; font-size: 13px; color: var(--md-on-surface-variant); }
-.home-card-header .mini-menu { margin: calc(-1 * var(--space-1-5)) calc(-1 * var(--space-1-5)) 0 0; }
+.post-main { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.post-head { display: flex; align-items: center; gap: var(--space-1-5); min-height: 24px; }
+.who { font-size: 15px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.when { flex: none; font-size: 14px; color: var(--md-on-surface-variant); }
+.post-head .mini-menu { margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) auto; }
 /* The layer's .menu is only the surface; it drops down from the options button. */
-.card-menu { position: absolute; right: 0; top: 44px; z-index: 6; min-width: 224px; transform-origin: top right; }
+.card-menu { position: absolute; right: 0; top: 36px; z-index: 6; min-width: 224px; transform-origin: top right; }
+.topic { display: flex; align-items: center; gap: var(--space-2); margin: 0; min-width: 0; font: var(--type-label-medium); }
+.topic-pill { flex: none; display: inline-flex; align-items: center; gap: var(--space-1); max-width: 70%; padding: 2px 10px 2px 6px; border-radius: var(--md-shape-full); overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis; font-weight: 700; color: var(--card-accent); background: color-mix(in srgb, var(--card-accent) 14%, transparent); }
+.topic-pill :deep(svg) { width: 14px; height: 14px; flex: none; }
+.topic-subtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--md-on-surface-variant); }
 .inert { pointer-events: none; }
 a { color: inherit; }
 
 .headlines { display: flex; flex-direction: column; container-type: inline-size; }
-.headline-lead { display: flex; flex-direction: column; gap: var(--space-1-5); padding-bottom: var(--space-3); }
+.headline-lead { display: flex; flex-direction: column; gap: var(--space-1-5); }
 .headline-lead img { width: 100%; aspect-ratio: 16 / 9; max-height: 190px; object-fit: cover; border-radius: 18px; margin-bottom: var(--space-1); }
 .headline-text { display: flex; flex-direction: column; gap: var(--space-1-5); min-width: 0; }
 /* Wide cards (desktop) put the image beside the text instead of stretching it into a banner. */
@@ -217,10 +252,10 @@ a { color: inherit; }
   .headline-lead:has(> img) { display: grid; grid-template-columns: clamp(140px, 36%, 300px) minmax(0, 1fr); align-items: start; gap: var(--space-4); }
   .headline-lead img { height: auto; max-height: none; aspect-ratio: 4 / 3; margin: 0; }
 }
-.headline-lead strong { font-size: 20px; line-height: 1.25; }
-.lead .headline-lead strong { font-size: 22px; }
-.summary { color: var(--md-on-surface-variant); font-size: 15px; }
+.headline-lead strong { font-size: 17px; line-height: 1.3; }
+.summary { color: var(--md-on-surface-variant); font-size: 14px; line-height: 1.4; }
 .meta { font: var(--type-label-medium); color: var(--md-on-surface-variant); }
+.headline-lead + .headline-row { margin-top: var(--space-3); }
 .headline-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--md-outline-variant); }
 .headline-row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--card-accent); margin-top: var(--space-2); flex: none; }
 .headline-row .copy { flex: 1; display: flex; flex-direction: column; gap: var(--space-0-5); min-width: 0; font-size: 15px; }
@@ -255,13 +290,14 @@ tr.highlight td:first-child { border-radius: var(--md-shape-s) 0 0 var(--md-shap
 .change :deep(svg) { width: 16px; height: 16px; }
 .change.up { color: var(--md-success); } .change.down { color: var(--md-error); }
 
-.chart > svg { width: 100%; height: 170px; display: block; overflow: visible; }
+.chart > svg { width: 100%; height: 150px; display: block; overflow: visible; }
+.chart.compact > svg { height: 96px; }
 .chart-value { display: flex; align-items: baseline; gap: var(--space-1-5); margin-bottom: var(--space-2); }
-.chart-value strong { font-size: 32px; font-variant-numeric: tabular-nums; }
+.chart-value strong { font-size: 28px; font-variant-numeric: tabular-nums; }
 .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--md-on-surface-variant); margin-top: var(--space-1-5); }
 
 .tracker { display: flex; flex-direction: column; gap: var(--space-1-5); }
-.figure { font-size: 34px; font-weight: 800; color: var(--card-accent); line-height: 1.1; }
+.figure { font-size: 30px; font-weight: 800; color: var(--card-accent); line-height: 1.1; }
 .figure-label { font-size: 14px; font-weight: 500; color: var(--md-on-surface-variant); }
 .tracker .meter { height: 8px; border-radius: var(--md-shape-xs); margin: var(--space-2) 0 var(--space-1); background: color-mix(in srgb, var(--card-accent) 16%, transparent); }
 .tracker .meter span { display: block; height: 100%; border-radius: inherit; background: var(--card-accent); }
@@ -280,9 +316,8 @@ tr.highlight td:first-child { border-radius: var(--md-shape-s) 0 0 var(--md-shap
 .tracker-note { margin: var(--space-1) 0 0; padding: var(--space-3); border-radius: var(--md-shape-l); font: var(--type-body-medium); color: var(--md-on-surface-variant); background: color-mix(in srgb, var(--card-accent) 8%, transparent); }
 
 .note { display: flex; flex-direction: column; gap: var(--space-3); }
-.note-row { display: flex; align-items: flex-start; gap: 10px; }
-.bubble-text { margin: 0; padding: 10px 14px; border-radius: 6px 20px 20px 20px; background: color-mix(in srgb, var(--card-accent) 12%, transparent); font-size: 15px; line-height: 1.45; }
-.note-reply { align-self: flex-start; margin-left: 44px; max-width: calc(100% - 44px); }
+.note-text { margin: 0; font-size: 15px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-reply { align-self: flex-start; max-width: 100%; }
 
 .list { list-style: none; margin: 0; padding: 0; }
 .list li + li { border-top: 1px solid var(--md-outline-variant); }
@@ -292,8 +327,11 @@ tr.highlight td:first-child { border-radius: var(--md-shape-s) 0 0 var(--md-shap
 .list small { font-size: 13px; color: var(--md-on-surface-variant); }
 .list .trailing { font: var(--type-label-medium); color: var(--md-on-surface-variant); text-align: right; }
 
-.home-card-footer { display: flex; flex-direction: column; gap: var(--space-2); }
-.attribution { display: flex; align-items: center; gap: var(--space-1-5); font: var(--type-body-small); color: var(--md-on-surface-variant); }
+.post-details { display: flex; flex-direction: column; gap: var(--space-2); }
+.reason { margin: 0; font: var(--type-body-small); color: var(--md-on-surface-variant); }
+/* Actions sit on the content column's left edge; the icon buttons' padding is pulled out of it. */
+.post-actions { display: flex; align-items: center; gap: var(--space-1); margin-left: calc(-1 * var(--space-2)); }
+.post-actions .expand { margin-left: auto; }
 .sources { display: flex; flex-wrap: wrap; gap: var(--space-1-5); }
 /* Link chips: AppChip renders a <span>, so these stay `a.chip`. */
 .sources .chip { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) 10px; border-radius: var(--md-shape-full); font: var(--type-label-medium);

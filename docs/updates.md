@@ -31,8 +31,13 @@ This is a first implementation (2026-10-30). See [verification](#verification).
 - **Follow something** (**+**): describe what to follow ("processing times for my
   I-130"). The curator picks the layout and the contact on the next run.
 - **Card menu** (⋯ or long press on iOS): **Message {contact}**, **More like
-  this**, **Less like this**, **Hide from Updates**. Hidden topics never come back
-  unless the person shows them again in **Topics**.
+  this**, **Less like this**, **Hide from Updates**. On the web the feedback and reply
+  buttons sit in a row under each post and ⋯ keeps **Message** and **Hide**. Hidden
+  topics never come back unless the person shows them again in **Topics**.
+- **Web timeline**: a single column of posts, each led by the contact who prepared it
+  (avatar, name, age) with the topic as a small label. Each kind shows one headline,
+  two matches, a figure, three rows and so on until **Show more**, which also reveals
+  the reason and sources. Coming up and apps are one strip of chips above the feed.
 - **Notes** can suggest a reply. Tapping it opens the chat with the message in the
   composer (only if the composer is empty); it is never sent automatically.
 - **From a chat**: when the person asks a contact to keep an eye on something or to

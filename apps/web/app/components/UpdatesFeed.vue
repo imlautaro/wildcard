@@ -2,8 +2,7 @@
 import type { HomeCard, HomeFeed } from '~/utils/types';
 
 // Updates: the feed a person's contacts curate together (docs/updates.md). On wide
-// screens it fills the content pane beside the chat list; cards flow into two
-// columns, the lead card spans both.
+// screens it fills the content pane beside the chat list as a single timeline column.
 const route = useRoute();
 const home = useHome();
 const chats = useChats();
@@ -110,17 +109,14 @@ function origin(topic: HomeFeed['topics'][number]) {
       </AppNotice>
       <AppNotice v-if="actionError">{{ actionError }}</AppNotice>
 
-      <section v-if="feed?.agenda.length" class="home-agenda">
-        <h3>Coming up</h3>
+      <section v-if="feed?.agenda.length" class="home-agenda" aria-label="Coming up">
         <NuxtLink v-for="item in feed.agenda" :key="item.id" :to="agendaPath(item)" class="agenda-row" data-ripple>
           <span class="agenda-icon" :class="item.kind"><AppIcon :name="item.kind === 'task' ? 'tasks' : 'clock'" /></span>
           <span class="copy"><strong>{{ item.title }}</strong><small>{{ agendaDetail(item) }}</small></span>
-          <AppIcon name="chevron" class="chevron" />
         </NuxtLink>
       </section>
 
-      <section v-if="feed?.apps.length" class="home-apps">
-        <h3>Your apps</h3>
+      <section v-if="feed?.apps.length" class="home-apps" aria-label="Your apps">
         <div class="apps-row">
           <NuxtLink v-for="app in feed.apps" :key="app.id" :to="appPath(app)" class="app-tile" data-ripple :title="app.ownerName ?? undefined">
             <span class="mini-app-glyph"><AppIcon :name="miniAppIcon(app.icon)" /></span>
@@ -129,12 +125,11 @@ function origin(topic: HomeFeed['topics'][number]) {
         </div>
       </section>
 
-      <div v-if="feed?.cards.length" class="home-grid">
-        <HomeCard v-for="(card, index) in feed.cards" :key="card.id" :card="card" :lead="index === 0" :class="{ wide: index === 0 }"
-          @action="(kind, prompt) => act(card, kind, prompt)" />
+      <div v-if="feed?.cards.length" class="timeline">
+        <HomeCard v-for="card in feed.cards" :key="card.id" :card="card" @action="(kind, prompt) => act(card, kind, prompt)" />
       </div>
-      <div v-else-if="updating || (!feed && !home.state.error)" class="home-grid">
-        <div v-for="index in 3" :key="index" class="placeholder" :class="{ wide: index === 1 }" />
+      <div v-else-if="updating || (!feed && !home.state.error)" class="timeline" aria-hidden="true">
+        <div v-for="index in 3" :key="index" class="placeholder"><span class="avatar-dot" /><span class="lines"><span /><span /><span /></span></div>
       </div>
       <AppEmptyState v-else-if="feed?.enabled" class="home-empty" icon="sparkle" title="Your contacts are getting to know you"
         text="As you chat, they’ll bring news, figures and reminders about what matters to you here. You can also tell them what to follow.">
@@ -174,13 +169,14 @@ function origin(topic: HomeFeed['topics'][number]) {
 <style scoped>
 .home-page { display: flex; flex-direction: column; }
 .home-page .bar { background: var(--md-surface); }
-.home-inner { width: 100%; max-width: 1040px; margin: 0 auto; padding: 0 var(--space-5) var(--space-12); display: flex; flex-direction: column; gap: var(--space-4); }
+.home-inner { width: 100%; max-width: 640px; margin: 0 auto; padding: 0 0 var(--space-12); display: flex; flex-direction: column; gap: var(--space-3); }
 /* The column's gap spaces the notices. */
-.home-inner > .notice { margin: 0; }
+.home-inner > .notice, .home-inner > .home-status { margin: 0 var(--space-4); }
+.home-hero, .follow-more { padding-inline: var(--space-4); }
 .home-hero { display: flex; flex-direction: column; gap: var(--space-1-5); padding-top: var(--space-1); }
 .home-date { margin: 0; font: var(--type-label-medium); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--md-on-surface-variant); }
-.home-greeting { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; }
-.home-briefing { margin: 0; font-size: 17px; color: var(--md-on-surface-variant); max-width: 720px; }
+.home-greeting { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+.home-briefing { margin: 0; font-size: 15px; line-height: 1.45; color: var(--md-on-surface-variant); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .home-curators { display: flex; align-items: center; gap: var(--space-2); font-size: 13px; font-weight: 600; color: var(--md-on-surface-variant); margin-top: var(--space-1); }
 .home-curators .stack { display: inline-flex; }
 .home-curators .stack > * + * { margin-left: calc(-1 * var(--space-1)); }
@@ -189,28 +185,31 @@ function origin(topic: HomeFeed['topics'][number]) {
   color: var(--md-on-secondary-container); font: var(--type-label-large); align-self: flex-start; max-width: 100%; }
 .home-status .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-status .count { font-variant-numeric: tabular-nums; opacity: 0.8; }
-h3 { font-size: 15px; font-weight: 700; margin: 0 0 var(--space-2); }
-.home-agenda { padding: var(--space-4); border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); }
-.agenda-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2); margin: 0 calc(-1 * var(--space-2)); border-radius: var(--md-shape-l); color: inherit; }
-.agenda-icon { width: 36px; height: 36px; flex: none; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+/* Agenda and apps are one thin strip of chips above the timeline, not sections of their own. */
+.home-agenda, .apps-row { display: flex; gap: var(--space-2); overflow-x: auto; padding: 0 var(--space-4); scrollbar-width: none; }
+.agenda-row { flex: none; max-width: 240px; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1-5) var(--space-3) var(--space-1-5) var(--space-1-5); border-radius: var(--md-shape-full);
+  color: inherit; background: var(--md-surface-container-low); }
+.agenda-icon { width: 28px; height: 28px; flex: none; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
   color: var(--md-primary); background: color-mix(in srgb, var(--md-primary) 14%, transparent); }
 .agenda-icon.task { color: var(--md-warning); background: color-mix(in srgb, var(--md-warning) 14%, transparent); }
-.agenda-icon :deep(svg) { width: 20px; height: 20px; }
-.agenda-row .copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 15px; }
-.agenda-row small { font-size: 12px; color: var(--md-on-surface-variant); }
-.agenda-row .chevron { color: var(--md-outline); }
-.apps-row { display: flex; gap: var(--space-3); overflow-x: auto; padding-bottom: var(--space-1); }
-.app-tile { width: 84px; flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-1-5); padding: var(--space-2) var(--space-1);
-  border-radius: var(--md-shape-l); color: inherit; font: var(--type-label-medium); text-align: center; }
-.app-tile .mini-app-glyph { width: 56px; height: 56px; border-radius: var(--md-shape-l); }
-.home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: var(--space-4); align-items: start; }
-.home-grid .wide { grid-column: 1 / -1; }
-.placeholder { height: 180px; border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); animation: pulse 1.4s ease-in-out infinite alternate; }
-.placeholder.wide { height: 260px; }
+.agenda-icon :deep(svg) { width: 16px; height: 16px; }
+.agenda-row .copy { min-width: 0; display: flex; flex-direction: column; font-size: 13px; line-height: 1.25; }
+.agenda-row strong, .agenda-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agenda-row small { font-size: 11px; color: var(--md-on-surface-variant); }
+.app-tile { flex: none; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1-5) var(--space-3) var(--space-1-5) var(--space-1-5);
+  border-radius: var(--md-shape-full); color: inherit; background: var(--md-surface-container-low); font: var(--type-label-large); }
+.app-tile .mini-app-glyph { width: 28px; height: 28px; border-radius: 50%; }
+.app-tile .mini-app-glyph :deep(svg) { width: 16px; height: 16px; }
+.timeline { display: flex; flex-direction: column; border-top: 1px solid var(--md-outline-variant); }
+.placeholder { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--md-outline-variant); animation: pulse 1.4s ease-in-out infinite alternate; }
+.placeholder .avatar-dot { width: 40px; height: 40px; border-radius: 50%; background: var(--md-surface-container-high); }
+.placeholder .lines { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-1); }
+.placeholder .lines span { height: 12px; border-radius: var(--md-shape-full); background: var(--md-surface-container-high); }
+.placeholder .lines span:nth-child(1) { width: 35%; } .placeholder .lines span:nth-child(2) { width: 90%; height: 56px; border-radius: var(--md-shape-m); } .placeholder .lines span:nth-child(3) { width: 60%; }
 @keyframes pulse { from { opacity: 1; } to { opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) { .placeholder { animation: none; } }
 .follow-more { align-self: center; }
-.home-empty { flex: none; padding: var(--space-8) var(--space-6); border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); }
+.home-empty { flex: none; margin: 0 var(--space-4); padding: var(--space-8) var(--space-6); border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); }
 .follow-input { width: 100%; padding: var(--space-3) var(--space-4); border: 1px solid var(--md-outline); border-radius: var(--md-shape-xs); background: transparent;
   font: var(--type-body-large); resize: vertical; outline: none; }
 .follow-input:focus { border-color: var(--md-primary); box-shadow: inset 0 0 0 1px var(--md-primary); }
@@ -219,5 +218,5 @@ h3 { font-size: 15px; font-weight: 700; margin: 0 0 var(--space-2); }
 .topics .copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-0-5); }
 .topics small { font: var(--type-body-small); color: var(--md-on-surface-variant); }
 .topics li.hidden strong { color: var(--md-on-surface-variant); }
-@media (max-width: 860px) { .home-grid { grid-template-columns: minmax(0, 1fr); } .home-inner { padding: 0 var(--space-3) var(--space-8); } .home-greeting { font-size: 28px; } }
+@media (max-width: 860px) { .home-inner { padding-bottom: var(--space-8); } }
 </style>
