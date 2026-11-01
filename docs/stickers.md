@@ -86,9 +86,11 @@ The contact decides, in a private reply, with three tools (`apps/api/src/sticker
   that conversation. It becomes sendable immediately.
 - `create_sticker_of_yourself { emoji, expression }`: Muse Image edits the contact's profile
   photo into the requested expression, then the cutout pipeline above makes the sticker. It
-  only exists when the profile photo shows **one clear face**: Muse Spark checks that once
-  per photo version (`sticker_photo_check`) and a contact without such a photo cannot make
-  stickers of itself. At most 3 creations per minute per contact. This costs one vision call,
+  only exists when the profile picture shows **one main character with a clear face**: a real person, a
+  cartoon, pixel-art or game character, a robot or mascot with eyes all count; landscapes, logos,
+  several characters or a hidden or tiny face do not. Muse Spark checks that once per photo version
+  (`sticker_photo_check`); the expression keeps the picture's art style. Checked 2026-11-01 with
+  generated fictional avatars (photo, pixel art, robot). At most 3 creations per minute per contact. This costs one vision call,
   one image edit and one SAM request.
 
 The model sees stickers as `[Sticker 😂]` in history; the bytes are never sent to it.
