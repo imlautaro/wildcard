@@ -238,10 +238,9 @@ function act(kind: HomePostAction, prompt?: string) { menuOpen.value = false; em
 
 <style scoped>
 /* The accents are the catalog's fixed palette (docs/updates.md#cards), not theme roles. */
-/* A post: avatar column, then the content column. Posts are separated by the feed's dividers;
-   in a thread a line joins each avatar to the next post's instead. */
+/* A post: avatar column, then the content column. The feed draws each post as a card; in a
+   thread a line joins each avatar to the next post's instead. */
 .home-post { --card-accent: #1a73e8; display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-1); min-width: 0; }
-.home-post + .home-post:not(.in-thread) { border-top: 1px solid var(--md-outline-variant); }
 .post-rail { display: flex; flex-direction: column; align-items: center; }
 .home-post.chained .post-rail::after { content: ''; flex: 1; width: 2px; margin: var(--space-1-5) 0 calc(-1 * var(--space-3)); border-radius: 1px; background: var(--md-outline-variant); }
 .accent-blue { --card-accent: #1a73e8; } .accent-green { --card-accent: #188038; } .accent-orange { --card-accent: #e8710a; }

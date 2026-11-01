@@ -270,10 +270,13 @@ function origin(topic: HomeFeed['topics'][number]) {
   border-radius: var(--md-shape-full); color: inherit; background: var(--md-surface-container-low); font: var(--type-label-large); }
 .app-tile .mini-app-glyph { width: 28px; height: 28px; border-radius: 50%; }
 .app-tile .mini-app-glyph :deep(svg) { width: 16px; height: 16px; }
-.timeline { display: flex; flex-direction: column; border-top: 1px solid var(--md-outline-variant); }
-.timeline > :deep(.home-post) { padding-top: var(--space-6); padding-bottom: var(--space-5); }
-.thread .timeline > :deep(.home-post) { padding-top: var(--space-3); padding-bottom: var(--space-1); }
-.placeholder { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--md-outline-variant); animation: pulse 1.4s ease-in-out infinite alternate; }
+/* For you: each post is its own rounded card. Threads keep a flat column, where a rail joins
+   each avatar to the next post. */
+.timeline { display: flex; flex-direction: column; gap: var(--space-3); margin: 0 var(--space-4); }
+.timeline > :deep(.home-post) { padding: var(--space-5) var(--space-5) var(--space-2); border: 1px solid var(--md-outline-variant); border-radius: var(--ui-pane-radius); }
+.thread .timeline { gap: 0; margin: 0; }
+.thread .timeline > :deep(.home-post) { padding: var(--space-3) var(--space-4) var(--space-1); border: 0; border-radius: 0; }
+.placeholder { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--space-3); padding: var(--space-5); border: 1px solid var(--md-outline-variant); border-radius: var(--ui-pane-radius); animation: pulse 1.4s ease-in-out infinite alternate; }
 .placeholder .avatar-dot { width: 40px; height: 40px; border-radius: 50%; background: var(--md-surface-container-high); }
 .placeholder .lines { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-1); }
 .placeholder .lines span { height: 12px; border-radius: var(--md-shape-full); background: var(--md-surface-container-high); }
@@ -290,7 +293,6 @@ function origin(topic: HomeFeed['topics'][number]) {
   padding: var(--space-2) var(--space-4); border: 0; border-radius: var(--md-shape-full); font: var(--type-label-large); color: var(--md-on-primary); background: var(--md-primary);
   box-shadow: var(--md-elevation-2, 0 2px 6px rgb(0 0 0 / 0.2)); cursor: pointer; }
 .fresh :deep(svg) { width: 18px; height: 18px; }
-.thread .timeline { border-top: 0; }
 .thread-more { align-self: flex-start; margin-left: calc(var(--space-4) + 36px + var(--space-3) - var(--space-3)); }
 .home-empty { flex: none; margin: 0 var(--space-4); padding: var(--space-8) var(--space-6); border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); }
 .follow-input { width: 100%; padding: var(--space-3) var(--space-4); border: 1px solid var(--md-outline); border-radius: var(--md-shape-xs); background: transparent;
