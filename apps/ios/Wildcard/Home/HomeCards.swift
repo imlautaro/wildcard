@@ -26,7 +26,7 @@ enum HomeStyle {
 }
 
 enum HomeCardAction {
-    case more, less, hide, message, reply(String), thread
+    case more, less, hide, message, reply(String), thread, comment
 }
 
 /// One Updates post (docs/updates.md#posts), like a Threads or X post: the contact's avatar on a rail,
@@ -217,10 +217,15 @@ struct HomePostView: View {
                     .foregroundStyle(post.feedback == "more" ? AnyShapeStyle(Color.pink) : AnyShapeStyle(.secondary))
             }
             .accessibilityLabel(post.feedback == "more" ? "Undo more like this" : "More like this")
-            // A note with a suggested reply already offers its own way into the chat.
-            if post.contactID != nil, !(isNote && content.prompt != nil) {
-                Button { act(.message) } label: { Image(systemName: "bubble.left").foregroundStyle(.secondary) }
-                    .accessibilityLabel("Reply to \(name) in chat")
+            if post.contactID != nil {
+                Button { act(.comment) } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bubble.left")
+                        if let count = post.comments?.count, count > 0 { Text("\(count)").manrope(.footnote, weight: .semibold).monospacedDigit() }
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Comment on \(name)’s post")
             }
             Spacer(minLength: 0)
             if !inThread && threadCount > 1 {

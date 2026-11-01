@@ -9,6 +9,7 @@ struct UpdatesView: View {
     let openContact: (String) -> Void
     let openGroup: (String) -> Void
     let openThread: (String) -> Void
+    let openPost: (String) -> Void
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
     @Environment(\.scenePhase) private var scenePhase
@@ -23,6 +24,7 @@ struct UpdatesView: View {
 
     private var feed: HomeFeed? { store.feed }
     private var posts: [HomePost] { feed?.timeline ?? [] }
+    private var busy: Bool { feed?.isUpdating == true || feed?.isReplying == true }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -72,13 +74,14 @@ struct UpdatesView: View {
             if !first, !added.isEmpty, scrolled { fresh += added.count }
         }
         .refreshable { await run { try await store.requestUpdate(using: auth) } }
-        .task(id: scenePhase) {
+        // Restarts when a run starts or ends, so Update now never waits out a 60-second sleep.
+        .task(id: "\(scenePhase)-\(busy)") {
             guard scenePhase == .active else { return }
-            await store.refresh(using: auth)
-            // Poll briefly while contacts are preparing cards; otherwise revalidate stale data.
+            await store.refresh(using: auth, force: busy)
+            // Poll briefly while contacts are preparing posts or answering; otherwise revalidate stale data.
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(store.feed?.isUpdating == true ? 4 : 60)) } catch { return }
-                await store.refresh(using: auth, force: store.feed?.isUpdating == true)
+                do { try await Task.sleep(for: .seconds(busy ? 4 : 60)) } catch { return }
+                await store.refresh(using: auth, force: busy)
             }
         }
         .sheet(isPresented: $following) { HomeFollowSheet(store: store) }
@@ -257,7 +260,7 @@ struct UpdatesView: View {
 
     private func handle(_ action: HomeCardAction, post: HomePost) {
         Task {
-            await run { try await store.perform(action, on: post, auth: auth, contacts: contacts, openContact: openContact, openThread: openThread) }
+            await run { try await store.perform(action, on: post, auth: auth, contacts: contacts, openContact: openContact, openThread: openThread, openPost: openPost) }
         }
     }
 
@@ -419,7 +422,7 @@ struct HomeTopicsSheet: View {
 extension HomeFeedStore {
     /// What a post's buttons do, shared by the timeline and a thread.
     func perform(_ action: HomeCardAction, on post: HomePost, auth: AuthStore, contacts: ContactsStore,
-                 openContact: (String) -> Void, openThread: (String) -> Void) async throws {
+                 openContact: (String) -> Void, openThread: (String) -> Void, openPost: (String) -> Void) async throws {
         switch action {
         case .message:
             if let id = post.contactID { openContact(id) }
@@ -429,6 +432,8 @@ extension HomeFeedStore {
             openContact(id)
         case .thread:
             openThread(post.topicID)
+        case .comment:
+            openPost(post.id)
         case .more:
             try await setTopic(post.topicID, feedback: .some(post.feedback == "more" ? nil : "more"), using: auth)
         case .less:
@@ -445,6 +450,7 @@ struct HomeThreadView: View {
     let store: HomeFeedStore
     let topicID: String
     let openContact: (String) -> Void
+    let openPost: (String) -> Void
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
     @State private var actionError: String?
@@ -462,20 +468,11 @@ struct HomeThreadView: View {
                     ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
                         HomePostView(post: post, inThread: true, chained: index < posts.count - 1) { action in
                             Task {
-                                do { try await store.perform(action, on: post, auth: auth, contacts: contacts, openContact: openContact, openThread: { _ in }) }
+                                do { try await store.perform(action, on: post, auth: auth, contacts: contacts, openContact: openContact, openThread: { _ in }, openPost: openPost) }
                                 catch is CancellationError {}
                                 catch { actionError = error.localizedDescription }
                             }
                         }
-                    }
-                    if let last = posts.last, let id = last.contactID {
-                        Button { openContact(id) } label: {
-                            Label("Reply to \(last.contactName ?? "this contact") in chat", systemImage: "bubble.left")
-                                .manrope(.subheadline, weight: .semibold)
-                                .padding(.horizontal, 6).padding(.vertical, 4)
-                        }
-                        .buttonStyle(.glass)
-                        .padding(.leading, 64).padding(.top, 10)
                     }
                 }
                 .padding(.bottom, 32)
@@ -487,5 +484,154 @@ struct HomeThreadView: View {
         .alert("Updates", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
+    }
+}
+
+/// One post with its comments (docs/updates.md#comments), like the replies of a Threads post: the
+/// person's comment, then the answer of the contact who wrote the post, written in the background.
+/// It reads the session's cached feed and polls while a reply is pending. "Continue in chat" opens
+/// the contact's private chat, which already knows about this discussion.
+struct HomePostDetailView: View {
+    let store: HomeFeedStore
+    let postID: String
+    let openContact: (String) -> Void
+    let openThread: (String) -> Void
+    @Environment(AuthStore.self) private var auth
+    @Environment(ContactsStore.self) private var contacts
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var text = ""
+    @State private var sending = false
+    @State private var actionError: String?
+    @FocusState private var focused: Bool
+
+    private var post: HomePost? { store.feed?.timeline.first { $0.id == postID } }
+    private var comments: [HomeComment] { post?.comments ?? [] }
+    private var waiting: Bool { comments.contains { $0.status == "pending" } }
+    private var name: String { post?.contactName ?? "this contact" }
+    private var threadCount: Int { post.map { post in store.feed?.timeline.filter { $0.topicID == post.topicID }.count ?? 0 } ?? 0 }
+
+    var body: some View {
+        ScrollView {
+            if let post {
+                VStack(alignment: .leading, spacing: 0) {
+                    HomePostView(post: post, threadCount: threadCount, inThread: true, chained: !comments.isEmpty) { action in
+                        Task {
+                            do {
+                                try await store.perform(action, on: post, auth: auth, contacts: contacts, openContact: openContact,
+                                                        openThread: openThread, openPost: { _ in focused = true })
+                            }
+                            catch is CancellationError {}
+                            catch { actionError = error.localizedDescription }
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(comments) { comment in
+                            row(user: true, name: "You", at: comment.createdAt) { Text(comment.text) }
+                            row(user: false, name: name, at: comment.repliedAt) {
+                                switch comment.status {
+                                case "complete": Text(comment.reply ?? "")
+                                case "pending": TypingDots().accessibilityLabel("\(name) is replying")
+                                default: Text("\(name) couldn’t answer this one. Try again or continue in the chat.").italic().foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        if let id = post.contactID {
+                            Button { openContact(id) } label: {
+                                Label("Continue in chat with \(name)", systemImage: "bubble.left")
+                                    .manrope(.subheadline, weight: .semibold).padding(.horizontal, 6).padding(.vertical, 4)
+                            }
+                            .buttonStyle(.glass)
+                        }
+                        if threadCount > 1 {
+                            Button("See all \(threadCount) posts on \(post.content.title)") { openThread(post.topicID) }
+                                .manrope(.subheadline, weight: .semibold).buttonStyle(.plain).foregroundStyle(.tint)
+                        }
+                    }
+                    .padding(.leading, 64).padding(.trailing, 16).padding(.top, 8)
+                }
+                .padding(.bottom, 24)
+            } else {
+                ContentUnavailableView("This post isn’t in Updates anymore", systemImage: "sparkles.rectangle.stack",
+                                       description: Text("Its topic was hidden or retired, or the post is older than two weeks."))
+                    .padding(.top, 60)
+            }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(Color(.systemBackground))
+        .safeAreaInset(edge: .bottom) { if post?.contactID != nil { composer } }
+        .navigationTitle("Post")
+        .navigationBarTitleDisplayMode(.inline)
+        // Poll while the contact is answering, like the timeline does while a run is in progress.
+        .task(id: "\(scenePhase)-\(waiting)") {
+            guard scenePhase == .active, waiting else { return }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                await store.refresh(using: auth, force: true)
+            }
+        }
+        .alert("Updates", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+            Button("OK") { actionError = nil }
+        } message: { Text(actionError ?? "") }
+    }
+
+    private func row(user: Bool, name: String, at: Double?, @ViewBuilder content: () -> some View) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            if user { AccountAvatar(user: auth.user, size: 30) }
+            else { ContactAvatar(contact: post?.contactID.flatMap { contacts.contact(id: $0) }, size: 30) }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(name).manrope(.subheadline, weight: .bold)
+                    if let at { Text(HomePostView.age(at)).manrope(.subheadline).foregroundStyle(.secondary) }
+                }
+                content().manrope(.body).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var composer: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            TextField(waiting ? "\(name) is replying…" : "Reply to \(name)…", text: $text, axis: .vertical)
+                .lineLimit(1...5).focused($focused).manrope(.body).disabled(waiting)
+                .padding(.horizontal, 14).padding(.vertical, 10)
+            Button { Task { await send() } } label: {
+                Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 34, height: 34)
+            }
+            .buttonStyle(.glassProminent)
+            .buttonBorderShape(.circle)
+            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || waiting || sending)
+            .accessibilityLabel("Send comment")
+            .padding(5)
+        }
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .padding(.horizontal, 12).padding(.bottom, 8)
+    }
+
+    private func send() async {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, !waiting, !sending else { return }
+        sending = true
+        defer { sending = false }
+        do { try await store.comment(on: postID, text: String(value.prefix(1000)), using: auth); text = "" }
+        catch { actionError = error.localizedDescription }
+    }
+}
+
+/// Three pulsing dots while a contact is writing a reply.
+private struct TypingDots: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var on = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle().fill(Color.secondary).frame(width: 6, height: 6)
+                    .opacity(on ? 1 : 0.3)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.6).repeatForever().delay(Double(index) * 0.15), value: on)
+            }
+        }
+        .padding(.vertical, 6)
+        .onAppear { on = true }
     }
 }

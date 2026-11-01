@@ -62,6 +62,9 @@ struct HomeFeed: Decodable, Sendable {
 
     var isUpdating: Bool { status == "updating" || pending }
 
+    /// A contact is answering a comment: poll like a run so the reply shows up soon.
+    var isReplying: Bool { posts?.contains { $0.comments?.contains { $0.status == "pending" } == true } == true }
+
     /// The timeline, newest first; an API without posts gets one text-less post per card.
     var timeline: [HomePost] {
         posts ?? cards.map(HomePost.init(card:)).sorted { $0.createdAt > $1.createdAt }
@@ -85,13 +88,25 @@ struct HomePost: Decodable, Hashable, Sendable, Identifiable {
     let connector: Bool
     let createdAt: Double
     let content: HomeCardContent
+    /// The person's comments with the contact's replies, oldest first (docs/updates.md#comments).
+    var comments: [HomeComment]?
+}
+
+struct HomeComment: Decodable, Hashable, Sendable, Identifiable {
+    let id: String
+    let text: String
+    let reply: String?
+    /// pending, complete or failed.
+    let status: String
+    let createdAt: Double
+    let repliedAt: Double?
 }
 
 extension HomePost {
     init(card: HomeCard) {
         self.init(id: card.id, topicID: card.topicID, contactID: card.contactID, contactName: card.contactName,
                   contactPhotoVersion: card.contactPhotoVersion, text: nil, replyTo: nil, reason: card.reason, source: card.source,
-                  feedback: card.feedback, connector: card.connector, createdAt: card.generatedAt, content: card.content)
+                  feedback: card.feedback, connector: card.connector, createdAt: card.generatedAt, content: card.content, comments: nil)
     }
 }
 
@@ -262,6 +277,12 @@ final class HomeFeedStore {
 
     func requestUpdate(using auth: AuthStore) async throws {
         try await mutate(using: auth) { api, token in try await api.homeMutation(path: "refresh", token: token) }
+    }
+
+    /// Comment on a post; its contact answers in the background (docs/updates.md#comments).
+    func comment(on postID: String, text: String, using auth: AuthStore) async throws {
+        let path = "posts/\(postID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? postID)/comments"
+        try await mutate(using: auth) { api, token in try await api.homeMutation(path: path, body: ["text": text], token: token) }
     }
 
     func follow(_ text: String, using auth: AuthStore) async throws {
