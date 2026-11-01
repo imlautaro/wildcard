@@ -1,5 +1,5 @@
 import type { PushEnvironment } from '../push/delivery';
-import { deliverRemoteNative } from './remote';
+import { deliverRemoteNative, type RemoteTarget } from './remote';
 import { isRecord, type ModelTool } from '../chat/meta';
 import type { StoredTurn } from '../chat/data';
 
@@ -8,28 +8,76 @@ export const nativeKinds = ['focus', 'recipe', 'timer', 'alarm', 'calendar', 're
 // Deprecated on 2026-10-30: never advertise or create focus, recipe or speech actions.
 const deprecatedNativeKinds: ReadonlySet<string> = new Set(['focus', 'recipe', 'speech']);
 export const activeNativeKinds = nativeKinds.filter(kind => !deprecatedNativeKinds.has(kind));
-export type NativeContext = { deviceID: string; kinds: string[]; automaticKinds?: string[]; remote?: true; remoteDeviceKey?: string; remoteGrantID?: string; targetName?: string };
+// `deviceID`/`kinds` describe the requesting iPhone (absent on web). `remoteTargets` lists other
+// phones this participant may use, chosen per action by the model. `remote` is the legacy
+// single-target shape still sent by older iOS builds that pass remoteDeviceID.
+export type NativeContext = { deviceID?: string; kinds: string[]; automaticKinds?: string[]; remote?: true; remoteDeviceKey?: string; remoteGrantID?: string; targetName?: string; remoteTargets?: RemoteTarget[] };
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+function parseRemoteTargets(value: unknown): RemoteTarget[] | null {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 10) return null;
+  const targets: RemoteTarget[] = [];
+  for (const item of value) {
+    if (!isRecord(item) || Object.keys(item).sort().join(',') !== 'device,grantID,key,kinds,name,owned,ownerName'
+      || typeof item.device !== 'string' || !/^r\d{1,2}$/.test(item.device) || typeof item.owned !== 'boolean'
+      || ['key', 'grantID', 'name', 'ownerName'].some(key => typeof item[key] !== 'string' || !item[key] || (item[key] as string).length > 300)
+      || !Array.isArray(item.kinds) || !item.kinds.length || item.kinds.some(k => k !== 'timer' && k !== 'alarm')) return null;
+    targets.push({ device: item.device, key: item.key as string, grantID: item.grantID as string, name: item.name as string,
+      ownerName: item.ownerName as string, owned: item.owned, kinds: item.kinds as string[] });
+  }
+  return new Set(targets.map(t => t.device)).size === targets.length ? targets : null;
+}
 export function parseNativeContext(value: unknown): NativeContext | null {
-  if (!isRecord(value) || Object.keys(value).some(key => !['deviceID', 'kinds', 'automaticKinds', 'remote', 'remoteDeviceKey', 'remoteGrantID', 'targetName'].includes(key))
-    || typeof value.deviceID !== 'string' || !uuid.test(value.deviceID) || !Array.isArray(value.kinds)
+  if (!isRecord(value) || Object.keys(value).some(key => !['deviceID', 'kinds', 'automaticKinds', 'remote', 'remoteDeviceKey', 'remoteGrantID', 'targetName', 'remoteTargets'].includes(key))
+    || (value.deviceID === undefined ? value.remoteTargets === undefined : typeof value.deviceID !== 'string' || !uuid.test(value.deviceID)) || !Array.isArray(value.kinds)
     // Filtering legacy-only contexts yields an empty list, which must survive re-parsing.
     || value.kinds.length > nativeKinds.length
     || value.kinds.some(k => typeof k !== 'string' || !nativeKinds.includes(k as typeof nativeKinds[number]))
     || new Set(value.kinds).size !== value.kinds.length) return null;
+  if (value.deviceID === undefined && value.kinds.length) return null;
   if (value.remote !== undefined && value.remote !== true) return null;
-  if (value.remote === true && value.kinds.some(k => !['timer', 'alarm'].includes(k))) return null;
+  if (value.remote === true && (value.remoteTargets !== undefined || value.kinds.some(k => !['timer', 'alarm'].includes(k)))) return null;
+  const remoteTargets = value.remoteTargets === undefined ? undefined : parseRemoteTargets(value.remoteTargets);
+  if (remoteTargets === null) return null;
   if (['remoteDeviceKey', 'remoteGrantID', 'targetName'].some(key => value[key] !== undefined && (value.remote !== true || typeof value[key] !== 'string' || !value[key] || value[key].length > 300))) return null;
   const kinds = value.kinds;
   if (value.automaticKinds !== undefined && (!Array.isArray(value.automaticKinds)
     || value.automaticKinds.some(k => typeof k !== 'string' || !['timer', 'alarm', 'focus', 'recipe', 'reminder', 'speech'].includes(k) || !kinds.includes(k))
     || new Set(value.automaticKinds).size !== value.automaticKinds.length)) return null;
-  return { ...(value.remote === true ? { remote: true as const, remoteDeviceKey: value.remoteDeviceKey as string | undefined, remoteGrantID: value.remoteGrantID as string | undefined, targetName: value.targetName as string | undefined } : {}), ...(Array.isArray(value.automaticKinds) ? { automaticKinds: value.automaticKinds.filter(k => !deprecatedNativeKinds.has(k)).sort() } : {}), deviceID: value.deviceID.toLowerCase(), kinds: value.kinds.filter(k => !deprecatedNativeKinds.has(k)).sort() };
+  return { ...(value.remote === true ? { remote: true as const, remoteDeviceKey: value.remoteDeviceKey as string | undefined, remoteGrantID: value.remoteGrantID as string | undefined, targetName: value.targetName as string | undefined } : {}), ...(Array.isArray(value.automaticKinds) ? { automaticKinds: value.automaticKinds.filter(k => !deprecatedNativeKinds.has(k)).sort() } : {}), ...(typeof value.deviceID === 'string' ? { deviceID: value.deviceID.toLowerCase() } : {}), kinds: value.kinds.filter(k => !deprecatedNativeKinds.has(k)).sort(), ...(remoteTargets ? { remoteTargets } : {}) };
+}
+/** Phones the model may target in this message, as shown in its instructions. */
+export function nativePhones(context: NativeContext) {
+  return [
+    ...(context.remote ? [{ device: 'this_iphone', name: context.targetName ?? 'the selected iPhone', kinds: context.kinds, delivery: 'push to that phone; works while it is locked' }]
+      : context.deviceID && context.kinds.length ? [{ device: 'this_iphone', name: 'the iPhone the person is typing on (their own)', kinds: context.kinds, delivery: 'on this iPhone while Wildcard is open' }] : []),
+    ...(context.remoteTargets ?? []).map(t => ({ device: t.device, name: t.name, owner: t.owned ? 'the person themself' : t.ownerName, kinds: t.kinds, delivery: 'push to that phone; works while it is locked and Wildcard need not be open' })),
+  ];
+}
+type ResolvedTarget = { local: true; name: string; kinds: string[]; automaticKinds: string[] }
+  | { local: false; name: string; kinds: string[]; automaticKinds: string[]; key: string; grantID: string | null };
+function resolveTarget(turn: StoredTurn, context: NativeContext, device: unknown, kind: unknown): ResolvedTarget | { error: string } {
+  const names = nativePhones(context).map(p => `${p.device} (${p.name}: ${p.kinds.join(', ')})`).join('; ');
+  if (device !== undefined && (typeof device !== 'string' || device.length > 20)) return { error: `Invalid device. Use one of: ${names}.` };
+  // Older iOS builds chose one remote phone per message; keep honoring that snapshot.
+  if (context.remote) return { local: false, name: context.targetName ?? 'the selected iPhone', kinds: context.kinds, automaticKinds: context.automaticKinds ?? context.kinds,
+    key: context.remoteDeviceKey ?? `${turn.userID}:${context.deviceID}`, grantID: context.remoteGrantID ?? null };
+  const local: ResolvedTarget | null = context.deviceID && context.kinds.length ? { local: true, name: 'this iPhone', kinds: context.kinds, automaticKinds: context.automaticKinds ?? [] } : null;
+  const remote = (t: RemoteTarget): ResolvedTarget => ({ local: false, name: t.name, kinds: t.kinds, automaticKinds: t.kinds, key: t.key, grantID: t.grantID });
+  if (device === 'this_iphone') return local ?? { error: `This device cannot run native actions. Use one of: ${names || 'none'}.` };
+  if (typeof device === 'string') {
+    const target = context.remoteTargets?.find(t => t.device === device);
+    return target ? remote(target) : { error: `Unknown device. Use one of: ${names || 'none'}. If the person named someone without a listed phone, tell them that person has not allowed it.` };
+  }
+  if (local && typeof kind === 'string' && local.kinds.includes(kind)) return local;
+  const own = (context.remoteTargets ?? []).filter(t => t.owned && typeof kind === 'string' && t.kinds.includes(kind));
+  if (own.length === 1) return remote(own[0]!);
+  return { error: `Choose a device. Available: ${names || 'none'}. Ask the person which phone they mean if it is unclear.` };
 }
 export const nativeTools: ModelTool[] = [{ type: 'function', function: {
   name: 'request_native_action',
-  description: 'Prepare an iOS action ONLY for this direct human request and enabled device capabilities. This queues a device request; it does NOT execute it on the server. Local automatic requests need the app open. Remote timer/alarm requests use a visible push and the notification extension and may run while locked with the main app closed. Other requests need review. Follow the returned nextStep and never ask for extra confirmation for automatic kinds. Only a device-reported completed receipt confirms the requested operation; scheduling success does not mean an alarm rang. One proposal per kind per human message; replays return the original. Date must be explicit-offset ISO 8601. Never invent coordinates. Omit both coordinates to let the person choose the location on the phone map. Timer/alarm use AlarmKit; calendar opens an editor; reminder saves to Reminders; location_reminder creates an arrival/departure reminder in Reminders.',
+  description: 'Prepare an iOS action ONLY for this direct human request on one of the listed phones. This queues a device request; it does NOT execute it on the server. Choose the phone with device (see the phones listed in your instructions). Requests on the iPhone the person is typing on need the app open. Other phones get timers/alarms through a visible push and the notification extension, including while locked. Other requests need review. Follow the returned nextStep and never ask for extra confirmation for automatic kinds. Only a device-reported completed receipt confirms the requested operation; scheduling success does not mean an alarm rang. One proposal per kind per human message; replays return the original. Date must be explicit-offset ISO 8601. Never invent coordinates. Omit both coordinates to let the person choose the location on the phone map. Timer/alarm use AlarmKit; calendar opens an editor; reminder saves to Reminders; location_reminder creates an arrival/departure reminder in Reminders.',
   parameters: { type: 'object', additionalProperties: false, required: ['kind', 'title'], properties: {
+    device: { type: 'string', maxLength: 20, description: 'Listed phone ID: "this_iphone" for the iPhone the person is typing on, or a remote ID such as "r1". Use the phone of the person named in the request; otherwise the person\'s own phone.' },
     kind: { type: 'string', enum: [...activeNativeKinds] }, title: { type: 'string', maxLength: 100 },
     body: { type: 'string', maxLength: 2000 }, durationSeconds: { type: 'integer', minimum: 1, maximum: 28800 },
     date: { type: 'string', description: 'Future explicit-offset ISO 8601 date for alarm/calendar/reminder.' },
@@ -40,7 +88,7 @@ export const nativeTools: ModelTool[] = [{ type: 'function', function: {
     radius: { type: 'number', minimum: 100, maximum: 1000 }, trigger: { type: 'string', enum: ['arrival', 'departure'] },
   } },
 } }, { type: 'function', function: {
-  name: 'list_native_actions', description: 'Read the last 20 native proposals and device-reported execution states for THIS person, private chat and requesting device. Completed means the phone reported success, not that a timer fired or a real-world task was done. No access to calendar contents, location history or other devices.',
+  name: 'list_native_actions', description: 'Read the last 20 native proposals and device-reported execution states for THIS person and private chat, on the requesting iPhone and on other phones they used. Completed means the phone reported success, not that a timer fired or a real-world task was done. No access to calendar contents, location history or other devices.',
   parameters: { type: 'object', properties: {}, additionalProperties: false },
 } }];
 const dateValue = (v: unknown): number | null => typeof v === 'string' && v.length <= 40 && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(v) && Number.isFinite(Date.parse(v)) ? Date.parse(v) : null;
@@ -75,16 +123,20 @@ export async function executeNativeTool(env: PushEnvironment, turn: StoredTurn, 
     const { results } = await db.prepare(`SELECT a.id, a.kind, json_extract(a.payload_json, '$.title') AS title,
       CASE WHEN a.status = 'pending' AND a.expires_at <= ?4 THEN 'expired' ELSE a.status END AS status
       FROM native_action a JOIN chat_turn t ON t.id = a.turn_id JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
-      WHERE t.contact_id = ?1 AND t.user_id = ?2 AND json_extract(t.native_context_json, '$.deviceID') = ?3
-      ORDER BY a.created_at DESC, a.id LIMIT 20`).bind(turn.contactID, turn.userID, context.deviceID, Date.now()).all();
+      WHERE t.contact_id = ?1 AND t.user_id = ?2 AND (json_extract(t.native_context_json, '$.deviceID') = ?3 OR a.remote_device_id IS NOT NULL)
+      ORDER BY a.created_at DESC, a.id LIMIT 20`).bind(turn.contactID, turn.userID, context.deviceID ?? null, Date.now()).all();
     return JSON.stringify({ actions: results, source: 'device-reported', executedByThisTool: false });
   }
-  if (!validPayload(args, context.kinds)) return JSON.stringify({ error: 'Invalid or disabled native action. Use only fields for the chosen kind, explicit future dates, and known coordinates.' });
-  if (context.remote && (!env.APNS_PRIVATE_KEY || !env.APNS_KEY_ID || !env.APNS_TEAM_ID || !env.APNS_TOPIC)) return JSON.stringify({ error: 'Remote device push is not configured on this installation.' });
+  // `device` selects the phone; the stored payload (read by the extension) keeps only action fields.
+  const { device, ...payload } = args;
+  const target = resolveTarget(turn, context, device, payload.kind);
+  if ('error' in target) return JSON.stringify({ error: target.error });
+  if (!validPayload(payload, target.kinds)) return JSON.stringify({ error: `Invalid or disabled native action for ${target.name}. Use only fields for the chosen kind, explicit future dates, and known coordinates. That phone allows: ${target.kinds.join(', ')}.` });
+  if (!target.local && (!env.APNS_PRIVATE_KEY || !env.APNS_KEY_ID || !env.APNS_TEAM_ID || !env.APNS_TOPIC)) return JSON.stringify({ error: 'Remote device push is not configured on this installation.' });
   const now = Date.now();
-  const id = `${turn.id}:${args.kind}`;
-  const fireAt = context.remote ? (args.kind === 'timer' ? now + Number(args.durationSeconds) * 1000 : Date.parse(String(args.date))) : null;
-  const remoteID = context.remote ? context.remoteDeviceKey ?? `${turn.userID}:${context.deviceID}` : null;
+  const id = `${turn.id}:${payload.kind}`;
+  const fireAt = !target.local ? (payload.kind === 'timer' ? now + Number(payload.durationSeconds) * 1000 : Date.parse(String(payload.date))) : null;
+  const remoteID = !target.local ? target.key : null;
   await db.prepare(`INSERT INTO native_action (id, turn_id, kind, payload_json, created_at, updated_at, expires_at,
       remote_device_id, remote_nonce, fire_at, push_next_at, remote_grant_id)
     SELECT ?1, t.id, ?2, ?3, ?4, ?4, ?5, ?11, ?12, ?13, ?14, ?15 FROM chat_turn t JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
@@ -94,27 +146,31 @@ export async function executeNativeTool(env: PushEnvironment, turn: StoredTurn, 
       JOIN push_device p ON p.id = d.push_device_id JOIN session s ON s.id = p.session_id AND s.user_id = d.user_id
       WHERE d.id = ?11 AND g.contact_id = t.contact_id AND g.grant_id = COALESCE(?15, d.id || ':' || t.contact_id) AND s.expires_at > ?4
       AND EXISTS (SELECT 1 FROM json_each(g.kinds_json) WHERE value = ?2)))
-    ON CONFLICT(turn_id, kind) DO NOTHING`).bind(id, args.kind, JSON.stringify(args), now,
+    ON CONFLICT(turn_id, kind) DO NOTHING`).bind(id, payload.kind, JSON.stringify(payload), now,
       fireAt === null ? now + 86400000 : Math.min(now + 60_000, fireAt),
       turn.id, turn.contactID, turn.userID, turn.attempt, turn.nativeContextJSON,
-      remoteID, context.remote ? crypto.randomUUID() : null, fireAt, context.remote ? now : null, context.remoteGrantID ?? null).run();
-  if (context.remote) await deliverRemoteNative(env, id);
-  let action = await db.prepare(`SELECT id, kind, CASE WHEN status = 'pending' AND expires_at <= ?3 THEN 'expired' ELSE status END AS status, payload_json AS payloadJSON FROM native_action WHERE id = ?1 AND turn_id = ?2`)
-    .bind(id, turn.id, now).first<{ id: string; kind: string; status: string; payloadJSON: string }>();
+      remoteID, remoteID ? crypto.randomUUID() : null, fireAt, remoteID ? now : null, target.local ? null : target.grantID).run();
+  if (remoteID) await deliverRemoteNative(env, id);
+  let action = await db.prepare(`SELECT id, kind, CASE WHEN status = 'pending' AND expires_at <= ?3 THEN 'expired' ELSE status END AS status, payload_json AS payloadJSON, remote_device_id AS remoteDeviceKey FROM native_action WHERE id = ?1 AND turn_id = ?2`)
+    .bind(id, turn.id, now).first<{ id: string; kind: string; status: string; payloadJSON: string; remoteDeviceKey: string | null }>();
+  // One action per kind per message: a replay to another phone returns the original.
+  if (action && (action.remoteDeviceKey ?? null) !== remoteID) return JSON.stringify({ error: `This message already has a ${action.kind} request on another phone (status ${action.status}). Only one ${action.kind} per message; ask the person to send another message for a second phone.` });
+  const automatic = target.automaticKinds;
   // This bounded wait is awaited inside the existing reply Workflow step. It never executes the action.
-  if (action && context.automaticKinds?.includes(action.kind)) {
+  if (action && automatic.includes(action.kind)) {
     for (let poll = 0; poll < 10 && ['pending', 'running'].includes(action.status); poll++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      const receipt = await db.prepare(`SELECT a.id, a.kind, a.status, a.payload_json AS payloadJSON
+      const receipt = await db.prepare(`SELECT a.id, a.kind, a.status, a.payload_json AS payloadJSON, a.remote_device_id AS remoteDeviceKey
         FROM native_action a JOIN chat_turn t ON t.id = a.turn_id
         JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
         WHERE a.id = ?1 AND t.id = ?2 AND t.contact_id = ?3 AND t.user_id = ?4
         AND t.attempt = ?5 AND t.status = 'running' AND t.native_context_json = ?6`)
         .bind(id, turn.id, turn.contactID, turn.userID, turn.attempt, turn.nativeContextJSON)
-        .first<{ id: string; kind: string; status: string; payloadJSON: string }>();
+        .first<{ id: string; kind: string; status: string; payloadJSON: string; remoteDeviceKey: string | null }>();
       if (!receipt) return JSON.stringify({ error: 'The request is no longer active. Do not execute it again.' });
       action = receipt;
     }
   }
-  return JSON.stringify(action ? { id: action.id, kind: action.kind, status: action.status, proposal: JSON.parse(action.payloadJSON), executionConfirmed: action.status === 'completed', nextStep: action.status === 'completed' ? 'The selected iPhone confirmed completion of this operation. Confirm it naturally; do not ask the person to activate it. For timers/alarms, this means scheduled, not that it rang or is still running.' : ['failed', 'cancelled', 'unknown', 'expired'].includes(action.status) ? 'Report this device outcome accurately. Do not claim success or repeat the action. Unknown requires checking the system app.' : context.automaticKinds?.includes(action.kind) ? 'The selected iPhone is configured to run new requests of this kind automatically subject to current device settings and iOS permissions. Remote requests use a visible push and the notification extension even if the main app is closed; foreground-only requests require Wildcard open. No extra app confirmation is needed. Pending is not completed; only a completed device receipt confirms execution.' : 'Review and run in the iOS Native experiments screen. Never report pending as completed.' } : { error: 'The request is no longer active.' });
+  const phone = target.name;
+  return JSON.stringify(action ? { id: action.id, kind: action.kind, device: phone, status: action.status, proposal: JSON.parse(action.payloadJSON), executionConfirmed: action.status === 'completed', nextStep: action.status === 'completed' ? `${phone} confirmed this operation. Confirm it naturally and say which phone; do not ask the person to activate it. For timers/alarms, this means scheduled, not that it rang or is still running.` : ['failed', 'cancelled', 'unknown', 'expired'].includes(action.status) ? `Report this outcome on ${phone} accurately. Do not claim success or repeat the action. Unknown requires checking the system app on that phone.` : automatic.includes(action.kind) ? (target.local ? 'This iPhone runs new requests of this kind automatically while Wildcard is open, subject to device settings and iOS permissions. No extra app confirmation is needed. Pending is not completed; only a completed device receipt confirms execution.' : `Sent to ${phone} as a notification; it sets the timer or alarm there even while locked, with no app confirmation. Say it was sent to ${phone} and the chat will show when it is set. Pending is not completed.`) : 'Review and run in the iOS Native experiments screen. Never report pending as completed.' } : { error: 'The request is no longer active.' });
 }

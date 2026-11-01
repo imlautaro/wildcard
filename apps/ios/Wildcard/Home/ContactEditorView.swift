@@ -111,6 +111,7 @@ struct ContactEditorView: View {
                     if contacts.contact(id: contactID)?.role == "owner" {
                         ContactEnergyRow(contactID: contactID, cache: contacts.energySnapshots.store(for: contactID))
                     }
+                    NavigationLink { ContactPhonesView(contactID: contactID) } label: { Label("Timers and alarms", systemImage: "timer") }
                 }
                 Section {
                     NavigationLink {

@@ -225,7 +225,7 @@ attachment and quoted reply. Other errors do not trigger this fallback. Local
 automatic execution remains enabled; until the API is updated, the model may still
 describe manual review. This compatibility retry does not execute a device action. The model receives guidance
 for automatic requests without treating a pending proposal as execution success. It is snapshotted with
-the pending message ID across uncertain submissions. Other clients omit local native context; web requests may pass a server-validated `remoteDeviceID`.
+the pending message ID across uncertain submissions. Other clients omit local native context; the server adds the phones the participant may use (see [choosing the phone](native-remote.md#choosing-the-phone)).
 The UUID lives in a When-Unlocked, This-Device-Only Keychain item, separate from
 the session credential. Device affinity is a routing constraint, not hardware
 attestation; authorization always requires the signed-in account and its contact.
@@ -363,8 +363,8 @@ remain pending; static typechecks do not establish runtime correctness.
 
 iOS: the contact screen keeps the main switch at the top, opens **Allowed
 tools**, **Run without confirmation** and **Try it in chat** as rows with counts that
-open sheets, then shows **From the web and other people** (the **Receive timers and
-alarms** switch with a live status line) and **Who can send to this iPhone**. Explanations for those, Contact link and Requests are behind info
+open sheets, and links to contact details → **Timers and alarms** for receiving
+timers from the web and other people. Explanations for those, Contact link and Requests are behind info
 buttons. Web: the informational page lists capabilities and opens Automatic execution,
 Live status and receipts, Remote timers and alarms, and What stays on your iPhone in
 sheets. See the settings pattern in [contacts](contacts.md#contact-details-layout).
@@ -376,8 +376,8 @@ With migration 0083, a linked iPhone's account can explicitly allow a current
 shared-contact participant under **Who can send to this iPhone**, and switch that
 participant off again from iOS or web. Sharing a
 contact or enabling local automatic execution grants no such access by itself.
-The requester selects the authorized owner's iPhone in their own private chat;
-text and voice messages use that target, suppressing local native context. Both
+The requester just asks in their own private chat and the contact picks the
+permitted phone from the message, for text and voice messages alike. Both
 clients show device scheduling receipts. See [delegation and cache behavior](native-remote.md#allow-a-shared-contact-participant)
 for setup, limited permissions, revocation/in-flight semantics, pending-send
 recovery and the two-account device checks still required. This browser-facing

@@ -146,7 +146,7 @@ extension AuthAPI {
     }
 
     private struct ReplyInput: Encodable { let messageID: String; let side: String }
-    private struct MessageInput: Encodable { let historyRevision: Int; let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment?; var voice: VoiceInput? = nil; let replyTo: ReplyInput?; let nativeContext: NativeContext?; let remoteDeviceID: String? }
+    private struct MessageInput: Encodable { let historyRevision: Int; let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment?; var voice: VoiceInput? = nil; let replyTo: ReplyInput?; let nativeContext: NativeContext? }
 
     func chatTurns(contactID: String, before: Int? = nil, token: String) async throws -> ChatPage {
         let query = before.map { [URLQueryItem(name: "before", value: String($0))] } ?? []
@@ -154,13 +154,13 @@ extension AuthAPI {
         return try JSONDecoder().decode(ChatPage.self, from: data)
     }
 
-    func sendMessage(contactID: String, historyRevision: Int = 0, id: String, text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, nativeContext: NativeContext? = nil, remoteDeviceID: String? = nil, token: String) async throws -> ChatSubmission {
+    func sendMessage(contactID: String, historyRevision: Int = 0, id: String, text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, nativeContext: NativeContext? = nil, token: String) async throws -> ChatSubmission {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .withoutEscapingSlashes
         let timeZone = TimeZone.current.identifier
         let reply = replyTo.map { ReplyInput(messageID: $0.messageID, side: $0.side) }
         let body = try encoder.encode(MessageInput(historyRevision: historyRevision, id: id, text: text, timeZone: timeZone, attachment: attachment,
-                                                   voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, nativeContext: nativeContext, remoteDeviceID: remoteDeviceID))
+                                                   voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, nativeContext: nativeContext))
         let data: Data
         do {
             data = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: body, token: token, timeout: 90).0
@@ -169,7 +169,7 @@ extension AuthAPI {
             var legacyContext = nativeContext
             legacyContext?.automaticKinds = nil
             let legacyBody = try encoder.encode(MessageInput(historyRevision: historyRevision, id: id, text: text, timeZone: timeZone, attachment: attachment,
-                                                             voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, nativeContext: legacyContext, remoteDeviceID: remoteDeviceID))
+                                                             voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, nativeContext: legacyContext))
             data = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: legacyBody, token: token, timeout: 90).0
         }
         return try JSONDecoder().decode(ChatSubmission.self, from: data)

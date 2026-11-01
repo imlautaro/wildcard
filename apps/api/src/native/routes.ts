@@ -22,7 +22,8 @@ routes.use('*', async (c, next) => {
   await next();
 });
 routes.get('/', async c => {
-  const { results } = await c.env.DB.prepare(`SELECT ${columns} FROM native_action WHERE ${access}
+  // Requests sent to other phones show as chat receipts, not as work for this iPhone.
+  const { results } = await c.env.DB.prepare(`SELECT ${columns} FROM native_action WHERE ${access} AND remote_device_id IS NULL
     ORDER BY created_at DESC, id DESC LIMIT 50`).bind(c.req.param('id'), c.get('owner'), c.req.query('deviceID')!.toLowerCase(), Date.now()).all();
   return c.json({ actions: results });
 });

@@ -1,4 +1,4 @@
-import { remoteContext } from '../native/remote';
+import { remoteContext, remoteTargets } from '../native/remote';
 import { parseNativeContext } from '../native/actions';
 import { reactionRoutes } from '../reactions/routes';
 import { parsePrivateReply, privateQuotes, privateTarget } from '../replies/data';
@@ -155,11 +155,14 @@ chats.post('/turns', attachmentBody, async (c) => {
   }
   if (body.remoteDeviceID !== undefined && (typeof body.remoteDeviceID !== 'string' || !uuid.test(body.remoteDeviceID) || body.nativeContext !== undefined)) return c.json({ error: 'Choose one native device' }, 400);
   const localNative = body.nativeContext === undefined ? null : parseNativeContext(body.nativeContext);
-  if (localNative?.remote) return c.json({ error: 'Use remoteDeviceID for remote actions' }, 400);
+  if (body.nativeContext !== undefined && (!localNative || localNative.remote || localNative.remoteTargets || !localNative.deviceID)) return c.json({ error: 'Invalid native device capabilities' }, 400);
+  // remoteDeviceID is the older explicit single-phone selection; current clients omit it and
+  // the server lists every phone this participant may use for the model to choose from.
+  const targets = typeof body.remoteDeviceID === 'string' ? [] : await remoteTargets(c.env.DB, c.get('owner'), c.get('contactID'), localNative?.deviceID ?? null);
   const native = typeof body.remoteDeviceID === 'string'
-    ? await remoteContext(c.env.DB, c.get('owner'), c.get('contactID'), body.remoteDeviceID.toLowerCase()) : localNative;
+    ? await remoteContext(c.env.DB, c.get('owner'), c.get('contactID'), body.remoteDeviceID.toLowerCase())
+    : targets.length ? { ...(localNative ?? { kinds: [] }), remoteTargets: targets } : localNative;
   if (body.remoteDeviceID !== undefined && !native) return c.json({ error: 'Remote device unavailable or permission revoked' }, 403);
-  if (body.nativeContext !== undefined && !native) return c.json({ error: 'Invalid native device capabilities' }, 400);
   const nativeJSON = native ? JSON.stringify(native) : null;
   const reply = parsePrivateReply(body.replyTo);
   if (reply === null) return c.json({ error: 'Choose a message from this conversation to reply to' }, 400);

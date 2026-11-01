@@ -17,7 +17,6 @@ struct NativeToolsView: View {
     #endif
     @State private var sessionRevision = 0
     @State private var sheet: SheetKind?
-    @State private var remoteError: String?
 
     private enum SheetKind: String, Identifiable {
         case tools, automatic, examples
@@ -60,7 +59,7 @@ struct NativeToolsView: View {
                     Toggle("Enable native experiments", isOn: Binding(get: { !kinds.isEmpty }, set: {
                         native.setKinds($0 ? Set(NativeExperiments.kinds) : [], contactID: contactID)
                     }))
-                    InfoButton(title: "Native experiments", text: "Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms you ask for in this chat on this iPhone run while Wildcard is open. To get them from the web or from people who also chat with this contact, turn on Receive timers and alarms below. Choose other automatic tools below. Lock Screen activities may show their titles.")
+                    InfoButton(title: "Native experiments", text: "Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms you ask for in this chat on this iPhone run while Wildcard is open. To get them from the web or from people who also chat with this contact, open Timers and alarms in this contact's details. Choose other automatic tools below. Lock Screen activities may show their titles.")
                 }
             }
             if !kinds.isEmpty {
@@ -72,7 +71,11 @@ struct NativeToolsView: View {
                              value: "\(automatic.filter { native.automaticSince[contactID]?[$0] != nil }.count) of \(automatic.count)") { sheet = .automatic }
                     SheetRow(title: "Try it in chat", systemImage: "text.bubble", value: "\(Self.examples.count) ideas") { sheet = .examples }
                 }
-                RemoteNativeAccessSection(contactID: contactID, loadError: remoteError)
+                Section {
+                    NavigationLink { ContactPhonesView(contactID: contactID) } label: {
+                        NativeToolLabel(kind: "timer", title: "Timers and alarms from other people", symbol: "iphone.radiowaves.left.and.right")
+                    }
+                }
                 if let agent = contact?.agentID {
                     Section {
                         ShareLink(item: NativeShared.link(agentID: agent)) { Label("Share contact link", systemImage: "square.and.arrow.up") }
@@ -155,10 +158,6 @@ struct NativeToolsView: View {
             if let error = native.error {
                 Section { Label { Text(error) } icon: { Image(systemName: "exclamationmark.triangle.fill") }.foregroundStyle(.red) }
             }
-        }
-        .modifier(RemoteNativePolling(contactID: contactID, error: $remoteError))
-        .onChange(of: native.remoteEnabled) { _, _ in
-            Task { try? await contacts.refreshRemote(contactID: contactID, using: auth, force: true) }
         }
         .navigationTitle("Native experiments")
         .navigationBarTitleDisplayMode(.inline)

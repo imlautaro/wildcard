@@ -466,7 +466,6 @@ struct ChatView: View {
 
     private var composer: some View {
         VStack(spacing: 8) {
-            RemoteNativeTargetChip(contactID: contactID, chat: chat, error: remoteError)
             if let error = chat.error {
                 HStack(alignment: .top) {
                     Text(error).manrope(.footnote).foregroundStyle(.red)

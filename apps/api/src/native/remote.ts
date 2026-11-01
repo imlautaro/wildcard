@@ -15,6 +15,29 @@ export async function remoteContext(db: D1Database, userID: string, contactID: s
   return row ? { deviceID, kinds: JSON.parse(row.kindsJSON), automaticKinds: JSON.parse(row.kindsJSON), remote: true,
     remoteDeviceKey: row.deviceKey, remoteGrantID: row.grantID, targetName: row.targetName } : null;
 }
+// Phones this participant may use from this private chat: their own other phones with a
+// grant for the contact, and phones whose owners delegated access to them. The requesting
+// installation is excluded because its own requests use the local path. Server-generated
+// and snapshotted per human message; the model chooses among these by short ID.
+export type RemoteTarget = { device: string; key: string; grantID: string; name: string; ownerName: string; owned: boolean; kinds: string[] };
+export async function remoteTargets(db: D1Database, userID: string, contactID: string, excludeInstallation: string | null): Promise<RemoteTarget[]> {
+  const { results } = await db.prepare(`SELECT d.id AS key, g.grant_id AS grantID, g.kinds_json AS kindsJSON, d.user_id = ?1 AS owned,
+    d.name AS deviceName, u.name AS ownerName FROM native_remote_device d
+    JOIN native_remote_access g ON g.device_id = d.id AND g.contact_id = ?2
+    JOIN contact c ON c.id = g.contact_id AND c.user_id = ?1
+    JOIN user u ON u.id = d.user_id
+    JOIN push_device p ON p.id = d.push_device_id JOIN session s ON s.id = p.session_id AND s.user_id = d.user_id
+    WHERE s.expires_at > ?4 AND NOT (d.user_id = ?1 AND d.installation_id IS ?3)
+    ORDER BY d.user_id = ?1 DESC, d.updated_at DESC LIMIT 10`)
+    .bind(userID, contactID, excludeInstallation, Date.now()).all<{ key: string; grantID: string; kindsJSON: string; owned: number; deviceName: string; ownerName: string }>();
+  const seen = new Map<string, number>();
+  return results.map((row, index) => {
+    const base = row.owned ? `Your ${row.deviceName}` : `${row.ownerName}’s ${row.deviceName}`;
+    const count = (seen.get(base) ?? 0) + 1; seen.set(base, count);
+    return { device: `r${index + 1}`, key: row.key, grantID: row.grantID, name: count > 1 ? `${base} (${count})` : base,
+      ownerName: row.ownerName, owned: !!row.owned, kinds: (JSON.parse(row.kindsJSON) as string[]).filter(k => k === 'timer' || k === 'alarm').sort() };
+  }).filter(target => target.kinds.length);
+}
 // Domain-separated, action-scoped capability. It grants no account or conversation access.
 export async function remoteTicket(env: Env, id: string, nonce: string) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.BETTER_AUTH_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);

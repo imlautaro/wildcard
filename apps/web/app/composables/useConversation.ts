@@ -4,10 +4,9 @@ import type { ChatPage, ChatReadState, ChatSubmission, ChatTurn, DraftAttachment
 // Session cache of private conversations, keyed by contact. Pending sends keep
 // their UUID across navigation and failures so a retry can never duplicate them.
 // A voice message keeps its recorded clip in memory until the API accepts it.
-export type PendingSend = { historyRevision: number; id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; replyTo: ReplyQuote | null; failed: string | null; createdAt: number; remoteDeviceID: string | null; timeZone: string };
+export type PendingSend = { historyRevision: number; id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; replyTo: ReplyQuote | null; failed: string | null; createdAt: number; timeZone: string };
 export type Conversation = {
   historyRevision: number;
-  remoteDeviceID: string | null;
   reactions: ReactionCache;
   turns: ChatTurn[];
   nextBefore: number | null;
@@ -75,7 +74,6 @@ function conversation(id: string): Conversation {
     return entry;
   }
   entry = reactive({
-    remoteDeviceID: null,
     reactions: createReactionCache(),
     turns: [], nextBefore: null, presence: null, loaded: false, error: null, unavailable: false,
     historyRevision: 0, pending: null, draft: '', replyTo: null, loadingEarlier: false, retrying: false, revision: 0,
@@ -205,7 +203,6 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
     try {
       const result = await api<ChatSubmission>(`contacts/${id}/chat/turns`, {
         json: { historyRevision: pending.historyRevision, id: pending.id, text: pending.text, timeZone: pending.timeZone, attachment, voice: pending.voice ? { data: pending.voice.data } : undefined,
-          remoteDeviceID: pending.remoteDeviceID ?? undefined,
           replyTo: pending.replyTo ? { messageID: pending.replyTo.messageID, side: pending.replyTo.side } : undefined },
       });
       if (entry.pending?.id !== pending.id) return;
@@ -224,7 +221,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
   async function send(text: string, attachment: DraftAttachment | null, voice: DraftVoice | null = null) {
     const entry = state.value;
     if (entry.pending) return;
-    entry.pending = { historyRevision: entry.historyRevision, id: crypto.randomUUID(), text: voice ? '' : text.trim(), attachment: voice ? null : attachment, voice, replyTo: entry.replyTo, failed: null, createdAt: Date.now(), remoteDeviceID: entry.remoteDeviceID, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+    entry.pending = { historyRevision: entry.historyRevision, id: crypto.randomUUID(), text: voice ? '' : text.trim(), attachment: voice ? null : attachment, voice, replyTo: entry.replyTo, failed: null, createdAt: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
     if (!voice) entry.draft = '';
     entry.replyTo = null;
     await submit();

@@ -141,11 +141,11 @@ a feature guide and authorized contact-link fallback. Device verification is pen
 A first [remote timer/alarm prototype](docs/native-remote.md) lets an iOS or web chat target
 an explicitly linked iPhone through a visible APNs notification and its notification
 extension, including while locked or the main app is in the background. Turn on **Receive
-timers and alarms** per contact on iPhone, then pick that phone from the **Timers & alarms**
-chip above the chat composer.
+timers and alarms** in contact details → **Timers and alarms** on iPhone, then just ask in
+chat (“set a timer on Lucía’s phone”); the contact picks among the phones you may use.
 With [participant delegation](docs/native-remote.md#allow-a-shared-contact-participant)
 (migration 0083), explicitly allow a named shared-contact participant to request
-timers/alarms on your iPhone (**Who can send to this iPhone** on iOS, the chip's sheet on web),
+timers/alarms on your iPhone (contact details → **Timers and alarms** on iOS or web),
 or switch them off again. Sharing
 alone grants no device access. See [setup and rollback](docs/infrastructure.md#shared-contact-device-delegation--migration-0083).
 Migration 0034 and App Groups signing for the Notification Service App ID are

@@ -145,7 +145,7 @@ struct RemoteNativeAccessSection: View {
     }
     private var statusText: String {
         switch status {
-        case .needsTools: "Allow Timers or Alarms in Allowed tools first."
+        case .needsTools: "Turn on Timers or Alarms in this contact’s Native experiments first."
         case .off: "Off. Only this chat on this iPhone can set them."
         case .needsNotifications: "Paused. Notifications for Wildcard are off."
         case .needsAlarms: "Paused. Wildcard isn’t allowed to set alarms."
@@ -189,7 +189,7 @@ struct RemoteNativeAccessSection: View {
                 } label: { Label("Open Settings", systemImage: "gear") }
             }
         } header: {
-            Text("From the web and other people")
+            Text("This iPhone")
                 .task(id: scenePhase) { if scenePhase == .active { await checkPermissions() } }
         } footer: {
             Text(isOn
@@ -240,79 +240,60 @@ struct RemoteNativeAccessSection: View {
     }
 }
 
-/// Requester side: a compact chip above the composer that shows where timers and alarms
-/// requested in this chat go. Selection is always explicit and never falls back silently.
-struct RemoteNativeTargetChip: View {
+/// Contact details → Timers and alarms. There is no per-chat destination: people ask in
+/// chat ("set a timer on Ana’s phone") and the contact picks one of the phones listed here.
+/// This iPhone's own receiving switch and who may send to it follow below.
+struct ContactPhonesView: View {
     let contactID: String
-    let chat: ChatStore
-    let error: String?
+    @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
     @Environment(NativeExperiments.self) private var native
-
+    @State private var loadError: String?
     private var snapshot: RemoteNativeSnapshot? { contacts.remoteSnapshots.store(for: contactID).value }
     private var thisDevice: String? { try? native.deviceID() }
-    // This iPhone already handles its own requests locally, so it is never a remote choice here.
-    private var targets: [RemoteNativeDevice] { (snapshot?.devices ?? []).filter { $0.id != thisDevice } }
-    private var selected: RemoteNativeDevice? { snapshot?.devices.first { $0.id == chat.remoteDeviceID } }
-    private var unavailable: Bool { chat.remoteDeviceID != nil && selected == nil }
-    private var localOn: Bool { !(native.enabled[contactID] ?? []).isDisjoint(with: ["timer", "alarm"]) }
-    private var selectedLabel: String? {
-        guard let selected, let snapshot else { return nil }
-        return selected.id == thisDevice ? "This iPhone" : snapshot.label(for: selected)
-    }
-    private var title: String {
-        if unavailable { return "Selected iPhone unavailable" }
-        if let selectedLabel { return "Timers & alarms: \(selectedLabel)" }
-        return localOn ? "Timers & alarms: This iPhone" : "Timers & alarms: Off"
-    }
-    private var tint: Color { unavailable ? .red : selected != nil ? .accentColor : .secondary }
-
-    var body: some View {
-        if !targets.isEmpty || chat.remoteDeviceID != nil || error != nil {
-            VStack(alignment: .leading, spacing: 4) {
-                Menu {
-                    Picker("Send timers and alarms to", selection: Binding(get: { chat.remoteDeviceID ?? "" }, set: { chat.remoteDeviceID = $0.isEmpty ? nil : $0 })) {
-                            Label(localOn ? "This iPhone" : "Don’t send to a phone", systemImage: localOn ? "iphone" : "nosign").tag("")
-                            if unavailable, let id = chat.remoteDeviceID {
-                                Label("Unavailable iPhone", systemImage: "exclamationmark.triangle").tag(id)
-                            }
-                            ForEach(targets) { device in
-                                Label(snapshot?.label(for: device) ?? device.name, systemImage: "iphone.radiowaves.left.and.right").tag(device.id)
-                            }
-                        }
-                        .pickerStyle(.inline)
-                        .disabled(chat.isSending || chat.hasPendingRemoteSubmission)
-                    Section {
-                        Text("Another phone gets the request as a notification, even while locked. This chat shows when it’s set.")
-                    }
-                    if chat.hasPendingRemoteSubmission && !chat.isSending {
-                        Button("Discard pending send", systemImage: "xmark.circle", role: .destructive) { chat.discardPendingRemoteSubmission() }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: unavailable ? "exclamationmark.triangle.fill" : selected != nil ? "iphone.radiowaves.left.and.right" : "timer")
-                        Text(title).lineLimit(1)
-                        Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
-                    }
-                    .manrope(.footnote, weight: .semibold)
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(tint.opacity(selected != nil || unavailable ? 0.14 : 0.08), in: Capsule())
-                    .contentShape(Capsule())
-                }
-                .accessibilityLabel("Where timers and alarms go")
-                .accessibilityValue(title)
-                if unavailable {
-                    Text("That phone’s access was turned off or it signed out. Choose where to send timers before asking again.")
-                        .manrope(.caption).foregroundStyle(.red)
-                } else if chat.hasPendingRemoteSubmission && !chat.isSending {
-                    Text("A message is waiting to resend to \(selectedLabel ?? "that phone"). Check that phone before discarding it from this menu.")
-                        .manrope(.caption).foregroundStyle(.secondary)
-                }
-                if let error { Text(error).manrope(.caption).foregroundStyle(.red) }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+    // This iPhone is covered by the switch below; its own requests run locally.
+    private var phones: [RemoteNativeDevice] { (snapshot?.devices ?? []).filter { $0.id != thisDevice } }
+    private var contactName: String { contacts.contact(id: contactID)?.name ?? "this contact" }
+    private var example: String {
+        if let other = phones.first(where: { $0.owned == 0 }) {
+            let owner = other.name.components(separatedBy: "’s ").first ?? other.name
+            return "“Set a timer on \(owner)’s phone for 10 minutes”"
         }
+        return "“Set a timer for 10 minutes”"
+    }
+    var body: some View {
+        Form {
+            Section {
+                if snapshot == nil && loadError == nil { ProgressView() }
+                ForEach(phones) { device in
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(snapshot?.label(for: device) ?? device.name)
+                            Text(device.owned == 1 ? "Your other phone" : "They allowed you to send timers and alarms")
+                                .manrope(.footnote).foregroundStyle(.secondary)
+                        }
+                    } icon: { Image(systemName: "iphone") }
+                }
+                if snapshot != nil && phones.isEmpty {
+                    Text("No other phones yet. People who also chat with \(contactName) can let you use theirs.")
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Phones you can use")
+            } footer: {
+                Text("Just ask \(contactName) in chat, for example \(example). If you don’t name anyone, it goes to this iPhone. The other phone gets it as a notification, even while locked, and the chat shows when it’s set.")
+            }
+            RemoteNativeAccessSection(contactID: contactID, loadError: loadError)
+            if let error = native.error {
+                Section { Label { Text(error) } icon: { Image(systemName: "exclamationmark.triangle.fill") }.foregroundStyle(.red) }
+            }
+        }
+        .modifier(RemoteNativePolling(contactID: contactID, error: $loadError))
+        .onChange(of: native.remoteEnabled) { _, _ in
+            Task { try? await contacts.refreshRemote(contactID: contactID, using: auth, force: true) }
+        }
+        .navigationTitle("Timers and alarms")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

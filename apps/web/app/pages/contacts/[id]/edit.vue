@@ -155,6 +155,7 @@ const voiceChoiceInfo = computed(() => `Accent guides regional wording in text a
           <AppListItem icon="voice" opens :value="voiceSummary" @click="openVoiceSheet">Voice</AppListItem>
         </template>
         <ContactEnergySection v-if="contact.role === 'owner'" :contact-id="id" />
+        <ContactPhonesSection :contact-id="id" :contact-name="contact.name" />
       </AppListGroup>
 
       <AppListGroup>
