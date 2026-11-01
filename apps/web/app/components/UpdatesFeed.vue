@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import type { HomeCard, HomeFeed } from '~/utils/types';
+import type { HomeFeed, HomePost } from '~/utils/types';
+import type { HomePostAction } from './HomePost.vue';
 
 // Updates: the feed a person's contacts curate together (docs/updates.md). On wide
-// screens it fills the content pane beside the chat list as a single timeline column.
+// screens it fills the content pane beside the chat list as a single timeline column of
+// posts, newest first; `?thread=<topic>` shows every post on one topic as a thread.
 const route = useRoute();
 const home = useHome();
 const chats = useChats();
@@ -14,6 +16,35 @@ const managing = ref(false);
 const followText = ref('');
 const actionError = ref<string | null>(null);
 const busy = computed(() => home.state.saving > 0);
+const page = ref<HTMLElement | null>(null);
+const posts = computed(() => homePosts(feed.value));
+const threadCounts = computed(() => {
+  const counts = new Map<string, number>();
+  for (const post of posts.value) counts.set(post.topicID, (counts.get(post.topicID) ?? 0) + 1);
+  return counts;
+});
+const thread = computed(() => typeof route.query.thread === 'string' ? route.query.thread : null);
+// A thread reads top to bottom, oldest first.
+const threadPosts = computed(() => thread.value ? posts.value.filter(post => post.topicID === thread.value).reverse() : []);
+const threadTitle = computed(() => threadPosts.value.at(-1)?.content.title ?? 'Thread');
+const myPhoto = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
+
+// "N new posts": posts that arrive while the person is scrolled down are announced instead
+// of appearing silently above them; at the top they just show.
+const known = new Set<string>();
+const fresh = ref(0);
+watch(posts, (list) => {
+  const added = list.filter(post => !known.has(post.id));
+  const first = !known.size;
+  for (const post of added) known.add(post.id);
+  if (!first && added.length && !thread.value && (page.value?.scrollTop ?? 0) > 120) fresh.value += added.length;
+}, { immediate: true });
+function showFresh() { fresh.value = 0; page.value?.scrollTo({ top: 0, behavior: 'smooth' }); }
+function onScroll() { if (fresh.value && (page.value?.scrollTop ?? 0) < 40) fresh.value = 0; }
+function openThread(topicID: string | null) {
+  void navigateTo({ path: route.path, query: topicID ? { ...route.query, thread: topicID } : { ...route.query, thread: undefined } });
+  if (topicID) page.value?.scrollTo({ top: 0 });
+}
 
 const greeting = computed(() => {
   const hour = new Date().getHours();
@@ -48,7 +79,8 @@ async function follow() {
   if (!text) return;
   await run(async () => { await home.follow(text); following.value = false; followText.value = ''; });
 }
-function act(card: HomeCard, kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: string) {
+function act(card: HomePost, kind: HomePostAction, prompt?: string) {
+  if (kind === 'thread') return openThread(card.topicID);
   if (kind === 'message' && card.contactID) return navigateTo(`/chats/${card.contactID}`);
   if (kind === 'reply' && card.contactID) { if (prompt) suggestDraft(card.contactID, prompt); return navigateTo(`/chats/${card.contactID}`); }
   if (kind === 'hide') return run(() => home.setTopic(card.topicID, { status: 'hidden' }));
@@ -74,7 +106,23 @@ function origin(topic: HomeFeed['topics'][number]) {
 </script>
 
 <template>
-  <div class="page home-page">
+  <div v-if="thread" ref="page" class="page home-page">
+    <AppTopBar :title="threadTitle">
+      <template #leading><AppIconButton icon="back" label="Back to Updates" :tooltip="false" @click="openThread(null)" /></template>
+    </AppTopBar>
+    <div class="home-inner thread">
+      <AppNotice v-if="actionError">{{ actionError }}</AppNotice>
+      <div v-if="threadPosts.length" class="timeline">
+        <HomePost v-for="(post, index) in threadPosts" :key="post.id" :post="post" in-thread :chained="index < threadPosts.length - 1"
+          @action="(kind, prompt) => act(post, kind, prompt)" />
+      </div>
+      <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" title="This thread isn’t in Updates anymore"
+        text="Its topic was hidden or retired, or its posts are older than two weeks." />
+      <AppButton v-if="threadPosts.at(-1)?.contactID" variant="tonal" icon="chat" class="thread-reply"
+        :to="`/chats/${threadPosts.at(-1)!.contactID}`">Reply to {{ threadPosts.at(-1)!.contactName ?? 'this contact' }} in chat</AppButton>
+    </div>
+  </div>
+  <div v-else ref="page" class="page home-page" @scroll.passive="onScroll">
     <AppTopBar title="Updates">
       <template v-if="route.path !== '/'" #leading><AppIconButton to="/" icon="back" label="Back" class="back" :tooltip="false" /></template>
       <AppIconButton icon="list" label="Topics" @click="managing = true" />
@@ -109,6 +157,12 @@ function origin(topic: HomeFeed['topics'][number]) {
       </AppNotice>
       <AppNotice v-if="actionError">{{ actionError }}</AppNotice>
 
+      <button class="composer" @click="following = true">
+        <AppAvatar :name="user?.name ?? ''" :path="myPhoto" :size="36" />
+        <span class="composer-hint">What should your contacts follow?</span>
+        <span class="composer-action">Follow</span>
+      </button>
+
       <section v-if="feed?.agenda.length" class="home-agenda" aria-label="Coming up">
         <NuxtLink v-for="item in feed.agenda" :key="item.id" :to="agendaPath(item)" class="agenda-row" data-ripple>
           <span class="agenda-icon" :class="item.kind"><AppIcon :name="item.kind === 'task' ? 'tasks' : 'clock'" /></span>
@@ -125,8 +179,10 @@ function origin(topic: HomeFeed['topics'][number]) {
         </div>
       </section>
 
-      <div v-if="feed?.cards.length" class="timeline">
-        <HomeCard v-for="card in feed.cards" :key="card.id" :card="card" @action="(kind, prompt) => act(card, kind, prompt)" />
+      <button v-if="fresh" class="fresh" @click="showFresh"><AppIcon name="arrow-up" />{{ fresh === 1 ? '1 new post' : `${fresh} new posts` }}</button>
+      <div v-if="posts.length" class="timeline">
+        <HomePost v-for="post in posts" :key="post.id" :post="post" :thread-count="threadCounts.get(post.topicID)"
+          @action="(kind, prompt) => act(post, kind, prompt)" />
       </div>
       <div v-else-if="updating || (!feed && !home.state.error)" class="timeline" aria-hidden="true">
         <div v-for="index in 3" :key="index" class="placeholder"><span class="avatar-dot" /><span class="lines"><span /><span /><span /></span></div>
@@ -135,7 +191,6 @@ function origin(topic: HomeFeed['topics'][number]) {
         text="As you chat, they’ll bring news, figures and reminders about what matters to you here. You can also tell them what to follow.">
         <template #actions><AppButton @click="following = true">Follow something</AppButton></template>
       </AppEmptyState>
-      <AppButton v-if="feed?.cards.length" variant="text" icon="sparkle" class="follow-more" @click="following = true">Ask your contacts to follow something</AppButton>
     </div>
 
     <AppSheet v-if="following" title="Follow in Updates" @close="following = false">
@@ -208,7 +263,18 @@ function origin(topic: HomeFeed['topics'][number]) {
 .placeholder .lines span:nth-child(1) { width: 35%; } .placeholder .lines span:nth-child(2) { width: 90%; height: 56px; border-radius: var(--md-shape-m); } .placeholder .lines span:nth-child(3) { width: 60%; }
 @keyframes pulse { from { opacity: 1; } to { opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) { .placeholder { animation: none; } }
-.follow-more { align-self: center; }
+.composer { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-1) var(--space-4) 0; padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-full); background: var(--md-surface); color: inherit; text-align: left; cursor: pointer; }
+.composer:hover { background: var(--md-surface-container-low); }
+.composer-hint { flex: 1; min-width: 0; font-size: 15px; color: var(--md-on-surface-variant); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-action { flex: none; padding: var(--space-1-5) var(--space-4); border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-full); font: var(--type-label-large); }
+/* Stays under the top bar while the person scrolls the timeline. */
+.fresh { position: sticky; top: var(--space-3); z-index: 3; align-self: center; display: inline-flex; align-items: center; gap: var(--space-1-5); margin-bottom: calc(-1 * var(--space-10));
+  padding: var(--space-2) var(--space-4); border: 0; border-radius: var(--md-shape-full); font: var(--type-label-large); color: var(--md-on-primary); background: var(--md-primary);
+  box-shadow: var(--md-elevation-2, 0 2px 6px rgb(0 0 0 / 0.2)); cursor: pointer; }
+.fresh :deep(svg) { width: 18px; height: 18px; }
+.thread .timeline { border-top: 0; }
+.thread-reply { align-self: flex-start; margin: var(--space-2) var(--space-4) 0 calc(var(--space-4) + 36px + var(--space-3)); }
 .home-empty { flex: none; margin: 0 var(--space-4); padding: var(--space-8) var(--space-6); border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); }
 .follow-input { width: 100%; padding: var(--space-3) var(--space-4); border: 1px solid var(--md-outline); border-radius: var(--md-shape-xs); background: transparent;
   font: var(--type-body-large); resize: vertical; outline: none; }

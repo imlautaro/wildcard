@@ -265,11 +265,18 @@ export type HomeCard = {
   reason: string | null; source: 'person' | 'contact' | 'curator'; feedback: 'more' | 'less' | null; connector: boolean;
   generatedAt: number; content: HomeCardContent;
 };
+// A timeline post (docs/updates.md#posts): a contact's short text with a card attached. `text` is null for
+// a note (its text is the card) and for cards published before posts existed.
+export type HomePost = Omit<HomeCard, 'generatedAt'> & {
+  text: string | null; replyTo: { id: string; contactName: string | null } | null; createdAt: number;
+};
 export type HomeFeed = {
   enabled: boolean; status: 'idle' | 'updating'; pending: boolean; generatedAt: number | null; briefing: string | null; error: string | null;
   progress: { total: number; done: number; title: string; contactID: string; contactName: string | null } | null;
   contributors: { id: string; name: string; photoVersion: string | null }[];
   cards: HomeCard[];
+  /** Newest first. Absent from an API without posts (before migration 0086); see homePosts(). */
+  posts?: HomePost[];
   topics: { id: string; title: string; source: 'person' | 'contact' | 'curator'; status: 'active' | 'hidden'; feedback: 'more' | 'less' | null; contactID: string | null; hasCard: boolean }[];
   apps: { id: string; title: string; subtitle: string | null; icon: string | null; contactID: string | null; groupID: string | null; ownerName: string | null; opens: number }[];
   agenda: { id: string; kind: 'schedule' | 'task'; title: string; at: number | null; contactID: string | null; groupID: string | null; name: string | null }[];

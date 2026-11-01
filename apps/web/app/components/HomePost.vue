@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import type { HomeCard, HomeCardContent } from '~/utils/types';
+import type { HomeCardContent, HomePost } from '~/utils/types';
 
-// One Updates card of the closed catalog (docs/updates.md#cards), drawn as a post in a
-// timeline: the contact who prepared it (avatar, name, time) comes first, the topic is a small
-// label, and the body shows one headline, figure or line of each kind until "Show more".
-const props = defineProps<{ card: HomeCard }>();
-const emit = defineEmits<{ action: [kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: string] }>();
-const content = computed(() => props.card.content);
+export type HomePostAction = 'more' | 'less' | 'hide' | 'message' | 'reply' | 'thread';
+
+// One Updates post (docs/updates.md#posts), like a Threads or X post: the contact (avatar, name,
+// topic, age), the contact's text, and the card of the closed catalog (docs/updates.md#cards)
+// attached in a frame that shows one headline, figure or line of each kind until "Show more".
+// In a thread the attachments start expanded and a line joins the avatars.
+const props = defineProps<{ post: HomePost; threadCount?: number; inThread?: boolean; chained?: boolean }>();
+const emit = defineEmits<{ action: [kind: HomePostAction, prompt?: string] }>();
+const card = computed(() => props.post);
+const content = computed(() => props.post.content);
 const menuOpen = ref(false);
-const expanded = ref(false);
+const expanded = ref(!!props.inThread);
 const icons: Record<string, AppIconName> = { news: 'news', sport: 'sport', trophy: 'trophy', chart: 'chart', money: 'money', globe: 'globe',
   calendar: 'calendar', clock: 'clock', book: 'book', heart: 'heart', star: 'star', bolt: 'bolt', list: 'list', check: 'check', person: 'person',
   chat: 'chat', home: 'home', folder: 'folder', cart: 'cart', plane: 'plane', doc: 'doc', weather: 'weather' };
@@ -19,9 +23,12 @@ const rest = computed(() => content.value.kind === 'headlines' ? content.value.i
 const preview = useLinkPreview(() => lead.value?.url ?? null);
 const image = usePrivateImage(() => preview.value?.status === 'ready' && preview.value.imageVersion
   ? `link-previews/${preview.value.hash}/image?v=${preview.value.imageVersion}` : null);
-const avatar = computed(() => props.card.contactID ? contactPhotoPath({ id: props.card.contactID, photoVersion: props.card.contactPhotoVersion }) : null);
-const name = computed(() => props.card.contactName ?? 'A contact');
-const time = computed(() => relativeTime(props.card.generatedAt));
+const avatar = computed(() => props.post.contactID ? contactPhotoPath({ id: props.post.contactID, photoVersion: props.post.contactPhotoVersion }) : null);
+const name = computed(() => props.post.contactName ?? 'A contact');
+const time = computed(() => relativeTime(props.post.createdAt));
+const exactTime = computed(() => new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(props.post.createdAt));
+// A note's text is the post; any other post shows the contact's text above its card.
+const note = computed(() => content.value.kind === 'note');
 
 // How much of each kind shows before "Show more".
 const collapsedCount: Partial<Record<HomeCardContent['kind'], number>> = { matches: 2, metrics: 3, list: 3 };
@@ -44,7 +51,7 @@ const hidden = computed(() => {
 });
 const extras = computed(() => content.value.kind === 'chart' ? !!content.value.summary
   : content.value.kind === 'tracker' ? !!(content.value.steps?.length || content.value.note) : false);
-const expandable = computed(() => hidden.value > 0 || extras.value || !!props.card.reason || content.value.sources.length > 0);
+const expandable = computed(() => hidden.value > 0 || extras.value || !!props.post.reason || content.value.sources.length > 0);
 const live = (status?: string) => !!status && /live|vivo|'/i.test(status);
 const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; } };
 
@@ -75,30 +82,41 @@ const chart = computed(() => {
     labels: [points[0]!.label, points[Math.floor(points.length / 2)]!.label, points.at(-1)!.label] };
 });
 
-function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: string) { menuOpen.value = false; emit('action', kind, prompt); }
+function act(kind: HomePostAction, prompt?: string) { menuOpen.value = false; emit('action', kind, prompt); }
 </script>
 
 <template>
-  <article class="home-card" :class="`accent-${content.accent}`">
-    <AppAvatar class="post-avatar" :name="name" :path="avatar" :size="40" />
+  <article class="home-post" :class="[`accent-${content.accent}`, { chained, 'in-thread': inThread }]">
+    <div class="post-rail">
+      <AppAvatar class="post-avatar" :name="name" :path="avatar" :size="36" />
+    </div>
     <div class="post-main">
       <header class="post-head">
         <strong class="who">{{ name }}</strong>
-        <span class="when">· {{ time }}</span>
+        <template v-if="!inThread">
+          <AppIcon name="chevron" class="topic-sep" />
+          <span class="topic" :title="content.title">{{ content.title }}</span>
+        </template>
+        <button v-if="!inThread" class="when link-button" :title="exactTime" @click="act('thread')">{{ time }}</button>
+        <span v-else class="when" :title="exactTime">{{ time }}</span>
         <div class="mini-menu">
-          <AppIconButton icon="more" label="Card options" size="small" :tooltip="false" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen" />
+          <AppIconButton icon="more" label="Post options" size="small" :tooltip="false" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen" />
           <template v-if="menuOpen">
             <div class="backdrop" @click="menuOpen = false" />
             <div class="menu card-menu" role="menu">
               <AppMenuItem v-if="card.contactID && card.contactName" icon="chat" role="menuitem" @click="act('message')">Message {{ card.contactName }}</AppMenuItem>
+              <AppMenuItem icon="thumb-down" role="menuitem" @click="act('less')">{{ card.feedback === 'less' ? 'Undo less like this' : 'Less like this' }}</AppMenuItem>
               <AppMenuItem icon="hide" danger role="menuitem" @click="act('hide')">Hide from Updates</AppMenuItem>
             </div>
           </template>
         </div>
       </header>
-      <p class="topic">
-        <span class="topic-pill"><AppIcon :name="icon" filled />{{ content.title }}</span>
-        <span v-if="content.subtitle" class="topic-subtitle">{{ content.subtitle }}</span>
+      <p v-if="post.replyTo" class="replying">Replying to {{ post.replyTo.contactName ?? 'a contact' }}</p>
+      <p v-if="post.text" class="post-text" :class="{ open: !inThread }" @click="!inThread && act('thread')">{{ post.text }}</p>
+
+      <div :class="note ? 'note-body' : 'attachment'">
+      <p v-if="!note && (content.subtitle || !post.text)" class="attachment-head">
+        <AppIcon :name="icon" filled /><span>{{ post.text ? content.subtitle : content.subtitle ?? content.title }}</span>
       </p>
 
       <div v-if="content.kind === 'headlines'" class="headlines">
@@ -202,14 +220,15 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
           </a>
         </span>
       </div>
+      <button v-if="expandable" class="expand link-button" :aria-expanded="expanded" @click="expanded = !expanded">
+        {{ expanded ? 'Show less' : hidden ? `Show ${hidden} more` : 'Show more' }}
+      </button>
+      </div>
 
       <footer class="post-actions">
-        <AppIconButton icon="thumb-up" label="More like this" size="small" :selected="card.feedback === 'more'" @click="act('more')" />
-        <AppIconButton icon="thumb-down" label="Less like this" size="small" :selected="card.feedback === 'less'" @click="act('less')" />
-        <AppIconButton v-if="card.contactID && content.kind !== 'note'" icon="chat" label="Reply in chat" size="small" @click="act('message')" />
-        <AppButton v-if="expandable" variant="text" size="small" class="expand" :aria-expanded="expanded" @click="expanded = !expanded">
-          {{ expanded ? 'Show less' : hidden ? `Show ${hidden} more` : 'Show more' }}
-        </AppButton>
+        <AppIconButton icon="heart" label="More like this" size="small" class="like" :selected="card.feedback === 'more'" @click="act('more')" />
+        <AppIconButton v-if="card.contactID && !note" icon="chat" :label="`Reply to ${name} in chat`" size="small" @click="act('message')" />
+        <button v-if="!inThread && (threadCount ?? 0) > 1" class="thread-link link-button" @click="act('thread')">{{ threadCount }} posts in this thread</button>
       </footer>
     </div>
   </article>
@@ -217,9 +236,12 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
 
 <style scoped>
 /* The accents are the catalog's fixed palette (docs/updates.md#cards), not theme roles. */
-/* A post: avatar column, then the content column. Posts are separated by the feed's dividers. */
-.home-card { --card-accent: #1a73e8; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: var(--space-3); padding: var(--space-4) var(--space-4) var(--space-2); min-width: 0; }
-.home-card + .home-card { border-top: 1px solid var(--md-outline-variant); }
+/* A post: avatar column, then the content column. Posts are separated by the feed's dividers;
+   in a thread a line joins each avatar to the next post's instead. */
+.home-post { --card-accent: #1a73e8; display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-1); min-width: 0; }
+.home-post + .home-post:not(.in-thread) { border-top: 1px solid var(--md-outline-variant); }
+.post-rail { display: flex; flex-direction: column; align-items: center; }
+.home-post.chained .post-rail::after { content: ''; flex: 1; width: 2px; margin: var(--space-1-5) 0 calc(-1 * var(--space-3)); border-radius: 1px; background: var(--md-outline-variant); }
 .accent-blue { --card-accent: #1a73e8; } .accent-green { --card-accent: #188038; } .accent-orange { --card-accent: #e8710a; }
 .accent-red { --card-accent: #d93025; } .accent-purple { --card-accent: #9334e6; } .accent-teal { --card-accent: #12838f; }
 .accent-pink { --card-accent: #d01884; } .accent-indigo { --card-accent: #3f51b5; } .accent-gray { --card-accent: #5f6368; }
@@ -228,18 +250,27 @@ function act(kind: 'more' | 'less' | 'hide' | 'message' | 'reply', prompt?: stri
 :root[data-theme="dark"] .accent-purple { --card-accent: #c58af9; } :root[data-theme="dark"] .accent-teal { --card-accent: #78d9ec; }
 :root[data-theme="dark"] .accent-pink { --card-accent: #ff8bcb; } :root[data-theme="dark"] .accent-indigo { --card-accent: #9fa8da; }
 :root[data-theme="dark"] .accent-gray { --card-accent: #bdc1c6; }
-.post-main { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
-.post-head { display: flex; align-items: center; gap: var(--space-1-5); min-height: 24px; }
-.who { font-size: 15px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.when { flex: none; font-size: 14px; color: var(--md-on-surface-variant); }
+.post-main { display: flex; flex-direction: column; gap: var(--space-1-5); min-width: 0; }
+.post-head { display: flex; align-items: center; gap: var(--space-1); min-height: 24px; font-size: 15px; }
+.who { flex: none; max-width: 45%; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topic-sep { flex: none; width: 16px; height: 16px; color: var(--md-on-surface-variant); }
+.topic { min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.when { flex: none; margin-left: var(--space-1); font-size: 15px; color: var(--md-on-surface-variant); }
+.when.link-button { min-height: 0; padding: 0; font: inherit; color: var(--md-on-surface-variant); letter-spacing: normal; }
+.when.link-button:hover { text-decoration: underline; }
 .post-head .mini-menu { margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) auto; }
+.replying { margin: calc(-1 * var(--space-1)) 0 0; font-size: 13px; color: var(--md-on-surface-variant); }
+.post-text { margin: 0; font-size: 15px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.post-text.open { cursor: pointer; }
+/* The card is attached to the post like a quoted post or a link preview. */
+.attachment { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-1); padding: var(--space-3); border: 1px solid var(--md-outline-variant); border-radius: 18px; min-width: 0; }
+.note-body { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.attachment-head { display: flex; align-items: center; gap: var(--space-1-5); margin: 0; min-width: 0; font: var(--type-label-medium); font-weight: 600; color: var(--md-on-surface-variant); }
+.attachment-head :deep(svg) { width: 16px; height: 16px; flex: none; color: var(--card-accent); }
+.attachment-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.expand { align-self: flex-start; min-height: 0; padding: 0; font: var(--type-label-large); }
 /* The layer's .menu is only the surface; it drops down from the options button. */
 .card-menu { position: absolute; right: 0; top: 36px; z-index: 6; min-width: 224px; transform-origin: top right; }
-.topic { display: flex; align-items: center; gap: var(--space-2); margin: 0; min-width: 0; font: var(--type-label-medium); }
-.topic-pill { flex: none; display: inline-flex; align-items: center; gap: var(--space-1); max-width: 70%; padding: 2px 10px 2px 6px; border-radius: var(--md-shape-full); overflow: hidden;
-  white-space: nowrap; text-overflow: ellipsis; font-weight: 700; color: var(--card-accent); background: color-mix(in srgb, var(--card-accent) 14%, transparent); }
-.topic-pill :deep(svg) { width: 14px; height: 14px; flex: none; }
-.topic-subtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--md-on-surface-variant); }
 .inert { pointer-events: none; }
 a { color: inherit; }
 
@@ -330,8 +361,9 @@ tr.highlight td:first-child { border-radius: var(--md-shape-s) 0 0 var(--md-shap
 .post-details { display: flex; flex-direction: column; gap: var(--space-2); }
 .reason { margin: 0; font: var(--type-body-small); color: var(--md-on-surface-variant); }
 /* Actions sit on the content column's left edge; the icon buttons' padding is pulled out of it. */
-.post-actions { display: flex; align-items: center; gap: var(--space-1); margin-left: calc(-1 * var(--space-2)); }
-.post-actions .expand { margin-left: auto; }
+.post-actions { display: flex; align-items: center; gap: var(--space-1); margin-left: calc(-1 * var(--space-2)); color: var(--md-on-surface-variant); }
+.post-actions .like.selected { color: #e0245e; }
+.thread-link { margin-left: auto; min-height: 32px; padding: 0 var(--space-2); font: var(--type-label-large); color: var(--md-on-surface-variant); }
 .sources { display: flex; flex-wrap: wrap; gap: var(--space-1-5); }
 /* Link chips: AppChip renders a <span>, so these stay `a.chip`. */
 .sources .chip { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) 10px; border-radius: var(--md-shape-full); font: var(--type-label-medium);

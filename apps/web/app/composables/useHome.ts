@@ -1,4 +1,4 @@
-import type { HomeFeed } from '~/utils/types';
+import type { HomeFeed, HomePost } from '~/utils/types';
 
 // Session-owned Updates feed (docs/updates.md; the API resource is still `home`),
 // matching the iOS HomeFeedStore. Memory
@@ -41,6 +41,14 @@ export function updatesBadge() { return computed(() => badge.unseen); }
 export function staleHome() {
   state.revision++; state.request = null; state.loadedAt = 0;
   if (state.value) void useHome().refresh(true);
+}
+
+/** The timeline, newest first; an API without posts gets one text-less post per card. */
+export function homePosts(feed: HomeFeed | null): HomePost[] {
+  if (!feed) return [];
+  if (feed.posts) return feed.posts;
+  return feed.cards.map(({ generatedAt, ...card }) => ({ ...card, text: null, replyTo: null, createdAt: generatedAt }))
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export function homeUpdating(feed: HomeFeed | null) { return !!feed && (feed.status === 'updating' || feed.pending); }
