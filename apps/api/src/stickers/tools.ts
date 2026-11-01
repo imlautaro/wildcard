@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { isRecord, museCompletion, type ModelTool } from '../chat/meta';
+import { isRecord, museCompletion, safeErrorCode, type ModelTool } from '../chat/meta';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { photoKey } from '../photos/storage';
 import { cutout, CutoutError } from './cutout';
@@ -141,7 +141,7 @@ async function photoShowsFace(env: Env, jpeg: Uint8Array): Promise<boolean> {
     const answer = await museCompletion(env, [{ role: 'user', content: [
       { type: 'text', text: 'Does this profile photo clearly show exactly one human face (a person, not a cartoon, animal, object or group)? Reply with only JSON {"singleFace": true} or {"singleFace": false}.' },
       { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${Buffer.from(jpeg).toString('base64')}` } }] }],
-    'muse-spark-1.3', { maxTokens: 30, reasoning: 'minimal', responseFormat: { type: 'json_object' } });
+    'muse-spark-1.3', { maxTokens: 1024, reasoning: 'minimal', responseFormat: { type: 'json_object' } });
     const value: unknown = JSON.parse(typeof answer.content === 'string' ? answer.content : '{}');
     return isRecord(value) && value.singleFace === true;
   } catch { throw new Error('FACE_CHECK_UNAVAILABLE'); }
@@ -194,7 +194,7 @@ async function createSelfSticker(env: Env, scope: { agentID: string; userID: str
     return JSON.stringify({ created: true, stickerID: row.id, emoji: row.emoji });
   } catch (error) {
     if (error instanceof CutoutError && error.code === 'NO_SUBJECT') return fail('The sticker could not be cut out; try a different expression.');
-    console.error(JSON.stringify({ event: 'self_sticker_failed' }));
+    console.error(JSON.stringify({ event: 'self_sticker_failed', code: safeErrorCode(error) }));
     return fail('Sticker creation is unavailable right now. Do not claim you made one.');
   }
 }

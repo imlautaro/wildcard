@@ -163,7 +163,7 @@ async function nameSubject(env: Env, image: { mime: string; bytes: Uint8Array })
     const answer = await museCompletion(env, [{ role: 'user', content: [
       { type: 'text', text: 'Name the single main subject of this photo as a short lowercase noun phrase (1–4 words, e.g. "orange cat", "red sneaker"). Reply with only that phrase.' },
       { type: 'image_url', image_url: { url: `data:${image.mime};base64,${Buffer.from(image.bytes).toString('base64')}` } }] }],
-    'muse-spark-1.3', { maxTokens: 24, reasoning: 'minimal' });
+    'muse-spark-1.3', { maxTokens: 512, reasoning: 'minimal' });
     const phrase = typeof answer.content === 'string' ? answer.content.trim().toLowerCase().replace(/[^\p{L}\p{N} -]/gu, '').slice(0, 40) : '';
     return phrase.length >= 2 ? phrase : null;
   } catch { return null; }
