@@ -1259,6 +1259,14 @@ and native branding are unchanged. Static checks cover head writers, SVG parsing
 source equality and audio sample peaks. Navigation/browser rendering and listening
 remain pending; no tests or builds were run.
 
+## Chat JSON export (2026-11-01)
+
+Contact details and group details include **Export chat** on both clients, which
+downloads a readable transcript of that one conversation (web: browser download;
+iOS: share sheet). Same API, copy and file name on both. Exports bypass conversation
+caches and are discarded on cancel, page exit, sign-out or account switch. See
+[chat export](chat-export.md) for the format, limits and pending runtime checks.
+
 ## Debug JSON downloads
 
 **My account → Export debug JSON** downloads all available private/group chat

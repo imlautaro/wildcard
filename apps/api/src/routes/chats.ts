@@ -16,6 +16,7 @@ import { registerChatObject, discardChatObject } from '../chat/object-storage';
 import { isVoice, parseVoice } from '../voice/speech';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { libraryStickerToSend } from '../stickers/send';
+import { exportResult, privateChatExport } from '../chat/export';
 import { parsePostReference, publicPostReference, referencedPost, referencedPosts } from '../home/references';
 
 const chats = new Hono<{ Bindings: Env; Variables: { owner: string; contactID: string } }>();
@@ -232,6 +233,12 @@ chats.post('/turns', attachmentBody, async (c) => {
     .bind(c.get('contactID'), c.get('owner'), now).run();
   c.executionCtx.waitUntil(dispatchChat(c.env, turn));
   return c.json({ turn: await quotedTurn(c.env.DB, turn), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) }, 202);
+});
+// Readable JSON transcript of this private chat (docs/chat-export.md).
+chats.get('/export', async (c) => {
+  const result = await exportResult(c.env, c.get('owner'), () => privateChatExport(c.env.DB, c.get('contactID'), c.get('owner')));
+  if (result.retryAfter !== undefined) c.header('Retry-After', String(result.retryAfter));
+  return c.json(result.body, result.status);
 });
 // Shared media for chat details: images or files from both sides, newest first.
 // A page covers up to 30 messages with images (full-size bytes) or 60 with files; the cursor is the last sequence.

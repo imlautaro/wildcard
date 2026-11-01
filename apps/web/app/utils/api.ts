@@ -27,6 +27,10 @@ function serverMessage(body: unknown): string | null {
 
 function failureMessage(path: string, method: string, status: number, body: unknown): string {
   if (path === 'me/debug-export') return serverMessage(body) ?? 'The export could not be completed. Please try again.';
+  // Per-chat JSON export (docs/chat-export.md): the API's messages are accurate for every status.
+  if (/^(contacts\/[^/]+\/chat|groups\/[^/]+)\/export$/.test(path)) {
+    return status === 429 ? 'Too many exports. Please wait a minute and try again.' : serverMessage(body) ?? 'The chat could not be exported. Please try again.';
+  }
   if (path.startsWith('push/')) return serverMessage(body) ?? 'Notifications are temporarily unavailable. Please try again.';
   if (path.startsWith('onboarding')) return serverMessage(body) ?? 'Setup is temporarily unavailable. Please try again.';
   if (path === 'contacts/generation') return serverMessage(body) ?? 'Contact generation is temporarily unavailable. Please try again.';

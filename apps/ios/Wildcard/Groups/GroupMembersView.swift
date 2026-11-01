@@ -90,6 +90,7 @@ struct GroupMembersView: View {
                     }
                 }
                 ChatMediaSection(scope: .group(groupID), cache: groups.conversations.media, documents: groups.conversations.documents)
+                Section { ChatExportRow(scope: .group(groupID)) }
                 Section {
                     if owner { Button("Delete group", role: .destructive) { confirmingDelete = true } }
                     else { Button("Leave group", role: .destructive) { confirmingLeave = true } }

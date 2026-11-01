@@ -174,7 +174,7 @@ onMounted(() => run(async () => {
         />
 
         <AppListGroup class="lifecycle-group">
-          <ChatLifecycleActions :archived="archived" :can-clear="isOwner" :busy="busy" group
+          <ChatLifecycleActions :chat-id="id" :archived="archived" :can-clear="isOwner" :busy="busy" group
             @archive="run(() => chats.archiveChat('group', id, !archived))"
             @clear="memory => run(() => chats.clearChat('group', id, memory))"
           />

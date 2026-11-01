@@ -173,7 +173,7 @@ const voiceChoiceInfo = computed(() => `Accent guides regional wording in text a
       <!-- The media tabs end with a grid, a list or a button, so this section sets its own gap. -->
       <div class="lifecycle">
         <AppListGroup>
-          <ChatLifecycleActions :archived="archived" :can-clear="true" :busy="busy"
+          <ChatLifecycleActions :chat-id="id" :archived="archived" :can-clear="true" :busy="busy"
             @archive="run(() => chats.archiveChat('contact', id, !archived))"
             @clear="memory => run(() => chats.clearChat('contact', id, memory))"
           />

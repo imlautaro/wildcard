@@ -1013,3 +1013,8 @@ unchanged, but its pauses now overlap the work instead of preceding it:
   shows Researching... while the search runs, and then continues with what it found.
   Later bubbles are offset after the announcement. A turn whose only bubble is the
   announcement can still use response recovery.
+
+## JSON export
+
+Details → **Export chat** downloads this conversation as a readable JSON transcript on
+iOS and the web. See [chat export](chat-export.md).

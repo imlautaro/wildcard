@@ -364,6 +364,10 @@ API behavior; private initiative uses it within existing outreach limits. Both c
 provide per-person inspection, disable and reset controls. Migration 0067 uses the
 existing D1, Workflows and minute Cron; no new service or secret is required.
 
+Every private chat and group can be [exported as a readable JSON transcript](docs/chat-export.md)
+from its details screen on iOS and the web (messages, senders, times, replies, reactions and
+attachment metadata; no media bytes). It uses existing infrastructure.
+
 The web account screen can [download a debug JSON export](docs/debug-export.md)
 with private/group chat history and related authorized records, including archived
 chats. It downloads locally without uploading to an AI; credentials and media bytes

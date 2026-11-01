@@ -1480,6 +1480,16 @@ after async decoding and skips events delayed over 1.5 seconds. No old sound rep
 after unlock, navigation, account switching or offline recovery. Browser listening,
 keyboard/touch unlocking and background/resume behavior remain unverified.
 
+## Explicit chat exports
+
+[Chat JSON export](chat-export.md) intentionally has no cache on iOS or the web: the
+file must include unloaded history and must not keep another copy of a private
+conversation. Each export is one request, deduplicated while running, discarded on
+cancel/page exit (web), sign-out or account switch, and never touches conversation
+caches. The web releases its Blob URL after the download; iOS deletes its single
+temporary file when the share sheet closes or before the next export. Device and
+browser verification is pending (see the feature guide).
+
 ## Explicit debug exports (web only)
 
 [Debug JSON export](debug-export.md) intentionally has no cache: a user-triggered

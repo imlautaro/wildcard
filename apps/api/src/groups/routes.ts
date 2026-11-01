@@ -25,6 +25,7 @@ import { miniAppRoutes } from '../miniapps/routes';
 import { agentJoinStatements, userJoinStatements } from './membership';
 import { eventTextColumn, parseMembershipEvent, userHistoryStart } from './history-access';
 
+import { exportResult, groupChatExport } from '../chat/export';
 import { clearGroup, cleanResources, cleanupPending } from '../chat/cleanup';
 
 const groups = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
@@ -395,6 +396,12 @@ groups.get('/:id/messages', async (c) => {
       // Contact-generated album: every image in order, including the first.
       attachments: !voice && attachmentsJSON ? (JSON.parse(attachmentsJSON) as Attachment[]).map(publicMetadata) : null, voice: voice ? { ...voice, ownListenedAt } : null, replyTo: quotes({ replyToID }), event: null };
   }), nextBefore: results.length > 50 ? page[0].sequence : null });
+});
+// Readable JSON transcript of what this member can read (docs/chat-export.md).
+groups.get('/:id/export', async (c) => {
+  const result = await exportResult(c.env, c.get('owner'), () => groupChatExport(c.env.DB, c.req.param('id'), c.get('owner')));
+  if (result.retryAfter !== undefined) c.header('Retry-After', String(result.retryAfter));
+  return c.json(result.body, result.status);
 });
 // Aggregate-only refresh for retained history; recheck membership in the query.
 groups.get('/:id/receipts', async (c) => {

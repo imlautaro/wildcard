@@ -201,6 +201,12 @@ struct AuthAPI: Sendable {
                 }
                 throw Failure.rejected("Setup is temporarily unavailable. Please try again.")
             }
+            // Per-chat JSON export (docs/chat-export.md): the API's messages are accurate for every status.
+            if path.hasSuffix("/export") {
+                if response.statusCode == 429 { throw Failure.rejected("Too many exports. Please wait a minute and try again.") }
+                let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
+                throw Failure.rejected(message ?? "The chat could not be exported. Please try again.")
+            }
             if path == "contacts/generation" {
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
                 throw Failure.rejected(message ?? "Contact generation is temporarily unavailable. Please try again.")

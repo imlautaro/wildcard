@@ -146,6 +146,7 @@ struct ContactEditorView: View {
         }
         .task(id: contactID) {
             guard let contactID else { return }
+                Section { ChatExportRow(scope: .contact(contactID)) }
             // Feature flags come only from `GET /me`; revalidate them so the Voice section follows the admin switch.
             async let profile: Void? = try? auth.refreshProfile()
             do { try await contacts.refreshContact(id: contactID, using: auth, force: false) }

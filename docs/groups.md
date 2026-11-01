@@ -1258,3 +1258,8 @@ without earlier messages" for members with `includesHistory` 0. Flags decode as 
 booleans or 0/1 integers; new fields are optional and flow through the existing
 in-memory `GroupConversationCache` (nothing is persisted to disk). Verified with the
 static `swiftc -typecheck` of the app target only; device rendering is unverified.
+
+## JSON export
+
+Details → **Export chat** downloads this conversation as a readable JSON transcript on
+iOS and the web. See [chat export](chat-export.md).
