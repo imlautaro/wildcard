@@ -162,12 +162,11 @@ checks. iOS retains its existing native cropper; this change is scoped to the we
 
 Not in the web app yet:
 
-- **Push notifications.** Delivery is APNs-only. Web Push would need new API storage
-  and VAPID keys.
 - **Scheduled messages** (list/cancel), private-to-group requests, group photo
   editing, and the group "Confirm consent for future messages" action.
 
-Polling replaces push while the tab is visible, with the same cadence as the iOS
+Browser notifications (Web Push) are available; see [Browser notifications](#browser-notifications).
+Polling covers the visible tab, with the same cadence as the iOS
 session synchronizer: chat lists and the open conversation every second, energy every
 five seconds while the editor is open, and invitations every 15 seconds. Returning to
 the tab refreshes immediately. Requests never overlap: the next tick waits for the
@@ -414,6 +413,34 @@ section when `features.voiceMessages` is on. The dictation flow (transcribe into
 editable draft) is removed from the web app. Browser verification is pending; see
 [voice messages](voice.md#web-limitations-and-verification).
 
+## Browser notifications
+
+Account has a **Browser notifications** switch (web only; iOS already uses APNs). Turning it
+on asks for the browser permission, registers `/sw.js` and subscribes with the API's
+public VAPID key (`GET /api/v1/push/web-key`), then stores the subscription on the current
+session (`PUT /api/v1/push/web-device`). Turning it off, or signing out, deletes it
+(`DELETE`). The opt-in is remembered per account in this browser (`localStorage`
+`wildcard.webPush.<userID>`), so signing in again re-registers silently when the browser
+permission is still granted. A blocked permission disables the switch with an explanation.
+
+`apps/web/public/sw.js` only handles `push` and `notificationclick`; it caches nothing and
+never intercepts requests. Every push shows a notification titled with the contact or group
+(group alerts prefix the sender); one notification per conversation (`tag`, replaced and
+re-alerted by the next message). Clicking focuses an existing tab and routes it to the chat,
+or opens one. A push also tells open tabs to refresh the chat lists.
+
+The tab title reads `Wildcard (N)` while there are unread messages (`99+` above 99), the same
+total as the iOS icon badge. Polling pauses in hidden tabs, so a hidden signed-in tab also
+refreshes the lists every 30 s (browsers may throttle this further) and on every push.
+
+Limits: notifications carry no contact photo or badge; a browser that is closed completely
+only receives them if its push service delivers while the OS allows it (Safari requires the
+site to be added to the Dock/Home Screen on iOS). The API must have the optional VAPID
+secrets ([notifications](notifications.md#browser-web-push)); without them the switch reports
+that notifications are not configured. Not verified in a real browser or against a push
+service in this change: only the encryption (RFC 8291 test vector), types and SQL
+preparation were checked.
+
 ## Message sounds
 
 The web plays the same foreground sounds as iOS ([notifications](notifications.md#message-sounds-october-27-2026)),
@@ -428,8 +455,8 @@ about -41 dBFS to -13 dBFS. iOS audio levels and the source WAVs stay unchanged:
   (unread count up, latest message from someone else), plays the chime.
 - Only messages completed while the tab has been visible play. Hidden tabs, the first
   load of a conversation, failed or retried sends and messages already announced
-  stay silent; state clears on sign-out. There is no background or push sound, because
-  the web has no push.
+  stay silent; state clears on sign-out. Browser push notifications use the operating
+  system's default notification sound; the web plays no background audio.
 
 `useMessageSounds.ts` keeps the visible conversation (`useVisibleConversation` in the
 chat and group pages), the visibility interval and a bounded set of announced IDs, in

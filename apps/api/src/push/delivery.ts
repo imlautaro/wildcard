@@ -4,7 +4,8 @@ import { scheduleAllowed } from '../schedules/data';
 import { groupRequestTurnAllowed } from '../groups/request-access';
 import { totalUnreadMessages } from '../lib/unread';
 import { pushPhotoURL } from '../photos/push-access';
-import { replyPayload } from './payload';
+import { replyPayload, replyWebPayload } from './payload';
+import { sendWebPush, webPushConfigured, webPushTopic } from './web';
 
 // Optional until the installation has configured its own Apple provider key.
 export type PushEnvironment = Env & {
@@ -12,12 +13,22 @@ export type PushEnvironment = Env & {
   APNS_KEY_ID?: string;
   APNS_TEAM_ID?: string;
   APNS_TOPIC?: string;
+  // Optional until the installation has generated its own VAPID key pair (docs/notifications.md#browser-web-push).
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
 };
 type Delivery = {
   turnID: string; deviceID: string; sessionID: string; token: string;
   environment: 'development' | 'production'; contactID: string; userID: string;
-  attempts: number; expiresAt: number;
+  attempts: number; expiresAt: number; endpoint: string | null; p256dh: string | null; auth: string | null;
 };
+
+// A foreground visit (chat_visit, renewed while the chat is open and visible on any
+// device) means the person is reading the conversation. Deliveries wait instead of
+// alerting; reading deletes them, and they go out if the visit ends unread.
+export const chatNotVisited = (turn: string, now: string) => `NOT EXISTS (SELECT 1 FROM chat_visit v
+  WHERE v.contact_id = ${turn}.contact_id AND v.user_id = ${turn}.user_id AND v.closed = 0 AND v.expires_at > ${now})`;
 
 export function enqueueReply(db: D1Database, turnID: string, attempt: number, now: number) {
   return db.prepare(`INSERT OR IGNORE INTO push_delivery
@@ -51,22 +62,29 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
     OR EXISTS (SELECT 1 FROM chat_turn t JOIN contact c ON c.id = t.contact_id
       WHERE t.id = push_delivery.turn_id AND t.sequence <= c.last_read_sequence)`)
     .bind(now, now).run();
-  if (!env.APNS_PRIVATE_KEY || !env.APNS_KEY_ID || !env.APNS_TEAM_ID || !env.APNS_TOPIC) return;
+  const apnsReady = !!(env.APNS_PRIVATE_KEY && env.APNS_KEY_ID && env.APNS_TEAM_ID && env.APNS_TOPIC);
+  const webReady = webPushConfigured(env);
+  if (!apnsReady && !webReady) return;
   const { results } = await env.DB.prepare(`SELECT p.turn_id AS turnID, p.device_id AS deviceID,
     p.session_id AS sessionID, d.token, d.environment, t.contact_id AS contactID,
-    t.user_id AS userID, p.attempts, p.expires_at AS expiresAt
+    t.user_id AS userID, p.attempts, p.expires_at AS expiresAt, w.endpoint, w.p256dh, w.auth
     FROM push_delivery p JOIN push_device d ON d.id = p.device_id AND d.session_id = p.session_id
+    LEFT JOIN web_push_subscription w ON w.device_id = d.id
     JOIN session s ON s.id = p.session_id AND s.expires_at > ?1
     JOIN chat_turn t ON t.id = p.turn_id AND t.user_id = s.user_id
     WHERE p.next_at <= ?1 AND (?2 IS NULL OR p.turn_id = ?2)
-    ORDER BY p.next_at LIMIT 30`).bind(now, turnID ?? null).all<Delivery>();
+      AND ((w.device_id IS NULL AND ?3 = 1) OR (w.device_id IS NOT NULL AND ?4 = 1))
+      AND ${chatNotVisited('t', '?1')}
+    ORDER BY p.next_at LIMIT 30`).bind(now, turnID ?? null, apnsReady ? 1 : 0, webReady ? 1 : 0).all<Delivery>();
   if (!results.length) return;
   // One fresh provider JWT per bounded batch; never cache I/O across invocations.
-  let jwt: string;
-  try { jwt = await providerToken(env); }
-  catch {
-    console.error(JSON.stringify({ event: 'push_provider_signing_failed' }));
-    return;
+  let jwt = '';
+  if (results.some((item) => !item.endpoint)) {
+    try { jwt = await providerToken(env); }
+    catch {
+      console.error(JSON.stringify({ event: 'push_provider_signing_failed' }));
+      return;
+    }
   }
   for (let offset = 0; offset < results.length; offset += 5) {
     const outcomes = await Promise.allSettled(results.slice(offset, offset + 5).map(async (item) => {
@@ -75,8 +93,9 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
         WHERE turn_id = ? AND device_id = ? AND session_id = ? AND next_at <= ?
         AND EXISTS (SELECT 1 FROM chat_turn t JOIN contact c ON c.id = t.contact_id
           WHERE t.id = push_delivery.turn_id AND t.sequence > c.last_read_sequence)
+        AND EXISTS (SELECT 1 FROM chat_turn t WHERE t.id = push_delivery.turn_id AND ${chatNotVisited('t', '?')})
         RETURNING turn_id`)
-        .bind(now + 120_000, item.turnID, item.deviceID, item.sessionID, now).first();
+        .bind(now + 120_000, item.turnID, item.deviceID, item.sessionID, now, now).first();
       if (!claim) return;
       const contributor = (await accountModel(env, item.userID)).includes('contributor');
       const alert = await env.DB.prepare(`SELECT COALESCE(c.alias, c.name) AS contactName, c.photo_version AS photoVersion, CASE WHEN json_extract(t.assistant_messages_json, '$[#-1].attachment.mimeType') LIKE 'audio/%'
@@ -87,22 +106,26 @@ export async function deliverPush(env: PushEnvironment, turnID?: string) {
           AND ${groupRequestTurnAllowed('t', contributor)}`)
         .bind(item.turnID, item.userID).first<{ contactName: string; photoVersion: string | null; reply: string }>();
       if (!alert) return;
-      const photoURL = alert.photoVersion
+      const photoURL = alert.photoVersion && !item.endpoint
         ? await pushPhotoURL(env, item.contactID, alert.photoVersion, item.sessionID, item.expiresAt) : undefined;
       const unreadCount = await totalUnreadMessages(env.DB, item.userID);
       if (!await env.DB.prepare(`SELECT id FROM chat_turn t WHERE id = ? AND ${scheduleAllowed('t')} AND ${privateRelayAllowed('t')}
         AND ${groupRequestTurnAllowed('t', contributor)}`)
         .bind(item.turnID).first()) return;
-      const response = await sendAPNS(env, jwt, { ...item, collapseID: item.turnID },
-        replyPayload({ ...alert, turnID: item.turnID, photoURL, unreadCount, contactID: item.contactID, userID: item.userID }));
+      const alertFields = { ...alert, turnID: item.turnID, photoURL, unreadCount, contactID: item.contactID, userID: item.userID };
+      const response: { ok: boolean; status: number; reason?: string } = item.endpoint
+        ? await sendWebPush(env, { endpoint: item.endpoint, p256dh: item.p256dh!, auth: item.auth!, expiresAt: item.expiresAt,
+          topic: await webPushTopic(item.turnID) }, replyWebPayload(alertFields))
+        : await sendAPNS(env, jwt, { ...item, collapseID: item.turnID }, replyPayload(alertFields));
       const reason = response.reason;
-      if (response.status === 410 || (response.status === 400 && ['BadDeviceToken', 'DeviceTokenNotForTopic'].includes(reason ?? ''))) {
+      if (response.status === 410 || (item.endpoint ? response.status === 404
+        : response.status === 400 && ['BadDeviceToken', 'DeviceTokenNotForTopic'].includes(reason ?? ''))) {
         await env.DB.prepare('DELETE FROM push_device WHERE id = ? AND session_id = ?')
           .bind(item.deviceID, item.sessionID).run();
       } else if (response.ok || (response.status === 400 && reason === 'PayloadEmpty') || response.status === 413) {
         await env.DB.prepare('DELETE FROM push_delivery WHERE turn_id = ? AND device_id = ? AND session_id = ?')
           .bind(item.turnID, item.deviceID, item.sessionID).run();
-        if (response.ok) console.log(JSON.stringify({ event: 'push_accepted', environment: item.environment }));
+        if (response.ok) console.log(JSON.stringify({ event: 'push_accepted', environment: item.endpoint ? 'web' : item.environment }));
       } else {
         console.error(JSON.stringify({ event: 'push_delivery_deferred', status: response.status, reason: reason && /^[A-Za-z]{1,80}$/.test(reason) ? reason : 'Unknown' }));
         await env.DB.prepare('UPDATE push_delivery SET next_at = ? WHERE turn_id = ? AND device_id = ? AND session_id = ?')

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const { status, restore } = useSession();
 useMessageSoundPlayback();
+useWebPushLifecycle();
 </script>
 
 <template>

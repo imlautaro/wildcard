@@ -31,6 +31,21 @@ const themeOptions = [
   { value: 'dark', label: 'Dark' },
 ] as const;
 const themeSheet = ref(false);
+const webPush = useWebPush();
+const notificationsOn = computed(() => webPush.subscribed.value && webPush.permission.value === 'granted');
+const notificationsSupporting = computed(() => !webPush.supported.value ? 'This browser does not support notifications.'
+  : webPush.permission.value === 'denied' ? 'Blocked in your browser settings for this site.'
+    : notificationsOn.value ? 'Alerts for new messages, even when this tab is in the background.' : 'Get alerts for new messages when this tab is in the background.');
+async function toggleNotifications(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const want = input.checked;
+  await run(async () => {
+    try {
+      if (want) await webPush.enable(user.value!.id);
+      else await webPush.disable(user.value!.id);
+    } finally { input.checked = notificationsOn.value; }
+  });
+}
 const photoPath = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
 
 async function run(task: () => Promise<void>) {
@@ -65,13 +80,15 @@ onMounted(async () => {
       <AppListGroup>
         <AppListItem icon="model" opens :value="models.find(model => model.value === currentModel)?.label ?? currentModel" @click="openModelSheet">Chat model</AppListItem>
         <AppListItem icon="appearance" opens :value="themeOptions.find(option => option.value === themePreference)?.label" @click="themeSheet = true">Appearance</AppListItem>
+        <AppSwitch icon="notifications" label="Browser notifications" :checked="notificationsOn" :supporting="notificationsSupporting"
+          :disabled="busy || !webPush.supported.value || webPush.permission.value === 'denied'" @change="toggleNotifications" />
         <AppListItem icon="link" to="/account/connections">Connections</AppListItem>
         <AppListItem icon="iphone" to="/native">Native experiments</AppListItem>
       </AppListGroup>
       <AppListGroup>
         <AppListItem icon="file" opens @click="exportSheet = true">Export debug JSON</AppListItem>
       </AppListGroup>
-      <AppListGroup footer="Scheduled messages and push notifications are available in the iOS app.">
+      <AppListGroup footer="Scheduled messages are available in the iOS app.">
         <AppListItem icon="logout" danger :disabled="busy" @click="leave">Sign out</AppListItem>
       </AppListGroup>
 

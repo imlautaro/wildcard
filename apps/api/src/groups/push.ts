@@ -1,10 +1,12 @@
 import { providerToken, sendAPNS, type PushEnvironment } from '../push/delivery';
-import { groupMessagePayload } from '../push/payload';
+import { groupMessagePayload, groupWebPayload } from '../push/payload';
+import { sendWebPush, webPushConfigured, webPushTopic } from '../push/web';
 import { totalUnreadMessages } from '../lib/unread';
 import { agentDisplayName } from '../contacts/alias';
 
 type Delivery = { messageID: string; groupID: string; userID: string; deviceID: string; sessionID: string;
-  token: string; environment: 'development' | 'production'; attempts: number; expiresAt: number };
+  token: string; environment: 'development' | 'production'; attempts: number; expiresAt: number;
+  endpoint: string | null; p256dh: string | null; auth: string | null };
 
 export async function deliverGroupPush(env: PushEnvironment, messageID?: string) {
   const now = Date.now();
@@ -17,17 +19,25 @@ export async function deliverGroupPush(env: PushEnvironment, messageID?: string)
       WHERE gm.id = group_push_delivery.message_id AND gm.group_id = group_push_delivery.group_id
         AND m.user_id = group_push_delivery.user_id AND gm.user_id IS NOT m.user_id AND gm.sequence > m.last_read_sequence AND gm.task_id IS NULL AND gm.event_json IS NULL)`)
     .bind(now).run();
-  if (!env.APNS_PRIVATE_KEY || !env.APNS_KEY_ID || !env.APNS_TEAM_ID || !env.APNS_TOPIC) return;
+  const apnsReady = !!(env.APNS_PRIVATE_KEY && env.APNS_KEY_ID && env.APNS_TEAM_ID && env.APNS_TOPIC);
+  const webReady = webPushConfigured(env);
+  if (!apnsReady && !webReady) return;
   const { results } = await env.DB.prepare(`SELECT p.message_id AS messageID, p.group_id AS groupID, p.user_id AS userID,
-    p.device_id AS deviceID, p.session_id AS sessionID, d.token, d.environment, p.attempts, p.expires_at AS expiresAt
+    p.device_id AS deviceID, p.session_id AS sessionID, d.token, d.environment, p.attempts, p.expires_at AS expiresAt,
+    w.endpoint, w.p256dh, w.auth
     FROM group_push_delivery p JOIN push_device d ON d.id = p.device_id AND d.session_id = p.session_id
+    LEFT JOIN web_push_subscription w ON w.device_id = d.id
     JOIN session s ON s.id = p.session_id AND s.user_id = p.user_id AND s.expires_at > ?1
-    WHERE p.next_at <= ?1 AND (?2 IS NULL OR p.message_id = ?2) ORDER BY p.next_at LIMIT 30`)
-    .bind(now, messageID ?? null).all<Delivery>();
+    WHERE p.next_at <= ?1 AND (?2 IS NULL OR p.message_id = ?2)
+      AND ((w.device_id IS NULL AND ?3 = 1) OR (w.device_id IS NOT NULL AND ?4 = 1))
+    ORDER BY p.next_at LIMIT 30`)
+    .bind(now, messageID ?? null, apnsReady ? 1 : 0, webReady ? 1 : 0).all<Delivery>();
   if (!results.length) return;
-  let jwt: string;
-  try { jwt = await providerToken(env); }
-  catch { console.error(JSON.stringify({ event: 'group_push_provider_signing_failed' })); return; }
+  let jwt = '';
+  if (results.some((item) => !item.endpoint)) {
+    try { jwt = await providerToken(env); }
+    catch { console.error(JSON.stringify({ event: 'group_push_provider_signing_failed' })); return; }
+  }
   for (let offset = 0; offset < results.length; offset += 5) {
     const outcomes = await Promise.allSettled(results.slice(offset, offset + 5).map(async (item) => {
       const claim = await env.DB.prepare(`UPDATE group_push_delivery SET next_at = ?1, attempts = attempts + 1
@@ -56,14 +66,18 @@ export async function deliverGroupPush(env: PushEnvironment, messageID?: string)
           AND gm.user_id IS NOT m.user_id AND gm.sequence > m.last_read_sequence AND gm.task_id IS NULL AND gm.event_json IS NULL`)
         .bind(item.messageID, item.deviceID, item.sessionID, Date.now()).first();
       if (!eligible) return;
-      const response = await sendAPNS(env, jwt, { ...item, collapseID }, groupMessagePayload({ ...item, ...alert, unreadCount }));
+      const response: { ok: boolean; status: number; reason?: string } = item.endpoint
+        ? await sendWebPush(env, { endpoint: item.endpoint, p256dh: item.p256dh!, auth: item.auth!, expiresAt: item.expiresAt,
+          topic: await webPushTopic(item.messageID) }, groupWebPayload({ ...item, ...alert, unreadCount }))
+        : await sendAPNS(env, jwt, { ...item, collapseID }, groupMessagePayload({ ...item, ...alert, unreadCount }));
       const { reason } = response;
-      if (response.status === 410 || (response.status === 400 && ['BadDeviceToken', 'DeviceTokenNotForTopic'].includes(reason ?? ''))) {
+      if (response.status === 410 || (item.endpoint ? response.status === 404
+        : response.status === 400 && ['BadDeviceToken', 'DeviceTokenNotForTopic'].includes(reason ?? ''))) {
         await env.DB.prepare('DELETE FROM push_device WHERE id = ? AND session_id = ?').bind(item.deviceID, item.sessionID).run();
       } else if (response.ok || (response.status === 400 && reason === 'PayloadEmpty') || response.status === 413) {
         await env.DB.prepare('DELETE FROM group_push_delivery WHERE message_id = ? AND device_id = ? AND session_id = ?')
           .bind(item.messageID, item.deviceID, item.sessionID).run();
-        if (response.ok) console.log(JSON.stringify({ event: 'group_push_accepted', environment: item.environment }));
+        if (response.ok) console.log(JSON.stringify({ event: 'group_push_accepted', environment: item.endpoint ? 'web' : item.environment }));
       } else {
         console.error(JSON.stringify({ event: 'group_push_delivery_deferred', status: response.status,
           reason: reason && /^[A-Za-z]{1,80}$/.test(reason) ? reason : 'Unknown' }));

@@ -110,7 +110,7 @@ speech accent preference (migration 0061, including Argentine). Navigation reuse
 private/group chats, group details, schedules and sharing, and
 refreshes loaded content in the background. Recent chat images and avatars share
 a bounded memory/protected disk cache, reducing reloads across navigation and app
-restarts. [Reply push notifications](docs/notifications.md)
+restarts. [Reply push notifications and browser Web Push](docs/notifications.md)
 use APNs when the app is closed/backgrounded, after configuring Apple signing
 and provider secrets. Alerts show the contact name, reply text, and a contact avatar through the embedded
 notification service extension. Tapping an alert opens the chat. Bundled message sounds distinguish activity in the

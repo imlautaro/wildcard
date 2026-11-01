@@ -228,6 +228,14 @@ export const pushDevice = sqliteTable('push_device', {
   check('push_environment', sql`${table.environment} IN ('development', 'production')`),
 ]);
 
+// Browser Web Push keys for a push_device row (migration 0085).
+export const webPushSubscription = sqliteTable('web_push_subscription', {
+  deviceId: text('device_id').primaryKey().references(() => pushDevice.id, { onDelete: 'cascade' }),
+  endpoint: text('endpoint').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+});
+
 export const pushDelivery = sqliteTable('push_delivery', {
   turnId: text('turn_id').notNull().references(() => chatTurn.id, { onDelete: 'cascade' }),
   deviceId: text('device_id').notNull().references(() => pushDevice.id, { onDelete: 'cascade' }),

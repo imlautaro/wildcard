@@ -22,6 +22,12 @@ AI_GATEWAY_ID=
 # APNS_TEAM_ID=
 # APNS_TOPIC=
 
+# Optional browser Web Push; generate with `node scripts/generate-vapid-keys.mjs`.
+# Never commit values. VAPID_SUBJECT is a mailto: or https: contact for the push services.
+# VAPID_PUBLIC_KEY=
+# VAPID_PRIVATE_KEY=
+# VAPID_SUBJECT=mailto:you@example.com
+
 # Local admin panel (docs/admin.md). wrangler dev cannot serve the AdminAPI
 # entrypoint, so this mounts the admin routes on the local public app. Never set it
 # in wrangler.jsonc. Put your local account ID in the roster to sign in.

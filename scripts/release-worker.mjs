@@ -56,6 +56,14 @@ try {
       updates[name] = process.env[name].trim();
     }
   }
+  // Optional browser Web Push (docs/notifications.md#browser-web-push): all three or none.
+  const webPushNames = ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'];
+  if (webPushNames.some((name) => process.env[name] !== undefined)) {
+    for (const name of webPushNames) {
+      if (!process.env[name]?.trim()) throw new Error(`Configure all three VAPID build secrets; ${name} is missing or empty.`);
+      updates[name] = process.env[name].trim();
+    }
+  }
   if (Object.keys(updates).length) {
     temporaryDirectory = mkdtempSync(join(tmpdir(), 'wildcard-release-'));
     const secretFile = join(temporaryDirectory, 'secrets.json');

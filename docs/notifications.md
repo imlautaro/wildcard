@@ -449,6 +449,43 @@ its delivered prefix. Group parts use individual message notifications, receipts
 and unread counts. See [successive messages](reply-messages.md) for limitations and
 fictional-data device verification; static checks do not establish APNs delivery.
 
+## Browser Web Push
+
+Browsers receive the same reply and group alerts through Web Push (RFC 8030) with
+`aes128gcm` encryption (RFC 8291) and VAPID (RFC 8292), implemented with WebCrypto in
+`apps/api/src/push/web.ts`. A subscription is a `push_device` row (token = SHA-256 hex of
+the endpoint, environment `production`) plus a `web_push_subscription` row holding the
+endpoint and keys (migration 0085), so the existing fan-out (`enqueueReply`,
+`group_message_push` trigger), outboxes, retries, expiry and sign-out cleanup apply unchanged.
+`deliverPush` and `deliverGroupPush` send a web device through `sendWebPush` and an iOS
+device through APNs; each protocol runs only when its own secrets exist. 404/410 deletes the
+device, 2xx completes the delivery, anything else retries with the existing backoff.
+
+Endpoints must be `https` on a browser vendor's push service (FCM, Mozilla, Apple, Windows
+notify hosts); the allowlist is enforced at registration and again when sending. Registration
+accepts only `endpoint` and `keys.{p256dh,auth}`, is rate-limited with the APNs registration
+bucket, and shares its 10-devices-per-session cap. A browser that signs in as another account
+moves to that session. Payloads are plain JSON (`title`, `subtitle`, `body`, `tag`, `url`, `unread`),
+bounded to 3000 bytes, with bot Markdown removed.
+
+Secrets (all three or none; never commit values): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+`VAPID_SUBJECT` (`mailto:` or `https:` contact). Generate a pair per installation with
+`node scripts/generate-vapid-keys.mjs`, add them as encrypted Workers Builds secrets (the
+release script forwards them) or `.dev.vars` locally. Rotating the key makes browsers
+resubscribe on their next load. Rollback: remove the secrets (web alerts stop, nothing else
+changes); migration 0085 is additive.
+
+## Open chats suppress alerts
+
+A private chat that is open and visible on any device keeps a `chat_visit` alive (web and iOS
+both post `chat/activity`, and the open chat's polling renews it), so an open chat on either
+platform quiets the other's alerts. While a visit exists for that contact, reply deliveries to every
+device — browsers and iOS — are deferred instead of sent, without consuming retry attempts.
+Reading the message deletes the delivery; if the visit ends with the message still unread
+(tab hidden, closed or idle), the delivery goes out on the next minute Cron. "Open" means the
+tab is visible, not necessarily focused. Group chats have no visit signal yet, so group
+alerts are not suppressed. Verified by query preparation on local D1 only.
+
 ## Contact alias in notifications
 
 Direct reply pushes use the recipient's own alias for the title; group pushes resolve the bot sender's

@@ -74,6 +74,8 @@ async function authenticate(email: string, password: string, name: string | null
 }
 
 async function signOut() {
+  // The API can only delete this browser's push device while the session is valid.
+  await suspendWebPush().catch(() => {});
   try { await api('auth/sign-out', { json: {} }); }
   catch { /* The Worker clears the cookie even when the API is unreachable. */ }
   resetCaches();

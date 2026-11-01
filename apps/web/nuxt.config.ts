@@ -15,7 +15,6 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'Wildcard',
-      titleTemplate: 'Wildcard',
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg?v=0c69391a81ea' },
       ],

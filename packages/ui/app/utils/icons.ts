@@ -34,6 +34,7 @@ export const appIcons = {
   image: ['material-symbols:image-outline-rounded', 'material-symbols:image-rounded'],
   timer: ['material-symbols:timer-outline-rounded', 'material-symbols:timer-rounded'],
   alarm: ['material-symbols:alarm-outline-rounded', 'material-symbols:alarm-rounded'],
+  notifications: ['material-symbols:notifications-outline-rounded', 'material-symbols:notifications-rounded'],
   iphone: ['material-symbols:mobile-outline-rounded', 'material-symbols:mobile-rounded'],
   calendar: ['material-symbols:calendar-today-outline-rounded', 'material-symbols:calendar-today-rounded'],
   speaker: ['material-symbols:volume-up-outline-rounded', 'material-symbols:volume-up-rounded'],

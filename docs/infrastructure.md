@@ -431,6 +431,17 @@ Independent-account reproduction and installed iOS behavior remain unverified.
 - [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
 - [Workers CPU and platform limits](https://developers.cloudflare.com/workers/platform/limits/)
 
+## Browser Web Push — migration 0085
+
+Optional. Adds browser notifications without a new Cloudflare resource or binding. Apply
+`apps/api/migrations/0085_web_push.sql` (additive `web_push_subscription`) after 0084. To
+enable delivery, generate a VAPID pair with `node scripts/generate-vapid-keys.mjs` and set
+the encrypted Workers Builds secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+`VAPID_SUBJECT` together; `scripts/release-worker.mjs` forwards them. Without them the web
+switch reports notifications as not configured and nothing else changes. Rollback: delete
+the secrets; keep the table. Details: [notifications](notifications.md#browser-web-push).
+Unverified: delivery to real browser push services.
+
 ## Apple push notifications
 
 [Reply notifications](notifications.md) add APNs as an optional external service.
