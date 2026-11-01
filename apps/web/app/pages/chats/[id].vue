@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ChatTurn, Contact, DraftAttachment, DraftVoice, ReplyQuote } from '~/utils/types';
+import type { RemoteNativeDevice } from '~/composables/useRemoteNative';
 
 const route = useRoute();
 const contactID = computed(() => String(route.params.id));
@@ -13,28 +14,44 @@ const documents = useDocuments(() => `contacts/${contactID.value}`);
 // Cards appear under the reply that created a document; refresh when new replies arrive.
 watch(() => state.value.turns.at(-1)?.assistantMessages?.length, () => documents.refresh(), { immediate: true });
 const remoteError = ref<string | null>(null);
-function remoteStatus(status: string) {
-  return ({ completed: 'Scheduled on iPhone', pending: 'Sent · waiting for iPhone', running: 'Claimed · outcome not yet confirmed', expired: 'Expired without confirmation', failed: 'Could not schedule', cancelled: 'Cancelled', unknown: 'Outcome unknown · check iPhone' } as Record<string, string>)[status] ?? status;
+// Receipt copy names the phone; deviceName already reads "Ana’s iPhone" for a shared phone.
+function remoteStatus(action: { status: string; deviceName: string }) {
+  const device = action.deviceName;
+  return ({ completed: `Set on ${device}`, pending: `Sending to ${device}…`, running: `Reached ${device} · not confirmed yet`, expired: `${device} didn’t respond in time`, failed: `${device} couldn’t set it`, cancelled: `Cancelled on ${device}` } as Record<string, string>)[action.status] ?? `Not confirmed · check ${device}`;
 }
 // Visual tone per status; the same mapping as NativeActionTone on iOS.
 function remoteTone(status: string) {
   return ({ completed: 'done', pending: 'waiting', running: 'attention', unknown: 'attention', failed: 'failed' } as Record<string, string>)[status] ?? 'inactive';
 }
 const remoteToneIcons = { done: 'check', waiting: 'clock', attention: 'alert', failed: 'x-circle', inactive: 'minus' } as const;
-// The device picker appears once this account has a linked iPhone; setup lives in /native.
+// The destination chip appears once a phone is available to this chat; setup lives on the iPhone.
 const showRemote = computed(() => remote.state.value.devices.length > 0 || !!state.value.remoteDeviceID || !!remoteError.value || !!remote.state.value.error);
 const selectedRemote = computed(() => remote.state.value.devices.find(device => device.id === state.value.remoteDeviceID));
-async function setDelegate(participantID: string, allowed: boolean) {
-  const device = selectedRemote.value;
-  if (!device?.owned) return;
-  try { await remote.delegate(device.id, participantID, allowed); remoteError.value = null; }
-  catch (failure) { remoteError.value = errorMessage(failure); }
+const remoteUnavailable = computed(() => !!state.value.remoteDeviceID && remote.state.value.loaded && !selectedRemote.value);
+const ownedRemotes = computed(() => remote.state.value.devices.filter(device => device.owned));
+const remoteSheet = ref(false);
+// "Your iPhone" for this account, "Ana’s iPhone" for a shared one; a suffix only when two read the same.
+function deviceLabel(device: RemoteNativeDevice) {
+  const base = (d: RemoteNativeDevice) => d.owned ? `Your ${d.name}` : d.name;
+  const name = base(device);
+  return remote.state.value.devices.filter(d => base(d) === name).length > 1 ? `${name} · ${device.id.slice(-4)}` : name;
 }
-async function revokeRemote() {
-  const deviceID = state.value.remoteDeviceID;
-  if (!deviceID) return;
-  try { await remote.revoke(deviceID); state.value.remoteDeviceID = null; remoteError.value = null; }
-  catch (failure) { remoteError.value = errorMessage(failure); }
+const remoteChipLabel = computed(() => remoteUnavailable.value ? 'Selected iPhone unavailable'
+  : selectedRemote.value ? `Timers & alarms: ${deviceLabel(selectedRemote.value)}` : 'Timers & alarms: Off');
+function delegated(deviceID: string, participantID: string) {
+  return remote.state.value.delegations.some(g => g.deviceID === deviceID && g.participantID === participantID);
+}
+async function setDelegate(deviceID: string, participantID: string, event: Event) {
+  const input = event.target as HTMLInputElement;
+  try { await remote.delegate(deviceID, participantID, input.checked); remoteError.value = null; }
+  catch (failure) { input.checked = !input.checked; remoteError.value = errorMessage(failure); }
+}
+async function revokeRemote(deviceID: string) {
+  try {
+    await remote.revoke(deviceID);
+    if (state.value.remoteDeviceID === deviceID) state.value.remoteDeviceID = null;
+    remoteError.value = null;
+  } catch (failure) { remoteError.value = errorMessage(failure); }
 }
 const fetched = ref<Contact | null>(null);
 const contact = computed(() => chats.contacts.value.find((item) => item.id === contactID.value) ?? fetched.value);
@@ -215,36 +232,6 @@ onBeforeUnmount(() => {
     <template #actions><AppButton to="/" variant="tonal">Back to Chats</AppButton></template>
   </AppEmptyState>
   <template v-else>
-    <div v-if="showRemote" class="remote-native-bar">
-      <span class="native-glyph small" data-kind="timer"><AppIcon name="iphone" /></span>
-      <div class="remote-copy">
-        <label for="remote-device">Timers and alarms</label>
-        <p v-if="state.remoteDeviceID">Requests go to the selected iPhone through a visible notification, even while locked. Device confirmation is required before reporting success.</p>
-        <p v-if="state.remoteDeviceID && !selectedRemote" class="error">Selected iPhone unavailable or access revoked. Choose a device before sending another timer or alarm request.</p>
-        <p v-if="!state.remoteDeviceID">Choose an authorized iPhone to schedule timers and alarms from this chat.</p>
-        <p v-if="remote.state.value.error || remoteError" class="error">{{ remoteError || remote.state.value.error }}</p>
-      </div>
-      <div class="remote-actions">
-        <AppSelect
-          id="remote-device" v-model="state.remoteDeviceID" variant="tonal" class="device-select" :disabled="!!state.pending || !remote.state.value.loaded"
-          :options="[{ value: null, label: 'No remote device' }, ...(state.remoteDeviceID && !selectedRemote ? [{ value: state.remoteDeviceID, label: 'Selected iPhone unavailable' }] : []), ...remote.state.value.devices.map(device => ({ value: device.id, label: `${device.name} · ${device.id.slice(-6)}` }))]"
-        />
-        <AppIconButton icon="refresh" label="Refresh devices" @click="remote.refresh(true)" />
-        <button v-if="selectedRemote?.owned" type="button" class="link-button danger" @click="revokeRemote">Revoke access</button>
-      </div>
-    </div>
-    <div v-if="selectedRemote?.owned && remote.state.value.participants.length" class="remote-native-bar">
-      <div class="remote-copy">
-        <strong>Shared-contact access to this iPhone</strong>
-        <p>Allow a participant to set timers and alarms through this contact without asking you each time. Revoke access here at any time. Existing alarms remain scheduled.</p>
-        <div v-for="participant in remote.state.value.participants" :key="participant.id" class="actions-row">
-          <span>{{ participant.name }}</span>
-          <AppButton variant="tonal" :disabled="remote.state.value.mutating" @click="setDelegate(participant.id, !remote.state.value.delegations.some(g => g.deviceID === selectedRemote?.id && g.participantID === participant.id))">
-            {{ remote.state.value.delegations.some(g => g.deviceID === selectedRemote?.id && g.participantID === participant.id) ? 'Revoke access' : 'Allow timers and alarms' }}
-          </AppButton>
-        </div>
-      </div>
-    </div>
     <div class="message-viewport">
     <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" tabindex="0" @scroll.passive="onScroll" @wheel.passive="onWheel" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @keydown="onKeydown">
       <div ref="messageContent" class="message-content">
@@ -347,7 +334,7 @@ onBeforeUnmount(() => {
             <span class="native-glyph" :data-kind="action.kind"><AppIcon :name="action.kind === 'alarm' ? 'alarm' : 'timer'" /></span>
             <div>
               <strong>{{ action.title }}</strong>
-              <span class="status"><AppIcon :name="remoteToneIcons[remoteTone(action.status) as keyof typeof remoteToneIcons]" />{{ action.deviceName }} · {{ remoteStatus(action.status) }}</span>
+              <span class="status"><AppIcon :name="remoteToneIcons[remoteTone(action.status) as keyof typeof remoteToneIcons]" />{{ remoteStatus(action) }}</span>
             </div>
           </div>
         </template>
@@ -358,6 +345,52 @@ onBeforeUnmount(() => {
     </div>
     <ChatScrollDown v-if="positioned && !pinned" @click="scrollToBottom" />
     </div>
+    <div v-if="showRemote" class="remote-target">
+      <button
+        type="button" class="remote-chip" :class="{ active: !!selectedRemote, error: remoteUnavailable }"
+        aria-haspopup="dialog" :aria-label="`Where timers and alarms go: ${remoteChipLabel}`" @click="remoteSheet = true"
+      >
+        <AppIcon :name="remoteUnavailable ? 'alert' : selectedRemote ? 'iphone' : 'timer'" />
+        <span>{{ remoteChipLabel }}</span>
+        <AppIcon name="expand" />
+      </button>
+      <p v-if="remoteUnavailable" class="remote-note error">That phone’s access was turned off or it signed out. Choose where to send timers before asking again.</p>
+      <p v-if="remoteError || remote.state.value.error" class="remote-note error">{{ remoteError || remote.state.value.error }}</p>
+    </div>
+    <AppSheet v-if="remoteSheet" title="Timers and alarms" @close="remoteSheet = false">
+      <p class="muted small sheet-lead">
+        Pick a phone, then ask {{ contact?.name ?? 'your contact' }} for a timer or alarm here. The phone gets it as a notification, even while locked, and this chat shows when it’s set.
+      </p>
+      <AppListGroup title="Send from this chat to" role="radiogroup" aria-label="Send timers and alarms to"
+        :footer="state.pending ? 'You can change this once the current message is sent.' : undefined">
+        <label class="choice-row">
+          <input v-model="state.remoteDeviceID" type="radio" name="remote-device" :value="null" :disabled="!!state.pending">
+          <span>Don’t send to a phone</span>
+        </label>
+        <label v-if="remoteUnavailable" class="choice-row">
+          <input v-model="state.remoteDeviceID" type="radio" name="remote-device" :value="state.remoteDeviceID" disabled>
+          <span><strong>Selected iPhone unavailable</strong><span class="small muted">Access was turned off or the phone signed out</span></span>
+        </label>
+        <label v-for="device in remote.state.value.devices" :key="device.id" class="choice-row">
+          <input v-model="state.remoteDeviceID" type="radio" name="remote-device" :value="device.id" :disabled="!!state.pending">
+          <span>{{ deviceLabel(device) }}</span>
+        </label>
+      </AppListGroup>
+      <template v-for="device in ownedRemotes" :key="device.id">
+        <AppListGroup :title="`Who can send to ${deviceLabel(device).replace(/^Your /, 'your ')}`"
+          footer="They can’t see your chats or anything else on your phone. Turning this off doesn’t remove alarms already set. To receive again after stopping, turn it on in the iPhone app.">
+          <AppListItem plain icon="person" supporting="From this browser and your other devices">You</AppListItem>
+          <AppSwitch
+            v-for="participant in remote.state.value.participants" :key="participant.id" icon="person"
+            :label="participant.name" :supporting="`Asks ${contact?.name ?? 'this contact'} in their own chat`"
+            :checked="delegated(device.id, participant.id)" :disabled="remote.state.value.mutating"
+            @change="setDelegate(device.id, participant.id, $event)"
+          />
+          <AppListItem danger icon="block" @click="revokeRemote(device.id)">Stop receiving on {{ deviceLabel(device).replace(/^Your /, 'your ') }}</AppListItem>
+        </AppListGroup>
+      </template>
+      <template #actions><AppButton @click="remoteSheet = false">Done</AppButton></template>
+    </AppSheet>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable || contact?.clearing === 1" :sending="!!state.pending" :reply="replyTarget"
       :voice-key="contactID" @send="onSend" @voice="onVoice" @typing="activity.typing()" @cancel-reply="state.replyTo = null"
@@ -366,22 +399,19 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.remote-native-bar {
-  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--md-outline-variant); background: var(--md-surface);
+.remote-target { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); padding: var(--space-2) var(--space-4) 0; }
+.remote-chip {
+  display: inline-flex; align-items: center; gap: var(--space-1-5); max-width: 100%; min-height: 32px; padding: 0 var(--space-2) 0 var(--space-3);
+  border: 0; border-radius: var(--md-shape-full, 999px); font: var(--type-label-large); cursor: pointer;
+  color: var(--md-on-surface-variant); background: var(--md-surface-container-high);
 }
-.remote-copy { flex: 1; min-width: 0; }
-.remote-copy label { display: block; font: var(--type-label-large); font-weight: 700; }
-.remote-copy p { margin: 1px 0 0; font: var(--type-body-small); color: var(--md-on-surface-variant); }
-.remote-copy p.error { color: var(--md-error); }
-.remote-actions { display: flex; align-items: center; gap: var(--space-1); flex: none; }
-.device-select { min-width: 0; max-width: 220px; }
-.remote-actions :deep(.icon-button svg) { width: 18px; height: 18px; }
+.remote-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-chip svg { width: 18px; height: 18px; flex: none; }
+.remote-chip.active { color: var(--md-on-primary-container); background: var(--md-primary-container); }
+.remote-chip.error { color: var(--md-on-error-container); background: var(--md-error-container); }
+.remote-note { margin: 0; font: var(--type-body-small); color: var(--md-on-surface-variant); }
+.remote-note.error { color: var(--md-error); }
+.sheet-lead { margin: 0 0 var(--space-3); }
 /* Media bubbles have a 4 px inset, so the time needs its own side padding. */
 .bubble.media > .meta { padding: 0 var(--space-1-5) var(--space-0-5); }
-@media (max-width: 560px) {
-  .remote-native-bar { flex-wrap: wrap; }
-  .remote-actions { width: 100%; padding-left: calc(26px + var(--space-3)); }
-  .device-select { flex: 1; max-width: none; }
-}
 </style>

@@ -17,6 +17,7 @@ struct NativeToolsView: View {
     #endif
     @State private var sessionRevision = 0
     @State private var sheet: SheetKind?
+    @State private var remoteError: String?
 
     private enum SheetKind: String, Identifiable {
         case tools, automatic, examples
@@ -59,27 +60,10 @@ struct NativeToolsView: View {
                     Toggle("Enable native experiments", isOn: Binding(get: { !kinds.isEmpty }, set: {
                         native.setKinds($0 ? Set(NativeExperiments.kinds) : [], contactID: contactID)
                     }))
-                    InfoButton(title: "Native experiments", text: "Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms run automatically when requested in this private chat while Wildcard is open. Choose other automatic tools below. Lock Screen activities may show their titles. Other participants receive no device access unless you explicitly allow them under Shared-contact access to this iPhone.")
+                    InfoButton(title: "Native experiments", text: "Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms you ask for in this chat on this iPhone run while Wildcard is open. To get them from the web or from people who also chat with this contact, turn on Receive timers and alarms below. Choose other automatic tools below. Lock Screen activities may show their titles.")
                 }
-            }
-            Section("Remote timers and alarms") {
-                RemoteNativeControls(contactID: contactID, chat: contacts.conversations.store(for: contactID), showEmpty: true)
             }
             if !kinds.isEmpty {
-                Section {
-                    HStack {
-                        Toggle(isOn: Binding(
-                            get: { native.remoteEnabled.contains(contactID) },
-                            set: { on in Task { await native.setRemoteEnabled(on, contactID: contactID, using: auth) } }
-                        )) {
-                            NativeToolLabel(kind: "timer", title: "Allow remote timers and alarms", symbol: "iphone.radiowaves.left.and.right")
-                        }.disabled(native.remoteBusy)
-                        InfoButton(title: "Remote timers and alarms", text: "Lets requests from your other signed-in devices schedule timers and alarms on this iPhone, including while locked or Wildcard is closed. Requires AlarmKit and visible notifications. Delivery may be delayed; requests expire after one minute. This does not enable autonomous initiative actions.")
-                    }
-                } footer: {
-                    // What the switch grants stays visible next to it.
-                    Text("Your other devices can schedule timers and alarms on this iPhone. Select this iPhone above to allow individual shared-contact participants.")
-                }
                 Section {
                     let automatic = NativeExperiments.kinds.filter { kinds.contains($0) && NativeExperiments.automaticKinds.contains($0) }
                     SheetRow(title: "Allowed tools", systemImage: "wrench.and.screwdriver",
@@ -88,6 +72,7 @@ struct NativeToolsView: View {
                              value: "\(automatic.filter { native.automaticSince[contactID]?[$0] != nil }.count) of \(automatic.count)") { sheet = .automatic }
                     SheetRow(title: "Try it in chat", systemImage: "text.bubble", value: "\(Self.examples.count) ideas") { sheet = .examples }
                 }
+                RemoteNativeAccessSection(contactID: contactID, loadError: remoteError)
                 if let agent = contact?.agentID {
                     Section {
                         ShareLink(item: NativeShared.link(agentID: agent)) { Label("Share contact link", systemImage: "square.and.arrow.up") }
@@ -171,6 +156,7 @@ struct NativeToolsView: View {
                 Section { Label { Text(error) } icon: { Image(systemName: "exclamationmark.triangle.fill") }.foregroundStyle(.red) }
             }
         }
+        .modifier(RemoteNativePolling(contactID: contactID, error: $remoteError))
         .onChange(of: native.remoteEnabled) { _, _ in
             Task { try? await contacts.refreshRemote(contactID: contactID, using: auth, force: true) }
         }

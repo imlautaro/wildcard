@@ -639,16 +639,16 @@ Install dependencies with the existing root `npm ci` workflow.
 
 ## Native iOS experiments
 
-The [remote timer/alarm prototype](native-remote.md) adds a device selector to private
-iOS and web chats. With migration 0083, the iPhone account can allow a named current
-shared-contact participant under **Shared-contact access to this iPhone**, and
-**Revoke access** beside that participant removes only their permission. Select an
-owned phone to see these controls; other participants choose the authorized owner's
-phone in their own private chat. Delegation requires the owner's existing iPhone
+The [remote timer/alarm prototype](native-remote.md) adds a **Timers & alarms** chip
+above the composer of private iOS and web chats. With migration 0083, the iPhone account
+can switch on a named current shared-contact participant under **Who can send to your
+iPhone** in the chip's sheet; switching it off removes only their permission. These
+switches appear for any owned phone, independent of the selected destination; other
+participants choose the authorized owner's phone in their own private chat. Delegation requires the owner's existing iPhone
 grant and exposes only enabled timers/alarms. Native device registration still
 requires iOS; web can manage grants and request remote execution. See the
-[delegation contract and two-account verification](native-remote.md#allow-a-shared-contact-participant). After enabling **Allow remote timers and alarms** on iPhone, select that
-phone and request an action in chat. The browser submits `remoteDeviceID`; server-
+[delegation contract and two-account verification](native-remote.md#allow-a-shared-contact-participant). After enabling **Receive timers and alarms** on iPhone, select that
+phone from the chip and request an action in chat. The browser submits `remoteDeviceID`; server-
 validated grants determine tool capabilities. Delivery uses a visible APNs alert
 and the notification extension, with no tap or unlocked phone required by the
 implementation. Runtime support, signing, system countdown and main-app visibility
@@ -674,9 +674,11 @@ update the cached grant immediately, reject old reads and revalidate. Participan
 receive no grant-management controls for someone else’s iPhone.
 No private persistence or fabricated browser countdown is added.
 
-The device bar appears once this account has an owned or explicitly delegated iPhone for the contact,
+The chip appears once this account has an owned or explicitly delegated iPhone for the contact,
 a target is selected, or loading devices failed; setup instructions live on
-`/native`. It shows a compact device picker, a refresh icon and **Revoke access**.
+`/native`. It reads “Timers & alarms: Off” or names the selected phone (tinted), and turns
+red when the selected phone is unavailable. Its sheet holds the destination radio list,
+participant switches for owned phones and **Stop receiving on your iPhone**.
 Receipts render as centered chips with a kind glyph and a status icon colored by
 outcome (confirmed, waiting, unconfirmed/unknown, failed, inactive). iOS shows the same device-reported status text for remote receipts.
 The contact page's **Conversation initiative** uses the standard switch, and

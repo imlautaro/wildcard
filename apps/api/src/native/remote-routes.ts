@@ -36,10 +36,11 @@ remoteSettings.get('/', async c => {
     WHERE d.user_id = ? AND x.owner_contact_id = ? ORDER BY x.created_at LIMIT 30`)
     .bind(c.get('owner'), c.req.param('id')).all();
   const { results: actions } = await c.env.DB.prepare(`SELECT a.id, a.turn_id AS turnID, a.kind,
-    json_extract(a.payload_json, '$.title') AS title, COALESCE(d.name, 'iPhone') AS deviceName,
+    json_extract(a.payload_json, '$.title') AS title,
+    COALESCE(CASE WHEN d.user_id = ?2 THEN d.name ELSE du.name || '’s ' || d.name END, 'iPhone') AS deviceName,
     CASE WHEN a.status = 'pending' AND a.expires_at <= ?3 THEN 'expired' ELSE a.status END AS status,
     a.updated_at AS updatedAt, a.fire_at AS fireAt
-    FROM native_action a JOIN chat_turn t ON t.id = a.turn_id LEFT JOIN native_remote_device d ON d.id = a.remote_device_id
+    FROM native_action a JOIN chat_turn t ON t.id = a.turn_id LEFT JOIN native_remote_device d ON d.id = a.remote_device_id LEFT JOIN user du ON du.id = d.user_id
     WHERE a.remote_device_id IS NOT NULL AND t.contact_id = ?1 AND t.user_id = ?2 ORDER BY a.created_at DESC LIMIT 20`)
     .bind(c.req.param('id'), c.get('owner'), Date.now()).all();
   return c.json({ devices, actions, participants, delegations });

@@ -77,111 +77,285 @@ import SwiftUI
     }
 }
 
-// Both chat and Native experiments reuse the session-owned remote snapshot.
-struct RemoteNativeControls: View {
+extension RemoteNativeSnapshot {
+    /// "Your iPhone" for this account's phones, "Ana’s iPhone" for a phone shared with you.
+    /// The installation suffix appears only when two phones would otherwise read the same.
+    func label(for device: RemoteNativeDevice) -> String {
+        func base(_ device: RemoteNativeDevice) -> String { device.owned == 1 ? "Your \(device.name)" : device.name }
+        let name = base(device)
+        return devices.filter { base($0) == name }.count > 1 ? "\(name) · \(device.id.suffix(4))" : name
+    }
+}
+
+// Chat receipts, the chat destination chip and the owner settings all read the same
+// session-owned snapshot; this keeps it fresh while the scene is active.
+struct RemoteNativePolling: ViewModifier {
     let contactID: String
-    let chat: ChatStore
-    var showEmpty = false
+    @Binding var error: String?
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
     @Environment(\.scenePhase) private var scenePhase
-    @State private var error: String?
-    private var snapshot: NavigationSnapshot<RemoteNativeSnapshot> { contacts.remoteSnapshots.store(for: contactID) }
-    private var selected: RemoteNativeDevice? { snapshot.value?.devices.first { $0.id == chat.remoteDeviceID } }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if showEmpty || !(snapshot.value?.devices.isEmpty ?? true) || chat.remoteDeviceID != nil || error != nil {
-                HStack {
-                    Image(systemName: "iphone.radiowaves.left.and.right")
-                    Picker("Timers and alarms", selection: Binding(get: { chat.remoteDeviceID ?? "" }, set: { chat.remoteDeviceID = $0.isEmpty ? nil : $0 })) {
-                        Text("No remote device").tag("")
-                        if let id = chat.remoteDeviceID, selected == nil {
-                            Text("Selected iPhone unavailable").tag(id)
-                        }
-                        ForEach(snapshot.value?.devices ?? []) { device in
-                            Text("\(device.name) · \(device.id.suffix(6))").tag(device.id)
-                        }
-                    }.disabled(chat.isSending || chat.hasPendingRemoteSubmission)
-                    Button { Task { await refresh(force: true) } } label: { Image(systemName: "arrow.clockwise") }
-                        .accessibilityLabel("Refresh devices")
-                }
-                if chat.remoteDeviceID != nil {
-                    Text("Requests go to the selected iPhone through a visible notification, even while locked. Device confirmation is required before reporting success.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                } else if showEmpty {
-                    Text("Choose an authorized iPhone to schedule timers and alarms from this chat.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                if chat.remoteDeviceID != nil && selected == nil {
-                    Text("Selected iPhone unavailable or access revoked. Choose a device before sending another timer or alarm request.")
-                        .font(.footnote).foregroundStyle(.red)
-                }
-                if chat.hasPendingRemoteSubmission && !chat.isSending {
-                    Text("The pending send keeps its original iPhone. Check that phone before requesting again if its outcome is unknown.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    Button("Discard pending send", role: .destructive) { chat.discardPendingRemoteSubmission() }
-                }
-                if let selected, selected.owned == 1, let value = snapshot.value, !value.participants.isEmpty {
-                    DisclosureGroup("Shared-contact access to this iPhone") {
-                        Text("Allow a participant to set timers and alarms through this contact without asking you each time. Revoke access here at any time. Existing alarms remain scheduled.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                        ForEach(value.participants) { participant in
-                            let allowed = value.delegations.contains { $0.deviceID == selected.id && $0.participantID == participant.id }
-                            HStack {
-                                Text(participant.name)
-                                Spacer()
-                                Button(allowed ? "Revoke access" : "Allow timers and alarms", role: allowed ? .destructive : nil) {
-                                    Task {
-                                        do {
-                                            try await contacts.setRemoteDelegate(contactID: contactID, deviceID: selected.id, participantID: participant.id, allowed: !allowed, using: auth)
-                                            error = nil
-                                        } catch { self.error = error.localizedDescription }
-                                    }
-                                }.disabled(contacts.remoteMutating.contains(contactID))
-                            }
-                        }
-                    }
-                }
-                if let error { Text(error).font(.footnote).foregroundStyle(.red) }
-            }
-        }
-        .task(id: scenePhase) {
+    func body(content: Content) -> some View {
+        content.task(id: "\(contactID)-\(scenePhase == .active)") {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
-                await refresh()
+                do {
+                    try await contacts.refreshRemote(contactID: contactID, using: auth)
+                    error = nil
+                } catch {
+                    if error is CancellationError || Task.isCancelled { return }
+                    if contacts.remoteSnapshots.store(for: contactID).value == nil || !AuthAPI.isTransient(error) {
+                        self.error = error.localizedDescription
+                    }
+                }
                 do { try await Task.sleep(for: .seconds(5)) } catch { return }
             }
         }
     }
-    private func refresh(force: Bool = false) async {
-        do {
-            try await contacts.refreshRemote(contactID: contactID, using: auth, force: force)
-            error = nil
-        } catch {
-            if error is CancellationError || Task.isCancelled { return }
-            if snapshot.value != nil && AuthAPI.isTransient(error) { return }
-            self.error = error.localizedDescription
+}
+
+/// Owner side: whether this iPhone accepts timers and alarms that come from somewhere
+/// other than this chat on this iPhone, and who may send them.
+struct RemoteNativeAccessSection: View {
+    let contactID: String
+    var loadError: String? = nil
+    @Environment(AuthStore.self) private var auth
+    @Environment(ContactsStore.self) private var contacts
+    @Environment(NativeExperiments.self) private var native
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
+    @State private var notificationsAllowed: Bool?
+    @State private var alarmsAllowed: Bool?
+    @State private var error: String?
+
+    private enum Status { case needsTools, off, needsNotifications, needsAlarms, registering, on }
+    private var snapshot: RemoteNativeSnapshot? { contacts.remoteSnapshots.store(for: contactID).value }
+    private var thisDevice: String? { try? native.deviceID() }
+    private var hasKinds: Bool { !(native.enabled[contactID] ?? []).isDisjoint(with: ["timer", "alarm"]) }
+    private var isOn: Bool { native.remoteEnabled.contains(contactID) }
+    private var registered: Bool { snapshot?.devices.contains { $0.id == thisDevice && $0.owned == 1 } ?? false }
+    private var contactName: String { contacts.contact(id: contactID)?.name ?? "this contact" }
+    private var status: Status {
+        if !hasKinds { return .needsTools }
+        if !isOn { return .off }
+        if notificationsAllowed == false { return .needsNotifications }
+        if alarmsAllowed == false { return .needsAlarms }
+        if snapshot != nil && !registered { return .registering }
+        return .on
+    }
+    private var statusText: String {
+        switch status {
+        case .needsTools: "Allow Timers or Alarms in Allowed tools first."
+        case .off: "Off. Only this chat on this iPhone can set them."
+        case .needsNotifications: "Paused. Notifications for Wildcard are off."
+        case .needsAlarms: "Paused. Wildcard isn’t allowed to set alarms."
+        case .registering: "Connecting this iPhone…"
+        case .on: "On. Works in the background and while locked."
+        }
+    }
+    private var statusColor: Color {
+        switch status {
+        case .on: .green
+        case .needsNotifications, .needsAlarms: .orange
+        case .registering: .yellow
+        case .needsTools, .off: Color(uiColor: .tertiaryLabel)
+        }
+    }
+
+    var body: some View {
+        Section {
+            Toggle(isOn: Binding(get: { isOn }, set: { on in
+                Task {
+                    await native.setRemoteEnabled(on, contactID: contactID, using: auth)
+                    await checkPermissions()
+                }
+            })) {
+                Label {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Receive timers and alarms")
+                        HStack(spacing: 6) {
+                            Circle().fill(statusColor).frame(width: 7, height: 7)
+                            Text(statusText)
+                        }
+                        .manrope(.footnote).foregroundStyle(.secondary)
+                    }
+                } icon: { NativeGlyph(kind: "timer", size: 28, symbol: "iphone.radiowaves.left.and.right") }
+            }
+            .disabled(native.remoteBusy || (!hasKinds && !isOn))
+            if status == .needsNotifications || status == .needsAlarms {
+                Button {
+                    let target = status == .needsNotifications ? UIApplication.openNotificationSettingsURLString : UIApplication.openSettingsURLString
+                    if let url = URL(string: target) { openURL(url) }
+                } label: { Label("Open Settings", systemImage: "gear") }
+            }
+        } header: {
+            Text("From the web and other people")
+                .task(id: scenePhase) { if scenePhase == .active { await checkPermissions() } }
+        } footer: {
+            Text(isOn
+                 ? "Each request arrives as a notification and sets the timer or alarm on this iPhone. You don’t need to open Wildcard. Requests that can’t reach this iPhone within a minute are dropped."
+                 : "Lets you set timers and alarms on this iPhone from the web, and lets people you choose who also chat with \(contactName) do the same.")
+        }
+        if isOn {
+            Section {
+                LabeledContent {
+                    Image(systemName: "checkmark").foregroundStyle(.secondary)
+                } label: {
+                    Text("You")
+                    Text("From the web and your other devices")
+                }
+                ForEach(snapshot?.participants ?? []) { participant in
+                    Toggle(isOn: Binding(get: { allowed(participant) }, set: { on in set(participant, on) })) {
+                        Text(participant.name)
+                        Text("Asks \(contactName) in their own chat")
+                    }
+                    .disabled(!registered || contacts.remoteMutating.contains(contactID))
+                }
+                if let message = error ?? loadError { Text(message).manrope(.footnote).foregroundStyle(.red) }
+            } header: {
+                Text("Who can send to this iPhone")
+            } footer: {
+                Text(snapshot?.participants.isEmpty == false
+                     ? "They can’t see your chats, calendar or anything else on this iPhone. Turning someone off doesn’t remove alarms they already set."
+                     : "People who also chat with \(contactName) appear here so you can let them in.")
+            }
+        }
+    }
+    private func allowed(_ participant: RemoteNativeParticipant) -> Bool {
+        snapshot?.delegations.contains { $0.deviceID == thisDevice && $0.participantID == participant.id } ?? false
+    }
+    private func set(_ participant: RemoteNativeParticipant, _ on: Bool) {
+        guard let thisDevice else { return }
+        Task {
+            do {
+                try await contacts.setRemoteDelegate(contactID: contactID, deviceID: thisDevice, participantID: participant.id, allowed: on, using: auth)
+                error = nil
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+    private func checkPermissions() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        notificationsAllowed = settings.alertSetting == .enabled
+        alarmsAllowed = AlarmManager.shared.authorizationState != .denied
+    }
+}
+
+/// Requester side: a compact chip above the composer that shows where timers and alarms
+/// requested in this chat go. Selection is always explicit and never falls back silently.
+struct RemoteNativeTargetChip: View {
+    let contactID: String
+    let chat: ChatStore
+    let error: String?
+    @Environment(ContactsStore.self) private var contacts
+    @Environment(NativeExperiments.self) private var native
+
+    private var snapshot: RemoteNativeSnapshot? { contacts.remoteSnapshots.store(for: contactID).value }
+    private var thisDevice: String? { try? native.deviceID() }
+    // This iPhone already handles its own requests locally, so it is never a remote choice here.
+    private var targets: [RemoteNativeDevice] { (snapshot?.devices ?? []).filter { $0.id != thisDevice } }
+    private var selected: RemoteNativeDevice? { snapshot?.devices.first { $0.id == chat.remoteDeviceID } }
+    private var unavailable: Bool { chat.remoteDeviceID != nil && selected == nil }
+    private var localOn: Bool { !(native.enabled[contactID] ?? []).isDisjoint(with: ["timer", "alarm"]) }
+    private var selectedLabel: String? {
+        guard let selected, let snapshot else { return nil }
+        return selected.id == thisDevice ? "This iPhone" : snapshot.label(for: selected)
+    }
+    private var title: String {
+        if unavailable { return "Selected iPhone unavailable" }
+        if let selectedLabel { return "Timers & alarms: \(selectedLabel)" }
+        return localOn ? "Timers & alarms: This iPhone" : "Timers & alarms: Off"
+    }
+    private var tint: Color { unavailable ? .red : selected != nil ? .accentColor : .secondary }
+
+    var body: some View {
+        if !targets.isEmpty || chat.remoteDeviceID != nil || error != nil {
+            VStack(alignment: .leading, spacing: 4) {
+                Menu {
+                    Picker("Send timers and alarms to", selection: Binding(get: { chat.remoteDeviceID ?? "" }, set: { chat.remoteDeviceID = $0.isEmpty ? nil : $0 })) {
+                            Label(localOn ? "This iPhone" : "Don’t send to a phone", systemImage: localOn ? "iphone" : "nosign").tag("")
+                            if unavailable, let id = chat.remoteDeviceID {
+                                Label("Unavailable iPhone", systemImage: "exclamationmark.triangle").tag(id)
+                            }
+                            ForEach(targets) { device in
+                                Label(snapshot?.label(for: device) ?? device.name, systemImage: "iphone.radiowaves.left.and.right").tag(device.id)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        .disabled(chat.isSending || chat.hasPendingRemoteSubmission)
+                    Section {
+                        Text("Another phone gets the request as a notification, even while locked. This chat shows when it’s set.")
+                    }
+                    if chat.hasPendingRemoteSubmission && !chat.isSending {
+                        Button("Discard pending send", systemImage: "xmark.circle", role: .destructive) { chat.discardPendingRemoteSubmission() }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: unavailable ? "exclamationmark.triangle.fill" : selected != nil ? "iphone.radiowaves.left.and.right" : "timer")
+                        Text(title).lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
+                    }
+                    .manrope(.footnote, weight: .semibold)
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(tint.opacity(selected != nil || unavailable ? 0.14 : 0.08), in: Capsule())
+                    .contentShape(Capsule())
+                }
+                .accessibilityLabel("Where timers and alarms go")
+                .accessibilityValue(title)
+                if unavailable {
+                    Text("That phone’s access was turned off or it signed out. Choose where to send timers before asking again.")
+                        .manrope(.caption).foregroundStyle(.red)
+                } else if chat.hasPendingRemoteSubmission && !chat.isSending {
+                    Text("A message is waiting to resend to \(selectedLabel ?? "that phone"). Check that phone before discarding it from this menu.")
+                        .manrope(.caption).foregroundStyle(.secondary)
+                }
+                if let error { Text(error).manrope(.caption).foregroundStyle(.red) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
 struct SharedRemoteReceiptView: View {
     let action: RemoteNativeReceipt
-    private var status: String {
+    private var tone: NativeActionTone {
         switch action.status {
-        case "completed": "Scheduled on iPhone"
-        case "pending": "Sent · waiting for iPhone"
-        case "running": "Claimed · outcome not yet confirmed"
-        case "expired": "Expired without confirmation"
-        case "failed": "Could not schedule"
-        case "cancelled": "Cancelled"
-        default: "Outcome unknown · check iPhone"
+        case "completed": .done
+        case "pending": .waiting
+        case "running", "unknown": .attention
+        case "failed": .failed
+        default: .inactive
+        }
+    }
+    private var status: String {
+        let device = action.deviceName
+        return switch action.status {
+        case "completed": "Set on \(device)"
+        case "pending": "Sending to \(device)…"
+        case "running": "Reached \(device) · not confirmed yet"
+        case "expired": "\(device) didn’t respond in time"
+        case "failed": "\(device) couldn’t set it"
+        case "cancelled": "Cancelled on \(device)"
+        default: "Not confirmed · check \(device)"
         }
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Label(action.title, systemImage: action.kind == "timer" ? "timer" : "alarm")
-            Text("\(action.deviceName) · \(status)").font(.footnote).foregroundStyle(.secondary)
-        }.frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .center, spacing: 10) {
+            NativeGlyph(kind: action.kind, size: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(action.title).manrope(.subheadline, weight: .semibold)
+                    .fixedSize(horizontal: false, vertical: true)
+                Label { Text(status).manrope(.caption) } icon: { Image(systemName: tone.symbol).foregroundStyle(tone.color) }
+                    .labelStyle(NativeCompactLabelStyle())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .frame(maxWidth: 340, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }

@@ -19,11 +19,11 @@ extension on a physical iPhone. A receipt, not APNs acceptance, establishes succ
 3. Install the updated app and embedded notification extension using Xcode. Open it
    once after device restart/unlock and sign in. Allow visible notifications and
    AlarmKit. In a contact's **Native experiments**, enable timers/alarms, then
-   **Allow remote timers and alarms**. This grant belongs to this participant,
+   **Receive timers and alarms**. This grant belongs to this participant,
    contact and installation, including for shared contacts. At most 20 contacts per
    device can have grants. The extension checks the local per-kind allowlist too.
-4. In that contact's web chat, choose the iPhone under **Timers and alarms** (the bar
-   appears on its own once chat polling lists the linked iPhone) and
+4. In that contact's web chat, open the **Timers & alarms** chip above the composer
+   (it appears once chat polling lists the linked iPhone), choose the iPhone and
    send “Set a timer for two minutes.” Multiple iPhones show an installation suffix.
    Selection stays in the session conversation cache; a pending send snapshots the
    target, time zone and message UUID. Retries cannot silently choose another phone.
@@ -39,7 +39,7 @@ Existing grants re-register silently on launch and whenever APNs rotates the
 token. Because the token arrives after Home starts, re-registration waits for it
 (and for visible notifications) without showing an error, and retries transient
 network failures on the next launch or token change. Only an explicit
-**Allow remote timers and alarms** tap reports missing notifications or token.
+**Receive timers and alarms** tap reports missing notifications or token.
 This is iOS-only: the web client registers no APNs device.
 
 The normal foreground native path remains available without remote grants.
@@ -145,19 +145,19 @@ rules complement [caching](caching.md), not a new persistent browser cache.
 Migration `0083_delegated_remote_native.sql` adds explicit participant grants. After
 both accounts have accepted access to the same contact:
 
-1. On the target iPhone, enable the contact's timer/alarm kinds and **Allow remote
+1. On the target iPhone, enable the contact's timer/alarm kinds and **Receive
    timers and alarms** in **Native experiments** as before.
-2. In that screen's **Remote timers and alarms** selector, or in your private chat
-   on iOS/web, select your linked iPhone. Open **Shared-contact access to this iPhone**
-   on iOS (shown directly on web) and choose **Allow timers and alarms** next to the
-   intended participant's account name. This authorizes requests without per-action
-   approval. It grants only the timer/alarm kinds currently enabled on this iPhone.
+2. Under **Who can send to this iPhone** in that same screen, turn on the intended
+   participant's switch. On web, open the chat's **Timers & alarms** chip; the sheet
+   lists the same switches under **Who can send to your iPhone**. Delegation is keyed to
+   this installation, never to the chat's selected target. This authorizes requests
+   without per-action approval. It grants only the timer/alarm kinds currently enabled.
 3. That participant opens their own private chat with the same shared contact,
-   selects **Your name’s iPhone** and asks, for example, “Set a timer on my husband's
+   picks **Your name’s iPhone** from the **Timers & alarms** chip and asks, for example, “Set a timer on my husband's
    phone for ten minutes.” Text and voice-message requests use the same selected
    target. Device selection is explicit; mentioning a phone cannot silently override
    it, and this does not add a live voice-call command interface.
-4. Use **Revoke access** beside that participant on either client to remove only
+4. Turn that participant's switch off on either client to remove only
    their permission. Disabling the parent remote grant removes all its delegations;
    participant/contact/account/session/device deletion also removes dependent grants.
 
@@ -190,10 +190,11 @@ iPhone. Delivery/expiry and uncertain-result rules above still apply.
 
 Both clients retain an unavailable selected phone until the person explicitly
 changes it. Requests cannot fall back silently to their own phone after revocation.
-Retries preserve the original target and message UUID; the device picker stays
-locked during an unresolved remote submission. iOS offers **Discard pending send**
+Retries preserve the original target and message UUID; the chip's choices stay
+locked during an unresolved remote submission. The iOS chip menu offers **Discard pending send**
 to release that retry before selecting another phone, with a reminder to inspect
-the phone when the outcome is unknown. Discarding a local retry cannot recall an
+the phone when the outcome is unknown. iOS never lists the current installation as a
+remote choice: requests typed on that iPhone already use the local path. Discarding a local retry cannot recall an
 already accepted server request. Native iOS suppresses local
 native capabilities when a remote phone is selected.
 
@@ -229,6 +230,19 @@ not revive an old turn; disable parent grant/kind; remove/rejoin participant;
 failed/offline refresh; back/reopen with empty snapshots; account switch during
 read/mutation; attempted self/onward/unrelated-agent grants; duplicate push and
 unknown receipt behavior. Confirm actual system alarms separately from receipts.
+
+### Settings and chat layout
+
+The owner's **Native experiments** screen has one **From the web and other people**
+section: the **Receive timers and alarms** switch with a status line (Off, Connecting
+this iPhone, Paused because notifications or AlarmKit are off with an **Open Settings**
+row, or On), then **Who can send to this iPhone** listing the owner and a switch per
+current participant. In chat, a single-line **Timers & alarms** chip above the composer
+shows the current destination (This iPhone/Off, or the selected phone, tinted) and
+replaces the earlier top banner. Web opens a sheet from the chip with the destination
+choices and, for an owned phone, the participant switches and **Stop receiving on your
+iPhone**. Receipts name the phone (“Set on Lucía’s iPhone”); the snapshot's
+`deviceName` now carries the owner's name for phones owned by someone else.
 
 ## Future autonomous initiative
 

@@ -361,10 +361,10 @@ remain pending; static typechecks do not establish runtime correctness.
 
 ## Layout
 
-iOS: the contact screen keeps the main switch and the remote timers/alarms switch at the
-top (with a one-line note of what the remote switch grants), and opens **Allowed
+iOS: the contact screen keeps the main switch at the top, opens **Allowed
 tools**, **Run without confirmation** and **Try it in chat** as rows with counts that
-open sheets. Explanations for those, Contact link and Requests are behind info
+open sheets, then shows **From the web and other people** (the **Receive timers and
+alarms** switch with a live status line) and **Who can send to this iPhone**. Explanations for those, Contact link and Requests are behind info
 buttons. Web: the informational page lists capabilities and opens Automatic execution,
 Live status and receipts, Remote timers and alarms, and What stays on your iPhone in
 sheets. See the settings pattern in [contacts](contacts.md#contact-details-layout).
@@ -373,8 +373,8 @@ sheets. See the settings pattern in [contacts](contacts.md#contact-details-layou
 ## Shared-contact timer and alarm access
 
 With migration 0083, a linked iPhone's account can explicitly allow a current
-shared-contact participant under **Remote timers and alarms → Shared-contact
-access to this iPhone**, and revoke that participant from iOS or web. Sharing a
+shared-contact participant under **Who can send to this iPhone**, and switch that
+participant off again from iOS or web. Sharing a
 contact or enabling local automatic execution grants no such access by itself.
 The requester selects the authorized owner's iPhone in their own private chat;
 text and voice messages use that target, suppressing local native context. Both

@@ -27,6 +27,7 @@ struct ChatView: View {
     @State private var animateNewMessages = false
     @State private var isAwayFromBottom = false
     @State private var composerBarHeight: CGFloat = 0
+    @State private var remoteError: String?
     @State private var historyPosition = ChatHistoryPosition()
     @State private var replyTarget: MessageReplyQuote?
     @State private var highlightedMessage: String?
@@ -246,12 +247,8 @@ struct ChatView: View {
             }
             .refreshable { await chat.refresh(contactID: contactID, using: auth) }
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                RemoteNativeControls(contactID: contactID, chat: chat).padding(.horizontal, 12)
-                NativeActiveStatusView(contactID: contactID)
-            }.background(.background)
-        }
+        .safeAreaInset(edge: .top, spacing: 0) { NativeActiveStatusView(contactID: contactID) }
+        .modifier(RemoteNativePolling(contactID: contactID, error: $remoteError))
         .task(id: contacts.suggestedDrafts[contactID]) {
             // An Updates note's suggested reply fills an empty composer; it is never sent automatically.
             guard let text = contacts.suggestedDrafts[contactID] else { return }
@@ -469,6 +466,7 @@ struct ChatView: View {
 
     private var composer: some View {
         VStack(spacing: 8) {
+            RemoteNativeTargetChip(contactID: contactID, chat: chat, error: remoteError)
             if let error = chat.error {
                 HStack(alignment: .top) {
                     Text(error).manrope(.footnote).foregroundStyle(.red)
