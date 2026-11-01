@@ -61,7 +61,11 @@ async function toggleContactsShare(event: Event) {
   const input = event.target as HTMLInputElement;
   await run(async () => {
     try { await savePrivacy(input.checked); }
-    finally { input.checked = user.value?.contactsShare === true; }
+    finally {
+      // Every linked-contacts snapshot may change (allContacts); refetch on next visit.
+      invalidateContactLinks();
+      input.checked = user.value?.contactsShare === true;
+    }
   });
 }
 const photoPath = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);

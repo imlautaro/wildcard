@@ -121,12 +121,13 @@ async function saveModel(chatModel: string, contributorConsent: boolean) {
 }
 
 // "Contacts share with each other" (docs/privacy.md). The response is authoritative.
+// Callers drop linked-contact snapshots: this module must not import other composables,
+// which register their session resets here while it initializes.
 async function savePrivacy(contactsShare: boolean) {
   const owner = user.value?.id;
   const revision = ++profileRevision;
   profileRequest = null;
   const result = await api<{ user: AuthUser }>('me/privacy', { method: 'PUT', json: { contactsShare } });
-  invalidateContactLinks();
   if (revision !== profileRevision || status.value !== 'signed-in' || user.value?.id !== owner) return;
   user.value = result.user;
 }
