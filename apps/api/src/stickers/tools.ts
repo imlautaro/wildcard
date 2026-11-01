@@ -61,14 +61,18 @@ export async function stickerState(db: D1Database, input: { agentID: string; use
     if (attachment?.sticker) received.push({ messageID: row.id, emoji: attachment.sticker.emoji });
   }
   const agent = await db.prepare('SELECT photo_version AS version FROM contact_agent WHERE id = ?').bind(input.agentID).first<{ version: string | null }>();
-  const check = agent?.version ? await db.prepare('SELECT has_face AS hasFace FROM sticker_photo_check WHERE agent_id = ? AND photo_version = ?')
-    .bind(input.agentID, agent.version).first<{ hasFace: number }>() : null;
+  const check = agent?.version ? await db.prepare('SELECT has_face AS hasFace, checked_at AS checkedAt FROM sticker_photo_check WHERE agent_id = ? AND photo_version = ?')
+    .bind(input.agentID, agent.version).first<{ hasFace: number; checkedAt: number }>() : null;
   const avatarCount = library.filter(row => row.source === 'avatar').length;
   return { library, received: received.slice(0, 5), answering: !!input.current?.sticker,
     // The person answered a sticker of ours with a sticker: the exchange is complete.
     blocked: !!input.current?.sticker && lastContactSticker(input.prior),
-    canCreate: !!agent?.version && check?.hasFace !== 0 && avatarCount < maxAvatarStickers };
+    canCreate: !!agent?.version && !faceRefused(check) && avatarCount < maxAvatarStickers };
 }
+
+// A "no face" verdict is only trusted for six hours, so a better prompt or a model hiccup never locks a contact out of stickers for good.
+const faceRetryAfter = 6 * 3600_000;
+const faceRefused = (check: { hasFace: number; checkedAt: number } | null) => !!check && check.hasFace === 0 && Date.now() - check.checkedAt < faceRetryAfter;
 
 export function stickerTools(state: StickerState): ModelTool[] {
   return [...(state.library.length && !state.blocked ? [stickerSendTool] : []), ...(state.received.length ? [stickerSaveTool] : []),
@@ -174,14 +178,14 @@ async function createSelfSticker(env: Env, scope: { agentID: string; userID: str
   if (!object) return fail('Your profile photo is unavailable.');
   const avatar = new Uint8Array(await object.arrayBuffer());
   try {
-    const known = await env.DB.prepare('SELECT has_face AS hasFace FROM sticker_photo_check WHERE agent_id = ? AND photo_version = ?').bind(scope.agentID, agent.version).first<{ hasFace: number }>();
-    let hasFace = known ? known.hasFace === 1 : null;
+    const known = await env.DB.prepare('SELECT has_face AS hasFace, checked_at AS checkedAt FROM sticker_photo_check WHERE agent_id = ? AND photo_version = ?').bind(scope.agentID, agent.version).first<{ hasFace: number; checkedAt: number }>();
+    let hasFace = known && (known.hasFace === 1 || faceRefused(known)) ? known.hasFace === 1 : null;
     if (hasFace === null) {
       hasFace = await photoShowsFace(env, avatar);
       await env.DB.prepare('INSERT OR REPLACE INTO sticker_photo_check (agent_id, photo_version, has_face, checked_at) VALUES (?, ?, ?, ?)')
         .bind(scope.agentID, agent.version, hasFace ? 1 : 0, Date.now()).run();
     }
-    if (!hasFace) return fail('Your profile photo does not clearly show one face, so you cannot make a sticker of yourself.');
+    if (!hasFace) return fail('Your profile picture does not clearly show one character with a face, so you cannot make a sticker of yourself.');
     const portrait = await expressionImage(env, avatar, expression);
     const result = await cutout(env, portrait);
     // The profile photo may have changed while generating; never publish a sticker from an old one.

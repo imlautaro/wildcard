@@ -90,7 +90,7 @@ The contact decides, in a private reply, with three tools (`apps/api/src/sticker
   cartoon, pixel-art or game character, a robot or mascot with eyes all count; landscapes, logos,
   several characters or a hidden or tiny face do not. Muse Spark checks that once per photo version
   (`sticker_photo_check`); the expression keeps the picture's art style. Checked 2026-11-01 with
-  generated fictional avatars (photo, pixel art, robot). At most 3 creations per minute per contact. This costs one vision call,
+  generated fictional avatars (photo, pixel art, robot). A "no" verdict is trusted for six hours only (migration 0092 cleared verdicts from the first, stricter check). At most 3 creations per minute per contact. This costs one vision call,
   one image edit and one SAM request.
 
 The model sees stickers as `[Sticker 😂]` in history; the bytes are never sent to it.
