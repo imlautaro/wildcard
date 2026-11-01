@@ -3,7 +3,7 @@ const chats = useChats();
 const archived = ref(false);
 const visibleRows = computed(() => archived.value ? chats.archivedRows.value : chats.rows.value);
 const route = useRoute();
-// On wide screens the navigation rail reaches For you and Account; phones use the header menu.
+// On wide screens the navigation sidebar reaches For you and Account; phones use the header menu.
 const wide = useWideLayout();
 const menuID = useId();
 const menu = ref<HTMLElement>();

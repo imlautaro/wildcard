@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Wide screens: navigation rail, then the chat list for the Chats section, then the page.
-// Updates and Account take the whole content pane. The chat list stays mounted (v-show) so
+// Wide screens: navigation sidebar, then the chat list for the Chats section, then the page.
+// For you and Account take the whole content pane. The chat list stays mounted (v-show) so
 // its Archived selection, scroll and polling survive switching pages (docs/web.md#design).
 const route = useRoute();
 const chatSection = ['/chats', '/groups', '/contacts', '/invitations', '/join'];
@@ -11,7 +11,7 @@ const hasPage = computed(() => route.path !== '/chats' && route.path !== '/');
 
 <template>
   <div class="shell" :class="{ 'has-page': hasPage, 'without-chat-list': !showChatList }">
-    <NavRail class="shell-rail" />
+    <NavSidebar class="shell-navigation" />
     <aside v-show="showChatList" aria-label="Chats"><ChatList /></aside>
     <main><slot /></main>
   </div>

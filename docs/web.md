@@ -231,22 +231,24 @@ and caching still match across clients. Manrope stays the typeface on both.
   settings that take effect immediately. Two-line rows use `.two-line` with a
   `.small` supporting line. `.search-field`, `.chip`, `.code-box`, `details`, and
   `.actions-row` (end-aligned buttons) cover the remaining page patterns.
-- **Layout.** Above 860 px a Material 3 navigation rail (`NavRail.vue`) sits at the
+- **Layout.** Above 860 px an expanded navigation sidebar (`NavSidebar.vue`) sits at the
   left edge with **For you** (new-posts badge), **Chats** (total unread badge) and
-  **Account**, and every page opens in a rounded content pane beside it, in the style of
+  **Account**. Each row places its icon on the left, its label on the right and
+  any unread badge at the trailing edge; the active row has a full-width pill.
+  The sidebar is 224 px wide (192 px between 861 and 1100 px). Every page opens in a rounded content pane beside it, in the style of
   Threads/X. The Chats section (`/chats`, conversations, groups, Contacts, new
   contact/group, invitations and join) adds the chat list as a second column between
-  the rail and the pane; For you and Account (including Connections and Native
+  the sidebar and the pane; For you and Account (including Connections and Native
   experiments) use the whole pane and the rail stays visible. Back buttons on
   section roots appear only below 860 px. `/` has no page: wide screens go to
   `/updates`, phones to `/chats`. The chat list stays mounted (hidden) outside Chats to
-  preserve Archived selection, scroll and polling. Below 860 px the rail is hidden,
+  preserve Archived selection, scroll and polling. Below 860 px the navigation sidebar is hidden,
   pages replace the chat list, and a menu icon button to the left of the Chats title
   opens a dropdown with **For you** and **My account** (the Home button in the
   header also opens For you); the native auto popover dismisses on outside press,
   Escape, navigation or item selection.
   This navigation change is explicitly web-only; iOS keeps its native tabs.
-  The rail layout was checked locally against a mock API on November 1, 2026 at
+  The previous rail layout was checked locally against a mock API on November 1, 2026 at
   1440, 1000 and 390 px (light and dark); type checking passed.
   Earlier local checks on October 30, 2026 verified desktop Chats, Contacts and
   Account, Back restoring Archived selection, and Chats/Contacts at 390 px.
@@ -1440,3 +1442,15 @@ anchor delivery-status answers. Neither client fetches another user's history or
 adds a cache. Existing migration 0084 receipts work without a backfill or app
 reinstall. Model semantics and the two-account browser/device round trip remain
 unverified by static checks.
+
+### Expanded web navigation sidebar (2026-11-01)
+
+This experiment is explicitly web-only at the user's request; iOS keeps its native
+tabs. Routes, active sections and badges are unchanged. The chat list remains
+mounted through `v-show`, preserving scroll, Archived selection, polling and all
+session-owned caches. No requests or persistence were added. Phone navigation
+keeps the existing header menu below 861 px.
+
+Visual verification remains pending: inspect 861, 1024 and 1440 px widths in light
+and dark appearance, keyboard focus, trailing badges and long chat titles. Switch
+For you → Chats → Account → back and confirm retained chat scroll and selection.

@@ -219,3 +219,13 @@ delete dialog and sign-in. Not verified: real touch devices, Safari and Firefox,
 screen readers, the production build, and every remaining screen (mini apps, tasks,
 documents, onboarding, invitations, MCP flows), which were migrated and type-checked
 but not viewed.
+
+## Web app navigation sidebar
+
+The web app uses `NavSidebar.vue` above 860 px: horizontal rows with a leading
+Material Symbol, visible label and trailing count, with the selected row filled
+using the secondary container role. Width is 224 px, or 192 px up to 1100 px.
+This web-only experiment uses the existing typography, shape, color and ripple
+tokens; iOS retains native tabs. Narrow web screens retain the chat header menu.
+No shared UI components or admin navigation change. See [web layout](web.md#design)
+for cache preservation and pending visual checks.

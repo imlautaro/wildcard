@@ -1615,3 +1615,8 @@ and are refreshed per turn; changes to another account's history are not polled
 by the requester. Existing iOS/web chat caches, account isolation, pending IDs,
 mutation refresh and late-response guards remain unchanged. Verify pronoun replies,
 reopen, offline recovery, revocation and account switching after release.
+
+The expanded web navigation sidebar (2026-11-01) is presentation-only. It keeps
+the chat list mounted with `v-show` and reuses existing session stores, badge
+polling and invalidation. No new cache, request, or persistence is introduced.
+Visual and navigation checks for the new layout are pending in `docs/web.md`.
