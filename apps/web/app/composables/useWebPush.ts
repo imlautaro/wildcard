@@ -89,8 +89,6 @@ async function sync(userID: string) {
 }
 
 let activeUser: string | null = null;
-registerSessionReset(() => { subscribed.value = false; });
-
 export function useWebPush() {
   return { supported, permission, subscribed, enable, disable, sync, refreshSupport };
 }
@@ -107,6 +105,7 @@ export function useWebPushLifecycle() {
   watch(() => [status.value, user.value?.id] as const, ([state, id]) => {
     activeUser = state === 'signed-in' && id ? id : null;
     if (activeUser) void sync(activeUser);
+    else subscribed.value = false;
   }, { immediate: true });
 
   function onMessage(event: MessageEvent) {
