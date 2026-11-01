@@ -1,18 +1,22 @@
-# Updates
+# For you
 
-Updates is a personal, adaptive feed that a person's contacts build together. Each
+For you is a personal, adaptive feed that a person's contacts build together. Each
 card is about something the person actually cares about (their team's league, the
 processing times of an application they are waiting on, the exchange rates they
 follow, a trip) and is prepared by the contact best suited to it, with its own
-layout. Updates also gives quick access to the mini apps the person opens most and
+layout. For you also gives quick access to the mini apps the person opens most and
 an agenda of upcoming schedules and tasks assigned to them.
 
-On iOS, Updates is the second tab of the signed-in shell (Chats stays the default).
+On iOS, For you is the second tab of the signed-in shell (Chats stays the default).
 On the web it lives at `/updates`: on wide screens it is the first item of the
-navigation rail and where `/` lands; on a phone-width screen it opens from the sparkle
-button in the chat list header (or **Menu → Updates**) and `/` goes to the chat list.
+navigation rail and where `/` lands; on a phone-width screen it opens from the Home
+button in the chat list header (or **Menu → For you**) and `/` goes to the chat list.
 
-The feature was first shipped as "Home" (default tab) and renamed on 2026-10-30.
+The feature first shipped as "Home" (default tab), became "Updates" on
+2026-10-30, and was renamed "For you" with a Home icon on 2026-11-01.
+iOS uses the `house` SF Symbol; web uses the shared `home` icon. This changes
+labels and presentation only: `/updates`, API paths, storage, badges, navigation
+defaults and session cache behavior remain unchanged.
 The API and storage keep that original name: `/api/v1/home`, the `home_*` tables,
 `HOME_FEED_ENABLED` and the `apps/api/src/home/` module; client data types are
 `HomeFeed`/`HomeCard`.
@@ -35,7 +39,7 @@ This is a first implementation (2026-10-30). See [verification](#verification).
   curator picks the layout and the contact on the next run.
 - **Post actions**: the heart is **More like this** and the bubble (with the comment
   count) opens the post to [comment](#comments) on it. ⋯ (or a long press on iOS) offers **Message {contact}**, **Less like
-  this** and **Hide from Updates**. Feedback is per topic, so every post on a topic shows
+  this** and **Hide from For you**. Feedback is per topic, so every post on a topic shows
   the same heart. Hidden topics never come back unless the person shows them again in
   **Topics**.
 - **Timeline** (both clients): a single column of posts, each led by the contact
@@ -51,16 +55,16 @@ This is a first implementation (2026-10-30). See [verification](#verification).
 - **Notes** can suggest a reply. Tapping it opens the chat with the message in the
   composer (only if the composer is empty); it is never sent automatically.
 - **From a chat**: when the person asks a contact to keep an eye on something or to
-  put it in Updates, the contact calls `add_to_updates`. The topic is attributed to that
+  put it in For you, the contact calls `add_to_updates`. The topic is attributed to that
   contact and stays until hidden.
 - **Your apps**: enabled mini apps the person has opened, most used first, plus
   ones created in the last three days. Tiles open the mini app full screen (iOS) or
   its page (web).
 - **Coming up**: up to four active schedules due in the next 48 hours and up to
   four open tasks assigned to the person, each opening its chat.
-- **New-post badge**: the Updates tab (iOS) and the Updates button and menu item
+- **New-post badge**: the For you tab (iOS) and the For you button and menu item
   (web) show how many posts were published since the person last opened
-  Updates. Opening Updates clears it. See [New-card badge](#new-card-badge).
+  For you. Opening For you clears it. See [New-card badge](#new-card-badge).
 
 Fixed interface copy is English like the rest of the app; card text is written by
 the contacts in the language the person uses with them.
@@ -91,7 +95,7 @@ and list 12 hours, tracker 24 hours.
 
 ## Posts
 
-Since 2026-11-01 (migration 0086) Updates is a timeline. `home_card` still keeps the
+Since 2026-11-01 (migration 0086) For you is a timeline. `home_card` still keeps the
 latest card of each topic, which schedules runs, feeds the editor and reviews, and is
 still returned as `cards`; every published card is also appended to `home_post` as a
 post:
@@ -133,7 +137,7 @@ comments, a composer ("Reply to {contact}…") and **Continue in chat with {cont
   `CHAT_WORKFLOW` (one retry). The contact answers in its voice and the language of the
   comment, in one to three sentences unless asked for more, from its post, the card,
   earlier comments on the post and matching things contacts remember about the person.
-  It may run one `research_web` search (Updates daily budgets) and never invents
+  It may run one `research_web` search (For you daily budgets) and never invents
   figures. Here it can only reply: for reminders, tasks or a longer talk it points to
   the private chat. Connector posts and connector-isolated contacts are answered with
   Standard and without research or memories; otherwise the account model is used,
@@ -182,12 +186,12 @@ directly by an API request, with one durable step per stage:
 
 Runs are fenced by a per-person revision: a newer claim makes an older instance's
 writes no-ops, and a run that has not finished after 45 minutes can be claimed
-again. Automatic runs happen only while the person opened Updates in the last three
+again. Automatic runs happen only while the person opened For you in the last three
 days; a feed that was never opened never runs.
 
-Triggers: the first Updates view, **Update now**/pull to refresh, following a topic,
+Triggers: the first For you view, **Update now**/pull to refresh, following a topic,
 showing a hidden topic again, a contact's `add_to_updates` (picked up by the minute
-Cron once the person has opened Updates) and card expiry.
+Cron once the person has opened For you) and card expiry.
 
 ## Skipped topics
 
@@ -237,7 +241,7 @@ of a run are composed, `home/review.ts` checks the feed without any model call:
 Reviews happen during curation runs, so a better-informed contact catches up at the
 next automatic or requested run (one to twelve hours, or **Update now**), not
 immediately after a chat. The reviewer reads only its own conversation with the
-person, which already belongs to the person's own data used by Updates.
+person, which already belongs to the person's own data used by For you.
 
 Checked on 2026-10-31 with `muse-spark-1.3-contributor` and fictional data: given a
 "Proyecto Lumen" note saying the project was still an idea, a reviewer whose chat said
@@ -245,7 +249,7 @@ the beta launched with 40 users and payments come next published a tracker with
 those facts; with only an older "still thinking about the idea" excerpt it skipped.
 The review SQL was run on the local workerd D1.
 
-## What Updates reads
+## What For you reads
 
 Only the person's own rows: their contacts (name, personality description and
 specialties, which connectors each contact has), what any of their contacts
@@ -257,20 +261,20 @@ and their Topics, feedback and current cards.
 Connector-isolated private chats and groups (`mcp_private_contact`,
 `mcp_private_group`) are excluded from these signals, so their history never reaches
 a Contributor call. Pooling what the person's own contacts know about the person is
-intended: the contacts curate Updates together. Updates never reads other participants' memories or
+intended: the contacts curate For you together. For you never reads other participants' memories or
 messages from shared contacts or groups, and its output is never written back into
 contact memory. Card JSON is stored in D1 (`home_card`) until it is replaced,
 retired, hidden or the account is deleted.
 
-## Connectors in Updates
+## Connectors in For you
 
 A connector topic lets the assigned contact read the person's own data, for example
 an exchange-rate tool or last month's spending from a personal finance connector.
 
 - Any of the person's account connectors can be used, whether or not the tool is
   assigned to that contact (decision for this first version: no per-contact
-  restriction in Updates).
-- Only tools approved in **Connections** that Updates considers reads are listed or
+  restriction in For you).
+- Only tools approved in **Connections** that For you considers reads are listed or
   called: the server annotates them `readOnlyHint` without `destructiveHint`, or the
   tool name starts with a read verb (`get`, `list`, `search`, `fetch`, `read`,
   `query`, `find`, `lookup`, `price`, `rate`, `balance`, …) and contains no write verb
@@ -287,14 +291,14 @@ an exchange-rate tool or last month's spending from a personal finance connector
 
 ## Web research and budgets
 
-`research_web` in Updates calls the same research model as conversational research
+`research_web` in For you calls the same research model as conversational research
 with a public query written by the contact (instructions forbid personal details).
 Each search reserves one slot of the account's and the global daily web research
-budget (`web_research_usage`, 30 and 300 per 24 hours) and one of Updates' own 12 per
+budget (`web_research_usage`, 30 and 300 per 24 hours) and one of For you' own 12 per
 person per 24 hours (`home_research`). Findings are saved with the reservation, so a
 retried Workflow step reuses them instead of searching again. Saved findings are
 deleted after two days (bounded cleanup on later reservations). `WEB_RESEARCH_ENABLED`
-also disables Updates searches.
+also disables For you searches.
 
 Cost bounds per run: one planning call, at most six cards, four model rounds per
 card, four searches and three connector reads per card.
@@ -307,9 +311,9 @@ Reads are limited to 90 per minute, writes to 20 per minute.
 | Route | Purpose |
 | --- | --- |
 | `GET /api/v1/home?timeZone=…` | The feed: `enabled`, `status`, `pending`, `briefing`, `progress`, `contributors`, `cards`, `posts` (newest first; each `{ id, topicID, contactID, contactName, contactPhotoVersion, text, replyTo, reason, source, feedback, connector, createdAt, content, comments }`, comments `{ id, text, reply, status, createdAt, repliedAt }`), `topics`, `apps`, `agenda`. Records the view and the time zone, and starts a due run. |
-| `GET /api/v1/home/badge` | `{ unseen }`: posts of active topics published after the last visit (capped at 99, `0` when Updates are off). Never starts a run. |
-| `POST /api/v1/home/seen` | Record that Updates was opened (clears the badge). `GET /home` records it too. |
-| `POST /api/v1/home/refresh` | Request an update (409 when Updates are turned off). Returns the feed. |
+| `GET /api/v1/home/badge` | `{ unseen }`: posts of active topics published after the last visit (capped at 99, `0` when For you is off). Never starts a run. |
+| `POST /api/v1/home/seen` | Record that For you was opened (clears the badge). `GET /home` records it too. |
+| `POST /api/v1/home/refresh` | Request an update (409 when For you is turned off). Returns the feed. |
 | `POST /api/v1/home/topics` `{ text }` | Follow something (1–400 characters, at most 20 active requests). Returns the feed (201). |
 | `POST /api/v1/home/posts/:id/comments` `{ text }` | Comment on a post (1–1,000 characters); its contact answers in the background. `409` while a reply is pending or at 20 comments, `404` when the post or its contact is gone. Returns the feed (201). |
 | `PATCH /api/v1/home/topics/:id` `{ status?, feedback? }` | `status`: `active` or `hidden`; `feedback`: `more`, `less` or `null`. Hiding deletes the card and its posts. Returns the feed. |
@@ -328,8 +332,8 @@ Migration 0076 adds `home_feed.seen_at`, set on every feed read and by
 a post counts as new when its `created_at` is later (before it, a card's `generated_at`
 was counted); a topic with nothing new adds nothing. Both clients
 poll `GET /home/badge` every 15 seconds while signed in and active (iOS: the signed-in
-shell while the app is in the foreground; web: the chat list), not while Updates is
-the visible page. Opening Updates sets the local count to 0 at once, increments a
+shell while the app is in the foreground; web: the chat list), not while For you is
+the visible page. Opening For you sets the local count to 0 at once, increments a
 badge revision so a read already in flight cannot bring the count back, and calls
 `POST /home/seen`. The count lives in memory only and is dropped with the session.
 
@@ -340,7 +344,7 @@ Both clients keep one session-owned feed in memory (`HomeFeedStore` on iOS,
 to disk because cards can contain connector data.
 
 - Navigation shows the last feed synchronously; the first load shows placeholders.
-- Background revalidation after 60 seconds while Updates is visible, every 4 seconds
+- Background revalidation after 60 seconds while For you is visible, every 4 seconds
   while a run is in progress or pending. Requests are deduplicated.
 - Every mutation returns the whole feed, which replaces the cached one; a newer
   mutation rejects older in-flight reads.
@@ -348,7 +352,7 @@ to disk because cards can contain connector data.
 - The feed is mounted only where a person can see it: its own page or tab. On wide web
   screens (above 860px) `/` redirects to `/updates`, so opening the web app there counts
   as a visit. On a phone-width web `/` redirects to the chat list, which never mounts
-  Updates, so it never polls or counts as a visit (which would keep automatic runs
+  For you, so it never polls or counts as a visit (which would keep automatic runs
   going).
 - Link preview images reuse the existing link preview cache and the private image
   cache (iOS) / private image loader (web).
@@ -416,5 +420,5 @@ figures can be days old, which cards are instructed to state.
   schedules and tasks.
 - Group mini apps appear in quick access, but group conversations are not used as
   topics beyond the person's own group messages.
-- Push notifications for new cards and Updates widgets are not implemented.
+- Push notifications for new cards and For you widgets are not implemented.
 - The read-tool classification for connectors is a heuristic (see above).

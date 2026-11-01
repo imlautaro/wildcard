@@ -3,7 +3,7 @@ const chats = useChats();
 const archived = ref(false);
 const visibleRows = computed(() => archived.value ? chats.archivedRows.value : chats.rows.value);
 const route = useRoute();
-// On wide screens the navigation rail reaches Updates and Account; phones use the header menu.
+// On wide screens the navigation rail reaches For you and Account; phones use the header menu.
 const wide = useWideLayout();
 const menuID = useId();
 const menu = ref<HTMLElement>();
@@ -55,13 +55,13 @@ onMounted(() => { void chats.refresh(); });
         <AppIcon name="menu" />
       </button>
       <nav v-if="!wide" :id="menuID" ref="menu" popover="auto" class="menu chat-menu" aria-label="Main navigation" @toggle="onMenuToggle">
-        <AppMenuItem to="/updates" icon="sparkle" @click="menu?.hidePopover()">Updates<span v-if="updatesUnseen" class="badge" style="margin-inline-start: auto" :aria-label="`${updatesUnseen} new`">{{ updatesUnseen }}</span></AppMenuItem>
+        <AppMenuItem to="/updates" icon="home" @click="menu?.hidePopover()">For you<span v-if="updatesUnseen" class="badge" style="margin-inline-start: auto" :aria-label="`${updatesUnseen} new`">{{ updatesUnseen }}</span></AppMenuItem>
         <AppMenuItem to="/account" icon="person" @click="menu?.hidePopover()">My account</AppMenuItem>
       </nav>
       <AppIconButton v-if="archived" icon="back" label="Back to Chats" @click="archived = false" />
     </template>
-    <AppIconButton v-if="!wide" to="/updates" icon="sparkle" label="Updates"
-                   :badge="updatesUnseen" :badge-label="`${updatesUnseen} new in Updates`" />
+    <AppIconButton v-if="!wide" to="/updates" icon="home" label="For you"
+                   :badge="updatesUnseen" :badge-label="`${updatesUnseen} new in For you`" />
     <AppIconButton icon="archive" label="Archived" :selected="archived" @click="archived = !archived; chats.loadAllContacts()" />
     <AppIconButton to="/contacts" icon="plus" label="New chat" variant="filled"
                    :badge="chats.invitationCount.value" :badge-label="`${chats.invitationCount.value} pending invitations`" />

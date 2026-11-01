@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-/// Native layouts for the closed Updates card catalog (docs/updates.md#cards), attached to timeline posts.
+/// Native layouts for the closed For you card catalog (docs/updates.md#cards), attached to timeline posts.
 enum HomeStyle {
     static func accent(_ name: String) -> Color {
         ["blue": .blue, "green": .green, "orange": .orange, "red": .red, "purple": .purple,
@@ -29,7 +29,7 @@ enum HomeCardAction {
     case more, less, hide, message, reply(String), thread, comment
 }
 
-/// One Updates post (docs/updates.md#posts), like a Threads or X post: the contact's avatar on a rail,
+/// One For you post (docs/updates.md#posts), like a Threads or X post: the contact's avatar on a rail,
 /// "name › topic · age", the contact's text, and the card of the closed catalog attached in a frame that
 /// shows one headline, figure or line of each kind until "Show more" (the same counts as the web).
 /// In a thread the attachments start expanded and a line joins each avatar to the next post.
@@ -245,7 +245,7 @@ struct HomePostView: View {
         Button { act(.less) } label: {
             Label(post.feedback == "less" ? "Undo less like this" : "Less like this", systemImage: post.feedback == "less" ? "hand.thumbsdown.fill" : "hand.thumbsdown")
         }
-        Button(role: .destructive) { act(.hide) } label: { Label("Hide from Updates", systemImage: "eye.slash") }
+        Button(role: .destructive) { act(.hide) } label: { Label("Hide from For you", systemImage: "eye.slash") }
     }
 
     private func host(_ value: String) -> String {

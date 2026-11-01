@@ -232,18 +232,18 @@ and caching still match across clients. Manrope stays the typeface on both.
   `.small` supporting line. `.search-field`, `.chip`, `.code-box`, `details`, and
   `.actions-row` (end-aligned buttons) cover the remaining page patterns.
 - **Layout.** Above 860 px a Material 3 navigation rail (`NavRail.vue`) sits at the
-  left edge with **Updates** (new-posts badge), **Chats** (total unread badge) and
+  left edge with **For you** (new-posts badge), **Chats** (total unread badge) and
   **Account**, and every page opens in a rounded content pane beside it, in the style of
   Threads/X. The Chats section (`/chats`, conversations, groups, Contacts, new
   contact/group, invitations and join) adds the chat list as a second column between
-  the rail and the pane; Updates and Account (including Connections and Native
+  the rail and the pane; For you and Account (including Connections and Native
   experiments) use the whole pane and the rail stays visible. Back buttons on
   section roots appear only below 860 px. `/` has no page: wide screens go to
   `/updates`, phones to `/chats`. The chat list stays mounted (hidden) outside Chats to
   preserve Archived selection, scroll and polling. Below 860 px the rail is hidden,
   pages replace the chat list, and a menu icon button to the left of the Chats title
-  opens a dropdown with **Updates** and **My account** (the sparkle button in the
-  header also opens Updates); the native auto popover dismisses on outside press,
+  opens a dropdown with **For you** and **My account** (the Home button in the
+  header also opens For you); the native auto popover dismisses on outside press,
   Escape, navigation or item selection.
   This navigation change is explicitly web-only; iOS keeps its native tabs.
   The rail layout was checked locally against a mock API on November 1, 2026 at
@@ -1286,10 +1286,10 @@ Web shows one link card per bubble (`LinkPreviewCard`) using `useLinkPreviews`, 
 memory-only session cache, and the private image blob cache for the API's copy of
 the image, matching iOS. See [link previews](link-previews.md).
 
-## Updates (migration 0074)
+## For you (migration 0074)
 
-[Updates](updates.md) opens at `/updates` from the sparkle button in the chat list
-header (also **Menu → Updates**). It shows beside the chat list on wide screens and
+[For you](updates.md) opens at `/updates` from the Home button in the chat list
+header (also **Menu → For you**). It shows beside the chat list on wide screens and
 full width with a back button on narrow ones; `/` keeps the "Select a chat" pane.
 Since migration 0086 it is a timeline of [posts](updates.md#posts) (`HomePost`): the
 contact's text above the card in a rounded frame, with a per-card accent, inline SVG
@@ -1302,10 +1302,10 @@ production API). **Update now**, **Topics** and **Follow** live in the page bar,
 "What should your contacts follow?" box opens Follow; the heart is More like this, the
 bubble opens the post's comments and ⋯ offers Message, Less like this and Hide. A note's suggested reply fills
 the contact's empty composer through `suggestDraft` and is never sent automatically.
-Behavior, copy and caching match the iOS Updates tab (`useHome`, see
-[caching](caching.md#updates-feed)). The sparkle button and the menu item carry the
+Behavior, copy and caching match the iOS For you tab (`useHome`, see
+[caching](caching.md#updates-feed)). The Home button and the menu item carry the
 [new-card badge](updates.md#new-card-badge) (migration 0076), polled by the chat list
-every 15 seconds and cleared when the Updates page mounts, like the iOS tab badge.
+every 15 seconds and cleared when the For you page mounts, like the iOS tab badge.
 
 ## Chat-list context menu and message menu (2026-10-30)
 

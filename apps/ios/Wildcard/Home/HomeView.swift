@@ -36,7 +36,7 @@ struct HomeView: View {
         case updates
         case account
 
-        var title: String { self == .updates ? "Updates" : self == .chats ? "Chats" : "Account" }
+        var title: String { self == .updates ? "For you" : self == .chats ? "Chats" : "Account" }
     }
 
     @State private var nativeRouteError: String?
@@ -64,7 +64,7 @@ struct HomeView: View {
                     )
                 }
                 .badge(totalUnreadCount)
-                Tab("Updates", systemImage: "sparkles.rectangle.stack", value: Section.updates) {
+                Tab("For you", systemImage: "house", value: Section.updates) {
                     UpdatesView(
                         store: updates, following: $updatesFollowing, managing: $updatesManaging,
                         openContact: { id in destinations.append(.contact(id)) },
@@ -93,12 +93,12 @@ struct HomeView: View {
                             Image(systemName: "ellipsis")
                         }
                         .tint(Color(uiColor: .label))
-                        .accessibilityLabel("Updates options")
+                        .accessibilityLabel("For you options")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { updatesFollowing = true } label: { Image(systemName: "plus") }
                             .tint(Color(uiColor: .label))
-                            .accessibilityLabel("Follow something in Updates")
+                            .accessibilityLabel("Follow something in For you")
                     }
                 }
                 if section == .chats && destinations.isEmpty {
@@ -217,7 +217,7 @@ struct HomeView: View {
         .environment(contacts)
         .environment(invitations)
         .onChange(of: contacts.aliasRevision) { _, _ in
-            // Groups, Updates and shared boards render names the server resolved with the old alias.
+            // Groups, For you and shared boards render names the server resolved with the old alias.
             groups.conversations.aliasChanged()
             updates.markStale()
             sync.request()

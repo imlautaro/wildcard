@@ -9,7 +9,7 @@ import { dispatchHome, homeEnabled, postRetention } from './workflow';
 import { topicColumns, type HomeTopicRow } from './signals';
 import { commentLimits, type HomeCommentJob } from './comments';
 
-// Updates feed for the signed-in person (docs/updates.md; the API keeps the `home` name). Cards come from curation
+// For you feed for the signed-in person (docs/updates.md; the API keeps the `home` name). Cards come from curation
 // runs; quick access and agenda are computed on each read and cost no inference.
 const home = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 home.use('*', bodyLimit({ maxSize: 4096, onError: c => c.json({ error: 'Request body too large' }, 413) }));
@@ -144,13 +144,13 @@ home.get('/', async c => {
   return c.json(await homeFeed(c.env, owner));
 });
 
-// Opening Updates (any read of the feed, or this explicit call) clears the badge.
+// Opening For you (any read of the feed, or this explicit call) clears the badge.
 async function markSeen(env: Env, owner: string, now: number) {
   await env.DB.prepare('UPDATE home_feed SET seen_at = ?2 WHERE user_id = ?1').bind(owner, now).run();
 }
 
-// Number of posts published since the person last opened Updates; clients poll it
-// for the Updates tab/button badge. It never starts a curation run.
+// Number of posts published since the person last opened For you; clients poll it
+// for the For you tab/button badge. It never starts a curation run.
 home.get('/badge', async c => {
   const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unseen FROM home_post p
     JOIN home_feed f ON f.user_id = p.user_id
@@ -166,7 +166,7 @@ home.post('/seen', async c => {
 
 home.post('/refresh', async c => {
   const owner = c.get('owner');
-  if (!homeEnabled(c.env)) return c.json({ error: 'Updates are turned off.' }, 409);
+  if (!homeEnabled(c.env)) return c.json({ error: 'For you is turned off.' }, 409);
   const recent = await c.env.DB.prepare('SELECT 1 FROM home_feed WHERE user_id = ? AND requested_at > ?').bind(owner, Date.now() - 60_000).first();
   if (!recent) await request(c.env, c.executionCtx, owner, true);
   return c.json(await homeFeed(c.env, owner));
@@ -180,7 +180,7 @@ home.post('/topics', async c => {
   if (!text || Array.from(text).length > 400 || /[\u0000-\u001f\u007f]/u.test(text)) return c.json({ error: 'Describe it in 1–400 characters.' }, 422);
   const count = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM home_topic WHERE user_id = ? AND source = 'person' AND status = 'active'`)
     .bind(owner).first<{ count: number }>();
-  if ((count?.count ?? 0) >= homeLimits.personTopics) return c.json({ error: `Updates follows up to ${homeLimits.personTopics} of your requests. Hide one first.` }, 409);
+  if ((count?.count ?? 0) >= homeLimits.personTopics) return c.json({ error: `For you follows up to ${homeLimits.personTopics} of your requests. Hide one first.` }, 409);
   const now = Date.now();
   // The curator refines the title, layout and contact on the next run.
   await c.env.DB.prepare(`INSERT INTO home_topic (id, user_id, title, brief, kind, source, created_at, updated_at)

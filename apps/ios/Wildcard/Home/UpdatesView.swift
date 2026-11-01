@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The Updates tab: a timeline of posts the person's contacts write together, newest first
+/// The For you tab: a timeline of posts the person's contacts write together, newest first
 /// (see docs/updates.md#posts). Tapping a post opens its topic as a thread.
 struct UpdatesView: View {
     let store: HomeFeedStore
@@ -87,7 +87,7 @@ struct UpdatesView: View {
         .sheet(isPresented: $following) { HomeFollowSheet(store: store) }
         .sheet(isPresented: $managing) { HomeTopicsSheet(store: store) }
         .fullScreenCover(item: $openedApp) { app in MiniAppScreen(base: app.base, appID: app.id) }
-        .alert("Updates", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+        .alert("For you", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
     }
@@ -141,7 +141,7 @@ struct UpdatesView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Follow something in Updates")
+        .accessibilityLabel("Follow something in For you")
     }
 
     private var notice: String? {
@@ -247,7 +247,7 @@ struct UpdatesView: View {
 
     private var empty: some View {
         VStack(spacing: 12) {
-            Image(systemName: "sparkles.rectangle.stack").font(.system(size: 40)).foregroundStyle(Color.accentColor)
+            Image(systemName: "house").font(.system(size: 40)).foregroundStyle(Color.accentColor)
             Text("Your contacts are getting to know you").manrope(.headline, weight: .bold).multilineTextAlignment(.center)
             Text("As you chat, they’ll bring news, figures and reminders about what matters to you here. You can also tell them what to follow.")
                 .manrope(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -341,7 +341,7 @@ struct HomeFollowSheet: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(.red).manrope(.footnote) } }
             }
-            .navigationTitle("Follow in Updates")
+            .navigationTitle("Follow in For you")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel", role: .cancel) { dismiss() } }
@@ -361,7 +361,7 @@ struct HomeFollowSheet: View {
     }
 }
 
-/// What Updates follows, with the option to hide or restore each topic.
+/// What For you follows, with the option to hide or restore each topic.
 struct HomeTopicsSheet: View {
     let store: HomeFeedStore
     @Environment(AuthStore.self) private var auth
@@ -460,7 +460,7 @@ struct HomeThreadView: View {
     var body: some View {
         ScrollView {
             if posts.isEmpty {
-                ContentUnavailableView("This thread isn’t in Updates anymore", systemImage: "sparkles.rectangle.stack",
+                ContentUnavailableView("This thread isn’t in For you anymore", systemImage: "house",
                                        description: Text("Its topic was hidden or retired, or its posts are older than two weeks."))
                     .padding(.top, 60)
             } else {
@@ -481,7 +481,7 @@ struct HomeThreadView: View {
         .background(Color(.systemBackground))
         .navigationTitle(posts.last?.content.title ?? "Thread")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Updates", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+        .alert("For you", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
     }
@@ -551,7 +551,7 @@ struct HomePostDetailView: View {
                 }
                 .padding(.bottom, 24)
             } else {
-                ContentUnavailableView("This post isn’t in Updates anymore", systemImage: "sparkles.rectangle.stack",
+                ContentUnavailableView("This post isn’t in For you anymore", systemImage: "house",
                                        description: Text("Its topic was hidden or retired, or the post is older than two weeks."))
                     .padding(.top, 60)
             }
@@ -569,7 +569,7 @@ struct HomePostDetailView: View {
                 await store.refresh(using: auth, force: true)
             }
         }
-        .alert("Updates", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+        .alert("For you", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
     }

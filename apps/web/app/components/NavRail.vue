@@ -9,8 +9,8 @@ const chatSection = ['/chats', '/groups', '/contacts', '/invitations', '/join'];
 const accountSection = ['/account', '/native'];
 const within = (prefixes: string[]) => prefixes.some(prefix => route.path === prefix || route.path.startsWith(`${prefix}/`));
 const items = computed(() => [
-  { to: '/updates', icon: 'sparkle' as const, label: 'Updates', active: route.path === '/updates',
-    badge: route.path === '/updates' ? 0 : updatesUnseen.value, badgeLabel: `${updatesUnseen.value} new in Updates` },
+  { to: '/updates', icon: 'home' as const, label: 'For you', active: route.path === '/updates',
+    badge: route.path === '/updates' ? 0 : updatesUnseen.value, badgeLabel: `${updatesUnseen.value} new in For you` },
   { to: '/chats', icon: 'chat' as const, label: 'Chats', active: within(chatSection),
     badge: chats.totalUnread.value, badgeLabel: `${chats.totalUnread.value} unread messages` },
   { to: '/account', icon: 'person' as const, label: 'Account', active: within(accountSection), badge: 0, badgeLabel: '' },

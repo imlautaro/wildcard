@@ -3,7 +3,7 @@ import type { HomeCardContent, HomePost } from '~/utils/types';
 
 export type HomePostAction = 'more' | 'less' | 'hide' | 'message' | 'reply' | 'thread' | 'comment';
 
-// One Updates post (docs/updates.md#posts), like a Threads or X post: the contact (avatar, name,
+// One For you post (docs/updates.md#posts), like a Threads or X post: the contact (avatar, name,
 // topic, age), the contact's text, and the card of the closed catalog (docs/updates.md#cards)
 // attached in a frame that shows one headline, figure or line of each kind until "Show more".
 // In a thread the attachments start expanded and a line joins the avatars.
@@ -106,7 +106,7 @@ function act(kind: HomePostAction, prompt?: string) { menuOpen.value = false; em
             <div class="menu card-menu" role="menu">
               <AppMenuItem v-if="card.contactID && card.contactName" icon="chat" role="menuitem" @click="act('message')">Message {{ card.contactName }}</AppMenuItem>
               <AppMenuItem icon="thumb-down" role="menuitem" @click="act('less')">{{ card.feedback === 'less' ? 'Undo less like this' : 'Less like this' }}</AppMenuItem>
-              <AppMenuItem icon="hide" danger role="menuitem" @click="act('hide')">Hide from Updates</AppMenuItem>
+              <AppMenuItem icon="hide" danger role="menuitem" @click="act('hide')">Hide from For you</AppMenuItem>
             </div>
           </template>
         </div>

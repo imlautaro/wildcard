@@ -2,7 +2,7 @@
 import type { HomeFeed, HomePost } from '~/utils/types';
 import type { HomePostAction } from './HomePost.vue';
 
-// Updates: the feed a person's contacts curate together (docs/updates.md). On wide
+// For you: the feed a person's contacts curate together (docs/updates.md). On wide
 // screens it fills the content pane beside the chat list as a single timeline column of
 // posts, newest first; `?thread=<topic>` shows every post on one topic as a thread and
 // `?post=<id>` one post with its comments (docs/updates.md#comments).
@@ -135,13 +135,13 @@ function origin(topic: HomeFeed['topics'][number]) {
           See all {{ threadCounts.get(focusPost.topicID) }} posts on {{ focusPost.content.title }}
         </button>
       </template>
-      <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" title="This post isn’t in Updates anymore"
+      <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" title="This post isn’t in For you anymore"
         text="Its topic was hidden or retired, or the post is older than two weeks." />
     </div>
   </div>
   <div v-else-if="thread" ref="page" class="page home-page">
     <AppTopBar :title="threadTitle">
-      <template #leading><AppIconButton icon="back" label="Back to Updates" :tooltip="false" @click="openThread(null)" /></template>
+      <template #leading><AppIconButton icon="back" label="Back to For you" :tooltip="false" @click="openThread(null)" /></template>
     </AppTopBar>
     <div class="home-inner thread">
       <AppNotice v-if="actionError">{{ actionError }}</AppNotice>
@@ -149,16 +149,16 @@ function origin(topic: HomeFeed['topics'][number]) {
         <HomePost v-for="(post, index) in threadPosts" :key="post.id" :post="post" in-thread :chained="index < threadPosts.length - 1"
           @action="(kind, prompt) => act(post, kind, prompt)" />
       </div>
-      <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" title="This thread isn’t in Updates anymore"
+      <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" title="This thread isn’t in For you anymore"
         text="Its topic was hidden or retired, or its posts are older than two weeks." />
     </div>
   </div>
   <div v-else ref="page" class="page home-page" @scroll.passive="onScroll">
-    <AppTopBar title="Updates">
+    <AppTopBar title="For you">
       <template #leading><AppIconButton to="/chats" icon="back" label="Chats" class="back" :tooltip="false" /></template>
       <AppIconButton icon="list" label="Topics" @click="managing = true" />
       <AppIconButton icon="refresh" label="Update now" :disabled="!feed?.enabled || updating || busy" @click="run(home.update)" />
-      <AppIconButton icon="plus" label="Follow something in Updates" variant="filled" @click="following = true" />
+      <AppIconButton icon="plus" label="Follow something in For you" variant="filled" @click="following = true" />
     </AppTopBar>
     <div class="home-inner">
       <section class="home-hero">
@@ -224,7 +224,7 @@ function origin(topic: HomeFeed['topics'][number]) {
       </AppEmptyState>
     </div>
 
-    <AppSheet v-if="following" title="Follow in Updates" @close="following = false">
+    <AppSheet v-if="following" title="Follow in For you" @close="following = false">
       <form id="home-follow" @submit.prevent="follow">
         <textarea v-model="followText" class="follow-input" rows="3" maxlength="400" autofocus
           placeholder="For example: processing times for my I-130" aria-label="What should your contacts follow?" />

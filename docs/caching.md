@@ -1510,6 +1510,10 @@ hours). See [link previews](link-previews.md).
 
 ## Updates feed
 
+The feed is labeled **For you** with a Home icon on iOS and web as of
+2026-11-01. This presentation change preserves cache keys, freshness,
+revalidation, badge acknowledgement and account isolation.
+
 Both clients own one [Updates](updates.md) feed (API resource `home`) per signed-in session: iOS
 `HomeFeedStore` (created by the signed-in shell, so sign-out and account switch drop
 it) and web `useHome` (registered with the session reset). It lives in memory only

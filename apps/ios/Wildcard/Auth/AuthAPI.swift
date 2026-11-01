@@ -208,7 +208,7 @@ struct AuthAPI: Sendable {
             if path.hasPrefix("home") {
                 if response.statusCode == 429 || response.statusCode >= 500 { throw Failure.temporarilyUnavailable }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
-                throw Failure.rejected(message ?? "Updates are temporarily unavailable. Please try again.")
+                throw Failure.rejected(message ?? "For you is temporarily unavailable. Please try again.")
             }
             if path.hasSuffix("/reactions") {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }
