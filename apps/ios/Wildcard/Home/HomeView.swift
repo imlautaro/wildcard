@@ -84,6 +84,9 @@ struct HomeView: View {
             }
             .safeAreaInset(edge: .top, spacing: 0) { topAccessories(for: nil) }
             .navigationTitle(section.title)
+            // For you scrolls a ScrollView the shared bar cannot track through the TabView, so a large
+            // title there got stuck expanded over the content; it keeps a small centered title instead.
+            .toolbarTitleDisplayMode(section == .updates ? .inline : .automatic)
             .toolbar {
                 if section == .updates && destinations.isEmpty {
                     ToolbarItem(placement: .topBarLeading) {
