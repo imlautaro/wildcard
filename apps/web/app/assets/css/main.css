@@ -63,6 +63,9 @@
 /* Main navigation popover under the chat-list menu button. */
 .chat-menu { position: fixed; inset: 60px auto auto var(--space-2); }
 
+/* Separate page and chat bars from their content in both color themes. */
+.bar { border-bottom: 1px solid var(--md-outline-variant); }
+
 /* Chat bar: the avatar and name are one link to the details page. */
 .bar a.title {
   display: flex; align-items: center; gap: var(--space-3); margin-left: var(--space-1); padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
