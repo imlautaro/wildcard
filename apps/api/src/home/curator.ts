@@ -4,7 +4,7 @@ import { clipText, keywords } from '../chat/memory';
 import { isRecord, museCompletion, safeErrorCode, type ModelMessage, type ModelTool } from '../chat/meta';
 import { catalog, connectionColumns, remote, size, validator, type Connection, type RemoteTool } from '../mcp/client';
 import { researchLimits, researchWeb, type ResearchResult } from '../research/model';
-import { cardKinds, homeAccents, homeIcons, kindGuide, parseCard, type CardKind, type HomeCard } from './cards';
+import { cardKinds, homeAccents, homeIcons, kindGuide, parseCard, parsePostText, postTextLimit, type CardKind, type HomeCard } from './cards';
 import { homeReadable, type HomeContact, type HomeSignals } from './signals';
 
 export const homeLimits = {
@@ -125,12 +125,20 @@ const composerTools = (research: boolean, connectors: boolean): ModelTool[] => [
 
 export type ComposeBudget = { research: number; researchID: (index: number) => string; topicID: string };
 
-export type ComposeResult = { card: HomeCard; connector: boolean } | { skip: string };
+// Earlier posts on the same topic, oldest first, so a contact tells what changed instead of repeating itself.
+export type EarlierPost = { at: number; contact: string; text: string };
+export type ComposeResult = { card: HomeCard; text: string | null; connector: boolean } | { skip: string } | { unchanged: string };
 
-/** One contact prepares one card, or skips with a reason when it honestly has nothing to show. */
+/**
+ * One contact writes one post (a short text with a card attached), says nothing changed since its
+ * earlier post, or skips with a reason when it honestly has nothing to show (docs/updates.md#posts).
+ */
 export async function composeCard(env: Env, context: ComposeContext, topic: PlannedTopic & { id: string },
   previous: string | null, others: string[], model: string, budget: ComposeBudget,
-  review?: { authorName: string; excerpts: ReviewExcerpt[] }): Promise<ComposeResult> {
+  extra: { earlier?: EarlierPost[]; review?: { authorName: string; excerpts: ReviewExcerpt[] } } = {}): Promise<ComposeResult> {
+  const { review, earlier = [] } = extra;
+  // "Nothing new" needs something already published to stand for it; a review either revises or keeps.
+  const canKeep = !!previous && !review;
   const contact = context.contacts.find(item => item.id === topic.contactID);
   if (!contact) return { skip: '' };
   const terms = keywords(`${topic.title} ${topic.brief}`);
@@ -144,12 +152,18 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
     { role: 'system', content: [
       `You are ${JSON.stringify(contact.name)}, one of ${JSON.stringify(context.userName)}'s contacts in Wildcard.`
         + (contact.description ? ` Personality: ${contact.description}` : '') + (contact.specialties ? ` Specialties: ${contact.specialties}` : ''),
-      `You and ${JSON.stringify(context.userName)}'s other contacts curate their Updates page together, and you were asked to prepare one card for it. `
-        + `Write every visible text in ${context.language}, concise and scannable like a well-designed news or dashboard card, with a touch of your own voice in subtitles and notes.`,
+      `You and ${JSON.stringify(context.userName)}'s other contacts curate their Updates page together. It is a timeline of short posts, like Threads or X, and you were asked to write one post about this topic: `
+        + 'a short text in your own voice with one card attached that shows the data.',
+      `Write every visible text in ${context.language}. The card is concise and scannable like a well-designed news or dashboard card.`,
+      `post (max ${postTextLimit} characters): one or two short sentences, the way you would text them, leading with what is new or why it matters to them now. `
+        + 'Do not list the card\'s figures one by one, do not greet them or sign, no hashtags; an emoji only if it suits your personality. A note card has no post: its text is the post.',
       `Now: ${localNow(Date.now(), context.timeZone)} (${context.timeZone}).`,
       'Gather evidence with the tools when the card needs current or personal data, then answer with JSON only: '
-        + '{"action":"publish","card":{...}} or {"action":"skip","reason":"..."}. '
+        + '{"action":"publish","post":"...","card":{...}}' + (canKeep ? ', {"action":"no_news","reason":"..."}' : '') + ' or {"action":"skip","reason":"..."}. '
         + 'A skip reason is one short line in English for the editor, saying what was missing (for example "no public data on this application type"); no personal details.',
+      ...(canKeep ? ['previousCard and earlierPosts are what Updates already shows on this topic. Publish only when the evidence brings something new or meaningfully different '
+        + '(a result, a figure that moved, a status change, fresh news); then say what changed since then. '
+        + 'If nothing meaningful changed, answer {"action":"no_news","reason":"..."} (one short English line) and the earlier post stays. Never repost the same thing in other words.'] : []),
       'Only use facts from tool results, the evidence below and the previous card. Never invent numbers, scores, dates, quotes, sources or links; copy URLs exactly from tool results and omit url when you have none. '
         + 'Use the most recent figures the evidence gives and label when they are from (subtitle, time or caption); when today\'s value is not out yet, show the latest one with its date instead of giving up.',
       ...(research ? ['research_web runs one public web search. Use one focused, self-contained query without personal details.'] : []),
@@ -166,6 +180,7 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
     ].join('\n') },
     { role: 'user', content: JSON.stringify({
       card: { title: topic.title, brief: topic.brief, whyItIsInUpdates: topic.reason, kind: topic.kind },
+      ...(earlier.length ? { earlierPosts: earlier.map(post => ({ date: date(post.at, context.timeZone), by: post.contact, post: post.text })) } : {}),
       whatContactsRemember: (memories.length ? memories : context.memories.slice(0, 12)).slice(0, 20).map(memory => memory.content),
       relatedRecentMessages: messages.slice(0, 8).map(message => message.text),
       previousCard: previous ? JSON.parse(previous) : undefined,
@@ -206,15 +221,18 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
     }
     let output: unknown;
     try { output = JSON.parse(answer.content ?? ''); } catch { output = null; }
-    if (isRecord(output) && output.action === 'skip') {
-      return { skip: Array.from(typeof output.reason === 'string' ? output.reason.replace(/\s+/g, ' ').trim() : '').slice(0, 200).join('') };
-    }
-    const parsed = isRecord(output) && output.action === 'publish' ? parseCard(output.card) : { error: 'Answer with {"action":"publish","card":{...}} or {"action":"skip","reason":"..."}.' };
-    if ('card' in parsed) return { card: parsed.card, connector: connectorUsed };
+    const reason = isRecord(output) && typeof output.reason === 'string' ? Array.from(output.reason.replace(/\s+/g, ' ').trim()).slice(0, 200).join('') : '';
+    if (isRecord(output) && output.action === 'skip') return { skip: reason };
+    if (isRecord(output) && output.action === 'no_news' && canKeep) return { unchanged: reason };
+    const card = isRecord(output) && output.action === 'publish' ? parseCard(output.card)
+      : { error: 'Answer with {"action":"publish","post":"...","card":{...}}' + (canKeep ? ', {"action":"no_news","reason":"..."}' : '') + ' or {"action":"skip","reason":"..."}.' };
+    const post = 'card' in card ? parsePostText(isRecord(output) ? output.post : undefined, card.card.kind) : null;
+    if ('card' in card && post && 'text' in post) return { card: card.card, text: post.text, connector: connectorUsed };
+    const parsed = post && 'error' in post ? post : card as { error: string };
     // One repair turn for a card the validator rejected.
     if (repaired || round === homeLimits.rounds - 1) throw new NonRetryableError('MODEL_HOME_CARD_INVALID');
     repaired = true;
-    conversation.push(answer, { role: 'user', content: `The card was rejected: ${parsed.error} Fix it and answer with the corrected JSON only.` });
+    conversation.push(answer, { role: 'user', content: `The answer was rejected: ${parsed.error} Fix it and answer with the corrected JSON only.` });
   }
   throw new NonRetryableError('MODEL_HOME_CARD_INVALID');
 }

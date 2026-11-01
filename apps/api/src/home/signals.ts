@@ -11,6 +11,7 @@ export type HomeContact = { id: string; name: string; description: string; speci
 export type HomeTopicRow = { id: string; title: string; brief: string; reason: string | null; kind: CardKind; source: 'person' | 'contact' | 'curator';
   contactID: string | null; status: 'active' | 'hidden' | 'retired'; feedback: 'more' | 'less' | null; pinned: number; updatedAt: number; skips: number; skipReason: string | null };
 export type HomeCardRow = { topicID: string; kind: CardKind; contactID: string | null; payloadJSON: string; generatedAt: number; expiresAt: number };
+export type HomePostRow = { topicID: string; contact: string; text: string; at: number };
 export type HomeSignals = {
   userName: string; timeZone: string; now: number;
   contacts: HomeContact[];
@@ -21,6 +22,8 @@ export type HomeSignals = {
   schedules: { instruction: string; nextAt: number; repeats: boolean }[];
   topics: HomeTopicRow[];
   cards: HomeCardRow[];
+  /** Recent post texts, newest first, so a contact can tell what changed (docs/updates.md#posts). */
+  posts: HomePostRow[];
 };
 
 // Reads only. Home never runs a tool a server or its name marks as a change.
@@ -58,7 +61,7 @@ export const topicColumns = `id, title, brief, reason, kind, source, contact_id 
 export async function readSignals(db: D1Database, userID: string): Promise<HomeSignals | null> {
   const user = await db.prepare('SELECT name FROM user WHERE id = ?').bind(userID).first<{ name: string }>();
   if (!user) return null;
-  const [contacts, access, memories, messages, groupMessages, connectors, miniApps, schedules, topics, cards, timeZone] = await Promise.all([
+  const [contacts, access, memories, messages, groupMessages, connectors, miniApps, schedules, topics, cards, posts, timeZone] = await Promise.all([
     db.prepare(`SELECT c.id, c.name, p.profile_json AS profile,
         (SELECT MAX(t.created_at) FROM chat_turn t WHERE t.contact_id = c.id) AS lastAt
       FROM contact c LEFT JOIN agent_personality p ON p.agent_id = c.agent_id
@@ -96,6 +99,9 @@ export async function readSignals(db: D1Database, userID: string): Promise<HomeS
       .bind(userID).all<HomeTopicRow>(),
     db.prepare(`SELECT topic_id AS topicID, kind, contact_id AS contactID, payload_json AS payloadJSON, generated_at AS generatedAt,
       expires_at AS expiresAt FROM home_card WHERE user_id = ? ORDER BY position`).bind(userID).all<HomeCardRow>(),
+    db.prepare(`SELECT p.topic_id AS topicID, COALESCE(c.name, 'A contact') AS contact, p.text, p.created_at AS at FROM home_post p
+      LEFT JOIN contact c ON c.id = p.contact_id AND c.user_id = p.user_id
+      WHERE p.user_id = ? AND p.text IS NOT NULL ORDER BY p.created_at DESC LIMIT 60`).bind(userID).all<HomePostRow>(),
     homeTimeZone(db, userID),
   ]);
   return {
@@ -113,5 +119,6 @@ export async function readSignals(db: D1Database, userID: string): Promise<HomeS
     schedules: schedules.results.map(row => ({ instruction: clipText(row.instruction, 200), nextAt: row.nextAt, repeats: row.interval !== null })),
     topics: topics.results.filter(row => (cardKinds as readonly string[]).includes(row.kind)),
     cards: cards.results,
+    posts: posts.results,
   };
 }

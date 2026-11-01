@@ -150,6 +150,20 @@ function body(kind: CardKind, card: Record<string, unknown>): Record<string, unk
   }
 }
 
+// A post's text (docs/updates.md#posts): what the contact says above its card.
+export const postTextLimit = 280;
+
+/** Validates a post's text; a note card carries its own text, so its post has none. */
+export function parsePostText(raw: unknown, kind: CardKind): { text: string | null } | { error: string } {
+  try {
+    if (kind === 'note') return { text: null };
+    return { text: text(raw, 'post', postTextLimit)! };
+  } catch (error) {
+    if (error instanceof CardError) return { error: error.message };
+    throw error;
+  }
+}
+
 /** Validates a composed card, returning a precise error the composer can repair. */
 export function parseCard(raw: unknown): { card: HomeCard } | { error: string } {
   try {

@@ -2,18 +2,23 @@ import type { WorkflowStep } from 'cloudflare:workers';
 import { safeErrorCode } from '../chat/meta';
 import { accountModel, standardModel } from '../lib/model-preference';
 import { cardLifetimes } from './cards';
-import { composeCard, homeLimits, planHome, type ComposeContext, type PlannedTopic } from './curator';
+import { composeCard, homeLimits, planHome, type ComposeContext, type EarlierPost, type PlannedTopic } from './curator';
 import { readSignals } from './signals';
 import { reviewCandidates, type ReviewCandidate } from './review';
 import type { CardKind } from './cards';
 
 export type HomeJob = { kind: 'home'; userID: string; revision: number; force: boolean };
-type ComposeJob = PlannedTopic & { id: string; position: number; previous: string | null };
+type ComposeJob = PlannedTopic & { id: string; position: number; previous: string | null; earlier: EarlierPost[] };
 type RunPlan = { context: ComposeContext; model: string; compose: ComposeJob[]; titles: string[] };
 
 // Curation runs only for people who opened Home recently; a run that has not
 // finished in this time is claimed again (its writes are fenced by revision).
 const viewWindow = 3 * 86_400_000, staleRun = 45 * 60_000, retryDelay = 10 * 60_000;
+// Posts stay in the timeline this long (docs/updates.md#posts); three earlier ones go to the composer.
+export const postRetention = 14 * 86_400_000;
+const earlierPosts = 3;
+// Each run publishes at most one post per topic, so the revision makes a retried step rewrite its own post.
+const postID = (topicID: string, revision: number, review = false) => `${topicID}-${revision}${review ? '-review' : ''}`;
 export const homeEnabled = (env: Env) => env.HOME_FEED_ENABLED === 'true' && !!env.META_API_KEY?.trim();
 const current = (env: Env, job: HomeJob) => env.DB.prepare(`SELECT 1 FROM home_feed WHERE user_id = ? AND revision = ? AND status = 'running'`)
   .bind(job.userID, job.revision).first();
@@ -90,6 +95,7 @@ async function plan(env: Env, job: HomeJob): Promise<RunPlan | { error: string }
     env.DB.prepare(`UPDATE home_feed SET briefing = ?1 WHERE user_id = ?2 AND revision = ?3 AND status = 'running'`)
       .bind(planned.briefing || null, job.userID, job.revision),
     env.DB.prepare(`DELETE FROM home_topic WHERE user_id = ? AND status = 'retired' AND updated_at < ?`).bind(job.userID, now - 7 * 86_400_000),
+    env.DB.prepare(`DELETE FROM home_post WHERE user_id = ? AND created_at < ?`).bind(job.userID, now - postRetention),
   ]);
   // Compose new topics and stale cards, best first; a requested refresh also
   // renews cards older than half an hour.
@@ -99,7 +105,9 @@ async function plan(env: Env, job: HomeJob): Promise<RunPlan | { error: string }
     // Topics someone asked for go first, so the per-run cap never delays them behind curator picks.
     .sort((a, b) => Number(requested.has(b.topic.id)) - Number(requested.has(a.topic.id)))
     .slice(0, homeLimits.composePerRun)
-    .map(({ topic, position, card }) => ({ ...topic, position, previous: card?.payloadJSON ?? null }));
+    .map(({ topic, position, card }) => ({ ...topic, position, previous: card?.payloadJSON ?? null,
+      earlier: signals.posts.filter(post => post.topicID === topic.id).slice(0, earlierPosts).reverse()
+        .map(post => ({ at: post.at, contact: post.contact, text: post.text })) }));
   return {
     model, compose, titles: topics.map(topic => topic.title),
     context: { userID: job.userID, userName: signals.userName, timeZone: signals.timeZone, language: planned.language,
@@ -117,7 +125,7 @@ async function compose(env: Env, job: HomeJob, run: RunPlan, index: number, rese
   const budget = { get research() { return research.remaining; }, set research(value: number) { research.remaining = value; },
     researchID: (attempt: number) => `home-${job.userID}-${job.revision}-${topic.id}-${attempt}`, topicID: topic.id };
   const result = await composeCard({ ...env, META_CHAT_MODEL: model }, run.context, topic, topic.previous,
-    run.titles.filter(title => title !== topic.title), model, budget);
+    run.titles.filter(title => title !== topic.title), model, budget, { earlier: topic.earlier });
   const now = Date.now();
   const fence = `EXISTS (SELECT 1 FROM home_feed WHERE user_id = ?2 AND revision = ?3 AND status = 'running')`;
   if ('skip' in result) {
@@ -137,10 +145,23 @@ async function compose(env: Env, job: HomeJob, run: RunPlan, index: number, rese
     console.log(JSON.stringify({ event: 'home_card_skipped' }));
     return 'skipped';
   }
+  if ('unchanged' in result) {
+    // Nothing new since the earlier post: no post, and the card counts as fresh for its kind's lifetime,
+    // so the next run is not due sooner (finish() schedules from the first expiry). Not a skip.
+    const kind = (JSON.parse(topic.previous ?? '{}') as { kind?: CardKind }).kind;
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE home_card SET expires_at = ?4 WHERE topic_id = ?1 AND user_id = ?2 AND ${fence}`)
+        .bind(topic.id, job.userID, job.revision, now + (kind && cardLifetimes[kind] ? cardLifetimes[kind] : 6 * 3_600_000)),
+      env.DB.prepare(`UPDATE home_topic SET skips = 0, skip_reason = NULL WHERE id = ?1 AND user_id = ?2 AND skips > 0 AND ${fence}`)
+        .bind(topic.id, job.userID, job.revision),
+    ]);
+    console.log(JSON.stringify({ event: 'home_card_unchanged' }));
+    return 'unchanged';
+  }
   const { card } = result;
   await env.DB.prepare(`UPDATE home_topic SET skips = 0, skip_reason = NULL WHERE id = ?1 AND user_id = ?2 AND skips > 0 AND ${fence}`)
     .bind(topic.id, job.userID, job.revision).run();
-  await env.DB.prepare(`INSERT INTO home_card (id, user_id, topic_id, contact_id, kind, position, payload_json, connector, generated_at, expires_at)
+  await env.DB.batch([env.DB.prepare(`INSERT INTO home_card (id, user_id, topic_id, contact_id, kind, position, payload_json, connector, generated_at, expires_at)
       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
       WHERE EXISTS (SELECT 1 FROM home_feed WHERE user_id = ?2 AND revision = ?11 AND status = 'running')
         AND EXISTS (SELECT 1 FROM home_topic WHERE id = ?3 AND user_id = ?2 AND status = 'active')
@@ -150,7 +171,17 @@ async function compose(env: Env, job: HomeJob, run: RunPlan, index: number, rese
       generated_at = excluded.generated_at, expires_at = excluded.expires_at
     WHERE home_card.user_id = excluded.user_id`)
     .bind(crypto.randomUUID(), job.userID, topic.id, topic.contactID, card.kind, topic.position, JSON.stringify(card), result.connector ? 1 : 0,
-      now, now + cardLifetimes[card.kind], job.revision).run();
+      now, now + cardLifetimes[card.kind], job.revision),
+  // The same card is appended to the timeline as a post with the contact's text.
+  env.DB.prepare(`INSERT INTO home_post (id, user_id, topic_id, contact_id, text, kind, payload_json, connector, created_at)
+      SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
+      WHERE EXISTS (SELECT 1 FROM home_feed WHERE user_id = ?2 AND revision = ?10 AND status = 'running')
+        AND EXISTS (SELECT 1 FROM home_topic WHERE id = ?3 AND user_id = ?2 AND status = 'active')
+        AND EXISTS (SELECT 1 FROM contact WHERE id = ?4 AND user_id = ?2)
+    ON CONFLICT(id) DO UPDATE SET text = excluded.text, kind = excluded.kind, payload_json = excluded.payload_json, connector = excluded.connector
+    WHERE home_post.user_id = excluded.user_id`)
+    .bind(postID(topic.id, job.revision), job.userID, topic.id, topic.contactID, result.text, card.kind, JSON.stringify(card),
+      result.connector ? 1 : 0, now, job.revision)]);
   return 'published';
 }
 
@@ -170,12 +201,21 @@ async function review(env: Env, job: HomeJob, run: RunPlan, candidate: ReviewCan
   const budget = { get research() { return research.remaining; }, set research(value: number) { research.remaining = value; },
     researchID: (attempt: number) => `home-${job.userID}-${job.revision}-review-${candidate.topicID}-${attempt}`, topicID: candidate.topicID };
   const result = await composeCard({ ...env, META_CHAT_MODEL: run.model }, run.context, topic, row.payloadJSON,
-    run.titles.filter(title => title !== row.title), run.model, budget, { authorName: candidate.authorName, excerpts: candidate.excerpts });
+    run.titles.filter(title => title !== row.title), run.model, budget, { review: { authorName: candidate.authorName, excerpts: candidate.excerpts } });
   // A reviewer's skip only means its evidence is not better; it does not count as a topic skip.
-  if ('skip' in result) return 'kept';
+  if (!('card' in result)) return 'kept';
   const now = Date.now(), fence = `EXISTS (SELECT 1 FROM home_feed WHERE user_id = ?2 AND revision = ?3 AND status = 'running')`;
   const note = Array.from(`${reviewer.name} updated this with newer details from your chats`).slice(0, 160).join('');
+  const id = postID(candidate.topicID, job.revision, true);
   await env.DB.batch([
+    // The revision is a post that replies to the latest post on the topic.
+    env.DB.prepare(`INSERT INTO home_post (id, user_id, topic_id, contact_id, text, kind, payload_json, connector, reply_to, created_at)
+        SELECT ?4, ?2, ?1, ?5, ?6, ?7, ?8, 0,
+          (SELECT p.id FROM home_post p WHERE p.topic_id = ?1 AND p.user_id = ?2 AND p.id != ?4 ORDER BY p.created_at DESC LIMIT 1), ?9
+        WHERE ${fence} AND EXISTS (SELECT 1 FROM home_topic WHERE id = ?1 AND user_id = ?2 AND status = 'active')
+      ON CONFLICT(id) DO UPDATE SET text = excluded.text, kind = excluded.kind, payload_json = excluded.payload_json
+      WHERE home_post.user_id = excluded.user_id`)
+      .bind(candidate.topicID, job.userID, job.revision, id, reviewer.id, result.text, result.card.kind, JSON.stringify(result.card), now),
     env.DB.prepare(`UPDATE home_card SET contact_id = ?4, kind = ?5, payload_json = ?6, revision = revision + 1, generated_at = ?7, expires_at = ?8
       WHERE topic_id = ?1 AND user_id = ?2 AND ${fence}`)
       .bind(candidate.topicID, job.userID, job.revision, reviewer.id, result.card.kind, JSON.stringify(result.card), now, now + cardLifetimes[result.card.kind]),

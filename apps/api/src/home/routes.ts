@@ -5,7 +5,7 @@ import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { parseSpec } from '../miniapps/spec';
 import { homeLimits } from './curator';
-import { dispatchHome, homeEnabled } from './workflow';
+import { dispatchHome, homeEnabled, postRetention } from './workflow';
 import { topicColumns, type HomeTopicRow } from './signals';
 
 // Updates feed for the signed-in person (docs/updates.md; the API keeps the `home` name). Cards come from curation
@@ -29,10 +29,15 @@ function zone(value: string | undefined): string | null {
 type FeedRow = { status: string; generatedAt: number | null; briefing: string | null; progressJSON: string | null; errorCode: string | null; dueAt: number; requestedAt: number | null };
 type CardRow = { id: string; topicID: string; contactID: string | null; contactName: string | null; photoVersion: string | null; payloadJSON: string;
   connector: number; generatedAt: number; reason: string | null; source: string; feedback: string | null };
+type PostRow = { id: string; topicID: string; contactID: string | null; contactName: string | null; photoVersion: string | null; text: string | null;
+  payloadJSON: string; connector: number; createdAt: number; replyTo: string | null; replyToName: string | null;
+  reason: string | null; source: string; feedback: string | null };
+// The newest posts the timeline shows (docs/updates.md#posts).
+const timelinePosts = 50;
 
 export async function homeFeed(env: Env, owner: string) {
   const now = Date.now();
-  const [state, cards, topics, apps, schedules, tasks] = await Promise.all([
+  const [state, cards, posts, topics, apps, schedules, tasks] = await Promise.all([
     env.DB.prepare(`SELECT status, generated_at AS generatedAt, briefing, progress_json AS progressJSON, error_code AS errorCode,
       due_at AS dueAt, requested_at AS requestedAt FROM home_feed WHERE user_id = ?`).bind(owner).first<FeedRow>(),
     env.DB.prepare(`SELECT card.id, card.topic_id AS topicID, card.contact_id AS contactID, COALESCE(c.alias, c.name) AS contactName, c.photo_version AS photoVersion,
@@ -40,6 +45,14 @@ export async function homeFeed(env: Env, owner: string) {
       FROM home_card card JOIN home_topic t ON t.id = card.topic_id AND t.status = 'active'
       LEFT JOIN contact c ON c.id = card.contact_id AND c.user_id = card.user_id
       WHERE card.user_id = ? ORDER BY card.position, card.generated_at DESC LIMIT 16`).bind(owner).all<CardRow>(),
+    env.DB.prepare(`SELECT p.id, p.topic_id AS topicID, p.contact_id AS contactID, COALESCE(c.alias, c.name) AS contactName, c.photo_version AS photoVersion,
+        p.text, p.payload_json AS payloadJSON, p.connector, p.created_at AS createdAt, p.reply_to AS replyTo, COALESCE(rc.alias, rc.name) AS replyToName,
+        t.reason, t.source, t.feedback
+      FROM home_post p JOIN home_topic t ON t.id = p.topic_id AND t.status = 'active'
+      LEFT JOIN contact c ON c.id = p.contact_id AND c.user_id = p.user_id
+      LEFT JOIN home_post r ON r.id = p.reply_to
+      LEFT JOIN contact rc ON rc.id = r.contact_id AND rc.user_id = p.user_id
+      WHERE p.user_id = ? AND p.created_at > ? ORDER BY p.created_at DESC LIMIT ?`).bind(owner, now - postRetention, timelinePosts).all<PostRow>(),
     env.DB.prepare(`SELECT ${topicColumns} FROM home_topic WHERE user_id = ? AND status != 'retired' ORDER BY updated_at DESC LIMIT 40`)
       .bind(owner).all<HomeTopicRow>(),
     // Enabled mini apps the person opens, plus ones created in the last three days.
@@ -65,7 +78,7 @@ export async function homeFeed(env: Env, owner: string) {
   ]);
   const progress = state?.progressJSON ? JSON.parse(state.progressJSON) as { total: number; done: number; title: string; contactID: string } : null;
   const contributors = new Map<string, { id: string; name: string; photoVersion: string | null }>();
-  for (const card of cards.results) if (card.contactID && card.contactName) contributors.set(card.contactID, { id: card.contactID, name: card.contactName, photoVersion: card.photoVersion });
+  for (const card of [...cards.results, ...posts.results]) if (card.contactID && card.contactName) contributors.set(card.contactID, { id: card.contactID, name: card.contactName, photoVersion: card.photoVersion });
   return {
     enabled: homeEnabled(env),
     status: state?.status === 'running' ? 'updating' : 'idle',
@@ -78,6 +91,11 @@ export async function homeFeed(env: Env, owner: string) {
     cards: cards.results.map(card => ({ id: card.id, topicID: card.topicID, contactID: card.contactID, contactName: card.contactName,
       contactPhotoVersion: card.photoVersion, reason: card.reason, source: card.source, feedback: card.feedback, connector: card.connector === 1,
       generatedAt: card.generatedAt, content: JSON.parse(card.payloadJSON) })),
+    // The timeline, newest first: each post is a contact's text with a card attached (null text: the card alone).
+    posts: posts.results.map(post => ({ id: post.id, topicID: post.topicID, contactID: post.contactID, contactName: post.contactName,
+      contactPhotoVersion: post.photoVersion, text: post.text, replyTo: post.replyTo ? { id: post.replyTo, contactName: post.replyToName } : null,
+      reason: post.reason, source: post.source, feedback: post.feedback, connector: post.connector === 1, createdAt: post.createdAt,
+      content: JSON.parse(post.payloadJSON) })),
     topics: topics.results.map(topic => ({ id: topic.id, title: topic.title, source: topic.source, status: topic.status, feedback: topic.feedback,
       contactID: topic.contactID, hasCard: cards.results.some(card => card.topicID === topic.id) })),
     apps: apps.results.flatMap(app => {
@@ -121,13 +139,13 @@ async function markSeen(env: Env, owner: string, now: number) {
   await env.DB.prepare('UPDATE home_feed SET seen_at = ?2 WHERE user_id = ?1').bind(owner, now).run();
 }
 
-// Number of cards generated since the person last opened Updates; clients poll it
+// Number of posts published since the person last opened Updates; clients poll it
 // for the Updates tab/button badge. It never starts a curation run.
 home.get('/badge', async c => {
-  const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unseen FROM home_card card
-    JOIN home_feed f ON f.user_id = card.user_id
-    JOIN home_topic t ON t.id = card.topic_id AND t.status = 'active'
-    WHERE card.user_id = ? AND card.generated_at > COALESCE(f.seen_at, f.viewed_at)`).bind(c.get('owner')).first<{ unseen: number }>();
+  const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unseen FROM home_post p
+    JOIN home_feed f ON f.user_id = p.user_id
+    JOIN home_topic t ON t.id = p.topic_id AND t.status = 'active'
+    WHERE p.user_id = ? AND p.created_at > COALESCE(f.seen_at, f.viewed_at)`).bind(c.get('owner')).first<{ unseen: number }>();
   return c.json({ unseen: homeEnabled(c.env) ? Math.min(row?.unseen ?? 0, 99) : 0 });
 });
 
@@ -177,8 +195,9 @@ home.patch('/topics/:id', async c => {
   await c.env.DB.batch([
     c.env.DB.prepare(`UPDATE home_topic SET status = ?1, feedback = CASE WHEN ?2 = 1 THEN ?3 ELSE feedback END, updated_at = ?4
       WHERE id = ?5 AND user_id = ?6`).bind(status, 'feedback' in body ? 1 : 0, body.feedback ?? null, now, c.req.param('id'), owner),
-    // Hiding removes the card at once; the curator never brings the topic back.
+    // Hiding removes the card and its posts at once; the curator never brings the topic back.
     c.env.DB.prepare(`DELETE FROM home_card WHERE topic_id = ? AND user_id = ? AND ? = 'hidden'`).bind(c.req.param('id'), owner, status),
+    c.env.DB.prepare(`DELETE FROM home_post WHERE topic_id = ? AND user_id = ? AND ? = 'hidden'`).bind(c.req.param('id'), owner, status),
   ]);
   if (topic.status === 'hidden' && status === 'active') await request(c.env, c.executionCtx, owner, true);
   return c.json(await homeFeed(c.env, owner));
