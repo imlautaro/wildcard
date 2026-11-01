@@ -23,5 +23,15 @@
       "binding": "API",
       "service": "wildcard-api"
     }
-  ]
+  ],
+  // Previews (`wrangler preview`, Workers Builds on non-production branches) don't inherit
+  // the settings above. Their API binding calls wildcard-api's production deployment.
+  "previews": {
+    "services": [
+      {
+        "binding": "API",
+        "service": "wildcard-api"
+      }
+    ]
+  }
 }
