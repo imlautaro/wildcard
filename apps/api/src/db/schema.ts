@@ -894,3 +894,28 @@ export const privateContactMessage = sqliteTable('private_contact_message', {
   index('private_contact_message_target_idx').on(table.targetContactId, table.createdAt),
   index('private_contact_message_budget_idx').on(table.createdAt),
 ]);
+
+// Sticker libraries of people and contacts (migration 0091, docs/stickers.md).
+export const sticker = sqliteTable('sticker', {
+  id: text('id').primaryKey(),
+  ownerKind: text('owner_kind', { enum: ['user', 'agent'] }).notNull(),
+  ownerId: text('owner_id').notNull(),
+  scopeUserId: text('scope_user_id'),
+  emoji: text('emoji').notNull(),
+  objectKey: text('object_key').notNull().unique(),
+  digest: text('digest').notNull(),
+  size: integer('size').notNull(),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  source: text('source', { enum: ['upload', 'avatar', 'saved'] }).notNull(),
+  sourcePhotoVersion: text('source_photo_version'),
+  createdAt: date('created_at').notNull(),
+}, (t) => [index('sticker_owner_idx').on(t.ownerKind, t.ownerId, desc(t.createdAt)),
+  check('sticker_owner_kind', sql`${t.ownerKind} IN ('user', 'agent')`),
+  check('sticker_source', sql`${t.source} IN ('upload', 'avatar', 'saved')`)]);
+export const stickerPhotoCheck = sqliteTable('sticker_photo_check', {
+  agentId: text('agent_id').notNull(),
+  photoVersion: text('photo_version').notNull(),
+  hasFace: integer('has_face').notNull(),
+  checkedAt: date('checked_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.agentId, t.photoVersion] })]);

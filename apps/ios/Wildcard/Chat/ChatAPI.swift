@@ -169,7 +169,7 @@ extension AuthAPI {
     }
 
     private struct ReplyInput: Encodable { let messageID: String; let side: String }
-    private struct MessageInput: Encodable { let historyRevision: Int; let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment?; var voice: VoiceInput? = nil; let replyTo: ReplyInput?; var homePost: String? = nil; let nativeContext: NativeContext? }
+    private struct MessageInput: Encodable { let historyRevision: Int; let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment?; var voice: VoiceInput? = nil; var sticker: StickerSend? = nil; let replyTo: ReplyInput?; var homePost: String? = nil; let nativeContext: NativeContext? }
 
     func chatTurns(contactID: String, before: Int? = nil, token: String) async throws -> ChatPage {
         let query = before.map { [URLQueryItem(name: "before", value: String($0))] } ?? []
@@ -177,13 +177,14 @@ extension AuthAPI {
         return try JSONDecoder().decode(ChatPage.self, from: data)
     }
 
-    func sendMessage(contactID: String, historyRevision: Int = 0, id: String, text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, homePost: String? = nil, nativeContext: NativeContext? = nil, token: String) async throws -> ChatSubmission {
+    func sendMessage(contactID: String, historyRevision: Int = 0, id: String, text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, sticker: Sticker? = nil, replyTo: MessageReplyQuote? = nil, homePost: String? = nil, nativeContext: NativeContext? = nil, token: String) async throws -> ChatSubmission {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .withoutEscapingSlashes
         let timeZone = TimeZone.current.identifier
         let reply = replyTo.map { ReplyInput(messageID: $0.messageID, side: $0.side) }
         let body = try encoder.encode(MessageInput(historyRevision: historyRevision, id: id, text: text, timeZone: timeZone, attachment: attachment,
-                                                   voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, homePost: homePost, nativeContext: nativeContext))
+                                                   voice: voice.map { VoiceInput(data: $0.data) }, sticker: sticker.map { StickerSend(id: $0.id) },
+                                                   replyTo: reply, homePost: homePost, nativeContext: nativeContext))
         let data: Data
         do {
             data = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: body, token: token, timeout: 90).0
@@ -192,8 +193,13 @@ extension AuthAPI {
             var legacyContext = nativeContext
             legacyContext?.automaticKinds = nil
             let legacyBody = try encoder.encode(MessageInput(historyRevision: historyRevision, id: id, text: text, timeZone: timeZone, attachment: attachment,
-                                                             voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, homePost: homePost, nativeContext: legacyContext))
+                                                             voice: voice.map { VoiceInput(data: $0.data) }, sticker: sticker.map { StickerSend(id: $0.id) },
+                                                             replyTo: reply, homePost: homePost, nativeContext: legacyContext))
             data = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: legacyBody, token: token, timeout: 90).0
+        } catch Failure.notFound where sticker != nil {
+            // The route answers 404 "Choose a sticker from your library" (deleted on another device); a missing contact is
+            // reported by the next history refresh.
+            throw Failure.rejected("This sticker is no longer in your library.")
         }
         return try JSONDecoder().decode(ChatSubmission.self, from: data)
     }

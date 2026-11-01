@@ -11,6 +11,8 @@ private struct MessageReactionsModifier: ViewModifier {
     /// `.some` for voice messages: the transcript, `nil` while transcribing, empty without speech.
     let transcript: String??
     let onMessageInfo: (() -> Void)?
+    /// Set on a contact's sticker message in a private chat: adds "Save sticker" to the message menu.
+    let onSaveSticker: (() -> Void)?
     @Environment(AuthStore.self) private var auth
     @State private var showsPicker = false
     @State private var showsTranscript = false
@@ -31,6 +33,7 @@ private struct MessageReactionsModifier: ViewModifier {
                 .accessibilityActions {
                     if enabled, let onReply { Button("Reply", action: onReply) }
                     if let onMessageInfo { Button("Message info", action: onMessageInfo) }
+                    if let onSaveSticker { Button("Save sticker", action: onSaveSticker) }
                     if transcript != nil { Button("View transcript") { showsTranscript = true } }
                 }
             if !rows.isEmpty {
@@ -86,6 +89,12 @@ private struct MessageReactionsModifier: ViewModifier {
                         }
                     }
                 }
+                if let onSaveSticker {
+                    Button("Save sticker", systemImage: "square.and.arrow.down") {
+                        showsPicker = false
+                        onSaveSticker()
+                    }
+                }
                 if transcript != nil {
                     Button("View transcript", systemImage: "text.quote") {
                         showsPicker = false
@@ -115,8 +124,8 @@ private struct MessageReactionsModifier: ViewModifier {
 
 extension View {
     func messageReactions(_ store: MessageReactionStore, path: String, messageID: String, side: String, fromUser: Bool, enabled: Bool = true,
-                          onReply: (() -> Void)? = nil, transcript: String?? = nil, onMessageInfo: (() -> Void)? = nil) -> some View {
+                          onReply: (() -> Void)? = nil, transcript: String?? = nil, onMessageInfo: (() -> Void)? = nil, onSaveSticker: (() -> Void)? = nil) -> some View {
         modifier(MessageReactionsModifier(store: store, path: path, messageID: messageID, side: side, fromUser: fromUser, enabled: enabled, onReply: onReply,
-                                          transcript: transcript, onMessageInfo: onMessageInfo))
+                                          transcript: transcript, onMessageInfo: onMessageInfo, onSaveSticker: onSaveSticker))
     }
 }

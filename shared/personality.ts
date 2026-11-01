@@ -16,6 +16,7 @@ export const personalityTraits = [
   { key: 'initiative', label: 'Initiative', low: 'Waits for you', high: 'Starts conversations' },
   { key: 'sarcasm', label: 'Irony', low: 'Literal', high: 'Wry' },
   { key: 'emoji', label: 'Emoji', low: 'Rarely', high: 'Often' },
+  { key: 'stickers', label: 'Stickers', low: 'Rarely', high: 'Often' },
 ] as const;
 export type TraitKey = typeof personalityTraits[number]['key'];
 export type Personality = {
@@ -36,6 +37,12 @@ export function defaultPersonality(): Personality {
 // starting point from the expressive traits instead of a flat middle value.
 export function inferredEmoji(traits: Partial<Record<string, number>>): number {
   const value = ((traits.expressiveness ?? 5) + (traits.playfulness ?? 5) + (traits.warmth ?? 5) + (11 - (traits.formality ?? 5))) / 4;
+  return Number.isFinite(value) ? Math.max(1, Math.min(10, Math.round(value))) : 5;
+}
+
+// Same for the stickers trait: a contact that likes emoji tends to like stickers, a formal one less.
+export function inferredStickers(traits: Partial<Record<string, number>>): number {
+  const value = ((traits.emoji ?? inferredEmoji(traits)) + (traits.playfulness ?? 5) + (traits.expressiveness ?? 5) + (11 - (traits.formality ?? 5))) / 4;
   return Number.isFinite(value) ? Math.max(1, Math.min(10, Math.round(value))) : 5;
 }
 
@@ -106,6 +113,7 @@ export function parsePersonality(value: unknown, now = Date.now(), allowLegacyMi
   }
   const traits = { ...p.traits } as Record<string, unknown>;
   if (!Object.hasOwn(traits, 'emoji')) traits.emoji = inferredEmoji(traits as Partial<Record<string, number>>);
+  if (!Object.hasOwn(traits, 'stickers')) traits.stickers = inferredStickers(traits as Partial<Record<string, number>>);
   if (Object.keys(traits).length !== personalityTraits.length || personalityTraits.some(t =>
     typeof traits[t.key] !== 'number' || !Number.isInteger(traits[t.key]) || Number(traits[t.key]) < 1 || Number(traits[t.key]) > 10)) return null;
   return { enabled: p.enabled, description: p.description.trim(), specialties: specialties.trim(), birthDate: p.birthDate as string | null,

@@ -101,3 +101,43 @@ export function expressionHabits(input: ExpressionInput): string {
   parts.push('These are habits, not rules: follow the moment first and never mention them.');
   return parts.join(' ');
 }
+
+// Sticker habits (docs/stickers.md#habits). Same design as the emoji nudge: a personal rate from
+// the Stickers trait, corrected by how often the contact used stickers lately and mirrored a little
+// to the person, drawn with the turn ID as seed. A sticker from the person is a different case:
+// the usual answer is a sticker back, unless the contact's own sticker came just before.
+const stickerRates = [0.005, 0.02, 0.04, 0.07, 0.1, 0.14, 0.19, 0.25, 0.32, 0.4];
+
+// Without a configured personality each contact still gets its own stable level (2–7).
+export function stickerLevel(agentID: string, personality: Personality): number {
+  return personality.enabled ? personality.traits.stickers : 2 + hash(`${agentID}:stickers`) % 6;
+}
+
+export type StickerHabitInput = {
+  agentID: string; personality: Personality; seed: string;
+  // The person's current message is a sticker.
+  answering: boolean;
+  // The contact's previous message was a sticker and the person answered it with a sticker.
+  blocked: boolean;
+  // How many of the contact's last eight replies contained a sticker, out of how many replies.
+  ownStickers: number; ownReplies: number;
+  // The person's own sticker use over their last eight messages.
+  theirStickers: number; theirMessages: number;
+};
+export function stickerHabits(input: StickerHabitInput): string {
+  const level = stickerLevel(input.agentID, input.personality);
+  const roll = draw(`${input.seed}:sticker`);
+  if (input.blocked) return 'Sticker habit: the person answered your sticker with a sticker, so that exchange is complete. Do not send a sticker for this reply.';
+  if (input.answering) {
+    const chance = clamp(0.5 + level * 0.045, 0.5, 0.95);
+    return roll < chance
+      ? 'Sticker habit: the person just sent you a sticker. People usually answer a sticker with a sticker when the moment is light or friendly, so send one back with send_sticker if one of yours fits the mood (a short text with it is fine). If none fits, a reaction or a few words is also natural. Never answer a sad, tense or serious message with a sticker.'
+      : 'Sticker habit: the person just sent you a sticker, but this time answer in words or a reaction rather than a sticker.';
+  }
+  const mirror = input.theirMessages >= 3 ? input.theirStickers / input.theirMessages : null;
+  const target = clamp(stickerRates[level - 1]! + (mirror === null ? 0 : mirror * 0.2), 0.003, 0.6);
+  const recent = input.ownReplies >= 3 ? input.ownStickers / input.ownReplies : null;
+  const chance = clamp(recent === null ? target : target + (target - recent) * 0.8, 0.002, 0.7);
+  const habit = level <= 2 ? 'You almost never send stickers.' : level <= 5 ? 'You send a sticker now and then.' : level <= 8 ? 'You like sending stickers and use them fairly often.' : 'You love stickers and send them often.';
+  return `Sticker habit: ${habit} ${roll < chance ? 'For this reply a sticker fits your style if the moment is casual, warm or playful and one of yours genuinely matches (send_sticker). Never in sad, tense, serious or technical moments.' : 'For this reply, do not send a sticker.'}`;
+}

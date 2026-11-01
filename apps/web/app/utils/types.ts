@@ -55,7 +55,13 @@ export type ContactEnergy = { points: number; capacity: number; rechargeInterval
 
 export type ContactsPage = { contacts: Contact[]; totalUnreadCount?: number | null; nextCursor: string | null };
 
-export type Attachment = { name: string; mimeType: string; size: number };
+// `sticker` marks a sticker message (docs/stickers.md): a transparent PNG with one emoji.
+export type StickerRef = { id: string; emoji: string };
+export type Attachment = { name: string; mimeType: string; size: number; sticker?: StickerRef | null };
+// A sticker of the person's library or of a contact (docs/stickers.md#api).
+export type Sticker = { id: string; emoji: string; width: number; height: number; size: number; source: 'upload' | 'avatar' | 'saved'; digest: string; createdAt: number };
+// A sticker chosen in the composer; `path` is its library image path so an optimistic bubble reuses the cached image.
+export type StickerChoice = { id: string; emoji: string; path: string };
 export type DraftAttachment = Attachment & { data: string; previewURL: string | null };
 // A recorded voice message (docs/voice.md): `listenedAt` turns the outgoing microphone
 // blue; `transcript` is null while transcribing and "" when no speech was detected.

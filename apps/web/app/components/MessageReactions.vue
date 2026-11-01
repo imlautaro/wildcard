@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { ReactionCache } from '~/composables/useMessageReactions';
-// `voice` adds "View transcript" to the menu; `transcript` follows docs/voice.md.
-const props = defineProps<{ cache: ReactionCache; path: string; messageID: string; side: string; replyable?: boolean; voice?: boolean; transcript?: string | null; receiptGroupID?: string }>();
-const emit = defineEmits<{ reply: [] }>();
+// `voice` adds "View transcript" to the menu; `transcript` follows docs/voice.md. `saveSticker`
+// adds "Save sticker" for a contact's sticker in a private chat (docs/stickers.md#web).
+const props = defineProps<{ cache: ReactionCache; path: string; messageID: string; side: string; replyable?: boolean; voice?: boolean; transcript?: string | null; receiptGroupID?: string; saveSticker?: boolean }>();
+const emit = defineEmits<{ reply: []; saveSticker: [] }>();
 const { user } = useSession();
 const open = ref(false);
 const root = ref<HTMLElement>();
@@ -17,7 +18,7 @@ const key = computed(() => `${props.messageID}/${props.side}`);
 const rows = computed(() => props.cache.rows.filter((row) => row.messageID === props.messageID && row.side === props.side));
 const own = computed(() => rows.value.find((row) => row.actorID === `user/${user.value?.id}`)?.emoji);
 const summaries = computed(() => reactionEmojis.map((emoji) => ({ emoji, rows: rows.value.filter((row) => row.emoji === emoji) })).filter((value) => value.rows.length));
-const hasActions = computed(() => props.replyable || !!props.receiptGroupID || props.voice || !!own.value);
+const hasActions = computed(() => props.replyable || !!props.receiptGroupID || props.voice || props.saveSticker || !!own.value);
 const hasMenu = computed(() => hasActions.value || rows.value.length > 0);
 function choose(emoji: string | null) {
   open.value = false;
@@ -28,6 +29,10 @@ const showsReaders = ref(false);
 function viewTranscript() {
   open.value = false;
   showsTranscript.value = true;
+}
+function keepSticker() {
+  open.value = false;
+  emit('saveSticker');
 }
 function reply() {
   open.value = false;
@@ -129,6 +134,7 @@ onBeforeUnmount(() => {
         </div>
         <div v-if="hasMenu" ref="menu" class="menu reaction-menu" role="group" aria-label="Message actions" :style="boxStyle(position?.menu)">
           <AppMenuItem v-if="replyable" icon="reply" @click="reply">Reply</AppMenuItem>
+          <AppMenuItem v-if="saveSticker" icon="sticker" @click="keepSticker">Save sticker</AppMenuItem>
           <AppMenuItem v-if="receiptGroupID" icon="check" @click="open = false; showsReaders = true">Message info</AppMenuItem>
           <AppMenuItem v-if="voice" icon="file" @click="viewTranscript">View transcript</AppMenuItem>
           <AppMenuItem v-if="own" icon="close" :disabled="cache.busy.includes(key)" @click="choose(null)">Remove reaction</AppMenuItem>

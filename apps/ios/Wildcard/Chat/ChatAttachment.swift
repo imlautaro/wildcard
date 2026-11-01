@@ -8,7 +8,16 @@ struct ChatAttachment: Codable, Equatable, Sendable {
     let name: String
     let mimeType: String
     let size: Int
+    /// Set when the attachment is a sticker (docs/stickers.md); older servers omit it.
+    var sticker: ChatSticker? = nil
     var isImage: Bool { mimeType.hasPrefix("image/") }
+    var isSticker: Bool { sticker != nil }
+}
+
+/// The sticker a message attachment carries: the library ID it was sent from and its emoji.
+struct ChatSticker: Codable, Equatable, Hashable, Sendable {
+    let id: String
+    let emoji: String
 }
 
 struct DraftAttachment: Encodable, Equatable, Sendable {
@@ -61,12 +70,16 @@ struct ChatAttachmentView: View {
     let turnID: String
     var groupID: String? = nil
     var assistantAttachment = false
+    /// Index in `assistantMessages` of a contact message; stickers follow the contact's text as their own message.
+    var assistantPart = 0
     let sentAt: Double
     let caption: String
     var receiptState: String? = nil
     var readAt: Double? = nil
     var isSending = false
     var localData: Data? = nil
+    /// A sticker being sent: the library sticker the optimistic bubble draws until the server copy exists.
+    var localSticker: CachedImageResource? = nil
     var fromUser = true
     var showsReceipt = true
     var formatsMarkdown = false
@@ -88,7 +101,7 @@ struct ChatAttachmentView: View {
 
     private var imageResource: CachedImageResource { resource(image: 0) }
     private func resource(image: Int) -> CachedImageResource {
-        groupID.map { .groupAttachment(groupID: $0, messageID: turnID, image: image) } ?? (assistantAttachment ? .assistantAttachment(contactID: contactID, turnID: turnID, image: image) : .attachment(contactID: contactID, turnID: turnID))
+        groupID.map { .groupAttachment(groupID: $0, messageID: turnID, image: image) } ?? (assistantAttachment ? .assistantAttachment(contactID: contactID, turnID: turnID, image: image, part: assistantPart) : .attachment(contactID: contactID, turnID: turnID))
     }
     private var albumImages: [ChatAttachment] { album.count > 1 ? Array(album.prefix(3)) : [] }
     private var viewerImages: [AttachmentImageViewer.Item] {
@@ -102,6 +115,17 @@ struct ChatAttachmentView: View {
     }
 
     var body: some View {
+        if attachment.isSticker {
+            // A sticker is the bare picture without bubble, rim or tail (docs/stickers.md#ios).
+            StickerMessageView(attachment: attachment, resource: imageResource, localResource: localSticker, sentAt: sentAt, fromUser: fromUser,
+                               receiptState: receiptState, readAt: readAt, isSending: isSending, showsReceipt: showsReceipt,
+                               senderName: senderName, senderColor: senderColor, replyQuote: replyQuote, onQuoteTap: onQuoteTap)
+        } else {
+            regularBody
+        }
+    }
+
+    private var regularBody: some View {
         HStack {
             if fromUser { Spacer(minLength: 40) }
             VStack(alignment: .trailing, spacing: 6) {
@@ -281,7 +305,7 @@ struct ChatAttachmentView: View {
                 do {
                     let bytes = try await auth.withSession { api, token in
                         if let groupID { return try await api.groupAttachment(groupID: groupID, messageID: turnID, token: token) }
-                        return try await api.chatAttachment(contactID: contactID, turnID: turnID, assistant: assistantAttachment, token: token)
+                        return try await api.chatAttachment(contactID: contactID, turnID: turnID, assistant: assistantAttachment, part: assistantPart > 0 ? assistantPart : nil, token: token)
                     }
                     try Task.checkCancellation()
                     let folder = FileManager.default.temporaryDirectory.appending(path: "chat-preview-\(UUID().uuidString)")

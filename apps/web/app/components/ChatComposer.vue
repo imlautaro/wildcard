@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DraftAttachment, DraftVoice, HomePostReference } from '~/utils/types';
+import type { DraftAttachment, DraftVoice, HomePostReference, Sticker } from '~/utils/types';
 import type { ReplyPreview } from '~/utils/replies';
 
 // Text plus optional image/PDF attachments (picked, dropped in the picker or pasted), sent as
@@ -9,9 +9,11 @@ import type { ReplyPreview } from '~/utils/replies';
 // voice messages (docs/voice.md): hold to record and release to send, slide left to
 // cancel, slide up to lock. With a mouse, one click starts a locked recording and a
 // second click sends it (no hold needed). Changing the key discards an active recording.
-const props = defineProps<{ disabled?: boolean; sending?: boolean; placeholder?: string; reply?: ReplyPreview | null; post?: HomePostReference | null; voiceKey?: string | null }>();
+// With `stickers` (private chats and groups), a sticker button left of send opens the sticker
+// picker (docs/stickers.md#web); `contactID` adds the contact's stickers tab (private chats).
+const props = defineProps<{ disabled?: boolean; sending?: boolean; placeholder?: string; reply?: ReplyPreview | null; post?: HomePostReference | null; voiceKey?: string | null; stickers?: { contactID?: string | null; contactName?: string | null } | null }>();
 const draft = defineModel<string>({ required: true });
-const emit = defineEmits<{ send: [text: string, attachments: DraftAttachment[]]; voice: [clip: DraftVoice]; typing: []; cancelReply: []; cancelPost: [] }>();
+const emit = defineEmits<{ send: [text: string, attachments: DraftAttachment[]]; voice: [clip: DraftVoice]; typing: []; cancelReply: []; cancelPost: []; sticker: [sticker: Sticker] }>();
 
 const maxAttachments = 10;
 const attachments = ref<DraftAttachment[]>([]);
@@ -112,6 +114,20 @@ watch(recorder.phase, (phase) => {
   if (phase === 'idle') { endHold(); locked.value = false; }
 });
 watch(() => props.voiceKey, () => discardRecording());
+
+// Sticker picker and the Create sticker dialog; the picker returns after creating or cancelling.
+const stickerButton = ref<{ $el: HTMLElement }>();
+const stickerPanel = ref<'picker' | 'create' | null>(null);
+function closeStickers(focus: 'button' | 'message' = 'button') {
+  stickerPanel.value = null;
+  void nextTick(() => { if (focus === 'message') textarea.value?.focus(); else stickerButton.value?.$el.focus(); });
+}
+function pickSticker(sticker: Sticker) {
+  if (props.disabled || props.sending) return;
+  closeStickers('message');
+  emit('sticker', sticker);
+}
+watch(() => props.disabled, (value) => { if (value) stickerPanel.value = null; });
 
 function resize() {
   const element = textarea.value;
@@ -226,6 +242,10 @@ defineExpose({ focus: () => textarea.value?.focus() });
           @keydown="onKey" @input="emit('typing')" @paste="onPaste"
         />
       </div>
+      <AppIconButton
+        v-if="stickers && !recording" ref="stickerButton" icon="sticker" label="Stickers" size="large"
+        :disabled="disabled || sending" aria-haspopup="dialog" @click="stickerPanel = 'picker'"
+      />
       <div v-if="showsMicrophone" class="mic-slot">
         <div v-if="holding && recorder.phase.value === 'recording'" class="voice-lock" :style="{ transform: `translateY(${Math.max(drag.y, -lockDistance) / 2}px)` }" aria-hidden="true">
           <AppIcon name="lock" /><AppIcon name="arrow-up" />
@@ -241,6 +261,11 @@ defineExpose({ focus: () => textarea.value?.focus() });
       </div>
       <button v-else type="submit" class="send" data-ripple :disabled="!canSend" aria-label="Send"><AppIcon name="send" /></button>
     </form>
+    <StickerPicker
+      v-if="stickers && stickerPanel === 'picker'" :contact-i-d="stickers.contactID" :contact-name="stickers.contactName"
+      @close="closeStickers()" @pick="pickSticker" @create="stickerPanel = 'create'"
+    />
+    <CreateStickerDialog v-if="stickers && stickerPanel === 'create'" @close="stickerPanel = 'picker'" @created="stickerPanel = 'picker'" />
     <p v-if="length > 4000" class="hint">Messages can contain up to 4,000 characters.</p>
     <p v-else-if="problem" class="hint">{{ problem }}</p>
     <p v-else-if="recorder.notice.value && !recording" class="hint" :class="{ info: !recorder.notice.value.error }" :role="recorder.notice.value.error ? 'alert' : 'status'">{{ recorder.notice.value.text }}</p>

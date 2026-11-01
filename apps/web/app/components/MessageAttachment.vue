@@ -54,6 +54,10 @@ async function open() {
       <span v-else class="center"><span class="spinner" /></span>
     </button>
   </div>
+  <span v-else-if="attachment.sticker" class="chat-sticker-frame">
+    <img v-if="source" class="chat-sticker" :src="source" :alt="`Sticker ${attachment.sticker.emoji}`" draggable="false">
+    <span v-else class="center"><span class="spinner" aria-hidden="true" /></span>
+  </span>
   <button v-else-if="isImage" type="button" class="link-button chat-image-thumbnail" :disabled="!source" :aria-label="`Open image full screen: ${attachment.name}`" @click.stop="open">
     <img v-if="source" class="chat-image" :src="source" :alt="attachment.name">
     <span v-else class="center"><span class="spinner" /></span>

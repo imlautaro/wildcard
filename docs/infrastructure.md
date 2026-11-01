@@ -3154,3 +3154,33 @@ migration 0084, its receipts and existing push access guards. An older release
 continues delivery but loses the corrected reply references and receipt grounding;
 prefer a forward fix if those behaviors need adjustment. Never replay real past
 requests to validate a release.
+
+## Stickers
+
+[Stickers](stickers.md) add migration `0091_stickers.sql` (`sticker`, `sticker_photo_check`, two
+deletion triggers) and no new binding, bucket or secret. Prerequisites and resources:
+
+- **Required**: the existing `DB`, private `CONTACT_PHOTOS` bucket (library objects under
+  `users/<user>/stickers/` and `contacts/<owner>/<agent>/stickers/`, covered by the existing
+  account/agent cleanup sweeps; message copies use the normal `attachments/` registry) and
+  `META_API_KEY`.
+- **Meta models used with that key**: `sam-3.1` (Responses API, segmentation), `muse-image-1.0`
+  (`/v1/images/edits`, expression portraits of a contact) and `muse-spark-1.3` (one-phrase
+  subject naming and the profile-photo face check). Availability of `sam-3.1` for a given key
+  is not verified outside the measurement recorded in `docs/stickers.md`; without it,
+  sticker creation fails with 502/503 and the rest of chat is unaffected.
+- **New npm dependencies** (`apps/api`, exact versions in the root lockfile): `@meta-sam/parser`,
+  `jpeg-js`, `upng-js` (+ `@types/upng-js`). All are pure JavaScript and run on the Worker
+  runtime with `nodejs_compat`; they have been exercised on Node with the real SAM API, not yet
+  on a deployed Worker.
+- **Order**: apply migration 0091 (`npm run db:migrate:local`, or the automatic release for
+  production), then release the API, then the clients. The API keeps working for older clients,
+  which show a sticker as an ordinary captionless PNG image and cannot create or send stickers.
+- **Cost and limits**: a cutout is one SAM request (plus one Spark request when "person" finds
+  nothing); a contact's sticker of itself adds one face check per photo version and one Muse Image
+  edit. Per account 6 cutouts and 30 saves per minute; per contact 3 self-stickers per minute.
+- **Rollback**: keep the migration, tables and objects. An older Worker ignores the tables; dropping
+  them loses libraries. Messages keep their own copies of sticker bytes either way.
+- **Local development**: apply migrations, set `META_API_KEY` in the ignored `apps/api/.dev.vars`
+  (calls consume credits) and use fictional photos. Unverified: production release and a
+  deployed-Worker cutout.

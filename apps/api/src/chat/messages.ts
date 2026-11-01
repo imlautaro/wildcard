@@ -1,7 +1,8 @@
 import type { Attachment } from './attachments';
 import { parseLearningQuestion, type LearningQuestion } from './learning';
 import { parsePrivateReply, type ReplyTarget } from '../replies/data';
-export type ContactResponse = { messages: string[]; attachments?: Attachment[]; replyTo?: ReplyTarget | null; learningRevision?: number; learningQuestion?: LearningQuestion | null };
+// sticker: the library sticker the contact chose; it is delivered as its own message after the text (docs/stickers.md).
+export type ContactResponse = { messages: string[]; attachments?: Attachment[]; sticker?: { stickerID: string; emoji: string }; replyTo?: ReplyTarget | null; learningRevision?: number; learningQuestion?: LearningQuestion | null };
 export const quoteInstruction = 'Quote an earlier message only when it clarifies which message you are answering: overlapping topics, several unanswered messages, or returning to an older point. Default to no quote when the context is obvious. A shared question such as what everyone ate does not need a quote on each answer. Use actual supplied message IDs, never copied quote text or invented IDs. Quote only once at the start of your response, not on every successive message.';
 
 // A turn may be one cohesive message or a short conversational burst.
@@ -15,10 +16,11 @@ export function validMessages(value: unknown): value is string[] {
     && Array.from(value.join('\n\n')).length <= 20_000;
 }
 
-export function parseMessages(content: string): ContactResponse {
+// allowEmpty: a reply that is only a sticker has no text messages.
+export function parseMessages(content: string, allowEmpty = false): ContactResponse {
   let value: unknown;
   try { value = JSON.parse(content); } catch { throw new Error('MODEL_INVALID_RESPONSE'); }
-  if (!value || typeof value !== 'object' || !('messages' in value) || Object.keys(value).some(key => !['messages', 'replyTo', 'learningQuestion'].includes(key)) || !validMessages(value.messages)) {
+  if (!value || typeof value !== 'object' || !('messages' in value) || Object.keys(value).some(key => !['messages', 'replyTo', 'learningQuestion'].includes(key)) || !(allowEmpty && Array.isArray(value.messages) && value.messages.length === 0) && !validMessages(value.messages)) {
     throw new Error('MODEL_INVALID_RESPONSE');
   }
   const target = 'replyTo' in value && value.replyTo !== null ? parsePrivateReply(value.replyTo) : undefined;

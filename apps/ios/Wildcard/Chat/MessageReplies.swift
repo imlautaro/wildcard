@@ -76,15 +76,17 @@ private struct MessageReplySummary: View {
 
     static func description(_ quote: MessageReplyQuote) -> String {
         guard quote.available else { return "Original message unavailable" }
+        if let sticker = quote.attachment?.sticker, quote.available { return "Sticker \(sticker.emoji)" }
         if !quote.text.isEmpty { return quote.previewText ?? (quote.side == "assistant" || quote.agentID != nil ? MessageMarkdown.plainText(quote.text) : quote.text) }
         guard let attachment = quote.attachment else { return "" }
+        if let sticker = attachment.sticker { return "Sticker \(sticker.emoji)" }
         return attachment.isImage ? "Photo" : attachment.name
     }
 
     var body: some View {
         HStack(spacing: 4) {
             if quote.available, let attachment = quote.attachment {
-                Image(systemName: attachment.isImage ? "photo" : "doc.richtext")
+                Image(systemName: attachment.isSticker ? "face.smiling" : attachment.isImage ? "photo" : "doc.richtext")
             }
             Text(Self.description(quote)).italic(!quote.available)
                 .lineLimit(2).multilineTextAlignment(.leading)

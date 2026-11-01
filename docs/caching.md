@@ -1648,3 +1648,88 @@ iOS, 20 web entries), like a pending send. Reaction labels come from the
 `lastReaction` field of the cached contacts/groups list summaries and follow the
 existing list freshness and stale-response rules; there is no separate reaction
 request for the list. See [chat list previews](chats.md#chat-list-previews).
+
+## Stickers
+
+Web (`useStickers`, memory only; see [stickers](stickers.md#web)) and iOS (`StickerStore`,
+memory only; see [stickers](stickers.md#ios) and [iOS](#stickers-ios) below) follow the same
+rules; the bullets below describe the web, and the iOS differences are listed at the end.
+
+- **Lists.** One library list (`GET /stickers`, with the 120-sticker limit) and one list
+  per contact (`GET /contacts/:id/stickers`, at most 20 retained, least recently used
+  first). Opening the picker renders cached lists synchronously, including empty ones;
+  the spinner shows only for a list that was never loaded.
+- **Freshness.** A list older than 30 seconds revalidates in the background when the
+  picker opens or the tab changes; **Retry** forces a read. Contacts add avatar
+  stickers and save new ones over time, so there is no longer TTL. Transient failures
+  keep loaded stickers visible with a retry notice; a 404 for a contact empties its list.
+- **Deduplication and stale reads.** At most one read per list is in flight. Every read
+  records the list revision; sign-out, account change, contact deletion
+  (`forgetContactStickers`) and every mutation bump it, so a response that started earlier
+  is dropped, as is one that finishes after an account switch.
+- **Mutations.** Create, Save (from the contact tab or a message) and emoji change update
+  the library in place from the API's `sticker`; Delete removes it (a 404 counts as
+  deleted). Saving deduplicates by digest on the server: an existing entry comes back
+  unchanged, and the contact tab shows **Saved** for any contact sticker whose digest is
+  already in the library. Nothing is persisted, and the contact lists are not touched by
+  library mutations.
+- **Images.** Library and contact stickers load through `usePrivateImage`; the path
+  carries the digest (`stickers/:id/image?v=<digest>`), so the key is account + path +
+  digest and an edited or replaced sticker never serves old bytes. Message stickers use
+  the ordinary attachment path (`…/attachment?side=assistant&part=N`), and an optimistic
+  sticker bubble reuses the library path, so it shows the cached image without a
+  request. No parallel image cache exists.
+- **Pending sends.** A pending sticker send keeps its message UUID and library ID across
+  navigation and failures; Retry resends the same UUID. If the sticker was deleted in the
+  meantime the send fails with "This sticker is no longer in your library."
+- **Create flow.** The source JPEG and the preview PNG are held only by the open dialog
+  (as blobs/object URLs) and released on Cancel, Save, unmount or account change; a cutout
+  or save response that arrives after Cancel or "Choose another photo" is ignored. The
+  cutout request is aborted on cancel.
+- **Not cached.** Cutout results are never reused: each attempt is a new request.
+- **Verification (not done).** Reopen the picker (instant, empty state included), refresh
+  after another device adds or deletes stickers, offline reopen, delete while a send is
+  pending, 409 library full, account switch with the picker open, and cancel during the
+  cutout.
+
+### Stickers (iOS)
+
+`StickerStore` is owned by `ContactsStore` and built from the existing primitives; nothing is
+persisted and no view downloads on its own.
+
+- **Library.** One `NavigationSnapshot<StickerLibrary>` (stickers plus the server's `limit`).
+  `StickerPickerView` reads `value` synchronously on open, so a reopened sheet shows the cached
+  library at once, an empty one included (`value == []` is non-nil); the spinner shows only while
+  `value == nil`. Every open and pull to refresh revalidates in the background (no TTL: the library is
+  small, and the contact tab depends on changes made elsewhere). A failed revalidation keeps the loaded
+  list; only a never-loaded list shows the error and **Retry**.
+- **Contact tabs.** A `NavigationSnapshotCache<[Sticker]>` keyed by contact ID, at most eight entries
+  (least recently used evicted), revalidated when the tab is selected. A 404 for the contact shows
+  "This contact is no longer available." and drops the entry; deleting a contact or losing access
+  (`ContactsStore` removal paths) calls `forget(contactID:)`. Clearing a chat does not touch sticker
+  caches (libraries are independent of chat history).
+- **Deduplication and stale reads.** `NavigationSnapshot.refresh` shares one in-flight request per list
+  and drops a response whose revision changed. `create`, `changeEmoji`, `delete`, `save` and
+  `saveMessageSticker` update the library and `replace` the snapshot, which cancels and ignores older
+  reads. `busy` (sticker IDs with a mutation in flight) rejects a second concurrent mutation of the same
+  sticker. Saving deduplicates by digest on the server; **Saved** is derived from the digests already in
+  the library.
+- **Account change and sign-out.** `ContentView` applies `.id(auth.user?.id)` to `HomeView`, so a new
+  account gets a new `ContactsStore` and `StickerStore`; sign-out drops them with the view.
+  `AuthStore.withSession` also turns results of a replaced session into cancellations.
+- **Images.** `PrivateImageCache` resources `sticker(id:digest:)` (`sticker/<id>/<digest>`) and
+  `contactSticker(contactID:stickerID:digest:)`; the digest is immutable per ID. The cache keeps its
+  account partition, memory limits (32 MiB decoded, 16 MiB originals) and 64 MiB protected disk budget.
+  Picker tiles decode at 300 px, message stickers at 520 px, so a 120-sticker library can exceed the
+  decoded budget and re-decode from the originals cache while scrolling. Message stickers use the
+  existing attachment keys; `assistantAttachment` gained a `part` (key unchanged for part 0). After a send,
+  `PrivateImageCache.copy` re-keys the library bytes to the message's key, so the optimistic bubble does
+  not reload.
+- **Pending sends.** The message UUID is kept across navigation and failures (`ChatStore.submission`,
+  `GroupChatStore.pending`), as for attachments.
+- **Create flow.** The JPEG source and the cutout PNG are held only by `StickerCreateModel` and released on
+  reset, Save and when the screen disappears. A generation counter drops late cutout and save responses;
+  the task is cancelled with it. Cutout results are never reused.
+- **Verification (not done).** Reopen the sheet (instant, empty state included), refresh after another
+  device changes the library, offline reopen, delete while a send is pending, library full, account
+  switch with the sheet open, and leaving the create screen during the cutout.

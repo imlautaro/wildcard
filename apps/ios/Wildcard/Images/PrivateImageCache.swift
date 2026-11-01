@@ -11,9 +11,15 @@ enum CachedImageResource: Hashable, Sendable {
     /// `image` selects one image of a contact-generated album (docs/generated-images.md#albums);
     /// 0 is the message's first or only image and keeps the original key.
     case groupAttachment(groupID: String, messageID: String, image: Int = 0)
-    case assistantAttachment(contactID: String, turnID: String, image: Int = 0)
+    /// `part` selects one message of a multi-message contact reply (stickers follow the text as their own message);
+    /// 0 keeps the original key.
+    case assistantAttachment(contactID: String, turnID: String, image: Int = 0, part: Int = 0)
     case attachment(contactID: String, turnID: String)
     case linkPreview(hash: String, version: Int)
+    /// A sticker of the person's library (docs/stickers.md#ios); immutable per `digest`.
+    case sticker(id: String, digest: String)
+    /// A sticker of a contact's library as shown in the contact tab of the picker.
+    case contactSticker(contactID: String, stickerID: String, digest: String)
 
     var key: String {
         switch self {
@@ -22,9 +28,11 @@ enum CachedImageResource: Hashable, Sendable {
         case let .groupAvatar(id, version): return "group/\(id)/avatar/\(version)"
         case let .groupMemberAvatar(group, kind, member, version): return "group/\(group)/member/\(kind)/\(member)/avatar/\(version)"
         case let .groupAttachment(id, message, image): return "group/\(id)/attachment/\(message)\(image > 0 ? "/image/\(image)" : "")"
-        case let .assistantAttachment(id, turn, image): return "contact/\(id)/assistant-attachment/\(turn)\(image > 0 ? "/image/\(image)" : "")"
+        case let .assistantAttachment(id, turn, image, part): return "contact/\(id)/assistant-attachment/\(turn)\(part > 0 ? "/part/\(part)" : "")\(image > 0 ? "/image/\(image)" : "")"
         case let .attachment(id, turn): return "contact/\(id)/attachment/\(turn)"
         case let .linkPreview(hash, version): return "link/\(hash)/\(version)"
+        case let .sticker(id, digest): return "sticker/\(id)/\(digest)"
+        case let .contactSticker(contactID, stickerID, digest): return "contact/\(contactID)/sticker/\(stickerID)/\(digest)"
         }
     }
 }
@@ -89,6 +97,17 @@ final class PrivateImageCache {
         let currentSession = session
         originals.setObject(data as NSData, forKey: resource.key as NSString, cost: data.count)
         await disk.write(data, userID: userID, key: resource.key, session: currentSession)
+    }
+
+    /// Re-keys already cached bytes under another resource, so a message that was sent from a library sticker
+    /// keeps showing the picture it displayed while sending, without another download.
+    func copy(_ source: CachedImageResource, to destination: CachedImageResource) async {
+        guard let userID else { return }
+        let currentSession = session
+        var data = (originals.object(forKey: source.key as NSString)).map { $0 as Data }
+        if data == nil { data = await disk.read(userID: userID, key: source.key, session: currentSession) }
+        guard let data, session == currentSession else { return }
+        await store(data, for: destination)
     }
 
     func image(_ resource: CachedImageResource, maxPixelSize: Int,
@@ -246,9 +265,11 @@ extension AuthStore {
                 case let .groupMemberAvatar(group, kind, member, _):
                     return try await api.send(path: "groups/\(group)/photos/\(kind)/\(member)", token: token).0
                 case let .groupAttachment(id, message, image): return try await api.groupAttachment(groupID: id, messageID: message, image: image, token: token)
-                case let .assistantAttachment(id, turn, image): return try await api.chatAttachment(contactID: id, turnID: turn, assistant: true, image: image, token: token)
+                case let .assistantAttachment(id, turn, image, part): return try await api.chatAttachment(contactID: id, turnID: turn, assistant: true, part: part > 0 ? part : nil, image: image, token: token)
                 case let .attachment(id, turn): return try await api.chatAttachment(contactID: id, turnID: turn, token: token)
                 case let .linkPreview(hash, _): return try await api.send(path: "link-previews/\(hash)/image", token: token).0
+                case let .sticker(id, _): return try await api.stickerImage(id: id, token: token)
+                case let .contactSticker(contactID, stickerID, _): return try await api.contactStickerImage(contactID: contactID, stickerID: stickerID, token: token)
                 }
             }
         }

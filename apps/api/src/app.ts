@@ -15,6 +15,7 @@ import push from './routes/push';
 import pushPhotos from './photos/push-access';
 import voices from './voice/routes';
 import home from './home/routes';
+import stickers from './stickers/routes';
 
 const app = new Hono<{ Bindings: Env }>();
 const authEndpoints = new Map([
@@ -57,6 +58,7 @@ app.route('/api/v1/push-photos', pushPhotos);
 app.route('/api/v1/voices', voices);
 app.route('/api/v1/link-previews', links);
 app.route('/api/v1/home', home);
+app.route('/api/v1/stickers', stickers);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 app.onError((_error, c) => {

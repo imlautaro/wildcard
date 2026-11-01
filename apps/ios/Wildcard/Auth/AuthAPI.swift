@@ -34,6 +34,10 @@ struct AuthAPI: Sendable {
         case reviewRequired
         /// A document save based on an older revision; the message explains the conflict.
         case conflict(String)
+        /// A sticker cutout found no subject (HTTP 422 `NO_SUBJECT`); the person may name what to cut out.
+        case noSubject(String)
+        /// HTTP 429 with the server's `Retry-After` seconds when it sent one.
+        case rateLimited(retryAfter: Int?, message: String)
 
         var errorDescription: String? {
             switch self {
@@ -46,6 +50,9 @@ struct AuthAPI: Sendable {
             case .temporarilyUnavailable: "Groups are temporarily unavailable. Please try again."
             case .reviewRequired: "Review and enable this mini app first."
             case .conflict(let message): message
+            case .noSubject(let message): message
+            case .rateLimited(let retryAfter, let message):
+                retryAfter.map { "Too many requests. Please wait \($0) second\($0 == 1 ? "" : "s") and try again." } ?? message
             }
         }
     }
@@ -128,6 +135,25 @@ struct AuthAPI: Sendable {
         _ = try await send(path: "auth/sign-out", method: "POST", body: Data("{}".utf8), token: token)
     }
 
+    /// Sticker routes carry typed codes and `Retry-After`, so they bypass the generic path-based mapping.
+    private static func stickerFailure(_ response: HTTPURLResponse, data: Data, path: String) -> Failure {
+        let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let message = (body?["error"] as? String).flatMap { text -> String? in
+            text.isEmpty || text.unicodeScalars.count > 512 || text.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) ? nil : text
+        }
+        switch response.statusCode {
+        case 404 where message == "Contact not found": return .notFound
+        case 404: return .rejected(message ?? "This sticker is no longer available.")
+        case 422 where body?["code"] as? String == "NO_SUBJECT":
+            return .noSubject(message ?? "Could not find a subject to cut out.")
+        case 429:
+            return .rateLimited(retryAfter: response.value(forHTTPHeaderField: "Retry-After").flatMap { Int($0) }.map { max($0, 1) },
+                                message: message ?? "Too many requests. Please wait a minute and try again.")
+        case 400, 409, 413, 415, 422: return .rejected(message ?? "This sticker could not be used.")
+        default: return .rejected("Stickers are unavailable right now. Please try again.")
+        }
+    }
+
     func send(path: String, method: String = "GET", body: Data? = nil, token: String? = nil, query: [URLQueryItem] = [], contentType: String = "application/json", timeout: TimeInterval = 30) async throws -> (Data, HTTPURLResponse) {
         guard let baseURL, baseURL.host != nil else { throw Failure.invalidConfiguration }
         #if DEBUG
@@ -164,6 +190,9 @@ struct AuthAPI: Sendable {
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if path.hasPrefix("stickers") || path.contains("/stickers") {
+                throw Self.stickerFailure(response, data: data, path: path)
+            }
             if path.hasPrefix("onboarding") {
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
                 if let message, !message.isEmpty, message.count <= 512,

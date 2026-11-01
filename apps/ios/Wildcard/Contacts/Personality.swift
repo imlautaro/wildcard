@@ -111,6 +111,7 @@ struct PersonalityTrait: Identifiable, Sendable {
         .init(key: "initiative", label: "Initiative", low: "Waits for you", high: "Starts conversations"),
         .init(key: "sarcasm", label: "Irony", low: "Literal", high: "Wry"),
         .init(key: "emoji", label: "Emoji", low: "Rarely", high: "Often"),
+        .init(key: "stickers", label: "Stickers", low: "Rarely", high: "Often"),
     ]
 }
 

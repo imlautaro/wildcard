@@ -44,6 +44,10 @@ Short or cancelled drags return the image to its position. When zoomed in,
 dragging continues to pan the image; zoom out before swiping to dismiss. Documents continue to open in native Quick Look. Failed image loads
 show retry controls; full-screen loading also supports retry and dismissal.
 
+[Stickers](stickers.md) are image attachments with a `sticker: { id, emoji }` marker: they
+render as a bare transparent image without a bubble ([web](stickers.md#web)), load through
+the same private image cache, and never appear in **Shared in this chat**.
+
 ## Formats and limits
 
 This implementation accepts JPEG, PNG, GIF, WebP, and PDF, up to 5 MiB per file.
@@ -53,6 +57,10 @@ long edge rendered at scale 1, with a white background for transparency. The sel
 photo representation must also fit 5 MiB before conversion. Camera capture, multiple
 attachments, Word/Excel documents, video, and audio file input are not offered.
 Recorded [voice messages](voice.md) use a separate `voice` body field, not attachments.
+[Stickers](stickers.md) are sent with a separate `sticker: { id }` body field; the server stores a PNG
+copy as an ordinary image attachment with `sticker: { id, emoji }`, so history, attachment routes and the
+image cache work as for photos, but the clients draw it without a bubble, do not open the photo viewer and
+leave it out of **Shared in this chat**.
 
 The API validates base64, MIME allowlist, file signatures, name, and size before
 storage; this is format validation, not a malware scan or full file parser. The model

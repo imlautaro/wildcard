@@ -23,6 +23,9 @@ struct ChatView: View {
     @State private var photoSelection: PhotosPickerItem?
     @State private var showPhotoPicker = false
     @State private var showFilePicker = false
+    @State private var showStickers = false
+    /// Result of "Save sticker" on a contact message (docs/stickers.md#ios).
+    @State private var stickerNotice: String?
     @State private var isLoadingAttachment = false
     @State private var attachmentError: String?
     @State private var attachmentTask: Task<Void, Never>?
@@ -123,6 +126,7 @@ struct ChatView: View {
                                                      replyQuote: quote, onQuoteTap: showQuote)
                                 } else if let attachment = turn.attachment {
                                     ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id, sentAt: turn.createdAt, caption: attachment.isImage ? turn.userText : "", readAt: turn.readAt, isSending: chat.isSubmitting(turn.id), localData: chat.outgoingMessage?.turn.id == turn.id ? chat.outgoingMessage?.attachment?.data : nil,
+                                                       localSticker: chat.outgoingMessage?.turn.id == turn.id ? chat.outgoingMessage?.sticker?.imageResource : nil,
                                                        replyQuote: quote, onQuoteTap: showQuote)
                                 }
                                 if turn.voice == nil && !turn.userText.isEmpty && turn.attachment?.isImage != true {
@@ -163,7 +167,9 @@ struct ChatView: View {
                                                      onQuoteTap: { if let quote = message.replyTo { showQuoted(quote, proxy: proxy) } })
                                 } else if let attachment = item.message?.attachment {
                                     ChatAttachmentView(attachment: attachment, contactID: contactID, turnID: turn.id,
-                                                       assistantAttachment: true, sentAt: item.timestamp, caption: reply,
+                                                       assistantAttachment: true,
+                                                       assistantPart: turn.assistantMessages?.firstIndex(where: { $0.id == item.message?.id }) ?? 0,
+                                                       sentAt: item.timestamp, caption: attachment.isSticker ? "" : reply,
                                                        fromUser: false, showsReceipt: false, formatsMarkdown: true,
                                                        replyQuote: item.message?.replyTo.map(replyPreview),
                                                        onQuoteTap: { if let quote = item.message?.replyTo { showQuoted(quote, proxy: proxy) } },
@@ -182,7 +188,10 @@ struct ChatView: View {
                                 // A contact voice message's transcript is the text it spoke.
                                 .messageReactions(chat.reactions, path: "contacts/\(contactID)/chat/reactions", messageID: turn.id, side: "assistant", fromUser: false,
                                                   onReply: canReply ? { self.reply(to: turn, side: "assistant", isVoice: voiceMessage != nil) } : nil,
-                                                  transcript: voiceMessage.map { $0.transcript ?? reply })
+                                                  transcript: voiceMessage.map { $0.transcript ?? reply },
+                                                  onSaveSticker: item.message?.attachment?.isSticker == true ? {
+                                                      saveSticker(turnID: turn.id, part: turn.assistantMessages?.firstIndex(where: { $0.id == item.message?.id }) ?? 0)
+                                                  } : nil)
                                 .messageHighlight(highlightedMessage == "\(turn.id)/assistant")
                                 .id(item.message?.id == "\(turn.id)/assistant/0" || item.message == nil ? "\(turn.id)/assistant" : item.id)
                                 .task {
@@ -298,6 +307,12 @@ struct ChatView: View {
             await native.refresh(contactID: contactID, using: auth)
             await contacts.miniApps.refresh(base: "contacts/\(contactID)", using: auth)
             await contacts.documentCaches.refresh("contacts/\(contactID)", auth: auth)
+        }
+        .sheet(isPresented: $showStickers) {
+            StickerPickerView(contact: .init(id: contactID, name: contacts.contact(id: contactID)?.name ?? "Contact"),
+                              canSend: chat.hasLoaded && !chat.isSending && !chat.isUnavailable && !isClearing,
+                              onSelect: sendSticker)
+                .presentationDetents([.medium, .large])
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection, matching: .images, preferredItemEncoding: .compatible)
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: DraftAttachment.types) { result in
@@ -490,6 +505,39 @@ struct ChatView: View {
         }
     }
 
+    private func sendSticker(_ sticker: Sticker) {
+        guard canReply, !chat.isSending, !isClearing else { return }
+        let submittedReply = replyTarget
+        let submittedPost = postTarget
+        replyTarget = nil
+        postTarget = nil
+        showStickers = false
+        stickerNotice = nil
+        Task {
+            let accepted = await chat.send(text: "", sticker: sticker, replyTo: submittedReply, homePost: submittedPost, contactID: contactID, using: auth)
+            sync.request(.contact(contactID))
+            if accepted { scrollToLatest() }
+            else {
+                // The error banner explains; the quote and post stay so a retry sends the same message.
+                if replyTarget == nil { replyTarget = submittedReply }
+                if postTarget == nil { postTarget = submittedPost }
+            }
+        }
+    }
+
+    /// "Save sticker" on a contact message; the library is session-cached, so the new sticker is in the picker at once.
+    private func saveSticker(turnID: String, part: Int) {
+        attachmentError = nil
+        stickerNotice = nil
+        Task {
+            do {
+                try await contacts.stickers.saveMessageSticker(contactID: contactID, turnID: turnID, part: part, using: auth)
+                stickerNotice = "Saved to your stickers."
+            } catch is CancellationError { }
+            catch { attachmentError = error.localizedDescription }
+        }
+    }
+
     private func selectFile(_ url: URL) throws {
         attachment = try DraftAttachment.load(url: url)
         attachmentError = nil
@@ -522,6 +570,14 @@ struct ChatView: View {
             if let attachmentError {
                 Text(attachmentError).manrope(.footnote).foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let stickerNotice {
+                Text(stickerNotice).manrope(.footnote).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .task(id: stickerNotice) {
+                        do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                        self.stickerNotice = nil
+                    }
             }
             if isLoadingAttachment {
                 HStack { ProgressView(); Text("Preparing attachment…").manrope(.footnote); Spacer() }
@@ -585,6 +641,19 @@ struct ChatView: View {
                         .focused($composerFocused)
                         .chatComposerFieldStyle()
                         .disabled(chat.isUnavailable)
+                    Button {
+                        composerFocused = false
+                        showStickers = true
+                    } label: {
+                        Image(systemName: "face.smiling")
+                            .font(.system(size: sendIconSize, weight: .medium))
+                            .frame(width: composerHeight, height: composerHeight)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: Circle())
+                    .accessibilityLabel("Stickers")
+                    .disabled(!chat.hasLoaded || chat.isUnavailable || chat.isSending || isClearing)
                 }
                 // The microphone keeps its identity while recording so the hold gesture continues.
                 if draftIsEmpty {

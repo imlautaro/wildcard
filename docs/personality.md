@@ -154,6 +154,7 @@ numbers and relationship counters never enter the contact's reply prompt.
 | Initiative | Waits for you | Starts conversations | Continued thoughts and timing |
 | Irony | Literal | Wry | Occasional dry wit |
 | Emoji | Rarely | Often | How often emoji appear, and how readily the contact reacts (see [emoji and reactions](#emoji-and-reactions)) |
+| Stickers | Rarely | Often | How often the contact answers with a sticker (see [stickers](stickers.md#habits-and-the-reciprocity-rule)) |
 
 Traits interact with the current situation, rather than supplying catchphrases.
 For example, an expressive/playful contact can celebrate enthusiastically but
@@ -352,6 +353,15 @@ messages (emoji only):
   Both editors show the new **Emoji** slider. iOS builds from before this change
   receive 16 traits and their editor validation expects 15, so they cannot save a
   personality until updated; the web always uses the current shared list.
+  The **Stickers** trait follows the same rule right after Emoji: the web Temperament
+  sheet iterates `personalityTraits`, so it shows 17 sliders and the "17 traits" row
+  without a hardcoded count; clients that omit it keep the saved value. See
+  [stickers](stickers.md#habits-and-the-reciprocity-rule).
+  iOS adds **Stickers** (low "Rarely", high "Often") right after Emoji in
+  `PersonalityTrait.all`, so its Temperament sheet shows 17 sliders and the
+  "17 traits" row (`PersonalityTrait.all.count`), and `ContactPersonality.isValid`
+  expects exactly 17 traits. iOS builds from before this change receive 17 traits while their
+  validation expects 16, so they cannot save a personality until updated, as with Emoji.
 - **Mirroring.** The rate moves a little toward how the other people in the
   conversation write (their share of messages with emoji).
 - **Correction.** The share of the contact's own last eight messages with emoji pulls
@@ -383,7 +393,7 @@ yet measured.
 No profile row means the disabled default and revision zero. Writes use an
 atomic revision comparison; concurrent edits return 409 instead of overwriting.
 Request bodies are limited to 16 KiB. Unknown keys, malformed types, missing
-traits (except `emoji`, which older clients omit and the server keeps), fractional/out-of-range values, invalid dates and invalid zones return
+traits (except `emoji` and `stickers`, which older clients omit and the server keeps), fractional/out-of-range values, invalid dates and invalid zones return
 400. Missing membership returns 404; member writes return 403. Responses are
 `no-store`. Session identity supplies ownership, never a client-provided owner.
 Creator updates are limited to thirty attempts per minute per account.

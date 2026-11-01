@@ -567,6 +567,14 @@ owner-authenticated route and sent inline to Meta during generation. See
 [attachments](attachments.md) for supported formats, API payloads, the 5 MiB limit,
 context retention, migration, cleanup, provider data policy, and validation status.
 
+## Stickers in chats
+
+The composer has a sticker button right of the message field (left of send/microphone) in private chats
+and groups. A sticker is sent alone as `sticker: { id }`, shows as a bare transparent image without a
+bubble, and supports quotes, replies and reactions. Contacts reply with stickers in private chats and
+the long-press menu of their stickers offers **Save sticker**. See [stickers](stickers.md#ios) (iOS) and
+[caching](caching.md#stickers-ios).
+
 
 ## Bubble appearance experiment
 

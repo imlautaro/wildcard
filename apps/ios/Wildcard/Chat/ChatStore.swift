@@ -16,6 +16,8 @@ final class ChatStore {
         let turn: ChatTurn
         let attachment: DraftAttachment?
         var voice: VoiceClip? = nil
+        /// The library sticker being sent; the bubble draws it from the image cache while sending.
+        var sticker: Sticker? = nil
     }
     private(set) var outgoingMessage: OutgoingMessage?
     /// A voice message whose send failed; kept with its reply target until retried or discarded.
@@ -76,7 +78,7 @@ final class ChatStore {
     private var invalidated = false
     private var revision = 0
     private var historyRevision = 0
-    private var submission: (historyRevision: Int, id: String, text: String, contentID: UUID?, replyKey: String?, nativeContext: NativeContext?)?
+    private var submission: (historyRevision: Int, id: String, text: String, contentID: String?, replyKey: String?, nativeContext: NativeContext?)?
     var hasPendingReply: Bool { turns.contains(where: \.isPending) }
 
     func clearPresence() { presence = nil }
@@ -240,17 +242,18 @@ final class ChatStore {
 
     func discardFailedVoice() { failedVoice = nil }
 
-    func send(text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, homePost: HomePostReference? = nil, contactID: String, using auth: AuthStore) async -> Bool {
+    func send(text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, sticker: Sticker? = nil, replyTo: MessageReplyQuote? = nil, homePost: HomePostReference? = nil, contactID: String, using auth: AuthStore) async -> Bool {
         guard !isSending, !invalidated, !isUnavailable else {
             if let voice, !invalidated { failedVoice = (voice, replyTo, homePost) }
             return false
         }
-        let text = voice == nil ? text.trimmingCharacters(in: .whitespacesAndNewlines) : ""
-        guard (!text.isEmpty || attachment != nil || voice != nil), text.unicodeScalars.count <= 4000 else { return false }
+        // A voice message or a sticker is sent alone (docs/stickers.md#sending).
+        let text = voice == nil && sticker == nil ? text.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        guard (!text.isEmpty || attachment != nil || voice != nil || sticker != nil), text.unicodeScalars.count <= 4000 else { return false }
         // Keep the identifier across an uncertain network result to prevent duplicate sends.
         // A different quoted message or clip is different content and needs a new identifier.
         let replyKey = [replyTo.map { "\($0.messageID)/\($0.side)" }, homePost.map { "post/\($0.id)" }].compactMap { $0 }.joined(separator: "|")
-        let contentID = voice?.id ?? attachment?.id
+        let contentID = voice?.id.uuidString ?? attachment?.id.uuidString ?? sticker.map { "sticker/\($0.id)" }
         if submission?.text != text || submission?.contentID != contentID || submission?.replyKey != replyKey {
             do { submission = (historyRevision, UUID().uuidString.lowercased(), text, contentID, replyKey, try NativeExperiments.shared.context(contactID: contactID)) }
             catch {
@@ -267,13 +270,15 @@ final class ChatStore {
         let now = Date.now.timeIntervalSince1970 * 1000
         outgoingMessage = OutgoingMessage(
             turn: ChatTurn(
-                attachment: attachment.map { ChatAttachment(name: $0.name, mimeType: $0.mimeType, size: $0.data.count) },
+                attachment: attachment.map { ChatAttachment(name: $0.name, mimeType: $0.mimeType, size: $0.data.count) }
+                    ?? sticker.map { ChatAttachment(name: "Sticker.png", mimeType: "image/png", size: $0.size, sticker: $0.chatSticker) },
                 scheduleID: nil, groupRequestID: nil, errorCode: nil, sequence: 0, id: submission.id,
                 userText: text, assistantText: nil, status: .queued, attempt: 0,
                 createdAt: now, readAt: nil, updatedAt: now, replyTo: replyTo, voice: voice?.metadata, homePost: homePost
             ),
             attachment: attachment,
-            voice: voice
+            voice: voice,
+            sticker: sticker
         )
         if voice != nil { failedVoice = nil }
         defer {
@@ -283,7 +288,7 @@ final class ChatStore {
         do {
             let turn = try await auth.withSession { api, token in
                 try await api.sendMessage(contactID: contactID, historyRevision: submission.historyRevision, id: submission.id, text: text, attachment: attachment, voice: voice,
-                                          replyTo: replyTo, homePost: homePost?.id, nativeContext: submission.nativeContext, token: token)
+                                          sticker: sticker, replyTo: replyTo, homePost: homePost?.id, nativeContext: submission.nativeContext, token: token)
             }
             revision += 1
             guard !invalidated else { return false }
@@ -297,6 +302,7 @@ final class ChatStore {
                 await auth.images.store(attachment.data, for: .attachment(contactID: contactID, turnID: submission.id))
             }
             if let voice { await auth.images.audio.store(voice.data, for: .userVoice(contactID: contactID, turnID: submission.id)) }
+            if let sticker { await auth.images.copy(sticker.imageResource, to: .attachment(contactID: contactID, turnID: submission.id)) }
             MessageSounds.shared.sent(turnID: submission.id, contactID: contactID)
             return true
         } catch is CancellationError {
@@ -314,6 +320,7 @@ final class ChatStore {
                     await auth.images.store(attachment.data, for: .attachment(contactID: contactID, turnID: submission.id))
                 }
                 if let voice { await auth.images.audio.store(voice.data, for: .userVoice(contactID: contactID, turnID: submission.id)) }
+            if let sticker { await auth.images.copy(sticker.imageResource, to: .attachment(contactID: contactID, turnID: submission.id)) }
                 MessageSounds.shared.sent(turnID: submission.id, contactID: contactID)
                 return true
             }

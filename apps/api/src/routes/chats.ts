@@ -15,6 +15,7 @@ import { dispatchChat } from '../chat/dispatch';
 import { registerChatObject, discardChatObject } from '../chat/object-storage';
 import { isVoice, parseVoice } from '../voice/speech';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
+import { libraryStickerToSend } from '../stickers/send';
 import { parsePostReference, publicPostReference, referencedPost, referencedPosts } from '../home/references';
 
 const chats = new Hono<{ Bindings: Env; Variables: { owner: string; contactID: string } }>();
@@ -140,10 +141,10 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
 });
 chats.post('/turns', attachmentBody, async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
-  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'voice', 'replyTo', 'homePost', 'nativeContext', 'remoteDeviceID', 'historyRevision'].includes(key))
+  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'sticker', 'voice', 'replyTo', 'homePost', 'nativeContext', 'remoteDeviceID', 'historyRevision'].includes(key))
     || (body.timeZone !== undefined && !validTimeZone(body.timeZone))
     || typeof body.id !== 'string' || !uuid.test(body.id) || typeof body.text !== 'string'
-    || (!body.text.trim() && body.attachment === undefined && body.voice === undefined) || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
+    || (!body.text.trim() && body.attachment === undefined && body.voice === undefined && body.sticker === undefined) || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
     return c.json({ error: 'Provide an id and a message using 1–4000 characters' }, 400);
   }
   const epoch = await c.env.DB.prepare('SELECT history_revision AS revision,clearing,setup_pending AS setupPending FROM contact WHERE id=? AND user_id=?')
@@ -151,8 +152,12 @@ chats.post('/turns', attachmentBody, async (c) => {
   if (epoch?.setupPending) return c.json({ error: 'This contact is still being created. Try again in a moment.' }, 409);
   if (!epoch || epoch.clearing || (body.historyRevision ?? 0)!==epoch.revision) return c.json({error:'Chat was cleared. Refresh before sending a new message.'},409);
   // A voice message is only audio: no caption or file. Its transcript comes later.
-  if (body.voice !== undefined && (body.text.trim() || body.attachment !== undefined)) {
+  if (body.voice !== undefined && (body.text.trim() || body.attachment !== undefined || body.sticker !== undefined)) {
     return c.json({ error: 'Send a voice message without text or attachments' }, 400);
+  }
+  // A sticker is sent alone, by library ID (docs/stickers.md#sending).
+  if (body.sticker !== undefined && (body.text.trim() || body.attachment !== undefined)) {
+    return c.json({ error: 'Send a sticker without text or attachments' }, 400);
   }
   if (body.remoteDeviceID !== undefined && (typeof body.remoteDeviceID !== 'string' || !uuid.test(body.remoteDeviceID) || body.nativeContext !== undefined)) return c.json({ error: 'Choose one native device' }, 400);
   const localNative = body.nativeContext === undefined ? null : parseNativeContext(body.nativeContext);
@@ -170,7 +175,9 @@ chats.post('/turns', attachmentBody, async (c) => {
   // A For you post this message answers (docs/updates.md#continue-in-chat).
   const postID = parsePostReference(body.homePost);
   if (postID === null) return c.json({ error: 'Choose a For you post to reply to' }, 400);
-  const attachment = body.voice !== undefined ? await parseVoice(body.voice)
+  const sticker = body.sticker === undefined ? null : await libraryStickerToSend(c.env, c.get('owner'), body.sticker);
+  if (body.sticker !== undefined && !sticker) return c.json({ error: 'Choose a sticker from your library' }, 404);
+  const attachment = sticker ? { metadata: sticker.metadata, bytes: sticker.bytes } : body.voice !== undefined ? await parseVoice(body.voice)
     : body.attachment === undefined ? null : await parseAttachment(body.attachment);
   if (body.voice !== undefined && !attachment) return c.json({ error: 'Use a mono 16-bit 16 kHz WAV lasting 0.25–60 seconds' }, 400);
   if (body.attachment !== undefined && !attachment) return c.json({ error: 'Choose a JPEG, PNG, GIF, WebP, or PDF up to 5 MB' }, 400);
@@ -201,7 +208,7 @@ chats.post('/turns', attachmentBody, async (c) => {
   }
   const now = Date.now();
   const key = attachment ? `attachments/${c.get('owner')}/${c.get('contactID')}/${id}/${crypto.randomUUID()}` : null;
-  const attachmentJSON = attachment && key ? JSON.stringify({ ...attachment.metadata, key }) : null;
+  const attachmentJSON = attachment && key ? JSON.stringify({ ...attachment.metadata, key, ...(sticker ? { sticker: sticker.sticker } : {}) }) : null;
   if (attachment && key) {
     await registerChatObject(c.env,key,c.get('contactID'));
     await c.env.CONTACT_PHOTOS.put(key, attachment.bytes, { httpMetadata: { contentType: attachment.metadata.mimeType } });
@@ -237,8 +244,10 @@ chats.get('/media', async (c) => {
     attachment_json AS attachmentJSON, assistant_messages_json AS assistantMessagesJSON FROM chat_turn
     WHERE contact_id = ?1 AND user_id = ?2 AND sequence < ?3 AND (
       (attachment_json IS NOT NULL AND json_extract(attachment_json, '$.mimeType') NOT LIKE 'audio/%'
+        AND json_extract(attachment_json, '$.sticker') IS NULL
         AND (json_extract(attachment_json, '$.mimeType') LIKE 'image/%') = (?4 = 'image'))
       OR (json_extract(assistant_messages_json, '$[0].attachment.key') IS NOT NULL
+        AND json_extract(assistant_messages_json, '$[0].attachment.sticker') IS NULL
         AND json_extract(assistant_messages_json, '$[0].attachment.mimeType') NOT LIKE 'audio/%'
         AND (json_extract(assistant_messages_json, '$[0].attachment.mimeType') LIKE 'image/%') = (?4 = 'image')))
     ORDER BY sequence DESC LIMIT ?5`)
@@ -252,7 +261,7 @@ chats.get('/media', async (c) => {
     return [
       ...album.map((attachment, image) => ({ side: 'assistant' as const, createdAt: reply!.createdAt, attachment, image: album.length > 1 ? image : undefined })),
       ...(turn.attachmentJSON ? [{ side: 'user' as const, createdAt: turn.createdAt, attachment: JSON.parse(turn.attachmentJSON) as Attachment, image: undefined }] : []),
-    ].filter(({ attachment }) => !isVoice(attachment) && attachment.mimeType.startsWith('image/') === (kind === 'image'))
+    ].filter(({ attachment }) => !isVoice(attachment) && !attachment.sticker && attachment.mimeType.startsWith('image/') === (kind === 'image'))
       .map(({ side, createdAt, attachment, image }) => ({ messageID: turn.id, side, sequence: turn.sequence, createdAt,
         ...(image !== undefined ? { image } : {}), name: attachment.name, mimeType: attachment.mimeType, size: attachment.size }));
   });

@@ -1,10 +1,10 @@
 import { createReactionCache, clearReactionCache, refreshReactions, type ReactionCache } from './useMessageReactions';
-import type { DraftAttachment, DraftVoice, GroupMessage, GroupMessagesPage, GroupSnapshot, ReplyQuote } from '~/utils/types';
+import type { DraftAttachment, DraftVoice, GroupMessage, GroupMessagesPage, GroupSnapshot, ReplyQuote, StickerChoice } from '~/utils/types';
 
 // Session cache of group conversations, mirroring useConversation. A pending send
 // becomes `accepted` (Sent) on HTTP acceptance, before the follow-up history
 // request; history then replaces it by UUID.
-export type GroupPending = { historyRevision: number; id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; replyTo: ReplyQuote | null; failed: string | null; accepted: boolean; createdAt: number };
+export type GroupPending = { historyRevision: number; id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; sticker: StickerChoice | null; replyTo: ReplyQuote | null; failed: string | null; accepted: boolean; createdAt: number };
 export type GroupConversation = {
   reactions: ReactionCache;
   snapshot: GroupSnapshot | null;
@@ -341,7 +341,7 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
       : undefined;
     try {
       await api<{ id: string }>(`groups/${id}/messages`, { json: { historyRevision: pending.historyRevision, id: pending.id, text: pending.text, attachment,
-        voice: pending.voice ? { data: pending.voice.data } : undefined, replyToID: pending.replyTo?.messageID } });
+        voice: pending.voice ? { data: pending.voice.data } : undefined, sticker: pending.sticker ? { id: pending.sticker.id } : undefined, replyToID: pending.replyTo?.messageID } });
       if (entry.pending?.id !== pending.id) return;
       // Seed before history loads, so the accepted voice bubble plays without a download.
       if (pending.voice) seedVoiceAudio(`groups/${id}/messages/${pending.id}/attachment`, pending.voice.blob);
@@ -355,11 +355,11 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
     }
   }
 
-  async function send(text: string, attachment: DraftAttachment | null, voice: DraftVoice | null = null) {
+  async function send(text: string, attachment: DraftAttachment | null, voice: DraftVoice | null = null, sticker: StickerChoice | null = null) {
     const entry = state.value;
     if (entry.pending) return;
-    entry.pending = { historyRevision: entry.snapshot?.group.historyRevision ?? 0, id: crypto.randomUUID(), text: voice ? '' : text.trim(), attachment: voice ? null : attachment, voice, replyTo: entry.replyTo, failed: null, accepted: false, createdAt: Date.now() };
-    if (!voice) entry.draft = '';
+    entry.pending = { historyRevision: entry.snapshot?.group.historyRevision ?? 0, id: crypto.randomUUID(), text: voice || sticker ? '' : text.trim(), attachment: voice || sticker ? null : attachment, voice: sticker ? null : voice, sticker, replyTo: entry.replyTo, failed: null, accepted: false, createdAt: Date.now() };
+    if (!voice && !sticker) entry.draft = '';
     entry.replyTo = null;
     await submit();
   }
@@ -367,8 +367,8 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
   function discardPending() {
     const entry = state.value;
     if (!entry.pending?.failed) return;
-    // A failed voice message has no text to edit: discarding drops the clip.
-    if (!entry.pending.voice) entry.draft = entry.pending.text;
+    // A failed voice message or sticker has no text to edit: discarding drops it.
+    if (!entry.pending.voice && !entry.pending.sticker) entry.draft = entry.pending.text;
     entry.replyTo = entry.pending.replyTo;
     if (entry.pending.attachment?.previewURL) URL.revokeObjectURL(entry.pending.attachment.previewURL);
     entry.pending = null;

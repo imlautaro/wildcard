@@ -10,6 +10,7 @@ import { deliverGroupPush } from './push';
 import media from './media';
 import { taskRoutes } from '../tasks/routes';
 import { documentRoutes } from '../documents/routes';
+import { libraryStickerToSend } from '../stickers/send';
 import { parseAttachment, sameAttachment, publicAttachment, publicMetadata, storedAttachment, type Attachment } from '../chat/attachments';
 import { registerChatObject, discardChatObject } from '../chat/object-storage';
 import { isVoice, parseVoice, publicVoice } from '../voice/speech';
@@ -72,7 +73,7 @@ g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (S
   (SELECT id FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageID,
   (SELECT user_id FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageUserID,
   (SELECT ${receiptState('gm')} FROM group_message gm WHERE gm.group_id = g.id AND gm.task_id IS NULL AND gm.event_json IS NULL ORDER BY gm.sequence DESC LIMIT 1) AS lastMessageReceiptState, g.created_at AS createdAt, g.photo_version AS photoVersion,
-  (SELECT CASE WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN text = '' AND attachments_json IS NOT NULL THEN json_array_length(attachments_json) || ' photos' WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
+  (SELECT CASE WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN text = '' AND attachments_json IS NOT NULL THEN json_array_length(attachments_json) || ' photos' WHEN text = '' AND json_extract(attachment_json, '$.sticker') IS NOT NULL THEN 'Sticker ' || json_extract(attachment_json, '$.sticker.emoji') WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
   (SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageAt,
   (SELECT ${agentDisplayName('lm.agent_id', 'lm.sender_name', 'm.user_id')} FROM group_message lm WHERE lm.group_id = g.id AND lm.task_id IS NULL AND lm.event_json IS NULL ORDER BY lm.sequence DESC LIMIT 1) AS lastMessageSenderName,
   COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt,
@@ -478,9 +479,10 @@ groups.post('/:id/messages', async (c) => {
   const id = c.req.param('id'), owner = c.get('owner');
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (typeof b?.id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.id)
-    || typeof b.text !== 'string' || (!b.text.trim() && b.attachment === undefined && b.voice === undefined) || b.text.includes('\0')
-    || Array.from(b.text.trim()).length > 4000 || Object.keys(b).some((key) => !['id','text','attachment','voice','replyToID','historyRevision'].includes(key))
-    || (b.voice !== undefined && (b.text.trim() || b.attachment !== undefined))) {
+    || typeof b.text !== 'string' || (!b.text.trim() && b.attachment === undefined && b.voice === undefined && b.sticker === undefined) || b.text.includes('\0')
+    || Array.from(b.text.trim()).length > 4000 || Object.keys(b).some((key) => !['id','text','attachment','sticker','voice','replyToID','historyRevision'].includes(key))
+    || (b.voice !== undefined && (b.text.trim() || b.attachment !== undefined || b.sticker !== undefined))
+    || (b.sticker !== undefined && (b.text.trim() || b.attachment !== undefined))) {
     return c.json({ error: 'Use a message up to 4,000 characters, an attachment or a voice message, with a UUID' }, 400);
   }
   const epoch=await c.env.DB.prepare('SELECT history_revision AS revision,clearing FROM chat_group WHERE id=?').bind(id).first<{revision:number;clearing:number}>();
@@ -488,7 +490,9 @@ groups.post('/:id/messages', async (c) => {
   b.id = b.id.toLowerCase();
   const replyToID = parseGroupReply(b.replyToID) ?? null;
   if (b.replyToID !== undefined && !replyToID) return c.json({ error: 'Choose a message from this group to reply to' }, 400);
-  const attachment = b.voice !== undefined ? await parseVoice(b.voice)
+  const sticker = b.sticker === undefined ? null : await libraryStickerToSend(c.env, owner, b.sticker);
+  if (b.sticker !== undefined && !sticker) return c.json({ error: 'Choose a sticker from your library' }, 404);
+  const attachment = sticker ? { metadata: sticker.metadata, bytes: sticker.bytes } : b.voice !== undefined ? await parseVoice(b.voice)
     : b.attachment === undefined ? null : await parseAttachment(b.attachment);
   if (b.voice !== undefined && !attachment) return c.json({ error: 'Use a mono 16-bit 16 kHz WAV lasting 0.25–60 seconds' }, 400);
   if (b.attachment !== undefined && !attachment) return c.json({ error: 'Choose a JPEG, PNG, GIF, WebP, or PDF up to 5 MB' }, 400);
@@ -509,7 +513,7 @@ groups.post('/:id/messages', async (c) => {
   }
   const now = Date.now();
   const key = attachment ? `group-attachments/${id}/${owner}/${b.id}/${crypto.randomUUID()}` : null;
-  const attachmentJSON = attachment && key ? JSON.stringify({ ...attachment.metadata, key }) : null;
+  const attachmentJSON = attachment && key ? JSON.stringify({ ...attachment.metadata, key, ...(sticker ? { sticker: sticker.sticker } : {}) }) : null;
   if (attachment && key) {
     await registerChatObject(c.env,key,id);
     await c.env.CONTACT_PHOTOS.put(key, attachment.bytes, { httpMetadata: { contentType: attachment.metadata.mimeType } });

@@ -47,6 +47,7 @@ export function mergeTurn(current: ChatTurn, incoming: ChatTurn): ChatTurn {
 // Matches the API's chat list summary for the latest turn.
 export function turnPreview(turn: ChatTurn) {
   const fallback = turn.scheduleID ? 'Scheduled message' : turn.groupRequestID ? 'Group response'
+    : !turn.userText && turn.attachment?.sticker ? `Sticker ${turn.attachment.sticker.emoji}`
     : !turn.userText && turn.attachment ? `Attachment: ${turn.attachment.name}` : turn.userText;
   return [...(turn.assistantText ?? fallback)].slice(0, 500).join('');
 }

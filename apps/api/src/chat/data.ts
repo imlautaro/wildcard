@@ -1,4 +1,4 @@
-import { publicAttachment, storedAttachment, type PublicAttachment, type Attachment } from './attachments';
+import { publicAttachment, publicMetadata, storedAttachment, type PublicAttachment, type Attachment } from './attachments';
 import { isVoice, publicVoice, type PublicVoice } from '../voice/speech';
 import type { ReplyQuote, ReplyTarget } from '../replies/data';
 import type { PublicPostReference } from '../home/references';
@@ -49,13 +49,11 @@ export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }, r
         ...message,
         // A contact voice message keeps its text, which is also its transcript.
         voice: voice ? { ...voice, ownListenedAt: ownListened[part] ?? null } : null,
-        attachment: message.attachment && !isVoice(message.attachment) ? {
-          name: message.attachment.name, mimeType: message.attachment.mimeType, size: message.attachment.size,
-        } : null,
+        attachment: message.attachment && !isVoice(message.attachment) ? publicMetadata(message.attachment) : null,
         // A contact-generated album lists every image, including the first; older
         // clients keep reading attachment and show only that first image.
         attachments: message.attachments && message.attachments.length > 1
-          ? message.attachments.map(({ name, mimeType, size }) => ({ name, mimeType, size })) : null,
+          ? message.attachments.map(publicMetadata) : null,
         replyTo: message.replyTo && resolveQuote
           ? resolveQuote({ replyToID: message.replyTo.messageID, replyToSide: message.replyTo.side }) : null,
       };

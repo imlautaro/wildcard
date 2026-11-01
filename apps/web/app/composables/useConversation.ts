@@ -1,10 +1,11 @@
 import { createReactionCache, clearReactionCache, refreshReactions, type ReactionCache } from './useMessageReactions';
-import type { ChatPage, ChatReadState, ChatSubmission, ChatTurn, DraftAttachment, DraftVoice, HomePost, HomePostReference, Presence, ReplyQuote } from '~/utils/types';
+import type { ChatPage, ChatReadState, ChatSubmission, ChatTurn, DraftAttachment, DraftVoice, HomePost, HomePostReference, Presence, ReplyQuote, StickerChoice } from '~/utils/types';
 
 // Session cache of private conversations, keyed by contact. Pending sends keep
 // their UUID across navigation and failures so a retry can never duplicate them.
-// A voice message keeps its recorded clip in memory until the API accepts it.
-export type PendingSend = { historyRevision: number; id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; replyTo: ReplyQuote | null; homePost: HomePostReference | null; failed: string | null; createdAt: number; timeZone: string };
+// A voice message keeps its recorded clip in memory until the API accepts it; a sticker keeps
+// only its library ID (docs/stickers.md#sending).
+export type PendingSend = { historyRevision: number; id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; sticker: StickerChoice | null; replyTo: ReplyQuote | null; homePost: HomePostReference | null; failed: string | null; createdAt: number; timeZone: string };
 export type Conversation = {
   historyRevision: number;
   reactions: ReactionCache;
@@ -54,6 +55,7 @@ export function forgetConversation(id: string) {
   forgetChatMedia(`contacts/${id}/chat`);
   forgetTasks(`contacts/${id}`);
   forgetDocuments(`contacts/${id}`);
+  forgetContactStickers(id);
   forgetRead(`contact:${id}`);
 }
 
@@ -212,7 +214,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
       : undefined;
     try {
       const result = await api<ChatSubmission>(`contacts/${id}/chat/turns`, {
-        json: { historyRevision: pending.historyRevision, id: pending.id, text: pending.text, timeZone: pending.timeZone, attachment, voice: pending.voice ? { data: pending.voice.data } : undefined,
+        json: { historyRevision: pending.historyRevision, id: pending.id, text: pending.text, timeZone: pending.timeZone, attachment, voice: pending.voice ? { data: pending.voice.data } : undefined, sticker: pending.sticker ? { id: pending.sticker.id } : undefined,
           replyTo: pending.replyTo ? { messageID: pending.replyTo.messageID, side: pending.replyTo.side } : undefined,
           homePost: pending.homePost?.id },
       });
@@ -225,15 +227,17 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
       revokePreview(pending.attachment);
       entry.pending = null;
     } catch (error) {
-      if (entry.pending?.id === pending.id) entry.pending.failed = errorMessage(error);
+      // The chat route reports a missing contact for any 404, but a sticker send fails with 404 when the sticker left the library.
+      if (entry.pending?.id === pending.id) entry.pending.failed = pending.sticker && error instanceof ApiError && error.status === 404
+        ? 'This sticker is no longer in your library.' : errorMessage(error);
     }
   }
 
-  async function send(text: string, attachment: DraftAttachment | null, voice: DraftVoice | null = null) {
+  async function send(text: string, attachment: DraftAttachment | null, voice: DraftVoice | null = null, sticker: StickerChoice | null = null) {
     const entry = state.value;
     if (entry.pending) return;
-    entry.pending = { historyRevision: entry.historyRevision, id: crypto.randomUUID(), text: voice ? '' : text.trim(), attachment: voice ? null : attachment, voice, replyTo: entry.replyTo, homePost: entry.homePost, failed: null, createdAt: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
-    if (!voice) entry.draft = '';
+    entry.pending = { historyRevision: entry.historyRevision, id: crypto.randomUUID(), text: voice || sticker ? '' : text.trim(), attachment: voice || sticker ? null : attachment, voice: sticker ? null : voice, sticker, replyTo: entry.replyTo, homePost: entry.homePost, failed: null, createdAt: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+    if (!voice && !sticker) entry.draft = '';
     entry.replyTo = null;
     entry.homePost = null;
     await submit();
@@ -242,8 +246,8 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
   function discardPending() {
     const entry = state.value;
     if (!entry.pending?.failed) return;
-    // A failed voice message has no text to edit: discarding drops the clip.
-    if (!entry.pending.voice) entry.draft = entry.pending.text;
+    // A failed voice message or sticker has no text to edit: discarding drops it.
+    if (!entry.pending.voice && !entry.pending.sticker) entry.draft = entry.pending.text;
     entry.replyTo = entry.pending.replyTo;
     entry.homePost = entry.pending.homePost;
     revokePreview(entry.pending.attachment);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DraftAttachment, DraftVoice, GroupMember, GroupMessage, ReplyQuote } from '~/utils/types';
+import type { Attachment, DraftAttachment, DraftVoice, GroupMember, GroupMessage, ReplyQuote, Sticker, StickerChoice } from '~/utils/types';
 import { replyActivityLabel } from '../../../../../../shared/activity';
 
 const route = useRoute();
@@ -135,6 +135,17 @@ async function onSend(text: string, attachments: DraftAttachment[]) {
     if (state.value.pending?.failed) { for (const rest of queue.slice(index + 1)) if (rest?.previewURL) URL.revokeObjectURL(rest.previewURL); break; }
   }
 }
+// A library sticker is sent alone (docs/stickers.md#sending); the optimistic bubble reuses the
+// picker's cached image. Groups have no contact stickers tab: contacts do not send stickers there.
+async function onSticker(sticker: Sticker) {
+  scrollToBottom();
+  await send('', null, null, { id: sticker.id, emoji: sticker.emoji, path: stickerImagePath(sticker) });
+}
+const groupStickers = {};
+const stickerAttachment = (choice: StickerChoice): Attachment => ({ name: 'Sticker.png', mimeType: 'image/png', size: 0, sticker: { id: choice.id, emoji: choice.emoji } });
+// Photos use the media bubble; stickers are bare images without one.
+const isSticker = (message: GroupMessage) => !!message.attachment?.sticker;
+const isMedia = (message: GroupMessage) => !!message.attachment?.mimeType.startsWith('image/') && !isSticker(message);
 async function onVoice(clip: DraftVoice) {
   scrollToBottom();
   await send('', null, clip);
@@ -240,18 +251,18 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
           </div>
           <MessageReactions :cache="state.reactions" :path="`groups/${groupID}/reactions`" :message-i-d="item.message.id" side="group" :replyable="canReply"
             :receipt-group-i-d="groupID" :voice="!!item.message.voice" :transcript="transcriptOf(item.message)" @reply="startReply(item.message)">
-          <div class="bubble" :class="{ media: item.message.attachment?.mimeType.startsWith('image/') }">
+          <div class="bubble" :class="{ media: isMedia(item.message), sticker: isSticker(item.message) }">
             <span
               v-if="!isMine(item.message) && item.first" class="sender"
-              :style="[senderStyle(item.message), item.message.attachment?.mimeType.startsWith('image/') ? { padding: '4px 8px 0' } : {}]"
+              :style="[senderStyle(item.message), isMedia(item.message) ? { padding: '4px 8px 0' } : {}]"
             >{{ senderOf(item.message)?.name ?? item.message.senderName }}</span>
             <MessageReplyQuote v-if="item.message.replyTo" :preview="replyPreview(item.message.replyTo)" interactive @open="showQuoted(item.message.replyTo)" />
             <VoiceMessage v-if="item.message.voice" :voice="item.message.voice" :path="attachmentPath(item.message)" :outgoing="isMine(item.message)" :sender-name="item.message.senderName" :sender-photo="senderPhoto(item.message)" />
             <MessageAttachment v-else-if="item.message.attachment" :attachment="item.message.attachment" :attachments="item.message.attachments" :path="attachmentPath(item.message)" />
-            <div v-if="item.message.text && !item.message.voice" :class="{ caption: item.message.attachment?.mimeType.startsWith('image/') }"><MessageMarkdown v-if="item.message.agentID" :text="item.message.text" /><template v-else><LinkifiedText :text="item.message.text" /></template><LinkPreviewCard :url="previewLink(item.message.text, !!item.message.agentID)" /></div>
+            <div v-if="item.message.text && !item.message.voice" :class="{ caption: isMedia(item.message) }"><MessageMarkdown v-if="item.message.agentID" :text="item.message.text" /><template v-else><LinkifiedText :text="item.message.text" /></template><LinkPreviewCard :url="previewLink(item.message.text, !!item.message.agentID)" /></div>
             <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => a.replyID === item.message.id)" :key="app.id" :app="app" :base="`groups/${groupID}`" />
             <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.message.id)" :key="doc.id" :document="doc" :to="`/groups/${groupID}/documents/${doc.id}`" />
-            <div class="meta" :style="item.message.attachment?.mimeType.startsWith('image/') ? 'padding: 0 6px 2px' : ''">
+            <div class="meta" :style="isMedia(item.message) ? 'padding: 0 6px 2px' : ''">
               {{ messageTime(item.message.createdAt) }}<MessageReceipt v-if="isMine(item.message)" :receipt-state="item.message.receiptState ?? 'sent'" />
             </div>
           </div>
@@ -267,8 +278,9 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
 
       <template v-if="state.pending">
         <div class="bubble-row outgoing">
-          <div class="bubble" :class="{ media: state.pending.attachment?.previewURL }">
+          <div class="bubble" :class="{ media: state.pending.attachment?.previewURL, sticker: !!state.pending.sticker }">
             <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
+            <MessageAttachment v-if="state.pending.sticker" :attachment="stickerAttachment(state.pending.sticker)" :path="state.pending.sticker.path" />
             <VoiceMessage v-if="state.pending.voice" :voice="{ durationMs: state.pending.voice.durationMs, listenedAt: null, transcript: null }" :path="attachmentPath(state.pending)" :blob="state.pending.voice.blob" outgoing />
             <MessageAttachment v-if="state.pending.attachment" :attachment="state.pending.attachment" :path="null" :local-url="state.pending.attachment.previewURL" />
             <div v-if="state.pending.text" :class="{ caption: state.pending.attachment?.previewURL }"><LinkifiedText :text="state.pending.text" /></div>
@@ -280,7 +292,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
         <div v-if="state.pending.failed" class="status-line outgoing error">
           {{ state.pending.failed }}
           <button class="link-button" @click="submit">Retry</button>
-          <button class="link-button danger" @click="discardPending">{{ state.pending.voice ? 'Delete' : 'Edit' }}</button>
+          <button class="link-button danger" @click="discardPending">{{ state.pending.voice || state.pending.sticker ? 'Delete' : 'Edit' }}</button>
         </div>
       </template>
 
@@ -298,7 +310,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
     </div>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded || state.snapshot?.group.clearing === 1" :reply="replyTarget"
-      :voice-key="groupID" @send="onSend" @voice="onVoice" @cancel-reply="state.replyTo = null"
+      :voice-key="groupID" :stickers="groupStickers" @send="onSend" @voice="onVoice" @sticker="onSticker" @cancel-reply="state.replyTo = null"
     />
   </template>
 </template>

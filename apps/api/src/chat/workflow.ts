@@ -24,6 +24,7 @@ import { contactReply } from './context';
 import { maintainMemories } from './memory';
 import { releaseAttention } from './dispatch';
 import { storedAttachment } from './attachments';
+import { publishedSticker } from '../stickers/publish';
 import { TranscriptionFailure } from './transcription';
 import { isVoice, privateVoiceReplies, speakMessage, transcribeVoice, voiceSuitable } from '../voice/speech';
 import { NonRetryableError } from 'cloudflare:workflows';
@@ -40,10 +41,15 @@ async function pauseUntil(step: WorkflowStep, name: string, deadline: number) {
 const hasImages = (response: ContactResponse | null) => !!(response?.attachments?.length || (response as { attachment?: unknown } | null)?.attachment);
 function replyMessages(reply: ContactResponse | string[] | string | null) {
   const response = reply && typeof reply === 'object' && !Array.isArray(reply) ? reply : null;
-  const messages = response ? response.messages : typeof reply === 'string' ? [reply] : Array.isArray(reply) ? reply : [];
+  const texts = response ? response.messages : typeof reply === 'string' ? [reply] : Array.isArray(reply) ? reply : [];
+  // A chosen sticker is its own message after the text. Its text is its emoji, so chat lists and
+  // notifications read naturally. An album already occupies the first message, so it wins over a sticker alone.
+  const sticker = response?.sticker && (texts.length > 0 || !hasImages(response)) ? response.sticker : null;
+  const messages = sticker ? [...texts, sticker.emoji] : texts;
+  const stickerIndex = sticker ? messages.length - 1 : -1;
   // At most one message per reply is spoken: the first suitable one without an image.
-  const spoken = messages.findIndex((text, index) => voiceSuitable(text) && !(index === 0 && hasImages(response)));
-  return { response, messages, spoken };
+  const spoken = messages.findIndex((text, index) => index !== stickerIndex && voiceSuitable(text) && !(index === 0 && hasImages(response)));
+  return { response, messages, spoken, sticker, stickerIndex };
 }
 
 export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob | InitiativeJob | HomeJob | HomeCommentJob> {
@@ -232,7 +238,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
   }
 
   private async publishMessages(env: Env, job: ChatJob, step: WorkflowStep, reply: ContactResponse | string[] | string | null, prefix = 'reply', firstTypingAt?: number) {
-    const { response, messages, spoken } = replyMessages(reply);
+    const { response, messages, spoken, sticker, stickerIndex } = replyMessages(reply);
     // A research announcement may already be the turn's first bubble.
     const base = await step.do(`${prefix}-published-base`, async () => {
       const turn = await activeTurn(env.DB, job);
@@ -278,7 +284,9 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
           userID: delivered.userID, contactID: delivered.contactID, contributor: env.META_CHAT_MODEL.includes('contributor') && !await privateContact(env.DB, delivered.contactID),
           beforeSequence: delivered.sequence + 1, turnID: job.turnID, attempt: job.attempt,
         }) : [];
-        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${base + index}`, text: messages[index], createdAt: now, ...(album.length ? albumFields(album) : voice ? { attachment: voice } : {}), ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
+        // The library sticker is copied into the message (idempotent key); if it was deleted meanwhile the emoji alone is delivered.
+        const stickerAttachment = index === stickerIndex && sticker ? await publishedSticker(env, delivered, job, sticker.stickerID) : null;
+        const next = messages[index] ? [...previous, { id: `${job.turnID}/assistant/${base + index}`, text: messages[index], createdAt: now, ...(stickerAttachment ? { attachment: stickerAttachment } : album.length ? albumFields(album) : voice ? { attachment: voice } : {}), ...(index === 0 && response?.replyTo ? { replyTo: response.replyTo } : {}) }] : previous;
         const interrupted = `EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = chat_turn.contact_id
           AND newer.user_id = chat_turn.user_id AND newer.sequence > chat_turn.sequence)`;
         const text = next.length ? next.map(message => message.text).join('\n\n') : null;

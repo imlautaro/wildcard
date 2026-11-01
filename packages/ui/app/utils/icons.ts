@@ -67,6 +67,7 @@ export const appIcons = {
   search: ['solar:magnifer-linear', 'solar:magnifer-linear'],
   copy: ['solar:copy-linear', 'solar:copy-bold'],
   link: ['solar:link-linear', 'solar:link-linear'],
+  sticker: ['solar:sticker-smile-circle-linear', 'solar:sticker-smile-circle-bold'],
   'add-reaction': ['solar:smile-circle-linear', 'solar:smile-circle-bold'],
   tasks: ['solar:checklist-minimalistic-linear', 'solar:checklist-minimalistic-linear'],
   circle: ['solar:record-linear', 'solar:record-linear'],

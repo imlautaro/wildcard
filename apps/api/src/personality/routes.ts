@@ -53,11 +53,13 @@ routes.put('/', bodyLimit({ maxSize: 16_384, onError: c => c.json({ error: 'Pers
   }
   // Older clients omit specialties; preserve the current value under the same revision check.
   const sent = body.personality as { traits?: object };
-  if (!Object.hasOwn(sent, 'specialties') || !Object.hasOwn(sent.traits ?? {}, 'emoji')) {
+  if (!Object.hasOwn(sent, 'specialties') || !Object.hasOwn(sent.traits ?? {}, 'emoji') || !Object.hasOwn(sent.traits ?? {}, 'stickers')) {
     const current = (await readPersonality(c.env.DB, agent.agentID)).personality;
     if (!Object.hasOwn(sent, 'specialties')) profile.specialties = current.specialties;
     // Older clients omit the emoji trait too; keep the saved (or inferred) value.
     if (!Object.hasOwn(sent.traits ?? {}, 'emoji')) profile.traits.emoji = current.traits.emoji;
+    // Likewise for the stickers trait.
+    if (!Object.hasOwn(sent.traits ?? {}, 'stickers')) profile.traits.stickers = current.traits.stickers;
   }
   const saved = await c.env.DB.prepare(`INSERT INTO agent_personality (agent_id, profile_json, revision, updated_at)
     SELECT a.id, ?1, 1, ?2 FROM contact_agent a JOIN contact c ON c.agent_id = a.id

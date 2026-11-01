@@ -34,7 +34,7 @@ instructions also handle those legacy profiles. No schema, API or cache changes.
 Live semantic checks of generation and replies remain pending.
 
 A new identity has a generated name, portrait, enabled personality, specialties,
-time zone and all sixteen temperament traits. Muse Spark 1.3 Standard creates text;
+time zone and all seventeen temperament traits (a generated profile that omits Emoji or Stickers gets an inferred value). Muse Spark 1.3 Standard creates text;
 the existing Muse Image integration creates the portrait. The server chooses a
 random valid civil birthday giving exactly the requested age in the bot's generated
 time zone and persists it with the plan before image work. Onboarding also assigns

@@ -28,5 +28,6 @@ export function quoteSummary(quote: ReplyQuote) {
   if (quote.text) return quote.previewText ?? (quote.side === 'assistant' || quote.agentID ? plainMessageMarkdown(quote.text) : quote.text);
   // Quotes of voice messages carry no text or attachment (docs/voice.md).
   if (!quote.attachment) return 'Voice message';
+  if (quote.attachment.sticker) return `Sticker ${quote.attachment.sticker.emoji}`;
   return quote.attachment.mimeType.startsWith('image/') ? 'Photo' : quote.attachment.name;
 }

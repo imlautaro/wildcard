@@ -183,6 +183,7 @@ struct GroupChatView: View {
     @State private var photoSelection: PhotosPickerItem?
     @State private var showPhotoPicker = false
     @State private var showFilePicker = false
+    @State private var showStickers = false
     @State private var isLoadingAttachment = false
     @State private var attachmentError: String?
     @State private var attachmentTask: Task<Void, Never>?
@@ -333,6 +334,12 @@ struct GroupChatView: View {
                                              sentAt: store.pendingSentAt ?? 0, fromUser: true, receiptState: "sent", isSending: !store.pendingAccepted,
                                              localData: clip.data, replyQuote: pendingQuote)
                         }
+                        if let sticker = store.pendingSticker {
+                            ChatAttachmentView(attachment: ChatAttachment(name: "Sticker.png", mimeType: "image/png", size: sticker.size, sticker: sticker.chatSticker),
+                                               contactID: groupID, turnID: store.pendingID ?? "pending", groupID: groupID,
+                                               sentAt: store.pendingSentAt ?? 0, caption: "", receiptState: "sent", isSending: !store.pendingAccepted,
+                                               localSticker: sticker.imageResource, replyQuote: pendingQuote)
+                        }
                         if let file = store.pendingAttachment {
                             ChatAttachmentView(attachment: ChatAttachment(name: file.name, mimeType: file.mimeType, size: file.data.count),
                                                contactID: groupID, turnID: store.pendingID ?? "pending", groupID: groupID,
@@ -340,7 +347,7 @@ struct GroupChatView: View {
                                                receiptState: "sent", isSending: !store.pendingAccepted, localData: file.data,
                                                replyQuote: pendingQuote)
                         }
-                        if !pending.isEmpty && store.pendingAttachment?.mimeType.hasPrefix("image/") != true {
+                        if !pending.isEmpty && store.pendingAttachment?.mimeType.hasPrefix("image/") != true && store.pendingSticker == nil {
                             MessageBubbleView(text: pending, sentAt: store.pendingSentAt ?? 0, fromUser: true, receiptState: "sent", isSending: !store.pendingAccepted,
                                               replyQuote: store.pendingAttachment == nil ? pendingQuote : nil)
                         }
@@ -428,6 +435,12 @@ struct GroupChatView: View {
                 .accessibilityLabel(store.snapshot?.group.name ?? "Group details")
                 .accessibilityValue(subtitle)
             }
+        }
+        .sheet(isPresented: $showStickers) {
+            // Groups offer the person's own library only; contacts do not send stickers in groups.
+            StickerPickerView(contact: nil, canSend: store.snapshot != nil && !store.isSending && store.pendingID == nil && !isClearing,
+                              onSelect: sendSticker)
+                .presentationDetents([.medium, .large])
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection, matching: .images, preferredItemEncoding: .compatible)
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: DraftAttachment.types) { result in
@@ -549,6 +562,7 @@ struct GroupChatView: View {
             if let pending = store.pendingText, !store.isSending, !store.pendingAccepted {
                 Button("Retry sending") {
                     if let clip = store.pendingVoice { sendVoice(clip, reply: store.pendingReplyTo) }
+                    else if let sticker = store.pendingSticker { sendSticker(sticker) }
                     else { send(pending, file: store.pendingAttachment, reply: store.pendingReplyTo, proxy: proxy) }
                 }
                     .manrope(.footnote).frame(maxWidth: .infinity, alignment: .leading)
@@ -621,6 +635,19 @@ struct GroupChatView: View {
                         .focused($composerFocused)
                         .chatComposerFieldStyle()
                         .disabled(store.snapshot == nil)
+                    Button {
+                        composerFocused = false
+                        showStickers = true
+                    } label: {
+                        Image(systemName: "face.smiling")
+                            .font(.system(size: 20, weight: .medium))
+                            .frame(width: composerControlHeight, height: composerControlHeight)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: Circle())
+                    .accessibilityLabel("Stickers")
+                    .disabled(store.snapshot == nil || store.isSending || store.pendingID != nil || isClearing)
                 }
                 // The microphone keeps its identity while recording so the hold gesture continues.
                 if draftIsEmpty {
@@ -666,6 +693,20 @@ struct GroupChatView: View {
         Task {
             _ = await store.send("", voice: clip, replyTo: reply, id: groupID, auth: auth)
             sync.request(.group(groupID))
+            scrollToLatest()
+        }
+    }
+    /// Sends a library sticker alone. Retrying a failed one reuses the pending message ID.
+    private func sendSticker(_ sticker: Sticker) {
+        guard store.snapshot != nil, !store.isSending, !isClearing else { return }
+        let reply = store.pendingID == nil ? replyTarget : store.pendingReplyTo
+        if store.pendingID == nil { replyTarget = nil }
+        showStickers = false
+        nearBottom = true
+        Task {
+            let success = await store.send("", sticker: sticker, replyTo: reply, id: groupID, auth: auth)
+            sync.request(.group(groupID))
+            if !success, store.pendingID == nil, replyTarget == nil { replyTarget = reply }
             scrollToLatest()
         }
     }

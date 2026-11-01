@@ -315,6 +315,10 @@ causes. Connector conversations retain their local isolation. Initiative adapts 
 remain disabled until explicitly enabled. Migrations 0039–0040 are required; see
 [infrastructure](docs/infrastructure.md#contact-personality) for release and rollback.
 
+People and contacts exchange [stickers](docs/stickers.md): transparent-background cutouts (Meta SAM)
+with an emoji, kept in a library that works in every chat, saved from contacts and "stolen" by
+contacts, with a personality trait for how often a contact sends them (migration 0091).
+
 Contacts can [generate contextual chat images](docs/generated-images.md) with
 portrait, landscape or square framing chosen from context, including optional
 private spontaneous image messages within existing initiative limits (migration

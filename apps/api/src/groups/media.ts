@@ -61,6 +61,7 @@ media.get('/media', async (c) => {
     sender_name AS senderName, created_at AS createdAt, attachment_json AS attachmentJSON, attachments_json AS attachmentsJSON FROM group_message
     WHERE group_id = ?1 AND sequence < ?2 AND attachment_json IS NOT NULL AND sequence >= ${userHistoryStart('?1', '?5')}
     AND json_extract(attachment_json, '$.mimeType') NOT LIKE 'audio/%'
+    AND json_extract(attachment_json, '$.sticker') IS NULL
     AND (json_extract(attachment_json, '$.mimeType') LIKE 'image/%') = (?3 = 'image')
     ORDER BY sequence DESC LIMIT ?4`).bind(c.req.param('id'), before, kind, mediaPage(kind) + 1, c.get('owner'))
     .all<{ sequence: number; messageID: string; userID: string | null; agentID: string | null; senderName: string; createdAt: number; attachmentJSON: string; attachmentsJSON: string | null }>();

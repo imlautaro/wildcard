@@ -496,7 +496,7 @@ final class GroupChatStore {
         }
     }
 
-    private var pending: (historyRevision: Int, id: String, text: String, attachment: DraftAttachment?, voice: VoiceClip?, sentAt: Double, replyTo: MessageReplyQuote?)?
+    private var pending: (historyRevision: Int, id: String, text: String, attachment: DraftAttachment?, voice: VoiceClip?, sentAt: Double, replyTo: MessageReplyQuote?, sticker: Sticker?)?
     /// A voice message the server rejected; kept until the person retries (with a new ID) or discards it.
     private(set) var failedVoice: (clip: VoiceClip, replyTo: MessageReplyQuote?)?
     func discardFailedVoice() { failedVoice = nil }
@@ -527,7 +527,7 @@ final class GroupChatStore {
             result.lastMessageID = message.id
             result.lastMessageVoice = message.voice
             result.lastMessageText = message.voice != nil ? "Voice message"
-                : message.text.isEmpty ? message.attachment.map { "Attachment: " + $0.name } ?? "" : String(message.text.prefix(500))
+                : message.text.isEmpty ? message.attachment.map { $0.sticker.map { "Sticker " + $0.emoji } ?? "Attachment: " + $0.name } ?? "" : String(message.text.prefix(500))
             result.lastMessagePreview = message.agentID != nil && message.voice == nil && !message.text.isEmpty
                 ? String(MessageMarkdown.plainText(message.text).prefix(500)) : result.lastMessageText
             result.lastMessageAt = message.createdAt
@@ -540,7 +540,7 @@ final class GroupChatStore {
             result.lastMessageID = pending.id
             result.lastMessageVoice = pending.voice?.metadata
             result.lastMessageText = pending.voice != nil ? "Voice message"
-                : pending.text.isEmpty ? pending.attachment.map { "Attachment: " + $0.name } ?? "" : pending.text
+                : pending.text.isEmpty ? pending.sticker.map { "Sticker " + $0.emoji } ?? pending.attachment.map { "Attachment: " + $0.name } ?? "" : pending.text
             result.lastMessagePreview = result.lastMessageText
             result.lastMessageAt = pending.sentAt
             result.lastMessageUserID = pendingSender?.id
@@ -552,6 +552,7 @@ final class GroupChatStore {
     var pendingID: String? { pending?.id }
     var pendingAttachment: DraftAttachment? { pending?.attachment }
     var pendingVoice: VoiceClip? { pending?.voice }
+    var pendingSticker: Sticker? { pending?.sticker }
     var pendingSentAt: Double? { pending?.sentAt }
     var pendingReplyTo: MessageReplyQuote? { pending?.replyTo }
 
@@ -619,6 +620,7 @@ final class GroupChatStore {
                     await auth.images.store(file.data, for: .groupAttachment(groupID: id, messageID: pending.id))
                 }
                 if let clip = pending.voice { await auth.images.audio.store(clip.data, for: .groupVoice(groupID: id, messageID: pending.id)) }
+                if let sticker = pending.sticker { await auth.images.copy(sticker.imageResource, to: .groupAttachment(groupID: id, messageID: pending.id)) }
                 guard !invalidated, epoch == accessEpoch else { return }
             }
             // Refresh older retained outgoing receipts without refetching message bodies.
@@ -692,16 +694,16 @@ final class GroupChatStore {
             self.error = error.localizedDescription
         }
     }
-    func send(_ text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, id: String, auth: AuthStore) async -> Bool {
+    func send(_ text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, sticker: Sticker? = nil, replyTo: MessageReplyQuote? = nil, id: String, auth: AuthStore) async -> Bool {
         guard !invalidated, !isSending, pending == nil || (pending?.text == text && pending?.attachment == attachment
-            && pending?.voice == voice && pending?.replyTo?.messageID == replyTo?.messageID) else {
+            && pending?.voice == voice && pending?.sticker?.id == sticker?.id && pending?.replyTo?.messageID == replyTo?.messageID) else {
             if let voice, !invalidated, pending?.voice != voice { failedVoice = (voice, replyTo) }
             return false
         }
         isSending = true
         if voice != nil { failedVoice = nil }
         if pending == nil {
-            pending = (historyRevision, UUID().uuidString.lowercased(), text, attachment, voice, Date.now.timeIntervalSince1970 * 1000, replyTo)
+            pending = (historyRevision, UUID().uuidString.lowercased(), text, attachment, voice, Date.now.timeIntervalSince1970 * 1000, replyTo, sticker)
             pendingAccepted = false
             pendingSender = auth.user.map { ($0.id, $0.name) }
         }
@@ -711,7 +713,7 @@ final class GroupChatStore {
         do {
             try await auth.withSession { api, token in
                 try await api.sendGroupMessage(groupID: id, historyRevision: submitted.historyRevision, id: submitted.id, text: submitted.text, attachment: submitted.attachment,
-                                               voice: submitted.voice, replyToID: submitted.replyTo?.messageID, token: token)
+                                               voice: submitted.voice, sticker: submitted.sticker, replyToID: submitted.replyTo?.messageID, token: token)
             }
             guard !invalidated, epoch == accessEpoch else { return false }
             if pending?.id == submitted.id { pendingAccepted = true }
@@ -721,6 +723,7 @@ final class GroupChatStore {
                 await auth.images.store(file.data, for: .groupAttachment(groupID: id, messageID: submitted.id))
             }
             if let clip = submitted.voice { await auth.images.audio.store(clip.data, for: .groupVoice(groupID: id, messageID: submitted.id)) }
+            if let sticker = submitted.sticker { await auth.images.copy(sticker.imageResource, to: .groupAttachment(groupID: id, messageID: submitted.id)) }
             await refresh(id: id, auth: auth)
             return true
         } catch is CancellationError { return false }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ChatTurn, Contact, DraftAttachment, DraftVoice, ReplyQuote } from '~/utils/types';
+import type { Attachment, ChatTurn, Contact, DraftAttachment, DraftVoice, ReplyQuote, Sticker, StickerChoice } from '~/utils/types';
 
 const route = useRoute();
 const contactID = computed(() => String(route.params.id));
@@ -147,6 +147,41 @@ async function onSend(text: string, attachments: DraftAttachment[]) {
     if (state.value.pending?.failed) { for (const rest of queue.slice(index + 1)) if (rest?.previewURL) URL.revokeObjectURL(rest.previewURL); break; }
   }
 }
+// A library sticker is sent alone, with the same optimistic bubble and retry as other messages;
+// the bubble reuses the picker's cached image (same path).
+async function onSticker(sticker: Sticker) {
+  scrollToBottom();
+  activity.sent();
+  await send('', null, null, { id: sticker.id, emoji: sticker.emoji, path: stickerImagePath(sticker) });
+}
+const stickerOptions = computed(() => ({ contactID: contactID.value, contactName: contact.value?.name ?? null }));
+const stickerAttachment = (choice: StickerChoice): Attachment => ({ name: 'Sticker.png', mimeType: 'image/png', size: 0, sticker: { id: choice.id, emoji: choice.emoji } });
+// A contact message can carry a sticker at any part; bytes are addressed by side and part.
+function assistantAttachment(item: MessageItem) {
+  return item.part === undefined ? null : item.turn.assistantMessages?.[item.part]?.attachment ?? null;
+}
+const assistantSticker = (item: MessageItem) => assistantAttachment(item)?.sticker ?? null;
+function assistantAttachmentPath(item: MessageItem) {
+  return item.part ? assistantVoicePath(item) : `${attachmentPath(item.turn)}?side=assistant`;
+}
+// "Save sticker" on a contact's sticker; the API deduplicates by digest (docs/stickers.md#api).
+const stickers = useStickers();
+const stickerNote = ref<{ text: string; tone: 'success' | 'error' } | null>(null);
+let noteTimer: ReturnType<typeof setTimeout> | undefined;
+async function saveSticker(item: MessageItem) {
+  const emoji = assistantSticker(item)?.emoji ?? '';
+  const id = contactID.value;
+  let note: { text: string; tone: 'success' | 'error' };
+  try {
+    await stickers.saveFromMessage(id, item.turn.id, item.part ?? 0);
+    note = { text: `Sticker ${emoji} saved to My stickers.`, tone: 'success' };
+  } catch (failure) { note = { text: errorMessage(failure), tone: 'error' }; }
+  if (contactID.value !== id) return;
+  stickerNote.value = note;
+  clearTimeout(noteTimer);
+  noteTimer = setTimeout(() => { stickerNote.value = null; }, 5000);
+}
+watch(contactID, () => { stickerNote.value = null; });
 async function onVoice(clip: DraftVoice) {
   scrollToBottom();
   activity.sent();
@@ -180,6 +215,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('focus', markRead);
   clearTimeout(highlightTimer);
+  clearTimeout(noteTimer);
 });
 </script>
 
@@ -226,6 +262,14 @@ onBeforeUnmount(() => {
             <div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div>
           </div>
         </div>
+        <div v-if="state.pending.sticker" class="bubble-row outgoing">
+          <div class="bubble sticker">
+            <MessagePostReference v-if="state.pending.homePost" :post="state.pending.homePost" />
+            <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
+            <MessageAttachment :attachment="stickerAttachment(state.pending.sticker)" :path="state.pending.sticker.path" />
+            <div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div>
+          </div>
+        </div>
         <div v-if="state.pending.attachment" class="bubble-row outgoing">
           <div class="bubble media">
             <MessagePostReference v-if="state.pending.homePost" :post="state.pending.homePost" />
@@ -241,7 +285,7 @@ onBeforeUnmount(() => {
         <div v-if="state.pending.failed" class="status-line outgoing error">
           {{ state.pending.failed }}
           <button class="link-button" @click="submit">Retry</button>
-          <button class="link-button danger" @click="discardPending">{{ state.pending.voice ? 'Delete' : 'Edit' }}</button>
+          <button class="link-button danger" @click="discardPending">{{ state.pending.voice || state.pending.sticker ? 'Delete' : 'Edit' }}</button>
         </div>
       </template>
         <template v-else-if="item.kind !== 'pending'">
@@ -259,7 +303,7 @@ onBeforeUnmount(() => {
                   <div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
                 </div>
                 <template v-else>
-                <div v-if="item.turn.attachment" class="bubble media">
+                <div v-if="item.turn.attachment" class="bubble" :class="item.turn.attachment.sticker ? 'sticker' : 'media'">
                   <MessagePostReference v-if="item.turn.homePost" :post="item.turn.homePost" interactive />
                   <MessageReplyQuote v-if="item.turn.replyTo" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />
                   <MessageAttachment :attachment="item.turn.attachment" :path="attachmentPath(item.turn)" />
@@ -276,14 +320,15 @@ onBeforeUnmount(() => {
             class="bubble-row incoming" :class="{ highlighted: highlighted === `${item.turn.id}-assistant` }"
           >
             <MessageReactions :cache="state.reactions" :path="`contacts/${contactID}/chat/reactions`" :message-i-d="item.turn.id" side="assistant" :replyable="canReply"
-              :voice="!!assistantVoice(item)" :transcript="item.text ?? null" @reply="startReply(item.turn, 'assistant')">
-              <div class="bubble" :class="{ media: item.first && item.turn.assistantMessages?.[0]?.attachment }">
+              :voice="!!assistantVoice(item)" :transcript="item.text ?? null" :save-sticker="!!assistantSticker(item) && canReply"
+              @reply="startReply(item.turn, 'assistant')" @save-sticker="saveSticker(item)">
+              <div class="bubble" :class="{ media: !!assistantAttachment(item) && !assistantSticker(item), sticker: !!assistantSticker(item) }">
                 <!-- A message the contact wrote itself after a comment on its For you post carries the post (docs/updates.md#private-messages-from-comments). -->
                 <MessagePostReference v-if="item.first && item.turn.homePost && !item.turn.userText && !item.turn.attachment && !item.turn.voice" :post="item.turn.homePost" interactive />
                 <MessageReplyQuote v-if="item.first && item.turn.assistantMessages?.[0]?.replyTo" :preview="replyPreview(item.turn.assistantMessages[0].replyTo)" interactive @open="showQuoted(item.turn.assistantMessages[0].replyTo)" />
-                <MessageAttachment v-if="item.first && item.turn.assistantMessages?.[0]?.attachment" :attachment="item.turn.assistantMessages[0].attachment" :attachments="item.turn.assistantMessages[0].attachments" :path="`contacts/${contactID}/chat/turns/${item.turn.id}/attachment?side=assistant`" />
+                <MessageAttachment v-if="assistantAttachment(item)" :attachment="assistantAttachment(item)!" :attachments="item.first ? item.turn.assistantMessages?.[0]?.attachments : null" :path="assistantAttachmentPath(item)" />
                 <VoiceMessage v-if="assistantVoice(item)" :voice="assistantVoice(item)!" :path="assistantVoicePath(item)" :sender-name="contact?.name" :sender-photo="contact ? contactPhotoPath(contact) : null" />
-                <div v-else :class="{ caption: item.first && item.turn.assistantMessages?.[0]?.attachment }"><MessageMarkdown :text="item.text ?? item.turn.assistantText" /><LinkPreviewCard :url="previewLink(item.text ?? item.turn.assistantText, true)" /></div>
+                <div v-else-if="!assistantSticker(item)" :class="{ caption: !!assistantAttachment(item) }"><MessageMarkdown :text="item.text ?? item.turn.assistantText" /><LinkPreviewCard :url="previewLink(item.text ?? item.turn.assistantText, true)" /></div>
                 <template v-if="item.first">
                   <MiniAppCard v-for="app in miniApps.state.value.apps.filter(a => a.turnID === item.turn.id)" :key="app.id" :app="app" :base="`contacts/${contactID}`" />
                   <DocumentCard v-for="doc in documents.state.value.items.filter(d => d.sourceID === item.turn.id)" :key="doc.id" :document="doc" :to="`/contacts/${contactID}/documents/${doc.id}`" />
@@ -320,14 +365,16 @@ onBeforeUnmount(() => {
     </div>
     <ChatScrollDown v-if="positioned && !pinned" @click="scrollToBottom" />
     </div>
+    <div v-if="stickerNote" class="composer-note"><AppNotice :tone="stickerNote.tone" dismissible @dismiss="stickerNote = null">{{ stickerNote.text }}</AppNotice></div>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable || contact?.clearing === 1" :sending="!!state.pending" :reply="replyTarget" :post="state.homePost"
-      :voice-key="contactID" @send="onSend" @voice="onVoice" @typing="activity.typing()" @cancel-reply="state.replyTo = null" @cancel-post="state.homePost = null"
+      :voice-key="contactID" :stickers="stickerOptions" @send="onSend" @voice="onVoice" @sticker="onSticker" @typing="activity.typing()" @cancel-reply="state.replyTo = null" @cancel-post="state.homePost = null"
     />
   </template>
 </template>
 
 <style scoped>
+.composer-note { padding: 0 var(--space-3); background: var(--md-surface); }
 /* Media bubbles have a 4 px inset, so the time needs its own side padding. */
 .bubble.media > .meta { padding: 0 var(--space-1-5) var(--space-0-5); }
 </style>

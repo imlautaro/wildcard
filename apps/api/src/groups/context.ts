@@ -90,6 +90,7 @@ const messageColumns = `gm.sequence, gm.sender_name AS name, gm.user_id AS userI
 // A voice message's text is its transcript (empty when no speech was recognized).
 const fileMarker = (attachmentJSON: string | null) => !attachmentJSON ? null
   : isVoice(storedAttachment({ attachmentJSON })) ? { voiceMessage: true, textIsTranscript: true }
+  : storedAttachment({ attachmentJSON })?.sticker ? { sticker: storedAttachment({ attachmentJSON })!.sticker!.emoji, bytesOmitted: true }
   : { name: storedAttachment({ attachmentJSON })?.name, bytesOmitted: true,
     // An album's first image carries its size; the other images are not described.
     ...((JSON.parse(attachmentJSON) as { albumSize?: number }).albumSize ? { albumImages: (JSON.parse(attachmentJSON) as { albumSize: number }).albumSize } : {}) };

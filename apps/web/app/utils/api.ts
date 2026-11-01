@@ -1,7 +1,7 @@
 // Same-origin client for the Worker proxy at /api/v1. Error copy follows the
 // iOS AuthAPI mapping so both clients explain failures the same way.
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number, readonly code?: string) {
+  constructor(message: string, readonly status: number, readonly code?: string, readonly retryAfter?: number) {
     super(message);
   }
 }
@@ -33,6 +33,10 @@ function failureMessage(path: string, method: string, status: number, body: unkn
   if (path.includes('/personality')) return serverMessage(body) ?? 'Personality is temporarily unavailable. Please try again.';
   if (path.includes('/mcp')) return serverMessage(body) ?? 'Connections are temporarily unavailable. Please try again.';
   if (path.includes('/mini-apps')) return serverMessage(body) ?? 'Mini apps are temporarily unavailable. Please try again.';
+  // Sticker routes (docs/stickers.md): the API's own messages are accurate for every status.
+  if (path === 'stickers' || path.startsWith('stickers/') || path.startsWith('stickers?') || path.includes('/stickers')) {
+    return serverMessage(body) ?? 'Stickers are temporarily unavailable. Please try again.';
+  }
   if (path.endsWith('/reactions')) return serverMessage(body) ?? 'Reactions are temporarily unavailable. Please try again.';
   if (path === 'home' || path.startsWith('home/')) return status === 429 || status >= 500
     ? 'For you is temporarily unavailable. Please try again.' : serverMessage(body) ?? 'For you is temporarily unavailable. Please try again.';
@@ -112,7 +116,8 @@ async function request(path: string, options: Options = {}): Promise<Response> {
     throw new ApiError('Your session has expired. Please sign in again.', 401);
   }
   const code = data && typeof data === 'object' && 'code' in data ? String((data as { code: unknown }).code) : undefined;
-  throw new ApiError(failureMessage(path, method, response.status, data), response.status, code);
+  const retryAfter = Number(response.headers.get('Retry-After'));
+  throw new ApiError(failureMessage(path, method, response.status, data), response.status, code, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined);
 }
 
 export async function api<T>(path: string, options: Options = {}): Promise<T> {

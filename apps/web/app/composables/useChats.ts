@@ -375,7 +375,7 @@ function contactMessageRow(contact: Contact): ChatRow | null {
   };
   const pending = cached?.pending;
   if (pending && !cached.turns.some((turn) => turn.id === pending.id)) {
-    return { ...base, voice: pending.voice ? { durationMs: pending.voice.durationMs, listenedAt: null, transcript: null } : null, preview: pending.voice ? voicePreviewLabel(pending.voice) : pending.text || (pending.attachment ? `Attachment: ${pending.attachment.name}` : ''),
+    return { ...base, voice: pending.voice ? { durationMs: pending.voice.durationMs, listenedAt: null, transcript: null } : null, preview: pending.voice ? voicePreviewLabel(pending.voice) : pending.text || (pending.sticker ? `Sticker ${pending.sticker.emoji}` : pending.attachment ? `Attachment: ${pending.attachment.name}` : ''),
       at: pending.createdAt, own: true, sending: true, readAt: null };
   }
   const latest = cached?.turns.at(-1);
@@ -404,7 +404,7 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   const last = cached ? lastGroupChatMessage(cached.messages) : undefined;
   if (last && (last.id === group.lastMessageID || last.createdAt >= (group.lastMessageAt ?? 0))) {
     voice = last.id === group.lastMessageID ? mergeVoice(last.voice, group.lastMessageVoice) : last.voice;
-    preview = last.text ? [...(last.agentID ? plainMessageMarkdown(last.text) : last.text)].slice(0, 500).join('') : (last.attachments?.length ?? 0) > 1 ? `${last.attachments!.length} photos` : last.attachment ? `Attachment: ${last.attachment.name}` : '';
+    preview = last.text ? [...(last.agentID ? plainMessageMarkdown(last.text) : last.text)].slice(0, 500).join('') : (last.attachments?.length ?? 0) > 1 ? `${last.attachments!.length} photos` : last.attachment?.sticker ? `Sticker ${last.attachment.sticker.emoji}` : last.attachment ? `Attachment: ${last.attachment.name}` : '';
     at = last.createdAt;
     sender = last.senderName;
     userID = last.userID;
@@ -413,7 +413,7 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   const pending = cached?.pending;
   if (pending && !cached.messages.some((message) => message.id === pending.id)) {
     voice = pending.voice ? { durationMs: pending.voice.durationMs, listenedAt: null, transcript: null } : null;
-    preview = pending.text || (pending.attachment ? `Attachment: ${pending.attachment.name}` : '');
+    preview = pending.text || (pending.sticker ? `Sticker ${pending.sticker.emoji}` : pending.attachment ? `Attachment: ${pending.attachment.name}` : '');
     at = pending.createdAt;
     userID = me ?? null;
     receiptState = 'sent';

@@ -68,6 +68,8 @@ final class ContactsStore {
     let taskSnapshots = NavigationSnapshotCache<TaskBoard>()
     let documentCaches = DocumentCaches()
     let miniApps = MiniAppStore()
+    /// The person's sticker library and per-contact sticker tabs (docs/stickers.md#ios).
+    let stickers = StickerStore()
     private var refreshRequest: (id: UUID, task: Task<Void, Never>)?
     private var warmingTask: Task<Void, Never>?
     private var queuedWarmContacts: [Contact]?
@@ -156,7 +158,7 @@ final class ContactsStore {
         // Voice messages never preview their transcript or spoken text.
         if turn.assistantText == nil ? turn.voice != nil : turn.assistantMessages?.last?.voice != nil { return "Voice message" }
         let fallback = turn.scheduleID != nil ? "Scheduled message" : turn.groupRequestID != nil ? "Group response" :
-            turn.userText.isEmpty ? turn.attachment.map { "Attachment: " + $0.name } ?? "" : turn.userText
+            turn.userText.isEmpty ? turn.attachment.map { $0.sticker.map { "Sticker " + $0.emoji } ?? "Attachment: " + $0.name } ?? "" : turn.userText
         return String(String.UnicodeScalarView((turn.assistantText ?? fallback).unicodeScalars.prefix(500)))
     }
 
@@ -227,6 +229,7 @@ final class ContactsStore {
                 mcpAccessSnapshots.remove(id: "contact:\(contact.id)")
                 linkSnapshots.removeAll()
                 miniApps.forget(base: "contacts/\(contact.id)")
+                stickers.forget(contactID: contact.id)
                 mediaSnapshots.forget(.contact(contact.id))
                 taskSnapshots.remove(id: "contacts/\(contact.id)")
                 documentCaches.forget("contacts/\(contact.id)")
@@ -475,6 +478,7 @@ final class ContactsStore {
             mcpAccessSnapshots.remove(id: "contact:\(contact.id)")
             linkSnapshots.removeAll()
             miniApps.forget(base: "contacts/\(contact.id)")
+            stickers.forget(contactID: contact.id)
             mediaSnapshots.forget(.contact(contact.id))
             taskSnapshots.remove(id: "contacts/\(contact.id)")
             documentCaches.forget("contacts/\(contact.id)")
@@ -528,6 +532,7 @@ final class ContactsStore {
                 mcpAccessSnapshots.remove(id: "contact:\(id)")
                 linkSnapshots.removeAll()
                 miniApps.forget(base: "contacts/\(id)")
+                stickers.forget(contactID: id)
                 mediaSnapshots.forget(.contact(id))
                 taskSnapshots.remove(id: "contacts/\(id)")
                 documentCaches.forget("contacts/\(id)")

@@ -9,6 +9,8 @@ import { documentRoutes } from '../documents/routes';
 import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 import { aliasBody } from '../contacts/alias';
 import { learningRoutes } from '../chat/learning-routes';
+import { contactStickers } from '../stickers/routes';
+import { dropAvatarStickers } from '../stickers/data';
 import { accountEnvironment } from '../lib/model-preference';
 import { readEnergy } from '../groups/energy';
 import { photoKey, photoResponse, removePhoto, validPhoto, readPhoto } from '../photos/storage';
@@ -42,7 +44,7 @@ const selection = `${columns},
   (SELECT CASE WHEN t.assistant_text IS NULL AND t.schedule_id IS NULL AND t.group_request_id IS NULL AND t.task_id IS NULL THEN 1 ELSE 0 END
     FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageFromUser,
   (SELECT t.read_at FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id ORDER BY t.sequence DESC LIMIT 1) AS lastMessageReadAt, (SELECT CASE WHEN json_extract(t.assistant_messages_json, '$[#-1].attachment.mimeType') LIKE 'audio/%'
-    OR (t.assistant_text IS NULL AND json_extract(t.attachment_json, '$.mimeType') LIKE 'audio/%') THEN 'Voice message' ELSE COALESCE(t.assistant_text, CASE WHEN t.schedule_id IS NOT NULL THEN 'Scheduled message' WHEN t.group_request_id IS NOT NULL THEN 'Group response' WHEN t.task_id IS NOT NULL THEN 'Working on a task' WHEN t.user_text = '' AND t.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(t.attachment_json, '$.name') ELSE t.user_text END) END
+    OR (t.assistant_text IS NULL AND json_extract(t.attachment_json, '$.mimeType') LIKE 'audio/%') THEN 'Voice message' ELSE COALESCE(t.assistant_text, CASE WHEN t.schedule_id IS NOT NULL THEN 'Scheduled message' WHEN t.group_request_id IS NOT NULL THEN 'Group response' WHEN t.task_id IS NOT NULL THEN 'Working on a task' WHEN t.user_text = '' AND json_extract(t.attachment_json, '$.sticker') IS NOT NULL THEN 'Sticker ' || json_extract(t.attachment_json, '$.sticker.emoji') WHEN t.user_text = '' AND t.attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(t.attachment_json, '$.name') ELSE t.user_text END) END
   FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
   ORDER BY t.sequence DESC LIMIT 1) AS lastMessageText,
   (SELECT CASE WHEN t.assistant_text IS NOT NULL THEN t.updated_at ELSE t.created_at END
@@ -303,6 +305,8 @@ contacts.put('/:id/photo', async (c) => {
     return c.json({ error: 'Contact changed. Refresh and try again.' }, 409);
   }
   if (previous.version) c.executionCtx.waitUntil(removePhoto(c.env, photoKey(owner, id, previous.version)));
+  // Stickers of the contact itself were cut from the old photo (docs/stickers.md).
+  c.executionCtx.waitUntil(dropAvatarStickers(c.env, previous.agentID));
   const result = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`).bind(id, owner).first<Contact>();
   return c.json({ contact: result ?? saved });
 });
@@ -318,6 +322,7 @@ contacts.delete('/:id/photo', async (c) => {
     .bind(Date.now(), c.req.param('id'), c.get('owner'), previous.version).first<Contact>();
   if (!saved) return c.json({ error: 'Contact changed. Refresh and try again.' }, 409);
   if (previous.version) c.executionCtx.waitUntil(removePhoto(c.env, photoKey(c.get('owner'), saved.id, previous.version)));
+  c.executionCtx.waitUntil(dropAvatarStickers(c.env, previous.agentID));
   const result = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`).bind(saved.id, c.get('owner')).first<Contact>();
   return c.json({ contact: result ?? saved });
 });
@@ -372,6 +377,7 @@ contacts.route('/:id/tasks', taskRoutes('contact'));
 contacts.route('/:id/links', linkRoutes);
 contacts.route('/:id/documents', documentRoutes('contact'));
 contacts.route('/:id/learning', learningRoutes('contact'));
+contacts.route('/:id/stickers', contactStickers);
 contacts.route('/:id/native-remote', remoteSettings);
 contacts.route('/sharing', sharing);
 

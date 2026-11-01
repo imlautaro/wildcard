@@ -10,7 +10,8 @@ import { messageInstruction, quoteInstruction, parseMessages, type ContactRespon
 import { profilePhotoTool, profilePhotoInstruction, viewProfilePhoto, withProfilePhotos } from '../photos/model';
 import { executeNativeTool, nativePhones, nativeTools, parseNativeContext } from '../native/actions';
 import { personalityContext } from '../personality/engine';
-import { expressionHabits } from '../personality/expression';
+import { expressionHabits, stickerHabits } from '../personality/expression';
+import { executeStickerTool, stickerInstruction, stickerState, stickerToolNames, stickerTools, type ChosenSticker, type StickerState } from '../stickers/tools';
 import { readPersonality } from '../personality/profile';
 import { privateContact } from '../mcp/client';
 import { executeMcp, mcpTools } from '../mcp/tools';
@@ -23,7 +24,7 @@ import { agentMemoryContext, readAgentMemories } from './agent-memory';
 import { executeGroupRequest, groupRequestReceipt, groupRequestTool, groupQuestionTool, recentGroupDestinations } from '../groups/requests';
 import { groupRequestReply } from '../groups/request-results';
 import { executeGroupRetrieval, groupRetrievalTools, relevantGroupMessages, searchGroupMessages, sharedGroups } from '../groups/retrieval';
-import { attachmentMessage, storedAttachment, voiceText } from './attachments';
+import { attachmentMessage, stickerText, storedAttachment, voiceText } from './attachments';
 import { isVoice } from '../voice/speech';
 import { voiceInstruction } from '../voice/catalog';
 import { contactModelAllowed } from './consent';
@@ -85,6 +86,7 @@ type HistoryRow = { errorCode: string | null; id: string; sequence: number; user
   replyToID: string | null; replyToSide: string | null; homePostID: string | null; homePostJSON: string | null; homeCommentID: string | null };
 const historyColumns = `id, sequence, error_code AS errorCode,
   CASE WHEN attachment_json IS NULL THEN user_text
+    WHEN json_extract(attachment_json, '$.sticker') IS NOT NULL THEN '[Sticker ' || json_extract(attachment_json, '$.sticker.emoji') || ']'
     WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN CASE WHEN user_text = ''
       THEN '[Voice message without recognizable speech]' ELSE '[Voice message, transcribed] ' || user_text END
     ELSE user_text || '\n[Attached file: ' || json_extract(attachment_json, '$.name') || '; bytes omitted from history]' END AS userText,
@@ -93,12 +95,18 @@ const historyColumns = `id, sequence, error_code AS errorCode,
   reply_to_id AS replyToID, reply_to_side AS replyToSide, home_post_id AS homePostID, home_post_json AS homePostJSON,
   home_comment_id AS homeCommentID`;
 
+function withStickerText<T extends { assistantText: string; assistantMessagesJSON: string | null }>(row: T): T {
+  if (!row.assistantMessagesJSON?.includes('"sticker"')) return row;
+  const messages = JSON.parse(row.assistantMessagesJSON) as { text: string; attachment?: { sticker?: { emoji: string } } | null }[];
+  return { ...row, assistantText: messages.map(message => message.attachment?.sticker ? stickerText(message.attachment.sticker.emoji) : message.text).join('\n\n') };
+}
+
 // Mark the quoted message inline so the model reads each reply in its intended context.
 function replyMarker(quote: ReplyQuote | null): string {
   if (!quote) return '';
   if (!quote.available) return '[Replying to an earlier message that is no longer available]\n';
   const author = quote.side === 'assistant' ? 'your' : 'their own';
-  const content = quote.text || (quote.attachment ? `[Attached file: ${quote.attachment.name}]` : '');
+  const content = quote.text || (quote.attachment?.sticker ? stickerText(quote.attachment.sticker.emoji) : quote.attachment ? `[Attached file: ${quote.attachment.name}]` : '');
   return `[Replying to ${author} earlier message ${JSON.stringify(quote.messageID)}: ${JSON.stringify(content)}]\n`;
 }
 
@@ -132,7 +140,7 @@ function toolArgumentError(call: ToolCall, error: string): string {
   return JSON.stringify({ published: false, publicationAttempted: false, code: 'INVALID_ARGUMENTS', error });
 }
 
-async function executeTool(env: Env, scope: MemoryScope & { agentID: string; name?: string; model?: string }, call: ToolCall, turn: StoredTurn, slot: number): Promise<string> {
+async function executeTool(env: Env, scope: MemoryScope & { agentID: string; name?: string; model?: string; stickers?: StickerState | null }, call: ToolCall, turn: StoredTurn, slot: number): Promise<string> {
   const db = env.DB;
   if (turn.taskID && !await contactModelAllowed(env, turn.contactID, turn.userID)) return JSON.stringify({ error: 'Current model consent is required.' });
   if ((turn.taskID || turn.scheduleID) && [...mcpTools, ...miniAppTools, ...nativeTools, imageTool, groupRequestTool, groupQuestionTool, ...privateRelayTools, ...scheduleTools.filter(tool => tool.function.name !== 'list_schedules')].some(tool => tool.function.name === call.function.name)) {
@@ -156,6 +164,9 @@ async function executeTool(env: Env, scope: MemoryScope & { agentID: string; nam
   if (!isRecord(args)) return toolArgumentError(call, 'Arguments must be a JSON object.');
   if (privateRelayTools.some(tool => tool.function.name === call.function.name)) return executePrivateRelay(env, turn, scope.agentID, call.function.name, args);
   const imageScope = { ...scope, contributor: !!scope.contributorModel, beforeSequence: turn.sequence + 1 };
+  if (stickerToolNames.has(call.function.name)) return scope.stickers
+    ? executeStickerTool(env, { agentID: scope.agentID, userID: turn.userID, contactID: turn.contactID, turnID: turn.id, state: scope.stickers }, call.function.name, args)
+    : JSON.stringify({ error: 'Stickers are not available in this conversation.' });
   if (call.function.name === researchTool.function.name) return executeResearchTool(env, {
     kind: 'contact', contactID: turn.contactID, userID: turn.userID, agentID: scope.agentID,
     turnID: turn.id, attempt: turn.attempt, contributor: !!scope.contributorModel,
@@ -317,9 +328,16 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   const pageChanges = taskWork?.reason === 'monitor' && workTask ? await monitorChanges(env.DB, workTask.task.id, turn.id) : [];
   // A task finished, canceled or reassigned before this turn ran needs no message.
   if (turn.taskID && !workTask) return null;
-  const { results } = await env.DB.prepare(`SELECT ${historyColumns} FROM chat_turn
+  const { results: historyRows } = await env.DB.prepare(`SELECT ${historyColumns} FROM chat_turn
     WHERE contact_id = ?1 AND user_id = ?2 AND sequence < ?3 AND (status = 'complete' OR error_code = 'MESSAGE_BATCHED')
     ORDER BY sequence DESC LIMIT 12`).bind(scope.contactID, scope.userID, scope.beforeSequence).all<HistoryRow>();
+  // A sticker the contact sent reads as "[Sticker 😂]", not as a bare emoji.
+  const results = historyRows.map(withStickerText);
+  // Stickers (docs/stickers.md): the contact's library, what the person sent, and the loop guard.
+  const stickers: StickerState | null = autonomous ? null : await stickerState(env.DB, { agentID: agent.id, userID: turn.userID,
+    current: storedAttachment(turn), currentID: turn.id, prior: results });
+  let roundTools = stickers ? [...turnTools, ...stickerTools(stickers)] : turnTools;
+  let chosenSticker: ChosenSticker | null = null;
   const boundary = await env.DB.prepare(`SELECT COALESCE(MAX(sequence), 0) AS sequence FROM chat_turn
     WHERE contact_id = ?1 AND user_id = ?2 AND sequence < ?3
     AND COALESCE(error_code, '') != 'MESSAGE_BATCHED'`)
@@ -341,7 +359,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   // Keep one file in context: the current attachment, or the most recent one
   // inside the bounded history. This also bounds PDF page/image payloads.
   // Voice messages are represented by their transcripts, never as files.
-  const file = (row: { attachmentJSON: string | null }) => !!row.attachmentJSON && !isVoice(storedAttachment(row));
+  const file = (row: { attachmentJSON: string | null }) => !!row.attachmentJSON && !isVoice(storedAttachment(row)) && !storedAttachment(row)?.sticker;
   const historicalAttachmentID = !file(turn) ? results.find(file)?.id : undefined;
   for (const prior of results.map((row) => ({ ...row, userText: postReferenceMarker(row, posts, false) + replyMarker(quotes(row)) + row.userText,
     assistantText: row.assistantText && privateMessageMarker(row, posts) + row.assistantText }))) {
@@ -421,6 +439,9 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
         // Scheduled and task turns cannot react; the person's recent messages are the reaction opportunities.
         reactions: autonomous ? undefined : { opportunities: results.filter(row => row.userText).length, to: 'their',
           reacted: reactions.filter(row => row.actorID === `agent/${agent.id}` && row.side === 'user' && row.messageID !== turn.id).length } }),
+      ...(stickers ? [stickerInstruction(stickers), stickerHabits({ agentID: agent.id, personality, seed: turn.id, answering: stickers.answering, blocked: stickers.blocked,
+        ownReplies: results.slice(0, 8).filter(row => row.assistantText).length, ownStickers: results.slice(0, 8).filter(row => row.assistantMessagesJSON?.includes('"sticker"')).length,
+        theirMessages: results.slice(0, 8).filter(row => row.userText).length, theirStickers: results.slice(0, 8).filter(row => row.attachmentJSON?.includes('"sticker"')).length })] : []),
       await regionalConversation(env.DB, agent.id),
       conversationStyle({ agentID: agent.id, personality, group: false,
         own: results.map(row => row.assistantText), names: speaker ? [speaker.name] : [] }),
@@ -499,12 +520,12 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
     if (round === toolRounds) messages.push({ role: 'system', content: 'Tool budget exhausted. Answer using the available evidence; acknowledge any missing detail.' });
     const answer = await museCompletion(env, await withChatImages(env, imageScope, await withProfilePhotos(env, imageScope,
       [...messages, { role: 'system', content: replyDeliveryInstruction }])), model,
-      !recoveryCode && round < toolRounds ? { responseFormat: { type: 'json_object' }, maxTokens: 8192, tools: autonomous ? turnTools.filter((tool) => !['create_schedule', 'update_schedule', 'cancel_schedule', 'send_group_message', 'ask_agent_in_group', 'list_message_recipients', 'get_private_message_receipts', 'send_private_message', 'generate_chat_image'].includes(tool.function.name)) : turnTools } : { responseFormat: { type: 'json_object' } });
+      !recoveryCode && round < toolRounds ? { responseFormat: { type: 'json_object' }, maxTokens: 8192, tools: autonomous ? roundTools.filter((tool) => !['create_schedule', 'update_schedule', 'cancel_schedule', 'send_group_message', 'ask_agent_in_group', 'list_message_recipients', 'get_private_message_receipts', 'send_private_message', 'generate_chat_image'].includes(tool.function.name)) : roundTools } : { responseFormat: { type: 'json_object' } });
     await acknowledgeGroupResults(env.DB, agent.id, processedGroupResults);
     processedGroupResults.length = 0;
     if (!answer.tool_calls?.length) {
       console.log(JSON.stringify({ event: 'chat_tool_summary', executions, groupPublicationCalls }));
-      const response = parseMessages(answer.content!);
+      const response = parseMessages(answer.content!, !!chosenSticker);
       if (response.replyTo && !await env.DB.prepare(`SELECT id FROM chat_turn quoted WHERE quoted.id = ?1
         AND quoted.contact_id = ?2 AND quoted.user_id = ?3 AND quoted.sequence <= ?4
         AND ${privateTarget('quoted', '?5')}`)
@@ -512,7 +533,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
         throw new Error('MODEL_INVALID_RESPONSE');
       }
       return { ...response, learningRevision, attachments: autonomous ? [] : await generatedImages(env,
-        { ...imageScope, turnID: turn.id, attempt: turn.attempt }) };
+        { ...imageScope, turnID: turn.id, attempt: turn.attempt }), ...(chosenSticker ? { sticker: chosenSticker } : {}) };
     }
     messages.push(answer);
     let reactionOnly = false, miniAppFailed = false, miniAppStarted = false;
@@ -523,10 +544,16 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       else {
         executions++;
         try {
-          content = turnTools.some(t => t.function.name === call.function.name)
-            ? await executeTool(env, { ...scope, name, model }, call, toolTurn, executions)
+          content = roundTools.some(t => t.function.name === call.function.name)
+            ? await executeTool(env, { ...scope, name, model, stickers }, call, toolTurn, executions)
             : JSON.stringify({ error: 'This tool is not permitted in this conversation.' });
           if (call.function.name === reactionTool.function.name && JSON.parse(content).endTurn === true) reactionOnly = true;
+          if (stickers && stickerToolNames.has(call.function.name)) {
+            const outcome = JSON.parse(content) as { chosen?: boolean; stickerID?: string; emoji?: string };
+            if (outcome.chosen && outcome.stickerID && outcome.emoji) chosenSticker = { stickerID: outcome.stickerID, emoji: outcome.emoji };
+            // A sticker saved or created this turn can be sent at once.
+            roundTools = [...turnTools, ...stickerTools(stickers)];
+          }
           if (call.function.name === 'create_mini_app' && 'error' in JSON.parse(content)) miniAppFailed = true;
           if (call.function.name === 'start_mini_app') miniAppStarted = true;
           if (['get_group_excerpt', 'search_group_messages'].includes(call.function.name)) {
@@ -543,7 +570,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       }
       messages.push({ role: 'tool', tool_call_id: call.id, content });
     }
-    if (reactionOnly && (autonomous || !(await generatedImages(env, { ...imageScope, turnID: turn.id, attempt: turn.attempt })).length)) return null;
+    if (reactionOnly && !chosenSticker && (autonomous || !(await generatedImages(env, { ...imageScope, turnID: turn.id, attempt: turn.attempt })).length)) return null;
     if (miniAppFailed && !repairRound && round === toolRounds - 1) { toolRounds++; repairRound = true; }
     // Announcing a mini app does not use up a building round (once per turn).
     if (miniAppStarted && !startRound) { toolRounds++; startRound = true; }
