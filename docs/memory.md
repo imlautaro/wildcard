@@ -192,7 +192,7 @@ and provider compatibility must be verified with fictional data when authorized.
 - [D1 transactional batches](https://developers.cloudflare.com/d1/worker-api/d1-database/)
 
 
-Consented group messages can contribute attributed memories to the same agent. Private-chat memory selection also considers grounded group memories while both the source user and agent remain in the source group. Group replies receive selected shared memories, never raw private transcripts. See [groups](groups.md) for consent, revocation, model switching and limits.
+Consented group messages can contribute attributed memories to the same agent. Private-chat memory selection also considers grounded group memories while both the source user and agent remain in the source group and the reader is a member of it (from their history floor); a group reply only uses memories from that same group. See [privacy](privacy.md). Group replies receive selected shared memories, never raw private transcripts. See [groups](groups.md) for consent, revocation, model switching and limits.
 
 
 ## One agent identity across private chats and groups
@@ -427,3 +427,14 @@ agent identity. It reuses local factual sources to recognize known answers, with
 exporting derived state across audiences. Each human can inspect, disable or reset
 learning in private/group details on iOS and web. Clear removes it even when factual
 memory is retained. Migration 0067; real model and device verification is pending.
+
+
+## Audiences and privacy controls (2026-11-01)
+
+`readMemories` takes the audience in `MemoryScope.groupID`: a group reply only receives
+participants' facts from people who are members of that group, and `groupMemories` requires
+either the same group or a reader who is a member of the source group. "Keep this chat
+private" (`contact.keep_private`) keeps a participant's facts in their own chat, and
+"Contacts share with each other" (`user.contacts_share`) adds the reader's own facts from
+their other contacts to private chats, attributed with `sourceContactName`. See
+[privacy](privacy.md) for the rules, audit and tests.

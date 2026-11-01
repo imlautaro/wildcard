@@ -21,6 +21,7 @@ watch(id, () => { void links.refresh(); });
     <template v-else-if="links.state.value">
       <AppNotice v-if="links.state.value.unavailable">{{ links.state.value.unavailable }}</AppNotice>
       <template v-else>
+        <AppNotice v-if="links.state.value.allContacts">Contacts share with each other is on, so this contact can already reach all your contacts except private chats. Links you add here stay if you turn it off.</AppNotice>
         <AppListGroup v-if="links.state.value.links.length">
           <div v-for="item in links.state.value.links" :key="item.id" class="button-row static link-row">
             <AppAvatar :name="item.name" :path="photoPath(item)" :size="36" />

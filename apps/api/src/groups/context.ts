@@ -212,8 +212,9 @@ export async function prepareGroupInput(env: Env, job: GroupJob, previous?: Grou
     .bind(row.groupID, JSON.stringify(quoteIDs), contributor).all<GroupContextMessage>() : { results: [] };
   const quoted = new Map(quotedMessages.map((message) => [message.id, message]));
   const describe = (message: GroupContextMessage) => contextMessage(message, quoted);
+  // The audience is this group: only facts from its members, never other groups' (docs/privacy.md).
   const sharedMemories = await readMemories(env.DB, { contactID: contact.id, userID: contact.userID,
-    beforeSequence: Number.MAX_SAFE_INTEGER, contributorModel: !!contributor, processingUserID: row.userID });
+    beforeSequence: Number.MAX_SAFE_INTEGER, contributorModel: !!contributor, processingUserID: row.userID, groupID: row.groupID });
   const localMemories = contributor ? [] : await localGroupMemories(env.DB, row.agentID, row.groupID, row.userID, row.throughSequence + 1);
   const memories = await rankMemories(env, [...localMemories, ...sharedMemories], row.text, true,
     !await env.DB.prepare('SELECT 1 FROM mcp_private_group WHERE group_id = ?').bind(row.groupID).first());

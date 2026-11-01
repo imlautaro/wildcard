@@ -107,7 +107,7 @@ struct ContactSharingView: View {
             Form {
                 Section {
                     // Consent covers this text, so it stays visible beside the switches.
-                    Text("The contact can recall facts learned from anyone here, including saved memories from before sharing. Chat transcripts and attachments stay private.")
+                    Text("The contact can recall facts learned from anyone here, including saved memories from before sharing. Chat transcripts and attachments stay private. Anyone can keep their own chat private in the contact’s details.")
                         .manrope(.footnote).foregroundStyle(.secondary)
                     Toggle("Share existing and future memories", isOn: $shareMemory)
                     if sharing?.contributorModel == true {
@@ -221,7 +221,7 @@ struct JoinSharedContactView: View {
             if let preview {
                 Section(preview.name) {
                     Text("Start your own empty chat with this contact. Its memories and presence are shared with other participants. Your schedules and notifications belong to you.")
-                    Text("The contact can share remembered facts about you with other participants. Your original messages and attachments are private. The creator can remove your access.")
+                    Text("The contact can share remembered facts about you with other participants. Your original messages and attachments are private. You can keep your chat private in the contact’s details. The creator can remove your access.")
                     Toggle("I agree to shared memories", isOn: $shareMemory)
                     if preview.contributorModel {
                         Toggle("I agree to Meta's Contributor data use", isOn: $contributorConsent)

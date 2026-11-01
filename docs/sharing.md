@@ -114,7 +114,9 @@ keys coexist. Extraction receives the speaker's server-resolved identity and
 only that speaker's messages/memories; it cannot rewrite another person's rows.
 
 Reply context and `search_memories` can retrieve memories from the same agent
-after sharing consent. Stored memory content, source quotes, and attribution are
+after sharing consent, unless that participant turned on **Keep this chat private** for
+their own chat. In a group, a participant's facts are used only if they are a member of
+that group ([privacy](privacy.md)). Stored memory content, source quotes, and attribution are
 shared; full original transcripts and attachment bytes are not. Other agents'
 memories remain inaccessible. The current speaker is explicitly identified in
 the reply instructions. Recent history, `search_messages`, source excerpts,

@@ -3184,3 +3184,20 @@ deletion triggers) and no new binding, bucket or secret. Prerequisites and resou
 - **Local development**: apply migrations, set `META_API_KEY` in the ignored `apps/api/.dev.vars`
   (calls consume credits) and use fictional photos. Unverified: production release and a
   deployed-Worker cutout.
+
+## Privacy controls (migration 0093)
+
+[Privacy](privacy.md) adds migration `0093_privacy_controls.sql`: `user.contacts_share` and
+`contact.keep_private` (INTEGER 0/1, default 0) and the trigger
+`contact_keep_private_revokes_group_sharing`. No new binding, bucket, secret or service.
+
+- **Order**: apply the migration (`npm run db:migrate:local`, or the automatic release for
+  production), then release the API, then the clients. The API reads the new columns in memory
+  queries, so it must not run before the migration. Older clients ignore the new fields and
+  show no controls; the server rules (group audience, reader membership) apply to every client.
+- **Data**: nothing is backfilled. Existing accounts start with both controls off, which keeps
+  today's sharing except the three fixed leaks described in the guide.
+- **Rollback**: keep the columns. An older Worker ignores them (its memory queries then use the
+  previous, broader audiences); dropping the columns loses the settings.
+- **Local verification**: `npm run test:memory-isolation` in `apps/api` runs the audience tests
+  on local workerd D1 with fictional rows; no network or model calls.

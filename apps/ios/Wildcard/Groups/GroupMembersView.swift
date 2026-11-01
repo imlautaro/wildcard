@@ -19,7 +19,7 @@ struct GroupMembersView: View {
     @State private var sharingAgent: String?
     @State private var showingSharing = false
     @State private var showingConsent = false
-    private static let sharingInfo = "Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat."
+    private static let sharingInfo = "Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections and chats you keep private stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat."
     private var sharingSummary: String {
         let permissions = snapshot?.privateSharing ?? []
         return permissions.isEmpty ? "No contacts" : "\(permissions.filter { $0.enabled == 1 }.count) of \(permissions.count) on"
@@ -128,7 +128,7 @@ struct GroupMembersView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(name)
                                     if permission.available != 1 && permission.enabled != 1 {
-                                        Text("Needs an eligible private chat").font(.caption).foregroundStyle(.secondary)
+                                        Text("Needs a private chat that isn't kept private").font(.caption).foregroundStyle(.secondary)
                                     }
                                 }
                             }

@@ -18,7 +18,7 @@ struct GroupConsentFields: View {
     }
     var body: some View {
         Section("Shared memory") {
-            Text("Group members can see your name and profile photo. \(historySentence) Contacts use shared memories from their other conversations. What you say here can become a shared memory and be recalled in other chats with these contacts. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.")
+            Text("Group members can see your name and profile photo. \(historySentence) Contacts use what group members have told them, except chats kept private. What you say here can become a shared memory, used in this group and in private chats with its members, never in other groups. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.")
                 .manrope(.footnote).foregroundStyle(.secondary)
             Toggle("I accept shared memory", isOn: $shareMemory)
             if contributor {

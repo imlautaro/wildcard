@@ -1743,3 +1743,15 @@ persisted and no view downloads on its own.
 - **Verification (not done).** Reopen the sheet (instant, empty state included), refresh after another
   device changes the library, offline reopen, delete while a send is pending, library full, account
   switch with the sheet open, and leaving the create screen during the cutout.
+
+## Privacy controls
+
+[Privacy](privacy.md) adds no new cache. The account switch is part of the session user
+(`useSession` on web, `AuthStore.user` on iOS) and is replaced by the authoritative
+`PUT /me/privacy` response. "Keep this chat private" is a contact field updated through the
+existing contact mutation path (web `useChats.setKeepPrivate`, iOS
+`ContactsStore.setKeepPrivate`), which rejects older list reads. Both changes drop every
+linked-contacts snapshot (web `invalidateContactLinks`, iOS `linkSnapshots.removeAll()`),
+since a private chat leaves all links and the account switch changes `allContacts`. Group
+detail snapshots (the "Discuss my private chats" switches) revalidate in the background as
+before; the server already removed the grants. Device and browser checks are pending.

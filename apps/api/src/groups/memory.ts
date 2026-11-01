@@ -3,7 +3,14 @@ import { standardModel } from '../lib/model-preference';
 import { isRecord, museCompletion } from '../chat/meta';
 import type { Memory } from '../chat/memory';
 
-export async function groupMemories(db: D1Database, agentID: string, contributor: boolean): Promise<Memory[]> {
+/**
+ * Who reads shared group memories (docs/privacy.md): a group reply reads only what was said in
+ * that group; a private chat reads only groups its reader is in, from when they could read.
+ */
+export type GroupMemoryAudience = { groupID: string } | { readerID: string };
+
+export async function groupMemories(db: D1Database, agentID: string, contributor: boolean, audience: GroupMemoryAudience): Promise<Memory[]> {
+  const groupID = 'groupID' in audience ? audience.groupID : null, readerID = 'readerID' in audience ? audience.readerID : null;
   const { results } = await db.prepare(`SELECT m.user_id AS sourceUserID, u.name AS sourceUserName,
     m.memory_key AS key, m.kind, m.content, m.source_id AS sourceTurnID, m.source_quote AS sourceQuote,
     0 AS sourceSequence, m.updated_at AS updatedAt, 'group_memory:' || m.rowid AS embedRef FROM group_memory m JOIN user u ON u.id = m.user_id
@@ -11,8 +18,11 @@ export async function groupMemories(db: D1Database, agentID: string, contributor
     JOIN group_member member ON member.group_id = gm.group_id AND member.user_id = m.user_id
     WHERE m.agent_id = ?1 AND member.share_memory = 1 AND NOT EXISTS (SELECT 1 FROM mcp_private_group p WHERE p.group_id = gm.group_id)
     AND EXISTS (SELECT 1 FROM group_agent ga WHERE ga.group_id = gm.group_id AND ga.agent_id = m.agent_id) AND (?2 = 0 OR (member.contributor_consent = 1 AND gm.contributor_consent = 1))
-    ORDER BY m.updated_at DESC LIMIT 128`).bind(agentID, contributor ? 1 : 0).all<Memory>();
-  return [...results,...await retainedGroupMemories(db,agentID,contributor)].filter((m,i,all)=>all.findIndex(other=>other.sourceUserID===m.sourceUserID && other.key===m.key)===i);
+    AND (?3 IS NULL OR gm.group_id = ?3)
+    AND (?4 IS NULL OR EXISTS (SELECT 1 FROM group_member reader WHERE reader.group_id = gm.group_id AND reader.user_id = ?4
+      AND reader.share_memory = 1 AND gm.sequence >= COALESCE(reader.history_start, 0)))
+    ORDER BY m.updated_at DESC LIMIT 128`).bind(agentID, contributor ? 1 : 0, groupID, readerID).all<Memory>();
+  return [...results,...await retainedGroupMemories(db,agentID,contributor,undefined,audience)].filter((m,i,all)=>all.findIndex(other=>other.sourceUserID===m.sourceUserID && other.key===m.key)===i);
 }
 
 export async function localGroupMemories(db: D1Database, agentID: string, groupID: string, userID: string, beforeSequence = Number.MAX_SAFE_INTEGER): Promise<Memory[]> {

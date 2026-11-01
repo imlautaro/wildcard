@@ -14,6 +14,9 @@ struct AccountView: View {
     @State private var refreshingProfile = true
     @State private var showingModel = false
     @State private var showingNotifications = false
+    @State private var showingPrivacy = false
+    @State private var savingPrivacy = false
+    @State private var privacyError: String?
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
 
     private static let models = [
@@ -71,6 +74,33 @@ struct AccountView: View {
                 NavigationLink(value: HomeDestination.nativeExperiments) { Label("Native experiments", systemImage: "iphone") }
             }
             Section {
+                Toggle(isOn: Binding(
+                    get: { auth.user?.contactsShare == true },
+                    set: { enabled in
+                        guard !savingPrivacy else { return }
+                        savingPrivacy = true
+                        privacyError = nil
+                        Task {
+                            defer { savingPrivacy = false }
+                            do {
+                                try await auth.savePrivacy(contactsShare: enabled)
+                                contacts.linkSnapshots.removeAll()
+                            } catch is CancellationError { } catch { privacyError = error.localizedDescription }
+                        }
+                    }
+                )) {
+                    HStack {
+                        Label("Contacts share with each other", systemImage: "person.2")
+                        InfoButton(title: "Contacts share with each other", text: PrivacyGuide.contactsShareInfo)
+                    }
+                }
+                .disabled(savingPrivacy || refreshingProfile || auth.isBusy)
+                SheetRow(title: "How privacy works", systemImage: "lock", value: "") { showingPrivacy = true }
+                if let privacyError { Text(privacyError).foregroundStyle(.red) }
+            } header: {
+                Text("Privacy")
+            }
+            Section {
                 Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                     Task { await auth.signOut() }
                 }
@@ -84,6 +114,7 @@ struct AccountView: View {
         }
         .sheet(isPresented: $showingModel) { modelSheet }
         .sheet(isPresented: $showingNotifications) { notificationsSheet }
+        .sheet(isPresented: $showingPrivacy) { PrivacyGuideSheet() }
         .task {
             refreshingProfile = true
             defer { refreshingProfile = false }

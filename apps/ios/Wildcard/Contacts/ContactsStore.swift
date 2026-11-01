@@ -366,6 +366,15 @@ final class ContactsStore {
         }
     }
 
+    /// "Keep this chat private" (docs/privacy.md#keep-a-chat-private). Every linked-contacts
+    /// snapshot can change with it (a private chat takes no part in links).
+    func setKeepPrivate(contactID: String, keepPrivate: Bool, using auth: AuthStore) async throws {
+        try await updateContact(contactID: contactID, using: auth) { api, token in
+            try await api.setContactPrivacy(id: contactID, keepPrivate: keepPrivate, token: token)
+        }
+        linkSnapshots.removeAll()
+    }
+
     /// This participant's opt-in to voice replies from the contact.
     func setVoiceMessages(contactID: String, enabled: Bool, using auth: AuthStore) async throws {
         try await updateContact(contactID: contactID, using: auth) { api, token in

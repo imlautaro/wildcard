@@ -109,7 +109,7 @@ onMounted(load);
           <ConsentFields
             v-model:share-memory="shareMemory" v-model:contributor-consent="contributorConsent"
             :contributor-model="sharing.contributorModel"
-            :disclosure="['The contact can recall facts learned from anyone here, including saved memories from before sharing. Chat transcripts and attachments stay private.']"
+            :disclosure="['The contact can recall facts learned from anyone here, including saved memories from before sharing. Chat transcripts and attachments stay private. Anyone can keep their own chat private in the contact’s details.']"
             memory-label="Share existing and future memories"
             contributor-note="Your selected model is Contributor. Messages and shared memories sent to Meta may be used to train its models."
           />

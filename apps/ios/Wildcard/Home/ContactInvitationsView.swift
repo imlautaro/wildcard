@@ -56,7 +56,7 @@ struct ReceivedContactInvitationView: View {
             Section {
                 Text("Invited by \(invitation.senderName)")
                 Text("Start your own private chat with the same contact. Its memories and presence are shared. Your schedules and notifications belong to you.")
-                Text("The contact can share remembered facts about you with other participants. Original messages and attachments stay private. The creator can remove your access.")
+                Text("The contact can share remembered facts about you with other participants. Original messages and attachments stay private. You can keep your chat private in the contact’s details. The creator can remove your access.")
                 Toggle("I agree to shared memories", isOn: $shareMemory)
                 if invitations.contributorModel {
                     Toggle("I agree to Meta's Contributor data use", isOn: $contributorConsent)

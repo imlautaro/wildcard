@@ -10,6 +10,7 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "test:lifecycle": "node --test --test-concurrency=1 tests/lifecycle.test.mjs",
+    "test:memory-isolation": "node --test --test-concurrency=1 --test-name-pattern=\"isolation:\" tests/lifecycle.test.mjs",
     "typecheck:lifecycle": "tsc --noEmit -p tests/tsconfig.json"
   },
   "dependencies": {

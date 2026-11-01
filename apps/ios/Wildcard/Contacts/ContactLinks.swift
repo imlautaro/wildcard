@@ -12,6 +12,8 @@ struct ContactLinks: Decodable, Sendable {
     let links: [Item]
     let available: [Item]
     let unavailable: String?
+    /// "Contacts share with each other" is on: every eligible contact is linked too (docs/privacy.md).
+    var allContacts: Bool? = nil
 }
 
 struct ContactLinksView: View {
@@ -35,6 +37,12 @@ struct ContactLinksView: View {
                 if let unavailable = state.unavailable {
                     Section { Text(unavailable).foregroundStyle(.secondary) }
                 } else {
+                    if state.allContacts == true {
+                        Section {
+                            Text("Contacts share with each other is on, so this contact can already reach all your contacts except private chats. Links you add here stay if you turn it off.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
                     Section("Linked") {
                         if state.links.isEmpty { Text("No linked contacts yet.").foregroundStyle(.secondary) }
                         ForEach(state.links) { item in

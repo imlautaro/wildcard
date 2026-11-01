@@ -102,7 +102,7 @@ the agent briefly; actual composer activity extends its server-side idle lease. 
 pauses for actual typing, grouping of short messages through an atomic publication
 check, and independently timestamped human/reply bubbles. Started tools keep their receipts. Accepted replies
 continue in Cloudflare when the app closes. See [chats](docs/chats.md) for the API,
-limits, and background execution. [Contact memory](docs/memory.md) stores grounded facts in D1 (including conversation-local memory for MCP chats/groups), selects bounded recent context, and provides shared attributed memories with private history search tools. Each agent also keeps its own stated persona/preferences across chats and can discover common group members and retrieve their attributed group statements through bounded, permission-checked search. An empty draft offers a microphone for
+limits, and background execution. [Privacy](docs/privacy.md) explains what contacts can share and where, with per-chat and account controls (migration 0093). [Contact memory](docs/memory.md) stores grounded facts in D1 (including conversation-local memory for MCP chats/groups), selects bounded recent context, and provides shared attributed memories with private history search tools. Each agent also keeps its own stated persona/preferences across chats and can discover common group members and retrieve their attributed group statements through bounded, permission-checked search. An empty draft offers a microphone for
 WhatsApp-style [voice messages](docs/voice.md): hold to record, release to send, slide
 to cancel or lock. They are transcribed after sending, and contacts can answer with
 their own ElevenLabs v4 voice with conversational delivery and a creator-managed

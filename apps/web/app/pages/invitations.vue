@@ -11,11 +11,11 @@ const consented = computed(() => shareMemory.value && (!chats.contributorModel.v
 
 const contactDisclosure = [
   'Start your own empty chat with this contact. Its memories and presence are shared with other participants. Your schedules and notifications belong to you.',
-  'The contact can share remembered facts about you with other participants. Your original messages and attachments are private. The creator can remove your access.',
+  'The contact can share remembered facts about you with other participants. Your original messages and attachments are private. You can keep your chat private in the contact’s details. The creator can remove your access.',
 ];
 const historyClause = "Members can read the group's history, including messages sent before they joined, unless they were added without earlier messages.";
 const groupDisclosure = [
-  `Group members can see your name and profile photo. ${historyClause} Contacts use shared memories from their other conversations. What you say here can become a shared memory and be recalled in other chats with these contacts. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.`,
+  `Group members can see your name and profile photo. ${historyClause} Contacts use what group members have told them, except chats kept private. What you say here can become a shared memory, used in this group and in private chats with its members, never in other groups. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.`,
 ];
 // An invitation without earlier messages replaces the full-history clause.
 const withoutHistory = (invitation: GroupInvitation) => invitation.includeHistory === 0 || invitation.includeHistory === false;

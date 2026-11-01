@@ -97,6 +97,13 @@ final class AuthStore {
         })
     }
 
+    /// "Contacts share with each other" (docs/privacy.md). The response is authoritative.
+    func savePrivacy(contactsShare: Bool) async throws {
+        user = keepingFeatures(try await withSession { api, token in
+            try await api.savePrivacy(contactsShare: contactsShare, token: token)
+        })
+    }
+
     func saveProfile(name: String) async throws {
         user = keepingFeatures(try await withSession { api, token in
             try await api.saveProfile(name: name, token: token)

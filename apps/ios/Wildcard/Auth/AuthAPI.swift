@@ -8,6 +8,8 @@ struct AuthUser: Codable, Sendable {
     var onboardingRequired: Bool? = nil
     var chatModel: String? = nil
     var photoVersion: String? = nil
+    /// "Contacts share with each other" (docs/privacy.md); absent from older responses means off.
+    var contactsShare: Bool? = nil
     /// Runtime flags from `GET /me`; other profile responses omit them, so the store keeps the last value.
     var features: AccountFeatures? = nil
 }
@@ -105,6 +107,12 @@ struct AuthAPI: Sendable {
         return try JSONDecoder().decode(UserResponse.self, from: data).user
     }
 
+    func savePrivacy(contactsShare: Bool, token: String) async throws -> AuthUser {
+        let body = try JSONEncoder().encode(["contactsShare": contactsShare])
+        let (data, _) = try await send(path: "me/privacy", method: "PUT", body: body, token: token)
+        return try JSONDecoder().decode(UserResponse.self, from: data).user
+    }
+
     func currentUser(token: String) async throws -> AuthUser {
         let (data, _) = try await send(path: "me", token: token)
         let response = try JSONDecoder().decode(MeResponse.self, from: data)
@@ -193,6 +201,12 @@ struct AuthAPI: Sendable {
             if path.hasPrefix("stickers") || path.contains("/stickers") {
                 throw Self.stickerFailure(response, data: data, path: path)
             }
+            // Per-chat JSON export (docs/chat-export.md): the API's messages are accurate for every status.
+            if path.hasSuffix("/export") {
+                if response.statusCode == 429 { throw Failure.rejected("Too many exports. Please wait a minute and try again.") }
+                let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
+                throw Failure.rejected(message ?? "The chat could not be exported. Please try again.")
+            }
             if path.hasPrefix("onboarding") {
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
                 if let message, !message.isEmpty, message.count <= 512,
@@ -200,12 +214,6 @@ struct AuthAPI: Sendable {
                     throw Failure.rejected(message)
                 }
                 throw Failure.rejected("Setup is temporarily unavailable. Please try again.")
-            }
-            // Per-chat JSON export (docs/chat-export.md): the API's messages are accurate for every status.
-            if path.hasSuffix("/export") {
-                if response.statusCode == 429 { throw Failure.rejected("Too many exports. Please wait a minute and try again.") }
-                let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
-                throw Failure.rejected(message ?? "The chat could not be exported. Please try again.")
             }
             if path == "contacts/generation" {
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error

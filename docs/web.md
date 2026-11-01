@@ -1502,3 +1502,11 @@ with the unsent composer text, or `You: reacted with 👍` / `Reacted with 👍`
 Drafts stay in the session conversation cache (`entry.draft`), which now never evicts
 an entry holding a draft. Typecheck only; browser verification pending. See
 [chat list previews](chats.md#chat-list-previews).
+
+## Privacy controls (2026-11-01)
+
+Account → **Privacy** has **Contacts share with each other** and **How privacy works**
+(a sheet with the rules); contact details have **Keep this chat private**; Linked contacts
+shows a notice while the account switch is on; "Discuss my private chats" explains that a
+private chat is unavailable. iOS has the same rows and copy (`PrivacyGuide.swift`). See
+[privacy](privacy.md). Typecheck only; browser rendering is unverified.

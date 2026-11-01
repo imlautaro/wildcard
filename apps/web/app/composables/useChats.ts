@@ -279,6 +279,17 @@ async function setInitiative(id: string, enabled: boolean): Promise<Contact | nu
   return result.contact;
 }
 
+// "Keep this chat private" (docs/privacy.md#keep-a-chat-private). Linked contacts change with it.
+async function setKeepPrivate(id: string, keepPrivate: boolean): Promise<Contact | null> {
+  const started = ++generation;
+  const result = await api<{ contact: Contact }>(`contacts/${id}/privacy`, { method: 'PUT', json: { keepPrivate } });
+  invalidateContactLinks();
+  if (started !== generation) return null;
+  generation += 1; // Reject reads started while the mutation was pending.
+  upsertContact(result.contact);
+  return result.contact;
+}
+
 // Sets or clears (null) this account's private alias. The response is authoritative, so it is
 // applied even if a list refresh ran meanwhile; the generation bump rejects reads begun before it.
 async function setAlias(id: string, alias: string | null): Promise<Contact> {
@@ -453,7 +464,7 @@ export function useChats() {
   return {
     contacts, groups, rows, archivedRows, directory, totalUnread, nextCursor, loaded, contactsLoaded, groupsLoaded, allContactsLoaded, error,
     contactInvitations, groupInvitations, invitationCount, contributorModel,
-    archiveChat, clearChat, deleteChatContact, refresh, refreshLists, refreshInvitations, loadMore, loadAllContacts, setInitiative, setAlias, upsertContact, removeContact, updateGroup, removeGroup, applyRead,
+    archiveChat, clearChat, deleteChatContact, refresh, refreshLists, refreshInvitations, loadMore, loadAllContacts, setInitiative, setKeepPrivate, setAlias, upsertContact, removeContact, updateGroup, removeGroup, applyRead,
   };
 }
 

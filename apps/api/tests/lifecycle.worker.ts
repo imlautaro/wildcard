@@ -9,9 +9,13 @@ import { clearContact, clearGroup, cleanResources } from '../src/chat/cleanup';
 import { dispatchInitiatives } from '../src/chat/initiative';
 import { dispatchAgent } from '../src/chat/dispatch';
 import { retainedGroupMemories, retainedGroupSelf } from '../src/chat/retained-memory';
-import { readMemories } from '../src/chat/memory';
-import { readAgentMemories } from '../src/chat/agent-memory';
+import { readMemories, relatedPrivateTurns } from '../src/chat/memory';
+import { selectMemories } from '../src/chat/memory';
+import { sharedGroups, searchGroupMessages, relevantGroupMessages } from '../src/groups/retrieval';
+import { readAgentMemories, agentMemoryContext } from '../src/chat/agent-memory';
 import { discardChatObject } from '../src/chat/object-storage';
+import { groupMemories } from '../src/groups/memory';
+import { readLinks } from '../src/contacts/links';
 
 type Faults = {
   objects?: string[]; lists?: string[]; workflows?: string[];
@@ -86,7 +90,7 @@ export default {
       await Promise.allSettled(pending);
       return response;
     }
-    const body = await request.json<{ action: string; id: string; userID?: string; memory?: boolean; revision?: number; group?: boolean; complete?: boolean; contributor?: boolean; generation?: boolean }>();
+    const body = await request.json<{ action: string; id: string; userID?: string; memory?: boolean; revision?: number; group?: boolean; complete?: boolean; contributor?: boolean; generation?: boolean; query?: string; agentID?: string; groupID?: string }>();
     try {
       if (body.action === 'initiative') await dispatchInitiatives({ ...wrapped, META_API_KEY: 'fictional-test-key-no-network' });
       if (body.action === 'dispatch') await dispatchAgent(wrapped,body.id);
@@ -97,6 +101,41 @@ export default {
           : await readMemories(env.DB,{contactID:body.id,userID:body.userID!,beforeSequence:Number.MAX_SAFE_INTEGER,privateConversation:true,contributorModel:body.contributor,processingUserID:body.userID}),
         self: await readAgentMemories(env.DB,body.group?'fixture-contact':body.id,body.contributor??false,body.userID!,body.group?{groupID:'fixture-group'}:{contactID:body.id}),
       });
+      if (body.action === 'audience') {
+        // Privacy audiences (docs/privacy.md): what a group reply (groupID) or a private chat (no groupID)
+        // would receive as human memories, the group-memory search result, and the effective linked contacts.
+        const human = await readMemories(env.DB, { contactID: body.id, userID: body.userID!, beforeSequence: Number.MAX_SAFE_INTEGER,
+          privateConversation: !body.groupID, contributorModel: false, processingUserID: body.userID, ...(body.groupID ? { groupID: body.groupID } : {}) });
+        const groupSearch = await groupMemories(env.DB, body.agentID!, false, body.groupID ? { groupID: body.groupID } : { readerID: body.userID! });
+        const links = body.groupID ? [] : await readLinks(env.DB, body.userID!, body.id);
+        return Response.json({ human, groupSearch, links: links.map(link => link.id) });
+      }
+      if (body.action === 'context') {
+        // Diagnostic read: the blocks one contact's reply context is built from (see chat/context.ts),
+        // with every D1 statement recorded. These readers take only a D1Database, so R2 is unreachable from them. Test entrypoint only.
+        const sql: { sql: string; params: unknown[] }[] = [];
+        const statement = (target: D1PreparedStatement, text: string): D1PreparedStatement => new Proxy(target, { get(value, key) {
+          if (key === 'bind') return (...params: unknown[]) => { sql.push({ sql: text, params }); return value.bind(...params); };
+          const member: unknown = Reflect.get(value, key);
+          return typeof member === 'function' ? member.bind(value) : member;
+        } });
+        const db = new Proxy(env.DB, { get(value, key) {
+          if (key === 'prepare') return (text: string) => statement(value.prepare(text), text);
+          const member: unknown = Reflect.get(value, key);
+          return typeof member === 'function' ? member.bind(value) : member;
+        } });
+        const query = body.query ?? '';
+        const contributor = body.contributor ?? false;
+        const human = await readMemories(db, { contactID: body.id, userID: body.userID!, beforeSequence: Number.MAX_SAFE_INTEGER,
+          privateConversation: true, contributorModel: contributor, processingUserID: body.userID });
+        const self = await readAgentMemories(db, body.agentID!, contributor, body.userID!, { contactID: body.id });
+        const groupScope = { agentID: body.agentID!, userID: body.userID!, contributor };
+        const groups = await sharedGroups(db, groupScope);
+        const groupHits = [...(await relevantGroupMessages(db, groupScope, query)).results, ...(await searchGroupMessages(db, groupScope, query)).results];
+        const related = await relatedPrivateTurns(db, body.id, body.userID!, query, Number.MAX_SAFE_INTEGER);
+        return Response.json({ sql, human, humanBlock: JSON.stringify({ results: selectMemories(human, query, true) }),
+          self, selfBlock: agentMemoryContext(self, query), groups, groupHits, related });
+      }
       if (body.action === 'clean') await cleanResources(wrapped, body.id || undefined);
       if (body.action === 'clear') {
         if (body.group) await clearGroup(wrapped, body.id, body.memory ?? false, body.revision ?? 0);

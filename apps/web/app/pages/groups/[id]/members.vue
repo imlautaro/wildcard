@@ -30,7 +30,7 @@ const sharingSummary = computed(() => {
   const permissions = snapshot.value?.privateSharing ?? [];
   return permissions.length ? `${permissions.filter(permission => permission.enabled).length} of ${permissions.length} on` : 'No contacts';
 });
-const sharingInfo = 'Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat.';
+const sharingInfo = 'Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections and chats you keep private stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat.';
 // Missing (older cached snapshot) means full history.
 const withoutHistory = (member: GroupMember) => member.includesHistory === 0 || member.includesHistory === false;
 // Each sheet starts with history on, so an earlier "off" does not carry over.
@@ -187,7 +187,7 @@ onMounted(() => run(async () => {
             <label v-for="permission in snapshot.privateSharing ?? []" :key="permission.agentID" class="toggle">
               <span class="two-line">
                 {{ snapshot.members.find(member => member.kind === 'agent' && member.id === permission.agentID)?.name ?? 'Contact' }}
-                <span v-if="!permission.available && !permission.enabled" class="small">Needs an eligible private chat</span>
+                <span v-if="!permission.available && !permission.enabled" class="small">Needs a private chat that isn't kept private</span>
               </span>
               <input
                 type="checkbox" role="switch" :checked="!!permission.enabled" :disabled="busy || (!permission.available && !permission.enabled)"
@@ -231,7 +231,7 @@ onMounted(() => run(async () => {
             <ConsentFields
               v-model:share-memory="shareMemory" v-model:contributor-consent="contributorConsent"
               :contributor-model="snapshot.contributorModel"
-              :disclosure="['Adding this contact shares its existing and future memories with everyone in the group. It remains the same contact in your other chats.']"
+              :disclosure="['Adding this contact lets it use what group members, including you, have told it with everyone in the group, except chats kept private. It remains the same contact in your other chats.']"
               memory-label="I accept shared memory"
               contributor-note="Your selected model is Contributor. Messages and memories sent to Meta may be used for model training."
             />

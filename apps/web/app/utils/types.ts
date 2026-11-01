@@ -7,6 +7,8 @@ export type AuthUser = {
   onboardingRequired?: boolean;
   chatModel?: 'muse-spark-1.3' | 'muse-spark-1.3-contributor';
   photoVersion?: string | null;
+  /** "Contacts share with each other" (docs/privacy.md). */
+  contactsShare?: boolean;
 };
 // Server feature switches returned next to `user` by GET /me (docs/voice.md).
 export type Features = { voiceMessages: boolean };
@@ -27,6 +29,8 @@ export type Contact = {
   realName?: string;
   alias?: string | null;
   initiativeEnabled?: number;
+  /** "Keep this chat private": 1 when this person's facts stay in this chat (docs/privacy.md). */
+  keepPrivate?: number;
   // The contact's shared voice and this participant's voice-reply opt-in (0 or 1).
   speechAccent?: string | null;
   voiceID?: string | null;

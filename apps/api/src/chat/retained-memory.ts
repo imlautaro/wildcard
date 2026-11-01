@@ -2,7 +2,11 @@ import type { Memory } from './memory';
 import type { AgentMemory } from './agent-memory';
 
 export async function retainedGroupMemories(db: D1Database, agentID: string, contributor: boolean,
-  local?: { groupID: string; userID: string }): Promise<Memory[]> {
+  local?: { groupID: string; userID: string }, audience?: { groupID: string } | { readerID: string }): Promise<Memory[]> {
+  // Shared rows follow the same audience as live group memories (docs/privacy.md); kept rows have no
+  // source message left, so a private reader only needs current membership.
+  const groupID = audience && 'groupID' in audience ? audience.groupID : null;
+  const readerID = audience && 'readerID' in audience ? audience.readerID : null;
   const {results}=await db.prepare(`SELECT m.user_id AS sourceUserID,u.name AS sourceUserName,m.memory_key AS key,
     m.kind,m.content,'' AS sourceTurnID,'' AS sourceQuote,0 AS sourceSequence,m.updated_at AS updatedAt
     FROM retained_group_memory m JOIN user u ON u.id=m.user_id
@@ -13,7 +17,9 @@ export async function retainedGroupMemories(db: D1Database, agentID: string, con
         OR m.group_id=?3 AND EXISTS(SELECT 1 FROM mcp_private_group WHERE group_id=m.group_id)
           AND EXISTS(SELECT 1 FROM group_member WHERE group_id=m.group_id AND user_id=?4 AND share_memory=1))
       AND (?5=0 OR (m.contributor_consent=1 AND author.contributor_consent=1))
-    ORDER BY m.updated_at DESC LIMIT 128`).bind(agentID,local?'local_human':'human',local?.groupID??null,local?.userID??null,contributor?1:0).all<Memory>();
+      AND (?6 IS NULL OR m.group_id=?6)
+      AND (?7 IS NULL OR EXISTS(SELECT 1 FROM group_member reader WHERE reader.group_id=m.group_id AND reader.user_id=?7 AND reader.share_memory=1))
+    ORDER BY m.updated_at DESC LIMIT 128`).bind(agentID,local?'local_human':'human',local?.groupID??null,local?.userID??null,contributor?1:0,groupID,readerID).all<Memory>();
   return results;
 }
 

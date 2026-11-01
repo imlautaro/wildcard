@@ -120,6 +120,17 @@ async function saveModel(chatModel: string, contributorConsent: boolean) {
   for (const listener of modelListeners) listener(result.user.chatModel === 'muse-spark-1.3-contributor');
 }
 
+// "Contacts share with each other" (docs/privacy.md). The response is authoritative.
+async function savePrivacy(contactsShare: boolean) {
+  const owner = user.value?.id;
+  const revision = ++profileRevision;
+  profileRequest = null;
+  const result = await api<{ user: AuthUser }>('me/privacy', { method: 'PUT', json: { contactsShare } });
+  invalidateContactLinks();
+  if (revision !== profileRevision || status.value !== 'signed-in' || user.value?.id !== owner) return;
+  user.value = result.user;
+}
+
 export function useSession() {
-  return { user: readonly(user), features: readonly(features), status: readonly(status), restore, authenticate, signOut, saveName, savePhoto, saveModel, refreshProfile };
+  return { user: readonly(user), features: readonly(features), status: readonly(status), restore, authenticate, signOut, saveName, savePhoto, saveModel, savePrivacy, refreshProfile };
 }

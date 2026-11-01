@@ -561,3 +561,192 @@ test('generation dispatch cannot leave checkpoints after racing account deletion
     assert.equal((await invoke({action:'workflow-status',id:workflow,generation:true})).status,500);
   }
 });
+
+// ---- Per-contact memory isolation (docs/memory.md) ---------------------------------------------
+// A  = owner's contact on agent X, the only place the fact is saved.
+// B  = same owner, a different contact with its own agent Y (separate contact, shared account).
+// C  = another person's participant row on agent X (shared contact); only memory_shared changes its reads.
+// D  = an unrelated account's contact.
+// Everything lives in one D1 database; isolation is the row predicates asserted below, not separate stores.
+const isolation = { b: 'fixture-contact-b' };
+const FACT = 'Sombra is my fake plant, I water it on Tuesdays';
+const QUERIES = ['What do I water on Tuesdays?', 'Sombra'];
+const leaks = (read) => /sombra/i.test(JSON.stringify({ human: read.human, humanBlock: read.humanBlock, self: read.self, selfBlock: read.selfBlock,
+  groups: read.groups, groupHits: read.groupHits, related: read.related }));
+async function isolationFixture() {
+  await fixture();
+  await run('INSERT INTO contact(id,user_id,name,created_at,updated_at) VALUES(?,?,?,?,?)',isolation.b,ids.owner,'Fictional contact B',now,now);
+  await turn('sombra-turn',ids.contact,ids.owner,{user_text:FACT,assistant_text:'Fictional reply about the plant.'});
+  await turn('other-turn',isolation.b,ids.owner,{user_text:'Fictional unrelated message.',assistant_text:'Fictional reply.'});
+  const sequence=(await rows('SELECT sequence FROM chat_turn WHERE id=?','sombra-turn'))[0].sequence;
+  await run(`INSERT INTO contact_memory(contact_id,user_id,memory_key,kind,content,source_turn_id,source_quote,source_sequence,updated_at,embedding) VALUES(?,?,?,'fact',?,?,?,?,?,zeroblob(1024))`,
+    ids.contact,ids.owner,'fake_plant_sombra','The fake plant Sombra is watered on Tuesdays.','sombra-turn','Sombra is my fake plant',sequence,now);
+  await run('INSERT INTO contact_memory_state(contact_id,user_id,last_sequence) VALUES(?,?,?)',ids.contact,ids.owner,sequence);
+}
+const readers = {
+  A: { id: ids.contact, userID: ids.owner, agentID: ids.contact },
+  B: { id: isolation.b, userID: ids.owner, agentID: isolation.b },
+  C: { id: ids.shared, userID: ids.member, agentID: ids.contact },
+  D: { id: ids.other, userID: ids.outsider, agentID: ids.other },
+};
+const names = { [ids.contact]: 'A', [isolation.b]: 'B', [ids.shared]: 'C', [ids.other]: 'D', [ids.owner]: 'owner', [ids.member]: 'member', [ids.outsider]: 'outsider' };
+async function readAll(label) {
+  const result = {};
+  for (const [who, reader] of Object.entries(readers)) {
+    result[who] = {};
+    for (const query of QUERIES) {
+      const read = await invoke({ action: 'context', ...reader, query });
+      assert.equal(read.status, 200, JSON.stringify(read));
+      result[who][query] = read;
+      const memory = read.sql.find(s => /FROM contact_memory m/.test(s.sql));
+      console.log(`[${label}] ${who} ← ${JSON.stringify(query)}\n  D1 memory query params=${JSON.stringify(memory.params.map(p => names[p] ?? p))}` + `\n`
+        + `  statements=${read.sql.length} rows=${read.human.length} humanBlock=${read.humanBlock}\n  selfBlock=${read.selfBlock} groups=${JSON.stringify(read.groups).slice(0,80)} related=${read.related.length} → ${leaks(read) ? 'CONTAINS Sombra' : 'no Sombra'}`);
+    }
+  }
+  const text = (await invoke({ action: 'context', ...readers.A, query: QUERIES[0] })).sql.find(s => /FROM contact_memory m/.test(s.sql)).sql;
+  console.log(`[${label}] statement text (identical for every caller; bound ids and stored flags decide):\n${text.replace(/\s+/g, ' ')}`);
+  return result;
+}
+const expectLeak = (all, who, expected, label) => { for (const query of QUERIES) assert.equal(leaks(all[who][query]), expected, `${label}: ${who} ← ${query}`); };
+
+test('isolation: with sharing OFF only A sees Sombra; B, C and D get a context without it', async () => {
+  await isolationFixture();
+  assert.equal((await rows('SELECT memory_shared AS v FROM contact_agent WHERE id=?',ids.contact))[0].v, 0, 'default is not shared');
+  const all = await readAll('sharing OFF');
+  expectLeak(all, 'A', true, 'owner of the fact'); // A's own recall works
+  for (const who of ['B', 'C', 'D']) for (const query of QUERIES) assert.equal(leaks(all[who][query]), false, `LEAK: ${who} ← ${query}`);
+  // The assertion is real: the same query on A is a hit, both in memory rows and in its history recall.
+  assert.equal(all.A[QUERIES[0]].human.length, 1); assert.ok(all.A[QUERIES[1]].related.length >= 1);
+  // Query evidence: B never binds A's ids; both memory predicates are in the statement that ran.
+  for (const query of QUERIES) {
+    const b = all.B[query].sql; assert.ok(b.every(s => s.params.every(p => ![ids.contact, ids.shared].includes(p))), 'B binds no A/C id');
+    assert.ok(all.B[query].sql.find(s => /FROM contact_memory m/.test(s.sql)).sql.includes('source.agent_id = current.agent_id'));
+    assert.ok(all.C[query].sql.find(s => /FROM contact_memory m/.test(s.sql)).sql.includes('a.memory_shared = 1'));
+  }
+  await drain();
+});
+
+test('isolation: the sharing flag gates real reads for C (positive control), B stays isolated either way', async () => {
+  await isolationFixture();
+  await run('UPDATE contact_agent SET memory_shared=1 WHERE id=?',ids.contact);
+  const on = await readAll('sharing ON');
+  expectLeak(on, 'C', true, 'sharing ON must expose the owner’s fact to the other participant of the SAME agent');
+  assert.equal(on.C[QUERIES[0]].human[0].sourceUserID, ids.owner, 'attributed to its source person');
+  for (const who of ['B', 'D']) for (const query of QUERIES) assert.equal(leaks(on[who][query]), false, `LEAK with sharing ON: ${who} ← ${query}`);
+  // Flipping the column back cuts the very next read; nothing is cached or copied.
+  await run('UPDATE contact_agent SET memory_shared=0 WHERE id=?',ids.contact);
+  const off = await readAll('sharing back OFF');
+  for (const who of ['B', 'C', 'D']) for (const query of QUERIES) assert.equal(leaks(off[who][query]), false, `LEAK after un-sharing: ${who} ← ${query}`);
+  expectLeak(off, 'A', true, 'owner keeps recall');
+  await drain();
+});
+
+test('isolation: a connector-isolated A never exposes Sombra, even with sharing ON', async () => {
+  await isolationFixture();
+  await run('UPDATE contact_agent SET memory_shared=1 WHERE id=?',ids.contact);
+  await run('INSERT INTO mcp_private_contact(contact_id) VALUES(?)',ids.contact);
+  const all = await readAll('sharing ON + connector-isolated');
+  expectLeak(all, 'A', true, 'A recalls its own connector-isolated memory');
+  for (const who of ['B', 'C', 'D']) for (const query of QUERIES) assert.equal(leaks(all[who][query]), false, `LEAK from isolated A: ${who} ← ${query}`);
+  assert.ok(all.C[QUERIES[0]].sql.find(s => /FROM contact_memory m/.test(s.sql)).sql.includes('mcp_private_contact'));
+  await drain();
+});
+
+// ---- Privacy audiences (docs/privacy.md) ----------------------------------------------------------
+// Owner U holds contact X (fixture-contact); member V shares X (fixture-shared). Group G has U, V and X.
+// Group G2 has U, the outsider W and X. Each fact uses a unique word so a leak is a plain substring.
+const audience = { g2: 'fixture-group-two', b: 'fixture-contact-b' };
+async function audienceFixture() {
+  await fixture();
+  await run('UPDATE contact_agent SET memory_shared=1 WHERE id=?',ids.contact);
+  await run('INSERT INTO contact(id,user_id,name,created_at,updated_at) VALUES(?,?,?,?,?)',audience.b,ids.owner,'Fictional contact B',now,now);
+  await run('INSERT INTO chat_group(id,owner_id,name,created_at) VALUES(?,?,?,?)',audience.g2,ids.owner,'Fictional group two',now);
+  for(const user of [ids.owner,ids.outsider]) await run('INSERT INTO group_member(group_id,user_id,share_memory,contributor_consent,joined_at) VALUES(?,?,1,1,?)',audience.g2,user,now);
+  await run('INSERT INTO group_agent(group_id,agent_id,added_by,joined_at) VALUES(?,?,?,?)',audience.g2,ids.contact,ids.owner,now);
+  const remember = async (contact, user, turnID, key, content) => {
+    await turn(turnID,contact,user,{user_text:content,assistant_text:'Fictional reply.'});
+    const sequence=(await rows('SELECT sequence FROM chat_turn WHERE id=?',turnID))[0].sequence;
+    await run(`INSERT INTO contact_memory(contact_id,user_id,memory_key,kind,content,source_turn_id,source_quote,source_sequence,updated_at) VALUES(?,?,?,'fact',?,?,?,?,?)`,
+      contact,user,key,content,turnID,content,sequence,now);
+  };
+  await remember(ids.contact,ids.owner,'owner-turn','owner_tulip','Owner keeps a Tulipan notebook.');
+  await remember(ids.shared,ids.member,'member-turn','member_quokka','Member adopted a Quokka named Bruno.');
+  await remember(audience.b,ids.owner,'b-turn','owner_zeppelin','Owner booked a Zeppelin tour.');
+  await run('INSERT INTO group_message(id,group_id,user_id,sender_name,text,created_at) VALUES(?,?,?,?,?,?)','g2-message',audience.g2,ids.outsider,'Fictional outsider','Outsider plans a Marimba surprise.',now);
+  await run(`INSERT INTO group_memory(agent_id,user_id,memory_key,kind,content,source_id,source_quote,updated_at) VALUES(?,?,?,'fact',?,?,?,?)`,
+    ids.contact,ids.outsider,'outsider_marimba','Outsider plans a Marimba surprise.','g2-message','Outsider plans a Marimba surprise.',now);
+}
+const sees = (read, word) => new RegExp(word,'i').test(JSON.stringify([read.human, read.groupSearch]));
+const groupRead = (groupID) => invoke({ action:'audience', id: ids.contact, userID: ids.owner, agentID: ids.contact, groupID });
+const privateRead = (id, userID, agentID) => invoke({ action:'audience', id, userID, agentID });
+
+test('isolation: a group only hears facts from its own members and its own group memories', async () => {
+  await audienceFixture();
+  const g = await groupRead(ids.group), g2 = await groupRead(audience.g2);
+  assert.equal(g.status,200,JSON.stringify(g));
+  assert.ok(sees(g,'Tulipan') && sees(g,'Quokka'), 'G has U and V: both private facts are allowed (positive control)');
+  assert.ok(!sees(g,'Marimba'), 'LEAK: G2 group memory reached group G');
+  assert.ok(sees(g2,'Tulipan'), 'G2 has U: owner fact allowed (positive control)');
+  assert.ok(sees(g2,'Marimba'), 'G2 recalls its own group memory (positive control)');
+  assert.ok(!sees(g2,'Quokka'), 'LEAK: the shared-contact member’s private fact reached a group they are not in');
+  assert.ok(!sees(g,'Zeppelin') && !sees(g2,'Zeppelin'), 'another contact’s memory never reaches a group');
+  await drain();
+});
+
+test('isolation: a private chat only recalls group memories from groups its person is in', async () => {
+  await audienceFixture();
+  const owner = await privateRead(ids.contact, ids.owner, ids.contact), member = await privateRead(ids.shared, ids.member, ids.contact);
+  assert.ok(sees(owner,'Marimba'), 'U is in G2 (positive control)');
+  assert.ok(!sees(member,'Marimba'), 'LEAK: V is not in G2 but recalled its group memory through the shared contact');
+  assert.ok(sees(member,'Tulipan'), 'shared-contact consent still lets V recall U’s private fact (positive control)');
+  const outsider = await privateRead(ids.other, ids.outsider, ids.other);
+  assert.ok(!sees(outsider,'Marimba') && !sees(outsider,'Tulipan'), 'another agent never sees X’s memories');
+  await drain();
+});
+
+test('isolation: "Keep this chat private" keeps a person’s facts in their own chat only', async () => {
+  await audienceFixture();
+  await run('INSERT INTO group_private_sharing(group_id,agent_id,user_id,contact_id,created_at) VALUES(?,?,?,?,?)',ids.group,ids.contact,ids.owner,ids.contact,now);
+  const response = await api(`contacts/${ids.contact}/privacy`, ids.owner, 'PUT', { keepPrivate: true });
+  assert.equal(response.status,200,JSON.stringify(response.body));
+  assert.equal(response.body.contact.keepPrivate,1);
+  assert.equal(await count('group_private_sharing'),0,'a private chat drops its "Discuss my private chats" grants');
+  assert.ok(sees(await privateRead(ids.contact, ids.owner, ids.contact),'Tulipan'), 'U still recalls it in their own chat');
+  assert.ok(!sees(await privateRead(ids.shared, ids.member, ids.contact),'Tulipan'), 'LEAK: private fact reached the other participant');
+  assert.ok(!sees(await groupRead(ids.group),'Tulipan') && !sees(await groupRead(audience.g2),'Tulipan'), 'LEAK: private fact reached a group');
+  assert.ok(sees(await groupRead(ids.group),'Quokka'), 'V’s own choice is unaffected (positive control)');
+  // V decides for V's chat only; the owner cannot change it through their own contact ID.
+  assert.equal((await api(`contacts/${ids.shared}/privacy`, ids.owner, 'PUT', { keepPrivate: true })).status,404);
+  assert.equal((await api(`contacts/${ids.contact}/privacy`, ids.owner, 'PUT', { keepPrivate: 'yes' })).status,400);
+  await api(`contacts/${ids.contact}/privacy`, ids.owner, 'PUT', { keepPrivate: false });
+  assert.ok(sees(await privateRead(ids.shared, ids.member, ids.contact),'Tulipan'), 'turning it off restores sharing on the next read');
+  await drain();
+});
+
+test('isolation: "Contacts share with each other" pools only the person’s own facts across their own contacts', async () => {
+  await audienceFixture();
+  const before = await privateRead(audience.b, ids.owner, audience.b);
+  assert.ok(!sees(before,'Tulipan') && before.links.length === 0, 'off by default: B knows nothing of X');
+  const response = await api('me/privacy', ids.owner, 'PUT', { contactsShare: true });
+  assert.equal(response.status,200,JSON.stringify(response.body));
+  assert.equal(response.body.user.contactsShare,true);
+  const b = await privateRead(audience.b, ids.owner, audience.b);
+  assert.ok(sees(b,'Tulipan'), 'B recalls what U told X');
+  assert.equal(b.human.find(m => /Tulipan/.test(m.content)).sourceContactName,'Fictional shared contact','pooled facts name the contact they were told to');
+  assert.ok(!sees(b,'Quokka'), 'LEAK: another person’s fact pooled into U’s other contact');
+  assert.deepEqual(b.links,[ids.contact],'every eligible contact counts as linked');
+  assert.equal((await api(`contacts/${audience.b}/links`, ids.owner)).body.allContacts,true);
+  assert.ok(!sees(await groupRead(ids.group),'Zeppelin'), 'LEAK: pooling reached a group');
+  assert.ok(!sees(await privateRead(ids.shared, ids.member, ids.contact),'Zeppelin'), 'LEAK: pooling reached another person');
+  // A private chat neither gives nor receives.
+  await api(`contacts/${ids.contact}/privacy`, ids.owner, 'PUT', { keepPrivate: true });
+  const privateX = await privateRead(audience.b, ids.owner, audience.b);
+  assert.ok(!sees(privateX,'Tulipan') && privateX.links.length === 0, 'LEAK: a private chat was pooled or linked');
+  assert.ok(!sees(await privateRead(ids.contact, ids.owner, ids.contact),'Zeppelin'), 'a private chat receives nothing either');
+  // A connector-isolated contact never takes part.
+  await api(`contacts/${ids.contact}/privacy`, ids.owner, 'PUT', { keepPrivate: false });
+  await run('INSERT INTO mcp_private_contact(contact_id) VALUES(?)',ids.contact);
+  assert.ok(!sees(await privateRead(audience.b, ids.owner, audience.b),'Tulipan'), 'LEAK: connector-isolated memory pooled');
+  await api('me/privacy', ids.owner, 'PUT', { contactsShare: false });
+  await drain();
+});

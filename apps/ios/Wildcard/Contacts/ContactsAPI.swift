@@ -16,6 +16,8 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     var setupPending: Int? = nil
     var isSettingUp: Bool { setupPending == 1 }
     var initiativeEnabled: Int? = nil
+    /// "Keep this chat private" (0 or 1): this person's facts stay in this chat (docs/privacy.md).
+    var keepPrivate: Int? = nil
     /// This participant's opt-in to voice replies (0 or 1).
     var voiceMessagesEnabled: Int? = nil
     /// The contact's shared voice; only the creator can change it.
@@ -114,6 +116,12 @@ extension AuthAPI {
     func setContactInitiative(id: String, enabled: Bool, token: String) async throws -> Contact {
         let body = try JSONEncoder().encode(["enabled": enabled])
         let (data, _) = try await send(path: "contacts/\(id)/initiative", method: "PUT", body: body, token: token)
+        return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
+    }
+
+    func setContactPrivacy(id: String, keepPrivate: Bool, token: String) async throws -> Contact {
+        let body = try JSONEncoder().encode(["keepPrivate": keepPrivate])
+        let (data, _) = try await send(path: "contacts/\(id)/privacy", method: "PUT", body: body, token: token)
         return try JSONDecoder().decode(ContactEnvelope.self, from: data).contact
     }
 

@@ -3,10 +3,14 @@
 // navigation and revalidated in the background. Links are mutual, so every change
 // invalidates all snapshots; the response of a change replaces the current one.
 export type LinkedContact = { id: string; name: string; photoVersion: string | null };
-export type ContactLinks = { links: LinkedContact[]; available: LinkedContact[]; unavailable: string | null };
+/** allContacts: "Contacts share with each other" is on, so every eligible contact is linked too (docs/privacy.md). */
+export type ContactLinks = { links: LinkedContact[]; available: LinkedContact[]; unavailable: string | null; allContacts?: boolean };
 type Snapshot = { value: ContactLinks | null; revision: number; request: Promise<void> | null };
 const snapshots = shallowReactive(new Map<string, Snapshot>());
 registerSessionReset(() => { for (const entry of snapshots.values()) entry.revision++; snapshots.clear(); });
+
+/** Privacy changes (a private chat, contacts sharing) change every snapshot; drop them all. */
+export function invalidateContactLinks() { for (const entry of snapshots.values()) entry.revision++; snapshots.clear(); }
 
 export function useContactLinks(contactID: MaybeRefOrGetter<string>) {
   const state = computed(() => snapshots.get(toValue(contactID))?.value ?? null);

@@ -6,7 +6,8 @@ import { cardKinds, type CardKind } from './cards';
 // contacts, what those contacts remember about them, their own recent messages,
 // connectors, mini apps, schedules and Home feedback. Other participants'
 // memories of shared agents are never read here, nor connector-isolated chats and
-// groups, whose history never reaches a Contributor-capable call.
+// groups, whose history never reaches a Contributor-capable call, nor chats the person
+// keeps private (docs/privacy.md#keep-a-chat-private).
 export type HomeContact = { id: string; name: string; description: string; specialties: string; connectors: string[]; lastAt: number | null };
 export type HomeTopicRow = { id: string; title: string; brief: string; reason: string | null; kind: CardKind; source: 'person' | 'contact' | 'curator';
   contactID: string | null; status: 'active' | 'hidden' | 'retired'; feedback: 'more' | 'less' | null; pinned: number; updatedAt: number; skips: number; skipReason: string | null };
@@ -84,12 +85,12 @@ export async function readSignals(db: D1Database, userID: string): Promise<HomeS
     db.prepare(`SELECT a.contact_id AS contactID, m.name FROM mcp_contact_access a JOIN mcp_connector m ON m.id = a.connection_id
       WHERE m.user_id = ?`).bind(userID).all<{ contactID: string; name: string }>(),
     db.prepare(`SELECT c.name AS contact, m.kind, m.content, m.updated_at AS updatedAt FROM contact_memory m
-      JOIN contact c ON c.id = m.contact_id AND c.user_id = m.user_id
+      JOIN contact c ON c.id = m.contact_id AND c.user_id = m.user_id AND c.keep_private = 0
       WHERE m.user_id = ? AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = m.contact_id)
       ORDER BY m.updated_at DESC LIMIT 60`).bind(userID)
       .all<{ contact: string; kind: string; content: string; updatedAt: number }>(),
     db.prepare(`SELECT c.name AS recipient, t.user_text AS text, t.created_at AS at FROM chat_turn t
-      JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
+      JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id AND c.keep_private = 0
       WHERE t.user_id = ? AND t.status = 'complete' AND t.user_text != ''
         AND t.schedule_id IS NULL AND t.task_id IS NULL AND t.group_request_id IS NULL
         AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = t.contact_id)

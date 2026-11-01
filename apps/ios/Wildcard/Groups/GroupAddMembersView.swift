@@ -172,7 +172,7 @@ struct AddGroupContactConsentView: View {
                 .listRowBackground(Color.clear)
             }
             Section("Shared memory") {
-                Text("Adding this contact shares its existing and future memories with everyone in the group. It remains the same contact in your other chats.")
+                Text("Adding this contact lets it use what group members, including you, have told it with everyone in the group, except chats kept private. It remains the same contact in your other chats.")
                     .manrope(.footnote).foregroundStyle(.secondary)
                 Toggle("I accept shared memory", isOn: $shareMemory)
                 if snapshot?.contributorModel == true {

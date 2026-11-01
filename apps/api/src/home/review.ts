@@ -37,7 +37,7 @@ export async function reviewCandidates(db: D1Database, userID: string, signals: 
     if (!query) continue;
     const { results } = await db.prepare(`SELECT t.contact_id AS contactID, COUNT(*) AS hits, MAX(t.created_at) AS lastAt
       FROM chat_turn_search JOIN chat_turn t ON t.sequence = chat_turn_search.rowid
-      JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id AND c.archived_at IS NULL AND c.setup_pending = 0
+      JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id AND c.archived_at IS NULL AND c.setup_pending = 0 AND c.keep_private = 0
       WHERE chat_turn_search MATCH ?1 AND t.user_id = ?2 AND t.status = 'complete' AND t.created_at > ?3
         AND t.schedule_id IS NULL AND t.task_id IS NULL AND t.group_request_id IS NULL
         AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = t.contact_id)

@@ -107,7 +107,10 @@ memories, attributed by stable user ID and display name. Each contact retains it
 identity, global presence and memory; adding it creates no independent agent.
 Group extraction stores at most three grounded memories per human message and
 agent, with a verbatim source quote, up to 64 keys per agent/source user. These
-memories participate in private-chat memory selection as well as group replies.
+memories are used in that group's replies and in private chats of people who are
+members of the group; never in another group. A group reply uses participants'
+private-chat facts only from its own members, and never from chats kept private
+([privacy](privacy.md)).
 Extraction is best effort and does not support an explicit forget tool yet.
 Agents also keep their own explicit persona/preferences across private and group
 replies in a separate agent-scoped profile. Private chats can discover common

@@ -27,8 +27,8 @@ import personality from '../personality/routes';
 import generation from '../contacts/generation';
 import { listVoices, voiceRepliesAvailable, type Voice } from '../voice/catalog';
 
-type Contact = { archivedAt?: number | null; historyRevision?: number; clearing?: number; speechAccent: string | null; onboardingChat?: number; setupPending?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; realName: string; alias: string | null; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageVoiceJSON?: string | null; lastReactionJSON?: string | null; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
-const columns = `archived_at AS archivedAt, history_revision AS historyRevision, clearing, (SELECT speech_accent FROM contact_agent WHERE id = contact.agent_id) AS speechAccent, onboarding_chat AS onboardingChat, setup_pending AS setupPending, initiative_enabled AS initiativeEnabled, voice_messages_enabled AS voiceMessagesEnabled,
+type Contact = { archivedAt?: number | null; historyRevision?: number; clearing?: number; speechAccent: string | null; onboardingChat?: number; setupPending?: number; initiativeEnabled: number; keepPrivate: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; realName: string; alias: string | null; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageVoiceJSON?: string | null; lastReactionJSON?: string | null; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
+const columns = `archived_at AS archivedAt, history_revision AS historyRevision, clearing, (SELECT speech_accent FROM contact_agent WHERE id = contact.agent_id) AS speechAccent, onboarding_chat AS onboardingChat, setup_pending AS setupPending, initiative_enabled AS initiativeEnabled, keep_private AS keepPrivate, voice_messages_enabled AS voiceMessagesEnabled,
   (SELECT voice_id FROM contact_agent WHERE id = contact.agent_id) AS voiceID, (SELECT voice_name FROM contact_agent WHERE id = contact.agent_id) AS voiceName, id, agent_id AS agentID, COALESCE(alias, name) AS name, name AS realName, alias, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
   CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
 const managesAgent = `EXISTS (SELECT 1 FROM contact_agent a WHERE a.id = contact.agent_id AND a.owner_id = contact.user_id)`;
@@ -169,6 +169,20 @@ contacts.put('/:id/initiative', contactBody, async (c) => {
   }
   await c.env.DB.prepare('UPDATE contact SET initiative_enabled = ? WHERE id = ? AND user_id = ?')
     .bind(body.enabled ? 1 : 0, c.req.param('id'), c.get('owner')).run();
+  const contact = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param('id'), c.get('owner')).first<Contact>();
+  return contact ? c.json({ contact: contactPreview(contact) }) : c.json({ error: 'Contact not found' }, 404);
+});
+
+// "Keep this chat private" (docs/privacy.md#keep-a-chat-private): each participant decides for their own chat.
+contacts.put('/:id/privacy', contactBody, async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!body || Object.keys(body).join(',') !== 'keepPrivate' || typeof body.keepPrivate !== 'boolean') {
+    return c.json({ error: 'Provide only keepPrivate as a boolean' }, 400);
+  }
+  await c.env.DB.prepare('UPDATE contact SET keep_private = ? WHERE id = ? AND user_id = ?')
+    .bind(body.keepPrivate ? 1 : 0, c.req.param('id'), c.get('owner')).run();
   const contact = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`)
     .bind(c.req.param('id'), c.get('owner')).first<Contact>();
   return contact ? c.json({ contact: contactPreview(contact) }) : c.json({ error: 'Contact not found' }, 404);

@@ -7,10 +7,10 @@ import { readPhoto, validPhoto, removePhoto } from '../photos/storage';
 import { contributorModel, validChatModel } from '../lib/model-preference';
 import { voiceRepliesAvailable } from '../voice/catalog';
 
-type Profile = { id: string; name: string; email: string; emailVerified: number; photoVersion: string | null; chatModel: string; onboardingRequired: number };
-const columns = 'id, name, email, email_verified AS emailVerified, photo_version AS photoVersion, chat_model AS chatModel, onboarding_required AS onboardingRequired';
+type Profile = { id: string; name: string; email: string; emailVerified: number; photoVersion: string | null; chatModel: string; onboardingRequired: number; contactsShare: number };
+const columns = 'id, name, email, email_verified AS emailVerified, photo_version AS photoVersion, chat_model AS chatModel, onboarding_required AS onboardingRequired, contacts_share AS contactsShare';
 const key = (owner: string, version: string) => `users/${owner}/${version}.jpg`;
-const responseUser = (row: Profile) => ({ ...row, emailVerified: Boolean(row.emailVerified), onboardingRequired: Boolean(row.onboardingRequired) });
+const responseUser = (row: Profile) => ({ ...row, emailVerified: Boolean(row.emailVerified), onboardingRequired: Boolean(row.onboardingRequired), contactsShare: Boolean(row.contactsShare) });
 const me = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
 
 me.use('*', async (c, next) => {
@@ -54,6 +54,19 @@ me.put('/model', bodyLimit({ maxSize: 1024 }), async (c) => {
   }
   const row = await c.env.DB.prepare(`UPDATE user SET chat_model = ?, updated_at = ? WHERE id = ? RETURNING ${columns}`)
     .bind(input.chatModel, Date.now(), c.get('owner')).first<Profile>();
+  if (!row) return c.json({ error: 'Unauthorized' }, 401);
+  return c.json({ user: responseUser(row) });
+});
+
+// "Contacts share with each other" (docs/privacy.md#contacts-share-with-each-other).
+me.put('/privacy', bodyLimit({ maxSize: 1024 }), async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const input = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!input || Object.keys(input).join(',') !== 'contactsShare' || typeof input.contactsShare !== 'boolean') {
+    return c.json({ error: 'Provide only contactsShare as a boolean' }, 400);
+  }
+  const row = await c.env.DB.prepare(`UPDATE user SET contacts_share = ?, updated_at = ? WHERE id = ? RETURNING ${columns}`)
+    .bind(input.contactsShare ? 1 : 0, Date.now(), c.get('owner')).first<Profile>();
   if (!row) return c.json({ error: 'Unauthorized' }, 401);
   return c.json({ user: responseUser(row) });
 });

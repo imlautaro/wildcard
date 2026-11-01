@@ -4,7 +4,7 @@ import type { GroupRetrievalScope } from './retrieval';
 
 // Bound parameters are always server-resolved agent/group/model identities.
 const access = `s.group_id = ?1 AND s.agent_id = ?2 AND c.agent_id = s.agent_id
-  AND c.user_id = s.user_id AND a.memory_shared = 1
+  AND c.user_id = s.user_id AND a.memory_shared = 1 AND c.keep_private = 0
   AND member.share_memory = 1
   AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = c.id)
   AND (?3 = 0 OR ((c.user_id = a.owner_id OR c.contributor_consent = 1)

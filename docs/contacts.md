@@ -401,6 +401,11 @@ so connector data never crosses a link.
   duplicate them, and a replayed question reuses the saved answer. Notes and answers are
   untrusted data in prompts. The asking contact's model is used for the answer (and the
   linked contact must allow it, as for its own chat).
+- **Privacy** (2026-11-01, [privacy](privacy.md)): a chat with **Keep this chat private**
+  cannot be linked and its existing links pause. With **Contacts share with each other**,
+  every eligible contact counts as linked at reply time (up to 12, explicit links first,
+  then most recent chats); `GET /links` returns `allContacts: true` and still lists only
+  explicit links.
 - **Clients**: the Linked contacts page lists linked contacts with **Unlink** and a
   picker to link another one. iOS caches it in `ContactsStore.linkSnapshots`, web in
   `useContactLinks` (one snapshot per contact, eight at most, dropped with the session);

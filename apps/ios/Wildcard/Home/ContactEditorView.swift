@@ -105,6 +105,23 @@ struct ContactEditorView: View {
                         }
                     }
                     .disabled(saving || contacts.isMutating)
+                    Toggle(isOn: Binding(
+                        get: { contacts.contact(id: contactID)?.keepPrivate == 1 },
+                        set: { keepPrivate in
+                            guard !contacts.isMutating else { return }
+                            Task {
+                                do { try await contacts.setKeepPrivate(contactID: contactID, keepPrivate: keepPrivate, using: auth) }
+                                catch is CancellationError { }
+                                catch { self.error = error.localizedDescription }
+                            }
+                        }
+                    )) {
+                        HStack {
+                            Label("Keep this chat private", systemImage: "lock")
+                            InfoButton(title: "Keep this chat private", text: PrivacyGuide.keepPrivateInfo(contactName: contacts.contact(id: contactID)?.name))
+                        }
+                    }
+                    .disabled(saving || contacts.isMutating)
                     if auth.user?.features?.voiceMessages == true {
                         ContactVoiceRows(contactID: contactID, disabled: saving) { self.error = $0 }
                     }
@@ -129,6 +146,7 @@ struct ContactEditorView: View {
                         label: { Label("Tasks", systemImage: "checklist") }
                 }
                 ChatMediaSection(scope: .contact(contactID), cache: contacts.mediaSnapshots, documents: contacts.documentCaches)
+                Section { ChatExportRow(scope: .contact(contactID)) }
                 Section {
                     NavigationLink(value: HomeDestination.nativeTools(contactID)) {
                         Label { Text("Native experiments") } icon: { NativeGlyph(kind: "default", size: 28, symbol: "iphone") }
@@ -146,7 +164,6 @@ struct ContactEditorView: View {
         }
         .task(id: contactID) {
             guard let contactID else { return }
-                Section { ChatExportRow(scope: .contact(contactID)) }
             // Feature flags come only from `GET /me`; revalidate them so the Voice section follows the admin switch.
             async let profile: Void? = try? auth.refreshProfile()
             do { try await contacts.refreshContact(id: contactID, using: auth, force: false) }

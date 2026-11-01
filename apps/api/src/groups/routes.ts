@@ -220,7 +220,7 @@ groups.get('/:id', async (c) => {
   const { results: privateSharing } = await c.env.DB.prepare(`SELECT ga.agent_id AS agentID,
     EXISTS (SELECT 1 FROM group_private_sharing s WHERE s.group_id = ga.group_id
       AND s.agent_id = ga.agent_id AND s.user_id = ?2) AS enabled,
-    (c.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = c.id)) AS available
+    (c.id IS NOT NULL AND c.keep_private = 0 AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = c.id)) AS available
     FROM group_agent ga LEFT JOIN contact c ON c.agent_id = ga.agent_id AND c.user_id = ?2
     WHERE ga.group_id = ?1 ORDER BY ga.agent_id`).bind(id, owner).all();
   return c.json({ group: group ? groupPreview(group) : group, members, replies, privateSharing, canInvite: member.canInvite === 1 || member.ownerID === owner, contributorModel: contributor(c.env) });
@@ -240,7 +240,7 @@ groups.put('/:id/private-sharing/:agentID', async (c) => {
     JOIN group_member m ON m.group_id = ga.group_id AND m.user_id = ?3 AND m.share_memory = 1
     JOIN contact c ON c.agent_id = ga.agent_id AND c.user_id = m.user_id
     JOIN contact_agent a ON a.id = c.agent_id AND a.memory_shared = 1
-    WHERE ga.group_id = ?1 AND ga.agent_id = ?2
+    WHERE ga.group_id = ?1 AND ga.agent_id = ?2 AND c.keep_private = 0
       AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = c.id)
       AND (?5 = 0 OR (m.contributor_consent = 1 AND (c.user_id = a.owner_id OR c.contributor_consent = 1)))
     ON CONFLICT(group_id, agent_id, user_id) DO NOTHING`)

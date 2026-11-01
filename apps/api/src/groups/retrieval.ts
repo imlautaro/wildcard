@@ -207,7 +207,8 @@ export async function executeGroupRetrieval(db: D1Database, scope: GroupRetrieva
     }
     const local = scope.groupID && !scope.contributor
       ? await localGroupMemories(db, scope.agentID, scope.groupID, scope.userID, scope.beforeSequence) : [];
-    const shared = await groupMemories(db, scope.agentID, scope.contributor);
+    // A group reads only its own memories; a private caller only groups its person is in (docs/privacy.md).
+    const shared = await groupMemories(db, scope.agentID, scope.contributor, scope.groupID ? { groupID: scope.groupID } : { readerID: scope.userID });
     // Semantic ranking only for non-isolated groups; private callers rank their own tool separately.
     const isolated = !scope.groupID || !!await db.prepare('SELECT 1 FROM mcp_private_group WHERE group_id = ?').bind(scope.groupID).first();
     return JSON.stringify(pack(env ? await rankMemories(env, [...local, ...shared], args.query, false, !isolated) : selectMemories([...local, ...shared], args.query)));

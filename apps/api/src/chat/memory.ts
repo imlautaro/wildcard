@@ -4,11 +4,17 @@ import { groupMemories } from '../groups/memory';
 import { isRecord, museCompletion } from './meta';
 import { contactModelAllowed } from './consent';
 
-export type MemoryScope = { contactID: string; userID: string; beforeSequence: number; contributorModel?: boolean; privateConversation?: boolean; processingUserID?: string };
+/**
+ * Who will read the memories. `groupID` set: a group reply, whose audience is that group;
+ * otherwise the private chat `contactID` of `userID`. See docs/privacy.md for the rules.
+ */
+export type MemoryScope = { contactID: string; userID: string; beforeSequence: number; contributorModel?: boolean; privateConversation?: boolean; processingUserID?: string; groupID?: string };
 export type Memory = {
   sourceUserID: string; sourceUserName: string;
   key: string; kind: string; content: string; sourceTurnID: string;
   sourceQuote: string; sourceSequence: number; updatedAt: number;
+  /** Set only for a fact the person told another of their own contacts (docs/privacy.md#contacts-share-with-each-other). */
+  sourceContactName?: string;
   // `table:rowid` of a memory eligible for semantic ranking; absent for connector-isolated sources.
   embedRef?: string | null;
 };
@@ -55,38 +61,58 @@ export function topicMatch(text: string, limit = 6): string | null {
   return terms.length ? terms.map(term => `"${term}"*`).join(' OR ') : null;
 }
 
+// Audience rules for contact memories (docs/privacy.md):
+// - A participant's facts from their private chat reach the other participants' private chats
+//   of a shared contact, and groups that participant is in, unless they keep that chat private.
+// - In a group, only facts from people who are members of that group are used.
+// - With "Contacts share with each other" on, a private chat also recalls the reader's own facts
+//   from their other contacts (never private, connector-isolated, archived or unfinished ones).
+const memoryAudience = (memory: string, source: string) => `(
+    (${source}.agent_id = current.agent_id
+      AND ((${memory}.contact_id = current.id AND ?8 IS NULL) OR (?4 = 0 AND a.memory_shared = 1 AND ${source}.keep_private = 0))
+      AND (?8 IS NULL OR EXISTS (SELECT 1 FROM group_member audience WHERE audience.group_id = ?8
+        AND audience.user_id = ${memory}.user_id AND audience.share_memory = 1)))
+    OR (?4 = 0 AND ?8 IS NULL AND ${source}.agent_id != current.agent_id
+      AND ${source}.user_id = current.user_id AND ${memory}.user_id = current.user_id
+      AND current.keep_private = 0 AND ${source}.keep_private = 0
+      AND ${source}.archived_at IS NULL AND ${source}.clearing = 0 AND ${source}.setup_pending = 0
+      AND EXISTS (SELECT 1 FROM user reader WHERE reader.id = current.user_id AND reader.contacts_share = 1)
+      AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = current.id)))`;
+const pooledName = `CASE WHEN source.agent_id != current.agent_id THEN COALESCE(source.alias, source.name) END AS sourceContactName`;
+
 export async function readMemories(db: D1Database, scope: MemoryScope, ownOnly = false): Promise<Memory[]> {
+  const audienceGroup = scope.groupID ?? null;
   const { results } = await db.prepare(`SELECT ${memoryColumns.split(',').map((s) => `m.${s.trim()}`).join(',')},
-    m.user_id AS sourceUserID, u.name AS sourceUserName,
+    m.user_id AS sourceUserID, u.name AS sourceUserName, ${pooledName},
     CASE WHEN NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = source.id) THEN 'contact_memory:' || m.id END AS embedRef
     FROM contact_memory m
     JOIN contact source ON source.id = m.contact_id AND source.user_id = m.user_id
     JOIN user u ON u.id = m.user_id
     JOIN contact current ON current.id = ?1 AND current.user_id = ?2
     JOIN contact_agent a ON a.id = current.agent_id
-    WHERE source.agent_id = current.agent_id
-      AND (m.contact_id = current.id OR (?4 = 0 AND a.memory_shared = 1))
+    WHERE ${memoryAudience('m', 'source')}
       AND (NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = source.id) OR (?6 = 1 AND m.contact_id = current.id))
       AND (m.contact_id != current.id OR m.source_sequence < ?3)
       AND (?5 = 0 OR source.user_id = ?7 OR source.contributor_consent = 1)
-    ORDER BY m.source_sequence DESC, m.id DESC LIMIT 256`)
-    .bind(scope.contactID, scope.userID, scope.beforeSequence, ownOnly ? 1 : 0, scope.contributorModel ? 1 : 0, scope.privateConversation ? 1 : 0, scope.processingUserID ?? scope.userID).all<Memory>();
-  const {results: retained} = await db.prepare(`SELECT m.user_id AS sourceUserID,u.name AS sourceUserName,
+    ORDER BY source.agent_id = current.agent_id DESC, m.source_sequence DESC, m.id DESC LIMIT 384`)
+    .bind(scope.contactID, scope.userID, scope.beforeSequence, ownOnly ? 1 : 0, scope.contributorModel ? 1 : 0, scope.privateConversation ? 1 : 0, scope.processingUserID ?? scope.userID, audienceGroup).all<Memory>();
+  const {results: retained} = await db.prepare(`SELECT m.user_id AS sourceUserID,u.name AS sourceUserName,${pooledName},
     m.memory_key AS key,m.kind,m.content,'' AS sourceTurnID,'' AS sourceQuote,0 AS sourceSequence,m.updated_at AS updatedAt
     FROM retained_contact_memory m JOIN contact source ON source.id=m.contact_id JOIN user u ON u.id=m.user_id
     JOIN contact current ON current.id=?1 AND current.user_id=?2 JOIN contact_agent a ON a.id=current.agent_id
-    WHERE m.category='human' AND source.agent_id=current.agent_id
-      AND (source.id=current.id OR (?3=0 AND a.memory_shared=1))
-      AND (NOT EXISTS(SELECT 1 FROM mcp_private_contact WHERE contact_id=source.id) OR (?4=1 AND source.id=current.id))
-      AND (?5=0 OR source.user_id=?6 OR source.contributor_consent=1)
-    ORDER BY m.updated_at DESC LIMIT 64`).bind(scope.contactID,scope.userID,ownOnly?1:0,scope.privateConversation?1:0,
-      scope.contributorModel?1:0,scope.processingUserID??scope.userID).all<Memory>();
-  const currentKeys = new Set(results.map(m=>`${m.sourceUserID}:${m.key}`));
-  const combined = [...results,...retained.filter(m=>!currentKeys.has(`${m.sourceUserID}:${m.key}`))];
+    WHERE m.category='human' AND ${memoryAudience('m', 'source')}
+      AND (NOT EXISTS(SELECT 1 FROM mcp_private_contact WHERE contact_id=source.id) OR (?6=1 AND source.id=current.id))
+      AND (?5=0 OR source.user_id=?7 OR source.contributor_consent=1)
+    ORDER BY source.agent_id = current.agent_id DESC, m.updated_at DESC LIMIT 128`).bind(scope.contactID,scope.userID,scope.beforeSequence,ownOnly?1:0,
+      scope.contributorModel?1:0,scope.privateConversation?1:0,scope.processingUserID??scope.userID,audienceGroup).all<Memory>();
+  const currentKeys = new Set(results.map(m=>`${m.sourceUserID}:${m.sourceContactName ?? ''}:${m.key}`));
+  const combined = [...results,...retained.filter(m=>!currentKeys.has(`${m.sourceUserID}:${m.sourceContactName ?? ''}:${m.key}`))]
+    .map(memory => { if (memory.sourceContactName == null) delete memory.sourceContactName; return memory; });
   if (ownOnly) return combined;
   const agent = await db.prepare('SELECT agent_id AS id FROM contact WHERE id = ? AND user_id = ?')
     .bind(scope.contactID, scope.userID).first<{ id: string }>();
-  return agent ? [...combined, ...await groupMemories(db, agent.id, !!scope.contributorModel)] : combined;
+  return agent ? [...combined, ...await groupMemories(db, agent.id, !!scope.contributorModel,
+    scope.groupID ? { groupID: scope.groupID } : { readerID: scope.userID })] : combined;
 }
 
 export function selectMemories(memories: Memory[], query: string, includePreferences = false): Memory[] {

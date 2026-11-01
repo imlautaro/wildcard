@@ -54,7 +54,7 @@ watch(code, () => { preview.value = null; });
           :contributor-model="preview.contributorModel"
           :disclosure="[
             'Start your own empty chat with this contact. Its memories and presence are shared with other participants. Your schedules and notifications belong to you.',
-            'The contact can share remembered facts about you with other participants. Your original messages and attachments are private. The creator can remove your access.',
+            'The contact can share remembered facts about you with other participants. Your original messages and attachments are private. You can keep your chat private in the contact’s details. The creator can remove your access.',
           ]"
           memory-label="I agree to shared memories"
           contributor-note="Messages and shared memories sent to Meta may be used to train its models."

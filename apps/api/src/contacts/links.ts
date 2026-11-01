@@ -17,19 +17,29 @@ import { admitAuthRequest } from '../lib/auth-rate-limit';
 // Connector-isolated contacts and contacts still being created cannot be linked.
 
 const pair = (a: string, b: string) => (a < b ? [a, b] : [b, a]) as [string, string];
-const linkable = (alias: string) => `${alias}.archived_at IS NULL AND ${alias}.setup_pending = 0
+// Private chats (docs/privacy.md#keep-a-chat-private) take no part: their existing links pause.
+const linkable = (alias: string) => `${alias}.archived_at IS NULL AND ${alias}.setup_pending = 0 AND ${alias}.clearing = 0 AND ${alias}.keep_private = 0
   AND NOT EXISTS (SELECT 1 FROM mcp_private_contact p WHERE p.contact_id = ${alias}.id)`;
+/** With "Contacts share with each other" every eligible contact counts as linked (docs/privacy.md). */
+const sharesAll = (user: string) => `EXISTS (SELECT 1 FROM user sharer WHERE sharer.id = ${user} AND sharer.contacts_share = 1)`;
 
 type LinkRow = { id: string; name: string; realName: string; photoVersion: string | null; agentID: string; profile: string | null };
 
-/** Contacts linked to `contactID` for `userID` (linkable ones only). */
+/**
+ * Contacts linked to `contactID` for `userID` (linkable ones only): explicit links, plus, with
+ * "Contacts share with each other", the person's other eligible contacts, most recent chats first.
+ */
 export async function readLinks(db: D1Database, userID: string, contactID: string): Promise<LinkRow[]> {
+  const linked = `EXISTS (SELECT 1 FROM contact_link l WHERE l.user_id = ?1
+    AND ((l.contact_a = ?2 AND l.contact_b = c.id) OR (l.contact_b = ?2 AND l.contact_a = c.id)))`;
   const { results } = await db.prepare(`SELECT c.id, COALESCE(c.alias, c.name) AS name, c.name AS realName, c.photo_version AS photoVersion,
       c.agent_id AS agentID, p.profile_json AS profile
-    FROM contact_link l JOIN contact c ON c.user_id = l.user_id AND c.id = CASE WHEN l.contact_a = ?2 THEN l.contact_b ELSE l.contact_a END
-    LEFT JOIN agent_personality p ON p.agent_id = c.agent_id
-    WHERE l.user_id = ?1 AND (l.contact_a = ?2 OR l.contact_b = ?2) AND ${linkable('c')}
-    ORDER BY COALESCE(c.alias, c.name) COLLATE NOCASE LIMIT 20`).bind(userID, contactID).all<LinkRow>();
+    FROM contact c LEFT JOIN agent_personality p ON p.agent_id = c.agent_id
+    WHERE c.user_id = ?1 AND c.id != ?2 AND ${linkable('c')}
+      AND EXISTS (SELECT 1 FROM contact self WHERE self.id = ?2 AND self.user_id = ?1 AND ${linkable('self')})
+      AND (${linked} OR ${sharesAll('?1')})
+    ORDER BY ${linked} DESC, (SELECT MAX(t.sequence) FROM chat_turn t WHERE t.contact_id = c.id) DESC, COALESCE(c.alias, c.name) COLLATE NOCASE
+    LIMIT 12`).bind(userID, contactID).all<LinkRow>();
   return results;
 }
 
@@ -37,13 +47,18 @@ async function linkState(db: D1Database, userID: string, contactID: string) {
   const self = await db.prepare(`SELECT c.id FROM contact c WHERE c.id = ? AND c.user_id = ? AND ${linkable('c')}`).bind(contactID, userID).first();
   const exists = self ?? await db.prepare('SELECT id FROM contact WHERE id = ? AND user_id = ?').bind(contactID, userID).first();
   if (!exists) return null;
-  if (!self) return { links: [], available: [], unavailable: 'This contact cannot be linked: it uses private connectors or is still being created.' };
-  const links = await readLinks(db, userID, contactID);
+  const allContacts = !!await db.prepare(`SELECT 1 WHERE ${sharesAll('?1')}`).bind(userID).first();
+  if (!self) return { links: [], available: [], allContacts, unavailable: 'This contact cannot be linked: its chat is private, it uses private connectors or it is still being created.' };
+  // Only explicit links are listed and editable; "Contacts share with each other" adds the rest at reply time.
+  const { results: links } = await db.prepare(`SELECT c.id, COALESCE(c.alias, c.name) AS name, c.photo_version AS photoVersion
+    FROM contact_link l JOIN contact c ON c.user_id = l.user_id AND c.id = CASE WHEN l.contact_a = ?2 THEN l.contact_b ELSE l.contact_a END
+    WHERE l.user_id = ?1 AND (l.contact_a = ?2 OR l.contact_b = ?2) AND ${linkable('c')}
+    ORDER BY COALESCE(c.alias, c.name) COLLATE NOCASE LIMIT 20`).bind(userID, contactID).all<{ id: string; name: string; photoVersion: string | null }>();
   const { results: available } = await db.prepare(`SELECT c.id, COALESCE(c.alias, c.name) AS name, c.photo_version AS photoVersion FROM contact c
     WHERE c.user_id = ?1 AND c.id != ?2 AND ${linkable('c')}
       AND NOT EXISTS (SELECT 1 FROM contact_link l WHERE l.user_id = ?1 AND ((l.contact_a = ?2 AND l.contact_b = c.id) OR (l.contact_b = ?2 AND l.contact_a = c.id)))
     ORDER BY COALESCE(c.alias, c.name) COLLATE NOCASE LIMIT 200`).bind(userID, contactID).all<{ id: string; name: string; photoVersion: string | null }>();
-  return { links: links.map(({ id, name, photoVersion }) => ({ id, name, photoVersion })), available, unavailable: null };
+  return { links, available, allContacts, unavailable: null };
 }
 
 /** Mounted under /contacts/:id/links. */
@@ -62,7 +77,7 @@ async function change(c: { env: Env; get(key: 'owner'): string; req: { param(key
       SELECT ?1, ?2, ?3, ?4 WHERE (SELECT COUNT(*) FROM contact c WHERE c.user_id = ?1 AND c.id IN (?2, ?3) AND ${linkable('c')}) = 2
       ON CONFLICT DO NOTHING`).bind(owner, a, b, Date.now()).run();
     if (!result.meta.changes && !await c.env.DB.prepare('SELECT 1 FROM contact_link WHERE user_id = ? AND contact_a = ? AND contact_b = ?').bind(owner, a, b).first()) {
-      return { status: 409 as const, body: { error: 'These contacts cannot be linked. Contacts with private connectors or still being created cannot be linked.' } };
+      return { status: 409 as const, body: { error: 'These contacts cannot be linked. Private chats, contacts with private connectors and contacts still being created cannot be linked.' } };
     }
   } else {
     await c.env.DB.prepare('DELETE FROM contact_link WHERE user_id = ? AND contact_a = ? AND contact_b = ?').bind(owner, a, b).run();

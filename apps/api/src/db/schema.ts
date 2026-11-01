@@ -11,6 +11,7 @@ export const user = sqliteTable('user', {
   image: text('image'),
   photoVersion: text('photo_version'),
   chatModel: text('chat_model').notNull().default('muse-spark-1.3'),
+  contactsShare: integer('contacts_share', { mode: 'boolean' }).notNull().default(false),
   createdAt: date('created_at').notNull(),
   updatedAt: date('updated_at').notNull(),
 });
@@ -71,6 +72,7 @@ export const contact = sqliteTable('contact', {
   learningRevision: integer('learning_revision').notNull().default(0),
   learningSince: integer('learning_since').notNull().default(0),
   initiativeEnabled: integer('initiative_enabled', { mode: 'boolean' }).notNull().default(true),
+  keepPrivate: integer('keep_private', { mode: 'boolean' }).notNull().default(false),
   initiativePaused: integer('initiative_paused', { mode: 'boolean' }).notNull().default(false),
   lastReplyReadAt: date('last_reply_read_at'),
   agentId: text('agent_id').references(() => contactAgent.id, { onDelete: 'cascade' }),

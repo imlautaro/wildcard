@@ -371,7 +371,8 @@ contacts), their own last 30 private messages and 12 group messages, their
 connectors' approved read tools, their mini apps and usage, their active schedules
 and their Topics, feedback and current cards.
 
-Connector-isolated private chats and groups (`mcp_private_contact`,
+Chats the person keeps private ([privacy](privacy.md)) are excluded from memories,
+messages and contact reviews. Connector-isolated private chats and groups (`mcp_private_contact`,
 `mcp_private_group`) are excluded from these signals, so their history never reaches
 a Contributor call. Pooling what the person's own contacts know about the person is
 intended: the contacts curate For you together. For you never reads other participants' memories or

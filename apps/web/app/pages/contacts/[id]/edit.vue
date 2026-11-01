@@ -57,6 +57,18 @@ const setInitiative = (event: Event) => run(async () => {
   }
 });
 
+// "Keep this chat private" (docs/privacy.md#keep-a-chat-private): this person's choice for their own chat.
+const privateInfo = computed(() => `What you tell ${contact.value?.name ?? 'this contact'} stays in this chat. It is not used in groups, by people this contact is shared with, by your other contacts or in For you, and this chat cannot be linked or discussed in a group. Things you explicitly ask it to send or post still go where you ask.`);
+const setKeepPrivate = (event: Event) => run(async () => {
+  const input = event.target as HTMLInputElement;
+  try {
+    const updated = await chats.setKeepPrivate(id.value, input.checked);
+    if (updated) apply(updated);
+  } finally {
+    input.checked = contact.value?.keepPrivate === 1;
+  }
+});
+
 // Voice section (docs/voice.md#contact-voices): shown while the server feature is on.
 // The opt-in belongs to this participant; only the creator picks the shared voice.
 const voiceFeature = computed(() => !!session.features.value?.voiceMessages);
@@ -150,6 +162,7 @@ const voiceChoiceInfo = computed(() => `Accent guides regional wording in text a
       <AppListGroup>
         <AppListItem icon="person" opens :value="contact.alias ?? 'None'" :disabled="busy" @click="openAlias">Alias</AppListItem>
         <AppSwitch icon="initiative" label="Conversation initiative" :info="initiativeInfo" :checked="contact.initiativeEnabled !== 0" :disabled="busy" @change="setInitiative" />
+        <AppSwitch icon="lock" label="Keep this chat private" :info="privateInfo" :checked="contact.keepPrivate === 1" :disabled="busy" @change="setKeepPrivate" />
         <template v-if="voiceFeature">
           <AppSwitch icon="mic" label="Voice messages" :info="voiceInfo" :checked="contact.voiceMessagesEnabled === 1" :disabled="busy" @change="setVoiceMessages" />
           <AppListItem icon="voice" opens :value="voiceSummary" @click="openVoiceSheet">Voice</AppListItem>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { user, saveName, savePhoto, saveModel, refreshProfile, signOut } = useSession();
+const { user, saveName, savePhoto, saveModel, savePrivacy, refreshProfile, signOut } = useSession();
 const { exporting, progress, exportError, download, cancel } = useDebugExport();
 const exportSheet = ref(false);
 onBeforeUnmount(cancel);
@@ -46,6 +46,24 @@ async function toggleNotifications(event: Event) {
     } finally { input.checked = notificationsOn.value; }
   });
 }
+// Privacy (docs/privacy.md): one account switch plus a plain explanation shared with iOS.
+const privacySheet = ref(false);
+const contactsShareInfo = 'Your contacts can recall what you told any of the others and ask each other, in your private chats, without linking them one by one. Groups and other people are not affected. Chats you keep private and chats with connections stay out.';
+const privacyRules = [
+  { title: 'Your private chats', text: 'A contact remembers facts from your chat, never the whole conversation. Those facts can be used in your chats with it, in groups where you are both members, and by people you share that contact with.' },
+  { title: 'Groups', text: 'What is said in a group is used only in that group and in private chats with people who are in it. Contacts never carry one group\'s conversation into another group.' },
+  { title: 'Keep this chat private', text: 'Set in each contact\'s details. What you tell that contact stays in that chat: not in groups, not with people you share it with, not with your other contacts and not in For you.' },
+  { title: 'Contacts share with each other', text: 'Set here. Your own contacts pool what they know about you in your private chats and can ask each other. Off by default.' },
+  { title: 'Always private', text: 'Whole chat transcripts, files and schedules are never shared, unless you turn on Discuss my private chats for one contact in one group. Chats with connections never leave their chat.' },
+  { title: 'For you', text: 'Built only from your own chats and seen only by you. Chats you keep private are left out.' },
+];
+async function toggleContactsShare(event: Event) {
+  const input = event.target as HTMLInputElement;
+  await run(async () => {
+    try { await savePrivacy(input.checked); }
+    finally { input.checked = user.value?.contactsShare === true; }
+  });
+}
 const photoPath = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
 
 async function run(task: () => Promise<void>) {
@@ -85,12 +103,25 @@ onMounted(async () => {
         <AppListItem icon="link" to="/account/connections">Connections</AppListItem>
         <AppListItem icon="iphone" to="/native">Native experiments</AppListItem>
       </AppListGroup>
+      <AppListGroup title="Privacy">
+        <AppSwitch icon="people" label="Contacts share with each other" :info="contactsShareInfo" :checked="user?.contactsShare === true" :disabled="busy" @change="toggleContactsShare" />
+        <AppListItem icon="lock" opens @click="privacySheet = true">How privacy works</AppListItem>
+      </AppListGroup>
       <AppListGroup>
         <AppListItem icon="file" opens @click="exportSheet = true">Export debug JSON</AppListItem>
       </AppListGroup>
       <AppListGroup footer="Scheduled messages are available in the iOS app.">
         <AppListItem icon="logout" danger :disabled="busy" @click="leave">Sign out</AppListItem>
       </AppListGroup>
+
+      <AppSheet v-if="privacySheet" title="How privacy works" @close="privacySheet = false">
+        <dl class="privacy-rules">
+          <template v-for="rule in privacyRules" :key="rule.title">
+            <dt>{{ rule.title }}</dt>
+            <dd>{{ rule.text }}</dd>
+          </template>
+        </dl>
+      </AppSheet>
 
       <AppSheet v-if="exportSheet" title="Export debug JSON" @close="cancel(); exportSheet = false">
         <p>Download your private and group chat history, including archived chats, contacts, local memories, reply status, schedules, tasks, documents and mini apps.</p>
@@ -136,4 +167,8 @@ onMounted(async () => {
 
 <style scoped>
 .account-email { display: flex; align-items: center; justify-content: center; gap: var(--space-1); margin-bottom: var(--space-5); overflow-wrap: anywhere; }
+.privacy-rules { margin: 0; padding: 0 var(--space-1); }
+.privacy-rules dt { margin-top: var(--space-4); font-weight: 600; }
+.privacy-rules dt:first-child { margin-top: 0; }
+.privacy-rules dd { margin: var(--space-1) 0 0; font-size: 14px; line-height: 1.45; color: var(--md-on-surface-variant); }
 </style>
