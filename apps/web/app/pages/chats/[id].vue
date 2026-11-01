@@ -198,7 +198,7 @@ onBeforeUnmount(() => {
   </PageBar>
 
   <AppEmptyState v-if="state.unavailable" icon="person" title="Contact unavailable" text="This contact is no longer available.">
-    <template #actions><AppButton to="/" variant="tonal">Back to Chats</AppButton></template>
+    <template #actions><AppButton to="/chats" variant="tonal">Back to Chats</AppButton></template>
   </AppEmptyState>
   <template v-else>
     <div class="message-viewport">

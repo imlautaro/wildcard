@@ -7,7 +7,7 @@ const props = defineProps<{ title?: string; back?: string; alwaysBack?: boolean 
 <template>
   <AppTopBar :title="title">
     <template #leading>
-      <AppIconButton :to="props.back ?? '/'" icon="back" label="Back" :tooltip="false" :class="{ back: !alwaysBack }" />
+      <AppIconButton :to="props.back ?? '/chats'" icon="back" label="Back" :tooltip="false" :class="{ back: !alwaysBack }" />
     </template>
     <template v-if="$slots.title" #title><slot name="title" /></template>
     <slot />

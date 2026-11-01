@@ -1,10 +1,11 @@
 # Private conversations
 
 Web navigation uses a solid primary **+** icon button in the Chats header to open
-Contacts. A menu button to the left of Chats opens an Account dropdown. Account
-and new-chat flows replace the chat list; Back restores it, including its Archived
-selection and scroll position. Existing conversations retain the adjacent list on
-wide screens. This layout change is scoped to web; iOS retains native navigation.
+Contacts. On wide screens a navigation rail switches between Updates, Chats and
+Account; the chat list is shown beside conversations and new-chat flows and hidden
+(not destroyed) on Updates and Account, keeping its Archived selection and scroll
+position. Below 860 px a menu button to the left of Chats opens Updates and Account,
+and pages replace the chat list. This layout change is scoped to web; iOS retains native navigation.
 See [web layout](web.md#design) and [cache behavior](caching.md#web-app).
 
 Ordinary human requests can use bounded [web research](web-research.md). The

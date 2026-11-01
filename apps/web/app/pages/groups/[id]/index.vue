@@ -210,7 +210,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
   </PageBar>
 
   <AppEmptyState v-if="state.unavailable" icon="people" title="Group unavailable" text="This group is no longer available.">
-    <template #actions><AppButton to="/" variant="tonal">Back to Chats</AppButton></template>
+    <template #actions><AppButton to="/chats" variant="tonal">Back to Chats</AppButton></template>
   </AppEmptyState>
   <template v-else>
     <div class="message-viewport">

@@ -104,7 +104,7 @@ const progressPhoto = computed(() => {
   const contact = chats.contacts.value.find(item => item.id === feed.value?.progress?.contactID);
   return contact ? contactPhotoPath(contact) : null;
 });
-const agendaPath = (item: HomeFeed['agenda'][number]) => item.contactID ? `/chats/${item.contactID}` : item.groupID ? `/groups/${item.groupID}` : '/';
+const agendaPath = (item: HomeFeed['agenda'][number]) => item.contactID ? `/chats/${item.contactID}` : item.groupID ? `/groups/${item.groupID}` : '/chats';
 const appPath = (app: HomeFeed['apps'][number]) => app.groupID ? `/groups/${app.groupID}/mini-apps/${app.id}` : `/contacts/${app.contactID}/mini-apps/${app.id}`;
 function agendaDetail(item: HomeFeed['agenda'][number]) {
   if (item.at == null) return [item.name, item.kind === 'task' ? 'Assigned to you' : null].filter(Boolean).join(' · ');
@@ -155,7 +155,7 @@ function origin(topic: HomeFeed['topics'][number]) {
   </div>
   <div v-else ref="page" class="page home-page" @scroll.passive="onScroll">
     <AppTopBar title="Updates">
-      <template v-if="route.path !== '/'" #leading><AppIconButton to="/" icon="back" label="Back" class="back" :tooltip="false" /></template>
+      <template #leading><AppIconButton to="/chats" icon="back" label="Chats" class="back" :tooltip="false" /></template>
       <AppIconButton icon="list" label="Topics" @click="managing = true" />
       <AppIconButton icon="refresh" label="Update now" :disabled="!feed?.enabled || updating || busy" @click="run(home.update)" />
       <AppIconButton icon="plus" label="Follow something in Updates" variant="filled" @click="following = true" />

@@ -231,18 +231,23 @@ and caching still match across clients. Manrope stays the typeface on both.
   settings that take effect immediately. Two-line rows use `.two-line` with a
   `.small` supporting line. `.search-field`, `.chip`, `.code-box`, `details`, and
   `.actions-row` (end-aligned buttons) cover the remaining page patterns.
-- **Layout.** On wide screens the chat list sits beside a rounded content pane.
-  A menu icon button to the left of the Chats title opens a dropdown with **My account**,
-  identified by the standard user icon rather than the account avatar.
-  The native auto popover dismisses on outside press, Escape, navigation or item
-  selection, supports keyboard focus, and exposes its expanded state on the button.
-  Account (including Connections) and New chat (Contacts, create contact/group,
-  invitations and join) hide the chat list and show a back button at every width.
-  The list stays mounted to preserve Archived selection, scroll and polling.
-  Below 860 px pages replace the chat list and use the full screen width.
+- **Layout.** Above 860 px a Material 3 navigation rail (`NavRail.vue`) sits at the
+  left edge with **Updates** (new-posts badge), **Chats** (total unread badge) and
+  **Account**, and every page opens in a rounded content pane beside it, in the style of
+  Threads/X. The Chats section (`/chats`, conversations, groups, Contacts, new
+  contact/group, invitations and join) adds the chat list as a second column between
+  the rail and the pane; Updates and Account (including Connections and Native
+  experiments) use the whole pane and the rail stays visible. Back buttons on
+  section roots appear only below 860 px. `/` has no page: wide screens go to
+  `/updates`, phones to `/chats`. The chat list stays mounted (hidden) outside Chats to
+  preserve Archived selection, scroll and polling. Below 860 px the rail is hidden,
+  pages replace the chat list, and a menu icon button to the left of the Chats title
+  opens a dropdown with **Updates** and **My account** (the sparkle button in the
+  header also opens Updates); the native auto popover dismisses on outside press,
+  Escape, navigation or item selection.
   This navigation change is explicitly web-only; iOS keeps its native tabs.
-  The Account dropdown, Escape dismissal and Account/Back navigation were checked
-  locally on October 30, 2026; type checking passed.
+  The rail layout was checked locally against a mock API on November 1, 2026 at
+  1440, 1000 and 390 px (light and dark); type checking passed.
   Earlier local checks on October 30, 2026 verified desktop Chats, Contacts and
   Account, Back restoring Archived selection, and Chats/Contacts at 390 px.
   Scroll restoration with populated history, dark mode, offline recovery and

@@ -124,7 +124,7 @@ const savePhoto = (photo: Blob | null) => run(async () => {
 const remove = () => run(async () => {
   if (!window.confirm(contactDeletionWarning(contact.value?.name, canManage.value))) return;
   await chats.deleteChatContact(id.value);
-  await navigateTo('/', { replace: true });
+  await navigateTo('/chats', { replace: true });
 });
 
 onMounted(() => { void session.refreshProfile().catch(() => {}); });

@@ -62,7 +62,7 @@ const remove = () => act((target) => {
   if (!window.confirm(contactDeletionWarning(target.name, contact?.role !== 'member'))) return;
   void run(async () => {
     await chats.deleteChatContact(target.id);
-    if (route.path.startsWith(`/chats/${target.id}`) || route.path.startsWith(`/contacts/${target.id}/`)) await navigateTo('/', { replace: true });
+    if (route.path.startsWith(`/chats/${target.id}`) || route.path.startsWith(`/contacts/${target.id}/`)) await navigateTo('/chats', { replace: true });
   });
 });
 </script>

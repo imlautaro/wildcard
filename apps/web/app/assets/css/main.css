@@ -10,10 +10,12 @@
   --sidebar: 360px;
 }
 
-/* Shell: the chat list on the container surface beside a rounded content pane. */
-.shell { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); height: 100dvh; background: var(--md-surface-container); }
-.shell.without-chat-list { grid-template-columns: minmax(0, 1fr); }
-.shell.without-chat-list > main { margin-left: var(--ui-pane-gap); }
+/* Shell: the navigation rail and, in the Chats section, the chat list on the container
+   surface beside a rounded content pane. */
+:root { --rail: 88px; }
+.shell { display: grid; grid-template-columns: var(--rail) var(--sidebar) minmax(0, 1fr); height: 100dvh; background: var(--md-surface-container); }
+.shell.without-chat-list { grid-template-columns: var(--rail) minmax(0, 1fr); }
+.shell > .shell-rail { min-height: 0; overflow-y: auto; }
 .shell > aside { position: relative; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .shell > main {
   min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--md-surface);
@@ -26,6 +28,7 @@
   content: ''; position: absolute; inset: 0; z-index: 10; border-radius: inherit; pointer-events: none;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-outline-variant) 50%, transparent);
 }
+@media (max-width: 1100px) { :root { --sidebar: 320px; } }
 @media (min-width: 1440px) { :root { --sidebar: 400px; } }
 @media (max-width: 860px) {
   .shell, .shell.without-chat-list { grid-template-columns: minmax(0, 1fr); }
@@ -49,7 +52,6 @@
 .bar a.title:hover { background: var(--hover); }
 .bar .name { display: block; font: var(--type-title-medium); letter-spacing: var(--tracking-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .back { display: none; }
-.shell.without-chat-list .back { display: inline-flex; }
 @media (max-width: 860px) { .back { display: inline-flex; } }
 
 /* List screens that scroll as a whole keep notices and search inside the gutter. */

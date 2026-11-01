@@ -124,7 +124,7 @@ const leave = () => run(async () => {
   await api(isOwner.value ? `groups/${id.value}` : `groups/${id.value}/members/${user.value!.id}`, { method: 'DELETE' });
   chats.removeGroup(id.value);
   forgetGroup(id.value);
-  await navigateTo('/', { replace: true });
+  await navigateTo('/chats', { replace: true });
 });
 
 onMounted(() => run(async () => {

@@ -8,9 +8,9 @@ layout. Updates also gives quick access to the mini apps the person opens most a
 an agenda of upcoming schedules and tasks assigned to them.
 
 On iOS, Updates is the second tab of the signed-in shell (Chats stays the default).
-On the web it opens at `/updates` from the sparkle button in the chat list header
-(or **Menu → Updates**), and on wide screens it is also the pane beside the chat list
-at `/` while no chat is selected; on a phone-width screen `/` is the chat list.
+On the web it lives at `/updates`: on wide screens it is the first item of the
+navigation rail and where `/` lands; on a phone-width screen it opens from the sparkle
+button in the chat list header (or **Menu → Updates**) and `/` goes to the chat list.
 
 The feature was first shipped as "Home" (default tab) and renamed on 2026-10-30.
 The API and storage keep that original name: `/api/v1/home`, the `home_*` tables,
@@ -345,11 +345,11 @@ to disk because cards can contain connector data.
 - Every mutation returns the whole feed, which replaces the cached one; a newer
   mutation rejects older in-flight reads.
 - Transient failures keep usable cards visible; only a first load shows the error.
-- The feed is mounted only where a person can see it: its own page or tab, and on
-  wide web screens (above 860px) the `/` pane when no chat is open, so opening the web
-  app there counts as a visit. On a phone-width web `/` is the chat list, which never
-  mounts Updates, so it never polls or counts as a visit (which would keep automatic
-  runs going).
+- The feed is mounted only where a person can see it: its own page or tab. On wide web
+  screens (above 860px) `/` redirects to `/updates`, so opening the web app there counts
+  as a visit. On a phone-width web `/` redirects to the chat list, which never mounts
+  Updates, so it never polls or counts as a visit (which would keep automatic runs
+  going).
 - Link preview images reuse the existing link preview cache and the private image
   cache (iOS) / private image loader (web).
 
