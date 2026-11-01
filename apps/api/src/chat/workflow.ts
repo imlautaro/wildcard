@@ -12,6 +12,7 @@ import { dispatchGroupRequests } from '../groups/request-results';
 import { groupRequestTurnAllowed } from '../groups/request-access';
 import { runGroup, type GroupJob } from '../groups/workflow';
 import { runHome, type HomeJob } from '../home/workflow';
+import { failComment, replyToComment, type HomeCommentJob } from '../home/comments';
 import { scheduleAllowed } from '../schedules/data';
 import type { VisitJob } from './visits';
 import { attendedChat, expirePresence, markRead, markRecording, markTyping } from './presence';
@@ -45,13 +46,19 @@ function replyMessages(reply: ContactResponse | string[] | string | null) {
   return { response, messages, spoken };
 }
 
-export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob | InitiativeJob | HomeJob> {
-  async run(event: WorkflowEvent<ChatJob | VisitJob | GroupJob | InitiativeJob | HomeJob>, step: WorkflowStep) {
+export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob | InitiativeJob | HomeJob | HomeCommentJob> {
+  async run(event: WorkflowEvent<ChatJob | VisitJob | GroupJob | InitiativeJob | HomeJob | HomeCommentJob>, step: WorkflowStep) {
     if ('kind' in event.payload) {
       if (event.payload.kind === 'initiative') await runInitiative(this.env, event.payload, step);
       else if (event.payload.kind === 'group') await runGroup(this.env, event.payload, step);
       // Updates curation runs are per person, not per chat (docs/updates.md).
       else if (event.payload.kind === 'home') await runHome(this.env, event.payload, step);
+      // A contact answers a comment on its Updates post (docs/updates.md#comments).
+      else if (event.payload.kind === 'home-comment') {
+        const job = event.payload;
+        await step.do('home-comment-reply', { retries: { limit: 1, delay: '10 seconds' }, timeout: '4 minutes' }, () => replyToComment(this.env, job))
+          .catch(cause => step.do('home-comment-failed', () => failComment(this.env, job, cause)));
+      }
       // Visits no longer connect contacts; legacy instances finish immediately.
       return;
     }

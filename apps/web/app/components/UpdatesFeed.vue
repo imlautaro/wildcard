@@ -4,7 +4,8 @@ import type { HomePostAction } from './HomePost.vue';
 
 // Updates: the feed a person's contacts curate together (docs/updates.md). On wide
 // screens it fills the content pane beside the chat list as a single timeline column of
-// posts, newest first; `?thread=<topic>` shows every post on one topic as a thread.
+// posts, newest first; `?thread=<topic>` shows every post on one topic as a thread and
+// `?post=<id>` one post with its comments (docs/updates.md#comments).
 const route = useRoute();
 const home = useHome();
 const chats = useChats();
@@ -26,6 +27,8 @@ const threadCounts = computed(() => {
 const thread = computed(() => typeof route.query.thread === 'string' ? route.query.thread : null);
 // A thread reads top to bottom, oldest first.
 const threadPosts = computed(() => thread.value ? posts.value.filter(post => post.topicID === thread.value).reverse() : []);
+const focusID = computed(() => typeof route.query.post === 'string' ? route.query.post : null);
+const focusPost = computed(() => focusID.value ? posts.value.find(post => post.id === focusID.value) ?? null : null);
 const threadTitle = computed(() => threadPosts.value.at(-1)?.content.title ?? 'Thread');
 const myPhoto = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
 
@@ -42,8 +45,13 @@ watch(posts, (list) => {
 function showFresh() { fresh.value = 0; page.value?.scrollTo({ top: 0, behavior: 'smooth' }); }
 function onScroll() { if (fresh.value && (page.value?.scrollTop ?? 0) < 40) fresh.value = 0; }
 function openThread(topicID: string | null) {
-  void navigateTo({ path: route.path, query: topicID ? { ...route.query, thread: topicID } : { ...route.query, thread: undefined } });
+  void navigateTo({ path: route.path, query: topicID ? { ...route.query, post: undefined, thread: topicID } : { ...route.query, thread: undefined } });
   if (topicID) page.value?.scrollTo({ top: 0 });
+}
+function openPost(postID: string | null) {
+  if (!postID) { void navigateTo({ path: route.path, query: { ...route.query, post: undefined } }); return; }
+  void navigateTo({ path: route.path, query: { ...route.query, post: postID } });
+  page.value?.scrollTo({ top: 0 });
 }
 
 const greeting = computed(() => {
@@ -66,7 +74,11 @@ const notice = computed(() => {
 const noticeTone = computed(() => home.state.error && !feed.value ? 'error'
   : feed.value?.enabled && feed.value.error && feed.value.error !== 'HOME_NO_CONTACTS' ? 'warning' : 'info');
 
-usePolling(() => home.refresh(homeUpdating(home.state.value)), () => homeUpdating(home.state.value) ? 4000 : 60_000);
+// Poll quickly while contacts prepare posts or answer a comment.
+const busyFeed = () => homeUpdating(home.state.value) || homeReplying(home.state.value);
+const polling = usePolling(() => home.refresh(busyFeed()), () => busyFeed() ? 4000 : 60_000);
+// The interval is chosen after each tick, so a comment or Update now must not wait out a 60-second timer.
+watch(busyFeed, busy => { if (busy) void polling.now(); });
 onMounted(() => { updatesOpened(true); void home.refresh(); });
 onBeforeUnmount(() => updatesOpened(false));
 
@@ -81,6 +93,7 @@ async function follow() {
 }
 function act(card: HomePost, kind: HomePostAction, prompt?: string) {
   if (kind === 'thread') return openThread(card.topicID);
+  if (kind === 'comment') return openPost(card.id);
   if (kind === 'message' && card.contactID) return navigateTo(`/chats/${card.contactID}`);
   if (kind === 'reply' && card.contactID) { if (prompt) suggestDraft(card.contactID, prompt); return navigateTo(`/chats/${card.contactID}`); }
   if (kind === 'hide') return run(() => home.setTopic(card.topicID, { status: 'hidden' }));
@@ -106,7 +119,27 @@ function origin(topic: HomeFeed['topics'][number]) {
 </script>
 
 <template>
-  <div v-if="thread" ref="page" class="page home-page">
+  <div v-if="focusID" ref="page" class="page home-page">
+    <AppTopBar title="Post">
+      <template #leading><AppIconButton icon="back" label="Back" :tooltip="false" @click="openPost(null)" /></template>
+    </AppTopBar>
+    <div class="home-inner thread">
+      <AppNotice v-if="actionError">{{ actionError }}</AppNotice>
+      <template v-if="focusPost">
+        <div class="timeline">
+          <HomePost :post="focusPost" in-thread :chained="!!focusPost.comments?.length" :thread-count="threadCounts.get(focusPost.topicID)"
+            @action="(kind, prompt) => act(focusPost!, kind, prompt)" />
+        </div>
+        <HomePostComments :post="focusPost" />
+        <button v-if="(threadCounts.get(focusPost.topicID) ?? 0) > 1" class="link-button thread-more" @click="openThread(focusPost.topicID)">
+          See all {{ threadCounts.get(focusPost.topicID) }} posts on {{ focusPost.content.title }}
+        </button>
+      </template>
+      <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" title="This post isn’t in Updates anymore"
+        text="Its topic was hidden or retired, or the post is older than two weeks." />
+    </div>
+  </div>
+  <div v-else-if="thread" ref="page" class="page home-page">
     <AppTopBar :title="threadTitle">
       <template #leading><AppIconButton icon="back" label="Back to Updates" :tooltip="false" @click="openThread(null)" /></template>
     </AppTopBar>
@@ -118,8 +151,6 @@ function origin(topic: HomeFeed['topics'][number]) {
       </div>
       <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" title="This thread isn’t in Updates anymore"
         text="Its topic was hidden or retired, or its posts are older than two weeks." />
-      <AppButton v-if="threadPosts.at(-1)?.contactID" variant="tonal" icon="chat" class="thread-reply"
-        :to="`/chats/${threadPosts.at(-1)!.contactID}`">Reply to {{ threadPosts.at(-1)!.contactName ?? 'this contact' }} in chat</AppButton>
     </div>
   </div>
   <div v-else ref="page" class="page home-page" @scroll.passive="onScroll">
@@ -274,7 +305,7 @@ function origin(topic: HomeFeed['topics'][number]) {
   box-shadow: var(--md-elevation-2, 0 2px 6px rgb(0 0 0 / 0.2)); cursor: pointer; }
 .fresh :deep(svg) { width: 18px; height: 18px; }
 .thread .timeline { border-top: 0; }
-.thread-reply { align-self: flex-start; margin: var(--space-2) var(--space-4) 0 calc(var(--space-4) + 36px + var(--space-3)); }
+.thread-more { align-self: flex-start; margin-left: calc(var(--space-4) + 36px + var(--space-3) - var(--space-3)); }
 .home-empty { flex: none; margin: 0 var(--space-4); padding: var(--space-8) var(--space-6); border-radius: var(--md-shape-xl); background: var(--md-surface-container-low); }
 .follow-input { width: 100%; padding: var(--space-3) var(--space-4); border: 1px solid var(--md-outline); border-radius: var(--md-shape-xs); background: transparent;
   font: var(--type-body-large); resize: vertical; outline: none; }

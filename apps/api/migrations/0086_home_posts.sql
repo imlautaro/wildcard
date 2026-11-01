@@ -3,6 +3,7 @@
 -- now also appended as a post: a short text in the contact's voice with that card
 -- as its attachment. Posts are the timeline both clients show, newest first, kept
 -- for 14 days and deleted with their topic (hiding a topic deletes them at once).
+-- The person can comment on a post and its contact answers (home_comment).
 CREATE TABLE home_post (
   id TEXT PRIMARY KEY NOT NULL,
   user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
@@ -24,3 +25,20 @@ CREATE INDEX home_post_reply ON home_post(reply_to);
 -- Current cards become the first posts, without text, so the timeline is not empty.
 INSERT INTO home_post (id, user_id, topic_id, contact_id, text, kind, payload_json, connector, created_at)
   SELECT lower(hex(randomblob(16))), user_id, topic_id, contact_id, NULL, kind, payload_json, connector, generated_at FROM home_card;
+
+-- Comments on a post (docs/updates.md#comments): the person writes, the contact who
+-- wrote the post answers in the same row, like a chat turn. Deleted with the post.
+CREATE TABLE home_comment (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  post_id TEXT NOT NULL REFERENCES home_post(id) ON DELETE CASCADE,
+  contact_id TEXT REFERENCES contact(id) ON DELETE SET NULL,
+  text TEXT NOT NULL CHECK (length(text) BETWEEN 1 AND 1000),
+  reply_text TEXT CHECK (reply_text IS NULL OR length(reply_text) <= 2000),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'complete', 'failed')),
+  error_code TEXT CHECK (error_code IS NULL OR length(error_code) <= 80),
+  created_at INTEGER NOT NULL,
+  replied_at INTEGER
+);
+CREATE INDEX home_comment_post ON home_comment(post_id, created_at);
+CREATE INDEX home_comment_contact ON home_comment(user_id, contact_id, created_at DESC);

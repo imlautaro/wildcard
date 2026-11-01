@@ -240,7 +240,7 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
 // Home searches reuse the conversational research model. The reservation shares
 // the account/global daily budget of web research and adds Home's own daily cap;
 // a retried Workflow step replays saved findings instead of searching again.
-async function homeResearch(env: Env, scope: { userID: string; id: string; topicID: string; model: string }, args: Record<string, unknown>): Promise<string> {
+export async function homeResearch(env: Env, scope: { userID: string; id: string; topicID: string; model: string }, args: Record<string, unknown>): Promise<string> {
   const failure = (code: string, error: string) => JSON.stringify({ researched: false, code, error });
   if (Object.keys(args).some(key => key !== 'query') || typeof args.query !== 'string' || !args.query.trim()
     || args.query.trim().length > researchLimits.query || args.query.includes('\0')) return failure('INVALID_ARGUMENTS', 'Provide a public query up to 600 characters.');

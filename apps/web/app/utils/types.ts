@@ -269,7 +269,10 @@ export type HomeCard = {
 // a note (its text is the card) and for cards published before posts existed.
 export type HomePost = Omit<HomeCard, 'generatedAt'> & {
   text: string | null; replyTo: { id: string; contactName: string | null } | null; createdAt: number;
+  /** The person's comments with the contact's replies, oldest first (docs/updates.md#comments). */
+  comments?: HomeComment[];
 };
+export type HomeComment = { id: string; text: string; reply: string | null; status: 'pending' | 'complete' | 'failed'; createdAt: number; repliedAt: number | null };
 export type HomeFeed = {
   enabled: boolean; status: 'idle' | 'updating'; pending: boolean; generatedAt: number | null; briefing: string | null; error: string | null;
   progress: { total: number; done: number; title: string; contactID: string; contactName: string | null } | null;

@@ -52,11 +52,13 @@ export function homePosts(feed: HomeFeed | null): HomePost[] {
 }
 
 export function homeUpdating(feed: HomeFeed | null) { return !!feed && (feed.status === 'updating' || feed.pending); }
+/** A contact is answering a comment: poll like a run so the reply shows up soon. */
+export function homeReplying(feed: HomeFeed | null) { return !!feed?.posts?.some(post => post.comments?.some(comment => comment.status === 'pending')); }
 
 export function useHome() {
   async function refresh(force = false) {
     if (state.request) return state.request;
-    if (state.saving || (!force && !homeUpdating(state.value) && Date.now() - state.loadedAt < 60_000)) return;
+    if (state.saving || (!force && !homeUpdating(state.value) && !homeReplying(state.value) && Date.now() - state.loadedAt < 60_000)) return;
     const revision = state.revision;
     state.request = (async () => {
       try {
@@ -86,6 +88,7 @@ export function useHome() {
     state, refresh,
     update: () => mutate('refresh', 'POST', {}),
     follow: (text: string) => mutate('topics', 'POST', { text }),
+    comment: (postID: string, text: string) => mutate(`posts/${encodeURIComponent(postID)}/comments`, 'POST', { text }),
     setTopic: (id: string, patch: { status?: 'active' | 'hidden'; feedback?: 'more' | 'less' | null }) => mutate(`topics/${id}`, 'PATCH', patch),
   };
 }

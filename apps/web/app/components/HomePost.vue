@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HomeCardContent, HomePost } from '~/utils/types';
 
-export type HomePostAction = 'more' | 'less' | 'hide' | 'message' | 'reply' | 'thread';
+export type HomePostAction = 'more' | 'less' | 'hide' | 'message' | 'reply' | 'thread' | 'comment';
 
 // One Updates post (docs/updates.md#posts), like a Threads or X post: the contact (avatar, name,
 // topic, age), the contact's text, and the card of the closed catalog (docs/updates.md#cards)
@@ -227,7 +227,9 @@ function act(kind: HomePostAction, prompt?: string) { menuOpen.value = false; em
 
       <footer class="post-actions">
         <AppIconButton icon="heart" label="More like this" size="small" class="like" :selected="card.feedback === 'more'" @click="act('more')" />
-        <AppIconButton v-if="card.contactID && !(note && content.prompt)" icon="chat" :label="`Reply to ${name} in chat`" size="small" @click="act('message')" />
+        <button v-if="card.contactID" class="comment-button" :aria-label="`Comment on ${name}’s post`" :title="`Comment on ${name}’s post`" @click="act('comment')">
+          <AppIcon name="chat" /><span v-if="post.comments?.length">{{ post.comments.length }}</span>
+        </button>
         <button v-if="!inThread && (threadCount ?? 0) > 1" class="thread-link link-button" @click="act('thread')">{{ threadCount }} posts in this thread</button>
       </footer>
     </div>
@@ -363,6 +365,10 @@ tr.highlight td:first-child { border-radius: var(--md-shape-s) 0 0 var(--md-shap
 /* Actions sit on the content column's left edge; the icon buttons' padding is pulled out of it. */
 .post-actions { display: flex; align-items: center; gap: var(--space-1); margin-left: calc(-1 * var(--space-2)); color: var(--md-on-surface-variant); }
 .post-actions .like.selected { color: #e0245e; }
+.comment-button { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 32px; padding: 0 var(--space-2); border: 0; border-radius: var(--md-shape-full);
+  background: none; color: inherit; font: var(--type-label-large); cursor: pointer; }
+.comment-button:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+.comment-button :deep(svg) { width: 20px; height: 20px; }
 .thread-link { margin-left: auto; min-height: 32px; padding: 0 var(--space-2); font: var(--type-label-large); color: var(--md-on-surface-variant); }
 .sources { display: flex; flex-wrap: wrap; gap: var(--space-1-5); }
 /* Link chips: AppChip renders a <span>, so these stay `a.chip`. */

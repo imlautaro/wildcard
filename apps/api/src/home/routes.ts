@@ -7,6 +7,7 @@ import { parseSpec } from '../miniapps/spec';
 import { homeLimits } from './curator';
 import { dispatchHome, homeEnabled, postRetention } from './workflow';
 import { topicColumns, type HomeTopicRow } from './signals';
+import { commentLimits, type HomeCommentJob } from './comments';
 
 // Updates feed for the signed-in person (docs/updates.md; the API keeps the `home` name). Cards come from curation
 // runs; quick access and agenda are computed on each read and cost no inference.
@@ -76,6 +77,11 @@ export async function homeFeed(env: Env, owner: string) {
       ORDER BY t.updated_at DESC LIMIT 4`).bind(owner)
       .all<{ id: string; title: string; contactID: string | null; groupID: string | null; name: string | null }>(),
   ]);
+  const { results: comments } = posts.results.length ? await env.DB.prepare(`SELECT id, post_id AS postID, text, reply_text AS reply, status,
+      created_at AS createdAt, replied_at AS repliedAt FROM home_comment
+    WHERE user_id = ? AND post_id IN (SELECT value FROM json_each(?)) ORDER BY created_at`)
+    .bind(owner, JSON.stringify(posts.results.map(post => post.id)))
+    .all<{ id: string; postID: string; text: string; reply: string | null; status: string; createdAt: number; repliedAt: number | null }>() : { results: [] };
   const progress = state?.progressJSON ? JSON.parse(state.progressJSON) as { total: number; done: number; title: string; contactID: string } : null;
   const contributors = new Map<string, { id: string; name: string; photoVersion: string | null }>();
   for (const card of [...cards.results, ...posts.results]) if (card.contactID && card.contactName) contributors.set(card.contactID, { id: card.contactID, name: card.contactName, photoVersion: card.photoVersion });
@@ -95,7 +101,11 @@ export async function homeFeed(env: Env, owner: string) {
     posts: posts.results.map(post => ({ id: post.id, topicID: post.topicID, contactID: post.contactID, contactName: post.contactName,
       contactPhotoVersion: post.photoVersion, text: post.text, replyTo: post.replyTo ? { id: post.replyTo, contactName: post.replyToName } : null,
       reason: post.reason, source: post.source, feedback: post.feedback, connector: post.connector === 1, createdAt: post.createdAt,
-      content: JSON.parse(post.payloadJSON) })),
+      content: JSON.parse(post.payloadJSON),
+      // The person's comments and the contact's replies, oldest first (docs/updates.md#comments).
+      comments: comments.filter(comment => comment.postID === post.id).map(comment => ({ id: comment.id, text: comment.text, reply: comment.reply,
+        status: comment.status === 'pending' && comment.createdAt < now - commentLimits.pendingFor ? 'failed' : comment.status,
+        createdAt: comment.createdAt, repliedAt: comment.repliedAt })) })),
     topics: topics.results.map(topic => ({ id: topic.id, title: topic.title, source: topic.source, status: topic.status, feedback: topic.feedback,
       contactID: topic.contactID, hasCard: cards.results.some(card => card.topicID === topic.id) })),
     apps: apps.results.flatMap(app => {
@@ -176,6 +186,38 @@ home.post('/topics', async c => {
   await c.env.DB.prepare(`INSERT INTO home_topic (id, user_id, title, brief, kind, source, created_at, updated_at)
     VALUES (?, ?, ?, ?, 'list', 'person', ?, ?)`).bind(crypto.randomUUID(), owner, Array.from(text).slice(0, 80).join(''), text, now, now).run();
   await request(c.env, c.executionCtx, owner, true);
+  return c.json(await homeFeed(c.env, owner), 201);
+});
+
+// Comment on a post; the contact who wrote it answers in the background (docs/updates.md#comments).
+home.post('/posts/:id/comments', async c => {
+  const owner = c.get('owner');
+  const body: unknown = await c.req.json().catch(() => null);
+  if (!isRecord(body) || Object.keys(body).join(',') !== 'text' || typeof body.text !== 'string') return c.json({ error: 'Provide text.' }, 400);
+  const text = body.text.trim();
+  if (!text || Array.from(text).length > commentLimits.text || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(text)) {
+    return c.json({ error: `Write 1–${commentLimits.text} characters.` }, 422);
+  }
+  const now = Date.now();
+  const post = await c.env.DB.prepare(`SELECT p.id, p.contact_id AS contactID,
+      (SELECT COUNT(*) FROM home_comment WHERE post_id = p.id) AS count,
+      EXISTS (SELECT 1 FROM home_comment WHERE post_id = p.id AND status = 'pending' AND created_at > ?3) AS pending
+    FROM home_post p JOIN home_topic t ON t.id = p.topic_id AND t.status = 'active'
+    JOIN contact ct ON ct.id = p.contact_id AND ct.user_id = p.user_id AND ct.archived_at IS NULL
+    WHERE p.id = ?1 AND p.user_id = ?2`).bind(c.req.param('id'), owner, now - commentLimits.pendingFor)
+    .first<{ id: string; contactID: string; count: number; pending: number }>();
+  if (!post) return c.json({ error: 'This post is no longer available to comment on.' }, 404);
+  if (post.pending) return c.json({ error: 'Wait for the reply before commenting again.' }, 409);
+  if (post.count >= commentLimits.perPost) return c.json({ error: 'This post has reached its comment limit. Continue in the chat.' }, 409);
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare(`INSERT INTO home_comment (id, user_id, post_id, contact_id, text, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+    .bind(id, owner, post.id, post.contactID, text, now).run();
+  const job: HomeCommentJob = { kind: 'home-comment', userID: owner, commentID: id };
+  try { await c.env.CHAT_WORKFLOW.create({ id: `home-comment-${id}`, params: job }); }
+  catch {
+    const exists = await c.env.CHAT_WORKFLOW.get(`home-comment-${id}`).then(instance => instance.status()).then(() => true, () => false);
+    if (!exists) await c.env.DB.prepare(`UPDATE home_comment SET status = 'failed', error_code = 'WORKFLOW_UNAVAILABLE' WHERE id = ? AND status = 'pending'`).bind(id).run();
+  }
   return c.json(await homeFeed(c.env, owner), 201);
 });
 
