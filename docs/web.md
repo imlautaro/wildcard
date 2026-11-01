@@ -1286,10 +1286,15 @@ the image, matching iOS. See [link previews](link-previews.md).
 [Updates](updates.md) opens at `/updates` from the sparkle button in the chat list
 header (also **Menu → Updates**). It shows beside the chat list on wide screens and
 full width with a back button on narrow ones; `/` keeps the "Select a chat" pane.
-Cards (`HomeCard`) use Material 3 surfaces with a per-card accent, inline SVG charts
-and the link preview image for the lead headline; menus reuse the mini app menu
-styles. **Update now**, **Topics** and **Follow** live in the page bar; the card
-menu offers Message, More/Less like this and Hide. A note's suggested reply fills
+Since migration 0086 it is a timeline of [posts](updates.md#posts) (`HomePost`): the
+contact's text above the card in a rounded frame, with a per-card accent, inline SVG
+charts and the link preview image for the lead headline. `?thread=<topic>` shows a
+topic's posts as a thread, and a sticky **N new posts** pill appears when posts arrive
+while the page is scrolled down. `homePosts()` falls back to text-less posts from
+`cards` when the API has no `posts` (for example a branch Preview against an older
+production API). **Update now**, **Topics** and **Follow** live in the page bar, and a
+"What should your contacts follow?" box opens Follow; the heart is More like this and
+⋯ offers Message, Less like this and Hide. A note's suggested reply fills
 the contact's empty composer through `suggestDraft` and is never sent automatically.
 Behavior, copy and caching match the iOS Updates tab (`useHome`, see
 [caching](caching.md#updates-feed)). The sparkle button and the menu item carry the

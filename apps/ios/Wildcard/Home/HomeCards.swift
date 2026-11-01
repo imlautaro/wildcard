@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-/// Native layouts for the closed Updates card catalog (docs/updates.md#cards).
+/// Native layouts for the closed Updates card catalog (docs/updates.md#cards), attached to timeline posts.
 enum HomeStyle {
     static func accent(_ name: String) -> Color {
         ["blue": .blue, "green": .green, "orange": .orange, "red": .red, "purple": .purple,
@@ -26,123 +26,235 @@ enum HomeStyle {
 }
 
 enum HomeCardAction {
-    case more, less, hide, message, reply(String)
+    case more, less, hide, message, reply(String), thread
 }
 
-/// Shared chrome: header with icon and contact, the kind's layout, then attribution and sources.
-struct HomeCardView: View {
-    let card: HomeCard
-    var lead = false
+/// One Updates post (docs/updates.md#posts), like a Threads or X post: the contact's avatar on a rail,
+/// "name › topic · age", the contact's text, and the card of the closed catalog attached in a frame that
+/// shows one headline, figure or line of each kind until "Show more" (the same counts as the web).
+/// In a thread the attachments start expanded and a line joins each avatar to the next post.
+struct HomePostView: View {
+    let post: HomePost
+    var threadCount = 0
+    var inThread = false
+    var chained = false
     let act: (HomeCardAction) -> Void
     @Environment(ContactsStore.self) private var contacts
     @Environment(\.openURL) private var openURL
+    @State private var expanded: Bool
 
-    private var content: HomeCardContent { card.content }
+    init(post: HomePost, threadCount: Int = 0, inThread: Bool = false, chained: Bool = false, act: @escaping (HomeCardAction) -> Void) {
+        self.post = post
+        self.threadCount = threadCount
+        self.inThread = inThread
+        self.chained = chained
+        self.act = act
+        _expanded = State(initialValue: inThread)
+    }
+
+    private var content: HomeCardContent { post.content }
     private var accent: Color { HomeStyle.accent(content.accent) }
+    private var isNote: Bool { content.kind == "note" }
+    private var name: String { post.contactName ?? "A contact" }
+
+    // How much of each kind shows before "Show more".
+    private static let collapsedCount: [String: Int] = ["matches": 2, "metrics": 3, "list": 3]
+    private static let collapsedRows = 4
+    private var items: [HomeCardContent.Item] { content.items ?? [] }
+    private var shownItems: [HomeCardContent.Item] {
+        guard !expanded, let cap = Self.collapsedCount[content.kind] else { return items }
+        return Array(items.prefix(cap))
+    }
+    private func keptRow(_ index: Int) -> Bool { index < Self.collapsedRows || index == content.highlight }
+    private var hidden: Int {
+        switch content.kind {
+        case "headlines": return max(0, items.count - 1)
+        case "table": return (content.rows ?? []).indices.filter { !keptRow($0) }.count
+        default: return Self.collapsedCount[content.kind].map { max(0, items.count - $0) } ?? 0
+        }
+    }
+    private var extras: Bool {
+        switch content.kind {
+        case "chart": content.summary != nil
+        case "tracker": !(content.steps ?? []).isEmpty || content.note != nil
+        default: false
+        }
+    }
+    private var expandable: Bool { hidden > 0 || extras || post.reason != nil || !content.sources.isEmpty }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            header
-            layout
-            footer
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: HomeStyle.corner, style: .continuous).fill(Color(.secondarySystemGroupedBackground))
-                .overlay(alignment: .top) {
-                    // The lead card carries a soft wash of its accent.
-                    if lead {
-                        LinearGradient(colors: [accent.opacity(0.18), .clear], startPoint: .top, endPoint: .center)
-                            .clipShape(RoundedRectangle(cornerRadius: HomeStyle.corner, style: .continuous))
-                    }
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 6) {
+                ContactAvatar(contact: post.contactID.flatMap { contacts.contact(id: $0) }, size: 36)
+                if chained { Capsule().fill(Color.secondary.opacity(0.3)).frame(width: 2).frame(maxHeight: .infinity) }
+            }
+            .padding(.top, 12)
+            VStack(alignment: .leading, spacing: 6) {
+                header
+                if let reply = post.replyTo {
+                    Text("Replying to \(reply.contactName ?? "a contact")").manrope(.caption).foregroundStyle(.secondary)
                 }
+                if let text = post.text {
+                    Text(text).manrope(.body).fixedSize(horizontal: false, vertical: true)
+                        .contentShape(Rectangle())
+                        .onTapGesture { if !inThread { act(.thread) } }
+                }
+                if isNote {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(content.text ?? "").manrope(.body).fixedSize(horizontal: false, vertical: true)
+                        if post.contactID != nil, let prompt = content.prompt {
+                            HomeReplyTemplate(prompt: prompt, accent: accent) { act(.reply($0)) }
+                        }
+                        more
+                    }
+                } else {
+                    attachment
+                }
+                actions
+            }
+            .padding(.top, 12).padding(.bottom, 4)
         }
-        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: HomeStyle.corner, style: .continuous))
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .contextMenu { menu }
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: HomeStyle.symbol(content.icon))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(accent)
-                .frame(width: 34, height: 34)
-                .background(accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(content.title).manrope(lead ? .title3 : .headline, weight: .bold).fixedSize(horizontal: false, vertical: true)
-                if let subtitle = content.subtitle {
-                    Text(subtitle).manrope(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
+        HStack(spacing: 4) {
+            Text(name).manrope(.subheadline, weight: .bold).lineLimit(1).layoutPriority(1)
+            if !inThread {
+                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.secondary).accessibilityHidden(true)
+                Text(content.title).manrope(.subheadline, weight: .semibold).lineLimit(1)
             }
+            Text(Self.age(post.createdAt)).manrope(.subheadline).foregroundStyle(.secondary).fixedSize().padding(.leading, 2)
             Spacer(minLength: 0)
             Menu { menu } label: {
                 Image(systemName: "ellipsis").font(.footnote.weight(.bold)).foregroundStyle(.secondary)
-                    .frame(width: 30, height: 30).contentShape(Rectangle())
+                    .frame(width: 28, height: 24).contentShape(Rectangle())
             }
-            .accessibilityLabel("Card options")
+            .accessibilityLabel("Post options")
         }
+        .contentShape(Rectangle())
+        .onTapGesture { if !inThread { act(.thread) } }
+    }
+
+    /// The card, framed like a quoted post or a link preview.
+    private var attachment: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if content.subtitle != nil || post.text == nil {
+                Label {
+                    Text(post.text == nil ? (content.subtitle ?? content.title) : (content.subtitle ?? "")).lineLimit(1)
+                } icon: {
+                    Image(systemName: HomeStyle.symbol(content.icon)).foregroundStyle(accent)
+                }
+                .manrope(.caption, weight: .semibold).foregroundStyle(.secondary)
+            }
+            layout
+            more
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.secondary.opacity(0.25)))
+        .padding(.top, 2)
     }
 
     @ViewBuilder private var layout: some View {
         switch content.kind {
-        case "headlines": HomeHeadlines(items: content.items ?? [], accent: accent, lead: lead)
-        case "matches": HomeMatches(items: content.items ?? [], accent: accent)
-        case "table": HomeTable(columns: content.columns ?? [], rows: content.rows ?? [], highlight: content.highlight, caption: content.caption, accent: accent)
-        case "metrics": HomeMetrics(items: content.items ?? [])
-        case "chart": HomeChart(content: content, accent: accent)
-        case "tracker": HomeTracker(content: content, accent: accent)
-        case "note": HomeNote(card: card, accent: accent, act: act)
-        default: HomeList(items: content.items ?? [], accent: accent)
+        case "headlines": HomeHeadlines(items: expanded ? items : Array(items.prefix(1)), accent: accent, lead: false)
+        case "matches": HomeMatches(items: shownItems, accent: accent)
+        case "table":
+            let kept = (content.rows ?? []).indices.filter { expanded || keptRow($0) }
+            HomeTable(columns: content.columns ?? [], rows: kept.map { (content.rows ?? [])[$0] },
+                      highlight: content.highlight.flatMap { kept.firstIndex(of: $0) }, caption: expanded ? content.caption : nil, accent: accent)
+        case "metrics": HomeMetrics(items: shownItems)
+        case "chart": HomeChart(content: content, accent: accent, expanded: expanded)
+        case "tracker": HomeTracker(content: content, accent: accent, expanded: expanded)
+        default: HomeList(items: shownItems, accent: accent)
         }
     }
 
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                ContactAvatar(contact: card.contactID.flatMap { contacts.contact(id: $0) }, size: 18)
-                Text(attribution).manrope(.caption).foregroundStyle(.secondary).lineLimit(2)
-            }
-            if !content.sources.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(content.sources, id: \.url) { source in
-                            Button {
-                                if let url = URL(string: source.url), MessageMarkdown.safeLink(url) { openURL(url) }
-                            } label: {
-                                Label(host(source.url), systemImage: "link").manrope(.caption2, weight: .semibold).lineLimit(1)
-                                    .padding(.horizontal, 9).padding(.vertical, 5)
-                                    .background(Color.primary.opacity(0.06), in: Capsule())
+    /// Reason and sources once expanded, then the "Show more" toggle.
+    @ViewBuilder private var more: some View {
+        if expanded, post.reason != nil || !content.sources.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                if let reason = post.reason { Text(reason).manrope(.caption).foregroundStyle(.secondary) }
+                if !content.sources.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(content.sources, id: \.url) { source in
+                                Button {
+                                    if let url = URL(string: source.url), MessageMarkdown.safeLink(url) { openURL(url) }
+                                } label: {
+                                    Label(host(source.url), systemImage: "link").manrope(.caption2, weight: .semibold).lineLimit(1)
+                                        .padding(.horizontal, 9).padding(.vertical, 5)
+                                        .background(Color.primary.opacity(0.06), in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel("Source: \(source.title)")
                             }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel("Source: \(source.title)")
                         }
                     }
+                    .scrollClipDisabled()
                 }
-                .scrollClipDisabled()
             }
+        }
+        if expandable {
+            Button(expanded ? "Show less" : hidden > 0 ? "Show \(hidden) more" : "Show more") {
+                withAnimation(.snappy) { expanded.toggle() }
+            }
+            .manrope(.subheadline, weight: .semibold)
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
         }
     }
 
-    private var attribution: String {
-        let when = Date(timeIntervalSince1970: card.generatedAt / 1000).formatted(.relative(presentation: .named))
-        let reason = card.reason.map { " · \($0)" } ?? ""
-        return "\(card.contactName ?? "A contact") · \(when)\(reason)"
+    private var actions: some View {
+        HStack(spacing: 20) {
+            Button { act(.more) } label: {
+                Image(systemName: post.feedback == "more" ? "heart.fill" : "heart")
+                    .foregroundStyle(post.feedback == "more" ? AnyShapeStyle(Color.pink) : AnyShapeStyle(.secondary))
+            }
+            .accessibilityLabel(post.feedback == "more" ? "Undo more like this" : "More like this")
+            // A note with a suggested reply already offers its own way into the chat.
+            if post.contactID != nil, !(isNote && content.prompt != nil) {
+                Button { act(.message) } label: { Image(systemName: "bubble.left").foregroundStyle(.secondary) }
+                    .accessibilityLabel("Reply to \(name) in chat")
+            }
+            Spacer(minLength: 0)
+            if !inThread && threadCount > 1 {
+                Button("\(threadCount) posts in this thread") { act(.thread) }
+                    .manrope(.footnote, weight: .semibold).foregroundStyle(.secondary)
+            }
+        }
+        .font(.system(size: 17))
+        .buttonStyle(.plain)
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder private var menu: some View {
+        if let contactName = post.contactName, post.contactID != nil {
+            Button { act(.message) } label: { Label("Message \(contactName)", systemImage: "bubble.left") }
+        }
+        Button { act(.less) } label: {
+            Label(post.feedback == "less" ? "Undo less like this" : "Less like this", systemImage: post.feedback == "less" ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+        }
+        Button(role: .destructive) { act(.hide) } label: { Label("Hide from Updates", systemImage: "eye.slash") }
     }
 
     private func host(_ value: String) -> String {
         URL(string: value)?.host()?.replacingOccurrences(of: "www.", with: "") ?? value
     }
 
-    @ViewBuilder private var menu: some View {
-        if let name = card.contactName, card.contactID != nil {
-            Button { act(.message) } label: { Label("Message \(name)", systemImage: "bubble.left") }
-        }
-        Button { act(.more) } label: { Label("More like this", systemImage: card.feedback == "more" ? "hand.thumbsup.fill" : "hand.thumbsup") }
-        Button { act(.less) } label: { Label("Less like this", systemImage: card.feedback == "less" ? "hand.thumbsdown.fill" : "hand.thumbsdown") }
-        Button(role: .destructive) { act(.hide) } label: { Label("Hide from Updates", systemImage: "eye.slash") }
+    /// Compact, like a timeline: "now", "27m", "2h", "3d", then the date.
+    static func age(_ at: Double) -> String {
+        let minutes = max(0, Int((Date.now.timeIntervalSince1970 * 1000 - at) / 60_000))
+        if minutes < 1 { return "now" }
+        if minutes < 60 { return "\(minutes)m" }
+        if minutes < 60 * 24 { return "\(Int((Double(minutes) / 60).rounded()))h" }
+        if minutes < 60 * 24 * 7 { return "\(Int((Double(minutes) / 1440).rounded()))d" }
+        return Date(timeIntervalSince1970: at / 1000).formatted(.dateTime.month(.abbreviated).day())
     }
 }
 
@@ -319,6 +431,7 @@ private struct HomeMetrics: View {
 private struct HomeChart: View {
     let content: HomeCardContent
     let accent: Color
+    var expanded = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -347,9 +460,9 @@ private struct HomeChart: View {
             }
             .chartYScale(domain: .automatic(includesZero: content.style == "bar"))
             .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) { _ in AxisValueLabel() } }
-            .frame(height: 170)
+            .frame(height: expanded ? 170 : 96)
             .accessibilityLabel(content.title)
-            if let summary = content.summary { Text(summary).manrope(.footnote).foregroundStyle(.secondary) }
+            if expanded, let summary = content.summary { Text(summary).manrope(.footnote).foregroundStyle(.secondary) }
         }
     }
 }
@@ -357,6 +470,7 @@ private struct HomeChart: View {
 private struct HomeTracker: View {
     let content: HomeCardContent
     let accent: Color
+    var expanded = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -369,7 +483,7 @@ private struct HomeTracker: View {
                     .accessibilityLabel("Progress \(Int(progress * 100)) percent")
             }
             if let status = content.status { Text(status).manrope(.subheadline) }
-            if let steps = content.steps, !steps.isEmpty {
+            if expanded, let steps = content.steps, !steps.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                         HStack(alignment: .top, spacing: 12) {
@@ -393,44 +507,10 @@ private struct HomeTracker: View {
                     }
                 }
             }
-            if let note = content.note {
+            if expanded, let note = content.note {
                 Text(note).manrope(.footnote).foregroundStyle(.secondary)
                     .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                     .background(accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-        }
-    }
-}
-
-private struct HomeNote: View {
-    let card: HomeCard
-    let accent: Color
-    let act: (HomeCardAction) -> Void
-    @Environment(ContactsStore.self) private var contacts
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 10) {
-                ContactAvatar(contact: card.contactID.flatMap { contacts.contact(id: $0) }, size: 34)
-                Text(card.content.text ?? "").manrope(.body)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(accent.opacity(0.12), in: UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 20, bottomTrailingRadius: 20, topTrailingRadius: 20, style: .continuous))
-            }
-            if card.contactID != nil {
-                if let prompt = card.content.prompt {
-                    HomeReplyTemplate(prompt: prompt, accent: accent) { act(.reply($0)) }
-                        .padding(.leading, 44)
-                } else {
-                    Button { act(.message) } label: {
-                        Label("Reply", systemImage: "arrowshape.turn.up.left.fill")
-                            .manrope(.subheadline, weight: .semibold)
-                            .padding(.horizontal, 14).padding(.vertical, 10)
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.tint(accent.opacity(0.25)).interactive(), in: Capsule())
-                    .padding(.leading, 44)
-                    .accessibilityHint("Opens the chat")
-                }
             }
         }
     }

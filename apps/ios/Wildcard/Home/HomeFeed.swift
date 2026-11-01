@@ -54,11 +54,45 @@ struct HomeFeed: Decodable, Sendable {
     let progress: Progress?
     let contributors: [Contributor]
     let cards: [HomeCard]
+    /// Newest first. Absent from an API without posts (before migration 0086); see `timeline`.
+    let posts: [HomePost]?
     let topics: [Topic]
     let apps: [App]
     let agenda: [AgendaItem]
 
     var isUpdating: Bool { status == "updating" || pending }
+
+    /// The timeline, newest first; an API without posts gets one text-less post per card.
+    var timeline: [HomePost] {
+        posts ?? cards.map(HomePost.init(card:)).sorted { $0.createdAt > $1.createdAt }
+    }
+}
+
+/// A timeline post (docs/updates.md#posts): a contact's short text with a card attached. `text` is nil
+/// for a note (its text is the card) and for cards published before posts existed.
+struct HomePost: Decodable, Hashable, Sendable, Identifiable {
+    struct ReplyTo: Decodable, Hashable, Sendable { let id: String; let contactName: String? }
+    let id: String
+    let topicID: String
+    let contactID: String?
+    let contactName: String?
+    let contactPhotoVersion: String?
+    let text: String?
+    let replyTo: ReplyTo?
+    let reason: String?
+    let source: String
+    let feedback: String?
+    let connector: Bool
+    let createdAt: Double
+    let content: HomeCardContent
+}
+
+extension HomePost {
+    init(card: HomeCard) {
+        self.init(id: card.id, topicID: card.topicID, contactID: card.contactID, contactName: card.contactName,
+                  contactPhotoVersion: card.contactPhotoVersion, text: nil, replyTo: nil, reason: card.reason, source: card.source,
+                  feedback: card.feedback, connector: card.connector, createdAt: card.generatedAt, content: card.content)
+    }
 }
 
 struct HomeCard: Decodable, Hashable, Sendable, Identifiable {

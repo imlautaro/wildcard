@@ -2927,6 +2927,19 @@ stop spending immediately (in-flight runs finish their current card). Keep the
 tables; deleting `home_card`/`home_topic` rows only clears feeds, and dropping them
 requires a release of code that no longer reads them.
 
+## Updates posts — migration 0086
+
+Apply `apps/api/migrations/0086_home_posts.sql` after 0085. It adds `home_post`
+(cascading with the account and the topic; contact and replied-to post set to null)
+and copies every current `home_card` row into it as a post without text. Additive: an
+older API ignores the table, and both clients fall back to `cards` when `posts` is
+absent, so the API and clients can be released in either order. No new resource,
+binding, var or secret. Local: `npm run db:migrate:local --workspace @wildcard/api`.
+Release only through the automatic API release. Validated on a scratch local workerd
+D1 (see [Updates](updates.md#verification)); not yet applied to staging or production.
+Rollback: release code that ignores `posts`; keep the table (dropping it only removes
+the timeline history, cards stay in `home_card`).
+
 ## Contextual image framing and initiative — migration 0079
 
 Apply `0079_initiative_images.sql` after every migration through 0078. It adds

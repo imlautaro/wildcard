@@ -21,23 +21,33 @@ This is a first implementation (2026-10-30). See [verification](#verification).
 
 ## Using it
 
-- **Cards** appear as contacts finish them; a status pill shows who is preparing
-  what ("Lucía is preparing Barça este finde · 2/5"). The first card is the lead
-  card. Each card shows its contact, when it was prepared, why it is in Updates and
-  its sources.
+- **Posts** appear as contacts finish them, newest first, like a Threads or X
+  timeline; a status pill shows who is preparing what ("Lucía is preparing Barça este
+  finde · 2/5"). Each post is a short text from a contact with a card attached
+  (see [posts](#posts)). When a run adds posts while the person is scrolled down, a
+  **N new posts** pill scrolls back to the top.
 - **Pull to refresh** (iOS) or **Update now** (web, and iOS **⋯ → Update now**)
-  asks the contacts to refresh cards older than 30 minutes. Requests within a
+  asks the contacts to refresh cards older than 30 minutes; a contact with nothing
+  new posts nothing. Requests within a
   minute of the previous one are ignored.
-- **Follow something** (**+**): describe what to follow ("processing times for my
-  I-130"). The curator picks the layout and the contact on the next run.
-- **Card menu** (⋯ or long press on iOS): **Message {contact}**, **More like
-  this**, **Less like this**, **Hide from Updates**. On the web the feedback and reply
-  buttons sit in a row under each post and ⋯ keeps **Message** and **Hide**. Hidden
-  topics never come back unless the person shows them again in **Topics**.
-- **Web timeline**: a single column of posts, each led by the contact who prepared it
-  (avatar, name, age) with the topic as a small label. Each kind shows one headline,
-  two matches, a figure, three rows and so on until **Show more**, which also reveals
-  the reason and sources. Coming up and apps are one strip of chips above the feed.
+- **Follow something** (**+**, or the "What should your contacts follow?" box above
+  the timeline): describe what to follow ("processing times for my I-130"). The
+  curator picks the layout and the contact on the next run.
+- **Post actions**: the heart is **More like this** and the bubble opens the
+  contact's chat. ⋯ (or a long press on iOS) offers **Message {contact}**, **Less like
+  this** and **Hide from Updates**. Feedback is per topic, so every post on a topic shows
+  the same heart. Hidden topics never come back unless the person shows them again in
+  **Topics**.
+- **Timeline** (both clients): a single column of posts, each led by the contact
+  (avatar, "name › topic · age"), then its text and the card in a rounded frame. Each
+  kind shows one headline, two matches, three figures or items, four table rows (plus
+  the highlighted one), a compact chart or a tracker without its steps until **Show
+  more**, which also reveals the reason and sources. Coming up and apps are one strip
+  of chips above the timeline.
+- **Threads**: tapping a post's text or age (web) or the post (iOS) opens every post on
+  its topic, oldest first, joined by a line, with the cards expanded and **Reply to
+  {contact} in chat**. A post with **N posts in this thread** has older ones. The web
+  keeps it in the address (`?thread=<topic>`), iOS pushes it on the navigation stack.
 - **Notes** can suggest a reply. Tapping it opens the chat with the message in the
   composer (only if the composer is empty); it is never sent automatically.
 - **From a chat**: when the person asks a contact to keep an eye on something or to
@@ -48,8 +58,8 @@ This is a first implementation (2026-10-30). See [verification](#verification).
   its page (web).
 - **Coming up**: up to four active schedules due in the next 48 hours and up to
   four open tasks assigned to the person, each opening its chat.
-- **New-card badge**: the Updates tab (iOS) and the Updates button and menu item
-  (web) show how many cards were prepared or refreshed since the person last opened
+- **New-post badge**: the Updates tab (iOS) and the Updates button and menu item
+  (web) show how many posts were published since the person last opened
   Updates. Opening Updates clears it. See [New-card badge](#new-card-badge).
 
 Fixed interface copy is English like the rest of the app; card text is written by
@@ -79,6 +89,35 @@ and up to five sources. A card is at most 12,000 characters of JSON. Freshness p
 kind: matches and metrics 2 hours, headlines 4 hours, chart 6 hours, note, table
 and list 12 hours, tracker 24 hours.
 
+## Posts
+
+Since 2026-11-01 (migration 0086) Updates is a timeline. `home_card` still keeps the
+latest card of each topic, which schedules runs, feeds the editor and reviews, and is
+still returned as `cards`; every published card is also appended to `home_post` as a
+post:
+
+- **Text**: one or two short sentences (at most 280 characters) in the contact's
+  voice, leading with what is new, without greetings, signatures or hashtags. A note
+  card has no separate text: its text is the post. Cards published before posts
+  existed were copied as posts without text, which show the card alone.
+- **Nothing new**: a contact recomposing a topic sees its previous card and up to three
+  earlier posts on the topic (dated) and may answer `{"action":"no_news"}`. Nothing is
+  posted, the card counts as fresh for its kind's lifetime (so the next run is not
+  due sooner) and, unlike a [skip](#skipped-topics), it is never counted against the
+  topic. The composer is told never to repost the same thing in other words. A run still
+  pays for the model call (and any search) that finds nothing new.
+- **Replies**: a [review](#contacts-review-cards) revision is a post by the reviewer
+  that replies to the latest post on the topic ("Replying to {contact}").
+- **Order and retention**: the API returns the newest 50 posts of active topics from the
+  last 14 days. Posts older than 14 days are deleted at the next run; hiding a topic
+  deletes its posts at once and a retired topic's posts leave the timeline with it (and
+  are deleted with the topic seven days later).
+- **Idempotency**: a run writes at most one post per topic (`<topic>-<revision>`, plus
+  `-review`), so a retried Workflow step rewrites its own post instead of adding one.
+
+Clients fall back to one text-less post per card when the API has no `posts` field (an
+API from before migration 0086), so either can be released first.
+
 ## How curation works
 
 A **curation run** is a `kind: 'home'` instance of the existing `CHAT_WORKFLOW`
@@ -98,10 +137,10 @@ directly by an API request, with one durable step per stage:
    topics, expired cards and, after a manual update, cards older than 30 minutes are
    composed. The assigned contact writes the card in its own voice, with its
    personality and specialties, the relevant things contacts remember about the
-   person, the previous card and the titles of the other cards. It may call
+   person, the previous card, its earlier posts on the topic and the titles of the other cards. It may call
    `research_web` (one search per card, four per run) and, for connector topics,
-   `list_mcp_tools`/`call_mcp_tool` (three reads per card), then answers with a card
-   or skips with a short reason. An invalid card gets one repair round; a skip keeps
+   `list_mcp_tools`/`call_mcp_tool` (three reads per card), then answers with a post
+   (text and card), says there is [nothing new](#posts), or skips with a short reason. An invalid card gets one repair round; a skip keeps
    the earlier card for another hour and is remembered on the topic (see
    [skipped topics](#skipped-topics)). Each card is saved as soon as it is ready, so
    the feed fills progressively.
@@ -158,9 +197,10 @@ of a run are composed, `home/review.ts` checks the feed without any model call:
    characters per side, marked untrusted), told to publish a revision only if its
    conversation adds newer or more complete facts and to skip otherwise. Web research
    and connectors are not used in a review.
-4. A revision replaces the card (new revision and generation time, so it shows in the
-   [badge](#new-card-badge)), moves the topic to the reviewer and sets the reason shown
-   on the card to "{contact} updated this with newer details from your chats". A skip
+4. A revision replaces the card (new revision and generation time), is posted as a reply
+   to the topic's latest post (so it shows in the [badge](#new-card-badge)), moves the
+   topic to the reviewer and sets the reason shown on its posts to "{contact} updated
+   this with newer details from your chats". A skip
    keeps the card. Each review is its own Workflow step with one retry and the run's
    revision fence.
 
@@ -236,8 +276,8 @@ Reads are limited to 90 per minute, writes to 20 per minute.
 
 | Route | Purpose |
 | --- | --- |
-| `GET /api/v1/home?timeZone=…` | The feed: `enabled`, `status`, `pending`, `briefing`, `progress`, `contributors`, `cards`, `topics`, `apps`, `agenda`. Records the view and the time zone, and starts a due run. |
-| `GET /api/v1/home/badge` | `{ unseen }`: active cards generated after the last visit (capped at 99, `0` when Updates are off). Never starts a run. |
+| `GET /api/v1/home?timeZone=…` | The feed: `enabled`, `status`, `pending`, `briefing`, `progress`, `contributors`, `cards`, `posts` (newest first; each `{ id, topicID, contactID, contactName, contactPhotoVersion, text, replyTo, reason, source, feedback, connector, createdAt, content }`), `topics`, `apps`, `agenda`. Records the view and the time zone, and starts a due run. |
+| `GET /api/v1/home/badge` | `{ unseen }`: posts of active topics published after the last visit (capped at 99, `0` when Updates are off). Never starts a run. |
 | `POST /api/v1/home/seen` | Record that Updates was opened (clears the badge). `GET /home` records it too. |
 | `POST /api/v1/home/refresh` | Request an update (409 when Updates are turned off). Returns the feed. |
 | `POST /api/v1/home/topics` `{ text }` | Follow something (1–400 characters, at most 20 active requests). Returns the feed (201). |
@@ -253,8 +293,9 @@ minutes count as one visit) in `mini_app_usage`.
 ## New-card badge
 
 Migration 0076 adds `home_feed.seen_at`, set on every feed read and by
-`POST /home/seen` (feeds from before it fall back to `viewed_at`). A card counts as
-new when its `generated_at` is later, so refreshed cards count again. Both clients
+`POST /home/seen` (feeds from before it fall back to `viewed_at`). Since migration 0086
+a post counts as new when its `created_at` is later (before it, a card's `generated_at`
+was counted); a topic with nothing new adds nothing. Both clients
 poll `GET /home/badge` every 15 seconds while signed in and active (iOS: the signed-in
 shell while the app is in the foreground; web: the chat list), not while Updates is
 the visible page. Opening Updates sets the local count to 0 at once, increments a
@@ -288,9 +329,29 @@ Migration `0074_home_feed.sql` adds `home_feed`, `home_topic`, `home_card`,
 versioned `HOME_FEED_ENABLED` var in `apps/api/wrangler.jsonc` turns curation runs
 on (`"true"`) or off. Runs use the existing `CHAT_WORKFLOW`, minute Cron, D1 and
 `META_API_KEY`; no new service, binding or secret. See
-[infrastructure](infrastructure.md#home-feed-migration-0074).
+[infrastructure](infrastructure.md#updates-feed-migration-0074). Migration
+`0086_home_posts.sql` adds `home_post` ([posts](#posts)), cascading with the account and
+the topic.
 
 ## Verification
+
+Posts, performed on 2026-11-01 on the `updates-posts` branch, before any release:
+
+- API and web type checks, and the whole-app iOS static type check.
+- Migrations 0001–0085 on a scratch local workerd D1 seeded with fictional rows, then
+  0086: existing cards were copied as text-less posts. The publish, retry (same id
+  rewrites), stale-revision fence, review reply, feed, badge, signals, no-news,
+  hide, retention and topic-cascade statements were run with literal values.
+- Live composer calls with `muse-spark-1.3-contributor` and fictional data (Spanish,
+  Argentina): a first post with a matches card, `no_news` when the evidence held
+  nothing newer than the earlier post, a post about only the new result when there
+  was one, and a review published as a reply ("Actualizo lo de Tomás: …").
+- Web rendering against a local mock API (desktop light timeline and thread, phone
+  dark timeline) with headless Chrome.
+
+Not verified for posts: a deployed curation run, iOS rendering on a simulator or
+device, the new-posts pill on either client with live polling, and how often contacts
+choose `no_news` over days of real use.
 
 Performed on 2026-10-30, before any release:
 

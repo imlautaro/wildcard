@@ -227,7 +227,7 @@ function act(kind: HomePostAction, prompt?: string) { menuOpen.value = false; em
 
       <footer class="post-actions">
         <AppIconButton icon="heart" label="More like this" size="small" class="like" :selected="card.feedback === 'more'" @click="act('more')" />
-        <AppIconButton v-if="card.contactID && !note" icon="chat" :label="`Reply to ${name} in chat`" size="small" @click="act('message')" />
+        <AppIconButton v-if="card.contactID && !(note && content.prompt)" icon="chat" :label="`Reply to ${name} in chat`" size="small" @click="act('message')" />
         <button v-if="!inThread && (threadCount ?? 0) > 1" class="thread-link link-button" @click="act('thread')">{{ threadCount }} posts in this thread</button>
       </footer>
     </div>

@@ -22,6 +22,7 @@ enum HomeDestination: Hashable {
     case joinContact
     case contactInvitations
     case receivedInvitation(ReceivedContactInvitation)
+    case updatesThread(String)
 }
 
 struct HomeView: View {
@@ -66,7 +67,8 @@ struct HomeView: View {
                     UpdatesView(
                         store: updates, following: $updatesFollowing, managing: $updatesManaging,
                         openContact: { id in destinations.append(.contact(id)) },
-                        openGroup: { id in destinations.append(.group(id)) }
+                        openGroup: { id in destinations.append(.group(id)) },
+                        openThread: { id in destinations.append(.updatesThread(id)) }
                     )
                 }
                 .badge(section == .updates ? 0 : updates.unseen)
@@ -323,6 +325,8 @@ struct HomeView: View {
             ReceivedContactInvitationView(invitation: invitation) { contactID in
                 destinations = [.contact(contactID)]
             }
+        case .updatesThread(let id):
+            HomeThreadView(store: updates, topicID: id) { destinations.append(.contact($0)) }
         case .sharing(let id):
             ContactSharingView(contactID: id, cache: contacts.sharingSnapshots.store(for: id))
         case .contact(let id):
