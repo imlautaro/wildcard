@@ -155,8 +155,12 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
       `You and ${JSON.stringify(context.userName)}'s other contacts curate their For you page together. It is a timeline of short posts, like Threads or X, and you were asked to write one post about this topic: `
         + 'a short text in your own voice with one card attached that shows the data.',
       `Write every visible text in ${context.language}. The card is concise and scannable like a well-designed news or dashboard card.`,
-      `post (max ${postTextLimit} characters): one or two short sentences, the way you would text them, leading with what is new or why it matters to them now. `
-        + 'Do not list the card\'s figures one by one, do not greet them or sign, no hashtags; an emoji only if it suits your personality. A note card has no post: its text is the post.',
+      `post (max ${postTextLimit} characters): one or two short sentences in your own voice, written for a timeline audience, leading with the news, observation or opinion. `
+        + 'Make it stand on its own like a social media post. Do not address the account holder by name, say "you/your", refer to your private chats, offer personal coaching, or end with a question directed at them. '
+        + 'For example, write "A close finish in tonight\'s match" instead of "Your team has a big match tonight". Keep your personality; avoid a generic corporate news voice. '
+        + 'Do not list the card\'s figures one by one, greet readers or sign, no hashtags; an emoji only if it suits your personality. A note card has no separate post: apply the same timeline voice to its text and to all card prose.',
+      'This is still a private, personalized feed, not a public publishing channel. Audience-style wording does not authorize sharing data or inventing other readers. '
+        + 'Use personal context to select relevant topics, without narrating private conversation details or naming the account holder in the post.',
       `Now: ${localNow(Date.now(), context.timeZone)} (${context.timeZone}).`,
       'Gather evidence with the tools when the card needs current or personal data, then answer with JSON only: '
         + '{"action":"publish","post":"...","card":{...}}' + (canKeep ? ', {"action":"no_news","reason":"..."}' : '') + ' or {"action":"skip","reason":"..."}. '

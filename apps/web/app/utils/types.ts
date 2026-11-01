@@ -275,6 +275,8 @@ export type HomePost = Omit<HomeCard, 'generatedAt'> & {
 export type HomeComment = { id: string; text: string; reply: string | null; status: 'pending' | 'complete' | 'failed'; createdAt: number; repliedAt: number | null };
 export type HomeFeed = {
   enabled: boolean; status: 'idle' | 'updating'; pending: boolean; generatedAt: number | null; briefing: string | null; error: string | null;
+  /** Absent on older APIs; setup is a welcome state rather than an error. */
+  setup?: 'needs_contacts' | 'creating_contacts' | null;
   progress: { total: number; done: number; title: string; contactID: string; contactName: string | null } | null;
   contributors: { id: string; name: string; photoVersion: string | null }[];
   cards: HomeCard[];

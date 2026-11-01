@@ -910,6 +910,11 @@ Photos use the existing private image cache. See [onboarding](onboarding.md) for
 API, privacy, freshness, retry limits and the pending browser/device checks.
 No browser or device validation or live generation has been performed.
 
+After setup, including opting out of AI contacts, the web client navigates directly
+to `/chats`, matching iOS. Running/completed setup recovery and an already-completed
+`/onboarding` redirect also open Chats. This lets the existing progress/retry UI
+lead the first visit; normal wide-screen `/` navigation still opens For you.
+
 ### Contact access to profile images
 
 Private and group replies use the shared API's read-only `view_profile_photo`
@@ -1292,7 +1297,8 @@ the image, matching iOS. See [link previews](link-previews.md).
 
 [For you](updates.md) opens at `/updates` from the Home button in the chat list
 header (also **Menu → For you**). It shows beside the chat list on wide screens and
-full width with a back button on narrow ones; `/` keeps the "Select a chat" pane.
+full width with a back button on narrow ones; `/` opens For you on wide screens and
+Chats on narrow screens. Completing onboarding opens Chats on either layout.
 Since migration 0086 it is a timeline of [posts](updates.md#posts) (`HomePost`): the
 contact's text above the card in a rounded frame, with a per-card accent, inline SVG
 charts and the link preview image for the lead headline. `?thread=<topic>` shows a
@@ -1304,6 +1310,24 @@ production API). **Update now**, **Topics** and **Follow** live in the page bar,
 "What should your contacts follow?" box opens Follow; the heart is More like this, the
 bubble opens the post's comments and ⋯ offers Message, Less like this and Hide. A note's suggested reply fills
 the contact's empty composer through `suggestDraft` and is never sent automatically.
+The header contains the title and feed controls, without the date, greeting,
+briefing or contributor summary. Timeline posts have 24px top and 20px bottom
+padding, matching iOS; topic threads keep their compact connected layout. Follow
+uses the generic "A topic you’re interested in…" placeholder. New post and card
+prose uses a standalone timeline voice instead of addressing the account holder;
+the feed remains private and existing posts retain their text.
+
+The API's optional `setup` field distinguishes contacts still being created
+(**Go to Chats**), no available contacts (**Add a contact**, opening Contacts),
+and a ready circle without posts (**Start a chat** / **Follow something**). No-contact
+states suppress the former error, composer and add/update controls; genuine first
+request failures still show Retry. Creating-contact feeds poll every four seconds,
+setup reopens force background revalidation and contact readiness changes while
+the feed is mounted mark its cached response stale. The old `HOME_NO_CONTACTS`
+code falls back to the same welcome UI. Server dispatch waits for a ready contact
+before starting curation; no new cache, migration or infrastructure is introduced.
+These changes match iOS; signup/readiness transitions and visual/model behavior
+still need browser/device verification with fictional data.
 Behavior, copy and caching match the iOS For you tab (`useHome`, see
 [caching](caching.md#updates-feed)). The Home button and the menu item carry the
 [new-card badge](updates.md#new-card-badge) (migration 0076), polled by the chat list

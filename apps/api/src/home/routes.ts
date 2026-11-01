@@ -6,7 +6,7 @@ import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { parseSpec } from '../miniapps/spec';
 import { homeLimits } from './curator';
 import { dispatchHome, homeEnabled, postRetention } from './workflow';
-import { topicColumns, type HomeTopicRow } from './signals';
+import { homeSetup, topicColumns, type HomeTopicRow } from './signals';
 import { commentLimits, type HomeCommentJob } from './comments';
 
 // For you feed for the signed-in person (docs/updates.md; the API keeps the `home` name). Cards come from curation
@@ -38,7 +38,7 @@ const timelinePosts = 50;
 
 export async function homeFeed(env: Env, owner: string) {
   const now = Date.now();
-  const [state, cards, posts, topics, apps, schedules, tasks] = await Promise.all([
+  const [state, cards, posts, topics, apps, schedules, tasks, setup] = await Promise.all([
     env.DB.prepare(`SELECT status, generated_at AS generatedAt, briefing, progress_json AS progressJSON, error_code AS errorCode,
       due_at AS dueAt, requested_at AS requestedAt FROM home_feed WHERE user_id = ?`).bind(owner).first<FeedRow>(),
     env.DB.prepare(`SELECT card.id, card.topic_id AS topicID, card.contact_id AS contactID, COALESCE(c.alias, c.name) AS contactName, c.photo_version AS photoVersion,
@@ -76,6 +76,7 @@ export async function homeFeed(env: Env, owner: string) {
         AND (l.user_id = ?1 OR EXISTS (SELECT 1 FROM group_member m WHERE m.group_id = l.group_id AND m.user_id = ?1))
       ORDER BY t.updated_at DESC LIMIT 4`).bind(owner)
       .all<{ id: string; title: string; contactID: string | null; groupID: string | null; name: string | null }>(),
+    homeSetup(env.DB, owner),
   ]);
   const { results: comments } = posts.results.length ? await env.DB.prepare(`SELECT id, post_id AS postID, text, reply_text AS reply, status,
       created_at AS createdAt, replied_at AS repliedAt FROM home_comment
@@ -87,10 +88,12 @@ export async function homeFeed(env: Env, owner: string) {
   for (const card of [...cards.results, ...posts.results]) if (card.contactID && card.contactName) contributors.set(card.contactID, { id: card.contactID, name: card.contactName, photoVersion: card.photoVersion });
   return {
     enabled: homeEnabled(env),
-    status: state?.status === 'running' ? 'updating' : 'idle',
+    setup,
+    status: !setup && state?.status === 'running' ? 'updating' : 'idle',
     // A requested or first run that the minute Cron has not started yet is shown as updating.
-    pending: state?.status !== 'running' && !!state && state.dueAt <= now && (state.requestedAt !== null || state.generatedAt === null) && homeEnabled(env),
-    generatedAt: state?.generatedAt ?? null, briefing: state?.briefing ?? null, error: state?.errorCode ?? null,
+    pending: !setup && state?.status !== 'running' && !!state && state.dueAt <= now && (state.requestedAt !== null || state.generatedAt === null) && homeEnabled(env),
+    generatedAt: state?.generatedAt ?? null, briefing: state?.briefing ?? null,
+    error: setup || state?.errorCode === 'HOME_NO_CONTACTS' ? null : state?.errorCode ?? null,
     progress: progress ? { ...progress, contactName: [...contributors.values()].find(item => item.id === progress.contactID)?.name
       ?? (await env.DB.prepare('SELECT COALESCE(alias, name) AS name FROM contact WHERE id = ? AND user_id = ?').bind(progress.contactID, owner).first<{ name: string }>())?.name ?? null } : null,
     contributors: [...contributors.values()],
@@ -139,7 +142,7 @@ home.get('/', async c => {
     ON CONFLICT(user_id) DO UPDATE SET viewed_at = ?2, time_zone = COALESCE(?3, home_feed.time_zone)
     WHERE home_feed.viewed_at < ?2 - 600000 OR (?3 IS NOT NULL AND home_feed.time_zone IS NOT ?3)`).bind(owner, now, timeZone).run();
   await markSeen(c.env, owner, now);
-  const due = await c.env.DB.prepare(`SELECT 1 FROM home_feed WHERE user_id = ? AND status = 'idle' AND due_at <= ?`).bind(owner, now).first();
+  const due = await c.env.DB.prepare(`SELECT 1 FROM home_feed WHERE user_id = ? AND status = 'idle' AND (due_at <= ? OR error_code = 'HOME_NO_CONTACTS')`).bind(owner, now).first();
   if (due && homeEnabled(c.env)) c.executionCtx.waitUntil(dispatchHome(c.env, owner).catch(() => console.error(JSON.stringify({ event: 'home_dispatch_deferred' }))));
   return c.json(await homeFeed(c.env, owner));
 });

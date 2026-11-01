@@ -7,6 +7,6 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const signedIn = status.value === 'signed-in';
   if (!signedIn && to.path !== '/sign-in') return navigateTo('/sign-in');
   if (signedIn && user.value?.onboardingRequired && to.path !== '/onboarding') return navigateTo('/onboarding');
-  if (signedIn && !user.value?.onboardingRequired && to.path === '/onboarding') return navigateTo('/');
+  if (signedIn && !user.value?.onboardingRequired && to.path === '/onboarding') return navigateTo('/chats');
   if (signedIn && to.path === '/sign-in') return navigateTo('/');
 });

@@ -1525,6 +1525,22 @@ deduplicated. `POST /home/refresh`, `POST /home/topics` and `PATCH /home/topics/
 return the whole feed, which replaces the cached one; a mutation increments the
 store revision so a read that started earlier cannot overwrite it. Transient
 failures keep the cached cards; only a failed first load shows an error with Retry.
+The feed's optional `setup` field shares that same memory-only snapshot, including
+empty states. Creating-contact feeds poll every four seconds with forced refresh;
+reopening any setup state revalidates immediately in the background. Changes to
+contact IDs, pending-setup, clearing or archive state mark the feed stale and reject
+older reads (web while the feed is mounted, iOS from the signed-in shell). iOS
+revalidates immediately when For you is selected; otherwise the next open reads it.
+An older canceled iOS read only clears its own revision's request slot, preserving
+deduplication for the replacement read when contact readiness changes mid-request.
+The server decides eligibility, so a partial client contact list never proves the
+account has no contacts. Legacy `HOME_NO_CONTACTS` is rendered as a welcome state.
+No extra cache or persistence is added, and ordinary ready feeds retain the
+60-second freshness window. The simplified header and larger post spacing do not
+change feed keys or retention; new model wording does not rewrite cached posts.
+Verify first signup with/without AI contacts, generation-to-ready and add/delete/
+archive transitions, reopen/back, empty/offline recovery and account switching on
+both clients; static validation does not establish those device behaviors.
 Hiding a topic removes its card and posts in the returned feed at once. The timeline
 ([posts](updates.md#posts)) is part of the same feed response: at most 50 posts, never
 paginated, and a thread is filtered from the cached feed, so it opens synchronously and

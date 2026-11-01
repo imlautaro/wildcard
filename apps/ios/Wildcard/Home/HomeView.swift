@@ -52,6 +52,9 @@ struct HomeView: View {
     @State private var invitations = ContactInvitationsStore()
 
     private var totalUnreadCount: Int { contacts.totalUnreadCount + groups.totalUnreadCount }
+    private var feedContacts: [String] {
+        contacts.contacts.map { "\($0.id):\($0.setupPending ?? 0):\($0.clearing ?? 0):\($0.archivedAt ?? 0)" }.sorted()
+    }
 
     var body: some View {
         NavigationStack(path: $destinations) {
@@ -67,6 +70,7 @@ struct HomeView: View {
                 Tab("For you", systemImage: "house", value: Section.updates) {
                     UpdatesView(
                         store: updates, following: $updatesFollowing, managing: $updatesManaging,
+                        openChats: { section = .chats },
                         openContact: { id in destinations.append(.contact(id)) },
                         openGroup: { id in destinations.append(.group(id)) },
                         openThread: { id in destinations.append(.updatesThread(id)) },
@@ -87,7 +91,7 @@ struct HomeView: View {
                             Button { Task { try? await updates.requestUpdate(using: auth) } } label: {
                                 Label("Update now", systemImage: "arrow.clockwise")
                             }
-                            .disabled(updates.feed?.enabled != true || updates.feed?.isUpdating == true)
+                            .disabled(updates.feed?.enabled != true || updates.feed?.isUpdating == true || updates.feed?.setupState != nil)
                             Button { updatesManaging = true } label: { Label("Topics", systemImage: "list.bullet.rectangle") }
                         } label: {
                             Image(systemName: "ellipsis")
@@ -95,10 +99,12 @@ struct HomeView: View {
                         .tint(Color(uiColor: .label))
                         .accessibilityLabel("For you options")
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button { updatesFollowing = true } label: { Image(systemName: "plus") }
-                            .tint(Color(uiColor: .label))
-                            .accessibilityLabel("Follow something in For you")
+                    if updates.feed?.setupState == nil {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button { updatesFollowing = true } label: { Image(systemName: "plus") }
+                                .tint(Color(uiColor: .label))
+                                .accessibilityLabel("Follow something in For you")
+                        }
                     }
                 }
                 if section == .chats && destinations.isEmpty {
@@ -216,6 +222,12 @@ struct HomeView: View {
         }
         .environment(contacts)
         .environment(invitations)
+        .onChange(of: feedContacts) { _, _ in
+            updates.markStale()
+            if section == .updates {
+                Task { await updates.refresh(using: auth, force: true) }
+            }
+        }
         .onChange(of: contacts.aliasRevision) { _, _ in
             // Groups, For you and shared boards render names the server resolved with the old alias.
             groups.conversations.aliasChanged()

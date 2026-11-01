@@ -24,7 +24,7 @@ async function update() {
     // Progressive setup lets the person into the app while the circle is still being created.
     if (snapshot.value?.status === 'complete' || running.value) {
       await refreshProfile();
-      if (!disposed && !user.value?.onboardingRequired) await navigateTo('/');
+      if (!disposed && !user.value?.onboardingRequired) await navigateTo('/chats');
     }
   } catch (failure) { if (!disposed) error.value = errorMessage(failure); }
   finally { updating = false; if (!disposed) timer = setTimeout(update, running.value ? 3000 : 10000); }
@@ -35,7 +35,7 @@ async function start() {
     await submit();
     // The person enters the app right away; contacts keep being created in the chat list.
     await refreshProfile();
-    if (!disposed && !user.value?.onboardingRequired) await navigateTo('/');
+    if (!disposed && !user.value?.onboardingRequired) await navigateTo('/chats');
   }
   catch (failure) { error.value = errorMessage(failure); }
 }

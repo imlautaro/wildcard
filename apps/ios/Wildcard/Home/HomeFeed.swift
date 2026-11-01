@@ -48,6 +48,8 @@ struct HomeFeed: Decodable, Sendable {
     let enabled: Bool
     let status: String
     let pending: Bool
+    /// Optional for compatibility with an older API. Setup is a welcome state, not a failure.
+    let setup: String?
     let generatedAt: Double?
     let briefing: String?
     let error: String?
@@ -60,7 +62,8 @@ struct HomeFeed: Decodable, Sendable {
     let apps: [App]
     let agenda: [AgendaItem]
 
-    var isUpdating: Bool { status == "updating" || pending }
+    var setupState: String? { setup ?? (error == "HOME_NO_CONTACTS" ? "needs_contacts" : nil) }
+    var isUpdating: Bool { setupState == nil && (status == "updating" || pending) }
 
     /// A contact is answering a comment: poll like a run so the reply shows up soon.
     var isReplying: Bool { posts?.contains { $0.comments?.contains { $0.status == "pending" } == true } == true }
@@ -215,8 +218,8 @@ final class HomeFeedStore {
 
     var isStale: Bool { loadedAt.map { Date.now.timeIntervalSince($0) > 60 } ?? true }
 
-    /// Names in cards and the briefing are resolved per viewer; after an alias change drop the freshness
-    /// window and reject in-flight reads, keeping the last feed on screen until the refetch lands.
+    /// Alias and contact-readiness changes drop freshness and reject in-flight reads,
+    /// keeping the last feed on screen until the refetch lands.
     func markStale() {
         revision += 1
         request?.cancel()
@@ -242,7 +245,7 @@ final class HomeFeedStore {
         }
         request = task
         await task.value
-        request = nil
+        if started == revision { request = nil }
     }
 
     /// Polled by the signed-in shell; never revives a badge cleared while a read was in flight.

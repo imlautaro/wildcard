@@ -11,6 +11,7 @@ const home = useHome();
 const chats = useChats();
 const { user } = useSession();
 const feed = computed<HomeFeed | null>(() => home.state.value);
+const setup = computed(() => feed.value?.setup ?? (feed.value?.error === 'HOME_NO_CONTACTS' ? 'needs_contacts' : null));
 const updating = computed(() => homeUpdating(feed.value));
 const following = ref(false);
 const managing = ref(false);
@@ -54,32 +55,26 @@ function openPost(postID: string | null) {
   page.value?.scrollTo({ top: 0 });
 }
 
-const greeting = computed(() => {
-  const hour = new Date().getHours();
-  const part = hour < 5 ? 'Good evening' : hour < 12 ? 'Good morning' : hour < 19 ? 'Good afternoon' : 'Good evening';
-  const name = user.value?.name.split(' ')[0];
-  return name ? `${part}, ${name}` : part;
-});
-const today = new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
-const curators = computed(() => new Intl.ListFormat('en', { type: 'conjunction' }).format(feed.value?.contributors.map(item => item.name) ?? []));
 const notice = computed(() => {
   if (home.state.error && !feed.value) return home.state.error;
   if (!feed.value) return null;
   if (!feed.value.enabled) return 'Curated cards are turned off on this server. Your apps and agenda still show here.';
-  if (updating.value || !feed.value.error) return null;
-  return feed.value.error === 'HOME_NO_CONTACTS' ? 'Add a contact so they can start curating your updates.'
-    : 'Your contacts couldn’t finish your updates. They’ll try again in a few minutes.';
+  if (setup.value || updating.value || !feed.value.error) return null;
+  return 'Your contacts couldn’t finish your updates. They’ll try again in a few minutes.';
 });
 // A failed first load is an error; the other notices explain the feed's state.
 const noticeTone = computed(() => home.state.error && !feed.value ? 'error'
   : feed.value?.enabled && feed.value.error && feed.value.error !== 'HOME_NO_CONTACTS' ? 'warning' : 'info');
 
 // Poll quickly while contacts prepare posts or answer a comment.
-const busyFeed = () => homeUpdating(home.state.value) || homeReplying(home.state.value);
+const busyFeed = () => home.state.value?.setup === 'creating_contacts' || homeUpdating(home.state.value) || homeReplying(home.state.value);
 const polling = usePolling(() => home.refresh(busyFeed()), () => busyFeed() ? 4000 : 60_000);
 // The interval is chosen after each tick, so a comment or Update now must not wait out a 60-second timer.
 watch(busyFeed, busy => { if (busy) void polling.now(); });
-onMounted(() => { updatesOpened(true); void home.refresh(); });
+// Contact readiness can change while setup finishes or a contact is added/removed.
+// The server decides availability; the local list only invalidates the existing snapshot.
+watch(() => chats.contacts.value.map(contact => `${contact.id}:${contact.setupPending ?? 0}:${contact.clearing ?? 0}:${contact.archivedAt ?? ''}`).sort().join('|'), () => staleHome());
+onMounted(() => { updatesOpened(true); void home.refresh(!!setup.value); });
 onBeforeUnmount(() => updatesOpened(false));
 
 async function run(operation: () => Promise<unknown>) {
@@ -157,24 +152,11 @@ function origin(topic: HomeFeed['topics'][number]) {
     <AppTopBar title="For you">
       <template #leading><AppIconButton to="/chats" icon="back" label="Chats" class="back" :tooltip="false" /></template>
       <AppIconButton icon="list" label="Topics" @click="managing = true" />
-      <AppIconButton icon="refresh" label="Update now" :disabled="!feed?.enabled || updating || busy" @click="run(home.update)" />
-      <AppIconButton icon="plus" label="Follow something in For you" variant="filled" @click="following = true" />
+      <AppIconButton v-if="!setup" icon="refresh" label="Update now" :disabled="!feed?.enabled || updating || busy" @click="run(home.update)" />
+      <AppIconButton v-if="!setup" icon="plus" label="Follow something in For you" variant="filled" @click="following = true" />
     </AppTopBar>
     <div class="home-inner">
-      <section class="home-hero">
-        <p class="home-date">{{ today }}</p>
-        <h2 class="home-greeting">{{ greeting }}</h2>
-        <p v-if="feed?.briefing" class="home-briefing">{{ feed.briefing }}</p>
-        <div v-if="feed?.contributors.length" class="home-curators">
-          <span class="stack">
-            <AppAvatar v-for="contributor in feed.contributors.slice(0, 5)" :key="contributor.id" :name="contributor.name"
-              :path="contactPhotoPath(contributor)" :size="28" />
-          </span>
-          <span>Curated by {{ curators }}</span>
-        </div>
-      </section>
-
-      <div v-if="updating" class="home-status" role="status">
+      <div v-if="updating && !setup" class="home-status" role="status">
         <template v-if="feed?.progress">
           <AppAvatar :name="feed.progress.contactName ?? '?'" :path="progressPhoto" :size="24" />
           <span class="grow">{{ feed.progress.contactName ?? 'A contact' }} is preparing {{ feed.progress.title }}</span>
@@ -188,7 +170,7 @@ function origin(topic: HomeFeed['topics'][number]) {
       </AppNotice>
       <AppNotice v-if="actionError">{{ actionError }}</AppNotice>
 
-      <button class="composer" @click="following = true">
+      <button v-if="!setup" class="composer" @click="following = true">
         <AppAvatar :name="user?.name ?? ''" :path="myPhoto" :size="36" />
         <span class="composer-hint">What should your contacts follow?</span>
         <span class="composer-action">Follow</span>
@@ -215,19 +197,30 @@ function origin(topic: HomeFeed['topics'][number]) {
         <HomePost v-for="post in posts" :key="post.id" :post="post" :thread-count="threadCounts.get(post.topicID)"
           @action="(kind, prompt) => act(post, kind, prompt)" />
       </div>
+      <AppEmptyState v-else-if="setup === 'creating_contacts'" class="home-empty" icon="sparkle" title="Your circle is taking shape"
+        text="Your contacts are being created. Head to Chats to meet each one as soon as they’re ready. Posts will appear here as you get to know them.">
+        <template #actions><AppButton to="/chats">Go to Chats</AppButton></template>
+      </AppEmptyState>
+      <AppEmptyState v-else-if="setup === 'needs_contacts'" class="home-empty" icon="sparkle" title="Make yourself at home"
+        text="Add your first contact and start a conversation. This feed will fill with posts about the things you’re into.">
+        <template #actions><AppButton to="/contacts" icon="plus">Add a contact</AppButton></template>
+      </AppEmptyState>
       <div v-else-if="updating || (!feed && !home.state.error)" class="timeline" aria-hidden="true">
         <div v-for="index in 3" :key="index" class="placeholder"><span class="avatar-dot" /><span class="lines"><span /><span /><span /></span></div>
       </div>
-      <AppEmptyState v-else-if="feed?.enabled" class="home-empty" icon="sparkle" title="Your contacts are getting to know you"
-        text="As you chat, they’ll bring news, figures and reminders about what matters to you here. You can also tell them what to follow.">
-        <template #actions><AppButton @click="following = true">Follow something</AppButton></template>
+      <AppEmptyState v-else-if="feed?.enabled" class="home-empty" icon="sparkle" title="A feed that grows with you"
+        text="Chat with your contacts or follow a topic you’re into. They’ll bring fresh posts here when there’s something to share.">
+        <template #actions>
+          <AppButton to="/chats">Start a chat</AppButton>
+          <AppButton variant="text" @click="following = true">Follow something</AppButton>
+        </template>
       </AppEmptyState>
     </div>
 
     <AppSheet v-if="following" title="Follow in For you" @close="following = false">
       <form id="home-follow" @submit.prevent="follow">
         <textarea v-model="followText" class="follow-input" rows="3" maxlength="400" autofocus
-          placeholder="For example: processing times for my I-130" aria-label="What should your contacts follow?" />
+          placeholder="A topic you’re interested in…" aria-label="What should your contacts follow?" />
         <p class="muted small">Your contacts decide how to show it and who keeps it up to date. Public questions may be searched on the web.</p>
       </form>
       <template #actions>
@@ -258,15 +251,6 @@ function origin(topic: HomeFeed['topics'][number]) {
 .home-inner { width: 100%; max-width: 640px; margin: 0 auto; padding: 0 0 var(--space-12); display: flex; flex-direction: column; gap: var(--space-3); }
 /* The column's gap spaces the notices. */
 .home-inner > .notice, .home-inner > .home-status { margin: 0 var(--space-4); }
-.home-hero, .follow-more { padding-inline: var(--space-4); }
-.home-hero { display: flex; flex-direction: column; gap: var(--space-1-5); padding-top: var(--space-1); }
-.home-date { margin: 0; font: var(--type-label-medium); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--md-on-surface-variant); }
-.home-greeting { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
-.home-briefing { margin: 0; font-size: 15px; line-height: 1.45; color: var(--md-on-surface-variant); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.home-curators { display: flex; align-items: center; gap: var(--space-2); font-size: 13px; font-weight: 600; color: var(--md-on-surface-variant); margin-top: var(--space-1); }
-.home-curators .stack { display: inline-flex; }
-.home-curators .stack > * + * { margin-left: calc(-1 * var(--space-1)); }
-.home-curators .stack :deep(.avatar) { box-shadow: 0 0 0 2px var(--md-surface); }
 .home-status { display: flex; align-items: center; gap: 10px; padding: 10px var(--space-4); border-radius: var(--md-shape-full); background: var(--md-secondary-container);
   color: var(--md-on-secondary-container); font: var(--type-label-large); align-self: flex-start; max-width: 100%; }
 .home-status .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -287,6 +271,8 @@ function origin(topic: HomeFeed['topics'][number]) {
 .app-tile .mini-app-glyph { width: 28px; height: 28px; border-radius: 50%; }
 .app-tile .mini-app-glyph :deep(svg) { width: 16px; height: 16px; }
 .timeline { display: flex; flex-direction: column; border-top: 1px solid var(--md-outline-variant); }
+.timeline > :deep(.home-post) { padding-top: var(--space-6); padding-bottom: var(--space-5); }
+.thread .timeline > :deep(.home-post) { padding-top: var(--space-3); padding-bottom: var(--space-1); }
 .placeholder { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--md-outline-variant); animation: pulse 1.4s ease-in-out infinite alternate; }
 .placeholder .avatar-dot { width: 40px; height: 40px; border-radius: 50%; background: var(--md-surface-container-high); }
 .placeholder .lines { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-1); }

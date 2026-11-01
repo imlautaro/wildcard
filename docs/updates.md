@@ -17,6 +17,10 @@ The feature first shipped as "Home" (default tab), became "Updates" on
 iOS uses the `house` SF Symbol; web uses the shared `home` icon. This changes
 labels and presentation only: `/updates`, API paths, storage, badges, navigation
 defaults and session cache behavior remain unchanged.
+The 2026-11-01 feed refinement removes the date, greeting, briefing and contributor
+summary from both clients. The page title and feed controls lead straight into the
+follow box and timeline. Timeline posts have 24 points/pixels above and 20 below,
+with separators; topic threads keep their compact connected layout.
 The API and storage keep that original name: `/api/v1/home`, the `home_*` tables,
 `HOME_FEED_ENABLED` and the `apps/api/src/home/` module; client data types are
 `HomeFeed`/`HomeCard`.
@@ -35,8 +39,8 @@ This is a first implementation (2026-10-30). See [verification](#verification).
   new posts nothing. Requests within a
   minute of the previous one are ignored.
 - **Follow something** (**+**, or the "What should your contacts follow?" box above
-  the timeline): describe what to follow ("processing times for my I-130"). The
-  curator picks the layout and the contact on the next run.
+  the timeline): describe a topic of interest. The field prompts "A topic you’re
+  interested in…". The curator picks the layout and the contact on the next run.
 - **Post actions**: the heart is **More like this** and the bubble (with the comment
   count) opens the post to [comment](#comments) on it. ⋯ (or a long press on iOS) offers **Message {contact}**, **Less like
   this** and **Hide from For you**. Feedback is per topic, so every post on a topic shows
@@ -68,6 +72,43 @@ This is a first implementation (2026-10-30). See [verification](#verification).
 
 Fixed interface copy is English like the rest of the app; card text is written by
 the contacts in the language the person uses with them.
+
+## First visit and empty feeds
+
+After setup, both clients open **Chats**, where the existing first-circle progress,
+ready contacts and retry action are available. Web onboarding navigates directly
+to `/chats`, including the redirect from an already-finished `/onboarding`; normal
+wide-screen `/` visits still open For you.
+
+The feed response includes optional `setup`: `creating_contacts`, `needs_contacts`
+or `null`. The server derives it from the person's current contacts and onboarding
+status, with the same eligibility used for dispatch and signal selection: an
+unarchived contact, not clearing history and no longer `setup_pending`.
+
+- **Creating contacts**: "Your circle is taking shape", with **Go to Chats**.
+- **No ready contacts and none being created**: "Make yourself at home", with
+  **Add a contact** opening Contacts (where creation and shared-contact joining live).
+- **Ready contacts without posts**: "A feed that grows with you", with **Start a
+  chat** and **Follow something**. Actual feed generation still shows progress.
+
+These are welcome states, not failures. The follow box and add/update controls
+wait until contacts are ready; apps and agenda remain accessible. Cached posts
+remain visible if contacts become unavailable. Older APIs' `HOME_NO_CONTACTS`
+maps to the no-contact welcome state in both clients. Actual request failures
+still offer Retry.
+
+Dispatch waits for a ready contact before claiming a Workflow or invoking a model.
+A feed already viewed remains due while empty, so the next GET or minute Cron can
+start it when the first contact becomes ready. Legacy no-contact failures are
+eligible immediately once a contact is ready. If contacts disappear between
+dispatch and planning, the run finishes as waiting, without an error or advancing
+`generated_at`, and becomes due again in a minute. No new schema or service is needed.
+
+Setup snapshots use the existing session feed cache. While contacts are being
+created, visible feeds poll every four seconds. Returning to a setup state
+revalidates in the background immediately, and changes to contact identity/readiness
+invalidate the snapshot (while mounted on web; from the iOS shell). The server,
+not the client list, decides readiness. See [caching](caching.md#updates-feed).
 
 ## Cards
 
@@ -101,8 +142,14 @@ still returned as `cards`; every published card is also appended to `home_post` 
 post:
 
 - **Text**: one or two short sentences (at most 280 characters) in the contact's
-  voice, leading with what is new, without greetings, signatures or hashtags. A note
-  card has no separate text: its text is the post. Cards published before posts
+  voice, written as a standalone social timeline post: lead with the news,
+  observation or opinion, without addressing the account holder, "you/your",
+  private-chat callbacks, personal coaching or a closing question aimed at them.
+  Card prose and note text follow the same direction, without greetings,
+  signatures or hashtags. Personal context still selects relevant topics; this
+  wording does not publish data, add readers or change feed access. These are model
+  instructions, not a deterministic language filter; existing posts are preserved.
+  A note card has no separate text: its text is the post. Cards published before posts
   existed were copied as posts without text, which show the card alone.
 - **Nothing new**: a contact recomposing a topic sees its previous card and up to three
   earlier posts on the topic (dated) and may answer `{"action":"no_news"}`. Nothing is
@@ -161,7 +208,8 @@ directly by an API request, with one durable step per stage:
 1. **Plan** (one model call, structured output). The editor reads the person's
    [signals](#what-updates-reads) and returns 2–8 topics in order, each with a layout,
    the contact that prepares it, whether it needs web research or a connector, a
-   reason shown to the person, plus a one-sentence briefing for the header. Topics
+   reason shown to the person, plus a one-sentence briefing retained in the API for
+   compatibility (current clients omit it from the header). Topics
    the person or a contact asked for are always kept; curator topics left out are
    retired with their cards once those cards are stale (a fresh card is never
    discarded by one plan). Retired topics are deleted after seven days. Hidden topics are given to the editor as "do not
@@ -416,6 +464,13 @@ figures can be days old, which cards are instructed to state.
 
 ## Limitations
 
+- The 2026-11-01 spacing, header, post-voice and first-visit refinements have only
+  static validation: API/web type checks, complete iOS Simulator Swift type checking
+  with the project's MainActor setting, and preparation of five changed SQL
+  statements against 86 migrations in an empty in-memory SQLite schema. No builds,
+  functional tests, live inference or persistent migrations were run. Browser/device layout, signup with and without AI contacts,
+  readiness transitions, offline/reopen/account switching and actual generated
+  wording still require functional verification with fictional data.
 - Native device reminders (EventKit) are not read; the agenda covers server-side
   schedules and tasks.
 - Group mini apps appear in quick access, but group conversations are not used as

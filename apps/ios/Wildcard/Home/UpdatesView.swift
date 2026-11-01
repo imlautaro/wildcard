@@ -6,6 +6,7 @@ struct UpdatesView: View {
     let store: HomeFeedStore
     @Binding var following: Bool
     @Binding var managing: Bool
+    let openChats: () -> Void
     let openContact: (String) -> Void
     let openGroup: (String) -> Void
     let openThread: (String) -> Void
@@ -24,15 +25,14 @@ struct UpdatesView: View {
 
     private var feed: HomeFeed? { store.feed }
     private var posts: [HomePost] { feed?.timeline ?? [] }
-    private var busy: Bool { feed?.isUpdating == true || feed?.isReplying == true }
+    private var busy: Bool { feed?.setupState == "creating_contacts" || feed?.isUpdating == true || feed?.isReplying == true }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 14) {
-                        header
-                        composer
+                        if feed?.setupState == nil { composer }
                         if let feed, feed.isUpdating { HomeStatusPill(feed: feed) }
                         if let message = notice { noticeView(message) }
                     }
@@ -77,7 +77,7 @@ struct UpdatesView: View {
         // Restarts when a run starts or ends, so Update now never waits out a 60-second sleep.
         .task(id: "\(scenePhase)-\(busy)") {
             guard scenePhase == .active else { return }
-            await store.refresh(using: auth, force: busy)
+            await store.refresh(using: auth, force: busy || feed?.setupState != nil)
             // Poll briefly while contacts are preparing posts or answering; otherwise revalidate stale data.
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(busy ? 4 : 60)) } catch { return }
@@ -90,39 +90,6 @@ struct UpdatesView: View {
         .alert("For you", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
-    }
-
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: .now)
-        let part = hour < 5 ? "Good evening" : hour < 12 ? "Good morning" : hour < 19 ? "Good afternoon" : "Good evening"
-        let name = auth.user?.name.split(separator: " ").first.map(String.init)
-        return name.map { "\(part), \($0)" } ?? part
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
-                .manrope(.caption, weight: .bold).foregroundStyle(.secondary).kerning(0.6)
-            Text(greeting).manrope(.title, weight: .extraBold)
-            if let briefing = feed?.briefing, !briefing.isEmpty {
-                Text(briefing).manrope(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            if let contributors = feed?.contributors, !contributors.isEmpty {
-                HStack(spacing: 8) {
-                    HStack(spacing: -8) {
-                        ForEach(contributors.prefix(5)) { contributor in
-                            ContactAvatar(contact: contacts.contact(id: contributor.id), size: 26)
-                                .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
-                        }
-                    }
-                    Text("Curated by \(contributors.map(\.name).formatted(.list(type: .and)))")
-                        .manrope(.footnote, weight: .semibold).foregroundStyle(.secondary).lineLimit(2)
-                }
-                .padding(.top, 2)
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .padding(.top, 8)
     }
 
     /// Like a social app's "What's new?" box: opens the follow sheet.
@@ -148,10 +115,9 @@ struct UpdatesView: View {
         if let error = store.error, feed == nil { return error }
         guard let feed else { return nil }
         if !feed.enabled { return "Curated cards are turned off on this server. Your apps and agenda still show here." }
-        if feed.isUpdating { return nil }
+        if feed.setupState != nil || feed.isUpdating { return nil }
         switch feed.error {
         case nil: return nil
-        case "HOME_NO_CONTACTS": return "Add a contact so they can start curating your updates."
         default: return "Your contacts couldn’t finish your updates. They’ll try again in a few minutes."
         }
     }
@@ -225,7 +191,9 @@ struct UpdatesView: View {
     @ViewBuilder private var timeline: some View {
         if posts.isEmpty {
             Group {
-                if feed?.isUpdating == true || (feed == nil && store.error == nil) {
+                if feed?.setupState != nil {
+                    empty
+                } else if feed?.isUpdating == true || (feed == nil && store.error == nil) {
                     ForEach(0..<3, id: \.self) { index in HomeCardPlaceholder(height: index == 0 ? 220 : 150) }
                 } else if feed?.enabled == true {
                     empty
@@ -238,6 +206,7 @@ struct UpdatesView: View {
                 Divider()
                 ForEach(posts) { post in
                     HomePostView(post: post, threadCount: counts[post.topicID] ?? 0) { action in handle(action, post: post) }
+                        .padding(.top, 12).padding(.bottom, 16)
                         .transition(.opacity)
                     Divider()
                 }
@@ -248,14 +217,38 @@ struct UpdatesView: View {
     private var empty: some View {
         VStack(spacing: 12) {
             Image(systemName: "house").font(.system(size: 40)).foregroundStyle(Color.accentColor)
-            Text("Your contacts are getting to know you").manrope(.headline, weight: .bold).multilineTextAlignment(.center)
-            Text("As you chat, they’ll bring news, figures and reminders about what matters to you here. You can also tell them what to follow.")
+            Text(emptyTitle).manrope(.headline, weight: .bold).multilineTextAlignment(.center)
+            Text(emptyMessage)
                 .manrope(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Button("Follow something") { following = true }.buttonStyle(.glassProminent).manrope(.subheadline, weight: .semibold)
+            if feed?.setupState == "needs_contacts" {
+                NavigationLink(value: HomeDestination.contacts) { Text("Add a contact") }
+                    .buttonStyle(.glassProminent).manrope(.subheadline, weight: .semibold)
+            } else if feed?.setupState == "creating_contacts" {
+                Button("Go to Chats", action: openChats).buttonStyle(.glassProminent).manrope(.subheadline, weight: .semibold)
+            } else {
+                Button("Start a chat", action: openChats).buttonStyle(.glassProminent).manrope(.subheadline, weight: .semibold)
+                Button("Follow something") { following = true }.manrope(.subheadline, weight: .semibold)
+            }
         }
         .padding(24)
         .frame(maxWidth: .infinity)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: HomeStyle.corner, style: .continuous))
+    }
+
+    private var emptyTitle: String {
+        switch feed?.setupState {
+        case "needs_contacts": "Make yourself at home"
+        case "creating_contacts": "Your circle is taking shape"
+        default: "A feed that grows with you"
+        }
+    }
+
+    private var emptyMessage: String {
+        switch feed?.setupState {
+        case "needs_contacts": "Add your first contact and start a conversation. This feed will fill with posts about the things you’re into."
+        case "creating_contacts": "Your contacts are being created. Head to Chats to meet each one as soon as they’re ready. Posts will appear here as you get to know them."
+        default: "Chat with your contacts or follow a topic you’re into. They’ll bring fresh posts here when there’s something to share."
+        }
     }
 
     private func handle(_ action: HomeCardAction, post: HomePost) {
@@ -333,7 +326,7 @@ struct HomeFollowSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("For example: processing times for my I-130", text: $text, axis: .vertical)
+                    TextField("A topic you’re interested in…", text: $text, axis: .vertical)
                         .lineLimit(3...6).focused($focused).manrope(.body)
                 } footer: {
                     Text("Your contacts decide how to show it and who keeps it up to date. Public questions may be searched on the web.")

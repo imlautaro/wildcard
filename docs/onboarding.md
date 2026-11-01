@@ -148,7 +148,12 @@ Since 2026-10-31 nobody waits on the onboarding screen while contacts are genera
   later from Contacts.
 - **Straight into the app.** With AI contacts, the submission saves the input and
   clears `onboarding_required` in the same batch, then starts the Workflow. Both
-  clients refresh the profile after submitting and open Chats immediately.
+  clients refresh the profile after submitting and open Chats immediately, also
+  when AI contacts are turned off. Web navigates directly to `/chats` rather than
+  passing through the wide-screen For you landing page; resuming completed or
+  running setup and the already-completed `/onboarding` redirect use the same route.
+  The [For you first visit](updates.md#first-visit-and-empty-feeds) offers setup-aware
+  welcome states if the person opens it before posts exist.
 - **Disabled contacts while they are created.** After the identity plan, one atomic
   `publish-contacts` step inserts all five contacts, personalities and shared agent
   identities with `contact.setup_pending = 1` (migration 0077) and no photo version.

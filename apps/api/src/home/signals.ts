@@ -58,6 +58,19 @@ export async function homeTimeZone(db: D1Database, userID: string): Promise<stri
 export const topicColumns = `id, title, brief, reason, kind, source, contact_id AS contactID, status, feedback, pinned, updated_at AS updatedAt,
   skips, skip_reason AS skipReason`;
 
+// Shared by signal selection, dispatch and the first-visit state; c is the contact alias.
+export const homeContactReady = `c.archived_at IS NULL AND c.clearing = 0 AND c.setup_pending = 0`;
+
+/** No ready contacts is a normal setup state, not a curation failure. */
+export async function homeSetup(db: D1Database, userID: string): Promise<'needs_contacts' | 'creating_contacts' | null> {
+  const row = await db.prepare(`SELECT
+    EXISTS (SELECT 1 FROM contact c WHERE c.user_id = ?1 AND ${homeContactReady}) AS ready,
+    (EXISTS (SELECT 1 FROM account_onboarding WHERE user_id = ?1 AND status IN ('queued', 'generating'))
+      OR EXISTS (SELECT 1 FROM contact c WHERE c.user_id = ?1 AND c.archived_at IS NULL AND c.clearing = 0 AND c.setup_pending = 1)) AS creating`)
+    .bind(userID).first<{ ready: number; creating: number }>();
+  return row?.ready ? null : row?.creating ? 'creating_contacts' : 'needs_contacts';
+}
+
 export async function readSignals(db: D1Database, userID: string): Promise<HomeSignals | null> {
   const user = await db.prepare('SELECT name FROM user WHERE id = ?').bind(userID).first<{ name: string }>();
   if (!user) return null;
@@ -65,7 +78,7 @@ export async function readSignals(db: D1Database, userID: string): Promise<HomeS
     db.prepare(`SELECT c.id, c.name, p.profile_json AS profile,
         (SELECT MAX(t.created_at) FROM chat_turn t WHERE t.contact_id = c.id) AS lastAt
       FROM contact c LEFT JOIN agent_personality p ON p.agent_id = c.agent_id
-      WHERE c.user_id = ? AND c.archived_at IS NULL AND c.clearing = 0
+      WHERE c.user_id = ? AND ${homeContactReady}
       ORDER BY lastAt IS NULL, lastAt DESC, c.created_at DESC LIMIT 12`).bind(userID)
       .all<{ id: string; name: string; profile: string | null; lastAt: number | null }>(),
     db.prepare(`SELECT a.contact_id AS contactID, m.name FROM mcp_contact_access a JOIN mcp_connector m ON m.id = a.connection_id

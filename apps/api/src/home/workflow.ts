@@ -3,7 +3,7 @@ import { safeErrorCode } from '../chat/meta';
 import { accountModel, standardModel } from '../lib/model-preference';
 import { cardLifetimes } from './cards';
 import { composeCard, homeLimits, planHome, type ComposeContext, type EarlierPost, type PlannedTopic } from './curator';
-import { readSignals } from './signals';
+import { homeContactReady, readSignals } from './signals';
 import { reviewCandidates, type ReviewCandidate } from './review';
 import type { CardKind } from './cards';
 
@@ -28,7 +28,8 @@ export async function dispatchHome(env: Env, userID?: string) {
   if (!homeEnabled(env)) return;
   const now = Date.now();
   const { results } = await env.DB.prepare(`SELECT user_id AS userID, revision FROM home_feed
-    WHERE (?4 IS NULL OR user_id = ?4) AND ((status = 'idle' AND due_at <= ?1 AND viewed_at > ?2) OR (status = 'running' AND claimed_at < ?3))
+    WHERE (?4 IS NULL OR user_id = ?4) AND ((status = 'idle' AND (due_at <= ?1 OR error_code = 'HOME_NO_CONTACTS') AND viewed_at > ?2) OR (status = 'running' AND claimed_at < ?3))
+      AND EXISTS (SELECT 1 FROM contact c WHERE c.user_id = home_feed.user_id AND ${homeContactReady})
     ORDER BY due_at LIMIT 5`).bind(now, now - viewWindow, now - staleRun, userID ?? null).all<{ userID: string; revision: number }>();
   const outcomes = await Promise.allSettled(results.map(async row => {
     const claimed = await env.DB.prepare(`UPDATE home_feed SET status = 'running', revision = revision + 1, claimed_at = ?1,
@@ -49,26 +50,26 @@ export async function dispatchHome(env: Env, userID?: string) {
   if (outcomes.some(outcome => outcome.status === 'rejected')) console.error(JSON.stringify({ event: 'home_dispatch_deferred' }));
 }
 
-async function finish(env: Env, job: HomeJob, error: string | null) {
+async function finish(env: Env, job: HomeJob, error: string | null, waiting = false) {
   const now = Date.now();
   const next = await env.DB.prepare('SELECT MIN(expires_at) AS at FROM home_card WHERE user_id = ?').bind(job.userID).first<{ at: number | null }>();
   // Next automatic run when the first card goes stale, between one and twelve hours away.
-  const due = error ? now + retryDelay : Math.min(now + 12 * 3_600_000, Math.max(now + 3_600_000, next?.at ?? now + 6 * 3_600_000));
+  const due = waiting ? now + 60_000 : error ? now + retryDelay : Math.min(now + 12 * 3_600_000, Math.max(now + 3_600_000, next?.at ?? now + 6 * 3_600_000));
   // A request or a new topic that arrived during this run gets its own run right away.
-  await env.DB.prepare(`UPDATE home_feed SET status = 'idle', generated_at = CASE WHEN ?2 IS NULL THEN ?3 ELSE generated_at END,
+  await env.DB.prepare(`UPDATE home_feed SET status = 'idle', generated_at = CASE WHEN ?2 IS NULL AND ?6 = 0 THEN ?3 ELSE generated_at END,
       due_at = CASE WHEN COALESCE(requested_at, 0) > claimed_at OR EXISTS (SELECT 1 FROM home_topic t WHERE t.user_id = home_feed.user_id
         AND t.status = 'active' AND t.source != 'curator' AND t.created_at > home_feed.claimed_at) THEN ?3 + 60000 ELSE ?1 END,
       progress_json = NULL, error_code = ?2, requested_at = CASE WHEN requested_at > claimed_at THEN requested_at END
-    WHERE user_id = ?4 AND revision = ?5 AND status = 'running'`).bind(due, error, now, job.userID, job.revision).run();
+    WHERE user_id = ?4 AND revision = ?5 AND status = 'running'`).bind(due, error, now, job.userID, job.revision, waiting ? 1 : 0).run();
 }
 
 // Saves the plan: topics the person or a contact asked for keep their source;
 // curator topics left out of the plan are retired with their cards.
-async function plan(env: Env, job: HomeJob): Promise<RunPlan | { error: string }> {
+async function plan(env: Env, job: HomeJob): Promise<RunPlan | { error: string } | { waiting: true }> {
   if (!await current(env, job)) return { error: 'HOME_SUPERSEDED' };
   const signals = await readSignals(env.DB, job.userID);
   if (!signals) return { error: 'HOME_SUPERSEDED' };
-  if (!signals.contacts.length) return { error: 'HOME_NO_CONTACTS' };
+  if (!signals.contacts.length) return { waiting: true };
   const model = await accountModel(env, job.userID);
   const planned = await planHome({ ...env, META_CHAT_MODEL: model }, signals, model);
   const now = Date.now();
@@ -228,9 +229,11 @@ async function review(env: Env, job: HomeJob, run: RunPlan, candidate: ReviewCan
 
 export async function runHome(env: Env, job: HomeJob, step: WorkflowStep) {
   let error: string | null = null;
+  let waiting = false;
   try {
     const run = await step.do('home-plan', { retries: { limit: 1, delay: '15 seconds' }, timeout: '4 minutes' }, () => plan(env, job));
-    if ('error' in run) error = run.error;
+    if ('waiting' in run) waiting = true;
+    else if ('error' in run) error = run.error;
     else {
       const research = { remaining: homeLimits.researchPerRun };
       for (let index = 0; index < run.compose.length; index++) {
@@ -263,5 +266,7 @@ export async function runHome(env: Env, job: HomeJob, step: WorkflowStep) {
     console.error(JSON.stringify({ event: 'home_plan_failed', code: error }));
   }
   if (error === 'HOME_SUPERSEDED') return;
-  await step.do('home-finish', () => finish(env, job, error));
+  // A plan checkpoint from an earlier release may still return the former error code.
+  if (error === 'HOME_NO_CONTACTS') { error = null; waiting = true; }
+  await step.do('home-finish', () => finish(env, job, error, waiting));
 }
