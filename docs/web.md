@@ -1390,3 +1390,14 @@ dark styles now use `:root[data-theme="dark"]` instead of `prefers-color-scheme`
 iOS sets the windows' `overrideUserInterfaceStyle`. Details and verification status:
 [appearance](appearance.md).
 
+
+## Private shared-contact messaging
+
+Like iOS, a human can ask a shared contact to deliver a specific message to another
+participant in their separate private chat, with requester attribution and no group.
+The sharing info explains this on both clients. Delivery uses ordinary assistant-only
+history/list/unread rendering and the existing session caches/polling; web has no
+browser push. No new route, view-local fetch, cache or protocol field is required.
+The shared API release and migration 0084 enable both clients; updated binaries/web
+assets are needed only for the sharing-help copy. See [behavior, limits and pending
+verification](sharing.md#private-messages-between-shared-contact-participants).

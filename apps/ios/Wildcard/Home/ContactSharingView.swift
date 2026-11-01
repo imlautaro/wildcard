@@ -19,7 +19,7 @@ struct ContactSharingView: View {
     }
 
     @State private var showingInvite = false
-    private static let aboutSharing = "Everyone talks to the same contact, with shared memories and presence. Each person starts an empty, private chat and keeps their own schedules and notifications. Invitations appear inside Wildcard; no email is sent. They expire after 24 hours. Up to four participants, including you."
+    private static let aboutSharing = "Everyone talks to the same contact, with shared memories and presence. Each person starts an empty, private chat and keeps their own schedules and notifications. Ask the contact to message another participant privately; only your requested message is delivered, with your name attached. Invitations appear inside Wildcard; no email is sent. They expire after 24 hours. Up to four participants, including you."
 
     var body: some View {
         Form {

@@ -3013,3 +3013,40 @@ rewrite history. Before rolling forward again, explicitly revoke delegations tha
 should no longer be effective. Already scheduled system alarms survive revocation
 and rollback and must be managed on the iPhone. Revocation blocks future claims;
 an operation already claimed can still finish.
+
+## Private shared-contact messages — migration 0084
+
+Requires the existing D1, authenticated shared contacts and private chat Workflow
+installation with migrations 0001–0083. No new service, dependency, binding, secret,
+account permission, APNs entitlement or resource is needed. Independent accounts
+retain their own D1 IDs, Meta key, release branch and optional Apple provider settings
+from the setup above. Web polling works without APNs; closed-app iOS notifications
+require the existing provider key/device registration setup. Staging uses its own
+existing Worker/D1/Meta/Apple configuration rather than production resources.
+
+Apply `apps/api/migrations/0084_private_contact_messages.sql` after 0083. It adds
+`chat_turn.is_private_relay` (default zero for compatibility) and indexed receipts
+with one primary source turn and nullable target references. Deleting the source
+cascades the receipt; clearing/removing the target nulls references and retains
+replay protection. Delivered recipient text is not retracted when sharing ends.
+D1 batch semantics atomically commit message/receipt/outbox; see
+[Cloudflare D1 batch](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch).
+No external delivery service or custom queue is introduced.
+
+For a new independent installation run the existing `npm ci`, local auth setup,
+ordered migrations and dev commands. An existing local installation uses
+`npm run db:migrate:local`. Authoring did not run persistent local/remote migrations.
+Production release is commit/push to the configured branch, followed by automatic
+Workers Builds migration/API/web release. Verify the automatic checks and pushed
+source SHA; never deploy manually. Existing clients receive messages as ordinary
+assistant turns; install the updated iOS build for the sharing-help text only.
+
+Follow the [fictional-account verification matrix](sharing.md#cache-and-verification).
+Static checks are complete; model semantics, app round trips and push delivery
+remain unverified. Roll back only by committed/pushed automatic release. Keep the
+additive schema and receipt rows. An older API cannot send this message type and
+its push path lacks the new access guard: drain or cancel unsent relay outbox rows
+before reverting that path, or prefer a forward fix that disables the private tools
+while retaining `privateRelayAllowed` notification checks. Do not down-migrate,
+delete receipts or replay old human requests. Delivered history remains readable
+by compatible older clients.

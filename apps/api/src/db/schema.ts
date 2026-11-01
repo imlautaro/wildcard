@@ -142,6 +142,7 @@ export const chatTurn = sqliteTable('chat_turn', {
   nativeContextJson: text('native_context_json'),
   groupRequestId: text('group_request_id').references((): AnySQLiteColumn => groupRequest.id, { onDelete: 'cascade' }),
   taskId: text('task_id').references((): AnySQLiteColumn => task.id, { onDelete: 'set null' }),
+  isPrivateRelay: integer('is_private_relay').notNull().default(0),
   // A private message a contact sent from this group (migration 0051).
   originGroupId: text('origin_group_id').references((): AnySQLiteColumn => chatGroup.id, { onDelete: 'set null' }),
   replyToId: text('reply_to_id').references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'set null' }),
@@ -162,6 +163,7 @@ export const chatTurn = sqliteTable('chat_turn', {
   checkedAt: integer('checked_at').notNull().default(0),
 }, (table) => [
   foreignKey({ columns: [table.contactId, table.userId], foreignColumns: [contact.id, contact.userId] }).onDelete('cascade'),
+  check('chat_private_relay', sql`${table.isPrivateRelay} IN (0, 1)`),
   check('chat_tools_started', sql`${table.toolsStarted} IN (0, 1)`),
   check('chat_status', sql`${table.status} IN ('queued', 'running', 'complete', 'failed')`),
   check('chat_attempt', sql`${table.attempt} > 0`),
@@ -854,3 +856,18 @@ export const chatDocumentRevision = sqliteTable('chat_document_revision', {
 export const documentMutation = sqliteTable('document_mutation', {
   id: text('id').primaryKey(), resultJson: text('result_json').notNull(), createdAt: date('created_at').notNull(),
 });
+
+// One receipt per human turn; nullable destinations retain replay protection after clear/removal.
+export const privateContactMessage = sqliteTable('private_contact_message', {
+  sourceTurnId: text('source_turn_id').primaryKey().references(() => chatTurn.id, { onDelete: 'cascade' }),
+  sourceContactId: text('source_contact_id').references(() => contact.id, { onDelete: 'set null' }),
+  targetContactId: text('target_contact_id').references(() => contact.id, { onDelete: 'set null' }),
+  targetTurnId: text('target_turn_id').unique().references(() => chatTurn.id, { onDelete: 'set null' }),
+  contributor: integer('contributor').notNull(),
+  createdAt: date('created_at').notNull(),
+}, table => [
+  check('private_contact_message_contributor', sql`${table.contributor} IN (0, 1)`),
+  index('private_contact_message_source_idx').on(table.sourceContactId, table.createdAt),
+  index('private_contact_message_target_idx').on(table.targetContactId, table.createdAt),
+  index('private_contact_message_budget_idx').on(table.createdAt),
+]);

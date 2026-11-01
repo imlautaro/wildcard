@@ -1581,3 +1581,16 @@ device setting (iOS `UserDefaults` `appearance`, web `localStorage`
 `wildcard-theme`) that holds no private data and intentionally survives sign-out
 and account switching. See [appearance](appearance.md).
 
+
+## Private shared-contact message delivery
+
+[Participant messaging](sharing.md#private-messages-between-shared-contact-participants)
+uses the existing iOS/web session-owned private chat and contact-list caches, polling,
+explicit refresh, pending submission IDs, coalesced reads, pagination and memory
+budgets. There is no new disk retention or recipient-history download. Live bounded
+server tool reads resolve current recipients; caching those permissions is unsuitable
+because removal/isolation can change during a turn. The save and push recheck them.
+Loaded messages survive transient refresh failures; account switch, confirmed access
+loss and deletion retain existing invalidation/late-response guards. Reopen/back,
+empty history, mutation visibility, offline recovery, revocation and account switching
+require the fictional-account device/browser checks in the feature guide.

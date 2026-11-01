@@ -254,3 +254,83 @@ acceptance in the contact invitation flow is saved on their own contact row.
 Existing rows are not granted new consent automatically. Group processing
 distinguishes its human requester from the agent owner’s lookup contact.
 See [model settings](model-settings.md#sharing-and-mcp).
+
+## Private messages between shared-contact participants
+
+In your private chat, ask a shared contact: “Tell Alice I will be ten minutes late.”
+The same contact places an assistant message in Alice's existing private chat,
+prefixed with `Message from "<requester name>":`. No group is required. Both iOS
+and web use the same API tools and existing chat rendering. Sharing help on both
+clients explains delivery and attribution. This is an in-app message, not SMS.
+
+The contact resolves actual participant IDs with `list_message_recipients`, then
+uses `send_private_message`. Discovery returns current eligible names/IDs only,
+never another person's messages, emails or files. Duplicate names and unresolved
+recipients require clarification. A separate bounded semantic authorization checks
+the current human request, requested text, recipient and at most three recent
+clarification exchanges. Hypotheticals, capability questions, cancellations,
+assistant suggestions and retrieved instructions cannot authorize a send. Only
+the requested text crosses chats. Sharing does not authorize copying transcripts.
+
+Delivery requires both existing contact projections for the same shared agent,
+its creator's continued participation, current sharing and applicable Contributor
+consent. Connector-isolated chats on either side are ineligible. Contact instances
+are fixed before authorization and rechecked atomically with the running source
+attempt/agent attention at save. Tasks, schedules, initiative, group replies and
+returned group answers cannot invoke these private tools. A recipient can reply
+normally to the contact; returning that reply to the requester requires another
+explicit send request from that recipient. No automatic relay loop is created.
+
+One message/recipient is allowed per human turn, up to 2,000 Unicode characters /
+8,000 UTF-8 bytes. Each source and target contact has a 12-message rolling daily
+limit. The existing six tool executions/three rounds and human send limits apply;
+authorization adds one model completion capped at 2,048 tokens with at most 32 KB
+of evidence. No additional inference generates the delivered text.
+
+Migration 0084 adds `private_contact_message` and `chat_turn.is_private_relay`.
+A D1 batch saves the complete assistant-only turn, unique source-turn receipt and
+push outbox together. A retry, changed arguments or failed private confirmation
+returns the original outcome; it cannot change content/destination. Recipient
+history clear/removal retains a receipt with null destination so it cannot
+resurrect the message. Source clear/deletion removes its receipt, while the
+already-delivered recipient message remains. Old attempts cannot save without
+current source/attention. Receipts confirm persistence, never reading or APNs
+acceptance. Unknown writes recover their receipt or report uncertainty.
+
+Messages use ordinary private history, unread counts and list previews without a
+fake human bubble. iOS uses the existing optional APNs provider/outbox, checked
+against the original sharing/contact/model permissions before enqueue and before
+submission. Ending access or adding connector isolation stops unsent alerts;
+rejoining creates no new authority for an old receipt. Already delivered text and
+accepted APNs alerts are not recalled. Web receives messages through ordinary
+foreground polling; it has no browser push. Direct complete inserts do not enqueue
+human-memory extraction, agent self-memory or autonomous reply work.
+
+### Cache and verification
+
+There is no new client fetch, recipient-directory cache, persistent client store
+or endpoint. Tool discovery is a small live server read per request because current
+permissions are essential. iOS/web reuse session-owned chat/list caches, existing
+polling/explicit refresh, request deduplication, history pagination/budgets,
+late-response rejection and account/access-loss invalidation. Original pending
+submission IDs survive navigation as before. A saved delivery appears on the
+recipient's next ordinary sync; transient failures retain already loaded content.
+No other participant's history is downloaded by the requesting client.
+
+Static API/web type checks, Swift parsing, all 84 migrations compiled in empty
+in-memory SQLite, relay SQL preparation and diff checks passed. No tests, builds,
+model inference, real messages, notifications, persistent migrations or release
+were run. After the automatic release, verify using fictional accounts on iOS/web:
+
+- A shared contact with no group delivers a literal message once, with the right
+  name, recipient preview, unread count and no sender access to recipient history.
+- Recipient ambiguity, no common contact, missing/removed participant, connector
+  isolation, applicable model consent, cancellation and unsupported autonomous sends.
+- Voice-transcribed requests, immediate clarification, recipient reply followed by
+  an explicit return message, and ordinary ongoing private chats.
+- Duplicate tool calls/retries, changed arguments, lost database acknowledgement,
+  limits, recipient clear/removal/rejoin and source deletion around save/push.
+- Reopen/back, empty cached chat, refresh, offline recovery, account switch,
+  foreground sync and iOS closed-app APNs with the independent installation's keys.
+
+See [reproducible setup and rollback](infrastructure.md#private-shared-contact-messages--migration-0084).
