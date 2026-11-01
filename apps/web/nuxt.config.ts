@@ -10,7 +10,7 @@ export default defineNuxtConfig({
   ssr: false,
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
-  // Connector library logos join the layer's Material Symbols in the client bundle.
+  // Connector library logos join the layer's Solar icons in the client bundle.
   icon: { clientBundle: { icons: Object.values(connectorLogos) } },
   app: {
     head: {

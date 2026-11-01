@@ -19,7 +19,7 @@ const items = computed(() => [
 
 <template>
   <nav class="nav-sidebar" aria-label="Main navigation">
-    <NuxtLink to="/updates" class="nav-sidebar-logo" aria-label="Wildcard"><img src="/icon.svg" alt="" width="32" height="32"><span>Wildcard</span></NuxtLink>
+    <NuxtLink to="/updates" class="nav-sidebar-logo" aria-label="Wildcard"><img src="/icon.svg" alt="" width="44" height="44"><span>Wildcard</span></NuxtLink>
     <NuxtLink v-for="item in items" :key="item.to" :to="item.to" class="nav-sidebar-item" :class="{ active: item.active }"
               :aria-current="item.active ? 'page' : undefined" data-ripple>
       <span class="nav-sidebar-icon">
@@ -34,9 +34,9 @@ const items = computed(() => [
 <style scoped>
 .nav-sidebar { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); }
 .nav-sidebar-logo {
-  display: flex; align-items: center; gap: var(--space-3); min-height: 56px; padding: 0 var(--space-3);
+  display: flex; align-items: center; gap: var(--space-3); min-height: 64px; padding: 0 var(--space-2);
   margin-bottom: var(--space-4); border-radius: var(--md-shape-l); color: var(--md-on-surface);
-  text-decoration: none; font: var(--type-title-medium); font-weight: 700;
+  text-decoration: none; font: var(--type-headline-small); font-weight: 750; letter-spacing: var(--tracking-headline);
 }
 .nav-sidebar-logo img { display: block; flex: none; }
 .nav-sidebar-item {

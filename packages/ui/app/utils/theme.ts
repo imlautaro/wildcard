@@ -7,7 +7,7 @@ export const themeStorageKey = 'wildcard-theme';
 export const themePreferences = ['system', 'light', 'dark'] as const;
 export type ThemePreference = typeof themePreferences[number];
 
-export const themeColors = { light: '#f9f9fc', dark: '#111318' } as const;
+export const themeColors = { light: '#f9f9f9', dark: '#131313' } as const;
 
 // Plain ES5 so it runs as-is in <head>. It creates its own color-scheme and
 // theme-color <meta> tags. Exposes window.__wildcardTheme() to reapply

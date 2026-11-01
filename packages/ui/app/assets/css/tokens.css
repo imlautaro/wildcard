@@ -16,16 +16,17 @@
 
 @layer ui.tokens {
   /* Color roles come from a tonal-spot scheme seeded with the brand blue
-     (#045de3, the iOS AccentColor), which stays the light primary. Neutrals keep
-     a faint blue cast so surfaces read cool and quiet next to the brand. */
+     (#045de3, the iOS AccentColor), which stays the light primary. Neutrals
+     (surfaces, text, outlines, secondary, scrim and shadows) are pure grays with
+     no hue, so only the accent roles carry color. */
   :root {
     --md-primary: #045de3;
     --md-on-primary: #ffffff;
     --md-primary-container: #dae3ff;
     --md-on-primary-container: #0f3478;
-    --md-secondary: #545e76;
-    --md-secondary-container: #dfe5f9;
-    --md-on-secondary-container: #2b3549;
+    --md-secondary: #5e5e5e;
+    --md-secondary-container: #dcdcdc;
+    --md-on-secondary-container: #303030;
     --md-tertiary: #7a4f9a;
     --md-tertiary-container: #f3daff;
     --md-on-tertiary-container: #4a2468;
@@ -39,26 +40,26 @@
     --md-warning: #8f4e00;
     --md-warning-container: #ffe3c4;
     --md-on-warning-container: #5c3200;
-    --md-surface: #f9f9fc;
-    --md-surface-dim: #d9dae0;
-    --md-surface-bright: #f9f9fc;
+    --md-surface: #f9f9f9;
+    --md-surface-dim: #dadada;
+    --md-surface-bright: #f9f9f9;
     --md-surface-container-lowest: #ffffff;
-    --md-surface-container-low: #f3f4f8;
-    --md-surface-container: #edeef3;
-    --md-surface-container-high: #e7e8ee;
-    --md-surface-container-highest: #e1e2e9;
-    --md-on-surface: #181b21;
-    --md-on-surface-variant: #444852;
-    --md-outline: #747884;
-    --md-outline-variant: #c4c6d0;
-    --md-inverse-surface: #2d3036;
-    --md-inverse-on-surface: #eff0f7;
+    --md-surface-container-low: #f4f4f4;
+    --md-surface-container: #eeeeee;
+    --md-surface-container-high: #e8e8e8;
+    --md-surface-container-highest: #e2e2e2;
+    --md-on-surface: #1b1b1b;
+    --md-on-surface-variant: #484848;
+    --md-outline: #787878;
+    --md-outline-variant: #c6c6c6;
+    --md-inverse-surface: #303030;
+    --md-inverse-on-surface: #f0f0f0;
     --md-inverse-primary: #b0c6ff;
-    --md-scrim: rgb(9 14 28 / 36%);
+    --md-scrim: rgb(0 0 0 / 36%);
 
-    /* Elevation: soft, layered shadows tinted with the neutral hue instead of
-       pure black, so raised surfaces look lit rather than outlined. */
-    --ui-shadow: 222 40% 14%;
+    /* Elevation: soft, layered shadows from a near-black neutral, so raised
+       surfaces look lit rather than outlined. */
+    --ui-shadow: 0 0% 8%;
     --md-elevation-1: 0 1px 2px hsl(var(--ui-shadow) / 0.08), 0 1px 3px 1px hsl(var(--ui-shadow) / 0.05);
     --md-elevation-2: 0 1px 2px hsl(var(--ui-shadow) / 0.08), 0 4px 12px -2px hsl(var(--ui-shadow) / 0.12);
     --md-elevation-3: 0 2px 4px hsl(var(--ui-shadow) / 0.06), 0 10px 24px -6px hsl(var(--ui-shadow) / 0.18);
@@ -81,9 +82,9 @@
     --md-on-primary: #002c70;
     --md-primary-container: #20448f;
     --md-on-primary-container: #dae3ff;
-    --md-secondary: #bcc6e0;
-    --md-secondary-container: #3a4458;
-    --md-on-secondary-container: #dfe5f9;
+    --md-secondary: #c6c6c6;
+    --md-secondary-container: #444444;
+    --md-on-secondary-container: #e5e5e5;
     --md-tertiary: #e3b8ff;
     --md-tertiary-container: #613a80;
     --md-on-tertiary-container: #f3daff;
@@ -97,23 +98,23 @@
     --md-warning: #ffb95c;
     --md-warning-container: #6a3b00;
     --md-on-warning-container: #ffdcbd;
-    --md-surface: #111318;
-    --md-surface-dim: #111318;
-    --md-surface-bright: #37393f;
-    --md-surface-container-lowest: #0c0e13;
-    --md-surface-container-low: #191b21;
-    --md-surface-container: #1d2026;
-    --md-surface-container-high: #282a31;
-    --md-surface-container-highest: #33353c;
-    --md-on-surface: #e2e2e9;
-    --md-on-surface-variant: #c4c6d0;
-    --md-outline: #8e909b;
-    --md-outline-variant: #44474f;
-    --md-inverse-surface: #e2e2e9;
-    --md-inverse-on-surface: #2d3036;
+    --md-surface: #131313;
+    --md-surface-dim: #131313;
+    --md-surface-bright: #393939;
+    --md-surface-container-lowest: #0e0e0e;
+    --md-surface-container-low: #1b1b1b;
+    --md-surface-container: #202020;
+    --md-surface-container-high: #2a2a2a;
+    --md-surface-container-highest: #353535;
+    --md-on-surface: #e3e3e3;
+    --md-on-surface-variant: #c6c6c6;
+    --md-outline: #919191;
+    --md-outline-variant: #474747;
+    --md-inverse-surface: #e3e3e3;
+    --md-inverse-on-surface: #303030;
     --md-inverse-primary: #045de3;
     --md-scrim: rgb(0 0 0 / 56%);
-    --ui-shadow: 230 50% 2%;
+    --ui-shadow: 0 0% 0%;
     --md-elevation-1: 0 1px 2px hsl(var(--ui-shadow) / 0.4), 0 1px 3px 1px hsl(var(--ui-shadow) / 0.2);
     --md-elevation-2: 0 1px 2px hsl(var(--ui-shadow) / 0.4), 0 4px 12px -2px hsl(var(--ui-shadow) / 0.4);
     --md-elevation-3: 0 2px 4px hsl(var(--ui-shadow) / 0.3), 0 10px 24px -6px hsl(var(--ui-shadow) / 0.5);

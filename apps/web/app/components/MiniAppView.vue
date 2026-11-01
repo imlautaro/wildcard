@@ -66,7 +66,7 @@ const ringRadius = 100 / (2 * Math.PI);
 function ring(item: Extract<MiniAppComponent, { type: 'progress' }>) {
   return Math.min(100, Math.max(0, progress(item) / item.goal * 100));
 }
-const palette = ['var(--accent)', '#34c759', '#ff9500', '#af52de', '#ff2d55', '#5ac8fa', '#ffcc00', '#a2845e', '#5856d6', '#30b0c7', '#ff6482', '#8e8e93'];
+const palette = ['var(--accent)', '#34c759', '#ff9500', '#af52de', '#ff2d55', '#5ac8fa', '#ffcc00', '#a2845e', '#5856d6', '#30b0c7', '#ff6482', '#8f8f8f'];
 function slices(points: { x: string; y: number }[]) {
   const total = points.reduce((sum, p) => sum + Math.max(p.y, 0), 0) || 1;
   let offset = 0;

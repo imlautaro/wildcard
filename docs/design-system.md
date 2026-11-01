@@ -3,7 +3,7 @@
 `packages/ui` is a [Nuxt layer](https://nuxt.com/docs/guide/going-further/layers)
 that both browser apps extend: `apps/web` and `apps/admin` declare
 `extends: ['../../packages/ui']` in `nuxt.config.ts`. The layer is the single source
-of the web look: Material 3 components, Material Symbols icons and the press ripple,
+of the web look: Material 3 components, Solar icons and the press ripple,
 with a Wildcard customization layer on top (type, spacing, shape, elevation and
 motion). iOS keeps its native SwiftUI design; this document applies to the browser
 apps only.
@@ -46,7 +46,7 @@ Use tokens, never raw values, for color, spacing, type, radius, elevation and mo
 
 - **Color roles** (`--md-*`): the Material 3 tonal-spot scheme seeded with the brand
   blue `#045de3` (the iOS AccentColor, kept as the light primary), with neutrals
-  that carry a faint blue cast. Includes `primary`, `secondary`, `tertiary`, `error`,
+  (surfaces, text, outlines, `secondary`, scrim) that are pure grays with no hue. Includes `primary`, `secondary`, `tertiary`, `error`,
   the custom `success` and `warning` roles with their containers, the full surface
   container ladder (`surface-container-lowest` … `highest`, `surface-dim`,
   `surface-bright`), `outline`, `outline-variant`, the inverse roles and `scrim`.
@@ -65,8 +65,8 @@ Use tokens, never raw values, for color, spacing, type, radius, elevation and mo
 - **Shape** (`--md-shape-*`): `xs` 4, `s` 8, `m` 12, `l` 16, `l-plus` 20, `xl` 28,
   `xl-plus` 32, `full`. Segmented lists use `--ui-group-radius` (24) outside and
   `--ui-group-item-radius` (6) between items, separated by `--ui-group-gap` (2).
-- **Elevation** (`--md-elevation-1` … `4`): soft layered shadows tinted with the
-  neutral hue (`--ui-shadow`) rather than pure black; stronger in dark mode.
+- **Elevation** (`--md-elevation-1` … `4`): soft layered shadows from a
+  near-black neutral (`--ui-shadow`, no hue); stronger in dark mode.
 - **Motion**: `--md-ease` (standard), `--md-ease-decelerate` (entering),
   `--md-ease-accelerate` (leaving), `--ui-ease-spring` (shape morphs and toggles,
   slight overshoot); durations `--md-motion-short` 150 ms, `medium` 250 ms, `long`
@@ -109,7 +109,7 @@ component can't express (see "Classes without a component").
 
 | Component | Use | Key props and slots |
 | --- | --- | --- |
-| `AppIcon` | Material Symbols (Rounded) glyph. | `name`, `filled` |
+| `AppIcon` | Solar glyph (Linear, or Bold when `filled`). | `name`, `filled` |
 | `AppButton` | Every text button. One filled action per task area. | `variant` (`filled`, `tonal`, `outlined`, `text`, `danger`, `danger-tonal`, `danger-text`), `size` (`small`, `medium`, `large`), `icon`, `trailing-icon`, `to` (renders a link), `type`, `block`, `loading`, `disabled` |
 | `AppIconButton` | Every icon-only button. | `icon`, `label` (accessible name and tooltip), `variant` (`standard`, `filled`, `tonal`, `outlined`), `size`, `to`, `selected` (toggle: `aria-pressed` + filled glyph), `danger`, `badge`, `badge-label`, `tooltip` |
 | `AppTopBar` | The top app bar of a page or panel. | `title`, `subtitle`; slots `leading` (navigation), `title` (custom title), default (actions, 4 px apart) |
@@ -187,14 +187,16 @@ renders in its own clipping layer, so hosts keep `overflow: visible` (badges).
 
 ## Icons
 
-`AppIcon` renders Material Symbols (Rounded) through `@nuxt/icon` in SVG mode, so CSS
-that sizes `svg` applies. `app/utils/icons.ts` maps each semantic name to an outline
-and a filled symbol. The layer's `nuxt.config.ts` bundles exactly those icons into
-the client of both apps (about 140 glyphs, ~70 KB uncompressed): the provider is
+`AppIcon` renders [Solar](https://icon-sets.iconify.design/solar/) icons through
+`@nuxt/icon` in SVG mode, so CSS that sizes `svg` applies. `app/utils/icons.ts` maps
+each semantic name to a Linear (outline) and a Bold (filled) glyph; arrows, crosses
+and other line-only glyphs use Linear in both slots. The layer's `nuxt.config.ts` bundles exactly those icons into
+the client of both apps (about 145 glyphs, ~125 KB uncompressed in the admin): the provider is
 `none` with no API fallback and no server bundle, so the apps never call Iconify and
 the Workers don't carry the collection. The admin bundles the full shared set too;
 that is the cost of one registry. Add an icon only after confirming its name in
-`node_modules/@iconify-json/material-symbols/icons.json`.
+`node_modules/@iconify-json/solar/icons.json`: with `scan: false` a misspelled name
+renders nothing instead of failing the build.
 
 ## Adding to the system
 

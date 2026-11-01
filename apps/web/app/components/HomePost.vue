@@ -246,12 +246,12 @@ function act(kind: HomePostAction, prompt?: string) { menuOpen.value = false; em
 .home-post.chained .post-rail::after { content: ''; flex: 1; width: 2px; margin: var(--space-1-5) 0 calc(-1 * var(--space-3)); border-radius: 1px; background: var(--md-outline-variant); }
 .accent-blue { --card-accent: #1a73e8; } .accent-green { --card-accent: #188038; } .accent-orange { --card-accent: #e8710a; }
 .accent-red { --card-accent: #d93025; } .accent-purple { --card-accent: #9334e6; } .accent-teal { --card-accent: #12838f; }
-.accent-pink { --card-accent: #d01884; } .accent-indigo { --card-accent: #3f51b5; } .accent-gray { --card-accent: #5f6368; }
+.accent-pink { --card-accent: #d01884; } .accent-indigo { --card-accent: #3f51b5; } .accent-gray { --card-accent: #636363; }
 :root[data-theme="dark"] .accent-blue { --card-accent: #8ab4f8; } :root[data-theme="dark"] .accent-green { --card-accent: #81c995; }
 :root[data-theme="dark"] .accent-orange { --card-accent: #fcad70; } :root[data-theme="dark"] .accent-red { --card-accent: #f28b82; }
 :root[data-theme="dark"] .accent-purple { --card-accent: #c58af9; } :root[data-theme="dark"] .accent-teal { --card-accent: #78d9ec; }
 :root[data-theme="dark"] .accent-pink { --card-accent: #ff8bcb; } :root[data-theme="dark"] .accent-indigo { --card-accent: #9fa8da; }
-:root[data-theme="dark"] .accent-gray { --card-accent: #bdc1c6; }
+:root[data-theme="dark"] .accent-gray { --card-accent: #c0c0c0; }
 .post-main { display: flex; flex-direction: column; gap: var(--space-1-5); min-width: 0; }
 .post-head { display: flex; align-items: center; gap: var(--space-1); min-height: 24px; font-size: 15px; }
 .who { flex: none; max-width: 45%; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

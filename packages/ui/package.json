@@ -4,7 +4,7 @@
   "type": "module",
   "main": "./nuxt.config.ts",
   "dependencies": {
-    "@iconify-json/material-symbols": "1.2.97",
+    "@iconify-json/solar": "1.2.13",
     "@nuxt/icon": "2.6.2"
   }
 }

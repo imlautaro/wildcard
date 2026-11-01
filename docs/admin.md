@@ -11,7 +11,7 @@
 - see recent admin actions.
 
 Its look comes from the [design system](design-system.md) layer in `packages/ui`,
-shared with the web app: tokens, Manrope, Material Symbols, the press ripple and the
+shared with the web app: tokens, Manrope, Solar icons, the press ripple and the
 `App*` components (`AppTopBar`, `AppListGroup`, `AppSwitch`, `AppSheet`, …).
 `apps/admin/app/assets/css/main.css` keeps only the admin shell, the users table and
 the overview stats. Navigation is a Material 3 navigation rail, which becomes a

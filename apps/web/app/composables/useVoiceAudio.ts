@@ -26,8 +26,8 @@ function fallbackMediaArtwork(): MediaImage[] {
     canvas.width = canvas.height = 288;
     const context = canvas.getContext('2d');
     if (!context) return [];
-    context.fillStyle = '#e5e7eb'; context.fillRect(0, 0, 288, 288);
-    context.fillStyle = '#8e8e93';
+    context.fillStyle = '#e6e6e6'; context.fillRect(0, 0, 288, 288);
+    context.fillStyle = '#8f8f8f';
     context.beginPath(); context.arc(144, 101, 43, 0, Math.PI * 2); context.fill();
     context.beginPath(); context.ellipse(144, 233, 86, 69, 0, Math.PI, 0); context.fill();
     placeholderArtwork = canvas.toDataURL('image/png');
