@@ -29,6 +29,8 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     let updatedAt: Double
     var replyActivity: String? = nil
     var lastMessageVoice: MessageVoice? = nil
+    /// Newest reaction in this chat; shown when newer than the last message (docs/chats.md#chat-list-previews).
+    var lastReaction: LastReaction? = nil
     var lastMessagePreview: String? = nil
     var lastMessageText: String?
     var lastMessageAt: Double?
@@ -39,6 +41,15 @@ struct Contact: Codable, Hashable, Identifiable, Sendable {
     var canManage: Bool { role != "member" }
     /// The name the creator edits and other participants see.
     var sharedName: String { realName ?? name }
+}
+
+/// The newest reaction in a chat, for the chat list (migration 0090). `name` is sent for groups only:
+/// the reacting member or contact as this viewer sees it.
+struct LastReaction: Codable, Hashable, Sendable {
+    let at: Double
+    let emoji: String
+    let own: Bool
+    var name: String? = nil
 }
 
 struct ContactsPage: Decodable, Sendable {

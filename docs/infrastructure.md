@@ -2927,6 +2927,22 @@ stop spending immediately (in-flight runs finish their current card). Keep the
 tables; deleting `home_card`/`home_topic` rows only clears feeds, and dropping them
 requires a release of code that no longer reads them.
 
+## Reaction activity for chat list previews — migration 0090
+
+Apply `apps/api/migrations/0090_reaction_activity.sql` after 0089. It adds three
+nullable columns to `message_reaction`: `created_at` (set/changed time), and the
+owning `contact_id` or `group_id` (no foreign key; the row already cascades with its
+message), backfills the conversation columns for existing reactions from their
+message, and creates two partial indexes `(contact_id, created_at)` and
+`(group_id, created_at)`. Additive: legacy reactions keep `created_at = NULL` and are
+never shown as list activity. Release order: the API that writes the new columns must
+ship together with the migration (the automatic release applies migrations before the
+Worker); older clients ignore the new `lastReaction` list field. No new resource,
+binding, var or secret. Local: `npm run db:migrate:local --workspace @wildcard/api`.
+Validated on a scratch local workerd D1; not yet applied to staging or production.
+Rollback: release code that ignores the columns and keep them. See
+[chat list previews](chats.md#chat-list-previews).
+
 ## Scheduled messages for another participant — migration 0089
 
 Apply `apps/api/migrations/0089_private_message_schedules.sql` after 0088. It adds the

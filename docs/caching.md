@@ -1636,3 +1636,15 @@ The expanded web navigation sidebar (2026-11-01) is presentation-only. It keeps
 the chat list mounted with `v-show` and reuses existing session stores, badge
 polling and invalidation. No new cache, request, or persistence is introduced.
 Visual and navigation checks for the new layout are pending in `docs/web.md`.
+
+## Chat list drafts and reaction labels
+
+Composer drafts live in the session conversation entries (iOS `ChatStore.draft` /
+`GroupChatStore.draft`, web `entry.draft`) so they survive navigation and feed the
+chat list `Draft:` label. They are memory-only, never persisted or uploaded, and are
+discarded with the conversation entry on sign-out, account change, clearing,
+deletion and access loss. A non-empty draft protects its entry from LRU eviction (8
+iOS, 20 web entries), like a pending send. Reaction labels come from the
+`lastReaction` field of the cached contacts/groups list summaries and follow the
+existing list freshness and stale-response rules; there is no separate reaction
+request for the list. See [chat list previews](chats.md#chat-list-previews).

@@ -488,6 +488,67 @@ prevent a short visit from connecting before its lease expires; the client retri
 uncertain registration with the same UUID. No realtime service or new binding is
 required, but visit jobs consume Workflows executions and activity adds D1 writes.
 
+## Chat list previews
+
+The second line of a row in the Chats list (iOS Home and the web chat list, private
+chats and groups alike) shows, in this order of priority:
+
+1. Live activity (`Typing...`, `Recording...`, `Researching...`) and `Cleaning up...`.
+2. An unsent draft: **`Draft:`** in the accent color followed by the composer text on
+   one line (whitespace collapsed, at most 500 characters). Attachments alone do not
+   count as a draft. No receipt or microphone icon is shown with it.
+3. A reaction newer than the last message: `You: reacted with 👍` when you reacted,
+   `Reacted with 👍` when the contact reacted in a private chat, and
+   `<Name>: reacted with 👍` when another member or contact reacted in a group (the
+   name is the viewer's alias for contacts). An unnamed group actor falls back to
+   `Reacted with 👍`.
+4. The last message, as before.
+
+The row's time and the list order still follow the last message: a reaction only
+changes the label and never moves a chat up, so server cursor pagination
+(`COALESCE(lastMessageAt, createdAt)`) is unchanged. A draft keeps a chat that has no
+messages yet in the list, at its creation time. Changing a reaction's emoji counts as
+new activity; picking the same emoji again does not. Removing the newest reaction
+falls back to the previous newer-than-message reaction, or to the last message.
+
+### Drafts
+
+The composer text belongs to the session conversation cache, not to the chat screen:
+iOS keeps it in `ChatStore.draft` / `GroupChatStore.draft`, web in the existing
+`entry.draft` of `useConversation` / `useGroupConversation`. Leaving and reopening a
+chat restores it in the input. Drafts are memory-only and never sent to the server;
+they are lost when the app or tab is closed, on sign-out or account change, and when
+a chat is cleared, deleted or loses access (its cached conversation is discarded).
+A conversation with a non-empty draft is never evicted from the bounded caches (8 on
+iOS, 20 on web), the same protection pending sends have.
+
+### Reactions
+
+`GET /api/v1/contacts` (and single-contact responses) and `GET /api/v1/groups` (and
+`GET /groups/:id`) include `lastReaction: { at, emoji, own, name? } | null`: the
+newest reaction in that chat, by anyone, with `name` only for groups. Clients show it
+only when `at` is greater than the last message time they display (including a
+cached newer message) and no send is in progress. Migration 0090 adds
+`message_reaction.created_at` and the owning `contact_id` / `group_id`, written by
+every human and agent reaction, with partial indexes so each list row is one index
+seek. Reactions saved before migration 0090 have no time and never become the
+preview. The list picks up a new reaction on its regular polling (1 s on web and on
+the iOS foreground synchronizer); there is no optimistic list update after reacting.
+
+### Verification
+
+Static: API and web `tsc`/`vue-tsc`, the iOS `swiftc -typecheck`, and migration 0090
+on a scratch local workerd D1 with seeded fictional rows: backfill of `contact_id` /
+`group_id` on legacy reactions, the real `writeReaction` statements (user and agent,
+private and group, emoji change vs. same emoji), both full list queries and the
+index plan. Not verified: device or browser runs, polling timing, visual styling,
+staging/production migration. Check with fictional accounts: type without sending,
+go back, see `Draft:` and reopen the chat with the text in the input (private and
+group, iOS and web); send and confirm the label disappears; react and have the
+contact react and confirm both labels, then send a message and confirm the label
+returns to the message; group reaction by another member shows their name; sign out
+and back in and confirm drafts are gone.
+
 ## Scheduled messages
 
 [Schedules](schedules.md) add autonomous assistant turns with nullable `scheduleID`

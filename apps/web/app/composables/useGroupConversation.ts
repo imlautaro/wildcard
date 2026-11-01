@@ -73,7 +73,8 @@ function entryFor(id: string): GroupConversation {
   groups.set(id, entry);
   for (const [key, value] of groups) {
     if (groups.size <= retained) break;
-    if (key !== id && !value.pending && !Object.keys(value.reactions.pending).length) {
+    // An unsent draft is user input shown in the chat list: never evict it (docs/chats.md#chat-list-previews).
+    if (key !== id && !value.pending && !value.draft.trim() && !Object.keys(value.reactions.pending).length) {
       clearReactionCache(value.reactions);
       groups.delete(key);
       receipts.delete(key);

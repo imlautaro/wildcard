@@ -88,10 +88,11 @@ function conversation(id: string): Conversation {
     historyRevision: 0, pending: null, draft: '', replyTo: null, homePost: null, loadingEarlier: false, retrying: false, revision: 0,
   });
   conversations.set(id, entry);
-  // Evict the least recently opened conversations without pending sends.
+  // Evict the least recently opened conversations without pending sends or drafts.
   for (const [key, value] of conversations) {
     if (conversations.size <= retained) break;
-    if (key !== id && !value.pending && !Object.keys(value.reactions.pending).length) {
+    // An unsent draft is user input shown in the chat list: never evict it (docs/chats.md#chat-list-previews).
+    if (key !== id && !value.pending && !value.draft.trim() && !Object.keys(value.reactions.pending).length) {
       clearReactionCache(value.reactions);
       conversations.delete(key);
     }

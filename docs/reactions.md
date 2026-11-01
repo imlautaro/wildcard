@@ -108,3 +108,11 @@ a dropped write; restore connectivity; remove membership; switch accounts. Check
 that no text placeholder, unread badge, bot loop or reply push is created. Validate
 VoiceOver, web keyboard controls, mobile scrolling and the iOS text-selection/hold
 interaction physically. Static checks do not establish visual or model behavior.
+
+## Chat list label
+
+Since migration 0090 every reaction write stores `created_at` (set or emoji change)
+and the owning `contact_id` / `group_id`, and the contacts/groups lists return the
+newest reaction as `lastReaction`. When it is newer than the last message the chat
+list shows `You: reacted with 👍`, `Reacted with 👍` or, in groups,
+`<Name>: reacted with 👍`. See [chat list previews](chats.md#chat-list-previews).

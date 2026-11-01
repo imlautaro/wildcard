@@ -25,7 +25,7 @@ import personality from '../personality/routes';
 import generation from '../contacts/generation';
 import { listVoices, voiceRepliesAvailable, type Voice } from '../voice/catalog';
 
-type Contact = { archivedAt?: number | null; historyRevision?: number; clearing?: number; speechAccent: string | null; onboardingChat?: number; setupPending?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; realName: string; alias: string | null; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageVoiceJSON?: string | null; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
+type Contact = { archivedAt?: number | null; historyRevision?: number; clearing?: number; speechAccent: string | null; onboardingChat?: number; setupPending?: number; initiativeEnabled: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; realName: string; alias: string | null; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageVoiceJSON?: string | null; lastReactionJSON?: string | null; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
 const columns = `archived_at AS archivedAt, history_revision AS historyRevision, clearing, (SELECT speech_accent FROM contact_agent WHERE id = contact.agent_id) AS speechAccent, onboarding_chat AS onboardingChat, setup_pending AS setupPending, initiative_enabled AS initiativeEnabled, voice_messages_enabled AS voiceMessagesEnabled,
   (SELECT voice_id FROM contact_agent WHERE id = contact.agent_id) AS voiceID, (SELECT voice_name FROM contact_agent WHERE id = contact.agent_id) AS voiceName, id, agent_id AS agentID, COALESCE(alias, name) AS name, name AS realName, alias, photo_version AS photoVersion, created_at AS createdAt, updated_at AS updatedAt, last_read_sequence AS lastReadSequence,
   CASE WHEN user_id = (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) THEN 'owner' ELSE 'member' END AS role`;
@@ -49,12 +49,17 @@ const selection = `${columns},
     FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
     ORDER BY t.sequence DESC LIMIT 1) AS lastMessageAt,
   (SELECT COUNT(*) FROM chat_turn t WHERE t.contact_id = contact.id AND t.user_id = contact.user_id
-    AND t.status = 'complete' AND t.assistant_text IS NOT NULL AND t.sequence > contact.last_read_sequence) AS unreadCount`;
+    AND t.status = 'complete' AND t.assistant_text IS NOT NULL AND t.sequence > contact.last_read_sequence) AS unreadCount,
+  (SELECT json_object('at', r.created_at, 'emoji', r.emoji, 'own', CASE WHEN r.user_id IS NOT NULL THEN json('true') ELSE json('false') END)
+    FROM message_reaction r WHERE r.contact_id = contact.id AND r.created_at IS NOT NULL
+    ORDER BY r.created_at DESC LIMIT 1) AS lastReactionJSON`;
 // Parse the complete source before clipping, keeping the legacy raw summary intact.
 function contactPreview(row: Contact) {
   const source = row.lastMessageText;
-  const { lastMessageVoiceJSON, ...fields } = row;
-  return { ...fields, lastMessageVoice: lastMessageVoiceJSON ? JSON.parse(lastMessageVoiceJSON) : null, lastMessageText: source == null ? source : [...source].slice(0, 500).join(''),
+  const { lastMessageVoiceJSON, lastReactionJSON, ...fields } = row;
+  return { ...fields, lastMessageVoice: lastMessageVoiceJSON ? JSON.parse(lastMessageVoiceJSON) : null,
+    // Newest reaction in this chat (docs/chats.md#chat-list-previews); clients show it when newer than the last message.
+    lastReaction: lastReactionJSON ? JSON.parse(lastReactionJSON) as { at: number; emoji: string; own: boolean } : null, lastMessageText: source == null ? source : [...source].slice(0, 500).join(''),
     lastMessagePreview: source == null ? null : [...(row.lastMessageFromUser === 0 ? plainMessageMarkdown(source) : source)].slice(0, 500).join('') };
 }
 const contacts = new Hono<{ Bindings: Env; Variables: { owner: string } }>();

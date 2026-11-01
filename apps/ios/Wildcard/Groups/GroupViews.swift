@@ -174,7 +174,11 @@ struct GroupChatView: View {
     let open: (HomeDestination) -> Void
     @State private var barWidth: CGFloat = 0
     @State private var isVisible = false
-    @State private var draft = ""
+    /// Lives in the cached conversation so it survives navigation and feeds the chat list "Draft:" preview.
+    private var draft: String {
+        get { store.draft }
+        nonmutating set { store.draft = newValue }
+    }
     @State private var attachment: DraftAttachment?
     @State private var photoSelection: PhotosPickerItem?
     @State private var showPhotoPicker = false

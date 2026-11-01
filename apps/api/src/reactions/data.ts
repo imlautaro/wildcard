@@ -26,10 +26,16 @@ export async function writeReaction(db: D1Database, target: { id: string; side: 
     ]);
     return result[0].results.length > 0;
   }
-  const result = await db.prepare(`INSERT INTO message_reaction (${targetColumn}, side, ${actorColumn}, emoji)
-    SELECT ?, ?, ?, ? WHERE ${access.sql}
-    ON CONFLICT DO UPDATE SET emoji = excluded.emoji RETURNING emoji`)
-    .bind(target.id, target.side, actor.id, emoji, ...access.values).first();
+  // created_at and the owning conversation feed the chat list preview (migration 0090);
+  // changing the emoji counts as new activity, re-choosing the same one does not.
+  const conversation = target.side === 'group'
+    ? { column: 'group_id', value: '(SELECT group_id FROM group_message WHERE id = ?)' }
+    : { column: 'contact_id', value: '(SELECT contact_id FROM chat_turn WHERE id = ?)' };
+  const result = await db.prepare(`INSERT INTO message_reaction (${targetColumn}, side, ${actorColumn}, emoji, created_at, ${conversation.column})
+    SELECT ?, ?, ?, ?, ?, ${conversation.value} WHERE ${access.sql}
+    ON CONFLICT DO UPDATE SET created_at = CASE WHEN emoji = excluded.emoji THEN created_at ELSE excluded.created_at END,
+      emoji = excluded.emoji, ${conversation.column} = excluded.${conversation.column} RETURNING emoji`)
+    .bind(target.id, target.side, actor.id, emoji, Date.now(), target.id, ...access.values).first();
   return !!result;
 }
 export const reactionTool: ModelTool = { type: 'function', function: {

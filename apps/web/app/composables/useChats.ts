@@ -1,5 +1,5 @@
 import { plainMessageMarkdown } from '~/utils/messageMarkdown';
-import type { ChatGroup, Contact, ContactsPage, GroupInvitation, ReceivedContactInvitation } from '~/utils/types';
+import type { ChatGroup, Contact, ContactsPage, GroupInvitation, LastReaction, ReceivedContactInvitation } from '~/utils/types';
 
 // Session cache for the chat list, the contact directory, and both invitation
 // inboxes. Loaded data renders synchronously on navigation; refreshes run in the
@@ -25,6 +25,8 @@ export type ChatRow = {
   receiptState: string | null;
   /** A first-circle contact still being created: shown disabled (docs/onboarding.md#progressive-setup). */
   setupPending?: boolean;
+  /** The preview is the unsent composer text, labeled "Draft:" (docs/chats.md#chat-list-previews). */
+  draft?: boolean;
 };
 
 const contacts = ref<Contact[]>([]);
@@ -332,17 +334,37 @@ function applyRead(kind: 'contact' | 'group', id: string, sequence: number, unre
   }
 }
 
+// Chat list second line (docs/chats.md#chat-list-previews), in priority order: live
+// activity, an unsent draft, a reaction newer than the last message, the last message.
+function draftPreview(text: string | undefined) {
+  const value = text?.replace(/\s+/g, ' ').trim();
+  return value ? [...value].slice(0, 500).join('') : null;
+}
+function withDraft(row: ChatRow, draft: string | null): ChatRow {
+  return draft ? { ...row, draft: true, preview: draft, sender: 'Draft', voice: null, own: false, sending: false, readAt: null, receiptState: null } : row;
+}
+function withReaction(row: ChatRow, reaction: LastReaction | null | undefined, group: boolean): ChatRow {
+  if (!reaction || reaction.at <= row.at || row.sending) return row;
+  const sender = reaction.own ? 'You' : group ? (reaction.name || null) : null;
+  return { ...row, preview: `${sender ? 'reacted' : 'Reacted'} with ${reaction.emoji}`, sender, voice: null, own: false, readAt: null, receiptState: null };
+}
+
 function contactRow(contact: Contact): ChatRow | null {
   if (contact.setupPending === 1) {
     return { kind: 'contact', archived: false, canClear: false, canDelete: false, id: contact.id, name: contact.name, photoPath: contactPhotoPath(contact),
       voice: null, preview: 'Creating…', sender: null, at: contact.createdAt, unread: 0, own: false, sending: false, readAt: null, receiptState: null, setupPending: true };
   }
-  const row = contactMessageRow(contact);
+  const draft = contact.clearing === 1 ? null : draftPreview(peekConversation(contact.id)?.draft);
+  const message = contactMessageRow(contact);
+  // A draft keeps a chat without messages in the list.
+  const row = message ?? (draft ? { kind: 'contact' as const, archived: contact.archivedAt != null, canClear: true, canDelete: true, id: contact.id, name: contact.name,
+    photoPath: contactPhotoPath(contact), voice: null, preview: '', sender: null, at: contact.createdAt, unread: Math.max(0, contact.unreadCount ?? 0),
+    own: false, sending: false, readAt: null, receiptState: null } : null);
   if (row && contact.clearing === 1) return { ...row, voice: null, preview: 'Cleaning up...' };
   if (row && (contact.replyActivity === 'typing' || contact.replyActivity === 'recording' || contact.replyActivity === 'researching')) {
     return { ...row, voice: null, preview: contact.replyActivity === 'researching' ? 'Researching...' : contact.replyActivity === 'recording' ? 'Recording...' : 'Typing...', own: false, sender: null, sending: false, receiptState: null };
   }
-  return row;
+  return row && withDraft(withReaction(row, contact.lastReaction, false), draft);
 }
 
 function contactMessageRow(contact: Contact): ChatRow | null {
@@ -399,11 +421,13 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   }
   if (voice) preview = voicePreviewLabel(voice);
   const own = !!userID && userID === me;
-  return {
+  const row: ChatRow = {
     kind: 'group', voice: group.replyActivity || group.clearing === 1 ? null : voice, archived: group.archivedAt != null, canClear: group.ownerID === me, canDelete: false, id: group.id, name: group.name, photoPath: groupPhotoPath(group), preview: group.clearing===1 ? 'Cleaning up...' : group.replyActivity ?? preview,
     sender: group.replyActivity ? null : own ? 'You' : sender, at, unread: Math.max(0, group.unreadCount ?? 0),
     own: group.replyActivity ? false : own, sending, readAt: null, receiptState: receiptState ?? 'sent',
   };
+  if (group.replyActivity || group.clearing === 1) return row;
+  return withDraft(withReaction(row, group.lastReaction, true), draftPreview(cached?.draft));
 }
 
 const loaded = computed(() => contactsLoaded.value && groupsLoaded.value);

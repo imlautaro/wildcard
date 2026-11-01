@@ -43,8 +43,10 @@ const mayInvite = `EXISTS (SELECT 1 FROM group_member m JOIN chat_group g ON g.i
 type GroupSummary = Record<string, unknown> & { lastMessageText: string | null; lastMessageUserID: string | null };
 function groupPreview(row: GroupSummary) {
   const source = row.lastMessageText;
-  const { lastMessageVoiceJSON, replyActivityJSON, ...fields } = row;
+  const { lastMessageVoiceJSON, replyActivityJSON, lastReactionJSON, ...fields } = row;
   return { ...fields, lastMessageVoice: typeof lastMessageVoiceJSON === 'string' ? JSON.parse(lastMessageVoiceJSON) : null,
+    // Newest reaction in this group (docs/chats.md#chat-list-previews); clients show it when newer than the last message.
+    lastReaction: typeof lastReactionJSON === 'string' ? JSON.parse(lastReactionJSON) as { at: number; emoji: string; own: boolean; name: string | null } : null,
     replyActivity: replyActivityLabel(typeof replyActivityJSON === 'string' ? JSON.parse(replyActivityJSON) as ReplyActivityEntry[] : []),
     lastMessagePreview: source == null ? null : [...(row.lastMessageUserID == null ? plainMessageMarkdown(source) : source)].slice(0, 500).join('') };
 }
@@ -73,7 +75,12 @@ g.history_revision AS historyRevision,g.clearing,m.archived_at AS archivedAt, (S
   (SELECT CASE WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN 'Voice message' WHEN text = '' AND attachments_json IS NOT NULL THEN json_array_length(attachments_json) || ' photos' WHEN text = '' AND attachment_json IS NOT NULL THEN 'Attachment: ' || json_extract(attachment_json, '$.name') ELSE text END FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageText,
   (SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1) AS lastMessageAt,
   (SELECT ${agentDisplayName('lm.agent_id', 'lm.sender_name', 'm.user_id')} FROM group_message lm WHERE lm.group_id = g.id AND lm.task_id IS NULL AND lm.event_json IS NULL ORDER BY lm.sequence DESC LIMIT 1) AS lastMessageSenderName,
-  COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt`;
+  COALESCE((SELECT created_at FROM group_message WHERE group_id = g.id AND task_id IS NULL AND event_json IS NULL ORDER BY sequence DESC LIMIT 1), g.created_at) AS updatedAt,
+  (SELECT json_object('at', r.created_at, 'emoji', r.emoji, 'own', CASE WHEN r.user_id = m.user_id THEN json('true') ELSE json('false') END,
+      'name', CASE WHEN r.user_id IS NOT NULL THEN (SELECT name FROM user WHERE id = r.user_id)
+        ELSE ${agentDisplayName('r.agent_id', '(SELECT name FROM contact_agent WHERE id = r.agent_id)', 'm.user_id')} END)
+    FROM message_reaction r WHERE r.group_id = g.id AND r.created_at IS NOT NULL
+    ORDER BY r.created_at DESC LIMIT 1) AS lastReactionJSON`;
 
 groups.use('*', async (c, next) => {
   const session = await readBearerSession(c.env, c.req.raw.headers);

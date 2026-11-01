@@ -314,6 +314,10 @@ photos and mutations require current membership. Responses have `no-store`.
 | POST /:id/replies/:replyID/retry | Retry a failed reply after active work finishes |
 | GET /:id/photos/:kind/:memberID | Current member avatar, kind `user` or `agent` |
 
+Chat list rows show an unsent draft as **Draft:** and a reaction newer than the last
+message as `You: reacted with 👍` or `<Name>: reacted with 👍`; see
+[chat list previews](chats.md#chat-list-previews).
+
 ## Delivery and read receipts
 
 Migration `0022_group_receipts.sql` records the human and agent recipient identities

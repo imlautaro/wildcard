@@ -10,6 +10,8 @@ final class ChatStore {
     }
 
     private(set) var reactions = MessageReactionStore()
+    /// Unsent composer text: kept across navigation and shown as "Draft:" in the chat list.
+    var draft = ""
     struct OutgoingMessage {
         let turn: ChatTurn
         let attachment: DraftAttachment?

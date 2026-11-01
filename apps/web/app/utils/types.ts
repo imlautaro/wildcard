@@ -11,6 +11,9 @@ export type AuthUser = {
 // Server feature switches returned next to `user` by GET /me (docs/voice.md).
 export type Features = { voiceMessages: boolean };
 
+/** `name` is set for groups only: the reacting member or contact, as this viewer sees it. */
+export type LastReaction = { at: number; emoji: string; own: boolean; name?: string | null };
+
 export type Contact = {
   archivedAt?: number | null;
   historyRevision?: number;
@@ -36,6 +39,8 @@ export type Contact = {
   updatedAt: number;
   replyActivity?: string | null;
   lastMessageVoice?: VoiceInfo | null;
+  /** Newest reaction in the chat (docs/chats.md#chat-list-previews); shown when newer than the last message. */
+  lastReaction?: LastReaction | null;
   lastMessagePreview?: string | null;
   lastMessageText: string | null;
   lastMessageAt: number | null;
@@ -124,6 +129,8 @@ export type ChatGroup = {
   updatedAt: number;
   replyActivity?: string | null;
   lastMessageVoice?: VoiceInfo | null;
+  /** Newest reaction in the chat (docs/chats.md#chat-list-previews); shown when newer than the last message. */
+  lastReaction?: LastReaction | null;
   lastMessagePreview?: string | null;
   lastMessageText: string | null;
   lastMessageAt: number | null;

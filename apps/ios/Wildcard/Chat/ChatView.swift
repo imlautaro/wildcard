@@ -14,7 +14,11 @@ struct ChatView: View {
     var openPost: ((String) -> Void)? = nil
     @Environment(NativeExperiments.self) private var native
     @State private var importedDraftID: String?
-    @State private var draft = ""
+    /// Lives in the cached conversation so it survives navigation and feeds the chat list "Draft:" preview.
+    private var draft: String {
+        get { chat.draft }
+        nonmutating set { chat.draft = newValue }
+    }
     @State private var attachment: DraftAttachment?
     @State private var photoSelection: PhotosPickerItem?
     @State private var showPhotoPicker = false

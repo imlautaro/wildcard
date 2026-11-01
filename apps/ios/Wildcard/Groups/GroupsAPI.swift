@@ -12,6 +12,8 @@ struct ChatGroup: Decodable, Hashable, Identifiable {
     let updatedAt: Double
     var replyActivity: String? = nil
     var lastMessageVoice: MessageVoice? = nil
+    /// Newest reaction in this group; shown when newer than the last message (docs/chats.md#chat-list-previews).
+    var lastReaction: LastReaction? = nil
     var lastMessagePreview: String? = nil
     var lastMessageText: String?
     var lastMessageAt: Double?
@@ -358,6 +360,8 @@ final class GroupChatStore {
     }
 
     private(set) var reactions = MessageReactionStore()
+    /// Unsent composer text: kept across navigation and shown as "Draft:" in the chat list.
+    var draft = ""
     @ObservationIgnored let messageInfo = NavigationSnapshotCache<GroupMessageInfo>()
     private var historyRevision = 0
     private(set) var snapshot: GroupSnapshot?
@@ -760,6 +764,7 @@ final class GroupConversationCache {
         while entries.count >= 8, let oldest = entries.filter({
             !$0.value.isRetained && !$0.value.isSending && !$0.value.isLoadingMore
                 && $0.value.pendingID == nil && $0.value.failedVoice == nil && $0.value.reactions.pending.isEmpty
+                && $0.value.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }).min(by: { (lastAccess[$0.key] ?? 0) < (lastAccess[$1.key] ?? 0) })?.key {
             lastAccess.removeValue(forKey: oldest)
             entries.removeValue(forKey: oldest)?.invalidate()
@@ -775,7 +780,8 @@ final class GroupConversationCache {
     func aliasChanged() {
         for (id, store) in entries {
             if store.isRetained || store.isSending || store.isLoadingMore
-                || store.pendingID != nil || store.failedVoice != nil || !store.reactions.pending.isEmpty {
+                || store.pendingID != nil || store.failedVoice != nil || !store.reactions.pending.isEmpty
+                || !store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 store.invalidateDetails()
             } else {
                 remove(id: id)

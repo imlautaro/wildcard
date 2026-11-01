@@ -117,7 +117,7 @@ onMounted(() => { void chats.refresh(); });
                 <MessageReceipt v-if="row.own" :sending="row.sending" :read-at="row.readAt" :receipt-state="row.receiptState" />
                 <span v-if="row.voice" class="preview-mic" :class="{ listened: row.own ? row.voice.listenedAt != null : row.voice.ownListenedAt != null }"
                   role="img" :aria-label="(row.own ? row.voice.listenedAt != null : row.voice.ownListenedAt != null) ? 'Listened' : 'Not listened yet'"><AppIcon name="mic" filled /></span>
-                <b v-if="row.sender">{{ row.sender }}: </b>{{ row.preview }}
+                <b v-if="row.sender" :class="{ 'draft-label': row.draft }">{{ row.sender }}: </b>{{ row.preview }}
               </span>
               <span v-if="row.unread" class="badge" :aria-label="`${row.unread} unread`">{{ row.unread }}</span>
             </div>
@@ -139,4 +139,6 @@ onMounted(() => { void chats.refresh(); });
 .preview-mic { display: inline-flex; vertical-align: -2px; margin-right: 4px; color: var(--md-on-surface-variant); }
 .preview-mic.listened { color: var(--read); }
 .preview-mic :deep(svg) { width: 16px; height: 16px; }
+.draft-label { color: var(--md-primary); }
+.row.active .draft-label { color: inherit; }
 </style>

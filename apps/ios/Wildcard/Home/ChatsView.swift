@@ -24,7 +24,9 @@ struct ChatsView: View {
     private var displayedContacts: [Contact] {
         if mode != .contacts {
             return contacts.contacts.map { contacts.preview(for: $0) }.filter {
-                ($0.archivedAt != nil) == (mode == .archived) && ($0.lastMessageAt != nil || $0.lastMessageText != nil || $0.onboardingChat == 1 || $0.clearing == 1 || mode == .archived)
+                ($0.archivedAt != nil) == (mode == .archived) && ($0.lastMessageAt != nil || $0.lastMessageText != nil || $0.onboardingChat == 1 || $0.clearing == 1 || mode == .archived
+                    // A draft keeps a chat without messages in the list.
+                    || ChatListPreview.draft(contacts.conversations.cachedStore(for: $0.id)?.draft) != nil)
             }
         }
         return contacts.contacts.sorted {
@@ -360,6 +362,23 @@ private struct ChatListRow: View {
         contact.replyActivity == "researching" ? "Researching..."
             : contact.replyActivity == "recording" ? "Recording..." : contact.replyActivity == "typing" ? "Typing..." : nil
     }
+    private var draft: String? {
+        contact.clearing == 1 || activity != nil ? nil : ChatListPreview.draft(contacts.conversations.cachedStore(for: contact.id)?.draft)
+    }
+    private var reaction: (sender: String?, text: String)? {
+        guard contact.clearing != 1, activity == nil, draft == nil,
+              contacts.conversations.cachedStore(for: contact.id)?.outgoingMessage == nil else { return nil }
+        return ChatListPreview.reaction(contact.lastReaction, after: contact.lastMessageAt, group: false)
+    }
+    /// The second line: live activity, then a draft, then a newer reaction, then the last message.
+    private var preview: AttributedString {
+        if let draft { return ChatListPreview.labeled("Draft", draft, size: previewSize, accent: true) }
+        if let reaction { return reaction.sender.map { ChatListPreview.labeled($0, reaction.text, size: previewSize) } ?? AttributedString(reaction.text) }
+        return AttributedString(messagePreview)
+    }
+    /// Receipts and the microphone belong to the last message only.
+    private var showsMessage: Bool { activity == nil && draft == nil && reaction == nil }
+    @ScaledMetric(relativeTo: .subheadline) private var previewSize: CGFloat = 15
     private var messagePreview: String {
         if contact.clearing == 1 { return "Cleaning up..." }
         if let activity { return activity }
@@ -379,13 +398,13 @@ private struct ChatListRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    if activity == nil && contact.lastMessageFromUser == 1 {
+                    if showsMessage && contact.lastMessageFromUser == 1 {
                         MessageReceiptView(sentAt: contact.lastMessageAt ?? contact.createdAt, readAt: contact.lastMessageReadAt, isSending: contacts.conversations.cachedStore(for: contact.id)?.outgoingMessage != nil)
                     }
-                    if activity == nil && contact.clearing != 1, let voice = contact.lastMessageVoice {
+                    if showsMessage && contact.clearing != 1, let voice = contact.lastMessageVoice {
                         VoicePreviewMicrophone(listened: contact.lastMessageFromUser == 1 ? voice.listenedAt != nil : voice.ownListenedAt != nil)
                     }
-                    Text(messagePreview).manrope(.subheadline)
+                    Text(preview).manrope(.subheadline)
                         .lineLimit(2)
                         .foregroundStyle(.secondary)
                 }
@@ -440,9 +459,25 @@ private struct GroupChatListRow: View {
     private var own: Bool { group.lastMessageUserID == auth.user?.id && group.lastMessageUserID != nil }
     @ScaledMetric(relativeTo: .subheadline) private var previewSize: CGFloat = 15
 
+    private var draft: String? {
+        group.clearing == 1 || group.replyActivity != nil ? nil : ChatListPreview.draft(groups.conversations.cachedStore(for: group.id)?.draft)
+    }
+    private var sending: Bool {
+        groups.conversations.cachedStore(for: group.id).map { $0.pendingID == group.lastMessageID && !$0.pendingAccepted } ?? false
+    }
+    private var reaction: (sender: String?, text: String)? {
+        guard group.clearing != 1, group.replyActivity == nil, draft == nil, !sending else { return nil }
+        return ChatListPreview.reaction(group.lastReaction, after: group.lastMessageAt, group: true)
+    }
+    /// Receipts and the microphone belong to the last message only.
+    private var showsMessage: Bool { group.replyActivity == nil && draft == nil && reaction == nil }
+
+    /// The second line: live activity, then a draft, then a newer reaction, then the last message.
     private var messagePreview: AttributedString {
         if group.clearing == 1 { return AttributedString("Cleaning up...") }
         if let activity = group.replyActivity { return AttributedString(activity) }
+        if let draft { return ChatListPreview.labeled("Draft", draft, size: previewSize, accent: true) }
+        if let reaction { return reaction.sender.map { ChatListPreview.labeled($0, reaction.text, size: previewSize) } ?? AttributedString(reaction.text) }
         let source = group.lastMessageText
         let cleaned = group.lastMessagePreview ?? source.map { group.lastMessageUserID == nil ? MessageMarkdown.plainText($0) : $0 }
         let voiceLabel = group.lastMessageVoice.map { "Voice message (\(VoiceDuration.format(milliseconds: $0.durationMs)))" }
@@ -460,12 +495,12 @@ private struct GroupChatListRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(group.name).manrope(.body, weight: .semibold).foregroundStyle(.primary).lineLimit(1)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    if own && group.replyActivity == nil {
+                    if own && showsMessage {
                         MessageReceiptView(sentAt: group.lastMessageAt ?? group.createdAt,
-                            isSending: groups.conversations.cachedStore(for: group.id).map { $0.pendingID == group.lastMessageID && !$0.pendingAccepted } ?? false,
+                            isSending: sending,
                             receiptState: group.lastMessageReceiptState ?? "sent")
                     }
-                    if group.replyActivity == nil && group.clearing != 1, let voice = group.lastMessageVoice {
+                    if showsMessage && group.clearing != 1, let voice = group.lastMessageVoice {
                         VoicePreviewMicrophone(listened: own ? voice.listenedAt != nil : voice.ownListenedAt != nil)
                     }
                     Text(messagePreview).manrope(.subheadline).foregroundStyle(.secondary).lineLimit(2)
@@ -489,6 +524,28 @@ private struct GroupChatListRow: View {
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+}
+
+/// Chat list second-line labels shared by private and group rows (docs/chats.md#chat-list-previews).
+private enum ChatListPreview {
+    /// The unsent composer text on one line, or nil when there is nothing to show.
+    static func draft(_ text: String?) -> String? {
+        let value = (text ?? "").split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return value.isEmpty ? nil : String(value.prefix(500))
+    }
+    /// "You: reacted with 👍" / "Reacted with 👍" (private) / "Ana: reacted with 👍" (group), when the
+    /// reaction is newer than the last message.
+    static func reaction(_ reaction: LastReaction?, after lastMessageAt: Double?, group: Bool) -> (sender: String?, text: String)? {
+        guard let reaction, reaction.at > (lastMessageAt ?? 0) else { return nil }
+        let sender = reaction.own ? "You" : group ? reaction.name.flatMap { $0.isEmpty ? nil : $0 } : nil
+        return (sender, "\(sender == nil ? "Reacted" : "reacted") with \(reaction.emoji)")
+    }
+    static func labeled(_ label: String, _ text: String, size: CGFloat, accent: Bool = false) -> AttributedString {
+        var prefix = AttributedString(label + ": ")
+        prefix.font = Font(AppTypography.font(size: size, weight: .bold))
+        if accent { prefix.foregroundColor = .accentColor }
+        return prefix + AttributedString(text)
     }
 }
 

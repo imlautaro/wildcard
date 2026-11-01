@@ -571,10 +571,16 @@ export const messageReaction = sqliteTable('message_reaction', {
   userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
   agentId: text('agent_id').references(() => contactAgent.id, { onDelete: 'cascade' }),
   emoji: text('emoji').notNull(),
+  // Chat list reaction previews (migration 0090): set/changed time and owning conversation.
+  createdAt: date('created_at'),
+  contactId: text('contact_id'),
+  groupId: text('group_id'),
 }, (t) => [
   uniqueIndex('reaction_identity').on(sql`COALESCE(${t.turnId}, ${t.groupMessageId})`, t.side,
     sql`COALESCE(${t.userId}, ${t.agentId})`, sql`(${t.userId} IS NOT NULL)`),
   index('reaction_turn').on(t.turnId), index('reaction_group_message').on(t.groupMessageId),
+  index('reaction_contact_activity').on(t.contactId, t.createdAt).where(sql`${t.contactId} IS NOT NULL AND ${t.createdAt} IS NOT NULL`),
+  index('reaction_group_activity').on(t.groupId, t.createdAt).where(sql`${t.groupId} IS NOT NULL AND ${t.createdAt} IS NOT NULL`),
   check('reaction_side', sql`${t.side} IN ('user', 'assistant', 'group')`),
   check('reaction_emoji', sql`${t.emoji} IN ('👍', '❤️', '😂', '😮', '😢', '🙏')`),
   check('reaction_actor', sql`(${t.userId} IS NULL) != (${t.agentId} IS NULL)`),

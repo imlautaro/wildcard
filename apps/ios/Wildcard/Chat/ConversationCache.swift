@@ -22,7 +22,8 @@ final class ConversationCache {
         if let store = entries[contactID] { return store }
         // Cache hits must not rewrite observable entries during SwiftUI rendering.
         while entries.count >= capacity,
-              let oldest = entries.filter({ !$0.value.isRetained && !$0.value.isSending && !$0.value.isLoadingMore && $0.value.reactions.pending.isEmpty && $0.value.failedVoice == nil })
+              let oldest = entries.filter({ !$0.value.isRetained && !$0.value.isSending && !$0.value.isLoadingMore && $0.value.reactions.pending.isEmpty && $0.value.failedVoice == nil
+                    && $0.value.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
                 .min(by: { (lastAccess[$0.key] ?? 0) < (lastAccess[$1.key] ?? 0) })?.key {
             lastAccess.removeValue(forKey: oldest)
             entries.removeValue(forKey: oldest)?.invalidate()

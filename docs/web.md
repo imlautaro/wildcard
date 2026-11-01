@@ -1482,3 +1482,12 @@ keeps the existing header menu below 861 px.
 Visual verification remains pending: inspect 861, 1024 and 1440 px widths in light
 and dark appearance, keyboard focus, trailing badges and long chat titles. Switch
 For you → Chats → Account → back and confirm retained chat scroll and selection.
+
+## Draft and reaction labels in the chat list (migration 0090)
+
+Same behavior as iOS: the second line of a chat row shows **Draft:** (primary color)
+with the unsent composer text, or `You: reacted with 👍` / `Reacted with 👍` /
+`<Name>: reacted with 👍` (groups) when a reaction is newer than the last message.
+Drafts stay in the session conversation cache (`entry.draft`), which now never evicts
+an entry holding a draft. Typecheck only; browser verification pending. See
+[chat list previews](chats.md#chat-list-previews).
