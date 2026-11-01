@@ -43,7 +43,7 @@ export function batchStatement(env: Env, job: ChatJob) {
     AND assistant_text IS NULL
     AND EXISTS (SELECT 1 FROM agent_attention WHERE turn_id = ?1 AND attempt = ?2)
     AND schedule_id IS NULL AND group_request_id IS NULL AND initiative_source_id IS NULL AND task_id IS NULL
-    AND attachment_json IS NULL AND reply_to_id IS NULL
+    AND attachment_json IS NULL AND reply_to_id IS NULL AND home_post_id IS NULL
     AND NOT EXISTS (SELECT 1 FROM native_action WHERE turn_id = ?1)
     AND NOT EXISTS (SELECT 1 FROM group_post WHERE source_turn_id = ?1)
     AND NOT EXISTS (SELECT 1 FROM group_request WHERE source_turn_id = ?1)
@@ -60,7 +60,7 @@ export function batchStatement(env: Env, job: ChatJob) {
       AND next.status = 'queued' AND next.schedule_id IS NULL AND next.group_request_id IS NULL
       AND next.initiative_source_id IS NULL AND next.attachment_json IS NULL
       AND next.native_context_json IS chat_turn.native_context_json
-      AND next.reply_to_id IS NULL AND length(CAST(next.user_text AS BLOB)) <= 1000)`)
+      AND next.reply_to_id IS NULL AND next.home_post_id IS NULL AND length(CAST(next.user_text AS BLOB)) <= 1000)`)
     .bind(job.turnID, job.attempt, Date.now());
 }
 

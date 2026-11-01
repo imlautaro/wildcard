@@ -16,6 +16,8 @@ final class ContactsStore {
     private(set) var aliasRevision = 0
     /// A message an Updates note suggested sending, prefilled once when its chat opens (memory only).
     var suggestedDrafts: [String: String] = [:]
+    /// "Continue in chat" from a For you post: the chat's next message answers it (docs/updates.md#continue-in-chat).
+    var postReplies: [String: HomePostReference] = [:]
     private let readAcknowledgements = ReadAcknowledgementQueue()
     let conversations = ConversationCache()
     let scheduleSnapshots = NavigationSnapshotCache<[ContactSchedule]>()

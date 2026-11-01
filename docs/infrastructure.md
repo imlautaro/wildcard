@@ -2927,6 +2927,18 @@ stop spending immediately (in-flight runs finish their current card). Keep the
 tables; deleting `home_card`/`home_topic` rows only clears feeds, and dropping them
 requires a release of code that no longer reads them.
 
+## Chat replies to For you posts — migration 0087
+
+Apply `apps/api/migrations/0087_chat_home_post.sql` after 0086. It adds two nullable
+columns to `chat_turn`: `home_post_id` (the For you post a message answers; no foreign
+key, posts expire) and `home_post_json` (a small JSON snapshot, checked valid and at most
+2,000 bytes). Additive: existing rows stay `NULL`. Release the API before clients that
+send `homePost`, since older APIs reject unknown message fields. No new resource,
+binding, var or secret. Local: `npm run db:migrate:local --workspace @wildcard/api`.
+Validated on the local workerd D1; not yet applied to staging or production. Rollback:
+release code that ignores the columns and keep them. See
+[Updates](updates.md#continue-in-chat).
+
 ## Updates posts — migration 0086
 
 Apply `apps/api/migrations/0086_home_posts.sql` after 0085. It adds `home_post`

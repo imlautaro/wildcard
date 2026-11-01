@@ -220,6 +220,7 @@ onBeforeUnmount(() => {
       <template v-else-if="item.kind === 'pending' && state.pending">
         <div v-if="state.pending.voice" class="bubble-row outgoing">
           <div class="bubble">
+            <MessagePostReference v-if="state.pending.homePost" :post="state.pending.homePost" />
             <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
             <VoiceMessage :voice="{ durationMs: state.pending.voice.durationMs, listenedAt: null, transcript: null }" :path="`contacts/${contactID}/chat/turns/${state.pending.id}/attachment`" :blob="state.pending.voice.blob" outgoing />
             <div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div>
@@ -227,6 +228,7 @@ onBeforeUnmount(() => {
         </div>
         <div v-if="state.pending.attachment" class="bubble-row outgoing">
           <div class="bubble media">
+            <MessagePostReference v-if="state.pending.homePost" :post="state.pending.homePost" />
             <MessageReplyQuote v-if="state.pending.replyTo" :preview="replyPreview(state.pending.replyTo)" />
             <MessageAttachment :attachment="state.pending.attachment" :path="null" :local-url="state.pending.attachment.previewURL" />
             <div v-if="state.pending.text && state.pending.attachment.previewURL" class="caption"><LinkifiedText :text="state.pending.text" /></div>
@@ -234,7 +236,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div v-if="state.pending.text && !state.pending.attachment?.previewURL" class="bubble-row outgoing">
-          <div class="bubble"><MessageReplyQuote v-if="state.pending.replyTo && !state.pending.attachment" :preview="replyPreview(state.pending.replyTo)" /><LinkifiedText :text="state.pending.text" /><div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div></div>
+          <div class="bubble"><MessagePostReference v-if="state.pending.homePost && !state.pending.attachment" :post="state.pending.homePost" /><MessageReplyQuote v-if="state.pending.replyTo && !state.pending.attachment" :preview="replyPreview(state.pending.replyTo)" /><LinkifiedText :text="state.pending.text" /><div class="meta">{{ messageTime(state.pending.createdAt) }}<MessageReceipt sending /></div></div>
         </div>
         <div v-if="state.pending.failed" class="status-line outgoing error">
           {{ state.pending.failed }}
@@ -251,18 +253,20 @@ onBeforeUnmount(() => {
               :voice="!!item.turn.voice" :transcript="item.turn.voice?.transcript" @reply="startReply(item.turn, 'user')">
               <div class="private-message-content">
                 <div v-if="item.turn.voice" class="bubble">
+                  <MessagePostReference v-if="item.turn.homePost" :post="item.turn.homePost" interactive />
                   <MessageReplyQuote v-if="item.turn.replyTo" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />
                   <VoiceMessage :voice="item.turn.voice" :path="attachmentPath(item.turn)" outgoing />
                   <div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
                 </div>
                 <template v-else>
                 <div v-if="item.turn.attachment" class="bubble media">
+                  <MessagePostReference v-if="item.turn.homePost" :post="item.turn.homePost" interactive />
                   <MessageReplyQuote v-if="item.turn.replyTo" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" />
                   <MessageAttachment :attachment="item.turn.attachment" :path="attachmentPath(item.turn)" />
                   <div v-if="item.turn.userText && item.turn.attachment.mimeType.startsWith('image/')" class="caption"><LinkifiedText :text="item.turn.userText" /></div>
                   <div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div>
                 </div>
-                <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble"><MessageReplyQuote v-if="item.turn.replyTo && !item.turn.attachment" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" /><LinkifiedText :text="item.turn.userText" /><LinkPreviewCard :url="previewLink(item.turn.userText, false)" /><div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
+                <div v-if="item.turn.userText && !item.turn.attachment?.mimeType.startsWith('image/')" class="bubble"><MessagePostReference v-if="item.turn.homePost && !item.turn.attachment" :post="item.turn.homePost" interactive /><MessageReplyQuote v-if="item.turn.replyTo && !item.turn.attachment" :preview="replyPreview(item.turn.replyTo)" interactive @open="showQuoted(item.turn.replyTo)" /><LinkifiedText :text="item.turn.userText" /><LinkPreviewCard :url="previewLink(item.turn.userText, false)" /><div class="meta">{{ messageTime(item.turn.createdAt) }}<MessageReceipt :read-at="item.turn.readAt" /></div></div>
                 </template>
               </div>
             </MessageReactions>
@@ -315,8 +319,8 @@ onBeforeUnmount(() => {
     <ChatScrollDown v-if="positioned && !pinned" @click="scrollToBottom" />
     </div>
     <ChatComposer
-      ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable || contact?.clearing === 1" :sending="!!state.pending" :reply="replyTarget"
-      :voice-key="contactID" @send="onSend" @voice="onVoice" @typing="activity.typing()" @cancel-reply="state.replyTo = null"
+      ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable || contact?.clearing === 1" :sending="!!state.pending" :reply="replyTarget" :post="state.homePost"
+      :voice-key="contactID" @send="onSend" @voice="onVoice" @typing="activity.typing()" @cancel-reply="state.replyTo = null" @cancel-post="state.homePost = null"
     />
   </template>
 </template>

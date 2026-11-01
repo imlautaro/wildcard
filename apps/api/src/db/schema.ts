@@ -147,6 +147,9 @@ export const chatTurn = sqliteTable('chat_turn', {
   originGroupId: text('origin_group_id').references((): AnySQLiteColumn => chatGroup.id, { onDelete: 'set null' }),
   replyToId: text('reply_to_id').references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'set null' }),
   replyToSide: text('reply_to_side'),
+  // The For you post this message answers (migration 0087); no foreign key, posts expire.
+  homePostId: text('home_post_id'),
+  homePostJson: text('home_post_json'),
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
   id: text('id').notNull().unique(),
   contactId: text('contact_id').notNull(),

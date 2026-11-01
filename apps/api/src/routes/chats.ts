@@ -15,17 +15,18 @@ import { dispatchChat } from '../chat/dispatch';
 import { registerChatObject, discardChatObject } from '../chat/object-storage';
 import { isVoice, parseVoice } from '../voice/speech';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
+import { parsePostReference, publicPostReference, referencedPost, referencedPosts } from '../home/references';
 
 const chats = new Hono<{ Bindings: Env; Variables: { owner: string; contactID: string } }>();
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const attachmentBody = bodyLimit({ maxSize: 7 * 1024 * 1024 + 32768, onError: (c) => c.json({ error: 'Attachment must be 5 MB or smaller' }, 413) });
 const messageBody = bodyLimit({ maxSize: 32768, onError: (c) => c.json({ error: 'Request body too large' }, 413) });
 async function quotedTurn(db: D1Database, turn: StoredTurn) {
-  const quotes = await privateQuotes(db, turn.contactID, turn.userID, [turn]);
-  return publicTurn(turn, quotes(turn), quotes);
+  const [quotes, posts] = await Promise.all([privateQuotes(db, turn.contactID, turn.userID, [turn]), referencedPosts(db, turn.userID, [turn])]);
+  return { ...publicTurn(turn, quotes(turn), quotes), homePost: publicPostReference(turn, posts) };
 }
-const sameReply = (turn: StoredTurn, reply: { messageID: string; side: string } | undefined) =>
-  turn.replyToID === (reply?.messageID ?? null) && turn.replyToSide === (reply?.side ?? null);
+const sameReply = (turn: StoredTurn, reply: { messageID: string; side: string } | undefined, postID: string | undefined) =>
+  turn.replyToID === (reply?.messageID ?? null) && turn.replyToSide === (reply?.side ?? null) && (turn.homePostID ?? null) === (postID ?? null);
 chats.use('*', async (c, next) => {
   const id = c.req.param('id');
   if (!id || !await c.env.DB.prepare('SELECT id FROM contact WHERE id = ? AND user_id = ?')
@@ -107,10 +108,10 @@ chats.get('/turns', async (c) => {
     WHERE contact_id = ?1 AND user_id = ?2 AND sequence < ?3 ORDER BY sequence DESC LIMIT 51`)
     .bind(c.get('contactID'), c.get('owner'), before ? Number(before) : Number.MAX_SAFE_INTEGER).all<ChatTurn & { attachmentJSON: string | null; taskTitle: string | null }>();
   const page = results.slice(0, 50);
-  const quotes = await privateQuotes(c.env.DB, c.get('contactID'), c.get('owner'), page);
+  const [quotes, posts] = await Promise.all([privateQuotes(c.env.DB, c.get('contactID'), c.get('owner'), page), referencedPosts(c.env.DB, c.get('owner'), page)]);
   const revision = await c.env.DB.prepare('SELECT history_revision AS value FROM contact WHERE id=?').bind(c.get('contactID')).first<{value:number}>();
   if (!epoch || revision?.value!==epoch.value) return c.json({error:'Chat was cleared. Refresh history.'},409);
-  return c.json({ historyRevision: epoch.value, presence, turns: page.reverse().map((turn) => ({ ...publicTurn(turn, quotes(turn), quotes), taskTitle: turn.taskTitle })), nextBefore: results.length > 50 ? page[0].sequence : null });
+  return c.json({ historyRevision: epoch.value, presence, turns: page.reverse().map((turn) => ({ ...publicTurn(turn, quotes(turn), quotes), homePost: publicPostReference(turn, posts), taskTitle: turn.taskTitle })), nextBefore: results.length > 50 ? page[0].sequence : null });
 });
 // Acknowledge only completed replies actually presented by the client. Never move backwards.
 chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }), async (c) => {
@@ -139,7 +140,7 @@ chats.put('/read', bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: 'R
 });
 chats.post('/turns', attachmentBody, async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
-  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'voice', 'replyTo', 'nativeContext', 'remoteDeviceID', 'historyRevision'].includes(key))
+  if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['id', 'text', 'timeZone', 'attachment', 'voice', 'replyTo', 'homePost', 'nativeContext', 'remoteDeviceID', 'historyRevision'].includes(key))
     || (body.timeZone !== undefined && !validTimeZone(body.timeZone))
     || typeof body.id !== 'string' || !uuid.test(body.id) || typeof body.text !== 'string'
     || (!body.text.trim() && body.attachment === undefined && body.voice === undefined) || Array.from(body.text.trim()).length > 4000 || body.text.includes('\0')) {
@@ -166,6 +167,9 @@ chats.post('/turns', attachmentBody, async (c) => {
   const nativeJSON = native ? JSON.stringify(native) : null;
   const reply = parsePrivateReply(body.replyTo);
   if (reply === null) return c.json({ error: 'Choose a message from this conversation to reply to' }, 400);
+  // A For you post this message answers (docs/updates.md#continue-in-chat).
+  const postID = parsePostReference(body.homePost);
+  if (postID === null) return c.json({ error: 'Choose a For you post to reply to' }, 400);
   const attachment = body.voice !== undefined ? await parseVoice(body.voice)
     : body.attachment === undefined ? null : await parseAttachment(body.attachment);
   if (body.voice !== undefined && !attachment) return c.json({ error: 'Use a mono 16-bit 16 kHz WAV lasting 0.25–60 seconds' }, 400);
@@ -176,7 +180,7 @@ chats.post('/turns', attachmentBody, async (c) => {
   const sameText = (turn: StoredTurn) => turn.userText === text || (body.voice !== undefined && isVoice(storedAttachment(turn)));
   const existing = await findTurn(c.env.DB, id, c.get('contactID'), c.get('owner'));
   if (existing) {
-    if (!sameText(existing) || !sameAttachment(existing, attachment?.metadata) || !sameReply(existing, reply)) return c.json({ error: 'Message id already used' }, 409);
+    if (!sameText(existing) || !sameAttachment(existing, attachment?.metadata) || !sameReply(existing, reply, postID)) return c.json({ error: 'Message id already used' }, 409);
     if (existing.status === 'queued') c.executionCtx.waitUntil(dispatchChat(c.env, existing));
     return c.json({ turn: await quotedTurn(c.env.DB, existing), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) }, 200);
   }
@@ -187,6 +191,8 @@ chats.post('/turns', attachmentBody, async (c) => {
     AND quoted.user_id = ?3 AND ${privateTarget('quoted', '?4')}`).bind(reply.messageID, c.get('contactID'), c.get('owner'), reply.side).first()) {
     return c.json({ error: 'The message you are replying to is no longer available' }, 400);
   }
+  const post = postID ? await referencedPost(c.env.DB, c.get('owner'), c.get('contactID'), postID) : null;
+  if (post && 'error' in post) return c.json({ error: post.error }, 400);
   if (!c.env.META_API_KEY?.trim()) return c.json({ error: 'Replies are unavailable' }, 503);
   const limit = await admitAuthRequest(c.env.DB, c.get('owner'), 'chat-generation', 20);
   if (!limit.allowed) {
@@ -201,17 +207,17 @@ chats.post('/turns', attachmentBody, async (c) => {
     await c.env.CONTACT_PHOTOS.put(key, attachment.bytes, { httpMetadata: { contentType: attachment.metadata.mimeType } });
   }
   const turn = await c.env.DB.prepare(`INSERT INTO chat_turn
-    (id, contact_id, user_id, user_text, status, workflow_id, created_at, updated_at, time_zone, attachment_json, reply_to_id, reply_to_side, native_context_json)
-    SELECT ?1, ?2, ?3, ?4, 'queued', ?5, ?6, ?6, ?7, ?8, ?9, ?10, ?11
+    (id, contact_id, user_id, user_text, status, workflow_id, created_at, updated_at, time_zone, attachment_json, reply_to_id, reply_to_side, native_context_json, home_post_id, home_post_json)
+    SELECT ?1, ?2, ?3, ?4, 'queued', ?5, ?6, ?6, ?7, ?8, ?9, ?10, ?11, ?13, ?14
     WHERE EXISTS (SELECT 1 FROM contact WHERE id = ?2 AND user_id = ?3 AND history_revision=?12 AND clearing=0) AND ${replyTarget}
       AND (SELECT COUNT(*) FROM chat_turn WHERE user_id = ?3 AND status IN ('queued','running')) < 10
     ON CONFLICT(id) DO NOTHING RETURNING ${storedColumns}`)
     .bind(id, c.get('contactID'), c.get('owner'), text, `chat-${id}-a1`, now, body.timeZone ?? null, attachmentJSON,
-      reply?.messageID ?? null, reply?.side ?? null, nativeJSON,epoch.revision).first<StoredTurn>();
+      reply?.messageID ?? null, reply?.side ?? null, nativeJSON,epoch.revision, postID ?? null, post?.json ?? null).first<StoredTurn>();
   if (!turn) {
     if (key) await discardChatObject(c.env,key,c.get('contactID'));
     const duplicate = await findTurn(c.env.DB, id, c.get('contactID'), c.get('owner'));
-    if (duplicate && sameText(duplicate) && sameAttachment(duplicate, attachment?.metadata) && sameReply(duplicate, reply)) return c.json({ turn: await quotedTurn(c.env.DB, duplicate), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
+    if (duplicate && sameText(duplicate) && sameAttachment(duplicate, attachment?.metadata) && sameReply(duplicate, reply, postID)) return c.json({ turn: await quotedTurn(c.env.DB, duplicate), presence: await readPresence(c.env.DB, c.get('contactID'), c.get('owner')) });
     return c.json({ error: 'Too many pending messages or the conversation changed' }, 409);
   }
   await c.env.DB.prepare(`UPDATE chat_visit SET typing_at = NULL

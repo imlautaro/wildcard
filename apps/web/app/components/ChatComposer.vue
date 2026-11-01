@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DraftAttachment, DraftVoice } from '~/utils/types';
+import type { DraftAttachment, DraftVoice, HomePostReference } from '~/utils/types';
 import type { ReplyPreview } from '~/utils/replies';
 
 // Text plus optional image/PDF attachments (picked, dropped in the picker or pasted), sent as
@@ -9,9 +9,9 @@ import type { ReplyPreview } from '~/utils/replies';
 // voice messages (docs/voice.md): hold to record and release to send, slide left to
 // cancel, slide up to lock. With a mouse, one click starts a locked recording and a
 // second click sends it (no hold needed). Changing the key discards an active recording.
-const props = defineProps<{ disabled?: boolean; sending?: boolean; placeholder?: string; reply?: ReplyPreview | null; voiceKey?: string | null }>();
+const props = defineProps<{ disabled?: boolean; sending?: boolean; placeholder?: string; reply?: ReplyPreview | null; post?: HomePostReference | null; voiceKey?: string | null }>();
 const draft = defineModel<string>({ required: true });
-const emit = defineEmits<{ send: [text: string, attachments: DraftAttachment[]]; voice: [clip: DraftVoice]; typing: []; cancelReply: [] }>();
+const emit = defineEmits<{ send: [text: string, attachments: DraftAttachment[]]; voice: [clip: DraftVoice]; typing: []; cancelReply: []; cancelPost: [] }>();
 
 const maxAttachments = 10;
 const attachments = ref<DraftAttachment[]>([]);
@@ -206,6 +206,10 @@ defineExpose({ focus: () => textarea.value?.focus() });
       <AppIconButton v-else icon="attach" label="Attach images or PDFs" size="large" :disabled="disabled || preparing" @click="picker?.click()" />
       <input ref="picker" type="file" multiple class="visually-hidden" :accept="attachmentTypes.join(',')" tabindex="-1" @change="choose">
       <div v-show="!recording" class="input">
+        <div v-if="post" class="draft-reply">
+          <MessagePostReference :post="post" />
+          <AppIconButton icon="close" label="Don’t reply to this post" size="small" :disabled="disabled" @click="emit('cancelPost')" />
+        </div>
         <div v-if="reply" class="draft-reply">
           <MessageReplyQuote :preview="reply" />
           <AppIconButton icon="close" label="Cancel reply" size="small" :disabled="disabled" @click="emit('cancelReply')" />

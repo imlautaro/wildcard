@@ -10,6 +10,8 @@ struct ChatView: View {
     @Environment(ContactsStore.self) private var contacts
     @Environment(\.scenePhase) private var scenePhase
     let chat: ChatStore
+    /// Opens a For you post referenced by a message (pushes it on the Home stack).
+    var openPost: ((String) -> Void)? = nil
     @Environment(NativeExperiments.self) private var native
     @State private var importedDraftID: String?
     @State private var draft = ""
@@ -30,6 +32,8 @@ struct ChatView: View {
     @State private var remoteError: String?
     @State private var historyPosition = ChatHistoryPosition()
     @State private var replyTarget: MessageReplyQuote?
+    /// The For you post the next message answers ("Continue in chat"), docs/updates.md#continue-in-chat.
+    @State private var postTarget: HomePostReference?
     @State private var highlightedMessage: String?
     @State private var quoteTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -100,6 +104,13 @@ struct ChatView: View {
                             let quote = turn.replyTo.map(replyPreview)
                             let showQuote = { if let replyTo = turn.replyTo { showQuoted(replyTo, proxy: proxy) } }
                             VStack(spacing: 8) {
+                                if let post = turn.homePost {
+                                    HStack {
+                                        Spacer(minLength: 40)
+                                        MessagePostReferenceView(post: post, action: openPost.map { open in { open(post.id) } })
+                                            .frame(maxWidth: 300)
+                                    }
+                                }
                                 if let voiceMessage = turn.voice {
                                     // The transcript may be saved as user text; it stays hidden behind the menu.
                                     VoiceMessageView(resource: .userVoice(contactID: contactID, turnID: turn.id), voice: voiceMessage,
@@ -254,6 +265,12 @@ struct ChatView: View {
             guard let text = contacts.suggestedDrafts[contactID] else { return }
             contacts.suggestedDrafts[contactID] = nil
             if draftIsEmpty { draft = text; composerFocused = true }
+        }
+        .task(id: contacts.postReplies[contactID]?.id) {
+            guard let post = contacts.postReplies[contactID] else { return }
+            contacts.postReplies[contactID] = nil
+            postTarget = post
+            composerFocused = true
         }
         .task(id: native.selectedDraft?.id) {
             guard let item = native.selectedDraft, item.contactID == contactID, item.userID == auth.user?.id else { return }
@@ -446,13 +463,15 @@ struct ChatView: View {
     private func sendRecording() {
         guard let clip = voice.takeClip() else { return }
         let reply = replyTarget
+        let post = postTarget
         replyTarget = nil
-        sendVoice(clip, reply: reply)
+        postTarget = nil
+        sendVoice(clip, reply: reply, post: post)
     }
 
-    private func sendVoice(_ clip: VoiceClip, reply: MessageReplyQuote?) {
+    private func sendVoice(_ clip: VoiceClip, reply: MessageReplyQuote?, post: HomePostReference? = nil) {
         Task {
-            let accepted = await chat.send(text: "", voice: clip, replyTo: reply, contactID: contactID, using: auth)
+            let accepted = await chat.send(text: "", voice: clip, replyTo: reply, homePost: post, contactID: contactID, using: auth)
             sync.request(.contact(contactID))
             if accepted { scrollToLatest() }
         }
@@ -484,7 +503,7 @@ struct ChatView: View {
             }
             if let failed = chat.failedVoice, !chat.isSending {
                 FailedVoiceMessageRow(clip: failed.clip, isBusy: chat.isSending || chat.isUnavailable,
-                                      retry: { sendVoice(failed.clip, reply: failed.replyTo) },
+                                      retry: { sendVoice(failed.clip, reply: failed.replyTo, post: failed.homePost) },
                                       discard: { chat.discardFailedVoice() })
             }
             if let attachmentError {
@@ -493,6 +512,13 @@ struct ChatView: View {
             }
             if isLoadingAttachment {
                 HStack { ProgressView(); Text("Preparing attachment…").manrope(.footnote); Spacer() }
+            }
+            if let postTarget {
+                MessagePostComposerBar(post: postTarget) {
+                    self.postTarget = nil
+                    draftRevision += 1
+                }
+                .disabled(chat.isSending)
             }
             if let replyTarget {
                 MessageReplyComposerBar(preview: replyPreview(replyTarget)) {
@@ -557,20 +583,23 @@ struct ChatView: View {
                         guard canSend else { return }
                         let submittedAttachment = attachment
                         let submittedReply = replyTarget
+                        let submittedPost = postTarget
                         let submitted = draft
                         let submittedRevision = draftRevision
                         lastComposerActivity = .distantPast
                         draft = ""
                         attachment = nil
                         replyTarget = nil
+                        postTarget = nil
                         Task {
-                            let accepted = await chat.send(text: submitted, attachment: submittedAttachment, replyTo: submittedReply, contactID: contactID, using: auth)
+                            let accepted = await chat.send(text: submitted, attachment: submittedAttachment, replyTo: submittedReply, homePost: submittedPost, contactID: contactID, using: auth)
                             if accepted, let importedDraftID { native.consumeDraft(importedDraftID); self.importedDraftID = nil }
                             sync.request(.contact(contactID))
                             if !accepted, draftRevision == submittedRevision, draft.isEmpty {
                                 draft = submitted
                                 if attachment == nil { attachment = submittedAttachment }
                                 if replyTarget == nil { replyTarget = submittedReply }
+                                if postTarget == nil { postTarget = submittedPost }
                             }
                         }
                     }

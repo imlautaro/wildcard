@@ -100,8 +100,13 @@ export type ChatTurn = {
   readAt: number | null;
   updatedAt: number;
   replyTo?: ReplyQuote | null;
+  /** The For you post this message answers (docs/updates.md#continue-in-chat). */
+  homePost?: HomePostReference | null;
   voice?: VoiceInfo | null;
 };
+
+/** A For you post referenced by a private message: live while the post exists, a snapshot after. */
+export type HomePostReference = { id: string; available: boolean; title: string; text: string | null; icon: string | null; accent: string | null; createdAt: number };
 
 export type Presence = { status: 'offline' | 'online' | 'typing'; isRecording?: boolean; isResearching?: boolean; lastSeenAt: number | null; expiresAt: number | null };
 export type ChatPage = { historyRevision?: number; presence: Presence | null; turns: ChatTurn[]; nextBefore: number | null };

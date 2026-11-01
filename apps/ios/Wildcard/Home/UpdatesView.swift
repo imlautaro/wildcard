@@ -483,7 +483,7 @@ struct HomeThreadView: View {
 /// One post with its comments (docs/updates.md#comments), like the replies of a Threads post: the
 /// person's comment, then the answer of the contact who wrote the post, written in the background.
 /// It reads the session's cached feed and polls while a reply is pending. "Continue in chat" opens
-/// the contact's private chat, which already knows about this discussion.
+/// the contact's private chat with this post attached to the next message (docs/updates.md#continue-in-chat).
 struct HomePostDetailView: View {
     let store: HomeFeedStore
     let postID: String
@@ -529,7 +529,11 @@ struct HomePostDetailView: View {
                             }
                         }
                         if let id = post.contactID {
-                            Button { openContact(id) } label: {
+                            Button {
+                                // The chat's next message answers this exact post; connector posts never enter a private chat.
+                                if !post.connector { contacts.postReplies[id] = HomePostReference(post: post) }
+                                openContact(id)
+                            } label: {
                                 Label("Continue in chat with \(name)", systemImage: "bubble.left")
                                     .manrope(.subheadline, weight: .semibold).padding(.horizontal, 6).padding(.vertical, 4)
                             }

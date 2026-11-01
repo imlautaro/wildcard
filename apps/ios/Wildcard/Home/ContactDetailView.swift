@@ -27,7 +27,7 @@ struct ContactDetailView: View {
                     .disabled(loading)
             }
             if let contact = contacts.contact(id: contactID) {
-                ChatView(contactID: contact.id, chat: contacts.conversations.store(for: contact.id)).id("\(contact.id):\(contact.historyRevision ?? 0)")
+                ChatView(contactID: contact.id, chat: contacts.conversations.store(for: contact.id), openPost: { open(.updatesPost($0)) }).id("\(contact.id):\(contact.historyRevision ?? 0)")
             } else if loading {
                 ProgressView("Loading contact…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

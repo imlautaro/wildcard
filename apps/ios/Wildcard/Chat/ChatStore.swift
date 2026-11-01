@@ -17,7 +17,7 @@ final class ChatStore {
     }
     private(set) var outgoingMessage: OutgoingMessage?
     /// A voice message whose send failed; kept with its reply target until retried or discarded.
-    private(set) var failedVoice: (clip: VoiceClip, replyTo: MessageReplyQuote?)?
+    private(set) var failedVoice: (clip: VoiceClip, replyTo: MessageReplyQuote?, homePost: HomePostReference?)?
     var displayedTurns: [ChatTurn] {
         guard let outgoingMessage, !turns.contains(where: { $0.id == outgoingMessage.turn.id }) else { return turns }
         return turns + [outgoingMessage.turn]
@@ -238,22 +238,22 @@ final class ChatStore {
 
     func discardFailedVoice() { failedVoice = nil }
 
-    func send(text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, contactID: String, using auth: AuthStore) async -> Bool {
+    func send(text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, homePost: HomePostReference? = nil, contactID: String, using auth: AuthStore) async -> Bool {
         guard !isSending, !invalidated, !isUnavailable else {
-            if let voice, !invalidated { failedVoice = (voice, replyTo) }
+            if let voice, !invalidated { failedVoice = (voice, replyTo, homePost) }
             return false
         }
         let text = voice == nil ? text.trimmingCharacters(in: .whitespacesAndNewlines) : ""
         guard (!text.isEmpty || attachment != nil || voice != nil), text.unicodeScalars.count <= 4000 else { return false }
         // Keep the identifier across an uncertain network result to prevent duplicate sends.
         // A different quoted message or clip is different content and needs a new identifier.
-        let replyKey = replyTo.map { "\($0.messageID)/\($0.side)" }
+        let replyKey = [replyTo.map { "\($0.messageID)/\($0.side)" }, homePost.map { "post/\($0.id)" }].compactMap { $0 }.joined(separator: "|")
         let contentID = voice?.id ?? attachment?.id
         if submission?.text != text || submission?.contentID != contentID || submission?.replyKey != replyKey {
             do { submission = (historyRevision, UUID().uuidString.lowercased(), text, contentID, replyKey, try NativeExperiments.shared.context(contactID: contactID)) }
             catch {
                 self.error = error.localizedDescription
-                if let voice { failedVoice = (voice, replyTo) }
+                if let voice { failedVoice = (voice, replyTo, homePost) }
                 return false
             }
         }
@@ -268,7 +268,7 @@ final class ChatStore {
                 attachment: attachment.map { ChatAttachment(name: $0.name, mimeType: $0.mimeType, size: $0.data.count) },
                 scheduleID: nil, groupRequestID: nil, errorCode: nil, sequence: 0, id: submission.id,
                 userText: text, assistantText: nil, status: .queued, attempt: 0,
-                createdAt: now, readAt: nil, updatedAt: now, replyTo: replyTo, voice: voice?.metadata
+                createdAt: now, readAt: nil, updatedAt: now, replyTo: replyTo, voice: voice?.metadata, homePost: homePost
             ),
             attachment: attachment,
             voice: voice
@@ -281,7 +281,7 @@ final class ChatStore {
         do {
             let turn = try await auth.withSession { api, token in
                 try await api.sendMessage(contactID: contactID, historyRevision: submission.historyRevision, id: submission.id, text: text, attachment: attachment, voice: voice,
-                                          replyTo: replyTo, nativeContext: submission.nativeContext, token: token)
+                                          replyTo: replyTo, homePost: homePost?.id, nativeContext: submission.nativeContext, token: token)
             }
             revision += 1
             guard !invalidated else { return false }
@@ -298,7 +298,7 @@ final class ChatStore {
             MessageSounds.shared.sent(turnID: submission.id, contactID: contactID)
             return true
         } catch is CancellationError {
-            if let voice, !invalidated { failedVoice = (voice, replyTo) }
+            if let voice, !invalidated { failedVoice = (voice, replyTo, homePost) }
             return false
         }
         catch {
@@ -316,7 +316,7 @@ final class ChatStore {
                 return true
             }
             self.error = error.localizedDescription
-            if let voice, !invalidated { failedVoice = (voice, replyTo) }
+            if let voice, !invalidated { failedVoice = (voice, replyTo, homePost) }
             return false
         }
     }

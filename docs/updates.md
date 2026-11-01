@@ -189,7 +189,8 @@ comments, a composer ("Reply to {contact}…") and **Continue in chat with {cont
   the private chat. Connector posts and connector-isolated contacts are answered with
   Standard and without research or memories; otherwise the account model is used,
   falling back to Standard when the contact lacks Contributor consent.
-- **Continue in chat**: the contact's private chat context includes, as untrusted
+- **Continue in chat**: opens the private chat with the post attached to the next
+  message ([Continue in chat](#continue-in-chat)). Independently, the contact's private chat context includes, as untrusted
   history, the two most recent posts the person commented on in the last three days
   (post text, clipped card and the comments), excluding connector posts, so the contact
   picks the discussion up without the person repeating it. Not in connector-isolated
@@ -198,6 +199,32 @@ comments, a composer ("Reply to {contact}…") and **Continue in chat with {cont
   (the web restarts its timer at once instead of waiting out the 60-second one).
 - **Retention**: comments are deleted with their post (14 days, hidden topic, account
   deletion).
+
+## Continue in chat
+
+Since 2026-11-01 (migration 0087) **Continue in chat with {contact}** on a post opens the
+contact's private chat with that post attached to the next message, like replying to a
+story. The composer shows the post above the text field (with ✕ to drop it); the sent
+message shows it above the bubble, and tapping it opens the post (web
+`/updates?post=<id>`, iOS a pushed **Post** view).
+
+- **A reference, not a quote**: `POST /contacts/:id/chat/turns` accepts
+  `homePost: "<post id>"` and stores it as `chat_turn.home_post_id`. The post must be the
+  person's, written by this chat's contact, and not a connector post (`400` otherwise);
+  for connector posts the button only opens the chat, because connector content never
+  enters a private chat.
+- **The contact reads the live post**: for that message the chat context says it answers a
+  post the contact itself published, with the post text, the clipped card and up to six
+  comments, so it talks about it directly. Later turns keep a short marker with the
+  post's title and text. Messages answering a post are never batched with others.
+- **Expiry**: posts are deleted after 14 days or with their topic, so there is no
+  foreign key. `home_post_json` keeps `{ title, text, icon, accent, createdAt }` from when
+  the message was sent; afterwards turns return `homePost.available: false` with that
+  snapshot ("No longer in For you") and the contact is told the post is gone and what it
+  said.
+- **Turns** return `homePost: { id, available, title, text, icon, accent, createdAt } | null`.
+  Older clients ignore it; older APIs reject the unknown `homePost` field, so release the
+  API first.
 
 ## How curation works
 

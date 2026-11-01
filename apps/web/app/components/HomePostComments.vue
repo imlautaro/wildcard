@@ -4,7 +4,9 @@ import type { HomePost } from '~/utils/types';
 // Comments under one Updates post (docs/updates.md#comments), like the replies of a Threads
 // post: the person's comment, then the answer of the contact who wrote the post. The reply is
 // written in the background; the feed polls until it arrives. "Continue in chat" opens the
-// contact's private chat, which already knows about this discussion.
+// contact's private chat with this post attached to the next message, so the contact answers
+// about this exact post (docs/updates.md#continue-in-chat). Connector posts never enter a
+// private chat, so for them it only opens the chat.
 const props = defineProps<{ post: HomePost }>();
 const home = useHome();
 const { user } = useSession();
@@ -16,6 +18,10 @@ const name = computed(() => props.post.contactName ?? 'this contact');
 const comments = computed(() => props.post.comments ?? []);
 const waiting = computed(() => comments.value.some(comment => comment.status === 'pending'));
 const myPhoto = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
+function continueInChat(contactID: string) {
+  if (!props.post.connector) continueFromPost(contactID, props.post);
+  void navigateTo(`/chats/${contactID}`);
+}
 const contactPhoto = computed(() => props.post.contactID ? contactPhotoPath({ id: props.post.contactID, photoVersion: props.post.contactPhotoVersion }) : null);
 const age = (at: number) => {
   const minutes = Math.max(0, Math.round((Date.now() - at) / 60_000));
@@ -65,7 +71,7 @@ onMounted(() => input.value?.focus({ preventScroll: true }));
       <AppIconButton type="submit" icon="send" label="Send comment" variant="filled" size="small" :disabled="!text.trim() || waiting || sending" />
     </form>
     <AppNotice v-if="error">{{ error }}</AppNotice>
-    <AppButton v-if="post.contactID" variant="tonal" icon="chat" class="continue" :to="`/chats/${post.contactID}`">Continue in chat with {{ name }}</AppButton>
+    <AppButton v-if="post.contactID" variant="tonal" icon="chat" class="continue" @click="continueInChat(post.contactID)">Continue in chat with {{ name }}</AppButton>
   </section>
 </template>
 

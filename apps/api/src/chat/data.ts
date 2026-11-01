@@ -1,6 +1,7 @@
 import { publicAttachment, storedAttachment, type PublicAttachment, type Attachment } from './attachments';
 import { isVoice, publicVoice, type PublicVoice } from '../voice/speech';
 import type { ReplyQuote, ReplyTarget } from '../replies/data';
+import type { PublicPostReference } from '../home/references';
 export type ChatState = 'queued' | 'running' | 'complete' | 'failed';
 export type AssistantMessage = { id: string; text: string; createdAt: number; attachment?: Attachment | PublicAttachment | null; attachments?: (Attachment | PublicAttachment)[] | null; replyTo?: ReplyQuote | ReplyTarget | null };
 export type ChatTurn = {
@@ -25,13 +26,17 @@ export type ChatTurn = {
   updatedAt: number;
   replyToID: string | null;
   replyToSide: 'user' | 'assistant' | null;
+  // The For you post this message answers (home/references.ts).
+  homePostID?: string | null;
+  homePostJSON?: string | null;
 };
-export type PublicTurn = Omit<ChatTurn, 'replyToID' | 'replyToSide' | 'assistantMessagesJSON' | 'voiceListenedAt' | 'voiceTranscribedAt' | 'assistantVoiceListenedJSON'> & { assistantMessages: (AssistantMessage & { voice: PublicVoice | null })[]; replyTo: ReplyQuote | null; voice: PublicVoice | null };
+export type PublicTurn = Omit<ChatTurn, 'replyToID' | 'replyToSide' | 'homePostID' | 'homePostJSON' | 'assistantMessagesJSON' | 'voiceListenedAt' | 'voiceTranscribedAt' | 'assistantVoiceListenedJSON'> & { assistantMessages: (AssistantMessage & { voice: PublicVoice | null })[]; replyTo: ReplyQuote | null; voice: PublicVoice | null; homePost?: PublicPostReference | null };
 export type StoredTurn = ChatTurn & { nativeContextJSON?: string | null; attachmentJSON: string | null; contactID: string; userID: string; workflowID: string; timeZone: string | null; scheduleInstruction: string | null };
 export type ChatJob = { turnID: string; attempt: number };
 export const turnColumns = `assistant_voice_listened_json AS assistantVoiceListenedJSON, assistant_messages_json AS assistantMessagesJSON, sequence, id, read_at AS readAt, user_text AS userText, assistant_text AS assistantText,
   status, attempt, created_at AS createdAt, updated_at AS updatedAt, schedule_id AS scheduleID, group_request_id AS groupRequestID, error_code AS errorCode,
-  reply_to_id AS replyToID, reply_to_side AS replyToSide, task_id AS taskID, voice_listened_at AS voiceListenedAt, voice_transcribed_at AS voiceTranscribedAt`;
+  reply_to_id AS replyToID, reply_to_side AS replyToSide, task_id AS taskID, voice_listened_at AS voiceListenedAt, voice_transcribed_at AS voiceTranscribedAt,
+  home_post_id AS homePostID, home_post_json AS homePostJSON`;
 export const storedColumns = `${turnColumns}, attachment_json AS attachmentJSON, contact_id AS contactID, user_id AS userID, workflow_id AS workflowID, time_zone AS timeZone, schedule_instruction AS scheduleInstruction, native_context_json AS nativeContextJSON`;
 
 export function publicTurn(turn: ChatTurn & { attachmentJSON: string | null }, replyTo: ReplyQuote | null, resolveQuote?: (target: { replyToID: string | null; replyToSide: string | null }) => ReplyQuote | null): PublicTurn {

@@ -43,6 +43,7 @@ import { addToHome, homeInstruction, homeTool } from '../home/tools';
 import { aliasAwareness } from '../contacts/alias';
 import { executeLinkTool, linkContext, linkToolNames, linkTools } from '../contacts/links';
 import { updatesDiscussion } from '../home/comments';
+import { postReferenceMarker, referencedPosts } from '../home/references';
 
 // The person expects a contact to remember everything it talked about with them, here and in
 // shared groups, not only the recent messages (docs/contacts.md#topic-recall).
@@ -81,7 +82,7 @@ const tools: ModelTool[] = [
 export { tools as privateChatTools };
 
 type HistoryRow = { errorCode: string | null; id: string; sequence: number; userText: string; assistantText: string; createdAt: number; updatedAt: number; assistantMessagesJSON: string | null; attachmentJSON: string | null;
-  replyToID: string | null; replyToSide: string | null };
+  replyToID: string | null; replyToSide: string | null; homePostID: string | null; homePostJSON: string | null };
 const historyColumns = `id, sequence, error_code AS errorCode,
   CASE WHEN attachment_json IS NULL THEN user_text
     WHEN json_extract(attachment_json, '$.mimeType') LIKE 'audio/%' THEN CASE WHEN user_text = ''
@@ -89,7 +90,7 @@ const historyColumns = `id, sequence, error_code AS errorCode,
     ELSE user_text || '\n[Attached file: ' || json_extract(attachment_json, '$.name') || '; bytes omitted from history]' END AS userText,
   COALESCE(assistant_text, '') AS assistantText, created_at AS createdAt, updated_at AS updatedAt,
   assistant_messages_json AS assistantMessagesJSON, attachment_json AS attachmentJSON,
-  reply_to_id AS replyToID, reply_to_side AS replyToSide`;
+  reply_to_id AS replyToID, reply_to_side AS replyToSide, home_post_id AS homePostID, home_post_json AS homePostJSON`;
 
 // Mark the quoted message inline so the model reads each reply in its intended context.
 function replyMarker(quote: ReplyQuote | null): string {
@@ -331,7 +332,8 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
     consecutiveHumanMessages: results.filter((row) => batch.includes(row.id)).reverse().map((row) => row.userText),
     latestHumanMessage: turn.userText,
   }) } : turn;
-  const quotes = await privateQuotes(env.DB, turn.contactID, turn.userID, [turn, ...results]);
+  const [quotes, posts] = await Promise.all([privateQuotes(env.DB, turn.contactID, turn.userID, [turn, ...results]),
+    referencedPosts(env.DB, turn.userID, [turn, ...results])]);
   const history: ModelMessage[] = [];
   const visibleHistory: HistoryRow[] = [];
   let remaining = 12_000;
@@ -340,7 +342,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
   // Voice messages are represented by their transcripts, never as files.
   const file = (row: { attachmentJSON: string | null }) => !!row.attachmentJSON && !isVoice(storedAttachment(row));
   const historicalAttachmentID = !file(turn) ? results.find(file)?.id : undefined;
-  for (const prior of results.map((row) => ({ ...row, userText: replyMarker(quotes(row)) + row.userText }))) {
+  for (const prior of results.map((row) => ({ ...row, userText: postReferenceMarker(row, posts, false) + replyMarker(quotes(row)) + row.userText }))) {
     const humanTiming = prior.userText || prior.attachmentJSON
       ? `[Historical message time: ${JSON.stringify(eventTime({ messageID: prior.id, at: prior.createdAt }, turn.timeZone))}]\n` : '';
     const botTiming = prior.assistantText
@@ -476,7 +478,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
     ...history,
     turn.scheduleID ? { role: 'user', content: `Scheduled task instruction: ${JSON.stringify(turn.scheduleInstruction)}. Execute now; this is not a new human request.` }
       : taskWork ? { role: 'user', content: `Task work trigger (${taskWork.reason}) for task ${JSON.stringify(taskWork.task?.taskID ?? turn.taskID)}. Execute now; this is not a new human request.` }
-      : await attachmentMessage(env, { ...turn, userText: replyMarker(quotes(turn)) + (isVoice(storedAttachment(turn)) ? voiceText(turn.userText) : turn.userText) }),
+      : await attachmentMessage(env, { ...turn, userText: postReferenceMarker(turn, posts, true) + replyMarker(quotes(turn)) + (isVoice(storedAttachment(turn)) ? voiceText(turn.userText) : turn.userText) }),
   ];
   if (recoveryCode) messages.push({ role: 'system', content: 'Response recovery: an earlier attempt failed to finish this request. No tools are available and no actions may be repeated. Write a brief message in the user’s language. Answer only what the supplied evidence supports; explain any incomplete work. Only supplied device-reported native operation receipts can establish native outcomes from that attempt. Other external execution receipts are not supplied; never invent success or failure, and mention uncertainty when relevant. Do not invent results or promise a later retry.' });
   const imageScope = { ...scope, contributor: !!scope.contributorModel, beforeSequence: turn.sequence + 1 };

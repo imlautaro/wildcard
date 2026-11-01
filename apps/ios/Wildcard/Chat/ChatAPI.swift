@@ -15,6 +15,27 @@ struct MessageReplyQuote: Codable, Equatable, Sendable {
     var beforeJoin: Bool? = nil
 }
 
+/// The For you post a private message answers (docs/updates.md#continue-in-chat): the live post
+/// while it exists (`available`), the snapshot saved with the message once it is gone.
+struct HomePostReference: Codable, Equatable, Sendable {
+    let id: String
+    let available: Bool
+    let title: String
+    let text: String?
+    let icon: String?
+    let accent: String?
+    let createdAt: Double
+
+    init(id: String, available: Bool, title: String, text: String?, icon: String?, accent: String?, createdAt: Double) {
+        self.id = id; self.available = available; self.title = title; self.text = text; self.icon = icon; self.accent = accent; self.createdAt = createdAt
+    }
+
+    init(post: HomePost) {
+        self.init(id: post.id, available: true, title: post.content.title, text: post.text, icon: post.content.icon,
+                  accent: post.content.accent, createdAt: post.createdAt)
+    }
+}
+
 /// A recorded or synthesized voice message. `transcript` is `nil` until transcription
 /// finishes and empty when no speech was found. `listenedAt` tracks contact listening;
 /// `ownListenedAt` tracks the signed-in person playing an incoming message.
@@ -66,6 +87,8 @@ struct ChatTurn: Decodable, Identifiable, Equatable, Sendable {
     var replyTo: MessageReplyQuote? = nil
     /// Set for a voice message; `userText` is empty and `attachment` is `nil`.
     var voice: MessageVoice? = nil
+    /// The For you post this message answers.
+    var homePost: HomePostReference? = nil
     var isPending: Bool { status == .queued || status == .running }
 
     /// History, send acknowledgements, and pagination may arrive out of order.
@@ -146,7 +169,7 @@ extension AuthAPI {
     }
 
     private struct ReplyInput: Encodable { let messageID: String; let side: String }
-    private struct MessageInput: Encodable { let historyRevision: Int; let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment?; var voice: VoiceInput? = nil; let replyTo: ReplyInput?; let nativeContext: NativeContext? }
+    private struct MessageInput: Encodable { let historyRevision: Int; let id: String; let text: String; let timeZone: String; let attachment: DraftAttachment?; var voice: VoiceInput? = nil; let replyTo: ReplyInput?; var homePost: String? = nil; let nativeContext: NativeContext? }
 
     func chatTurns(contactID: String, before: Int? = nil, token: String) async throws -> ChatPage {
         let query = before.map { [URLQueryItem(name: "before", value: String($0))] } ?? []
@@ -154,13 +177,13 @@ extension AuthAPI {
         return try JSONDecoder().decode(ChatPage.self, from: data)
     }
 
-    func sendMessage(contactID: String, historyRevision: Int = 0, id: String, text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, nativeContext: NativeContext? = nil, token: String) async throws -> ChatSubmission {
+    func sendMessage(contactID: String, historyRevision: Int = 0, id: String, text: String, attachment: DraftAttachment? = nil, voice: VoiceClip? = nil, replyTo: MessageReplyQuote? = nil, homePost: String? = nil, nativeContext: NativeContext? = nil, token: String) async throws -> ChatSubmission {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .withoutEscapingSlashes
         let timeZone = TimeZone.current.identifier
         let reply = replyTo.map { ReplyInput(messageID: $0.messageID, side: $0.side) }
         let body = try encoder.encode(MessageInput(historyRevision: historyRevision, id: id, text: text, timeZone: timeZone, attachment: attachment,
-                                                   voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, nativeContext: nativeContext))
+                                                   voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, homePost: homePost, nativeContext: nativeContext))
         let data: Data
         do {
             data = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: body, token: token, timeout: 90).0
@@ -169,7 +192,7 @@ extension AuthAPI {
             var legacyContext = nativeContext
             legacyContext?.automaticKinds = nil
             let legacyBody = try encoder.encode(MessageInput(historyRevision: historyRevision, id: id, text: text, timeZone: timeZone, attachment: attachment,
-                                                             voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, nativeContext: legacyContext))
+                                                             voice: voice.map { VoiceInput(data: $0.data) }, replyTo: reply, homePost: homePost, nativeContext: legacyContext))
             data = try await send(path: "contacts/\(contactID)/chat/turns", method: "POST", body: legacyBody, token: token, timeout: 90).0
         }
         return try JSONDecoder().decode(ChatSubmission.self, from: data)
