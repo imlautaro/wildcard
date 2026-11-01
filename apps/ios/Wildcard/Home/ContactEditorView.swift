@@ -36,6 +36,7 @@ struct ContactEditorView: View {
                         Text("Manually").tag("manual")
                         Text("Generate with AI").tag("ai")
                     }
+                    .disabled(auth.contactGeneration.busy || auth.contactGeneration.running)
                 }
             }
             if contactID == nil && creationMode == "ai" {
@@ -150,6 +151,9 @@ struct ContactEditorView: View {
             catch is CancellationError { }
             catch { self.error = error.localizedDescription }
             _ = await profile
+        }
+        .onChange(of: auth.contactGeneration.busy || auth.contactGeneration.running, initial: true) { _, active in
+            if contactID == nil && active { creationMode = "ai" }
         }
         .navigationTitle(contactID == nil ? "Add Contact" : (canEdit ? "Edit Contact" : "Contact"))
         .navigationBarTitleDisplayMode(.inline)

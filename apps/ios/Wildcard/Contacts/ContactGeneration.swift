@@ -115,7 +115,9 @@ struct ContactGenerationSection: View {
         @Bindable var store = auth.contactGeneration
         // This section always exists, so it owns polling and the hand-off to the new chat.
         Section {
-            if let options = store.options {
+            if store.busy || store.running {
+                ContactGenerationProgressView(running: store.running)
+            } else if let options = store.options {
                 Group {
                     Picker("Visual style", selection: $store.draft.style) {
                         ForEach(options.styles) { Text($0.name).tag($0.code) }
@@ -161,12 +163,9 @@ struct ContactGenerationSection: View {
             Task { await contacts.refresh(using: auth, force: true) }
             onCreated(id)
         }
-        if store.running || store.job?.status == "failed" || store.error != nil {
+        if store.job?.status == "failed" || store.error != nil {
             Section {
-                if store.running {
-                    ProgressView("Creating your contact and portrait…")
-                    Text("You can close the app and return later.").font(.footnote)
-                } else if store.job?.status == "failed" {
+                if !store.busy && store.job?.status == "failed" {
                     Text("Could not finish creating the contact. Create again to reuse the saved identity and portrait.")
                 }
                 if let error = store.error { Text(error).foregroundStyle(.red); Button("Refresh") { Task { await store.refresh(auth: auth) } } }
@@ -181,7 +180,45 @@ struct ContactGenerationCreateButton: View {
 
     var body: some View {
         let store = auth.contactGeneration
-        Button("Create") { Task { await store.submit(auth: auth) } }
+        Button(store.busy || store.running ? "Creating…" : "Create") { Task { await store.submit(auth: auth) } }
             .disabled(!store.ready || store.busy || store.running)
+    }
+}
+
+/// Indeterminate activity: rotating descriptions do not imply server-reported stages.
+private struct ContactGenerationProgressView: View {
+    let running: Bool
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var messageIndex = 0
+    private let messages = [
+        "A unique name, personality, and portrait are on the way.",
+        "Your contact is being created with the preferences you chose.",
+        "This can take a few minutes. We are still working on your contact.",
+    ]
+
+    var body: some View {
+        VStack(spacing: 20) {
+            ProgressView().controlSize(.large).tint(.accentColor)
+                .accessibilityLabel("Creating your contact")
+            Text(running ? "Creating your contact…" : "Starting contact creation…")
+                .font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            Text(running ? messages[messageIndex] : "Sending your request…")
+                .foregroundStyle(.secondary)
+                .frame(minHeight: 64)
+            if running {
+                Text("You can leave this screen or close the app. Creation will continue in the background.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                messageIndex = (messageIndex + 1) % messages.count
+            }
+        }
     }
 }

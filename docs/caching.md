@@ -1178,6 +1178,13 @@ manual creation, with persisted onboarding context and bot-only selectors. Creat
 uses a session-owned draft/pending ID and a durable D1 job on the existing onboarding
 Workflow; navigation reuses cached state, then revalidates. New generated contacts
 receive random adult birthdays. Birthday edits must keep contacts at least 18.
+Both clients replace the form with a prominent spinner from submission through
+active creation, show **Creating…** on the action, and rotate explanatory copy
+every five seconds after job confirmation. Active cached jobs select AI mode on
+reopen. The animation is view-only and stops on unmount (also while inactive on
+iOS); no new requests, cache, persistence or server progress stages are introduced.
+See [visible creation activity](contact-generation.md#visible-creation-activity)
+for copy, accessibility and pending cross-client verification.
 Existing creators can generate/regenerate all personality fields into the existing
 session draft, review them, and save with revision conflict protection. Generation
 preserves the name and adult birthday. Account changes/access loss discard cached

@@ -85,6 +85,30 @@ feature is unavailable, the voice is chosen when it is first needed.
 First-circle onboarding contacts get the same profile and opt-in, with no accent
 inferred from the user's country. Personality regeneration preserves the saved accent.
 
+
+### Visible creation activity
+
+On iOS and web, submitting immediately replaces the bot fields with a prominent
+indeterminate spinner, **Starting contact creation…** and **Sending your request…**.
+After the durable job is confirmed, the heading becomes **Creating your contact…**
+and explanatory messages rotate every five seconds. These describe the overall
+work, not measured stages or a completion percentage. The panel explains that
+creation can take a few minutes and, after confirmation, continues when leaving
+the screen or closing the app. The Create action reads **Creating…** and the mode
+selector is disabled until the request/job is no longer active. Reopening with
+cached active state selects AI mode and shows activity immediately. Success still
+opens the chat; errors retain the existing retry/refresh flow.
+
+The message index is presentation-only view state. Its timer stops on unmount
+(and while iOS is inactive); it does not request data, change job status, persist
+progress or create a cache. Existing session stores, polling, submission IDs,
+account reset and stale-response guards remain authoritative. Web exposes changing
+copy through a polite status region and respects reduced motion for the spinner;
+iOS uses the native accessible activity indicator. Verify immediate submission,
+slow/uncertain requests, retry, queued/running recovery, completion, narrow screens,
+large text, reduced motion, screen readers, offline recovery and account switching
+with fictional data on both clients; static checks do not establish these behaviors.
+
 ## Existing personalities
 
 Only the creator sees **Generate with AI / Regenerate with AI** in Personality.
