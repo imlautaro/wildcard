@@ -59,6 +59,8 @@ final class ContactsStore {
         personalityDrafts.removeValue(forKey: id)
         personalityDraftOrder.removeAll { $0 == id }
     }
+    let remoteSnapshots = NavigationSnapshotCache<RemoteNativeSnapshot>()
+    var remoteMutating: Set<String> = []
     let sharingSnapshots = NavigationSnapshotCache<ContactSharing>()
     let mediaSnapshots = NavigationSnapshotCache<ChatMediaPage>()
     let taskSnapshots = NavigationSnapshotCache<TaskBoard>()
@@ -216,6 +218,7 @@ final class ContactsStore {
                 NativeExperiments.shared.forget(contactID: contact.id)
                 scheduleSnapshots.remove(id: contact.id)
                 sharingSnapshots.remove(id: contact.id)
+                remoteSnapshots.remove(id: contact.id)
                 energySnapshots.remove(id: contact.id)
                 learningSnapshots.remove(id: contact.id)
                 forgetPersonality(id: contact.id)
@@ -463,6 +466,7 @@ final class ContactsStore {
             NativeExperiments.shared.forget(contactID: contact.id)
             scheduleSnapshots.remove(id: contact.id)
             sharingSnapshots.remove(id: contact.id)
+            remoteSnapshots.remove(id: contact.id)
             energySnapshots.remove(id: contact.id)
             learningSnapshots.remove(id: contact.id)
             forgetPersonality(id: contact.id)
@@ -515,6 +519,7 @@ final class ContactsStore {
                 NativeExperiments.shared.forget(contactID: id)
                 scheduleSnapshots.remove(id: id)
                 sharingSnapshots.remove(id: id)
+                remoteSnapshots.remove(id: id)
                 energySnapshots.remove(id: id)
                 learningSnapshots.remove(id: id)
                 forgetPersonality(id: id)

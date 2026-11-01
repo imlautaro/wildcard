@@ -783,6 +783,25 @@ speaker. This system state needs no independent network cache. Model receipt
 reads are bounded to ten terminal outcomes and scoped to contact/person/device;
 they do not cache or expose another participant's state.
 
+### Shared-contact remote timer/alarm delegation
+
+Migration 0083 extends the existing remote snapshot with owned/delegated devices,
+current participant names and outgoing participant grants. iOS uses the session-owned
+`ContactsStore.remoteSnapshots` / `NavigationSnapshotCache` (eight bounded snapshots),
+and web retains its twenty-contact cache. Both refresh every five seconds while
+visible/active, reuse loaded/empty snapshots on navigation, deduplicate reads and
+support explicit refresh. Responses are capped at ten phones, three participants,
+thirty outgoing grants and twenty receipts. Successful mutations update that grant
+immediately, invalidate earlier reads and refresh; per-contact gates serialize
+permission mutations. Transient refresh failure retains usable data. Confirmed
+access/contact loss removes snapshots; account replacement discards session owners
+and rejects late responses. Model changes invalidate iOS snapshots. There is no new
+disk retention. A selected but revoked/unavailable phone remains an explicit target
+and fails server authorization instead of falling back to another phone. Pending
+sends retain their original target and UUID through retry. See
+[delegation verification](native-remote.md#delegation-cache-and-verification) for
+reopen, empty, offline, revoke/re-enable and account-switch checks still required.
+
 ### Remote timer/alarm prototype
 
 [Remote native execution](native-remote.md#local-storage-and-cache) adds session-owned

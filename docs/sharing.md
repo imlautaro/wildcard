@@ -5,6 +5,12 @@ presence, and attention queue. Each participant has a separate private conversat
 read watermark, unread count, schedules, attachments, and push destinations. Joining
 starts an empty chat. It never clones an agent or copies someone else's history.
 
+Sharing alone gives no device access. A participant can separately allow another
+current participant to request timers/alarms on their own linked iPhone through
+this agent, and revoke that permission on iOS or web. See
+[explicit device delegation](native-remote.md#allow-a-shared-contact-participant).
+This permission does not expose either private conversation.
+
 ## iOS flow and consent
 
 The creator opens a contact and chooses **Share contact** in the chat's three-dot menu. **Share

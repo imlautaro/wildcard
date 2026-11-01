@@ -2967,3 +2967,49 @@ initiative planner budget is now 4,400 completion tokens. Rollback to an earlier
 pushed revision keeps the column; see the compatibility note in
 [generated images](generated-images.md#albums) about album images 2–3 and
 orphan cleanup after rollback.
+
+
+## Shared-contact device delegation — migration 0083
+
+Prerequisites are the existing remote-native setup above: D1 migrations through
+0082, authenticated accounts sharing one contact, APNs registration/live iPhone
+session, AlarmKit permission, visible notifications and the existing signed App Group
+notification extension. No new service, binding, secret, Apple entitlement or
+account identifier is introduced. Independent accounts use their own existing
+Wrangler/D1/APNs configuration and Apple App Group/topic replacements documented
+under [remote native device execution](#remote-native-device-execution).
+
+Apply `apps/api/migrations/0083_delegated_remote_native.sql` after earlier migrations.
+It creates `native_remote_delegate`, the live `native_remote_access` view and nullable
+`native_action.remote_grant_id`. Composite foreign-key cascade ties delegation to
+an existing owner grant; recipient deletion also cascades. The SQL follows
+[D1 foreign-key semantics](https://developers.cloudflare.com/d1/sql-api/foreign-keys/).
+Local development uses the existing `npm run db:migrate:local`, API and web dev
+commands; use fictional accounts and phones. This change does not run a local or
+production migration as part of authoring.
+
+For production or an independently configured staging account, use the same ordered
+migration/configuration with that account's D1/APNs/Apple settings. Commit and push
+the intended changes to the configured release branch; Workers Builds applies
+migrations before releasing the API and automatically publishes web from that pushed
+commit. Verify both automatic releases and source SHAs; never deploy manually.
+Install the updated iOS app to get its remote selector and grant controls. The
+extension command schema and local allowlist are unchanged, so the previously
+working remote execution binary remains compatible with new server delegation.
+
+Follow [the grant flow and verification matrix](native-remote.md#allow-a-shared-contact-participant).
+Check an owner grant and revoke, timer/alarm and voice requests from the delegate's
+iOS/web chat, rejection without permission, same-agent membership, stale grant
+identity after revoke/re-enable, deleted participant/session and locked delivery.
+Use receipts plus actual iPhone state; API/APNs acceptance proves no scheduling.
+These runtime/device checks remain pending unless separately recorded as performed.
+Static schema preparation and type checks neither contact production nor establish
+device behavior.
+
+Rollback is a committed/pushed automatic release of the prior API/web implementation.
+Retain additive migration 0083 and existing rows; old code cannot use delegated
+access and old app/server paths keep own-account access. Do not down-migrate or
+rewrite history. Before rolling forward again, explicitly revoke delegations that
+should no longer be effective. Already scheduled system alarms survive revocation
+and rollback and must be managed on the iPhone. Revocation blocks future claims;
+an operation already claimed can still finish.

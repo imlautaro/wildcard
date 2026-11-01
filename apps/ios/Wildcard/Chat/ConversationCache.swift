@@ -55,6 +55,12 @@ final class NavigationSnapshot<Value: Sendable> {
         invalidated = remove
     }
 
+    func replace(_ updated: Value) {
+        guard !invalidated else { return }
+        invalidate()
+        value = updated
+    }
+
     func refresh(fetch: @escaping @MainActor () async throws -> Value) async throws {
         guard !invalidated else { throw AuthAPI.Failure.notFound }
         let started = revision

@@ -23,6 +23,13 @@ function remoteTone(status: string) {
 const remoteToneIcons = { done: 'check', waiting: 'clock', attention: 'alert', failed: 'x-circle', inactive: 'minus' } as const;
 // The device picker appears once this account has a linked iPhone; setup lives in /native.
 const showRemote = computed(() => remote.state.value.devices.length > 0 || !!state.value.remoteDeviceID || !!remoteError.value || !!remote.state.value.error);
+const selectedRemote = computed(() => remote.state.value.devices.find(device => device.id === state.value.remoteDeviceID));
+async function setDelegate(participantID: string, allowed: boolean) {
+  const device = selectedRemote.value;
+  if (!device?.owned) return;
+  try { await remote.delegate(device.id, participantID, allowed); remoteError.value = null; }
+  catch (failure) { remoteError.value = errorMessage(failure); }
+}
 async function revokeRemote() {
   const deviceID = state.value.remoteDeviceID;
   if (!deviceID) return;
@@ -137,7 +144,6 @@ function failureText(turn: ChatTurn) {
 
 async function refresh() {
   await Promise.all([load(), remote.refresh(), miniApps.refresh()]);
-  if (remote.state.value.loaded && state.value.remoteDeviceID && !remote.state.value.devices.some(d => d.id === state.value.remoteDeviceID)) state.value.remoteDeviceID = null;
   if (document.visibilityState === 'visible') markRead();
 }
 
@@ -213,17 +219,30 @@ onBeforeUnmount(() => {
       <span class="native-glyph small" data-kind="timer"><AppIcon name="iphone" /></span>
       <div class="remote-copy">
         <label for="remote-device">Timers and alarms</label>
-        <p v-if="state.remoteDeviceID">Requests go to your iPhone through a visible notification, even while locked. Device confirmation is required before reporting success.</p>
-        <p v-else>Choose your iPhone to schedule timers and alarms from this chat.</p>
+        <p v-if="state.remoteDeviceID">Requests go to the selected iPhone through a visible notification, even while locked. Device confirmation is required before reporting success.</p>
+        <p v-if="state.remoteDeviceID && !selectedRemote" class="error">Selected iPhone unavailable or access revoked. Choose a device before sending another timer or alarm request.</p>
+        <p v-if="!state.remoteDeviceID">Choose an authorized iPhone to schedule timers and alarms from this chat.</p>
         <p v-if="remote.state.value.error || remoteError" class="error">{{ remoteError || remote.state.value.error }}</p>
       </div>
       <div class="remote-actions">
         <AppSelect
           id="remote-device" v-model="state.remoteDeviceID" variant="tonal" class="device-select" :disabled="!!state.pending || !remote.state.value.loaded"
-          :options="[{ value: null, label: 'No remote device' }, ...remote.state.value.devices.map(device => ({ value: device.id, label: `${device.name} · ${device.id.slice(-6)}` }))]"
+          :options="[{ value: null, label: 'No remote device' }, ...(state.remoteDeviceID && !selectedRemote ? [{ value: state.remoteDeviceID, label: 'Selected iPhone unavailable' }] : []), ...remote.state.value.devices.map(device => ({ value: device.id, label: `${device.name} · ${device.id.slice(-6)}` }))]"
         />
         <AppIconButton icon="refresh" label="Refresh devices" @click="remote.refresh(true)" />
-        <button v-if="state.remoteDeviceID" type="button" class="link-button danger" @click="revokeRemote">Revoke access</button>
+        <button v-if="selectedRemote?.owned" type="button" class="link-button danger" @click="revokeRemote">Revoke access</button>
+      </div>
+    </div>
+    <div v-if="selectedRemote?.owned && remote.state.value.participants.length" class="remote-native-bar">
+      <div class="remote-copy">
+        <strong>Shared-contact access to this iPhone</strong>
+        <p>Allow a participant to set timers and alarms through this contact without asking you each time. Revoke access here at any time. Existing alarms remain scheduled.</p>
+        <div v-for="participant in remote.state.value.participants" :key="participant.id" class="actions-row">
+          <span>{{ participant.name }}</span>
+          <AppButton variant="tonal" :disabled="remote.state.value.mutating" @click="setDelegate(participant.id, !remote.state.value.delegations.some(g => g.deviceID === selectedRemote?.id && g.participantID === participant.id))">
+            {{ remote.state.value.delegations.some(g => g.deviceID === selectedRemote?.id && g.participantID === participant.id) ? 'Revoke access' : 'Allow timers and alarms' }}
+          </AppButton>
+        </div>
       </div>
     </div>
     <div class="message-viewport">

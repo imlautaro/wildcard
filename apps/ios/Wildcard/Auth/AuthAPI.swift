@@ -269,6 +269,10 @@ struct AuthAPI: Sendable {
                 }
             }
             if path.contains("/chat/") {
+                if response.statusCode == 403,
+                   (try? JSONDecoder().decode(ErrorResponse.self, from: data).error) == "Remote device unavailable or permission revoked" {
+                    throw Failure.rejected("Remote device unavailable or permission revoked")
+                }
                 if response.statusCode == 413 { throw Failure.rejected("Choose a file up to 5 MB.") }
                 if response.statusCode == 400, let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String {
                     throw Failure.rejected(message)

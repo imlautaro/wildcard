@@ -2,6 +2,7 @@ import Foundation
 import AlarmKit
 import UserNotifications
 import UIKit
+import SwiftUI
 
 @MainActor extension NativeExperiments {
     func publishRemoteSettings() {
@@ -73,5 +74,114 @@ import UIKit
             guard !Task.isCancelled, userID == auth.user?.id else { return }
             await setRemoteEnabled(true, contactID: contactID, using: auth, requestPermission: false)
         }
+    }
+}
+
+// Both chat and Native experiments reuse the session-owned remote snapshot.
+struct RemoteNativeControls: View {
+    let contactID: String
+    let chat: ChatStore
+    var showEmpty = false
+    @Environment(AuthStore.self) private var auth
+    @Environment(ContactsStore.self) private var contacts
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var error: String?
+    private var snapshot: NavigationSnapshot<RemoteNativeSnapshot> { contacts.remoteSnapshots.store(for: contactID) }
+    private var selected: RemoteNativeDevice? { snapshot.value?.devices.first { $0.id == chat.remoteDeviceID } }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if showEmpty || !(snapshot.value?.devices.isEmpty ?? true) || chat.remoteDeviceID != nil || error != nil {
+                HStack {
+                    Image(systemName: "iphone.radiowaves.left.and.right")
+                    Picker("Timers and alarms", selection: Binding(get: { chat.remoteDeviceID ?? "" }, set: { chat.remoteDeviceID = $0.isEmpty ? nil : $0 })) {
+                        Text("No remote device").tag("")
+                        if let id = chat.remoteDeviceID, selected == nil {
+                            Text("Selected iPhone unavailable").tag(id)
+                        }
+                        ForEach(snapshot.value?.devices ?? []) { device in
+                            Text("\(device.name) · \(device.id.suffix(6))").tag(device.id)
+                        }
+                    }.disabled(chat.isSending || chat.hasPendingRemoteSubmission)
+                    Button { Task { await refresh(force: true) } } label: { Image(systemName: "arrow.clockwise") }
+                        .accessibilityLabel("Refresh devices")
+                }
+                if chat.remoteDeviceID != nil {
+                    Text("Requests go to the selected iPhone through a visible notification, even while locked. Device confirmation is required before reporting success.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                } else if showEmpty {
+                    Text("Choose an authorized iPhone to schedule timers and alarms from this chat.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                if chat.remoteDeviceID != nil && selected == nil {
+                    Text("Selected iPhone unavailable or access revoked. Choose a device before sending another timer or alarm request.")
+                        .font(.footnote).foregroundStyle(.red)
+                }
+                if chat.hasPendingRemoteSubmission && !chat.isSending {
+                    Text("The pending send keeps its original iPhone. Check that phone before requesting again if its outcome is unknown.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Button("Discard pending send", role: .destructive) { chat.discardPendingRemoteSubmission() }
+                }
+                if let selected, selected.owned == 1, let value = snapshot.value, !value.participants.isEmpty {
+                    DisclosureGroup("Shared-contact access to this iPhone") {
+                        Text("Allow a participant to set timers and alarms through this contact without asking you each time. Revoke access here at any time. Existing alarms remain scheduled.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        ForEach(value.participants) { participant in
+                            let allowed = value.delegations.contains { $0.deviceID == selected.id && $0.participantID == participant.id }
+                            HStack {
+                                Text(participant.name)
+                                Spacer()
+                                Button(allowed ? "Revoke access" : "Allow timers and alarms", role: allowed ? .destructive : nil) {
+                                    Task {
+                                        do {
+                                            try await contacts.setRemoteDelegate(contactID: contactID, deviceID: selected.id, participantID: participant.id, allowed: !allowed, using: auth)
+                                            error = nil
+                                        } catch { self.error = error.localizedDescription }
+                                    }
+                                }.disabled(contacts.remoteMutating.contains(contactID))
+                            }
+                        }
+                    }
+                }
+                if let error { Text(error).font(.footnote).foregroundStyle(.red) }
+            }
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                await refresh()
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            }
+        }
+    }
+    private func refresh(force: Bool = false) async {
+        do {
+            try await contacts.refreshRemote(contactID: contactID, using: auth, force: force)
+            error = nil
+        } catch {
+            if error is CancellationError || Task.isCancelled { return }
+            if snapshot.value != nil && AuthAPI.isTransient(error) { return }
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+struct SharedRemoteReceiptView: View {
+    let action: RemoteNativeReceipt
+    private var status: String {
+        switch action.status {
+        case "completed": "Scheduled on iPhone"
+        case "pending": "Sent · waiting for iPhone"
+        case "running": "Claimed · outcome not yet confirmed"
+        case "expired": "Expired without confirmation"
+        case "failed": "Could not schedule"
+        case "cancelled": "Cancelled"
+        default: "Outcome unknown · check iPhone"
+        }
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(action.title, systemImage: action.kind == "timer" ? "timer" : "alarm")
+            Text("\(action.deviceName) · \(status)").font(.footnote).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }

@@ -59,8 +59,11 @@ struct NativeToolsView: View {
                     Toggle("Enable native experiments", isOn: Binding(get: { !kinds.isEmpty }, set: {
                         native.setKinds($0 ? Set(NativeExperiments.kinds) : [], contactID: contactID)
                     }))
-                    InfoButton(title: "Native experiments", text: "Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms run automatically when requested in this private chat while Wildcard is open. Choose other automatic tools below. Lock Screen activities may show their titles. Other people sharing this contact receive no device access.")
+                    InfoButton(title: "Native experiments", text: "Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms run automatically when requested in this private chat while Wildcard is open. Choose other automatic tools below. Lock Screen activities may show their titles. Other participants receive no device access unless you explicitly allow them under Shared-contact access to this iPhone.")
                 }
+            }
+            Section("Remote timers and alarms") {
+                RemoteNativeControls(contactID: contactID, chat: contacts.conversations.store(for: contactID), showEmpty: true)
             }
             if !kinds.isEmpty {
                 Section {
@@ -75,7 +78,7 @@ struct NativeToolsView: View {
                     }
                 } footer: {
                     // What the switch grants stays visible next to it.
-                    Text("Your other devices can schedule timers and alarms on this iPhone.")
+                    Text("Your other devices can schedule timers and alarms on this iPhone. Select this iPhone above to allow individual shared-contact participants.")
                 }
                 Section {
                     let automatic = NativeExperiments.kinds.filter { kinds.contains($0) && NativeExperiments.automaticKinds.contains($0) }
@@ -167,6 +170,9 @@ struct NativeToolsView: View {
             if let error = native.error {
                 Section { Label { Text(error) } icon: { Image(systemName: "exclamationmark.triangle.fill") }.foregroundStyle(.red) }
             }
+        }
+        .onChange(of: native.remoteEnabled) { _, _ in
+            Task { try? await contacts.refreshRemote(contactID: contactID, using: auth, force: true) }
         }
         .navigationTitle("Native experiments")
         .navigationBarTitleDisplayMode(.inline)

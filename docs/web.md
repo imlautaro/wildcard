@@ -640,7 +640,14 @@ Install dependencies with the existing root `npm ci` workflow.
 ## Native iOS experiments
 
 The [remote timer/alarm prototype](native-remote.md) adds a device selector to private
-web chats. After enabling **Allow remote timers and alarms** on iPhone, select that
+iOS and web chats. With migration 0083, the iPhone account can allow a named current
+shared-contact participant under **Shared-contact access to this iPhone**, and
+**Revoke access** beside that participant removes only their permission. Select an
+owned phone to see these controls; other participants choose the authorized owner's
+phone in their own private chat. Delegation requires the owner's existing iPhone
+grant and exposes only enabled timers/alarms. Native device registration still
+requires iOS; web can manage grants and request remote execution. See the
+[delegation contract and two-account verification](native-remote.md#allow-a-shared-contact-participant). After enabling **Allow remote timers and alarms** on iPhone, select that
 phone and request an action in chat. The browser submits `remoteDeviceID`; server-
 validated grants determine tool capabilities. Delivery uses a visible APNs alert
 and the notification extension, with no tap or unlocked phone required by the
@@ -661,13 +668,17 @@ device lists, empty results and receipts use bounded session caches; five-second
 freshness reuses chat polling. Pending sends snapshot target, time zone and UUID.
 Explicit refresh bypasses freshness, requests deduplicate, transient failures keep
 content, and session/access/contact changes clear state and reject late results.
+An unavailable selected phone remains selected with an error until explicitly
+changed; revocation cannot silently target another phone. Permission mutations
+update the cached grant immediately, reject old reads and revalidate. Participants
+receive no grant-management controls for someone else’s iPhone.
 No private persistence or fabricated browser countdown is added.
 
-The device bar appears only once this account has a linked iPhone for the contact,
+The device bar appears once this account has an owned or explicitly delegated iPhone for the contact,
 a target is selected, or loading devices failed; setup instructions live on
 `/native`. It shows a compact device picker, a refresh icon and **Revoke access**.
 Receipts render as centered chips with a kind glyph and a status icon colored by
-outcome (confirmed, waiting, unconfirmed/unknown, failed, inactive), matching iOS.
+outcome (confirmed, waiting, unconfirmed/unknown, failed, inactive). iOS shows the same device-reported status text for remote receipts.
 The contact page's **Conversation initiative** uses the standard switch, and
 **Native experiments** is listed with **Connections** on the account page.
 

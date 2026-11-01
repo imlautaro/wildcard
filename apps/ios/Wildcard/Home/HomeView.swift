@@ -196,6 +196,7 @@ struct HomeView: View {
         }
         .onChange(of: auth.user?.chatModel) { _, _ in
             contacts.sharingSnapshots.removeAll()
+            contacts.remoteSnapshots.removeAll()
             for group in groups.groups {
                 groups.conversations.cachedStore(for: group.id)?.invalidateDetails()
             }

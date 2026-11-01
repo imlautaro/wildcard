@@ -8,10 +8,10 @@ export const nativeKinds = ['focus', 'recipe', 'timer', 'alarm', 'calendar', 're
 // Deprecated on 2026-10-30: never advertise or create focus, recipe or speech actions.
 const deprecatedNativeKinds: ReadonlySet<string> = new Set(['focus', 'recipe', 'speech']);
 export const activeNativeKinds = nativeKinds.filter(kind => !deprecatedNativeKinds.has(kind));
-export type NativeContext = { deviceID: string; kinds: string[]; automaticKinds?: string[]; remote?: true };
+export type NativeContext = { deviceID: string; kinds: string[]; automaticKinds?: string[]; remote?: true; remoteDeviceKey?: string; remoteGrantID?: string; targetName?: string };
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export function parseNativeContext(value: unknown): NativeContext | null {
-  if (!isRecord(value) || Object.keys(value).some(key => !['deviceID', 'kinds', 'automaticKinds', 'remote'].includes(key))
+  if (!isRecord(value) || Object.keys(value).some(key => !['deviceID', 'kinds', 'automaticKinds', 'remote', 'remoteDeviceKey', 'remoteGrantID', 'targetName'].includes(key))
     || typeof value.deviceID !== 'string' || !uuid.test(value.deviceID) || !Array.isArray(value.kinds)
     // Filtering legacy-only contexts yields an empty list, which must survive re-parsing.
     || value.kinds.length > nativeKinds.length
@@ -19,11 +19,12 @@ export function parseNativeContext(value: unknown): NativeContext | null {
     || new Set(value.kinds).size !== value.kinds.length) return null;
   if (value.remote !== undefined && value.remote !== true) return null;
   if (value.remote === true && value.kinds.some(k => !['timer', 'alarm'].includes(k))) return null;
+  if (['remoteDeviceKey', 'remoteGrantID', 'targetName'].some(key => value[key] !== undefined && (value.remote !== true || typeof value[key] !== 'string' || !value[key] || value[key].length > 300))) return null;
   const kinds = value.kinds;
   if (value.automaticKinds !== undefined && (!Array.isArray(value.automaticKinds)
     || value.automaticKinds.some(k => typeof k !== 'string' || !['timer', 'alarm', 'focus', 'recipe', 'reminder', 'speech'].includes(k) || !kinds.includes(k))
     || new Set(value.automaticKinds).size !== value.automaticKinds.length)) return null;
-  return { ...(value.remote === true ? { remote: true as const } : {}), ...(Array.isArray(value.automaticKinds) ? { automaticKinds: value.automaticKinds.filter(k => !deprecatedNativeKinds.has(k)).sort() } : {}), deviceID: value.deviceID.toLowerCase(), kinds: value.kinds.filter(k => !deprecatedNativeKinds.has(k)).sort() };
+  return { ...(value.remote === true ? { remote: true as const, remoteDeviceKey: value.remoteDeviceKey as string | undefined, remoteGrantID: value.remoteGrantID as string | undefined, targetName: value.targetName as string | undefined } : {}), ...(Array.isArray(value.automaticKinds) ? { automaticKinds: value.automaticKinds.filter(k => !deprecatedNativeKinds.has(k)).sort() } : {}), deviceID: value.deviceID.toLowerCase(), kinds: value.kinds.filter(k => !deprecatedNativeKinds.has(k)).sort() };
 }
 export const nativeTools: ModelTool[] = [{ type: 'function', function: {
   name: 'request_native_action',
@@ -83,20 +84,20 @@ export async function executeNativeTool(env: PushEnvironment, turn: StoredTurn, 
   const now = Date.now();
   const id = `${turn.id}:${args.kind}`;
   const fireAt = context.remote ? (args.kind === 'timer' ? now + Number(args.durationSeconds) * 1000 : Date.parse(String(args.date))) : null;
-  const remoteID = context.remote ? `${turn.userID}:${context.deviceID}` : null;
+  const remoteID = context.remote ? context.remoteDeviceKey ?? `${turn.userID}:${context.deviceID}` : null;
   await db.prepare(`INSERT INTO native_action (id, turn_id, kind, payload_json, created_at, updated_at, expires_at,
-      remote_device_id, remote_nonce, fire_at, push_next_at)
-    SELECT ?1, t.id, ?2, ?3, ?4, ?4, ?5, ?11, ?12, ?13, ?14 FROM chat_turn t JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
+      remote_device_id, remote_nonce, fire_at, push_next_at, remote_grant_id)
+    SELECT ?1, t.id, ?2, ?3, ?4, ?4, ?5, ?11, ?12, ?13, ?14, ?15 FROM chat_turn t JOIN contact c ON c.id = t.contact_id AND c.user_id = t.user_id
     WHERE t.id = ?6 AND t.contact_id = ?7 AND t.user_id = ?8 AND t.attempt = ?9 AND t.status = 'running'
     AND t.schedule_id IS NULL AND t.group_request_id IS NULL AND t.native_context_json = ?10
-    AND (?11 IS NULL OR EXISTS (SELECT 1 FROM native_remote_device d JOIN native_remote_grant g ON g.device_id = d.id
+    AND (?11 IS NULL OR EXISTS (SELECT 1 FROM native_remote_device d JOIN native_remote_access g ON g.device_id = d.id
       JOIN push_device p ON p.id = d.push_device_id JOIN session s ON s.id = p.session_id AND s.user_id = d.user_id
-      WHERE d.id = ?11 AND d.user_id = t.user_id AND g.contact_id = t.contact_id AND s.expires_at > ?4
+      WHERE d.id = ?11 AND g.contact_id = t.contact_id AND g.grant_id = COALESCE(?15, d.id || ':' || t.contact_id) AND s.expires_at > ?4
       AND EXISTS (SELECT 1 FROM json_each(g.kinds_json) WHERE value = ?2)))
     ON CONFLICT(turn_id, kind) DO NOTHING`).bind(id, args.kind, JSON.stringify(args), now,
       fireAt === null ? now + 86400000 : Math.min(now + 60_000, fireAt),
       turn.id, turn.contactID, turn.userID, turn.attempt, turn.nativeContextJSON,
-      remoteID, context.remote ? crypto.randomUUID() : null, fireAt, context.remote ? now : null).run();
+      remoteID, context.remote ? crypto.randomUUID() : null, fireAt, context.remote ? now : null, context.remoteGrantID ?? null).run();
   if (context.remote) await deliverRemoteNative(env, id);
   let action = await db.prepare(`SELECT id, kind, CASE WHEN status = 'pending' AND expires_at <= ?3 THEN 'expired' ELSE status END AS status, payload_json AS payloadJSON FROM native_action WHERE id = ?1 AND turn_id = ?2`)
     .bind(id, turn.id, now).first<{ id: string; kind: string; status: string; payloadJSON: string }>();
@@ -115,5 +116,5 @@ export async function executeNativeTool(env: PushEnvironment, turn: StoredTurn, 
       action = receipt;
     }
   }
-  return JSON.stringify(action ? { id: action.id, kind: action.kind, status: action.status, proposal: JSON.parse(action.payloadJSON), executionConfirmed: action.status === 'completed', nextStep: action.status === 'completed' ? 'The requesting iPhone confirmed completion of this operation. Confirm it naturally; do not ask the person to activate it. For timers/alarms, this means scheduled, not that it rang or is still running.' : ['failed', 'cancelled', 'unknown', 'expired'].includes(action.status) ? 'Report this device outcome accurately. Do not claim success or repeat the action. Unknown requires checking the system app.' : context.automaticKinds?.includes(action.kind) ? 'The requesting iPhone is configured to run new requests of this kind automatically subject to current device settings and iOS permissions. Remote requests use a visible push and the notification extension even if the main app is closed; foreground-only requests require Wildcard open. No extra app confirmation is needed. Pending is not completed; only a completed device receipt confirms execution.' : 'Review and run in the iOS Native experiments screen. Never report pending as completed.' } : { error: 'The request is no longer active.' });
+  return JSON.stringify(action ? { id: action.id, kind: action.kind, status: action.status, proposal: JSON.parse(action.payloadJSON), executionConfirmed: action.status === 'completed', nextStep: action.status === 'completed' ? 'The selected iPhone confirmed completion of this operation. Confirm it naturally; do not ask the person to activate it. For timers/alarms, this means scheduled, not that it rang or is still running.' : ['failed', 'cancelled', 'unknown', 'expired'].includes(action.status) ? 'Report this device outcome accurately. Do not claim success or repeat the action. Unknown requires checking the system app.' : context.automaticKinds?.includes(action.kind) ? 'The selected iPhone is configured to run new requests of this kind automatically subject to current device settings and iOS permissions. Remote requests use a visible push and the notification extension even if the main app is closed; foreground-only requests require Wildcard open. No extra app confirmation is needed. Pending is not completed; only a completed device receipt confirms execution.' : 'Review and run in the iOS Native experiments screen. Never report pending as completed.' } : { error: 'The request is no longer active.' });
 }

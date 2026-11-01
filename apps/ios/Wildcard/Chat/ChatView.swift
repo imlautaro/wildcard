@@ -193,7 +193,10 @@ struct ChatView: View {
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         }
                         if item.kind == .user {
-                            ForEach((native.actions[contactID] ?? []).filter { $0.turnID == turn.id }) { action in
+                            ForEach((contacts.remoteSnapshots.store(for: contactID).value?.actions ?? []).filter { $0.turnID == turn.id }) { action in
+                                SharedRemoteReceiptView(action: action)
+                            }
+                            ForEach((native.actions[contactID] ?? []).filter { $0.turnID == turn.id && $0.remoteDeviceID == nil }) { action in
                                 NativeActionReceiptView(action: action, contactID: contactID)
                             }
                         }
@@ -243,7 +246,12 @@ struct ChatView: View {
             }
             .refreshable { await chat.refresh(contactID: contactID, using: auth) }
         }
-        .safeAreaInset(edge: .top, spacing: 0) { NativeActiveStatusView(contactID: contactID) }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(spacing: 0) {
+                RemoteNativeControls(contactID: contactID, chat: chat).padding(.horizontal, 12)
+                NativeActiveStatusView(contactID: contactID)
+            }.background(.background)
+        }
         .task(id: contacts.suggestedDrafts[contactID]) {
             // An Updates note's suggested reply fills an empty composer; it is never sent automatically.
             guard let text = contacts.suggestedDrafts[contactID] else { return }

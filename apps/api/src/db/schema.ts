@@ -625,12 +625,18 @@ export const nativeRemoteGrant = sqliteTable('native_remote_grant', {
   kindsJson: text('kinds_json').notNull().default('["timer","alarm"]'),
 }, t => [primaryKey({ columns: [t.deviceId, t.contactId] })]);
 
+export const nativeRemoteDelegate = sqliteTable('native_remote_delegate', {
+  id: text('id').primaryKey().notNull(), deviceId: text('device_id').notNull(), ownerContactId: text('owner_contact_id').notNull(),
+  contactId: text('contact_id').notNull().references(() => contact.id, { onDelete: 'cascade' }), createdAt: date('created_at').notNull(),
+}, t => [foreignKey({ columns: [t.deviceId, t.ownerContactId], foreignColumns: [nativeRemoteGrant.deviceId, nativeRemoteGrant.contactId] }).onDelete('cascade'),
+  uniqueIndex('native_remote_delegate_device_contact').on(t.deviceId, t.contactId), index('native_remote_delegate_contact').on(t.contactId)]);
+
 // Device action proposals remain separate from model execution and private memory.
 export const nativeAction = sqliteTable('native_action', {
   id: text('id').primaryKey(),
   turnId: text('turn_id').notNull().references(() => chatTurn.id, { onDelete: 'cascade' }),
   kind: text('kind').notNull(), payloadJson: text('payload_json').notNull(),
-  remoteDeviceId: text('remote_device_id'),
+  remoteDeviceId: text('remote_device_id'), remoteGrantId: text('remote_grant_id'),
   remoteNonce: text('remote_nonce'), fireAt: date('fire_at'), pushAttempts: integer('push_attempts').notNull().default(0), pushNextAt: date('push_next_at'),
   status: text('status').notNull().default('pending'), executionId: text('execution_id'),
   createdAt: date('created_at').notNull(), updatedAt: date('updated_at').notNull(), expiresAt: date('expires_at').notNull(),

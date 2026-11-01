@@ -1,6 +1,6 @@
 # Remote iPhone timers and alarms
 
-This first implementation lets a direct private chat request from the web target
+This implementation lets a direct private chat request from iOS or web target
 an explicitly linked iPhone. It uses a visible APNs alert and the Notification
 Service Extension to schedule AlarmKit without opening the main app. It is an
 experimental device path: static validation does not establish that AlarmKit
@@ -112,8 +112,8 @@ Account switching/sign-out clears the shared execution allowlist. Server checks
 also require the iPhone's current registered session, contact access, per-kind grant
 and current model consent. Session/push registration removal cascades device grants;
 historical native operation receipts remain with their source conversation and
-retain remote provenance. Shared contacts never grant another participant control
-of your phone. Turning remote control on does not authorize autonomous bot actions.
+retain remote provenance. Sharing a contact alone never grants another participant control
+of your phone. The separate, explicit delegation below can grant timer/alarm access. Turning remote control on does not authorize autonomous bot actions.
 
 ## Local storage and cache
 
@@ -139,6 +139,96 @@ contact removal and confirmed access loss clear relevant state and reject late
 responses. Successful revocation updates cached devices immediately and revalidates;
 existing pending submissions retain their original target and idempotency ID. These
 rules complement [caching](caching.md), not a new persistent browser cache.
+
+## Allow a shared-contact participant
+
+Migration `0083_delegated_remote_native.sql` adds explicit participant grants. After
+both accounts have accepted access to the same contact:
+
+1. On the target iPhone, enable the contact's timer/alarm kinds and **Allow remote
+   timers and alarms** in **Native experiments** as before.
+2. In that screen's **Remote timers and alarms** selector, or in your private chat
+   on iOS/web, select your linked iPhone. Open **Shared-contact access to this iPhone**
+   on iOS (shown directly on web) and choose **Allow timers and alarms** next to the
+   intended participant's account name. This authorizes requests without per-action
+   approval. It grants only the timer/alarm kinds currently enabled on this iPhone.
+3. That participant opens their own private chat with the same shared contact,
+   selects **Your name’s iPhone** and asks, for example, “Set a timer on my husband's
+   phone for ten minutes.” Text and voice-message requests use the same selected
+   target. Device selection is explicit; mentioning a phone cannot silently override
+   it, and this does not add a live voice-call command interface.
+4. Use **Revoke access** beside that participant on either client to remove only
+   their permission. Disabling the parent remote grant removes all its delegations;
+   participant/contact/account/session/device deletion also removes dependent grants.
+
+Only the iPhone account can delegate its device. Being the shared agent's creator
+does not authorize control of another participant's device. Delegates cannot grant
+access onward, register someone else's phone, read their chat or access Calendar,
+Reminders, live countdowns, or other system data through this permission. Available
+phones identify their owner's account name; installation suffixes distinguish phones.
+Existing private histories remain separate. At most ten live target phones, three
+other participants and thirty outgoing delegations are returned in a snapshot.
+
+The additive table references both the recipient's private contact and the device
+owner's existing `(device_id, contact_id)` grant with cascading deletion. A live
+access view checks that both contacts still belong to the same agent. Each new
+delegation gets a random identity; duplicate enable requests preserve it, whereas
+revoke/re-enable creates a new identity. A turn snapshots that identity and the
+server-resolved target device key/name. A revoked request cannot become valid again
+when permission is re-enabled. Existing own-account turns without that snapshot
+remain restricted to the same account's original grant.
+
+Action creation, push selection and atomic device claims check current access and
+the granted action kind. Both requester and device-owner model consent are checked
+before delivery and claim. Push and canonical command identities use the device
+owner's account/contact, so the unchanged extension validates the existing local
+allowlist and files alarm IDs under the correct owner. Requester identities remain
+server-side; receipts stay only in the requesting private chat. Revocation blocks
+future claims, including delivered but unclaimed pushes. It cannot recall an
+operation already claimed or remove an existing system alarm; remove those on the
+iPhone. Delivery/expiry and uncertain-result rules above still apply.
+
+Both clients retain an unavailable selected phone until the person explicitly
+changes it. Requests cannot fall back silently to their own phone after revocation.
+Retries preserve the original target and message UUID; the device picker stays
+locked during an unresolved remote submission. iOS offers **Discard pending send**
+to release that retry before selecting another phone, with a reminder to inspect
+the phone when the outcome is unknown. Discarding a local retry cannot recall an
+already accepted server request. Native iOS suppresses local
+native capabilities when a remote phone is selected.
+
+`GET /contacts/:id/native-remote` adds `owned` on devices plus `participants` and
+outgoing `delegations`. Authenticated owner-only mutation routes are
+`PUT` / `DELETE /contacts/:id/native-remote/:deviceID/participants/:participantID`.
+The participant ID is a current participant contact ID from that snapshot, never an
+email or a client-asserted owner account. Existing device registration/revocation
+routes are unchanged. No new secret, binding or Apple entitlement is required.
+
+### Delegation cache and verification
+
+The web extends its existing twenty-contact, five-second session cache. iOS uses
+`ContactsStore.remoteSnapshots` through `NavigationSnapshotCache` (eight snapshots,
+with the bounded response sizes above). Empty results and loaded receipts render
+synchronously on return; visible active views refresh at five-second intervals and
+manual refresh bypasses freshness. Reads deduplicate and transient errors retain
+usable snapshots. Successful permission changes replace the affected grant locally,
+invalidate older reads and revalidate. Per-contact mutation gates prevent competing
+permission writes. Contact/access loss removes snapshots and session replacement
+replaces their owner; model changes invalidate them. Late reads cannot restore
+removed grants. Nothing is persisted to browser storage or additional iOS files.
+Selection/pending sends live in the existing conversation stores and retain their
+existing eviction rules. Cached permissions never authorize an operation.
+
+Static API/web types, Swift checks and empty-schema SQL preparation are recorded
+with this change. No builds, runtime tests, pushes, real-account grants or device
+alarms are exercised by static checks. Before claiming two-account operation, use
+fictional accounts to verify: no grant by default; owner grant; delegate timer and
+alarm from both clients, including voice messages; correct selected device with
+two phones; locked/background receipt; revoke before claim; revoke/re-enable does
+not revive an old turn; disable parent grant/kind; remove/rejoin participant;
+failed/offline refresh; back/reopen with empty snapshots; account switch during
+read/mutation; attempted self/onward/unrelated-agent grants; duplicate push and
+unknown receipt behavior. Confirm actual system alarms separately from receipts.
 
 ## Future autonomous initiative
 

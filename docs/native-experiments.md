@@ -1,6 +1,6 @@
 # Native iOS experiments
 
-The [remote timer/alarm prototype](native-remote.md) additionally supports web requests
+The [remote timer/alarm prototype](native-remote.md) additionally supports iOS/web requests
 to an explicitly linked iPhone through its notification extension. It requires
 migration 0034 and App Groups signing for that extension. Locked-device execution
 is experimental and not yet verified on our signed device. Autonomous initiative
@@ -368,3 +368,17 @@ open sheets. Explanations for those, Contact link and Requests are behind info
 buttons. Web: the informational page lists capabilities and opens Automatic execution,
 Live status and receipts, Remote timers and alarms, and What stays on your iPhone in
 sheets. See the settings pattern in [contacts](contacts.md#contact-details-layout).
+
+
+## Shared-contact timer and alarm access
+
+With migration 0083, a linked iPhone's account can explicitly allow a current
+shared-contact participant under **Remote timers and alarms → Shared-contact
+access to this iPhone**, and revoke that participant from iOS or web. Sharing a
+contact or enabling local automatic execution grants no such access by itself.
+The requester selects the authorized owner's iPhone in their own private chat;
+text and voice messages use that target, suppressing local native context. Both
+clients show device scheduling receipts. See [delegation and cache behavior](native-remote.md#allow-a-shared-contact-participant)
+for setup, limited permissions, revocation/in-flight semantics, pending-send
+recovery and the two-account device checks still required. This browser-facing
+control does not make Apple frameworks executable in a browser.

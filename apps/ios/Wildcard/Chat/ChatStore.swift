@@ -67,6 +67,7 @@ final class ChatStore {
     private(set) var isSending = false
     private(set) var nextBefore: Int?
     private(set) var isUnavailable = false
+    var remoteDeviceID: String?
     var error: String?
     private var refreshedAt: Date?
     private var refreshRequest: (id: UUID, task: Task<Void, Never>)?
@@ -74,7 +75,14 @@ final class ChatStore {
     private var invalidated = false
     private var revision = 0
     private var historyRevision = 0
-    private var submission: (historyRevision: Int, id: String, text: String, contentID: UUID?, replyKey: String?, nativeContext: NativeContext?)?
+    private var submission: (historyRevision: Int, id: String, text: String, contentID: UUID?, replyKey: String?, nativeContext: NativeContext?, remoteDeviceID: String?)?
+    var hasPendingRemoteSubmission: Bool { submission?.remoteDeviceID != nil }
+    func discardPendingRemoteSubmission() {
+        guard !isSending, hasPendingRemoteSubmission else { return }
+        submission = nil
+        failedVoice = nil
+        error = nil
+    }
     var hasPendingReply: Bool { turns.contains(where: \.isPending) }
 
     func clearPresence() { presence = nil }
@@ -110,6 +118,7 @@ final class ChatStore {
     }
 
     func invalidate() {
+        remoteDeviceID = nil
         reactions.invalidate()
         invalidated = true
         refreshRequest?.task.cancel()
@@ -250,7 +259,7 @@ final class ChatStore {
         let replyKey = replyTo.map { "\($0.messageID)/\($0.side)" }
         let contentID = voice?.id ?? attachment?.id
         if submission?.text != text || submission?.contentID != contentID || submission?.replyKey != replyKey {
-            do { submission = (historyRevision, UUID().uuidString.lowercased(), text, contentID, replyKey, try NativeExperiments.shared.context(contactID: contactID)) }
+            do { submission = (historyRevision, UUID().uuidString.lowercased(), text, contentID, replyKey, remoteDeviceID == nil ? try NativeExperiments.shared.context(contactID: contactID) : nil, remoteDeviceID) }
             catch {
                 self.error = error.localizedDescription
                 if let voice { failedVoice = (voice, replyTo) }
@@ -281,7 +290,7 @@ final class ChatStore {
         do {
             let turn = try await auth.withSession { api, token in
                 try await api.sendMessage(contactID: contactID, historyRevision: submission.historyRevision, id: submission.id, text: text, attachment: attachment, voice: voice,
-                                          replyTo: replyTo, nativeContext: submission.nativeContext, token: token)
+                                          replyTo: replyTo, nativeContext: submission.nativeContext, remoteDeviceID: submission.remoteDeviceID, token: token)
             }
             revision += 1
             guard !invalidated else { return false }
