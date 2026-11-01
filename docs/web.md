@@ -1476,12 +1476,6 @@ unverified by static checks.
 
 ### Expanded web navigation sidebar (2026-11-01)
 
-Web page and chat top bars have a 1 px bottom border using the theme's
-`--md-outline-variant` color, including the chat list, conversations and secondary
-views on desktop and narrow screens. This visual change is explicitly web-only;
-iOS retains its native navigation bars. It adds no requests or cache changes.
-Visual verification of the divider in light and dark appearance remains pending.
-
 This experiment is explicitly web-only at the user's request; iOS keeps its native
 tabs. Routes, active sections and badges are unchanged. The chat list remains
 mounted through `v-show`, preserving scroll, Archived selection, polling and all
