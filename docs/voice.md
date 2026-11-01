@@ -408,8 +408,10 @@ The web app (`apps/web`) implements the same behavior in private chats and group
   as base64 in the message body; nothing is transcribed before sending. The duration
   shown in the pending bubble is the rendered WAV length.
 - **Composer.** `ChatComposer.vue` shows the microphone while the draft is empty and
-  has no attachment. Hold uses pointer events with pointer capture, so mouse, pen and
-  touch behave alike: release sends, about 100 px left cancels, about 80 px up locks
+  has no attachment. On the web a mouse click starts a locked recording and a second
+  click on the Stop button sends it (no hold, slide or lock gesture; a clip under
+  0.5 seconds shows "Click to start recording, click again to send."). Touch and pen
+  keep the hold gesture, which uses pointer events with pointer capture: release sends, about 100 px left cancels, about 80 px up locks
   (the lock hint appears above the button while holding). The locked bar shows
   **Delete** and the button becomes **Stop**, which sends. Releasing before the
   microphone is ready (the first press may only show the browser permission prompt)

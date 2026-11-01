@@ -7,7 +7,8 @@ import type { ReplyPreview } from '~/utils/replies';
 // The parent owns the reply target so it survives navigation with the draft.
 // With `voiceKey` (the conversation identity), an empty draft shows a microphone for
 // voice messages (docs/voice.md): hold to record and release to send, slide left to
-// cancel, slide up to lock. Changing the key discards an active recording.
+// cancel, slide up to lock. With a mouse, one click starts a locked recording and a
+// second click sends it (no hold needed). Changing the key discards an active recording.
 const props = defineProps<{ disabled?: boolean; sending?: boolean; placeholder?: string; reply?: ReplyPreview | null; voiceKey?: string | null }>();
 const draft = defineModel<string>({ required: true });
 const emit = defineEmits<{ send: [text: string, attachments: DraftAttachment[]]; voice: [clip: DraftVoice]; typing: []; cancelReply: [] }>();
@@ -21,10 +22,12 @@ const picker = ref<HTMLInputElement>();
 const micButton = ref<HTMLButtonElement>();
 const length = computed(() => [...draft.value.trim()].length);
 const canSend = computed(() => !props.disabled && !props.sending && !preparing.value && length.value <= 4000 && (length.value > 0 || attachments.value.length > 0));
+// Mouse users click to start and click again to send; touch and pen keep hold-to-record.
+const mouseMode = ref(false);
 const recorder = useVoiceRecorder((clip) => {
   if (props.disabled || props.sending) return;
   emit('voice', clip);
-});
+}, () => (mouseMode.value ? mouseRecordingHint : shortRecordingHint));
 const supportsVoice = ref(false);
 onMounted(() => { supportsVoice.value = voiceRecordingSupported(); });
 const recording = computed(() => recorder.phase.value !== 'idle');
@@ -66,6 +69,9 @@ function sendRecording() {
 }
 function micDown(event: PointerEvent) {
   ignoreClick = false;
+  // A mouse press only records the device; the click that follows starts a locked recording.
+  mouseMode.value = event.pointerType === 'mouse';
+  if (mouseMode.value) return;
   if (event.button !== 0 || props.disabled || props.sending || locked.value || recording.value) return;
   event.preventDefault();
   micButton.value?.setPointerCapture(event.pointerId);
@@ -91,13 +97,13 @@ function micCancel(event: PointerEvent) {
   if (holding.value && origin && event.pointerId === origin.pointer) discardRecording();
 }
 // A key press always acts, even if a hold that ended away from the button left the flag set.
-function micKey() { ignoreClick = false; }
-// Keyboard and assistive technology activation (Space/Enter) starts a locked recording;
-// in the locked state the same button is Stop, which sends.
+function micKey() { ignoreClick = false; mouseMode.value = true; }
+// Mouse clicks and keyboard or assistive technology activation (Space/Enter) start a locked
+// recording; in the locked state the same button is Stop, which sends.
 function micClick(event: MouseEvent) {
   if (ignoreClick) { ignoreClick = false; return; }
   if (locked.value) { sendRecording(); return; }
-  if (event.detail !== 0 || props.disabled || props.sending || recording.value) return;
+  if ((event.detail !== 0 && !mouseMode.value) || props.disabled || props.sending || recording.value) return;
   locked.value = true;
   void recorder.start();
 }
@@ -223,7 +229,7 @@ defineExpose({ focus: () => textarea.value?.focus() });
         <button
           ref="micButton" type="button" class="send mic" data-ripple :class="{ recording: recording && !locked, locked }"
           :aria-label="locked ? 'Stop and send voice message' : 'Record a voice message'"
-          :title="locked ? undefined : 'Hold to record, release to send'"
+          :title="locked ? undefined : mouseMode ? 'Click to record' : 'Hold to record, release to send'"
           :disabled="(disabled || sending) && !recording"
           @pointerdown="micDown" @pointermove="micMove" @pointerup="micUp" @pointercancel="micCancel" @lostpointercapture="micCancel"
           @click="micClick" @keydown="micKey" @contextmenu.prevent

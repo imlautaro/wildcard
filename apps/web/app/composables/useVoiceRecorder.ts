@@ -9,6 +9,7 @@ const maxSeconds = 60;
 const minimumMs = 500;
 const sampleRate = 16_000;
 export const shortRecordingHint = 'Hold to record, release to send.';
+export const mouseRecordingHint = 'Click to start recording, click again to send.';
 
 export const voiceRecordingSupported = () => import.meta.client && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
 
@@ -39,7 +40,7 @@ async function toWav(recording: Blob): Promise<{ blob: Blob; durationMs: number 
 }
 
 /** `onClip` receives each finished recording; the composer sends it immediately. */
-export function useVoiceRecorder(onClip: (clip: DraftVoice) => void) {
+export function useVoiceRecorder(onClip: (clip: DraftVoice) => void, tooShortHint: () => string = () => shortRecordingHint) {
   const phase = ref<Phase>('idle');
   // A hint (too short) or an error (permission, unreadable audio) below the composer.
   const notice = ref<{ text: string; error: boolean } | null>(null);
@@ -130,7 +131,7 @@ export function useVoiceRecorder(onClip: (clip: DraftVoice) => void) {
   }
   function discardShort() {
     phase.value = 'idle'; elapsedMs.value = 0;
-    notice.value = { error: false, text: shortRecordingHint };
+    notice.value = { error: false, text: tooShortHint() };
   }
   // Hiding the tab discards the recording, as backgrounding does on iOS.
   function hidden() { if (document.visibilityState === 'hidden' && phase.value !== 'idle') cancel(); }
