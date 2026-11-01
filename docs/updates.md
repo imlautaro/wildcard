@@ -53,7 +53,7 @@ This is a first implementation (2026-10-30). See [verification](#verification).
   more**, which also reveals the reason and sources. Coming up and apps are one strip
   of chips above the timeline.
 - **Threads**: tapping a post's text or age (web) or the post (iOS) opens every post on
-  its topic, oldest first, joined by a line, with the cards expanded and **Reply to
+  its topic, newest first like the timeline, joined by a line, with the cards expanded and **Reply to
   A post with **N posts in this thread** has older ones. The web
   keeps it in the address (`?thread=<topic>`), iOS pushes it on the navigation stack.
 - **Notes** can suggest a reply. Tapping it opens the chat with the message in the

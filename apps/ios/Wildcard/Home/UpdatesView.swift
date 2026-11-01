@@ -437,7 +437,7 @@ extension HomeFeedStore {
     }
 }
 
-/// Every post on one topic, oldest first, joined by a line like a thread (docs/updates.md#posts).
+/// Every post on one topic, newest first like the timeline, joined by a line like a thread (docs/updates.md#posts).
 /// It reads the session's cached feed, so it opens at once and follows the timeline's mutations.
 struct HomeThreadView: View {
     let store: HomeFeedStore
@@ -448,7 +448,7 @@ struct HomeThreadView: View {
     @Environment(ContactsStore.self) private var contacts
     @State private var actionError: String?
 
-    private var posts: [HomePost] { Array((store.feed?.timeline ?? []).filter { $0.topicID == topicID }.reversed()) }
+    private var posts: [HomePost] { (store.feed?.timeline ?? []).filter { $0.topicID == topicID } }
 
     var body: some View {
         ScrollView {
@@ -472,7 +472,7 @@ struct HomeThreadView: View {
             }
         }
         .background(Color(.systemBackground))
-        .navigationTitle(posts.last?.content.title ?? "Thread")
+        .navigationTitle(posts.first?.content.title ?? "Thread")
         .navigationBarTitleDisplayMode(.inline)
         .alert("For you", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }

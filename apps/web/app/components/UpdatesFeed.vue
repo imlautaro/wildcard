@@ -26,11 +26,11 @@ const threadCounts = computed(() => {
   return counts;
 });
 const thread = computed(() => typeof route.query.thread === 'string' ? route.query.thread : null);
-// A thread reads top to bottom, oldest first.
-const threadPosts = computed(() => thread.value ? posts.value.filter(post => post.topicID === thread.value).reverse() : []);
+// A thread shows its newest post first, like the timeline.
+const threadPosts = computed(() => thread.value ? posts.value.filter(post => post.topicID === thread.value) : []);
 const focusID = computed(() => typeof route.query.post === 'string' ? route.query.post : null);
 const focusPost = computed(() => focusID.value ? posts.value.find(post => post.id === focusID.value) ?? null : null);
-const threadTitle = computed(() => threadPosts.value.at(-1)?.content.title ?? 'Thread');
+const threadTitle = computed(() => threadPosts.value[0]?.content.title ?? 'Thread');
 const myPhoto = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
 
 // "N new posts": posts that arrive while the person is scrolled down are announced instead
