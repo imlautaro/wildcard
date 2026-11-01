@@ -162,7 +162,8 @@ checks. iOS retains its existing native cropper; this change is scoped to the we
 
 Not in the web app yet:
 
-- **Scheduled messages** (list/cancel), private-to-group requests, group photo
+- **Scheduled messages** (list/cancel, including the "To <name>" recipient label for
+  messages scheduled for another participant; create/cancel them in chat), private-to-group requests, group photo
   editing, and the group "Confirm consent for future messages" action.
 
 Browser notifications (Web Push) are available; see [Browser notifications](#browser-notifications).

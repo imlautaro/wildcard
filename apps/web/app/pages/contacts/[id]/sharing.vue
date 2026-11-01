@@ -14,7 +14,7 @@ const busy = ref(false);
 const error = ref<string | null>(null);
 const copied = ref(false);
 const inviting = ref(false);
-const aboutSharing = 'Everyone talks to the same contact, with shared memories and presence. Each person starts an empty, private chat and keeps their own schedules and notifications. Ask the contact to message another participant privately; only your requested message is delivered, with your name attached. Invitations appear inside Wildcard; no email is sent. They expire after 24 hours. Up to four participants, including you.';
+const aboutSharing = 'Everyone talks to the same contact, with shared memories and presence. Each person starts an empty, private chat and keeps their own schedules and notifications. Ask the contact to message another participant privately, now or at a scheduled time, or to send them an image; only your requested message and image are delivered, with your name attached. Invitations appear inside Wildcard; no email is sent. They expire after 24 hours. Up to four participants, including you.';
 function openInvite() { shareMemory.value = false; contributorConsent.value = false; email.value = ''; inviting.value = true; }
 const consented = computed(() => shareMemory.value && (!sharing.value?.contributorModel || contributorConsent.value));
 

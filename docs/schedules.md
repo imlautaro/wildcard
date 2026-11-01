@@ -31,8 +31,10 @@ the conversation, independently of push delivery. Queued, running, and failed
 one-time jobs remain visible so failures are not mistaken for successful sends.
 Schedule records remain stored for history and cancellation/push checks.
 
-Each schedule belongs to the current contact and user, who is the only recipient.
-For [shared contacts](sharing.md), each participant has independent schedules and is the sole recipient. Scheduled work uses the same exclusive agent queue as human messages; another participant cannot inspect or change these schedules. Deleted contacts/accounts cascade their schedules, receipts,
+Each schedule belongs to the current contact and user. Without a recipient, that user
+is the only one who receives it. For [shared contacts](sharing.md), each participant has
+independent schedules; a schedule can instead deliver to another participant (see
+[below](#messages-for-another-participant)). Scheduled work uses the same exclusive agent queue as human messages; another participant cannot inspect or change these schedules. Deleted contacts/accounts cascade their schedules, receipts,
 turns, and pending notifications. Sign-out removes device push enrollment under
 the existing session rules but does not cancel stored schedules. Generation can
 continue in the cloud without an active device session.
@@ -81,12 +83,52 @@ flight or accepted cannot be recalled, and there is an unavoidable race between
 the final database check and that external request.
 
 Schedule mutations from the model persist receipts in the same D1 batch as the
-mutation. Keys are scoped to source human turn and action/target, allowing one
-creation per human message and at most one edit/cancellation per target/action
-in that message. Replays return the original result, including when regenerated
-arguments differ, rather than applying another change. An updated user request
+mutation. Keys are scoped to source human turn and action/target. A creation's target
+is its first execution instant, interval and recipient, so one human message can
+create several schedules (for example two messages at different times), while a
+regenerated call for the same time and recipient replays its first result. There is
+at most one edit/cancellation per schedule/action in that message. Replays return the
+original result, including when regenerated arguments differ, rather than applying
+another change. Before this change, a second creation in the same message was
+rejected, which the contact reported as "only one schedule at a time". An updated user request
 must be a new message. Only a currently running human turn can create a receipt.
 The existing tool rounds (three for human turns, two for scheduled turns) and six executions bound chat-side operations.
+
+## Messages for another participant
+
+In a shared contact, ask: "Send Ana 'I'm leaving now' at 6 pm and 'I'm here' at 7 pm."
+The contact resolves Ana with `list_message_recipients` and calls `create_schedule`
+once per message with `recipientUserID`. With a recipient, `instruction` is the
+exact text delivered, at most 1,000 characters (the schedule instruction limit). Before saving, the
+same bounded semantic authorization as an immediate
+[private message](sharing.md#private-messages-between-shared-contact-participants)
+checks the current human request, recipient, text, time and repetition. Edits re-run it.
+
+At the due time, `dispatchSchedules` delivers without inference, after waiting like
+any schedule for the owner's chat to be idle (a new turn would end a reply in
+progress). One D1 batch, keyed by the occurrence
+(`schedule-<id>-<revision>-<due>`), inserts:
+
+- a complete assistant-only turn in the owner's chat, which dispatches the occurrence
+  through the existing trigger, saying the message was delivered to the recipient or,
+  if not, that nothing was sent;
+- the recipient's message, `Message from "<owner>":` plus the text, with the same
+  `private_contact_message` receipt, eligibility checks (current sharing, connector
+  isolation, Contributor consent) and 12-per-day limits as an immediate send;
+- push outbox rows for both.
+
+A repeated dispatch is a no-op. The owner's note is English server text. The delivered
+text is never regenerated at the scheduled time, so it cannot drift from what was
+authorized or end up in the owner's chat instead. Scheduled messages are text only.
+Recurring intervals are allowed and count against the daily limits; an occurrence over
+the limit is reported in the owner's chat. A delivered one-time schedule leaves the
+API list once its receipt exists; an undelivered one stays visible as dispatched.
+If the recipient leaves the shared contact or deletes their account, triggers cancel
+their active schedules (migration 0089). The recipient cannot see or change the owner's
+schedules.
+
+iOS shows "To <name>" on these rows in **Schedules**. The web app has no schedules
+screen yet ([web gaps](web.md)); web users create and cancel them in chat.
 
 ## Limits and timing
 
@@ -113,7 +155,8 @@ Authenticated endpoints inherit contact ownership checks:
 
 - `GET /api/v1/contacts/:id/schedules` returns `{ schedules: [...] }` with
   `id`, `instruction`, `timeZone`, `nextAt` (Unix milliseconds), `intervalSeconds`,
-  `status`, `revision`, `createdAt`, and `updatedAt`.
+  `status`, `revision`, `createdAt`, `updatedAt`, `recipientUserID` (nullable) and
+  `recipientName` (nullable).
 - `DELETE /api/v1/contacts/:id/schedules/:scheduleID` cancels and returns
   `{ schedule: ... }`; repeated cancellation succeeds for an existing schedule.
   Missing or differently owned schedules return 404.

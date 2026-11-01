@@ -300,8 +300,12 @@ export const contactSchedule = sqliteTable('contact_schedule', {
   lastMutation: text('last_mutation').notNull(),
   createdAt: date('created_at').notNull(),
   updatedAt: date('updated_at').notNull(),
+  // Another participant of the same shared contact receives the exact instruction text (0089).
+  // No foreign key: triggers cancel the schedule when that participant leaves or is deleted.
+  recipientUserId: text('recipient_user_id'),
 }, (table) => [
   foreignKey({ columns: [table.contactId, table.userId], foreignColumns: [contact.id, contact.userId] }).onDelete('cascade'),
+  index('contact_schedule_recipient_idx').on(table.recipientUserId).where(sql`${table.recipientUserId} IS NOT NULL`),
   index('contact_schedule_due_idx').on(table.status, table.nextAt),
   index('contact_schedule_owner_idx').on(table.userId, table.status),
   index('contact_schedule_contact_idx').on(table.contactId, table.userId, table.createdAt),

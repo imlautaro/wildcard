@@ -277,9 +277,30 @@ its creator's continued participation, current sharing and applicable Contributo
 consent. Connector-isolated chats on either side are ineligible. Contact instances
 are fixed before authorization and rechecked atomically with the running source
 attempt/agent attention at save. Tasks, schedules, initiative, group replies and
-returned group answers cannot invoke these private tools. A recipient can reply
+returned group answers cannot invoke these private tools. A message scheduled for
+another participant is authorized when the human creates the schedule and delivered
+verbatim later without inference, never by a scheduled model turn. A recipient can reply
 normally to the contact; returning that reply to the requester requires another
 explicit send request from that recipient. No automatic relay loop is created.
+
+### Images and scheduled messages
+
+`send_private_message` can attach one image, with the message as its caption:
+`generatedImage` is the position of an image that `generate_chat_image` created earlier
+in the same reply, and `chatImage` is a `search_chat_images` reference to a photo of the
+requester's own chat (including one the human just sent). The image is resolved with
+the same live access checks as image search before authorization, and authorization
+must find a request to send that participant an image. The bytes are copied to a new
+object under the recipient's chat prefix and attachment registry, so the recipient's
+cleanup and image search never depend on the requester's chat, and the requester's
+generation prompt or descriptions never reach them. A generated image also stays in
+the requester's chat as the reply. If the image cannot be resolved or copied, nothing
+is sent. iOS and web render it as an ordinary contact image message.
+
+For a later time, the contact uses `create_schedule` with `recipientUserID`; see
+[Schedules](schedules.md#messages-for-another-participant). The contact is instructed
+never to deliver something meant for another participant in the requester's chat
+as a substitute, and to say plainly when a send or schedule fails.
 
 One message/recipient is allowed per human turn, up to 2,000 Unicode characters /
 8,000 UTF-8 bytes. Each source and target contact has a 12-message rolling daily

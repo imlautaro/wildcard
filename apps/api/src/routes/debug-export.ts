@@ -77,7 +77,7 @@ const debugDatasets: Record<string, Dataset> = {
     columns: 'r.group_id',
     where: `r.group_id IN (${groups})` },
   contact_schedule: { table: 'contact_schedule',
-    columns: 'r.id, r.contact_id, r.user_id, r.instruction, r.time_zone, r.next_at, r.interval_seconds, r.status, r.revision, r.created_at, r.updated_at',
+    columns: 'r.id, r.contact_id, r.user_id, r.instruction, r.time_zone, r.next_at, r.interval_seconds, r.status, r.revision, r.created_at, r.updated_at, r.recipient_user_id',
     where: `r.user_id = ?1 AND r.contact_id IN (${contacts})` },
   conversation_initiative: { table: 'conversation_initiative',
     columns: 'r.contact_id, r.source_id, r.anchor_id, r.revision, r.evaluations, r.sent, r.next_at, r.expires_at, r.intent, r.mode',

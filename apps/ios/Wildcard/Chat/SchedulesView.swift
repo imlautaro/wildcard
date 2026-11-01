@@ -8,6 +8,14 @@ struct ContactSchedule: Decodable, Identifiable, Sendable {
     let nextAt: Double
     let intervalSeconds: Int?
     let status: Status
+    /// Set when another participant of this shared contact receives the exact text.
+    let recipientUserID: String?
+    let recipientName: String?
+
+    var recipientLabel: String? {
+        guard recipientUserID != nil else { return nil }
+        return "To \(recipientName ?? "a former participant")"
+    }
 
     var timing: String {
         let zone = TimeZone(identifier: timeZone) ?? .current
@@ -64,7 +72,7 @@ struct SchedulesView: View {
                 ProgressView("Loading schedules…")
             } else if hasLoaded && schedules.isEmpty {
                 ContentUnavailableView("No schedules", systemImage: "clock",
-                    description: Text("Ask this contact to write to you at a specific time or every ten minutes."))
+                    description: Text("Ask this contact to write to you, or to another participant of this shared contact, at a specific time or every ten minutes."))
             }
             ForEach(schedules) { schedule in
                 HStack(alignment: .top, spacing: 12) {
@@ -72,6 +80,10 @@ struct SchedulesView: View {
                         .foregroundStyle(schedule.status == .active ? Color.accentColor : .secondary)
                         .frame(width: 24)
                     VStack(alignment: .leading, spacing: 4) {
+                        if let recipient = schedule.recipientLabel {
+                            Label(recipient, systemImage: "person")
+                                .manrope(.footnote, weight: .semibold).foregroundStyle(.secondary)
+                        }
                         Text(schedule.instruction).manrope().lineLimit(3)
                         Text("\(schedule.repetition) · \(schedule.status == .active ? "Next" : "Scheduled for") \(schedule.timing)")
                             .manrope(.footnote).foregroundStyle(.secondary)
@@ -106,7 +118,7 @@ struct SchedulesView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                InfoButton(title: "Schedules", text: "Create or change schedules by messaging this contact. Swipe a schedule or hold it to cancel. Times use the saved time zone. Messages may arrive after the scheduled time while they are generated and delivered.")
+                InfoButton(title: "Schedules", text: "Create or change schedules by messaging this contact. In a shared contact, you can also schedule a message for another participant: they receive your exact text with your name, and this chat confirms whether it was delivered. Swipe a schedule or hold it to cancel. Times use the saved time zone. Messages may arrive after the scheduled time while they are generated and delivered.")
             }
         }
         .navigationTitle("Schedules")

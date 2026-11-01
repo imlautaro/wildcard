@@ -1,20 +1,22 @@
 import type { StoredTurn } from '../chat/data';
 import type { ModelTool } from '../chat/meta';
 import { listSchedules, scheduleColumns, validTimeZone, type ContactSchedule, type ScheduleScope } from './data';
+import { authorizeScheduledMessage, validMessage } from '../chat/private-relay';
 
 const specification = {
-  instruction: { type: 'string', description: 'What to write or do at execution time, 1–1000 characters. Preserve the user intent.' },
+  instruction: { type: 'string', description: 'Without recipientUserID: what to write or do at execution time for the current user, 1–1000 characters; preserve the user intent. With recipientUserID: the exact message text delivered verbatim to that participant, attributed to the current user; write it as they should read it.' },
   runAt: { type: 'string', description: 'First execution as an ISO 8601 timestamp with Z or explicit UTC offset. Must be in the future, within one year.' },
   timeZone: { type: 'string', description: 'User IANA time zone. Use the current message time zone unless explicitly overridden. Ask if unknown.' },
   intervalSeconds: { type: ['integer', 'null'], description: 'Null for one message; 600–2592000 for fixed intervals from runAt. Every ten minutes means 600, starting ten minutes from now unless specified.' },
+  recipientUserID: { type: ['string', 'null'], description: 'Null: the message is for the current user. Otherwise the actual userID, from list_message_recipients, of another participant of this shared contact who receives the instruction text in their private chat at runAt.' },
 };
 export const scheduleTools: ModelTool[] = [
   { type: 'function', function: { name: 'create_schedule',
-    description: 'Schedule a message to the current user from this contact. Only for an explicit current user request. Confirm only after success. Supports one-time or fixed-interval recurrence, not local-calendar daily/weekly recurrence.',
+    description: 'Schedule a message from this contact, to the current user or, with recipientUserID, to another participant of this shared contact. Only for an explicit current user request. Call once per message: one human message can create several schedules (for example two messages at different times). Confirm only after success, naming the recipient. Supports one-time or fixed-interval recurrence, not local-calendar daily/weekly recurrence. Scheduled messages are text only.',
     parameters: { type: 'object', additionalProperties: false, properties: specification, required: Object.keys(specification) } } },
   { type: 'function', function: { name: 'list_schedules', description: 'List up to 20 schedules for this user and contact, active first; long instructions are clipped. Use IDs to identify an edit or cancellation. Never invent an ID.',
     parameters: { type: 'object', additionalProperties: false, properties: {} } } },
-  { type: 'function', function: { name: 'update_schedule', description: 'Replace the timing and instruction of an active schedule after the user asks. Supply its current revision from list_schedules. Invalidates unsent work from the previous revision.',
+  { type: 'function', function: { name: 'update_schedule', description: 'Replace the timing, instruction and recipient of an active schedule after the user asks. Supply its current revision and keep its recipientUserID unless the user changes it. Invalidates unsent work from the previous revision.',
     parameters: { type: 'object', additionalProperties: false, properties: { id: { type: 'string' }, revision: { type: 'integer' }, ...specification },
       required: ['id', 'revision', ...Object.keys(specification)] } } },
   { type: 'function', function: { name: 'cancel_schedule', description: 'Cancel one schedule explicitly requested by the user. Use list_schedules to resolve its ID. Clarify if ambiguous. Stops future work and unsent notifications.',
@@ -27,7 +29,8 @@ export async function cancelSchedule(db: D1Database, scope: ScheduleScope, id: s
     .bind(Date.now(), id, scope.contactID, scope.userID).first<ContactSchedule>();
 }
 
-export async function executeScheduleTool(db: D1Database, turn: StoredTurn, name: string, args: Record<string, unknown>) {
+export async function executeScheduleTool(env: Env, agentID: string, turn: StoredTurn, name: string, args: Record<string, unknown>) {
+  const db = env.DB;
   const scope = { contactID: turn.contactID, userID: turn.userID };
   if (name === 'list_schedules') {
     if (Object.keys(args).length) return JSON.stringify({ error: 'No arguments expected.' });
@@ -37,14 +40,20 @@ export async function executeScheduleTool(db: D1Database, turn: StoredTurn, name
   }
   // Autonomous turns have no permission to create, change, or perpetuate schedules.
   if (turn.scheduleID || turn.groupRequestID) return JSON.stringify({ error: 'Autonomous messages cannot mutate schedules.' });
-  const receiptID = `${turn.id}:${name}:${name === 'create_schedule' ? 'new' : String(args.id)}`;
+  // Calls written before recipients existed omit the field; they target the current user.
+  if (name !== 'cancel_schedule' && !('recipientUserID' in args)) args = { ...args, recipientUserID: null };
+  // Creations are keyed by occurrence and recipient, so one message can create several
+  // schedules while a regenerated call for the same one still replays its first result.
+  const receiptID = `${turn.id}:${name}:${name === 'create_schedule'
+    ? `${typeof args.runAt === 'string' ? Date.parse(args.runAt) : 'invalid'}:${String(args.intervalSeconds ?? 'once')}:${String(args.recipientUserID ?? 'self')}`
+    : String(args.id)}`;
   const request = JSON.stringify([name, Object.entries(args).sort(([a], [b]) => a.localeCompare(b))]);
   const previous = await db.prepare('SELECT request, result FROM schedule_mutation WHERE id = ? AND turn_id = ?')
     .bind(receiptID, turn.id).first<{ request: string; result: string | null }>();
   if (previous?.result) {
     if (previous.request === request) return previous.result;
     return JSON.stringify({ ...JSON.parse(previous.result), replayed: true,
-      note: 'This user message already performed this action. This is its original result; do not perform it again. List schedules to check current state. A new user message is needed for different arguments.' });
+      note: 'This user message already performed this action for this time and recipient. This is its original result; do not perform it again. List schedules to check current state. A different time or recipient is a separate schedule; changing this one needs a new user message.' });
   }
   const cancel = name === 'cancel_schedule';
   const create = name === 'create_schedule';
@@ -70,6 +79,15 @@ export async function executeScheduleTool(db: D1Database, turn: StoredTurn, name
       || Number(args.intervalSeconds) < 600 || Number(args.intervalSeconds) > 2592000)) {
       return JSON.stringify({ error: 'Use null for one message or an interval of 600–2592000 seconds.' });
     }
+    if (args.recipientUserID !== null) {
+      if (typeof args.recipientUserID !== 'string' || !args.recipientUserID || args.recipientUserID.length > 128 || args.recipientUserID === turn.userID) {
+        return JSON.stringify({ error: 'Use null for the current user, or another participant’s userID from list_message_recipients.' });
+      }
+      if (!validMessage(args.instruction)) return JSON.stringify({ error: 'A message for another participant must be plain text of 1–1000 characters.' });
+      const denied = await authorizeScheduledMessage(env, turn, agentID, { recipientUserID: args.recipientUserID,
+        message: (args.instruction as string).trim(), runAt: args.runAt as string, timeZone: args.timeZone as string, intervalSeconds: args.intervalSeconds as number | null });
+      if (denied) return denied;
+    }
   }
   const id = create ? crypto.randomUUID() : args.id as string;
   const pending = `EXISTS (SELECT 1 FROM schedule_mutation WHERE id = ?1 AND result IS NULL AND request = ?2)`;
@@ -79,24 +97,25 @@ export async function executeScheduleTool(db: D1Database, turn: StoredTurn, name
     .bind(receiptID, turn.id, request, now, scope.contactID, scope.userID, turn.attempt)];
   if (create) {
     statements.push(db.prepare(`INSERT INTO contact_schedule
-      (id, contact_id, user_id, instruction, time_zone, next_at, interval_seconds, last_mutation, created_at, updated_at)
-      SELECT ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?1, ?10, ?10 WHERE ${pending}
+      (id, contact_id, user_id, instruction, time_zone, next_at, interval_seconds, last_mutation, created_at, updated_at, recipient_user_id)
+      SELECT ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?1, ?10, ?10, ?11 WHERE ${pending}
       AND (SELECT COUNT(*) FROM contact_schedule WHERE user_id = ?5 AND status = 'active') < 20
       AND (SELECT COUNT(*) FROM contact_schedule WHERE contact_id = ?4 AND user_id = ?5 AND status = 'active') < 5`)
-      .bind(receiptID, request, id, scope.contactID, scope.userID, (args.instruction as string).trim(), args.timeZone, runAt, args.intervalSeconds, now));
+      .bind(receiptID, request, id, scope.contactID, scope.userID, (args.instruction as string).trim(), args.timeZone, runAt, args.intervalSeconds, now, args.recipientUserID));
   } else if (cancel) {
     statements.push(db.prepare(`UPDATE contact_schedule SET status = 'cancelled', updated_at = ?6, last_mutation = ?1
       WHERE id = ?3 AND contact_id = ?4 AND user_id = ?5 AND ${pending}`)
       .bind(receiptID, request, id, scope.contactID, scope.userID, now));
   } else {
     statements.push(db.prepare(`UPDATE contact_schedule SET instruction = ?6, time_zone = ?7, next_at = ?8,
-      interval_seconds = ?9, revision = revision + 1, last_mutation = ?1, updated_at = ?10
+      interval_seconds = ?9, recipient_user_id = ?12, revision = revision + 1, last_mutation = ?1, updated_at = ?10
       WHERE id = ?3 AND contact_id = ?4 AND user_id = ?5 AND status = 'active' AND revision = ?11 AND ${pending}`)
-      .bind(receiptID, request, id, scope.contactID, scope.userID, (args.instruction as string).trim(), args.timeZone, runAt, args.intervalSeconds, now, args.revision));
+      .bind(receiptID, request, id, scope.contactID, scope.userID, (args.instruction as string).trim(), args.timeZone, runAt, args.intervalSeconds, now, args.revision, args.recipientUserID));
   }
   statements.push(db.prepare(`UPDATE schedule_mutation SET result = COALESCE((SELECT json_object('schedule', json_object(
       'id', id, 'instruction', instruction, 'timeZone', time_zone, 'nextAt', next_at,
-      'intervalSeconds', interval_seconds, 'status', status, 'revision', revision))
+      'intervalSeconds', interval_seconds, 'status', status, 'revision', revision, 'recipientUserID', recipient_user_id,
+      'recipientName', (SELECT name FROM user WHERE id = recipient_user_id)))
       FROM contact_schedule WHERE id = ?3 AND contact_id = ?4 AND user_id = ?5 AND last_mutation = ?1),
       '{"error":"Schedule unavailable, changed, or active schedule limit reached (5 per contact, 20 per user). List schedules and clarify before retrying."}')
     WHERE id = ?1 AND request = ?2 AND result IS NULL`)

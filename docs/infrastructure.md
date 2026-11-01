@@ -2927,6 +2927,24 @@ stop spending immediately (in-flight runs finish their current card). Keep the
 tables; deleting `home_card`/`home_topic` rows only clears feeds, and dropping them
 requires a release of code that no longer reads them.
 
+## Scheduled messages for another participant — migration 0089
+
+Apply `apps/api/migrations/0089_private_message_schedules.sql` after 0088. It adds the
+nullable `contact_schedule.recipient_user_id`, a partial index on it, and two triggers
+that cancel an active schedule when its recipient leaves the shared contact or deletes
+their account. There is deliberately no foreign key: a cascade would delete schedules
+that the owner's dispatched turns still reference and block the deletion. Additive:
+existing rows stay `NULL` and keep writing to their owner. Release order does not
+matter; older clients ignore the new `recipientUserID`/`recipientName` schedule fields.
+Images sent with `send_private_message` reuse `CONTACT_PHOTOS` and the attachment
+registry; no new resource, binding, var or secret. Local:
+`npm run db:migrate:local --workspace @wildcard/api`. Validated on the local workerd
+D1 (delivery, repeated dispatch, revoked sharing, recipient/owner deletion); not yet
+applied to staging or production. Rollback: release code that ignores the column and
+keep it; an older API would dispatch a pending recipient schedule as an ordinary
+message to its owner, so cancel active recipient schedules before rolling back. See
+[Schedules](schedules.md#messages-for-another-participant).
+
 ## Private messages from comments — migration 0088
 
 Apply `apps/api/migrations/0088_home_comment_private_message.sql` after 0087. It adds the
