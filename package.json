@@ -24,6 +24,7 @@
     "release:ci": "node scripts/release-worker.mjs",
     "release:web": "node scripts/release-web.mjs",
     "release:admin": "node scripts/release-admin.mjs",
+    "preview:web": "node scripts/preview-web.mjs",
     "infra:provision": "node scripts/provision-d1.mjs",
     "db:migrate:local": "npm run db:migrate:local --workspace @wildcard/api",
     "db:migrate:remote": "npm run db:migrate:remote --workspace @wildcard/api",

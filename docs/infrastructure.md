@@ -51,7 +51,8 @@ rather than falling back to in-memory sessions or a development secret. See
 - Repository: `imlautaro/wildcard` (ID `1434657598`), production branch `main`.
 - Build root `/`; build command `npm ci && npm run typecheck`;
   automatic deployment command `npm run release:ci`.
-- Preview branch builds and version preview URLs are disabled.
+- `preview_urls` is on for `wildcard-api`, `wildcard-web` and `wildcard-admin` (November 1, 2026).
+  Only the web project builds branch Previews; see [Web previews](#web-previews).
 - Existing build credential: `Workers Builds - 2026-05-27 10:54`.
 
 The previous project's database was deleted and is not reused. These IDs and URLs
@@ -166,8 +167,8 @@ Provisioning (after the API Worker exists, because the service binding names it)
    GitHub repository and production branch: root `/`, build command
    `npm ci && npm run typecheck:web && npm run build:web`, deploy command
    `npm run release:web`. Use a credential limited to Workers Scripts edit and
-   account read; the web release needs no D1, R2, or Workflows permission. Disable
-   preview builds.
+   account read; the web release needs no D1, R2, or Workflows permission. For
+   branch Previews, see [Web previews](#web-previews); otherwise disable preview builds.
 3. Optional: set build watch paths so web-only pushes don't rebuild the API and the
    reverse. For example, include `apps/web/**`, `packages/ui/**`, `package.json`,
    `package-lock.json`, and `scripts/release-web.mjs` for the web project, and exclude
@@ -185,6 +186,32 @@ and a deployment token limited to Workers Scripts edit and Account Settings read
 Its initial build predates the web source commit; production verification follows
 the first automatic release. The web origin needs no API configuration: the proxy calls
 the API through the binding, and the API sees no browser `Origin` or cookies.
+
+### Web previews
+
+Every branch other than `main` can get its own Worker Preview of the web app at
+`https://<branch>-wildcard-web.imlautaro.workers.dev`, where `<branch>` is the branch name
+in lowercase letters, digits and hyphens.
+
+- `apps/web/wrangler.jsonc` has a `previews` block. `wrangler preview` refuses to run
+  without one, and Previews don't inherit top-level bindings, so it repeats the `API`
+  binding. From a Preview that binding calls `wildcard-api`'s **production**
+  deployment: a Preview reads and writes real accounts and data, and its URL is public
+  (the app still requires sign-in).
+- `npm run preview:web` (`scripts/preview-web.mjs`) deploys the generated
+  `apps/web/.output/server/wrangler.json` with `wrangler preview`, named after the branch
+  and tagged with the commit. It refuses the production branch and never touches the
+  production deployment. It also runs locally after `npm run build:web`.
+- Workers Builds (web project): enable builds for non-production branches, keep the
+  build command, and set the Preview command to `npm run preview:web`. The default
+  `npx wrangler preview` finds no Wrangler file at root `/`, and `release:web`
+  refuses branches other than `main`.
+- `nitro.cloudflare.wrangler.preview_urls` in `apps/web/nuxt.config.ts` overrides the
+  Wrangler file; Nitro merges it into the generated config.
+- Delete a Preview with `npx wrangler preview delete --name <name>` from `apps/web`.
+- The API and admin have no `previews` block. An API Preview would start without its
+  secrets and need a decision about D1 and Workflows, so their projects must not build
+  branch Previews.
 
 Verification after the first release: the build log shows the source SHA, the
 active `wildcard-web` version has a `workers/tag` equal to it, and its bindings list
