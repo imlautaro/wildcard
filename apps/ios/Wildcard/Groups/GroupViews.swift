@@ -185,6 +185,7 @@ struct GroupChatView: View {
     @State private var showFilePicker = false
     @State private var showStickers = false
     @State private var isLoadingAttachment = false
+    @State private var isDropTargeted = false
     @State private var attachmentError: String?
     @State private var attachmentTask: Task<Void, Never>?
     @State private var draftRevision = 0
@@ -204,6 +205,7 @@ struct GroupChatView: View {
     @ScaledMetric(relativeTo: .caption2) private var memberLineHeight: CGFloat = 16
 
     private var isClearing: Bool { store.snapshot?.group.clearing == 1 }
+    private var canAttachDrop: Bool { store.snapshot != nil && !store.isSending && store.pendingID == nil && !isLoadingAttachment && !voice.isBusy && !isClearing }
 
     private var canSend: Bool {
         (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachment != nil) && draft.unicodeScalars.count <= 4000
@@ -447,6 +449,13 @@ struct GroupChatView: View {
             do { try selectFile(result.get()) }
             catch { attachmentError = error.localizedDescription }
         }
+        // Drag an image or PDF onto the chat (Files, another app, or Finder on a Mac); same rules as the paperclip.
+        .onDrop(of: DraftAttachment.types, isTargeted: $isDropTargeted) { providers in
+            guard canAttachDrop else { return false }
+            receiveDrop(providers)
+            return true
+        }
+        .overlay { AttachmentDropHighlight(isTargeted: isDropTargeted && canAttachDrop) }
         .onChange(of: photoSelection) { _, selected in
             guard let selected else { return }
             attachmentTask?.cancel()
@@ -710,6 +719,23 @@ struct GroupChatView: View {
             scrollToLatest()
         }
     }
+    private func receiveDrop(_ providers: [NSItemProvider]) {
+        attachmentTask?.cancel()
+        isLoadingAttachment = true
+        attachmentError = nil
+        attachmentTask = Task {
+            defer { isLoadingAttachment = false }
+            do {
+                let dropped = try await DraftAttachment.load(dropped: providers)
+                try Task.checkCancellation()
+                guard store.snapshot != nil else { return }
+                attachment = dropped
+                draftRevision += 1
+            } catch is CancellationError { }
+            catch { attachmentError = error.localizedDescription }
+        }
+    }
+
     private func selectFile(_ url: URL) throws {
         attachment = try DraftAttachment.load(url: url)
         attachmentError = nil

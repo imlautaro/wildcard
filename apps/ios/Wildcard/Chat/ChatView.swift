@@ -27,6 +27,7 @@ struct ChatView: View {
     /// Result of "Save sticker" on a contact message (docs/stickers.md#ios).
     @State private var stickerNotice: String?
     @State private var isLoadingAttachment = false
+    @State private var isDropTargeted = false
     @State private var attachmentError: String?
     @State private var attachmentTask: Task<Void, Never>?
     @State private var draftRevision = 0
@@ -52,6 +53,7 @@ struct ChatView: View {
     @ScaledMetric(relativeTo: .body) private var sendIconSize: CGFloat = 20
 
     private var isClearing: Bool { contacts.contact(id: contactID)?.clearing == 1 }
+    private var canAttachDrop: Bool { chat.hasLoaded && !chat.isUnavailable && !chat.isSending && !isLoadingAttachment && !voice.isBusy && !isClearing }
 
     private var canSend: Bool {
         (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachment != nil) && draft.unicodeScalars.count <= 4000
@@ -319,6 +321,13 @@ struct ChatView: View {
             do { try selectFile(result.get()) }
             catch { attachmentError = error.localizedDescription }
         }
+        // Drag an image or PDF onto the chat (Files, another app, or Finder on a Mac); same rules as the paperclip.
+        .onDrop(of: DraftAttachment.types, isTargeted: $isDropTargeted) { providers in
+            guard canAttachDrop else { return false }
+            receiveDrop(providers)
+            return true
+        }
+        .overlay { AttachmentDropHighlight(isTargeted: isDropTargeted && canAttachDrop) }
         .onChange(of: photoSelection) { _, selected in
             guard let selected else { return }
             attachmentTask?.cancel()
@@ -533,6 +542,23 @@ struct ChatView: View {
             do {
                 try await contacts.stickers.saveMessageSticker(contactID: contactID, turnID: turnID, part: part, using: auth)
                 stickerNotice = "Saved to your stickers."
+            } catch is CancellationError { }
+            catch { attachmentError = error.localizedDescription }
+        }
+    }
+
+    private func receiveDrop(_ providers: [NSItemProvider]) {
+        attachmentTask?.cancel()
+        isLoadingAttachment = true
+        attachmentError = nil
+        attachmentTask = Task {
+            defer { isLoadingAttachment = false }
+            do {
+                let dropped = try await DraftAttachment.load(dropped: providers)
+                try Task.checkCancellation()
+                guard isVisible, !chat.isUnavailable else { return }
+                attachment = dropped
+                draftRevision += 1
             } catch is CancellationError { }
             catch { attachmentError = error.localizedDescription }
         }

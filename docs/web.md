@@ -108,7 +108,9 @@ Matching iOS:
   accepted, colored when the agent read it), Online/Typing/Last seen presence in
   the server's delivered → online → read → typing order, activity leases
   (`open`/`typing`/`leave`, with no draft text, which never connect the contact), and image/PDF
-  attachments up to 5 MB.
+  attachments up to 5 MB, added with the paperclip, by pasting, or by dragging files from
+  Finder/the desktop onto the chat page (private chats and groups; see
+  [attachments](attachments.md#drag-and-drop)).
 - **Documents** (`/contacts/:id/documents/:documentID`, `/groups/:id/documents/:documentID`,
   `DocumentScreen`): viewer, Write/Preview editor, revisions, conflicts and delete;
   cards inside the sender's reply bubble and the Docs tab in details, matching iOS. See [documents](documents.md).
@@ -332,6 +334,7 @@ update matching iOS commits `7f3ed3a`–`d68dc5f`:
 
 Not yet verified: model replies and private read receipts (they need a model run),
 group catch-up across more than 50 missed messages, PDF attachments in a browser,
+dropping files from Finder in Chrome, Safari and Firefox,
 photo selection through the file picker, session expiry over time, and rate-limit
 behavior and `CF-Connecting-IP` forwarding on the real Cloudflare network.
 

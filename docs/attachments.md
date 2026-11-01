@@ -48,6 +48,29 @@ show retry controls; full-screen loading also supports retry and dismissal.
 render as a bare transparent image without a bubble ([web](stickers.md#web)), load through
 the same private image cache, and never appear in **Shared in this chat**.
 
+## Drag and drop
+
+Both clients accept an image or PDF dragged onto an open private chat or group, with the
+same types, 5 MB limit and enabled state as the paperclip (not while the chat is loading,
+unavailable, clearing, sending a blocking message, preparing another attachment or recording
+voice). The file becomes a draft attachment to review before sending; nothing is sent on drop.
+
+- **Web** (`ChatComposer`): drop anywhere on the chat page, for example from Finder. A dashed
+  "Drop to attach" overlay covers the window while files hover. Every file drop on the page is
+  intercepted so the browser never opens the file in place of the chat; drops are ignored while
+  a dialog (sticker picker, image viewer) is open. Several files can be dropped at once, up to
+  the composer's 10 attachments; unsupported files show the usual type/size message while the
+  rest are kept. Text drags keep the browser's default behavior.
+- **iOS/iPadOS** (`ChatView`, `GroupChatView` via `DraftAttachment.load(dropped:)`): drop from
+  Files or another app in iPad multitasking, or from Finder when the iPad app runs on an Apple
+  silicon Mac. A message carries one attachment, so the first supported item is used, replacing
+  the current draft attachment as Choose file does, and the rest are ignored. The provider file
+  is copied to a private temporary folder, validated and deleted.
+
+Not yet verified (static checks only): drop from Finder in Chrome, Safari and Firefox,
+overlay flicker over chat bubbles in Safari, drop into a group, iPad drop from Files, and the
+iPad app on a Mac.
+
 ## Formats and limits
 
 This implementation accepts JPEG, PNG, GIF, WebP, and PDF, up to 5 MiB per file.

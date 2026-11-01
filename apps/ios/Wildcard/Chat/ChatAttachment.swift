@@ -27,7 +27,7 @@ struct DraftAttachment: Encodable, Equatable, Sendable {
     let data: Data
     enum CodingKeys: String, CodingKey { case name, mimeType, data }
     nonisolated static let limit = 5 * 1024 * 1024
-    static let types: [UTType] = [.jpeg, .png, .gif, .webP, .pdf]
+    nonisolated static let types: [UTType] = [.jpeg, .png, .gif, .webP, .pdf]
 
     static func load(url: URL) throws -> DraftAttachment {
         let access = url.startAccessingSecurityScopedResource()
@@ -44,6 +44,63 @@ struct DraftAttachment: Encodable, Equatable, Sendable {
         guard bytes.count <= limit else { throw AuthAPI.Failure.rejected("Choose a file up to 5 MB.") }
         let name = String(url.lastPathComponent.prefix(180))
         return DraftAttachment(name: name, mimeType: mime, data: bytes)
+    }
+}
+
+extension DraftAttachment {
+    /// The first image or PDF from a drop (Files, another app, or Finder when the iPad app runs
+    /// on a Mac). Messages carry one attachment, so further dropped items are ignored. The
+    /// provider's file is only valid inside its callback, so it is copied to a private
+    /// temporary folder, validated like a picked file, and removed.
+    nonisolated static func load(dropped providers: [NSItemProvider]) async throws -> DraftAttachment {
+        let candidates = providers.lazy.compactMap { provider in
+            types.first { provider.hasItemConformingToTypeIdentifier($0.identifier) }.map { (provider, $0) }
+        }
+        guard let (provider, type) = candidates.first else {
+            throw AuthAPI.Failure.rejected("Choose a JPEG, PNG, GIF, WebP, or PDF.")
+        }
+        let copy: URL = try await withCheckedThrowingContinuation { continuation in
+            _ = provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { @Sendable url, error in
+                guard let url else {
+                    continuation.resume(throwing: error ?? CocoaError(.fileReadUnknown))
+                    return
+                }
+                do {
+                    let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    var name = url.lastPathComponent
+                    if url.pathExtension.isEmpty, let ext = type.preferredFilenameExtension { name += ".\(ext)" }
+                    let destination = folder.appendingPathComponent(name)
+                    try FileManager.default.copyItem(at: url, to: destination)
+                    continuation.resume(returning: destination)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+        defer { try? FileManager.default.removeItem(at: copy.deletingLastPathComponent()) }
+        return try await load(url: copy)
+    }
+}
+
+/// Dashed outline shown over a chat while a droppable file hovers it.
+struct AttachmentDropHighlight: View {
+    let isTargeted: Bool
+    var body: some View {
+        if isTargeted {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.accentColor.opacity(0.08)))
+                .overlay {
+                    Label("Drop to attach", systemImage: "paperclip")
+                        .manrope(.headline)
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .glassEffect(.regular, in: Capsule())
+                }
+                .padding(8)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 }
 

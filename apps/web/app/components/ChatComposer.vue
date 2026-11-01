@@ -2,7 +2,8 @@
 import type { DraftAttachment, DraftVoice, HomePostReference, Sticker } from '~/utils/types';
 import type { ReplyPreview } from '~/utils/replies';
 
-// Text plus optional image/PDF attachments (picked, dropped in the picker or pasted), sent as
+// Text plus optional image/PDF attachments (picked, pasted, or dropped anywhere on the chat
+// page, e.g. from Finder), sent as
 // one message each with the text on the first, matching the API's 4,000 character limit.
 // The parent owns the reply target so it survives navigation with the draft.
 // With `voiceKey` (the conversation identity), an empty draft shows a microphone for
@@ -173,6 +174,44 @@ function onPaste(event: ClipboardEvent) {
   event.preventDefault();
   void addFiles(files.map((file) => file.name ? file : new File([file], `pasted-image.${file.type.split('/')[1] ?? 'png'}`, { type: file.type })));
 }
+// Files dragged from the desktop can be dropped anywhere while the composer is mounted (the
+// chat page). Every file drop is caught so the browser never opens the file in place of
+// the chat; it attaches only when the paperclip would (not while disabled, preparing,
+// recording, or behind an open dialog such as the sticker picker or image viewer).
+const dropDepth = ref(0);
+const dropActive = computed(() => dropDepth.value > 0);
+const carriesFiles = (event: DragEvent) => !!event.dataTransfer && [...event.dataTransfer.types].includes('Files');
+const acceptsDrop = () => !props.disabled && !preparing.value && !recording.value && !document.querySelector('dialog[open]');
+function onDragEnter(event: DragEvent) {
+  if (!carriesFiles(event)) return;
+  event.preventDefault();
+  if (acceptsDrop()) dropDepth.value += 1;
+}
+function onDragOver(event: DragEvent) {
+  if (!carriesFiles(event)) return;
+  event.preventDefault();
+  const accepts = acceptsDrop();
+  event.dataTransfer!.dropEffect = accepts ? 'copy' : 'none';
+  if (!accepts) dropDepth.value = 0;
+  else if (!dropDepth.value) dropDepth.value = 1;
+}
+function onDragLeave(event: DragEvent) {
+  if (!carriesFiles(event) || !dropDepth.value) return;
+  // Leaving the window resets; Safari reports a null relatedTarget for every leave, so
+  // also require the pointer to be at or past the viewport edge. dragover restores a miss.
+  const outside = event.clientX <= 0 || event.clientY <= 0 || event.clientX >= innerWidth || event.clientY >= innerHeight;
+  dropDepth.value = !event.relatedTarget && outside ? 0 : Math.max(0, dropDepth.value - 1);
+}
+function onDrop(event: DragEvent) {
+  if (!carriesFiles(event)) return;
+  event.preventDefault();
+  dropDepth.value = 0;
+  if (!acceptsDrop()) return;
+  void addFiles([...event.dataTransfer!.files]);
+  textarea.value?.focus();
+}
+const resetDrop = () => { dropDepth.value = 0; };
+const dropListeners = [['dragenter', onDragEnter], ['dragover', onDragOver], ['dragleave', onDragLeave], ['drop', onDrop], ['dragend', resetDrop]] as const;
 function removeAttachment(item: DraftAttachment) {
   if (item.previewURL) URL.revokeObjectURL(item.previewURL);
   attachments.value = attachments.value.filter((candidate) => candidate !== item);
@@ -200,9 +239,13 @@ function dismissKeyboardOutside(event: PointerEvent) {
   if (document.activeElement !== textarea.value || !(event.target instanceof Node)) return;
   if (!textarea.value?.contains(event.target)) textarea.value?.blur();
 }
-onMounted(() => document.addEventListener('pointerdown', dismissKeyboardOutside, { passive: true }));
+onMounted(() => {
+  document.addEventListener('pointerdown', dismissKeyboardOutside, { passive: true });
+  for (const [type, listener] of dropListeners) document.addEventListener(type, listener as EventListener);
+});
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', dismissKeyboardOutside);
+  for (const [type, listener] of dropListeners) document.removeEventListener(type, listener as EventListener);
   clearAttachments();
 });
 defineExpose({ focus: () => textarea.value?.focus() });
@@ -266,6 +309,15 @@ defineExpose({ focus: () => textarea.value?.focus() });
       @close="closeStickers()" @pick="pickSticker" @create="stickerPanel = 'create'"
     />
     <CreateStickerDialog v-if="stickers && stickerPanel === 'create'" @close="stickerPanel = 'picker'" @created="stickerPanel = 'picker'" />
+    <Teleport v-if="dropActive" to="body">
+      <div class="drop-overlay" aria-hidden="true">
+        <div class="drop-target">
+          <AppIcon name="attach" />
+          <strong>Drop to attach</strong>
+          <span>Images or PDFs, up to 5 MB each</span>
+        </div>
+      </div>
+    </Teleport>
     <p v-if="length > 4000" class="hint">Messages can contain up to 4,000 characters.</p>
     <p v-else-if="problem" class="hint">{{ problem }}</p>
     <p v-else-if="recorder.notice.value && !recording" class="hint" :class="{ info: !recorder.notice.value.error }" :role="recorder.notice.value.error ? 'alert' : 'status'">{{ recorder.notice.value.text }}</p>
@@ -293,6 +345,18 @@ defineExpose({ focus: () => textarea.value?.focus() });
 }
 .voice-lock svg { width: 18px; height: 18px; }
 .hint.info { color: var(--md-on-surface-variant); }
+/* pointer-events: none keeps drag events on the page underneath, so enter/leave counting stays stable. */
+.drop-overlay {
+  position: fixed; inset: 0; z-index: 1000; padding: var(--space-4); pointer-events: none;
+  background: color-mix(in srgb, var(--md-surface) 80%, transparent);
+}
+.drop-target {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2);
+  border: 2px dashed var(--md-primary); border-radius: var(--md-shape-l);
+  color: var(--md-on-surface-variant); font: var(--type-body-medium); text-align: center;
+}
+.drop-target strong { color: var(--md-on-surface); font: var(--type-title-medium); }
+.drop-target svg { width: 40px; height: 40px; color: var(--md-primary); }
 @keyframes voice-pulse { 50% { opacity: 0.3; } }
 @media (prefers-reduced-motion: reduce) { .voice-dot { animation: none; } .send.recording { transform: none; } }
 </style>
