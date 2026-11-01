@@ -770,6 +770,14 @@ resumed typing, failures, navigation, revocation and account switching is pendin
 
 ## Mini apps
 
+Private contacts can discuss saved mini app entries through the shared API's
+`read_mini_app` tool, on both web and iOS. The contact reads current server state
+in this private chat, rather than the browser's resolved-view cache, and runs no
+connectors. Unsaved drafts, temporary inputs and individual lesson answers are not
+retained; pending edits must finish saving first. See
+[discussing saved content](mini-apps.md#discussing-saved-content-2026-10-31)
+for isolation, pagination and pending device/browser checks.
+
 The chat page shows a mini app card under the reply that created it and polls the
 contact's app list alongside the conversation. `/contacts/:id/mini-apps` lists apps,
 and `/contacts/:id/mini-apps/:appID` shows the review screen (reads vs confirmed

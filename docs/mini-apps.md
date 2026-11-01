@@ -347,7 +347,8 @@ only for things that get done, editable records, adding through a composer or a 
 options, and one screen for simple tools. Numbers in the request are data or settings,
 not structure.
 
-All direct private chats expose `start_mini_app`, `create_mini_app` and `list_mini_apps`, and get
+All direct private chats expose `start_mini_app`, `create_mini_app`, `list_mini_apps`
+and `read_mini_app`, and get
 three tool-enabled rounds (scheduled turns keep two) with up to 8,192 completion
 tokens, within the six-execution budget. If `create_mini_app` fails in the last
 round (for example, after `list_mcp_tools` and `call_mcp_tool`), the turn gets one
@@ -364,6 +365,47 @@ and fall back to the existing tool-free recovery reply. Creation requires the li
 can create one new app (`<turnID>:app`), so a replayed Workflow step returns the
 original instead of a duplicate. Each chat holds up to 20 apps. The tool result tells
 the model that the app is disabled until reviewed, so it does not claim to show data.
+
+### Discussing saved content (2026-10-31)
+
+On iOS and web, a person can ask the contact about notes, entries, lists or progress
+saved inside a mini app. The contact is instructed to find it with `list_mini_apps`
+and call `read_mini_app` before answering, rather than asking the person to paste
+the content. Listing an app's spec alone does not reveal its current saved values.
+
+`read_mini_app` accepts `miniAppID`, optional `stateID` to focus on one value, and
+an optional Unicode `offset`. It reads the current definition and saved state in
+one D1 query, restricted to this participant's owned contact and private chat.
+The state is normalized exactly as in the renderer: missing or incompatible values
+use the current declared defaults. `hasSavedState`, `savedAt`, `revision` and
+`stateVersion` distinguish persisted state from an untouched app's defaults.
+The result includes an at-most-8,000-character page of JSON text (`content`),
+state IDs and `nextOffset`. Later pages require the returned `revision` and
+`stateVersion`; a concurrent edit or replacement requires restarting at zero.
+Large content may require more reads than a single turn's existing tool budget;
+the contact must acknowledge partial evidence.
+
+This reads saved state even when the app is disabled, without executing connectors,
+approving the app or changing state. Group apps and other participants' private
+apps are excluded, including other chats with the same shared agent. Scheduled,
+task and group-request turns cannot use this tool. App content is untrusted data,
+never instructions, and must stay within the private conversation. Existing
+connector-isolated chats retain their Standard processing and memory isolation.
+
+Temporary `inputs`, unsaved form drafts, on-device timer state and individual
+lesson answers are not persisted by the mini app runtime and cannot be recovered
+by this tool. Lesson XP is readable when saved, but is not evidence of a particular
+answer. Live connector results are not stored or refreshed by this read.
+
+No client protocol change, migration, service or cache is needed: both clients
+already save edits through the same API, and the contact reads D1 directly on each
+request. Pending or failed edits are visible only after they successfully save.
+Static API typechecking and SQL preparation were performed; no runtime tests,
+builds, model calls or device/browser verification were run for this change.
+Pending verification with fictional data: save a study note on each client, close
+the app and ask the contact about it; edit/delete the note and ask again; check an
+untouched app, a long paginated list, an edit between pages, disabled/deleted apps,
+and access isolation after contact removal or account switching.
 
 ### Announcing the build (2026-10-31)
 

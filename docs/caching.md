@@ -847,6 +847,15 @@ account switching require runtime verification; static type/SQL checks passed.
 
 ## Mini apps
 
+Conversational `read_mini_app` uses a fresh, private-chat-scoped D1 read, with no
+extra cache: an AI reply must use the latest successfully saved entries rather
+than a potentially stale resolved view. The definition and state are read together;
+later content pages require the same revision/state version or restart. It adds
+no disk persistence or automatic connector execution. This server behavior is
+shared by iOS and web; existing view caches and optimistic edit queues below are
+unchanged. See [saved-content access](mini-apps.md#discussing-saved-content-2026-10-31)
+for limits and pending verification.
+
 [Mini apps](mini-apps.md) use one session-owned list per base, `contacts/<id>` or
 `groups/<id>` (bounded to 20 lists, five-second freshness, revalidated by visible
 chat polling and contact or group details) and one resolved view per app (bounded
