@@ -85,7 +85,6 @@ const state = computed(() => {
 .compose svg { width: 20px; height: 20px; }
 .rows { position: relative; margin: 0; padding: 0 var(--space-2); list-style: none; }
 .row { display: flex; align-items: center; gap: var(--space-3); height: 68px; padding: 0 var(--space-3); border-radius: var(--md-shape-l); }
-.row.unread { background: color-mix(in srgb, var(--md-primary) 7%, transparent); }
 .row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .row-top, .row-bottom { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .row-top strong { flex: 1; font: var(--type-title-small); font-size: 15px; }
