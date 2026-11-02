@@ -67,7 +67,7 @@ struct HomeView: View {
                     )
                 }
                 .badge(totalUnreadCount)
-                Tab("For you", systemImage: "house", value: Section.updates) {
+                Tab("For you", systemImage: "rectangle.stack", value: Section.updates) {
                     UpdatesView(
                         store: updates, following: $updatesFollowing, managing: $updatesManaging,
                         openChats: { section = .chats },

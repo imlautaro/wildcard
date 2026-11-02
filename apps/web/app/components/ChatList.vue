@@ -61,12 +61,12 @@ onMounted(() => { void chats.refresh(); });
         <AppIcon name="menu" />
       </button>
       <nav v-if="!wide" :id="menuID" ref="menu" popover="auto" class="menu chat-menu" :aria-label="$t('chat.list.mainNavigation')" @toggle="onMenuToggle">
-        <AppMenuItem to="/updates" icon="home" @click="menu?.hidePopover()">{{ $t('chat.list.forYou') }}<span v-if="updatesUnseen" class="badge" style="margin-inline-start: auto" :aria-label="$t('chat.list.newCount', updatesUnseen)">{{ updatesUnseen }}</span></AppMenuItem>
+        <AppMenuItem to="/updates" icon="feed" @click="menu?.hidePopover()">{{ $t('chat.list.forYou') }}<span v-if="updatesUnseen" class="badge" style="margin-inline-start: auto" :aria-label="$t('chat.list.newCount', updatesUnseen)">{{ updatesUnseen }}</span></AppMenuItem>
         <AppMenuItem to="/account" icon="person" @click="menu?.hidePopover()">{{ $t('chat.list.myAccount') }}</AppMenuItem>
       </nav>
       <AppIconButton v-if="archived" icon="back" :label="$t('chat.list.backToChats')" @click="archived = false" />
     </template>
-    <AppIconButton v-if="!wide" to="/updates" icon="home" :label="$t('chat.list.forYou')"
+    <AppIconButton v-if="!wide" to="/updates" icon="feed" :label="$t('chat.list.forYou')"
                    :badge="updatesUnseen" :badge-label="$t('chat.list.newInForYou', updatesUnseen)" />
     <AppIconButton icon="archive" :label="$t('chat.list.archived')" :selected="archived" @click="archived = !archived; chats.loadAllContacts()" />
     <AppIconButton to="/contacts" icon="plus" :label="$t('chat.list.newChat')" variant="filled"

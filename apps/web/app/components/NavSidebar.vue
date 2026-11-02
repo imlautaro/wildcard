@@ -10,17 +10,17 @@ const chatSection = ['/chats', '/groups', '/contacts', '/invitations', '/join'];
 const accountSection = ['/account', '/native'];
 const within = (prefixes: string[]) => prefixes.some(prefix => route.path === prefix || route.path.startsWith(`${prefix}/`));
 const items = computed(() => [
-  { to: '/updates', icon: 'home' as const, label: t('account.nav.forYou'), active: route.path === '/updates',
-    badge: route.path === '/updates' ? 0 : updatesUnseen.value, badgeLabel: t('account.nav.forYouBadge', updatesUnseen.value) },
   { to: '/chats', icon: 'chat' as const, label: t('account.nav.chats'), active: within(chatSection),
     badge: chats.totalUnread.value, badgeLabel: t('account.nav.chatsBadge', chats.totalUnread.value) },
+  { to: '/updates', icon: 'feed' as const, label: t('account.nav.forYou'), active: route.path === '/updates',
+    badge: route.path === '/updates' ? 0 : updatesUnseen.value, badgeLabel: t('account.nav.forYouBadge', updatesUnseen.value) },
   { to: '/account', icon: 'person' as const, label: t('account.nav.account'), active: within(accountSection), badge: 0, badgeLabel: '' },
 ]);
 </script>
 
 <template>
   <nav class="nav-sidebar" :aria-label="$t('account.nav.main')">
-    <NuxtLink to="/updates" class="nav-sidebar-logo" aria-label="Wildcard"><img src="/icon.svg" alt="" width="44" height="44"><span>Wildcard</span></NuxtLink>
+    <NuxtLink to="/chats" class="nav-sidebar-logo" aria-label="Wildcard"><img src="/icon.svg" alt="" width="44" height="44"><span>Wildcard</span></NuxtLink>
     <NuxtLink v-for="item in items" :key="item.to" :to="item.to" class="nav-sidebar-item" :class="{ active: item.active }"
               :aria-current="item.active ? 'page' : undefined" data-ripple>
       <span class="nav-sidebar-icon">

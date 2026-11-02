@@ -241,7 +241,7 @@ and caching still match across clients. Manrope stays the typeface on both.
   `.small` supporting line. `.search-field`, `.chip`, `.code-box`, `details`, and
   `.actions-row` (end-aligned buttons) cover the remaining page patterns.
 - **Layout.** Above 860 px an expanded navigation sidebar (`NavSidebar.vue`) sits at the
-  left edge with **For you** (new-posts badge), **Chats** (total unread badge) and
+  left edge with **Chats** (total unread badge), **For you** (new-posts badge, Feed icon) and
   **Account**. Each row places its icon on the left, its label on the right and
   any unread badge at the trailing edge; the active row has a full-width pill.
   The sidebar is 224 px wide (192 px between 861 and 1100 px). Every page opens in a rounded content pane beside it, in the style of
@@ -249,11 +249,11 @@ and caching still match across clients. Manrope stays the typeface on both.
   contact/group, invitations and join) adds the chat list as a second column between
   the sidebar and the pane; For you and Account (including Connections and Native
   experiments) use the whole pane and the rail stays visible. Back buttons on
-  section roots appear only below 860 px. `/` has no page: wide screens go to
-  `/updates`, phones to `/chats`. The chat list stays mounted (hidden) outside Chats to
+  section roots appear only below 860 px. `/` has no page: every layout goes to
+  `/chats`. The chat list stays mounted (hidden) outside Chats to
   preserve Archived selection, scroll and polling. Below 860 px the navigation sidebar is hidden,
   pages replace the chat list, and a menu icon button to the left of the Chats title
-  opens a dropdown with **For you** and **My account** (the Home button in the
+  opens a dropdown with **For you** and **My account** (the Feed button in the
   header also opens For you); the native auto popover dismisses on outside press,
   Escape, navigation or item selection.
   This navigation change is explicitly web-only; iOS keeps its native tabs.
@@ -923,7 +923,7 @@ No browser or device validation or live generation has been performed.
 After setup, including opting out of AI contacts, the web client navigates directly
 to `/chats`, matching iOS. Running/completed setup recovery and an already-completed
 `/onboarding` redirect also open Chats. This lets the existing progress/retry UI
-lead the first visit; normal wide-screen `/` navigation still opens For you.
+lead the first visit; `/` also opens Chats on every layout.
 
 ### Contact access to profile images
 
@@ -1313,10 +1313,9 @@ the image, matching iOS. See [link previews](link-previews.md).
 
 ## For you (migration 0074)
 
-[For you](updates.md) opens at `/updates` from the Home button in the chat list
+[For you](updates.md) opens at `/updates` from the Feed button in the chat list
 header (also **Menu → For you**). It shows beside the chat list on wide screens and
-full width with a back button on narrow ones; `/` opens For you on wide screens and
-Chats on narrow screens. Completing onboarding opens Chats on either layout.
+full width with a back button on narrow ones; `/` opens Chats on every layout. Completing onboarding opens Chats on either layout.
 Since migration 0086 it is a timeline of [posts](updates.md#posts) (`HomePost`): the
 contact's text above the card in a rounded frame, with a per-card accent, inline SVG
 charts and the link preview image for the lead headline. `?thread=<topic>` shows a

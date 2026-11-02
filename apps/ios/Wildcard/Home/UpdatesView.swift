@@ -216,7 +216,7 @@ struct UpdatesView: View {
 
     private var empty: some View {
         VStack(spacing: 12) {
-            Image(systemName: "house").font(.system(size: 40)).foregroundStyle(Color.accentColor)
+            Image(systemName: "rectangle.stack").font(.system(size: 40)).foregroundStyle(Color.accentColor)
             Text(emptyTitle).manrope(.headline, weight: .bold).multilineTextAlignment(.center)
             Text(emptyMessage)
                 .manrope(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -455,7 +455,7 @@ struct HomeThreadView: View {
     var body: some View {
         ScrollView {
             if posts.isEmpty {
-                ContentUnavailableView("This thread isn’t in For you anymore", systemImage: "house",
+                ContentUnavailableView("This thread isn’t in For you anymore", systemImage: "rectangle.stack",
                                        description: Text("Its topic was hidden or retired, or its posts are older than two weeks."))
                     .padding(.top, 60)
             } else {
@@ -561,7 +561,7 @@ struct HomePostDetailView: View {
                 }
                 .padding(.bottom, 24)
             } else {
-                ContentUnavailableView("This post isn’t in For you anymore", systemImage: "house",
+                ContentUnavailableView("This post isn’t in For you anymore", systemImage: "rectangle.stack",
                                        description: Text("Its topic was hidden or retired, or the post is older than two weeks."))
                     .padding(.top, 60)
             }

@@ -57,6 +57,7 @@ export const appIcons = {
   folder: ['solar:folder-linear', 'solar:folder-bold'],
   grid: ['solar:widget-linear', 'solar:widget-bold'],
   home: ['solar:home-2-linear', 'solar:home-2-bold'],
+  feed: ['solar:feed-linear', 'solar:feed-bold'],
   chat: ['solar:chat-round-linear', 'solar:chat-round-bold'],
   book: ['solar:book-2-linear', 'solar:book-2-bold'],
   trophy: ['solar:cup-star-linear', 'solar:cup-star-bold'],

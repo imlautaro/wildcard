@@ -14,7 +14,8 @@ button in the chat list header (or **Menu → For you**) and `/` goes to the cha
 
 The feature first shipped as "Home" (default tab), became "Updates" on
 2026-10-30, and was renamed "For you" with a Home icon on 2026-11-01.
-iOS uses the `house` SF Symbol; web uses the shared `home` icon. This changes
+Since 2026-11-02 iOS uses the `rectangle.stack` SF Symbol and web the shared `feed`
+icon (Solar Feed); web lists For you below Chats in the sidebar and `/` opens Chats. This changes
 labels and presentation only: `/updates`, API paths, storage, badges, navigation
 defaults and session cache behavior remain unchanged.
 The 2026-11-01 feed refinement removes the date, greeting, briefing and contributor
