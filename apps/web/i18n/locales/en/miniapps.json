@@ -209,7 +209,13 @@
       "empty": "This document is empty. Edit it, or ask a contact in the chat to write it.",
       "delete": "Delete document",
       "unavailableTitle": "Document unavailable",
-      "unavailableText": "It was deleted or you no longer have access."
+      "unavailableText": "It was deleted or you no longer have access.",
+      "copyMarkdown": "Copy as Markdown",
+      "copied": "Copied",
+      "exportMarkdown": "Export Markdown",
+      "exportPDF": "Export PDF",
+      "copyFailed": "Could not copy. Check clipboard permissions.",
+      "exportFailed": "Could not open the print dialog."
     }
   }
 }

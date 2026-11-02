@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
 
 struct ResearchProvenance: Decodable, Hashable, Sendable {
     struct Source: Decodable, Hashable, Sendable {
@@ -196,6 +198,12 @@ struct DocumentScreen: View {
     @State private var error: String?
     @State private var conflict: String?
     @State private var confirmDelete = false
+    @State private var exportFile: DocumentExportFile?
+    @State private var exportType: UTType = .plainText
+    @State private var exportName = "document"
+    @State private var exporting = false
+    @State private var exportError: String?
+    @State private var copied = false
     @State private var draftTitle = ""
     @State private var draftBody = ""
     @State private var draftSummary = ""
@@ -231,6 +239,12 @@ struct DocumentScreen: View {
                         ToolbarItem(placement: .primaryAction) {
                             Menu {
                                 Button("Edit", systemImage: "pencil") { startEditing() }
+                                Button(copied ? "Copied" : "Copy as Markdown", systemImage: "doc.on.doc") {
+                                    UIPasteboard.general.string = snapshot.value?.body
+                                    copied = true
+                                }
+                                Button("Export Markdown", systemImage: "square.and.arrow.up") { prepareExport(pdf: false) }
+                                Button("Export PDF", systemImage: "square.and.arrow.up") { prepareExport(pdf: true) }
                                 Button(showHistory ? "Hide revisions" : "Revisions", systemImage: "clock.arrow.circlepath") { showHistory.toggle() }
                                 Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
                             } label: { Image(systemName: "ellipsis.circle") }
@@ -244,6 +258,13 @@ struct DocumentScreen: View {
             } message: { Text("Its revisions are deleted too.") }
             .interactiveDismissDisabled(editing && changed)
         }
+        .fileExporter(isPresented: $exporting, document: exportFile, contentType: exportType, defaultFilename: exportName) { result in
+            if case .failure(let failure) = result { exportError = failure.localizedDescription }
+            exportFile = nil
+        }
+        .alert("Export failed", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(exportError ?? "") }
         // Contacts may be editing; keep the viewer current, but never replace an open draft.
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
@@ -335,6 +356,56 @@ struct DocumentScreen: View {
         .padding()
     }
 
+    private func prepareExport(pdf: Bool) {
+        guard let document = snapshot.value else { return }
+        let data: Data
+        if pdf {
+            let text = NSMutableAttributedString(string: document.title + "\n\n", attributes: [.font: UIFont.boldSystemFont(ofSize: 24)])
+            // Share the viewer's block parser, with native fonts for print pagination.
+            var previousTableRow: Int?
+            for block in MessageMarkdown(document.body).blocks {
+                if let row = block.tableRowID, row != previousTableRow {
+                    text.append(NSAttributedString(string: "\n"))
+                }
+                previousTableRow = block.tableRowID
+                let size: CGFloat = block.headingLevel.map { max(14, 24 - CGFloat($0) * 2) } ?? 12
+                let prefix = block.marker.map { String(repeating: "  ", count: max(0, block.listDepth - 1)) + $0 + " " } ?? (block.isQuote ? "│ " : "")
+                text.append(NSAttributedString(string: prefix, attributes: [.font: UIFont.systemFont(ofSize: size)]))
+                for run in block.text.runs {
+                    let intent = run.inlinePresentationIntent
+                    var font = block.isCode || intent?.contains(.code) == true
+                        ? UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
+                        : UIFont.systemFont(ofSize: size, weight: block.headingLevel != nil || intent?.contains(.stronglyEmphasized) == true ? .bold : .regular)
+                    if intent?.contains(.emphasized) == true,
+                       let descriptor = font.fontDescriptor.withSymbolicTraits(font.fontDescriptor.symbolicTraits.union(.traitItalic)) {
+                        font = UIFont(descriptor: descriptor, size: size)
+                    }
+                    var attributes: [NSAttributedString.Key: Any] = [.font: font]
+                    if let link = run.link { attributes[.link] = link }
+                    text.append(NSAttributedString(string: String(block.text[run.range].characters), attributes: attributes))
+                }
+                text.append(NSAttributedString(string: block.tableID != nil ? "\t" : "\n\n"))
+            }
+            let formatter = UISimpleTextPrintFormatter(attributedText: text)
+            let renderer = UIPrintPageRenderer()
+            let page = CGRect(x: 0, y: 0, width: 595, height: 842)
+            renderer.setValue(NSValue(cgRect: page), forKey: "paperRect")
+            renderer.setValue(NSValue(cgRect: page.insetBy(dx: 48, dy: 48)), forKey: "printableRect")
+            renderer.addPrintFormatter(formatter, startingAtPageAt: 0)
+            data = UIGraphicsPDFRenderer(bounds: page).pdfData { context in
+                for index in 0..<renderer.numberOfPages {
+                    context.beginPage()
+                    renderer.drawPage(at: index, in: page)
+                }
+            }
+        } else { data = Data(document.body.utf8) }
+        exportType = pdf ? .pdf : (UTType(filenameExtension: "md") ?? .plainText)
+        let name = document.title.components(separatedBy: CharacterSet.controlCharacters.union(CharacterSet(charactersIn: "/\\:"))).joined(separator: "_")
+        exportName = String(name.prefix(100)) + (pdf ? ".pdf" : ".md")
+        exportFile = DocumentExportFile(data: data)
+        exporting = true
+    }
+
     private func startEditing() {
         guard let document = snapshot.value else { return }
         draftTitle = document.title; draftBody = document.body; draftSummary = ""
@@ -390,4 +461,13 @@ struct DocumentScreen: View {
         } catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }
+}
+
+/// File exporter owns the destination; no extra private disk cache is created.
+private struct DocumentExportFile: FileDocument {
+    static var readableContentTypes: [UTType] { [.pdf, UTType(filenameExtension: "md") ?? .plainText] }
+    let data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }

@@ -1553,3 +1553,12 @@ clients, including the localized group activity line built from the API's new
 Server error messages, push text and AI or user content stay as the server sends
 them. Details, iOS String Catalogs and verification: [localization](localization.md).
 
+
+## Document export
+
+Private and group document viewers offer Copy as Markdown, Export Markdown and
+Export PDF, matching iOS. Markdown is the exact saved body; PDF adds the title.
+Web opens the browser print dialog for Save as PDF using only the rendered document.
+These actions reuse the loaded revision without fetching or adding a cache.
+Clipboard failure is shown inline. Browser print/save and clipboard behavior remain
+unverified; see [documents](documents.md#export-and-clipboard).

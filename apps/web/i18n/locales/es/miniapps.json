@@ -209,7 +209,13 @@
       "empty": "Este documento está vacío. Edítalo o pídele a un contacto en el chat que lo escriba.",
       "delete": "Eliminar documento",
       "unavailableTitle": "Documento no disponible",
-      "unavailableText": "Se eliminó o ya no tienes acceso."
+      "unavailableText": "Se eliminó o ya no tienes acceso.",
+      "copyMarkdown": "Copiar como Markdown",
+      "copied": "Copiado",
+      "exportMarkdown": "Exportar Markdown",
+      "exportPDF": "Exportar PDF",
+      "copyFailed": "No se pudo copiar. Revisa los permisos del portapapeles.",
+      "exportFailed": "No se pudo abrir el diálogo de impresión."
     }
   }
 }

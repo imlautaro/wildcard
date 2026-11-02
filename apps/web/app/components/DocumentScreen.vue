@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { renderMessageMarkdown } from '~/utils/messageMarkdown';
 import { DocumentConflict } from '~/composables/useDocuments';
 
 // A document opens as its own screen: the rendered Markdown, an editor with preview,
@@ -43,6 +44,45 @@ async function save() {
       conflict.value = t('miniapps.documents.conflict', { name: failure.current?.updatedByName ?? t('miniapps.documents.someone'), revision: failure.current?.revision ?? '?' });
     } else error.value = errorMessage(failure);
   } finally { busy.value = false; }
+}
+// Export the saved snapshot, never an unsaved editor draft.
+const copied = ref(false);
+async function copyMarkdown() {
+  if (!doc.value) return;
+  try { await navigator.clipboard.writeText(doc.value.body); copied.value = true; }
+  catch { error.value = t('miniapps.documents.copyFailed'); }
+}
+function exportMarkdown() {
+  if (!doc.value) return;
+  const url = URL.createObjectURL(new Blob([doc.value.body], { type: 'text/markdown;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = (doc.value.title.replace(/[\u0000-\u001f\u007f/\\]/g, '_').slice(0, 100) || 'document') + '.md';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function exportPDF() {
+  if (!doc.value) return;
+  // A separate print document excludes app controls, history and private chat UI.
+  const frame = document.createElement('iframe');
+  frame.style.cssText = 'position:fixed;width:0;height:0;border:0';
+  frame.title = t('miniapps.documents.exportPDF');
+  document.body.append(frame);
+  const target = frame.contentDocument;
+  if (!target || !frame.contentWindow) { frame.remove(); error.value = t('miniapps.documents.exportFailed'); return; }
+  target.title = doc.value.title;
+  const style = target.createElement('style');
+  style.textContent = '@page { margin: 20mm } body { font: 12pt/1.5 system-ui; color: black; overflow-wrap: anywhere } h1,h2,h3 { break-after: avoid } pre { white-space: pre-wrap } table { border-collapse: collapse; width: 100% } td,th { border: 1px solid #aaa; padding: 5px } img { max-width: 100% }';
+  target.head.append(style);
+  const title = target.createElement('h1'); title.textContent = doc.value.title;
+  target.body.append(title);
+  const body = target.createElement('div'); body.innerHTML = renderMessageMarkdown(doc.value.body);
+  target.body.append(body);
+  frame.contentWindow.addEventListener('afterprint', () => frame.remove(), { once: true });
+  frame.contentWindow.focus();
+  frame.contentWindow.print();
+  // Also release the snapshot if a browser does not emit afterprint on cancel.
+  setTimeout(() => frame.remove(), 60_000);
 }
 // Keep my text and save it over the newer revision.
 function keepMine() { if (doc.value) draft.baseRevision = doc.value.revision; conflict.value = null; }
@@ -106,6 +146,11 @@ async function remove() {
         </AppListGroup>
         <MessageMarkdown v-if="doc.body.trim()" class="document-body" :text="doc.body" />
         <AppEmptyState v-else icon="doc" :text="$t('miniapps.documents.empty')" />
+        <div class="actions-row">
+          <AppButton variant="text" size="small" @click="copyMarkdown">{{ $t(copied ? 'miniapps.documents.copied' : 'miniapps.documents.copyMarkdown') }}</AppButton>
+          <AppButton variant="text" size="small" @click="exportMarkdown">{{ $t('miniapps.documents.exportMarkdown') }}</AppButton>
+          <AppButton variant="text" size="small" @click="exportPDF">{{ $t('miniapps.documents.exportPDF') }}</AppButton>
+        </div>
         <div class="actions-row">
           <AppButton variant="danger-text" size="small" :disabled="busy" @click="remove">{{ $t('miniapps.documents.delete') }}</AppButton>
         </div>

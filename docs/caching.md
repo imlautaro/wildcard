@@ -1778,3 +1778,8 @@ linked-contacts snapshot (web `invalidateContactLinks`, iOS `linkSnapshots.remov
 since a private chat leaves all links and the account switch changes `allContacts`. Group
 detail snapshots (the "Discuss my private chats" switches) revalidate in the background as
 before; the server already removed the grants. Device and browser checks are pending.
+
+Document Markdown/PDF export and copying reuse the loaded saved document snapshot.
+They make no network request and add no cache. Web revokes download blob URLs and
+removes its print frame; iOS releases in-memory export data after file export.
+User-saved files and clipboard text remain independent of later document changes.

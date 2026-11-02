@@ -109,3 +109,17 @@ device or browser.
 ## Clearing the containing chat
 
 [Chat lifecycle](chat-lifecycle.md) removes chat documents and every revision together with their mutation receipts and source cards. Both clients invalidate document caches. Archive preserves documents and collaborative editing.
+
+## Export and clipboard
+
+The saved document viewer in private chats and groups offers **Copy as Markdown**,
+**Export Markdown** and **Export PDF** on iOS and web. Markdown preserves the body
+exactly, without adding the separately stored title. PDF includes the title and body.
+Web uses a separate rendered print document: choose Save as PDF in the browser print
+dialog. iOS creates a paginated A4 PDF using the viewer’s Markdown parser and native print fonts, then opens the system file exporter; table layout is simpler than the viewer.
+Exports use the currently loaded saved revision, never an unsaved draft, and need
+no API request or new service. Clipboard writes happen only on explicit action.
+Web releases the download blob/print frame; iOS holds export bytes only until the
+file exporter completes. Exported files and copied text are independent snapshots.
+Browser print/clipboard permissions, long-document pagination, Unicode, empty bodies
+and device file saving still require manual verification.
