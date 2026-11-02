@@ -332,7 +332,10 @@ checkout of pushed commit `a1a6464` (version `356fc40b-5b76-4885-b265-897b7e3f44
 It serves `https://wildcard-site.imlautaro.workers.dev`: `/` 200, unknown paths 404,
 no console errors at 1280 and 390 px. Later releases must come from Workers Builds:
 connect the existing Worker under Settings → Builds with the commands above. That
-project was not yet created when this was written.
+project was not yet created when this was written. A second owner-approved manual
+release published `f87b39c` (version `866609e7-72bd-424d-91a4-b33857780fd6`) because
+no `wildcard-site` build existed yet; pushes to `main` produced only the API, web
+and admin builds.
 
 Rollback: roll back or delete the `wildcard-site` Worker. It stores no data and no
 other Worker depends on it.
