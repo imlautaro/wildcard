@@ -13,7 +13,7 @@ export const site = {
   // The source repository. While `repositoryPublic` is false the site says the code
   // is coming soon instead of linking to a private repository (which would 404).
   repositoryUrl: 'https://github.com/imlautaro/wildcard',
-  repositoryPublic: false,
+  repositoryPublic: true,
   // An App Store or TestFlight link for the iPhone app, when one exists.
   iosUrl: null as string | null,
 } as const;
