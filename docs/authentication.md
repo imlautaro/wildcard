@@ -176,6 +176,5 @@ Account includes a Standard/Contributor selector with explicit Contributor
 acceptance. `GET /me` and profile mutations include `user.chatModel`;
 `PUT /me/model` saves the authenticated account only. See [model settings](model-settings.md)
 for model selection, sharing consent, MCP Standard, cache behavior and background
-jobs. Onboarding always uses Standard without changing the account's later model
-choice. No real registration or live inference was executed while implementing
+jobs. Onboarding uses the account's effective model (Standard or Contributor). No real registration or live inference was executed while implementing
 this change.

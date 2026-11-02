@@ -45,6 +45,12 @@ selection, including when another participant's job refreshes that memory. Agent
 self-memory and group extraction use their reply job's model. All Spark calls,
 including extraction and group-post validation, share the gateway integration.
 
+Contact creation (identity, name pool and the onboarding plan), the appearance text for an
+AI photo of an existing contact, and the sticker subject naming and avatar face check use the
+creating or requesting account's effective model (`accountModel`), so a Contributor choice and
+the `contributor_only` flag cover them too. Inside a conversation the sticker tools use that
+turn's model, so MCP-isolated chats keep Standard.
+
 Already-started jobs keep their checkpointed model; changing a setting does not
 cancel or regenerate them. Existing Worker versions may finish under their former
 code. A new group reply job in an ongoing exchange reads the requester's selection

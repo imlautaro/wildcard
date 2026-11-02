@@ -1,4 +1,5 @@
 import { isRecord, museCompletion } from '../chat/meta';
+import { accountModel } from '../lib/model-preference';
 
 type Gender = 'male' | 'female';
 type Candidate = { name: string; gender: Gender };
@@ -43,7 +44,7 @@ export async function themedContactNames(env: Env, owner: string, input: Paramet
         + (input.adaptGenders ? ' Also add "themeGender": "female" when the theme clearly describes only girls or women (or female characters), "male" when only boys or men, otherwise "mixed".' : '') }] : []),
     // Additional exclusions (including the human's name) are applied locally.
     { role: 'user', content: JSON.stringify({ country: input.country, language: input.language, genders, excludedNames: usedNames, ...(input.theme ? { characterTheme: input.theme } : {}) }) },
-  ], 'muse-spark-1.3', { responseFormat: { type: 'json_object' }, maxTokens: 3500 });
+  ], await accountModel(env, owner), { responseFormat: { type: 'json_object' }, maxTokens: 3500 });
   let value: unknown;
   try { value = JSON.parse(response.content ?? 'null'); }
   catch { throw new Error('MODEL_INVALID_CONTACT_NAMES'); }

@@ -3,6 +3,7 @@ import jpeg from 'jpeg-js';
 import * as UPNG from 'upng-js';
 import { decodeMaskToRaster, parseImageStream, recordsOfKind, type ResponsesEvent } from '@meta-sam/parser';
 import { museCompletion } from '../chat/meta';
+import type { ChatModel } from '../lib/model-preference';
 
 // Turns a photo into a sticker: Meta's SAM 3.1 finds the subject, then the mask becomes the
 // alpha channel of a cropped, downscaled PNG (docs/stickers.md#cutout). Muse Image cannot
@@ -158,12 +159,12 @@ export function encodeSticker(rgba: Uint8Array, width: number, height: number): 
 }
 
 // A single short noun phrase for SAM when "person" found nothing (an object, a pet).
-async function nameSubject(env: Env, image: { mime: string; bytes: Uint8Array }): Promise<string | null> {
+async function nameSubject(env: Env, image: { mime: string; bytes: Uint8Array }, model: ChatModel): Promise<string | null> {
   try {
     const answer = await museCompletion(env, [{ role: 'user', content: [
       { type: 'text', text: 'Name the single main subject of this photo as a short lowercase noun phrase (1–4 words, e.g. "orange cat", "red sneaker"). Reply with only that phrase.' },
       { type: 'image_url', image_url: { url: `data:${image.mime};base64,${Buffer.from(image.bytes).toString('base64')}` } }] }],
-    'muse-spark-1.3', { maxTokens: 512, reasoning: 'minimal' });
+    model, { maxTokens: 512, reasoning: 'minimal' });
     const phrase = typeof answer.content === 'string' ? answer.content.trim().toLowerCase().replace(/[^\p{L}\p{N} -]/gu, '').slice(0, 40) : '';
     return phrase.length >= 2 ? phrase : null;
   } catch { return null; }
@@ -171,13 +172,14 @@ async function nameSubject(env: Env, image: { mime: string; bytes: Uint8Array })
 
 export type Cutout = { png: Uint8Array; width: number; height: number };
 // subject: an optional noun phrase from the person; defaults to "person", then to a model-named subject.
-export async function cutout(env: Env, bytes: Uint8Array, subject?: string): Promise<Cutout> {
+// model: the account's effective Muse Spark model (docs/model-settings.md); only used to name the subject.
+export async function cutout(env: Env, bytes: Uint8Array, model: ChatModel, subject?: string): Promise<Cutout> {
   const image = decodeImage(bytes);
   const info = dimensions(bytes)!;
   const source = { mime: info.type === 'png' ? 'image/png' : 'image/jpeg', bytes };
   let found = await segment(env, source, subject ?? 'person');
   if (!found && !subject) {
-    const named = await nameSubject(env, source);
+    const named = await nameSubject(env, source, model);
     if (named && named !== 'person') found = await segment(env, source, named);
   }
   if (!found) throw new CutoutError('NO_SUBJECT');

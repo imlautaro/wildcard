@@ -2950,7 +2950,7 @@ no production operation, device or acoustic validation is implied.
 This change reuses the existing DB, ONBOARDING_WORKFLOW, CHAT_WORKFLOW, minute Cron,
 Meta secret, optional APNs and client caches. No migration, resource, permission,
 account-specific identifier or secret is added. New onboarding/AI creation adds
-one bounded Standard name-pool completion before identity generation (24 candidates
+one bounded name-pool completion (the account's model) before identity generation (24 candidates
 per requested gender; at most 48). Existing two-minute identity steps and immutable
 plan persistence still apply. Failures before a saved plan can repeat billable
 inference; saved plans/portraits are reused. Personality regeneration does not
@@ -3426,7 +3426,7 @@ deletion triggers) and no new binding, bucket or secret. Prerequisites and resou
   `META_API_KEY`.
 - **Meta models used with that key**: `sam-3.1` (Responses API, segmentation), `muse-image-1.0`
   (`/v1/images/edits`, expression portraits of a contact) and `muse-spark-1.3` (one-phrase
-  subject naming and the profile-photo face check). Availability of `sam-3.1` for a given key
+  subject naming and the profile-photo face check, with the account's Standard or Contributor model). Availability of `sam-3.1` for a given key
   is not verified outside the measurement recorded in `docs/stickers.md`; without it,
   sticker creation fails with 502/503 and the rest of chat is unaffected.
 - **New npm dependencies** (`apps/api`, exact versions in the root lockfile): `@meta-sam/parser`,

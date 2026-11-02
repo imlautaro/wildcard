@@ -37,7 +37,7 @@ other human participants, send invitations or accept Contributor processing.
 
 The server creates exactly five fictional contacts and optionally a group containing
 the account and those same five agent identities. Group names are deterministic:
-**Friends**, **Study Group**, or **Work Team**; the model does not choose a name. Muse Spark 1.3 Standard proposes
+**Friends**, **Study Group**, or **Work Team**; the model does not choose a name. Muse Spark 1.3 (the account's Standard or Contributor model) proposes
 common given names for the selected country, a mixed-gender cast, distinct
 behavioral identities, optional topic affinities, English identity descriptions and
 physical descriptions. Identities use values, judgment, conversational quirks and
@@ -324,7 +324,7 @@ and a shuffled 2/3 gender mix. Names are assigned independently of the five
 ordered temperaments and shuffled specialties. The identity model must keep the
 assigned names/genders. Native spelling remains valid. Existing account contact
 names and the human's name are excluded within the documented bounded window;
-no other account's names are read. One extra Standard text completion adds latency
+no other account's names are read. One extra text completion adds latency
 and cost before the immutable plan is saved. Completed contacts and saved plans
 keep their names; no historical regeneration is introduced. Both clients use the
 same Workflow and existing progress/cache contract. Actual cultural/name diversity,

@@ -3,6 +3,7 @@ import { isRecord, museCompletion, safeErrorCode, type ModelTool } from '../chat
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { photoKey } from '../photos/storage';
 import { cutout, CutoutError } from './cutout';
+import type { ChatModel } from '../lib/model-preference';
 import { addSticker, agentLibrary, maxAvatarStickers, maxSavedStickers, parseStickerPng, validStickerEmoji, type StickerRow } from './data';
 import type { Attachment } from '../chat/attachments';
 
@@ -101,7 +102,7 @@ function userSticker(attachmentJSON: string): (Attachment & { sticker: { id: str
   return attachment.sticker ? attachment as Attachment & { sticker: { id: string; emoji: string } } : null;
 }
 
-export async function executeStickerTool(env: Env, scope: { agentID: string; userID: string; contactID: string; turnID: string; state: StickerState }, name: string, args: unknown): Promise<string> {
+export async function executeStickerTool(env: Env, scope: { agentID: string; userID: string; contactID: string; turnID: string; state: StickerState; model: ChatModel }, name: string, args: unknown): Promise<string> {
   const fail = (error: string) => JSON.stringify({ error });
   if (!isRecord(args)) return fail('Expected an object');
   if (name === stickerSendTool.function.name) {
@@ -140,12 +141,12 @@ export async function executeStickerTool(env: Env, scope: { agentID: string; use
 }
 
 // Does this profile picture show one clear character with a face (person, cartoon, pixel art, robot)? Only then can a sticker of the contact be made.
-export async function photoShowsFace(env: Env, jpeg: Uint8Array): Promise<boolean> {
+export async function photoShowsFace(env: Env, jpeg: Uint8Array, model: ChatModel): Promise<boolean> {
   try {
     const answer = await museCompletion(env, [{ role: 'user', content: [
       { type: 'text', text: 'Does this profile picture show exactly one main character with a clear, recognizable face? A real person, a cartoon, anime, pixel-art or game character, a robot or mascot with eyes, or an animal face all count. Answer false for landscapes, objects or logos without a face, text, several characters side by side, or a face that is tiny, hidden or too blurry to see. Reply with only JSON {"singleFace": true} or {"singleFace": false}.' },
       { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${Buffer.from(jpeg).toString('base64')}` } }] }],
-    'muse-spark-1.3', { maxTokens: 1024, reasoning: 'minimal', responseFormat: { type: 'json_object' } });
+    model, { maxTokens: 1024, reasoning: 'minimal', responseFormat: { type: 'json_object' } });
     const value: unknown = JSON.parse(typeof answer.content === 'string' ? answer.content : '{}');
     return isRecord(value) && value.singleFace === true;
   } catch { throw new Error('FACE_CHECK_UNAVAILABLE'); }
@@ -167,7 +168,7 @@ export async function expressionImage(env: Env, avatar: Uint8Array, expression: 
   return new Uint8Array(Buffer.from(data, 'base64'));
 }
 
-async function createSelfSticker(env: Env, scope: { agentID: string; userID: string; contactID: string; state: StickerState }, emoji: string, expression: string): Promise<string> {
+async function createSelfSticker(env: Env, scope: { agentID: string; userID: string; contactID: string; state: StickerState; model: ChatModel }, emoji: string, expression: string): Promise<string> {
   const fail = (error: string) => JSON.stringify({ error });
   const agent = await env.DB.prepare('SELECT photo_version AS version, owner_id AS ownerID FROM contact_agent WHERE id = ?').bind(scope.agentID).first<{ version: string | null; ownerID: string }>();
   if (!agent?.version) return fail('You have no profile photo, so you cannot make a sticker of yourself.');
@@ -181,13 +182,13 @@ async function createSelfSticker(env: Env, scope: { agentID: string; userID: str
     const known = await env.DB.prepare('SELECT has_face AS hasFace, checked_at AS checkedAt FROM sticker_photo_check WHERE agent_id = ? AND photo_version = ?').bind(scope.agentID, agent.version).first<{ hasFace: number; checkedAt: number }>();
     let hasFace = known && (known.hasFace === 1 || faceRefused(known)) ? known.hasFace === 1 : null;
     if (hasFace === null) {
-      hasFace = await photoShowsFace(env, avatar);
+      hasFace = await photoShowsFace(env, avatar, scope.model);
       await env.DB.prepare('INSERT OR REPLACE INTO sticker_photo_check (agent_id, photo_version, has_face, checked_at) VALUES (?, ?, ?, ?)')
         .bind(scope.agentID, agent.version, hasFace ? 1 : 0, Date.now()).run();
     }
     if (!hasFace) return fail('Your profile picture does not clearly show one character with a face, so you cannot make a sticker of yourself.');
     const portrait = await expressionImage(env, avatar, expression);
-    const result = await cutout(env, portrait);
+    const result = await cutout(env, portrait, scope.model);
     // The profile photo may have changed while generating; never publish a sticker from an old one.
     const current = await env.DB.prepare('SELECT photo_version AS version FROM contact_agent WHERE id = ?').bind(scope.agentID).first<{ version: string | null }>();
     if (current?.version !== agent.version) return fail('Your profile photo changed; try again.');

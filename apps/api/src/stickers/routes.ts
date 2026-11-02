@@ -4,6 +4,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readBearerSession } from '../lib/session';
 import { cutout, CutoutError } from './cutout';
+import { accountModel } from '../lib/model-preference';
 import { addSticker, agentLibrary, maxUserStickers, parseStickerPng, publicSticker, removeSticker, stickerColumns,
   userLibrary, validStickerEmoji, type StickerRow } from './data';
 import { isRecord } from '../chat/meta';
@@ -57,7 +58,7 @@ stickers.post('/cutout', bodyLimit({ maxSize: sourceBytes + 1024, onError: (c) =
   const bytes = await bodyBytes(c.req.raw, sourceBytes);
   if (!bytes) return c.json({ error: 'Photo must be 5 MB or smaller' }, 413);
   try {
-    const result = await cutout(c.env, bytes, subject);
+    const result = await cutout(c.env, bytes, await accountModel(c.env, c.get('owner')), subject);
     return new Response(result.png, { headers: { ...imageHeaders(result.png.length), 'X-Sticker-Width': String(result.width), 'X-Sticker-Height': String(result.height) } });
   } catch (error) {
     if (error instanceof CutoutError) {

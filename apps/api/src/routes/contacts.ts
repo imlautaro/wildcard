@@ -11,7 +11,7 @@ import { aliasBody } from '../contacts/alias';
 import { learningRoutes } from '../chat/learning-routes';
 import { contactStickers } from '../stickers/routes';
 import { dropAvatarStickers } from '../stickers/data';
-import { accountEnvironment } from '../lib/model-preference';
+import { accountEnvironment, accountModel } from '../lib/model-preference';
 import { readEnergy } from '../groups/energy';
 import { photoKey, photoResponse, removePhoto, validPhoto, readPhoto } from '../photos/storage';
 import { totalUnreadReplies } from '../lib/unread';
@@ -367,7 +367,7 @@ contacts.post('/:id/photo/generate', contactBody, async (c) => {
     const voice: unknown = agent.voiceProfile ? JSON.parse(agent.voiceProfile) : null;
     const gender = isRecord(voice) && (voice.gender === 'male' || voice.gender === 'female') ? voice.gender : undefined;
     const identity = { name: agent.name, description: snapshot.personality.description, age: snapshot.age ?? undefined, gender };
-    const portrait = await describeAppearance(env, identity, input);
+    const portrait = await describeAppearance(env, identity, input, await accountModel(env, owner));
     const bytes = await generatePortrait(env, { ...identity, portrait }, input);
     return replacePhoto(env, (task) => c.executionCtx.waitUntil(task), owner, id, previous, bytes);
   })();

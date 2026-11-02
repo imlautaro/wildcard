@@ -1,3 +1,4 @@
+import { contributorModel, standardModel } from '../lib/model-preference';
 import { executePrivateRelay, privateRelayContext, privateRelayInstruction, privateRelayTools } from './private-relay';
 import { embodiedIdentityInstruction } from '../personality/identity';
 import { conversationStyle, regionalConversation, replyDeliveryInstruction } from '../personality/conversation';
@@ -165,7 +166,8 @@ async function executeTool(env: Env, scope: MemoryScope & { agentID: string; nam
   if (privateRelayTools.some(tool => tool.function.name === call.function.name)) return executePrivateRelay(env, turn, scope.agentID, call.function.name, args);
   const imageScope = { ...scope, contributor: !!scope.contributorModel, beforeSequence: turn.sequence + 1 };
   if (stickerToolNames.has(call.function.name)) return scope.stickers
-    ? executeStickerTool(env, { agentID: scope.agentID, userID: turn.userID, contactID: turn.contactID, turnID: turn.id, state: scope.stickers }, call.function.name, args)
+    ? executeStickerTool(env, { agentID: scope.agentID, userID: turn.userID, contactID: turn.contactID, turnID: turn.id, state: scope.stickers,
+      model: scope.contributorModel ? contributorModel : standardModel }, call.function.name, args)
     : JSON.stringify({ error: 'Stickers are not available in this conversation.' });
   if (call.function.name === researchTool.function.name) return executeResearchTool(env, {
     kind: 'contact', contactID: turn.contactID, userID: turn.userID, agentID: scope.agentID,

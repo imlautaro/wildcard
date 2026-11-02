@@ -132,7 +132,8 @@ under `users/<user>/stickers/` and `contacts/<owner>/<agent>/stickers/`, covered
 account and agent cleanup sweeps; account or agent deletion also deletes the rows
 (migration 0091 triggers). Stickers sent to the model's provider are limited to the cutout
 (the person's uploaded photo goes to Meta's SAM and, when "person" finds nothing, to Muse
-Spark); this does not grant new consent for Contributor data.
+Spark, with the account's Standard or Contributor model; MCP-isolated chats use Standard).
+This does not grant new consent for Contributor data.
 
 ## Infrastructure and rollback
 

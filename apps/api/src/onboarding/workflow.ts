@@ -7,6 +7,7 @@ import { runContactGeneration } from '../contacts/generation';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
 import { museCompletion, isRecord } from '../chat/meta';
+import { accountModel } from '../lib/model-preference';
 import { photoKey, removePhoto } from '../photos/storage';
 import { defaultPersonality, randomBirthDate } from '../../../../shared/personality';
 import { characterTheme, onboardingOptions, type OnboardingInput } from '../../../../shared/onboarding';
@@ -66,7 +67,7 @@ async function createPlan(env: Env, input: OnboardingInput, owner: string): Prom
     { role: 'system', content: 'Use each ordered profile’s assignedName and gender exactly. These were selected independently from a broad local name pool; do not replace them with your usual favorite names or infer temperament from them.' },
     { role: 'user', content: JSON.stringify({ user: input.name, gender: input.gender, country, language,
       avatarStyle: input.style, ...(theme ? { characterTheme: theme } : {}), circleType, ...(circleType !== 'friends' ? { occupationOrStudies: input.occupation ?? '' } : {}), contactAgeRange: [minimumAge, maximumAge], orderedProfiles: temperaments.map((t, i) => ({ assignedName: names[i], gender: genders[i], temperament: t.identity, specialties: specialties[i] })) }) },
-  ], 'muse-spark-1.3', { responseFormat: { type: 'json_object' }, maxTokens: theme ? 9000 : 7000 });
+  ], await accountModel(env, owner), { responseFormat: { type: 'json_object' }, maxTokens: theme ? 9000 : 7000 });
   const value: unknown = JSON.parse(response.content ?? 'null');
   const text = (v: unknown, max: number): v is string => typeof v === 'string' && !!v.trim()
     && [...v].length <= max && !/[\u0000-\u001f\u007f-\u009f]/u.test(v);
