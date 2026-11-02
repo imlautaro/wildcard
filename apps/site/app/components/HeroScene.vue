@@ -82,7 +82,7 @@ const state = computed(() => {
 .compose { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
 .compose svg { width: 20px; height: 20px; }
 .rows { position: relative; margin: 0; padding: 0 var(--space-2); list-style: none; }
-.row { display: flex; align-items: center; gap: var(--space-3); height: 72px; padding: 0 var(--space-3); border-radius: var(--md-shape-l); }
+.row { display: flex; align-items: center; gap: var(--space-3); height: 68px; padding: 0 var(--space-3); border-radius: var(--md-shape-l); }
 .row.unread { background: color-mix(in srgb, var(--md-primary) 7%, transparent); }
 .row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .row-top, .row-bottom { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
@@ -98,8 +98,7 @@ const state = computed(() => {
 
 .banner {
   position: absolute; top: 6px; left: 10px; right: 10px; z-index: 5; display: flex; gap: var(--space-3); align-items: center;
-  padding: var(--space-3); border-radius: 22px; background: color-mix(in srgb, var(--md-surface-container-highest) 88%, transparent);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: var(--md-elevation-3);
+  padding: var(--space-3); border-radius: 22px; background: var(--md-surface-container-highest); box-shadow: var(--md-elevation-3);
 }
 .banner-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .banner-top { display: flex; justify-content: space-between; font: var(--type-title-small); }

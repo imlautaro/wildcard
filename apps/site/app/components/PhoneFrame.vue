@@ -46,7 +46,7 @@ withDefaults(defineProps<{
   overflow: hidden; border-radius: var(--phone-radius); background: var(--md-surface);
   box-shadow: 0 0 0 8px var(--md-surface-container-highest), 0 0 0 9px var(--stage-edge), var(--md-elevation-3);
 }
-.phone-top { flex: none; height: 36px; }
+.phone-top { flex: none; height: 52px; }
 .phone-bar {
   display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-4) var(--space-2) var(--space-2);
   border-bottom: 1px solid color-mix(in srgb, var(--md-on-surface) 6%, transparent);
