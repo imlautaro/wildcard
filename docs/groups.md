@@ -1173,8 +1173,9 @@ investigation with a shared document instead of asking a clarifying question fir
 **Deep** is chosen only for an explicit request for a thorough, better or
 comparative investigation, a report, or acceptance of that offer: two or three
 contacts take `research` with distinct sub-questions as their angles and one other
-contact takes `compile` last (up to four speakers). **Project** (a plan, roadmap or
-work split) is deep plus a task list.
+contact takes `compile` last (up to four speakers). **Project** (the people want the
+members to work on something together: a plan to carry out, a deliverable, a work
+split) has a single `organize` speaker; see below.
 
 Each planned researcher has its own research receipt
 (`research-group-<message>-<agent>`; migration 0072 rebuilds `web_research` so one
@@ -1183,13 +1184,36 @@ researcher announces, describing who covers what; each researcher then posts one
 short finding. The compiler waits (at most 180 one-second durable polls) for the
 researchers' drafts before using any tool, receives their drafts and their bounded
 research findings with cited sources (same Contributor model consent), writes one
-group document with `create_document`, and posts the key takeaways. For a project
-it also creates a task list: contacts get only work they can do with their own
-tools without new web research (agent-assigned tasks start the existing
-[persistent task work](persistent-work.md)), people get actions only they can take.
+group document with `create_document`, and posts the key takeaways.
 Account research budgets rose to 30 per day (global 300) because a deep round uses
 two or three searches. Live checks (Contributor model) chose deep for "can you do a
 better research about this", quick for a plain lookup and project for a moving plan.
+
+### Project rounds (2026-11-02)
+
+Until 2026-11-02 a project was a deep round whose compiler ended with a list of "next
+steps", mostly unassigned: the members split and did the work in chat during the round
+and the tasks arrived afterwards with no owner, so nothing used them. Now the
+coordinator picks exactly one contact with role `organize` (tools forced on) and nobody
+else speaks in that round. The organizer reads `list_tasks`, creates a document
+skeleton when the result is one shared text, and makes one `create_task_list` with
+three to six tasks: every task assigned (other contacts by persona, people only for
+what only a person can do), `documentID` on tasks that write or review the document,
+and `blockedBy` only for real dependencies. It keeps for itself only the final step
+that waits for the others (integration or review), because a contact's self-assigned
+independent task waits for the 30-minute review while tasks assigned by someone else
+start at the next Cron minute. It then posts who does what. If the list could not be
+created it answers directly and says so (model guidance, not enforced).
+
+The work happens in the assignees' [task work turns](persistent-work.md): each
+contact writes its part and reports in its own message, and the blocked integration
+task starts when the last blocker finishes. Task work cannot search the web unless a
+person saves a query in the task editor, so research-heavy requests should go to deep.
+Live check (local, Contributor model, five contacts, "a short guide for a board game
+night, split the work"): the coordinator chose project with one organizer, which
+created a document and five assigned tasks (the fifth, its own integration, blocked by
+the other four); each contact filled its section in one work turn and the organizer
+integrated the guide. The four section tasks were marked done without a `result`.
 
 ## Contact aliases in groups
 

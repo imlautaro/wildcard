@@ -13,9 +13,11 @@ import { parseMembershipEvent, welcomeBatch } from './history-access';
 // only its speakers and later human messages are not stuck behind silent turns.
 // Planning is an optimization: any failure falls back to per-contact decisions.
 
-export type RoundRole = 'answer' | 'research' | 'react' | 'spark' | 'compile';
+export type RoundRole = 'answer' | 'research' | 'react' | 'spark' | 'compile' | 'organize';
 // quick: one researcher at most. deep: two or three researchers split the topic
-// and a final compiler writes a shared document. project: deep plus a task list.
+// and a final compiler writes a shared document. project: one organizer splits the
+// work into an assigned task list and speaks alone; the contacts then do their parts
+// in their own task work turns (docs/groups.md#research-depth-quick-deep-and-project-migration-0072).
 export type RoundDepth = 'quick' | 'deep' | 'project';
 export type RoundSlot =
   | { kind: 'unplanned' }
@@ -23,7 +25,7 @@ export type RoundSlot =
   | { kind: 'planned'; rank: number; size: number; role: RoundRole; angle: string; tools: boolean };
 
 type Speaker = { agentID: string; role: RoundRole; angle: string; tools: boolean };
-const roles: RoundRole[] = ['answer', 'research', 'react', 'spark', 'compile'];
+const roles: RoundRole[] = ['answer', 'research', 'react', 'spark', 'compile', 'organize'];
 const depths: RoundDepth[] = ['quick', 'deep', 'project'];
 const maxSpeakers = 3;
 const maxDeepSpeakers = 4;
@@ -164,10 +166,10 @@ async function createPlan(env: Env, job: GroupJob) {
         'Human trigger: a question, request, greeting, news, opinion or invitation gets at least one speaker. Put the best-suited contact first. Name-addressed contacts must speak; when the human asks everyone or calls out silent contacts, include each of them. Plain acknowledgements such as "ok" or "thanks" may get zero or one brief speaker.',
         'Social messages and greetings: choose two or three speakers with different angles. At least one takes role spark: adds a hook that keeps the conversation going, such as a concrete opinion, a small detail from their own persona, a playful proposal or a specific question to another contact or the group. Avoid three near-identical replies.',
         'Requests to look something up, current facts, news or anything needing public web information: exactly one contact takes role research (tools true) and goes first. Others may follow only with a distinct, useful addition; nobody else researches the same thing. Contacts marked researchingNow are already busy researching.',
-        'depth: quick for ordinary turns and plain research requests. Choose deep only when the human explicitly wants a thorough, better, deeper or comparative investigation, a report or write-up, or accepts an earlier offer to go deeper. Choose project when they ask for a plan, project, roadmap or work split across members. For deep and project: two or three contacts take role research, each with a distinct sub-question as its angle (for example timelines, ways to speed it up, the human\'s own situation), then exactly one other contact takes role compile last (tools true) to write the shared document from their findings; up to four speakers. Depth quick never uses compile.',
+        'depth: quick for ordinary turns and plain research requests. Choose deep only when the human explicitly wants a thorough, better, deeper or comparative investigation, a report or write-up, or accepts an earlier offer to go deeper. For deep: two or three contacts take role research, each with a distinct sub-question as its angle (for example timelines, ways to speed it up, the human\'s own situation), then exactly one other contact takes role compile last (tools true) to write the shared document from their findings; up to four speakers. Choose project when the human wants the members to work together on something: a project, a plan to carry out, a deliverable to build or write, or work split across members. For project: exactly one contact takes role organize (tools true), the best suited to coordinate, and is the only speaker; it splits the work into an assigned task list and the other contacts do their parts afterwards through their tasks. Depth quick uses neither compile nor organize.',
         'Membership trigger (people or contacts just joined; trigger.joined lists them): every contact in trigger.joined that is also in contacts introduces itself, role answer, ordered first. Then choose exactly one existing contact (two only if four or more joined) to welcome all newcomers together, role answer. Nobody else speaks and nobody needs tools.',
         'Bot trigger (a contact spoke): choose zero or one speaker. Continue only when the message invites engagement, asks or addresses a contact, or a genuinely different perspective adds something. Choose zero for agreement, acknowledgements, farewells and closures.',
-        'Rotate fairly: prefer contacts who spoke less recently and whose persona fits. Never choose more than three speakers, except four for deep or project.',
+        'Rotate fairly: prefer contacts who spoke less recently and whose persona fits. Never choose more than three speakers, except four for deep and one for project.',
         'tools is true only when the speaker needs tools: web research, searching older group history, documents, tasks, images, mini apps or private messages. Ordinary conversation needs no tools.',
         'role answer: responds to the trigger. role react: a short reaction or agreement with something new. role spark: moves the conversation forward. angle: one short internal sentence in English describing what this speaker contributes; never script exact wording.',
         'foldedEarlierMessages are earlier human messages in this round that nobody answered yet; treat them as part of the trigger.',
@@ -203,17 +205,22 @@ async function createPlan(env: Env, job: GroupJob) {
       if (!isRecord(item) || typeof item.agentID !== 'string' || !ids.includes(item.agentID)
         || speakers.some(speaker => speaker.agentID === item.agentID) || !roles.includes(item.role as RoundRole)) continue;
       speakers.push({ agentID: item.agentID, role: item.role as RoundRole,
-        angle: typeof item.angle === 'string' ? clipText(item.angle.trim(), 300) : '', tools: item.tools === true || item.role === 'research' });
+        angle: typeof item.angle === 'string' ? clipText(item.angle.trim(), 300) : '', tools: item.tools === true || item.role === 'research' || item.role === 'organize' });
     }
     depth = depths.includes(parsed.depth as RoundDepth) ? parsed.depth as RoundDepth : 'quick';
     const researchers = speakers.filter(speaker => speaker.role === 'research');
     const compiler = speakers.find(speaker => speaker.role === 'compile');
-    if (depth !== 'quick' && researchers.length >= 2 && compiler) {
+    const organizer = speakers.find(speaker => speaker.role === 'organize');
+    if (depth === 'project' && (organizer ?? speakers[0])) {
+      // One organizer speaks alone and creates the assigned task list; the work itself
+      // happens in the assignees' task turns, so nobody else speaks this round.
+      speakers = [{ ...(organizer ?? speakers[0]!), role: 'organize', tools: true }];
+    } else if (depth === 'deep' && researchers.length >= 2 && compiler) {
       // Researchers first (each searches its own sub-question), one compiler last.
       speakers = [...researchers.slice(0, 3), { ...compiler, tools: true }];
     } else {
       depth = 'quick';
-      speakers = speakers.map((speaker): Speaker => speaker.role === 'compile' ? { ...speaker, role: 'answer' } : speaker).slice(0, maxSpeakers);
+      speakers = speakers.map((speaker): Speaker => speaker.role === 'compile' || speaker.role === 'organize' ? { ...speaker, role: 'answer' } : speaker).slice(0, maxSpeakers);
       // At most one contact researches a quick trigger; research turns are shared.
       const researcher = speakers.findIndex(speaker => speaker.role === 'research');
       if (researcher > 0) speakers.unshift(...speakers.splice(researcher, 1));
