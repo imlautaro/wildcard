@@ -5,7 +5,7 @@
 // - The server (and a browser without JavaScript) renders the final state, so the
 //   prerendered HTML carries the whole story.
 // - A scene that starts off screen resets to beat 0 on mount and plays when at
-//   least a third of it is visible; one already on screen keeps its final state
+//   least part of it is visible; one already on screen keeps its final state
 //   and replays after the hold.
 // - It pauses while off screen and loops while visible: after the last beat it
 //   holds, fades (`fading`) and restarts.
@@ -35,13 +35,18 @@ export function useScene(target: Ref<HTMLElement | null>, delays: readonly numbe
 
   onMounted(() => {
     const element = target.value;
-    if (!element || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!element || matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
     const rect = element.getBoundingClientRect();
     if (rect.top > innerHeight || rect.bottom < 0) step.value = 0;
     observer = new IntersectionObserver(([entry]) => {
       visible = !!entry?.isIntersecting;
-      if (visible) schedule(); else clear();
-    }, { threshold: 0.33 });
+      if (visible) schedule();
+      else {
+        clear();
+        // A canceled fade must not leave the scene transparent on re-entry.
+        if (fading.value) { step.value = 0; fading.value = false; }
+      }
+    }, { threshold: 0 });
     observer.observe(element);
   });
   onBeforeUnmount(() => { clear(); observer?.disconnect(); });

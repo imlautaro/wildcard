@@ -8,9 +8,6 @@ useHead(() => ({
   htmlAttrs: { lang: localeHead.value.htmlAttrs.lang, dir: localeHead.value.htmlAttrs.dir },
   link: [...(localeHead.value.link ?? [])],
   meta: [...(localeHead.value.meta ?? [])],
-  // html.js gates the scroll-reveal starting state, so the prerendered page stays
-  // fully visible when JavaScript doesn't run.
-  script: [{ innerHTML: "document.documentElement.classList.add('js')" }],
 }));
 const title = computed(() => `${site.name} — ${t('seo.tagline')}`);
 useSeoMeta({

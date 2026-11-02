@@ -41,10 +41,14 @@ carries the System/Light/Dark switch (stored per browser under
 
 Each scene is a list of beats driven by `useScene`. The server renders the final
 beat, so the prerendered HTML (and a browser without JavaScript) shows the whole
-story. In the browser, a scene that starts off screen resets and plays once a third
-of it is visible; it pauses off screen and loops while visible. With
+story. In the browser, a scene that starts off screen resets and plays when it
+enters the viewport; it pauses off screen and loops while visible. Leaving during
+a loop fade clears the fade and resets the scene so it cannot stay transparent. With
 `prefers-reduced-motion: reduce` scenes stay on their final beat, reveals start
-visible and CSS animations stop on their last frame. Never add `.reveal`-style
+visible and CSS animations stop on their last frame. Scroll reveals observe new
+page elements after both initial mounting and client navigation, including locale
+changes. Sections are visible by default; the finite entrance animation runs only
+after observation, so missing initialization cannot leave the page hidden. Never add `.reveal`-style
 classes from plain DOM code to an element with a `:class` binding: Vue rewrites
 the attribute and drops them (use an attribute instead, as the reveal plugin does).
 
