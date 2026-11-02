@@ -5,12 +5,16 @@
 const supported = ref(false);
 const permission = ref<NotificationPermission>('default');
 const subscribed = ref(false);
+// The account's choice on this browser, known synchronously from localStorage. The
+// switch shows this; `subscribed` only turns true after the API round trip in sync().
+const optedIn = ref(false);
 const optInKey = (userID: string) => `wildcard.webPush.${userID}`;
 
 function readOptIn(userID: string): boolean {
   try { return localStorage.getItem(optInKey(userID)) === '1'; } catch { return false; }
 }
 function writeOptIn(userID: string, on: boolean) {
+  optedIn.value = on;
   try { if (on) localStorage.setItem(optInKey(userID), '1'); else localStorage.removeItem(optInKey(userID)); } catch { /* Per-browser convenience only. */ }
 }
 
@@ -84,13 +88,14 @@ async function disable(userID: string, forget = true) {
 async function sync(userID: string) {
   refreshSupport();
   subscribed.value = false;
-  if (!supported.value || permission.value !== 'granted' || !readOptIn(userID)) return;
+  optedIn.value = readOptIn(userID);
+  if (!supported.value || permission.value !== 'granted' || !optedIn.value) return;
   try { await subscribe(); } catch { /* Retried on the next load. */ }
 }
 
 let activeUser: string | null = null;
 export function useWebPush() {
-  return { supported, permission, subscribed, enable, disable, sync, refreshSupport };
+  return { supported, permission, subscribed, optedIn, enable, disable, sync, refreshSupport };
 }
 
 /** Called before the session cookie is cleared, while the API can still delete the device. */
@@ -105,7 +110,7 @@ export function useWebPushLifecycle() {
   watch(() => [status.value, user.value?.id] as const, ([state, id]) => {
     activeUser = state === 'signed-in' && id ? id : null;
     if (activeUser) void sync(activeUser);
-    else subscribed.value = false;
+    else { subscribed.value = false; optedIn.value = false; }
   }, { immediate: true });
 
   function onMessage(event: MessageEvent) {

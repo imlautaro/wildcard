@@ -39,7 +39,8 @@ const { preference: languagePreference, setPreference: setLanguagePreference } =
 const languageOptions = computed(() => languagePreferences.map(value => ({ value, label: t(`common.language.${value}`) })));
 const languageSheet = ref(false);
 const webPush = useWebPush();
-const notificationsOn = computed(() => webPush.subscribed.value && webPush.permission.value === 'granted');
+// Follows the stored opt-in, not `subscribed`, so the switch doesn't flash off while sync() re-registers on load.
+const notificationsOn = computed(() => webPush.optedIn.value && webPush.permission.value === 'granted');
 const notificationsSupporting = computed(() => !webPush.supported.value ? t('account.notifications.unsupported')
   : webPush.permission.value === 'denied' ? t('account.notifications.blocked')
     : notificationsOn.value ? t('account.notifications.on') : t('account.notifications.off'));
