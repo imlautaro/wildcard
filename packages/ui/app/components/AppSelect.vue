@@ -23,6 +23,7 @@ const props = withDefaults(defineProps<{
   disabled?: boolean;
 }>(), { variant: 'outlined', label: undefined, placeholder: undefined });
 const model = defineModel<T>({ required: true });
+const strings = useUiStrings();
 defineOptions({ inheritAttrs: false });
 
 const attrs = useAttrs();
@@ -216,7 +217,7 @@ onBeforeUnmount(() => { open.value = false; clearTimeout(typedTimer); });
         <label v-if="searchable" class="select-search">
           <AppIcon name="search" />
           <input
-            ref="search" v-model="query" type="search" role="combobox" placeholder="Search" autocomplete="off" spellcheck="false"
+            ref="search" v-model="query" type="search" role="combobox" :placeholder="strings.search" autocomplete="off" spellcheck="false"
             aria-autocomplete="list" aria-expanded="true" :aria-controls="listID"
             :aria-label="`Search ${label ?? (attrs['aria-label'] as string | undefined) ?? 'options'}`"
             :aria-activedescendant="active >= 0 ? optionID(active) : undefined" @keydown="onSearchKey"
@@ -233,7 +234,7 @@ onBeforeUnmount(() => { open.value = false; clearTimeout(typedTimer); });
             <AppIcon v-if="index === selectedIndex" name="done" class="select-check" />
           </li>
         </ul>
-        <p v-if="!visible.length" class="select-empty" role="status">No matches</p>
+        <p v-if="!visible.length" class="select-empty" role="status">{{ strings.noMatches }}</p>
       </div>
     </Teleport>
   </div>

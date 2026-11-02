@@ -41,7 +41,7 @@ async function download() {
   function append(value: string) {
     const part = new TextEncoder().encode(value);
     bytes += part.byteLength;
-    if (bytes > 100 * 1024 * 1024) throw new Error('This export exceeds the 100 MB download limit. No partial file was saved.');
+    if (bytes > 100 * 1024 * 1024) throw new Error(translate('errors.debugExport.tooLarge'));
     parts.push(part);
   }
   try {
@@ -62,14 +62,16 @@ async function download() {
       append(`${index ? ',' : ''}${JSON.stringify(dataset)}:[`);
       let cursor: string | undefined;
       do {
-        progress.value = `Exporting ${dataset.replaceAll('_', ' ')} · ${Object.values(counts).reduce((a, b) => a + b, 0)} records`;
+        // Dataset names are API identifiers, shown as-is in every language.
+        const records = Object.values(counts).reduce((a, b) => a + b, 0);
+        progress.value = translate('account.debugExport.progress', { dataset: dataset.replaceAll('_', ' '), count: records }, records);
         const page = await api<ExportPage>('me/debug-export', { query: { dataset, cursor }, signal: controller.signal });
         checkSession(page.accountId);
         for (const row of page.rows) {
           append(`${counts[dataset] ? ',' : ''}${JSON.stringify(row)}`);
           counts[dataset]! += 1;
         }
-        if (page.nextCursor !== null && Number(page.nextCursor) <= Number(cursor ?? 0)) throw new Error('Export pagination did not advance. Please try again.');
+        if (page.nextCursor !== null && Number(page.nextCursor) <= Number(cursor ?? 0)) throw new Error(translate('errors.debugExport.paginationStalled'));
         cursor = page.nextCursor ?? undefined;
       } while (cursor !== undefined);
       append(']');
@@ -78,7 +80,7 @@ async function download() {
     const final = await api<ExportManifest>('me/debug-export', { signal: controller.signal });
     checkSession(final.accountId);
     if (JSON.stringify(final.scopes) !== JSON.stringify(manifest.scopes)) {
-      throw new Error('Chat access or history changed during the export. Please download it again.');
+      throw new Error(translate('errors.debugExport.changed'));
     }
     append(`},"counts":${JSON.stringify(counts)},"completedAt":${JSON.stringify(new Date().toISOString())}}`);
     const url = URL.createObjectURL(new Blob(parts, { type: 'application/json' }));
@@ -88,7 +90,7 @@ async function download() {
     document.body.append(link);
     try { link.click(); }
     finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
-    progress.value = 'Export ready. Your browser will save the JSON file.';
+    progress.value = translate('account.debugExport.ready');
   } catch (failure) {
     if (active === controller && !controller.signal.aborted) exportError.value = errorMessage(failure);
   } finally {

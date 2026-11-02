@@ -1,5 +1,5 @@
 <template>
-  <AppIconButton icon="expand" label="Scroll to latest messages" class="chat-scroll-down" />
+  <AppIconButton icon="expand" :label="$t('chat.scrollDown')" class="chat-scroll-down" />
 </template>
 
 <style scoped>

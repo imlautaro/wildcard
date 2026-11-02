@@ -47,24 +47,24 @@ const answer = computed(() => question.value.options ? question.value.options[qu
     <!-- The row is a card; only Start is a button, so it reads as one. -->
     <div class="mini-row mini-lesson-row">
       <span class="badge-icon"><AppIcon name="book" /></span>
-      <span class="copy"><strong>{{ lesson.title }}</strong><span>{{ lesson.questions.length }} questions</span></span>
-      <AppButton class="start" size="small" @click="start">Start</AppButton>
+      <span class="copy"><strong>{{ lesson.title }}</strong><span>{{ $t('miniapps.lesson.questions', lesson.questions.length) }}</span></span>
+      <AppButton class="start" size="small" @click="start">{{ $t('miniapps.lesson.start') }}</AppButton>
     </div>
   </div>
   <Teleport to="body">
     <div v-if="playing" class="mini-lesson" role="dialog" aria-modal="true" :aria-label="lesson.title">
       <header>
-        <AppIconButton icon="close" label="Close" @click="playing = false" />
+        <AppIconButton icon="close" :label="$t('common.close')" @click="playing = false" />
         <div class="track"><div class="fill" :style="{ width: `${(index + (result === null ? 0 : 1)) / lesson.questions.length * 100}%` }" /></div>
-        <span class="hearts" :aria-label="`${hearts} hearts`"><AppIcon name="heart" filled />{{ hearts }}</span>
+        <span class="hearts" :aria-label="$t('miniapps.lesson.hearts', hearts)"><AppIcon name="heart" filled />{{ hearts }}</span>
       </header>
       <section v-if="finished || failed" class="summary">
         <AppIcon :name="failed ? 'heart' : 'trophy'" filled class="big" :class="{ failed }" />
-        <h2>{{ failed ? 'Out of hearts' : 'Lesson complete!' }}</h2>
-        <p>{{ correct }} of {{ lesson.questions.length }} correct</p>
-        <p v-if="!failed && lesson.xp && correct" class="xp">+{{ correct }} XP</p>
-        <button type="button" class="mini-button primary" data-ripple @click="failed ? start() : done()">{{ failed ? 'Try again' : 'Done' }}</button>
-        <AppButton v-if="failed" variant="text" @click="playing = false">Close</AppButton>
+        <h2>{{ failed ? $t('miniapps.lesson.outOfHearts') : $t('miniapps.lesson.complete') }}</h2>
+        <p>{{ $t('miniapps.lesson.score', { correct, total: lesson.questions.length }) }}</p>
+        <p v-if="!failed && lesson.xp && correct" class="xp">{{ $t('miniapps.lesson.xp', { count: correct }) }}</p>
+        <button type="button" class="mini-button primary" data-ripple @click="failed ? start() : done()">{{ failed ? $t('common.tryAgain') : $t('common.done') }}</button>
+        <AppButton v-if="failed" variant="text" @click="playing = false">{{ $t('common.close') }}</AppButton>
       </section>
       <template v-else>
         <section class="question">
@@ -73,15 +73,15 @@ const answer = computed(() => question.value.options ? question.value.options[qu
             <button v-for="(option, at) in question.options" :key="at" type="button" data-ripple :disabled="result !== null"
               :class="{ chosen: selected === at, right: result !== null && at === question.correct, wrong: result === false && selected === at }" @click="selected = at">{{ option }}</button>
           </div>
-          <textarea v-else v-model="typed" rows="2" placeholder="Type your answer" :disabled="result !== null" @keydown.enter.prevent="ready && result === null && check()" />
+          <textarea v-else v-model="typed" rows="2" :placeholder="$t('miniapps.lesson.typeAnswer')" :disabled="result !== null" @keydown.enter.prevent="ready && result === null && check()" />
         </section>
         <footer :class="{ right: result === true, wrong: result === false }">
           <div v-if="result !== null" class="feedback">
-            <strong>{{ result ? 'Correct!' : 'Correct answer:' }}</strong>
+            <strong>{{ result ? $t('miniapps.lesson.correct') : $t('miniapps.lesson.correctAnswer') }}</strong>
             <span v-if="!result">{{ answer }}</span>
             <span v-if="question.explain" class="explain">{{ question.explain }}</span>
           </div>
-          <button type="button" class="mini-button primary" data-ripple :disabled="result === null && !ready" @click="result === null ? check() : advance()">{{ result === null ? 'Check' : 'Continue' }}</button>
+          <button type="button" class="mini-button primary" data-ripple :disabled="result === null && !ready" @click="result === null ? check() : advance()">{{ result === null ? $t('miniapps.lesson.check') : $t('common.continue') }}</button>
         </footer>
       </template>
     </div>

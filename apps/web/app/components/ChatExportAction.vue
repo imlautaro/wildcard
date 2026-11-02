@@ -19,17 +19,14 @@ onBeforeUnmount(() => { if (exporting.value) cancel(); });
 </script>
 
 <template>
-  <AppListItem icon="file" opens :disabled="busy" @click="open = true">Export chat</AppListItem>
-  <AppSheet v-if="open" title="Export chat" @close="close">
-    <p>Download this {{ kind === 'group' ? 'group' : 'chat' }} as a JSON file with every message you can read, who sent it and when, replies and reactions.</p>
-    <p class="group-footer">
-      {{ kind === 'group' ? 'It includes messages from every member. ' : '' }}Attachments are listed by name only; files, images and audio are not included.
-      Review the file before sharing it with anyone or with an AI. Nothing is sent to an AI by this download.
-    </p>
+  <AppListItem icon="file" opens :disabled="busy" @click="open = true">{{ $t('chat.export.title') }}</AppListItem>
+  <AppSheet v-if="open" :title="$t('chat.export.title')" @close="close">
+    <p>{{ kind === 'group' ? $t('chat.export.introGroup') : $t('chat.export.introChat') }}</p>
+    <p class="group-footer">{{ kind === 'group' ? $t('chat.export.footerGroup') : $t('chat.export.footerChat') }}</p>
     <AppNotice v-if="error">{{ error }}</AppNotice>
     <template #actions>
-      <AppButton variant="text" @click="close">{{ exporting ? 'Cancel export' : 'Close' }}</AppButton>
-      <AppButton :disabled="exporting || !!exportingKey" @click="start">{{ exporting ? 'Exporting…' : 'Download JSON' }}</AppButton>
+      <AppButton variant="text" @click="close">{{ exporting ? $t('chat.export.cancel') : $t('common.close') }}</AppButton>
+      <AppButton :disabled="exporting || !!exportingKey" @click="start">{{ exporting ? $t('chat.export.exporting') : $t('chat.export.download') }}</AppButton>
     </template>
   </AppSheet>
 </template>

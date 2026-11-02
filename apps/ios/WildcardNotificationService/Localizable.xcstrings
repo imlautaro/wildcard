@@ -1,0 +1,216 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ · Scheduled on this iPhone" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · Se programó en este iPhone"
+          }
+        }
+      }
+    },
+    "%@ · Scheduled; server confirmation unavailable" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · Se programó; sin confirmación del servidor"
+          }
+        }
+      }
+    },
+    "Action" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acción"
+          }
+        }
+      }
+    },
+    "Activity" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actividad"
+          }
+        }
+      }
+    },
+    "Alarm" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alarma"
+          }
+        }
+      }
+    },
+    "AlarmKit could not confirm scheduling in the notification extension (%@, %lld). Check Wildcard before retrying." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AlarmKit no pudo confirmar la programación en la extensión de notificaciones (%1$@, %2$lld). Revisa Wildcard antes de reintentar."
+          }
+        }
+      }
+    },
+    "Control Wildcard alarm" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controlar alarma de Wildcard"
+          }
+        }
+      }
+    },
+    "Notification processing was interrupted before scheduling." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El procesamiento de la notificación se interrumpió antes de programar."
+          }
+        }
+      }
+    },
+    "Pause" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausar"
+          }
+        }
+      }
+    },
+    "Remote access for this contact or tool is disabled on this iPhone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El acceso remoto para este contacto o herramienta está desactivado en este iPhone."
+          }
+        }
+      }
+    },
+    "Remote action unavailable on this iPhone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acción remota no disponible en este iPhone."
+          }
+        }
+      }
+    },
+    "Resume" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reanudar"
+          }
+        }
+      }
+    },
+    "The remote request does not match this iPhone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La solicitud remota no corresponde a este iPhone."
+          }
+        }
+      }
+    },
+    "The remote request expired before scheduling. Ask for a new timer or alarm." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La solicitud remota venció antes de programarse. Pide un temporizador o una alarma nuevos."
+          }
+        }
+      }
+    },
+    "The requested timer or alarm deadline has already passed." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La hora del temporizador o la alarma solicitados ya pasó."
+          }
+        }
+      }
+    },
+    "This remote action is not supported." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta acción remota no es compatible."
+          }
+        }
+      }
+    },
+    "Unable to confirm this timer or alarm during %@. Check Wildcard before requesting another." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo confirmar este temporizador o alarma durante %@. Revisa Wildcard antes de pedir otro."
+          }
+        }
+      }
+    },
+    "Update contact session" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualizar sesión del contacto"
+          }
+        }
+      }
+    },
+    "claim" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la reserva"
+          }
+        }
+      }
+    },
+    "handoff" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la entrega"
+          }
+        }
+      }
+    },
+    "validation" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la validación"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

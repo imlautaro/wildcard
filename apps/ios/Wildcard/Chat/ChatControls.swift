@@ -19,7 +19,7 @@ extension View {
 
 struct ChatComposerActionButton: View {
     let symbol: String
-    let label: String
+    let label: LocalizedStringKey
     let isEnabled: Bool
     var tint: Color = .accentColor
     let action: () -> Void

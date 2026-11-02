@@ -17,35 +17,35 @@ onMounted(async () => {
 </script>
 
 <template>
-  <PageBar title="Contacts" />
+  <PageBar :title="$t('contacts.index.title')" />
   <div class="scroll">
-    <AppSearchField v-model="query" label="Search contacts" />
+    <AppSearchField v-model="query" :label="$t('contacts.index.search')" />
     <ul v-if="!query" class="list">
-      <li><NuxtLink to="/groups/new" class="row action-row" data-ripple><span class="glyph"><AppIcon name="people" /></span><span class="body">Create group</span></NuxtLink></li>
+      <li><NuxtLink to="/groups/new" class="row action-row" data-ripple><span class="glyph"><AppIcon name="people" /></span><span class="body">{{ $t('contacts.index.createGroup') }}</span></NuxtLink></li>
       <li>
         <NuxtLink to="/invitations" class="row action-row" data-ripple>
           <span class="glyph"><AppIcon name="mail" /></span>
-          <span class="body"><span class="top"><span class="grow">Invitations</span><span v-if="chats.invitationCount.value" class="badge">{{ chats.invitationCount.value }}</span></span></span>
+          <span class="body"><span class="top"><span class="grow">{{ $t('contacts.index.invitations') }}</span><span v-if="chats.invitationCount.value" class="badge">{{ chats.invitationCount.value }}</span></span></span>
         </NuxtLink>
       </li>
-      <li><NuxtLink to="/contacts/new" class="row action-row" data-ripple><span class="glyph"><AppIcon name="plus" /></span><span class="body">Create contact</span></NuxtLink></li>
-      <li><NuxtLink to="/join" class="row action-row" data-ripple><span class="glyph"><AppIcon name="key" /></span><span class="body">Join shared contact</span></NuxtLink></li>
+      <li><NuxtLink to="/contacts/new" class="row action-row" data-ripple><span class="glyph"><AppIcon name="plus" /></span><span class="body">{{ $t('contacts.index.createContact') }}</span></NuxtLink></li>
+      <li><NuxtLink to="/join" class="row action-row" data-ripple><span class="glyph"><AppIcon name="key" /></span><span class="body">{{ $t('contacts.index.joinShared') }}</span></NuxtLink></li>
     </ul>
-    <div class="section-label">All contacts</div>
-    <AppLoading v-if="loading && !chats.directory.value.length" label="Loading contacts…" />
+    <div class="section-label">{{ $t('contacts.index.all') }}</div>
+    <AppLoading v-if="loading && !chats.directory.value.length" :label="$t('contacts.index.loading')" />
     <AppNotice v-if="error">{{ error }}</AppNotice>
     <AppEmptyState v-if="!loading && !visible.length" :icon="query ? 'search' : 'people'"
-                   :text="query ? 'No matching contacts.' : 'No contacts yet. Create one to start chatting.'" />
+                   :text="query ? $t('contacts.index.noMatches') : $t('contacts.index.empty')" />
     <ul class="list">
       <li v-for="contact in visible" :key="contact.id">
         <div v-if="contact.setupPending === 1" class="row" aria-disabled="true" style="opacity: 0.55">
           <AppAvatar :name="contact.name" :path="contactPhotoPath(contact)" :size="40" />
-          <span class="body"><span class="top"><strong>{{ contact.name }}</strong><span class="small muted">Creating…</span></span></span>
+          <span class="body"><span class="top"><strong>{{ contact.name }}</strong><span class="small muted">{{ $t('contacts.index.creating') }}</span></span></span>
         </div>
         <NuxtLink v-else :to="`/chats/${contact.id}`" class="row" data-ripple>
           <AppAvatar :name="contact.name" :path="contactPhotoPath(contact)" :size="40" />
           <span class="body">
-            <span class="top"><strong>{{ contact.name }}</strong><span v-if="contact.role === 'member'" class="small muted">Shared</span></span>
+            <span class="top"><strong>{{ contact.name }}</strong><span v-if="contact.role === 'member'" class="small muted">{{ $t('contacts.index.shared') }}</span></span>
           </span>
         </NuxtLink>
       </li>

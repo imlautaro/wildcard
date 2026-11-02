@@ -57,7 +57,7 @@ struct ProfileIdentityView<Avatar: View>: View {
                         showingNameEditor = true
                     }
                 } label: {
-                    Text(name.isEmpty ? "Add name" : name)
+                    Text(name.isEmpty ? String(localized: "Add name") : name)
                         .manrope(.title2, weight: .semibold)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.primary)
@@ -104,7 +104,7 @@ struct ProfileIdentityView<Avatar: View>: View {
                     guard let data = try await item.loadTransferable(type: Data.self) else { throw AuthAPI.Failure.invalidResponse }
                     let image = await Task.detached(priority: .userInitiated) { PhotoCropSource.decode(data) }.value
                     try Task.checkCancellation()
-                    guard let image else { throw AuthAPI.Failure.rejected("This image could not be opened. Please choose another photo.") }
+                    guard let image else { throw AuthAPI.Failure.rejected(String(localized: "This image could not be opened. Please choose another photo.")) }
                     cropSource = PhotoCropSource(image: image)
                 } catch is CancellationError { }
                 catch { self.error = error.localizedDescription }

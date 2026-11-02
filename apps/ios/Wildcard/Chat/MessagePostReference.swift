@@ -8,7 +8,9 @@ struct MessagePostReferenceView: View {
     /// Messages show it on its own tinted card; the composer places it on glass.
     var tinted = true
     private var accent: Color { HomeStyle.accent(post.accent ?? "blue") }
-    private var label: String { "For you post: \(post.title)" + (post.available ? "" : ". No longer in For you") }
+    private var label: String {
+        post.available ? String(localized: "For you post: \(post.title)") : String(localized: "For you post: \(post.title). No longer in For you")
+    }
 
     var body: some View {
         if let action, post.available {
@@ -28,7 +30,7 @@ struct MessagePostReferenceView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Label("For you post", systemImage: HomeStyle.symbol(post.icon ?? "star"))
                     .manrope(.caption2, weight: .semibold).foregroundStyle(accent).lineLimit(1)
-                Text(post.title.isEmpty ? "Post" : post.title).manrope(.caption, weight: .semibold).lineLimit(1)
+                Text(post.title.isEmpty ? String(localized: "Post") : post.title).manrope(.caption, weight: .semibold).lineLimit(1)
                 if let text = post.text, !text.isEmpty {
                     Text(text).manrope(.caption).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.leading)
                 }

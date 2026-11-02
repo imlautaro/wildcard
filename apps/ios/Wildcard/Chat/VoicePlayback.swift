@@ -16,7 +16,8 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
     private(set) var playbackRate: Float = 1
     private var preferenceOwner: String?
     private var ratePreferenceKey: String? { preferenceOwner.map { "voicePlaybackRate.v1.\($0)" } }
-    var playbackRateLabel: String { playbackRate == 1.5 ? "1.5x" : playbackRate == 2 ? "2x" : "1x" }
+    /// Locale-formatted ("1.5x" in English, "1,5x" in Spanish).
+    var playbackRateLabel: String { String(localized: "\(Double(playbackRate).formatted(.number.precision(.fractionLength(0...1))))x") }
     private var player: AVAudioPlayer?
     private var ownsAudioSession = false
     private var isMessage = false
@@ -362,7 +363,7 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
         }
         // The sender photo is shown at the user's request; names and transcripts stay private.
         var info: [String: Any] = [
-            MPMediaItemPropertyTitle: "Voice message",
+            MPMediaItemPropertyTitle: String(localized: "Voice message"),
             MPMediaItemPropertyPlaybackDuration: player.duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: player.currentTime,
             MPNowPlayingInfoPropertyPlaybackRate: player.isPlaying ? playbackRate : 0,

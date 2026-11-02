@@ -9,21 +9,14 @@ const busy = ref(false);
 const error = ref<string | null>(null);
 const consented = computed(() => shareMemory.value && (!chats.contributorModel.value || contributorConsent.value));
 
-const contactDisclosure = [
-  'Start your own empty chat with this contact. Its memories and presence are shared with other participants. Your schedules and notifications belong to you.',
-  'The contact can share remembered facts about you with other participants. Your original messages and attachments are private. You can keep your chat private in the contact’s details. The creator can remove your access.',
-];
-const historyClause = "Members can read the group's history, including messages sent before they joined, unless they were added without earlier messages.";
-const groupDisclosure = [
-  `Group members can see your name and profile photo. ${historyClause} Contacts use what group members have told them, except chats kept private. What you say here can become a shared memory, used in this group and in private chats with its members, never in other groups. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.`,
-];
-// An invitation without earlier messages replaces the full-history clause.
+const { t } = useI18n();
+// An invitation without earlier messages has its own disclosure without the full-history sentence.
 const withoutHistory = (invitation: GroupInvitation) => invitation.includeHistory === 0 || invitation.includeHistory === false;
 const disclosure = computed(() => {
   const current = selected.value;
   if (!current) return [];
-  if (current.kind === 'contact') return contactDisclosure;
-  return withoutHistory(current.invitation) ? groupDisclosure.map(text => text.replace(historyClause, "You'll see messages from when you join.")) : groupDisclosure;
+  if (current.kind === 'contact') return [t('auth.sharing.contactDisclosure1'), t('auth.sharing.contactDisclosure2')];
+  return [withoutHistory(current.invitation) ? t('auth.invitations.groupDisclosureWithoutHistory') : t('auth.invitations.groupDisclosure')];
 });
 
 function choose(next: typeof selected.value) {
@@ -67,48 +60,46 @@ onMounted(() => chats.refresh());
 </script>
 
 <template>
-  <PageBar title="Invitations" back="/contacts" always-back />
+  <PageBar :title="t('auth.invitations.title')" back="/contacts" always-back />
   <div class="page">
     <div class="page-inner">
       <AppNotice v-if="error">{{ error }}</AppNotice>
       <template v-if="selected">
-        <div class="group-title">Join {{ selected.kind === 'contact' ? selected.invitation.contactName : selected.invitation.groupName }}</div>
+        <div class="group-title">{{ t('auth.sharing.joinName', { name: selected.kind === 'contact' ? selected.invitation.contactName : selected.invitation.groupName }) }}</div>
         <ConsentFields
           v-model:share-memory="shareMemory" v-model:contributor-consent="contributorConsent"
           :contributor-model="chats.contributorModel.value"
           :disclosure="disclosure"
-          :memory-label="selected.kind === 'contact' ? 'I agree to shared memories' : 'I accept shared memory'"
-          :contributor-note="selected.kind === 'contact'
-            ? 'Messages and shared memories sent to Meta may be used to train its models.'
-            : 'This installation uses Meta\'s Contributor model. Group messages and shared memories sent to Meta may be used for model training.'"
+          :memory-label="selected.kind === 'contact' ? t('auth.sharing.contactMemory') : t('auth.invitations.groupMemory')"
+          :contributor-note="selected.kind === 'contact' ? t('auth.sharing.contactContributorNote') : t('auth.invitations.groupContributorNote')"
         />
         <div class="actions-row">
-          <AppButton variant="text" @click="selected = null">Cancel</AppButton>
-          <AppButton :disabled="!consented || busy" @click="accept">Accept</AppButton>
+          <AppButton variant="text" @click="selected = null">{{ t('common.cancel') }}</AppButton>
+          <AppButton :disabled="!consented || busy" @click="accept">{{ t('auth.invitations.accept') }}</AppButton>
         </div>
       </template>
 
-      <AppListGroup title="Contact invitations">
-        <div v-if="!chats.contactInvitations.value.length" class="text-block">No contact invitations</div>
+      <AppListGroup :title="t('auth.invitations.contactTitle')">
+        <div v-if="!chats.contactInvitations.value.length" class="text-block">{{ t('auth.invitations.contactEmpty') }}</div>
         <div v-for="invitation in chats.contactInvitations.value" :key="invitation.id" class="field">
           <span class="two-line">
             <strong>{{ invitation.contactName }}</strong>
-            <span class="small">From {{ invitation.senderName }} · Expires {{ fullDate(invitation.expiresAt) }}</span>
+            <span class="small">{{ t('auth.invitations.contactMeta', { sender: invitation.senderName, date: fullDate(invitation.expiresAt) }) }}</span>
           </span>
-          <button type="button" class="link-button danger" :disabled="busy" @click="decline('contact', invitation.id)">Decline</button>
-          <button type="button" class="link-button" :disabled="busy" @click="choose({ kind: 'contact', invitation })">Review</button>
+          <button type="button" class="link-button danger" :disabled="busy" @click="decline('contact', invitation.id)">{{ t('auth.invitations.decline') }}</button>
+          <button type="button" class="link-button" :disabled="busy" @click="choose({ kind: 'contact', invitation })">{{ t('auth.invitations.review') }}</button>
         </div>
       </AppListGroup>
 
-      <AppListGroup title="Group invitations">
-        <div v-if="!chats.groupInvitations.value.length" class="text-block">No group invitations</div>
+      <AppListGroup :title="t('auth.invitations.groupTitle')">
+        <div v-if="!chats.groupInvitations.value.length" class="text-block">{{ t('auth.invitations.groupEmpty') }}</div>
         <div v-for="invitation in chats.groupInvitations.value" :key="invitation.id" class="field">
           <span class="two-line">
             <strong>{{ invitation.groupName }}</strong>
-            <span class="small">Invited by {{ invitation.senderName }} · Expires {{ fullDate(invitation.expiresAt) }}</span>
+            <span class="small">{{ t('auth.invitations.groupMeta', { sender: invitation.senderName, date: fullDate(invitation.expiresAt) }) }}</span>
           </span>
-          <button type="button" class="link-button danger" :disabled="busy" @click="decline('group', invitation.id)">Decline</button>
-          <button type="button" class="link-button" :disabled="busy" @click="choose({ kind: 'group', invitation })">Review</button>
+          <button type="button" class="link-button danger" :disabled="busy" @click="decline('group', invitation.id)">{{ t('auth.invitations.decline') }}</button>
+          <button type="button" class="link-button" :disabled="busy" @click="choose({ kind: 'group', invitation })">{{ t('auth.invitations.review') }}</button>
         </div>
       </AppListGroup>
     </div>

@@ -1,46 +1,31 @@
 <script setup lang="ts">
 // The landing page. Copy follows what the app actually does (docs/*.md); see
-// docs/site.md before changing a claim.
-const comparison = [
-  { typical: 'Waits for you to type', wildcard: 'Reaches out first, then gives you space' },
-  { typical: 'One assistant for everything', wildcard: 'A cast of contacts, each with a personality' },
-  { typical: 'One memory for every chat, or none', wildcard: 'A separate memory for each contact' },
-  { typical: 'Just you and a text box', wildcard: 'Shared with family, friends and groups' },
-];
+// docs/site.md before changing a claim. Messages: i18n/locales/<locale>.json.
+const { t } = useI18n();
+const localePath = useLocalePath();
 
-const faqs = [
-  {
-    q: 'Is Wildcard trying to replace ChatGPT, Claude or Grok?',
-    a: 'No. Wildcard won\'t drive your browser, run code in a sandbox or spin up a virtual machine, and it isn\'t trying to. Keep using those tools for that. Wildcard is about the part of AI that feels like people: contacts with their own personality and memory, who stay in touch and work alongside you and the people around you.',
-  },
-  {
-    q: 'Who can see what I tell a contact?',
-    a: 'Your contacts are yours. If you share one, it remembers short facts across its participants (never full transcripts), and both sides agree to that when the contact is shared. Turn on "Keep this chat private" and nothing from that chat leaves it: not to groups, not to other people, not to your other contacts.',
-  },
-  {
-    q: 'Will my contacts spam me?',
-    a: 'No. They reach out when there\'s something worth saying, around the times you usually reply. If one message goes unanswered, they wait for you to write back. You can switch initiative off for any contact, or just tell it to stop.',
-  },
-  {
-    q: 'How do contacts learn about each other\'s projects?',
-    a: 'Only when you allow it. Link two contacts, or turn on "Contacts share with each other", and you can ask one to check with another. Private chats and chats with connected tools are never part of it.',
-  },
-  {
-    q: 'Can I really run it myself?',
-    a: 'Yes. Wildcard is open source and built entirely on Cloudflare: Workers, D1, R2 and Workflows. Deploy it to your own Cloudflare account and bring your own API keys: a Meta Model API key for the models, and optionally ElevenLabs for voices and Apple keys for iPhone notifications.',
-  },
-  {
-    q: 'Where does it run?',
-    a: 'Wildcard has a native iPhone app and a web app. A few native extras, like timers and alarms on someone else\'s phone, are iPhone only.',
-  },
-];
+const comparison = computed(() => [
+  { typical: t('why.rows.waitTypical'), wildcard: t('why.rows.waitWildcard') },
+  { typical: t('why.rows.castTypical'), wildcard: t('why.rows.castWildcard') },
+  { typical: t('why.rows.memoryTypical'), wildcard: t('why.rows.memoryWildcard') },
+  { typical: t('why.rows.sharedTypical'), wildcard: t('why.rows.sharedWildcard') },
+]);
 
-const metaModels = [
-  { name: 'Muse Spark', use: 'Conversations, memory and initiative' },
-  { name: 'Muse Image', use: 'Portraits, selfies and pictures' },
-  { name: 'Muse Voice Transcribe', use: 'Voice message transcripts' },
-  { name: 'SAM', use: 'Sticker cutouts' },
-];
+const faqs = computed(() => [
+  { q: t('faq.replaceQ'), a: t('faq.replaceA') },
+  { q: t('faq.privacyQ'), a: t('faq.privacyA') },
+  { q: t('faq.spamQ'), a: t('faq.spamA') },
+  { q: t('faq.sharingQ'), a: t('faq.sharingA') },
+  { q: t('faq.selfHostQ'), a: t('faq.selfHostA') },
+  { q: t('faq.platformsQ'), a: t('faq.platformsA') },
+]);
+
+const metaModels = computed(() => [
+  { name: 'Muse Spark', use: t('meta.spark') },
+  { name: 'Muse Image', use: t('meta.image') },
+  { name: 'Muse Voice Transcribe', use: t('meta.transcribe') },
+  { name: 'SAM', use: t('meta.sam') },
+]);
 </script>
 
 <template>
@@ -49,25 +34,22 @@ const metaModels = [
     <section class="hero">
       <div class="container split hero-split">
         <div class="hero-copy">
-          <span class="chip primary hero-chip"><SiteIcon name="meta" />Powered by Meta AI models · Open source</span>
-          <h1 class="hero-title">AI contacts that text you&nbsp;first.</h1>
-          <p class="lead">
-            Create a cast of AI contacts, each with their own name, face, personality and memory.
-            They reach out on their own, remember what matters, and work together with you and the people you love.
-          </p>
+          <span class="chip primary hero-chip"><SiteIcon name="meta" />{{ t('hero.chip') }}</span>
+          <h1 class="hero-title">{{ t('hero.title') }}</h1>
+          <p class="lead">{{ t('hero.lead') }}</p>
           <div class="hero-actions">
-            <AppButton :to="site.appUrl" size="large" trailing-icon="chevron">Meet your first contacts</AppButton>
-            <AppButton to="/#open-source" variant="tonal" size="large">Self-host it</AppButton>
+            <AppButton :to="site.appUrl" size="large" trailing-icon="chevron">{{ t('hero.meet') }}</AppButton>
+            <AppButton :to="`${localePath('/')}#open-source`" variant="tonal" size="large">{{ t('hero.selfHost') }}</AppButton>
           </div>
         </div>
         <HeroScene />
       </div>
       <div class="container">
         <ul class="proof">
-          <li><SiteIcon name="memory" /><span><strong>One memory per contact</strong><small>No cross-chat bleed</small></span></li>
-          <li><SiteIcon name="chat" /><span><strong>Proactive by design</strong><small>They message first</small></span></li>
-          <li><SiteIcon name="users" /><span><strong>Shareable</strong><small>Family, friends, groups</small></span></li>
-          <li><SiteIcon name="code" /><span><strong>Open source</strong><small>Self-host on Cloudflare</small></span></li>
+          <li><SiteIcon name="memory" /><span><strong>{{ t('hero.proof.memory') }}</strong><small>{{ t('hero.proof.memoryText') }}</small></span></li>
+          <li><SiteIcon name="chat" /><span><strong>{{ t('hero.proof.proactive') }}</strong><small>{{ t('hero.proof.proactiveText') }}</small></span></li>
+          <li><SiteIcon name="users" /><span><strong>{{ t('hero.proof.shareable') }}</strong><small>{{ t('hero.proof.shareableText') }}</small></span></li>
+          <li><SiteIcon name="code" /><span><strong>{{ t('hero.proof.openSource') }}</strong><small>{{ t('hero.proof.openSourceText') }}</small></span></li>
         </ul>
       </div>
     </section>
@@ -76,20 +58,17 @@ const metaModels = [
     <section id="why" class="section">
       <div class="container">
         <div class="section-head centered reveal">
-          <span class="eyebrow">Why Wildcard</span>
-          <h2 class="section-title">Chatbots wait. <span class="soft">Contacts show up.</span></h2>
-          <p class="lead">
-            Most AI apps are a single text box that answers when asked. Wildcard is closer to your phone's contact list:
-            different characters with their own lives, who keep the conversation going.
-          </p>
+          <span class="eyebrow">{{ t('why.eyebrow') }}</span>
+          <h2 class="section-title">{{ t('why.title') }} <span class="soft">{{ t('why.titleSoft') }}</span></h2>
+          <p class="lead">{{ t('why.lead') }}</p>
         </div>
         <div class="compare reveal">
           <div class="compare-col typical">
-            <h3>A typical AI chat</h3>
+            <h3>{{ t('why.typical') }}</h3>
             <ul><li v-for="row in comparison" :key="row.typical"><SiteIcon name="close" />{{ row.typical }}</li></ul>
           </div>
           <div class="compare-col wildcard">
-            <h3><WildcardMark :size="24" />A Wildcard contact</h3>
+            <h3><WildcardMark :size="24" />{{ t('why.wildcard') }}</h3>
             <ul><li v-for="row in comparison" :key="row.wildcard"><SiteIcon name="check" />{{ row.wildcard }}</li></ul>
           </div>
         </div>
@@ -100,32 +79,23 @@ const metaModels = [
     <section id="memory" class="section">
       <div class="container">
         <div class="section-head reveal">
-          <span class="eyebrow"><SiteIcon name="brain" />Memory, without the mess</span>
-          <h2 class="section-title">One memory per contact. <span class="soft">Zero cross&#8209;contamination.</span></h2>
-          <p class="lead">
-            In most AI apps, memory is all or nothing. Turn it off and every chat starts from zero. Turn it on and
-            everything you've ever said leaks into everything else: your bakery launch shows up in your training plan,
-            your exam in your business ideas.
-          </p>
-          <p class="lead">
-            In Wildcard, <strong>each contact keeps its own memory</strong>. Theo knows your bakery launch inside out. Ivy
-            knows your marathon plan. Pixel knows you're stuck on entropy. None of them brings up the others' business,
-            unless you want them to.
-          </p>
+          <span class="eyebrow"><SiteIcon name="brain" />{{ t('memory.eyebrow') }}</span>
+          <h2 class="section-title">{{ t('memory.title') }} <span class="soft">{{ t('memory.titleSoft') }}</span></h2>
+          <p class="lead">{{ t('memory.lead') }}</p>
+          <i18n-t keypath="memory.separate" tag="p" class="lead" scope="global">
+            <template #emphasis><strong>{{ t('memory.separateEmphasis') }}</strong></template>
+          </i18n-t>
         </div>
         <MemoryScene class="reveal" />
 
         <div class="split flip catch-split">
           <div class="reveal">
-            <span class="eyebrow"><SiteIcon name="transfer" />Catch me up</span>
-            <h3 class="sub-title">New contact? Ask it to check with one who already knows.</h3>
-            <p class="lead">
-              Want Nova to help with a project Theo has followed for weeks? Just say so. Nova asks Theo, gets the context it
-              needs and picks up where you left off, without you repeating a word.
-            </p>
+            <span class="eyebrow"><SiteIcon name="transfer" />{{ t('catchUp.eyebrow') }}</span>
+            <h3 class="sub-title">{{ t('catchUp.title') }}</h3>
+            <p class="lead">{{ t('catchUp.lead') }}</p>
             <div class="points">
-              <div class="point"><span class="disc"><SiteIcon name="lock" /></span><h3>Only with your permission</h3><p>Contacts talk to each other when you've linked them, or turned on sharing between your contacts.</p></div>
-              <div class="point"><span class="disc"><SiteIcon name="incognito" /></span><h3>Private stays private</h3><p>Mark a chat private and no other contact, group or person can learn from it.</p></div>
+              <div class="point"><span class="disc"><SiteIcon name="lock" /></span><h3>{{ t('catchUp.permission') }}</h3><p>{{ t('catchUp.permissionText') }}</p></div>
+              <div class="point"><span class="disc"><SiteIcon name="incognito" /></span><h3>{{ t('catchUp.private') }}</h3><p>{{ t('catchUp.privateText') }}</p></div>
             </div>
           </div>
           <CatchUpScene class="reveal delay-1" />
@@ -137,16 +107,10 @@ const metaModels = [
     <section id="initiative" class="section">
       <div class="container split">
         <div class="reveal">
-          <span class="eyebrow"><SiteIcon name="bell" />Initiative</span>
-          <h2 class="section-title">They text first.</h2>
-          <p class="lead">
-            Wildcard contacts don't sit in silence until you type. They follow up on the interview you mentioned, share a
-            thought they had later, or check in after a quiet week, timed to when you're usually around.
-          </p>
-          <p class="lead">
-            And they read the room: if a message goes unanswered, they wait until you write back. Switch initiative off for
-            any contact, any time.
-          </p>
+          <span class="eyebrow"><SiteIcon name="bell" />{{ t('initiative.eyebrow') }}</span>
+          <h2 class="section-title">{{ t('initiative.title') }}</h2>
+          <p class="lead">{{ t('initiative.lead') }}</p>
+          <p class="lead">{{ t('initiative.lead2') }}</p>
         </div>
         <InitiativeScene class="reveal delay-1" />
       </div>
@@ -156,17 +120,12 @@ const metaModels = [
     <section id="contacts" class="section">
       <div class="container split flip">
         <div class="reveal">
-          <span class="eyebrow"><SiteIcon name="palette" />Create anyone</span>
-          <h2 class="section-title">A cast as varied as your group chat.</h2>
-          <p class="lead">
-            Cartoon characters, anime heroes, 3D movie stars, realistic people, adorable pets, or a style you describe
-            yourself, like retro video game robots. Wildcard generates the portrait, a name and a personality, all yours to
-            edit.
-          </p>
-          <p class="lead">
-            Fine-tune who they are with <strong>17 temperament sliders</strong>, from humor and warmth to patience, how
-            often they reach out and how many emoji they use.
-          </p>
+          <span class="eyebrow"><SiteIcon name="palette" />{{ t('create.eyebrow') }}</span>
+          <h2 class="section-title">{{ t('create.title') }}</h2>
+          <p class="lead">{{ t('create.lead') }}</p>
+          <i18n-t keypath="create.sliders" tag="p" class="lead" scope="global">
+            <template #count><strong>{{ t('create.slidersCount') }}</strong></template>
+          </i18n-t>
         </div>
         <CreatorScene class="reveal delay-1" />
       </div>
@@ -176,19 +135,15 @@ const metaModels = [
     <section id="together" class="section">
       <div class="container">
         <div class="section-head reveal">
-          <span class="eyebrow"><SiteIcon name="handshake" />Better together</span>
-          <h2 class="section-title">Share a contact. <span class="soft">Keep your own chat.</span></h2>
-          <p class="lead">
-            Invite your partner, a friend or your family to one of your contacts. Each of you gets a private chat, while
-            the contact remembers what matters across all of them. Tell it something in the morning, and it can answer
-            your sister about it in the afternoon.
-          </p>
+          <span class="eyebrow"><SiteIcon name="handshake" />{{ t('together.eyebrow') }}</span>
+          <h2 class="section-title">{{ t('together.title') }} <span class="soft">{{ t('together.titleSoft') }}</span></h2>
+          <p class="lead">{{ t('together.lead') }}</p>
         </div>
         <SharedScene class="reveal" />
         <div class="points three">
-          <div class="point reveal"><span class="disc"><SiteIcon name="memory" /></span><h3>Shared memory, private chats</h3><p>Everyone talks to the contact on their own. It remembers facts, never full transcripts.</p></div>
-          <div class="point reveal delay-1"><span class="disc"><SiteIcon name="chat" /></span><h3>Pass a message along</h3><p>"Tell Sam I'm bringing dinner." The contact delivers it to Sam's private chat, signed with your name.</p></div>
-          <div class="point reveal delay-2"><span class="disc"><SiteIcon name="alarm" /></span><h3>Timers on their phone</h3><p>With their permission, a shared contact can set a timer or alarm on the other person's iPhone.</p></div>
+          <div class="point reveal"><span class="disc"><SiteIcon name="memory" /></span><h3>{{ t('together.memory') }}</h3><p>{{ t('together.memoryText') }}</p></div>
+          <div class="point reveal delay-1"><span class="disc"><SiteIcon name="chat" /></span><h3>{{ t('together.relay') }}</h3><p>{{ t('together.relayText') }}</p></div>
+          <div class="point reveal delay-2"><span class="disc"><SiteIcon name="alarm" /></span><h3>{{ t('together.timers') }}</h3><p>{{ t('together.timersText') }}</p></div>
         </div>
       </div>
     </section>
@@ -197,19 +152,15 @@ const metaModels = [
     <section id="groups" class="section">
       <div class="container">
         <div class="section-head reveal">
-          <span class="eyebrow"><SiteIcon name="users" />Groups</span>
-          <h2 class="section-title">Group chats where the AI pulls its weight.</h2>
-          <p class="lead">
-            Put several contacts in a group, and invite real people too, who can bring their own contacts along. Ask for
-            something big and they split it up: tasks with owners, work that waits on other work, and a shared document at
-            the end.
-          </p>
+          <span class="eyebrow"><SiteIcon name="users" />{{ t('groups.eyebrow') }}</span>
+          <h2 class="section-title">{{ t('groups.title') }}</h2>
+          <p class="lead">{{ t('groups.lead') }}</p>
         </div>
         <GroupScene class="reveal" />
         <div class="points three">
-          <div class="point reveal"><span class="disc neutral"><SiteIcon name="brain" /></span><h3>Everyone remembers the group</h3><p>What's said in a group stays with every contact in it, and only reaches the private chats of its members.</p></div>
-          <div class="point reveal delay-1"><span class="disc neutral"><SiteIcon name="routing" /></span><h3>Context moves like it would with people</h3><p>Ask a contact in private what the group decided. Allow it, and it can bring your private context to the group.</p></div>
-          <div class="point reveal delay-2"><span class="disc neutral"><SiteIcon name="shield" /></span><h3>You set the boundaries</h3><p>Sharing private chats with a group is off by default, per contact and per group.</p></div>
+          <div class="point reveal"><span class="disc neutral"><SiteIcon name="brain" /></span><h3>{{ t('groups.remember') }}</h3><p>{{ t('groups.rememberText') }}</p></div>
+          <div class="point reveal delay-1"><span class="disc neutral"><SiteIcon name="routing" /></span><h3>{{ t('groups.context') }}</h3><p>{{ t('groups.contextText') }}</p></div>
+          <div class="point reveal delay-2"><span class="disc neutral"><SiteIcon name="shield" /></span><h3>{{ t('groups.boundaries') }}</h3><p>{{ t('groups.boundariesText') }}</p></div>
         </div>
       </div>
     </section>
@@ -218,16 +169,10 @@ const metaModels = [
     <section id="for-you" class="section">
       <div class="container split">
         <div class="reveal">
-          <span class="eyebrow"><SiteIcon name="stars" />For you</span>
-          <h2 class="section-title">A feed written by your contacts.</h2>
-          <p class="lead">
-            As your contacts learn what you care about, they keep a feed of updates just for you: headlines, scores,
-            prices, charts and trackers, refreshed automatically. Mention you're eyeing a new MacBook Pro, and the news
-            shows up there.
-          </p>
-          <p class="lead">
-            Comment on a post and the contact who wrote it answers, or picks the conversation up with you in private.
-          </p>
+          <span class="eyebrow"><SiteIcon name="stars" />{{ t('forYou.eyebrow') }}</span>
+          <h2 class="section-title">{{ t('forYou.title') }}</h2>
+          <p class="lead">{{ t('forYou.lead') }}</p>
+          <p class="lead">{{ t('forYou.lead2') }}</p>
         </div>
         <FeedScene class="reveal delay-1" />
       </div>
@@ -237,16 +182,10 @@ const metaModels = [
     <section id="connectors" class="section">
       <div class="container split flip">
         <div class="reveal">
-          <span class="eyebrow"><SiteIcon name="plug" />Connectors</span>
-          <h2 class="section-title">Give each contact its own tools.</h2>
-          <p class="lead">
-            Connect MCP servers once, then decide which contact gets what. Your work contact reads Linear, your coach sees
-            your calendar, your study partner keeps notes in Notion. Over 30 connectors are ready to add, or bring your
-            own server.
-          </p>
-          <p class="lead">
-            Every tool starts off until you approve it, and a chat with connected tools stays out of shared memory.
-          </p>
+          <span class="eyebrow"><SiteIcon name="plug" />{{ t('connectors.eyebrow') }}</span>
+          <h2 class="section-title">{{ t('connectors.title') }}</h2>
+          <p class="lead">{{ t('connectors.lead') }}</p>
+          <p class="lead">{{ t('connectors.lead2') }}</p>
         </div>
         <ConnectorScene class="reveal delay-1" />
       </div>
@@ -256,8 +195,8 @@ const metaModels = [
     <section id="more" class="section">
       <div class="container">
         <div class="section-head reveal">
-          <span class="eyebrow"><SiteIcon name="widget" />And the little things</span>
-          <h2 class="section-title">Everything that makes them feel real.</h2>
+          <span class="eyebrow"><SiteIcon name="widget" />{{ t('more.eyebrow') }}</span>
+          <h2 class="section-title">{{ t('more.title') }}</h2>
         </div>
         <MoreGrid />
       </div>
@@ -268,8 +207,8 @@ const metaModels = [
       <div class="container">
         <div class="meta-band reveal">
           <div>
-            <span class="eyebrow"><SiteIcon name="meta" />Powered by Meta AI models</span>
-            <h2 class="sub-title">Conversations, portraits, voice notes and stickers, all on Meta's models.</h2>
+            <span class="eyebrow"><SiteIcon name="meta" />{{ t('common.poweredByMeta') }}</span>
+            <h2 class="sub-title">{{ t('meta.title') }}</h2>
           </div>
           <ul class="models">
             <li v-for="model in metaModels" :key="model.name"><strong>{{ model.name }}</strong><small>{{ model.use }}</small></li>
@@ -282,23 +221,20 @@ const metaModels = [
     <section id="open-source" class="section">
       <div class="container split">
         <div class="reveal">
-          <span class="eyebrow"><SiteIcon name="code" />Open source</span>
-          <h2 class="section-title">Yours to run, down to the last Worker.</h2>
-          <p class="lead">
-            Wildcard is open source and built entirely on Cloudflare. Deploy the whole thing to your own Cloudflare account
-            with your own API keys. Your contacts, your data, your infrastructure.
-          </p>
+          <span class="eyebrow"><SiteIcon name="code" />{{ t('common.openSource') }}</span>
+          <h2 class="section-title">{{ t('openSource.title') }}</h2>
+          <p class="lead">{{ t('openSource.lead') }}</p>
           <ul class="stack-list">
-            <li><SiteIcon name="cloudflare" /><span><strong>Cloudflare</strong><small>Workers, D1, R2, Workflows and Cron</small></span></li>
-            <li><SiteIcon name="meta" /><span><strong>Meta Model API key</strong><small>Required: conversations, images and transcripts</small></span></li>
-            <li><SiteIcon name="elevenlabs" class="mono" /><span><strong>ElevenLabs key</strong><small>Optional: contact voices</small></span></li>
-            <li><SiteIcon name="apple" class="mono" /><span><strong>Apple developer keys</strong><small>Optional: iPhone notifications and native extras</small></span></li>
+            <li><SiteIcon name="cloudflare" /><span><strong>Cloudflare</strong><small>{{ t('openSource.cloudflareText') }}</small></span></li>
+            <li><SiteIcon name="meta" /><span><strong>{{ t('openSource.metaKey') }}</strong><small>{{ t('openSource.metaKeyText') }}</small></span></li>
+            <li><SiteIcon name="elevenlabs" class="mono" /><span><strong>{{ t('openSource.elevenLabsKey') }}</strong><small>{{ t('openSource.elevenLabsKeyText') }}</small></span></li>
+            <li><SiteIcon name="apple" class="mono" /><span><strong>{{ t('openSource.appleKeys') }}</strong><small>{{ t('openSource.appleKeysText') }}</small></span></li>
           </ul>
           <div class="hero-actions">
-            <AppButton v-if="site.repositoryPublic" :to="site.repositoryUrl" variant="filled" size="large" trailing-icon="open-in-new">View the source</AppButton>
-            <span v-else class="chip soon-chip"><SiteIcon name="code" />Repository going public soon</span>
+            <AppButton v-if="site.repositoryPublic" :to="site.repositoryUrl" variant="filled" size="large" trailing-icon="open-in-new">{{ t('openSource.viewSource') }}</AppButton>
+            <span v-else class="chip soon-chip"><SiteIcon name="code" />{{ t('openSource.soon') }}</span>
           </div>
-          <p class="footnote">Model and voice usage is billed by those providers under your own keys.</p>
+          <p class="footnote">{{ t('openSource.footnote') }}</p>
         </div>
         <TerminalScene class="reveal delay-1" />
       </div>
@@ -308,8 +244,8 @@ const metaModels = [
     <section id="faq" class="section">
       <div class="container faq-wrap">
         <div class="section-head reveal">
-          <span class="eyebrow"><SiteIcon name="question" />FAQ</span>
-          <h2 class="section-title">Good questions.</h2>
+          <span class="eyebrow"><SiteIcon name="question" />{{ t('faq.eyebrow') }}</span>
+          <h2 class="section-title">{{ t('faq.title') }}</h2>
         </div>
         <div class="faq reveal">
           <details v-for="faq in faqs" :key="faq.q">
@@ -327,10 +263,10 @@ const metaModels = [
           <div class="cta-cast" aria-hidden="true">
             <ContactAvatar v-for="who in (['mila', 'theo', 'ivy', 'pixel', 'nova', 'coco'] as const)" :key="who" :who="who" :size="64" />
           </div>
-          <h2 class="section-title">Meet your first five contacts.</h2>
-          <p class="lead">Sign up, tell Wildcard a little about yourself, and it introduces you to five contacts made for you.</p>
+          <h2 class="section-title">{{ t('cta.title') }}</h2>
+          <p class="lead">{{ t('cta.lead') }}</p>
           <div class="hero-actions centered">
-            <AppButton :to="site.appUrl" size="large" trailing-icon="chevron">Get started</AppButton>
+            <AppButton :to="site.appUrl" size="large" trailing-icon="chevron">{{ t('common.getStarted') }}</AppButton>
           </div>
         </div>
       </div>

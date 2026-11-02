@@ -5,10 +5,11 @@ recorded in [workers-build-paths.json](workers-build-paths.json). Keep root `/` 
 include the shared Nuxt layer `packages/ui/*` alongside this app and root build
 inputs. Preview builds remain disabled.
 
-`apps/site` is the public marketing website: one long landing page in English that
-presents what is unique about Wildcard (independent contacts with their own memory,
-initiative, sharing, groups, For you, per-contact connectors, open source and
-self-hosting) with animated scenes built in HTML, CSS and JavaScript. It has no API
+`apps/site` is the public marketing website: one long landing page, in English at `/`
+and Spanish at `/es` (see [Localization](#localization)), that presents what is
+unique about Wildcard (independent contacts with their own memory, initiative,
+sharing, groups, For you, per-contact connectors, open source and self-hosting) with
+animated scenes built in HTML, CSS and JavaScript. It has no API
 access, no account state and no network-backed data, so the session caching rules
 in [caching](caching.md) don't apply: every page is static.
 
@@ -16,8 +17,11 @@ in [caching](caching.md) don't apply: every page is static.
 
 | Path | Contents |
 | --- | --- |
-| `nuxt.config.ts` | Extends the [design system layer](design-system.md) (`../../packages/ui`), adds site-only icons to the bundle, prerenders every page. |
-| `app/utils/site.ts` | Installation-specific values: web app URL, repository URL, `repositoryPublic`, `iosUrl`, section navigation. |
+| `nuxt.config.ts` | Extends the [design system layer](design-system.md) (`../../packages/ui`), adds site-only icons to the bundle, configures `@nuxtjs/i18n`, prerenders every page. |
+| `app/utils/site.ts` | Installation-specific values: the site's own URL (`url`, used for canonical and hreflang links), web app URL, repository URL, `repositoryPublic`, `iosUrl`, section anchors. |
+| `i18n/locales/<locale>.json`, `i18n/i18n.config.ts` | All copy, one file per locale; vue-i18n options (English fallback). |
+| `app/app.vue` | Per-locale head: title, description, Open Graph, `<html lang>`, hreflang, canonical. |
+| `app/components/LanguageSwitch.vue` | Language links in the nav (compact) and the footer. |
 | `app/utils/cast.ts` | The example contacts used in the scenes, each labeled with a real portrait style. |
 | `app/utils/siteIcons.ts` | Solar and `logos` glyphs outside the shared registry, rendered with `SiteIcon`. |
 | `app/composables/useScene.ts` | The scene timeline: beats with delays, play while visible, pause off screen, loop, final state for SSR and reduced motion. |
@@ -63,9 +67,45 @@ generator with esbuild (stubbing `cloudflare:workflows`), calls the paid image A
 once per portrait and resizes with macOS `sips`. Set `PORTRAITS_OUT` to try a prompt
 without replacing the site's files. Add new contacts to `app/utils/cast.ts`.
 
+## Localization
+
+The site uses `@nuxtjs/i18n` with the `prefix_except_default` strategy: English
+(`en`, `lang="en-US"`) is the default at `/`, Spanish (`es`) lives at `/es`. Both are
+prerendered (`nitro.prerender.routes`); `autoSubfolderIndex: false` emits `es.html`, so
+the Worker's `auto-trailing-slash` asset handling serves `/es` itself instead of
+redirecting it to `/es/`. Each page carries absolute hreflang alternates (`en`,
+`en-US`, `es`, `x-default`), a canonical URL and `og:locale` built from `site.url`
+(`i18n.baseUrl`). Section links use `localePath('/')`, so they become `/es#memory` on
+the Spanish page; links to the web app and the repository are the same in every
+language. The 404 page is a client-rendered shell and follows the URL's locale.
+
+- **Switcher:** the nav shows a globe link to the other language (its name appears
+  from 1180 px; below that it stays available to screen readers and as a tooltip);
+  the footer lists English and Español with `aria-current` on the current one. Each
+  link carries `lang` and `hreflang`, and is a plain prerendered link, so it works
+  without JavaScript.
+- **Browser language:** `detectBrowserLanguage` redirects a first visit to `/` once,
+  in the browser (the site is static, so there is no server redirect), to `/es` when
+  the browser prefers Spanish. Visiting a locale or using the switcher stores it in
+  the `wildcard_site_locale` cookie on the site's origin, and the root then follows
+  the cookie. During that redirect Vue reports a hydration mismatch in the console
+  (the English HTML hydrates in Spanish just before navigating); it has no visible
+  effect.
+- **Messages:** `apps/site/i18n/locales/en.json` and `es.json`, keyed by section and
+  scene. To add a string, add the same key to both files and use `t('key')` in the
+  component (inside `computed` for data arrays, so a language switch re-renders the
+  nav and footer, which don't remount). Messages contain no HTML: for emphasis or
+  links inside a sentence, use `<i18n-t keypath="…">` with named slots. Escape
+  `@ { } |` as `{'@'}`. Names of the example contacts, brands, model names and
+  terminal commands stay untranslated.
+- **Spanish copy** follows the same copy rules below and the conventions in
+  [localization](localization.md): neutral Latin American Spanish with "tú".
+- **Validation:** `node scripts/check-locales.mjs apps/site` (key parity, message
+  syntax, placeholders, unknown keys) and `npm run typecheck:site`.
+
 ## Copy rules
 
-The copy must stay true to the feature guides. Notable limits it respects:
+The copy must stay true to the feature guides. They apply to every language. Notable limits it respects:
 
 - Initiative is for private chats, stops after one unanswered spontaneous message,
   and can be turned off per contact ([initiative](initiative.md)).
@@ -98,6 +138,16 @@ static-assets-only Worker (`wildcard-site`) released by its own Workers Builds
 project; it needs no binding, secret or migration.
 
 ## Verification
+
+November 1, 2026 (localization): `node scripts/check-locales.mjs apps/site` and
+`npm run typecheck:site` pass. `npm run build:site` prerendered `index.html` and
+`es.html` with the expected `lang`, hreflang, canonical, title and description; the
+English page's visible text matched the previous build except for the language
+switcher. Under `wrangler dev`, `/` and `/es` answer 200 and `/es/` redirects to `/es`.
+In headless Chrome: no console errors on `/` or `/es` (390 px to 1280 px, no
+horizontal overflow, the nav fits from 900 px), the switcher moves between locales
+and sets the cookie, a Spanish browser is redirected from `/` to `/es` (with the
+hydration warning described above), and a stored English choice is kept.
 
 November 1, 2026: `npm run typecheck:site` passes. The page ran under `nuxt dev` and
 was captured in headless Chrome at 1280 px and 390 px, light and dark, with reduced

@@ -49,7 +49,7 @@ final class ContactInvitationsStore {
     }
 
     private func beginMutation() throws {
-        guard !isMutating else { throw AuthAPI.Failure.rejected("Please wait for the current invitation change to finish.") }
+        guard !isMutating else { throw AuthAPI.Failure.rejected(String(localized: "Please wait for the current invitation change to finish.")) }
         revision += 1
         isMutating = true
         refreshedAt = nil

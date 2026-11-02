@@ -4,8 +4,13 @@
 // shared Wildcard UI layer; main.css holds only this app's own styles.
 import { connectorLogos } from './app/utils/connectorLogos';
 
+// Message files under i18n/locales/<code>/<area>.json; every area exists for every locale.
+const messageAreas = ['common', 'errors', 'auth', 'account', 'contacts', 'chat', 'groups', 'updates', 'miniapps'];
+const localeFiles = [['en', 'en-US', 'English'], ['es', 'es', 'Español']] as const;
+
 export default defineNuxtConfig({
   extends: ['../../packages/ui'],
+  modules: ['@nuxtjs/i18n'],
   compatibilityDate: '2026-10-26',
   ssr: false,
   devtools: { enabled: false },
@@ -37,6 +42,17 @@ export default defineNuxtConfig({
         'Permissions-Policy': 'camera=(), microphone=(self), geolocation=()',
       } },
     },
+  },
+  // English is the default and the fallback for any missing message. No URL prefix:
+  // app/plugins/locale.ts picks the locale from the saved Language preference or
+  // the browser languages (docs/localization.md). Each area owns one message file.
+  i18n: {
+    strategy: 'no_prefix',
+    defaultLocale: 'en',
+    detectBrowserLanguage: false,
+    locales: localeFiles.map(([code, language, name]) => ({
+      code, language, name, files: messageAreas.map(area => `${code}/${area}.json`),
+    })),
   },
   typescript: { strict: true },
 });

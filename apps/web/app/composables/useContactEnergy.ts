@@ -47,7 +47,7 @@ export function useContactEnergy(contactID: MaybeRefOrGetter<string>) {
       } catch (failure) {
         if (failure instanceof ApiError && failure.status === 404) {
           forgetContactEnergy(id);
-          error.value = 'This contact is no longer available to its creator.';
+          error.value = translate('contacts.energy.unavailable');
         } else {
           error.value = errorMessage(failure);
         }

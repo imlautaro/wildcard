@@ -14,8 +14,8 @@ export function base64(bytes: Uint8Array) {
 
 // The API validates magic bytes and accepts these formats up to 5 MB.
 export async function draftAttachment(file: File): Promise<DraftAttachment> {
-  if (!attachmentTypes.includes(file.type)) throw new Error('Choose a JPEG, PNG, GIF, WebP, or PDF.');
-  if (file.size > attachmentLimit) throw new Error('Choose a file up to 5 MB.');
+  if (!attachmentTypes.includes(file.type)) throw new Error(translate('chat.files.unsupported'));
+  if (file.size > attachmentLimit) throw new Error(translate('chat.files.tooLarge'));
   const name = (file.name || 'attachment').replace(/[\u0000-\u001f\u007f/\\]/g, '_').slice(0, 180);
   const data = base64(new Uint8Array(await file.arrayBuffer()));
   const previewURL = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
@@ -24,13 +24,13 @@ export async function draftAttachment(file: File): Promise<DraftAttachment> {
 
 // Apply EXIF orientation and bound the in-memory editor source, as on iOS.
 export async function photoCropSource(file: File): Promise<ImageBitmap> {
-  if (!file.type.startsWith('image/')) throw new Error('Choose an image.');
+  if (!file.type.startsWith('image/')) throw new Error(translate('chat.image.chooseImage'));
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => {
-    throw new Error('This image could not be read. Choose a JPEG, PNG, or WebP photo.');
+    throw new Error(translate('chat.image.unreadable'));
   });
   if (Math.min(bitmap.width, bitmap.height) < 64) {
     bitmap.close();
-    throw new Error('Choose a photo at least 64 pixels wide and tall.');
+    throw new Error(translate('chat.image.tooSmall'));
   }
   const factor = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
   if (factor === 1) return bitmap;
@@ -47,7 +47,7 @@ export async function photoCropSource(file: File): Promise<ImageBitmap> {
 export async function croppedJPEG(bitmap: ImageBitmap, x: number, y: number, side: number): Promise<Blob> {
   const tolerance = 1e-6;
   if (![x, y, side].every(Number.isFinite) || side <= 0 || x < -tolerance || y < -tolerance
-    || x + side > bitmap.width + tolerance || y + side > bitmap.height + tolerance) throw new Error('Adjust the photo crop and try again.');
+    || x + side > bitmap.width + tolerance || y + side > bitmap.height + tolerance) throw new Error(translate('chat.files.cropInvalid'));
   // Clamp floating-point drift at the source edges.
   x = Math.max(0, Math.min(bitmap.width - side, x));
   y = Math.max(0, Math.min(bitmap.height - side, y));
@@ -56,7 +56,7 @@ export async function croppedJPEG(bitmap: ImageBitmap, x: number, y: number, sid
   canvas.width = size;
   canvas.height = size;
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('Photo editing is unavailable in this browser.');
+  if (!context) throw new Error(translate('chat.files.photoEditingUnavailable'));
   context.fillStyle = '#ffffff';
   context.fillRect(0, 0, size, size);
   context.drawImage(bitmap, x, y, side, side, 0, 0, size, size);
@@ -64,5 +64,5 @@ export async function croppedJPEG(bitmap: ImageBitmap, x: number, y: number, sid
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
     if (blob && blob.size <= photoLimit) return blob;
   }
-  throw new Error('Choose a smaller photo.');
+  throw new Error(translate('chat.image.tooLarge'));
 }

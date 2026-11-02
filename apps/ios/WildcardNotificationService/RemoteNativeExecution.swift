@@ -28,7 +28,7 @@ enum RemoteNativeExecution {
               let deviceID = content.userInfo["deviceID"] as? String,
               actionID.count <= 100, ticket.count == 64,
               let local = RemoteNativeShared.configuration, local.userID == userID, local.deviceID == deviceID,
-              !(local.contacts[contactID] ?? []).isEmpty else { return result(content, "Remote action unavailable on this iPhone.") }
+              !(local.contacts[contactID] ?? []).isEmpty else { return result(content, String(localized: "Remote action unavailable on this iPhone.")) }
         let executionID = UUID().uuidString.lowercased()
         var claimed = false
         var stage = "claim"
@@ -39,17 +39,17 @@ enum RemoteNativeExecution {
             let rejection: String?
             if command.userID != userID || command.contactID != contactID || command.deviceID != deviceID
                 || command.id != actionID || command.executionID != executionID {
-                rejection = "The remote request does not match this iPhone."
+                rejection = String(localized: "The remote request does not match this iPhone.")
             } else if !["timer", "alarm"].contains(command.kind) {
-                rejection = "This remote action is not supported."
+                rejection = String(localized: "This remote action is not supported.")
             } else if command.expiresAt <= Date.now.timeIntervalSince1970 * 1000 {
-                rejection = "The remote request expired before scheduling. Ask for a new timer or alarm."
+                rejection = String(localized: "The remote request expired before scheduling. Ask for a new timer or alarm.")
             } else if command.fireAt <= Date.now.timeIntervalSince1970 * 1000 {
-                rejection = "The requested timer or alarm deadline has already passed."
+                rejection = String(localized: "The requested timer or alarm deadline has already passed.")
             } else if !allowed(userID: userID, deviceID: deviceID, contactID: contactID, kind: command.kind) {
-                rejection = "Remote access for this contact or tool is disabled on this iPhone."
+                rejection = String(localized: "Remote access for this contact or tool is disabled on this iPhone.")
             } else if Task.isCancelled {
-                rejection = "Notification processing was interrupted before scheduling."
+                rejection = String(localized: "Notification processing was interrupted before scheduling.")
             } else { rejection = nil }
             if let rejection {
                 logger.notice("Remote action rejected before scheduling: \(rejection, privacy: .public)")
@@ -82,19 +82,26 @@ enum RemoteNativeExecution {
             _ = try await AlarmManager.shared.schedule(id: UUID(uuidString: executionID)!, configuration: configuration)
             do {
                 _ = try await update(actionID: actionID, ticket: ticket, deviceID: deviceID, executionID: executionID, status: "completed")
-                return result(content, "\(payload.title) · Scheduled on this iPhone")
+                return result(content, String(localized: "\(payload.title) · Scheduled on this iPhone"))
             } catch {
                 // Scheduling already succeeded. Never schedule again because acknowledgement failed.
-                return result(content, "\(payload.title) · Scheduled; server confirmation unavailable")
+                return result(content, String(localized: "\(payload.title) · Scheduled; server confirmation unavailable"))
             }
         } catch {
             let failure = error as NSError
             let domain = String(failure.domain.prefix(100))
             logger.error("Remote action failed at \(stage, privacy: .public); domain=\(domain, privacy: .public), code=\(failure.code, privacy: .public)")
             if claimed { _ = try? await update(actionID: actionID, ticket: ticket, deviceID: deviceID, executionID: executionID, status: "unknown") }
+            // Shown in the notification body; the log above keeps the raw stage identifier.
+            let stageLabel = switch stage {
+            case "claim": String(localized: "claim", comment: "Remote timer processing stage, inserted into “Unable to confirm this timer or alarm during %@.”")
+            case "validation": String(localized: "validation", comment: "Remote timer processing stage, inserted into “Unable to confirm this timer or alarm during %@.”")
+            case "handoff": String(localized: "handoff", comment: "Remote timer processing stage, inserted into “Unable to confirm this timer or alarm during %@.”")
+            default: stage
+            }
             return result(content, stage == "schedule"
-                ? "AlarmKit could not confirm scheduling in the notification extension (\(domain), \(failure.code)). Check Wildcard before retrying."
-                : "Unable to confirm this timer or alarm during \(stage). Check Wildcard before requesting another.")
+                ? String(localized: "AlarmKit could not confirm scheduling in the notification extension (\(domain), \(failure.code)). Check Wildcard before retrying.")
+                : String(localized: "Unable to confirm this timer or alarm during \(stageLabel). Check Wildcard before requesting another."))
         }
     }
     private static func authorizationLabel() -> String {

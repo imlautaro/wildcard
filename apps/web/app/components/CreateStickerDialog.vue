@@ -7,10 +7,11 @@ import type { Sticker } from '~/utils/types';
 // change. Every async step checks `attempt`, so a response that arrives after Cancel or
 // "Choose another photo" is ignored.
 const emit = defineEmits<{ close: []; created: [sticker: Sticker] }>();
+const { t } = useI18n();
 const stickers = useStickers();
 type Step = 'choose' | 'processing' | 'preview' | 'failed';
 const step = ref<Step>('choose');
-const processing = ref('Preparing photo…');
+const processing = ref<'preparing' | 'cutting'>('preparing');
 const problem = ref<string | null>(null);
 const noSubject = ref(false);
 const subject = ref('');
@@ -27,7 +28,7 @@ let attempt = 0;
 let controller: AbortController | null = null;
 let ticker: ReturnType<typeof setInterval> | undefined;
 
-const subjectProblem = computed(() => subject.value.trim() && !subjectPattern.test(subject.value.trim()) ? 'Use 2–40 letters, for example “dog”.' : null);
+const subjectProblem = computed(() => subject.value.trim() && !subjectPattern.test(subject.value.trim()) ? t('chat.createSticker.subjectProblem') : null);
 const waitSeconds = computed(() => Math.max(0, Math.ceil((retryAt.value - now.value) / 1000)));
 const hasSource = ref(false);
 const canRetry = computed(() => hasSource.value && waitSeconds.value === 0 && !subjectProblem.value);
@@ -72,7 +73,7 @@ async function choose(event: Event) {
   release();
   const token = attempt;
   problem.value = null; noSubject.value = false; subject.value = ''; emoji.value = ''; retryAt.value = 0;
-  processing.value = 'Preparing photo…';
+  processing.value = 'preparing';
   step.value = 'processing';
   try {
     const prepared = await stickerSourceJPEG(file);
@@ -96,7 +97,7 @@ async function cutOut() {
   const name = subject.value.trim();
   releasePreview();
   problem.value = null;
-  processing.value = 'Cutting out the subject… This takes a few seconds.';
+  processing.value = 'cutting';
   step.value = 'processing';
   try {
     const blob = await apiBlob('stickers/cutout', { body: source, query: { subject: name && subjectPattern.test(name) ? name : undefined }, signal: mine.signal });
@@ -138,41 +139,41 @@ onBeforeUnmount(release);
 </script>
 
 <template>
-  <AppSheet title="Create sticker" wide @close="cancel">
+  <AppSheet :title="$t('chat.createSticker.title')" wide @close="cancel">
     <input ref="picker" type="file" class="visually-hidden" tabindex="-1" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" @change="choose">
 
     <div v-if="step === 'choose'" class="sticker-step">
-      <p>Pick a photo. Wildcard cuts out the subject and makes it a sticker you can send in any chat.</p>
-      <p class="small muted">The photo is sent to Wildcard only to cut it out; nothing is stored until you save the sticker.</p>
-      <AppButton icon="image" @click="picker?.click()">Choose photo</AppButton>
+      <p>{{ $t('chat.createSticker.intro') }}</p>
+      <p class="small muted">{{ $t('chat.createSticker.privacy') }}</p>
+      <AppButton icon="image" @click="picker?.click()">{{ $t('chat.createSticker.choose') }}</AppButton>
     </div>
 
     <div v-else-if="step === 'processing'" class="sticker-step" role="status">
-      <AppLoading :label="processing" />
+      <AppLoading :label="$t(`chat.createSticker.${processing}`)" />
     </div>
 
     <div v-else-if="step === 'failed'" class="sticker-step">
       <AppNotice>{{ problem }}</AppNotice>
-      <AppTextField v-if="noSubject" v-model="subject" label="What should be cut out?" autocomplete="off" maxlength="40" :error="subjectProblem" supporting="Optional: 2–40 letters, for example “dog” or “guitar”." @keydown.enter.prevent="canRetry && cutOut()" />
-      <p v-if="waitSeconds" class="small muted" role="status">You can try again in {{ waitSeconds }} s.</p>
+      <AppTextField v-if="noSubject" v-model="subject" :label="$t('chat.createSticker.subjectLabel')" autocomplete="off" maxlength="40" :error="subjectProblem" :supporting="$t('chat.createSticker.subjectSupporting')" @keydown.enter.prevent="canRetry && cutOut()" />
+      <p v-if="waitSeconds" class="small muted" role="status">{{ $t('chat.createSticker.retryIn', { seconds: waitSeconds }) }}</p>
     </div>
 
     <div v-else class="sticker-step">
-      <div class="checkerboard"><img v-if="preview" :src="preview.url" alt="Sticker preview with a transparent background"></div>
+      <div class="checkerboard"><img v-if="preview" :src="preview.url" :alt="$t('chat.createSticker.previewAlt')"></div>
       <StickerEmojiPicker v-model="emoji" />
       <AppNotice v-if="problem">{{ problem }}</AppNotice>
-      <p v-if="waitSeconds" class="small muted" role="status">You can save again in {{ waitSeconds }} s.</p>
+      <p v-if="waitSeconds" class="small muted" role="status">{{ $t('chat.createSticker.saveIn', { seconds: waitSeconds }) }}</p>
     </div>
 
     <template #actions>
-      <AppButton variant="text" @click="cancel">Cancel</AppButton>
+      <AppButton variant="text" @click="cancel">{{ $t('common.cancel') }}</AppButton>
       <template v-if="step === 'failed'">
-        <AppButton variant="tonal" @click="chooseAnother">Choose another photo</AppButton>
-        <AppButton :disabled="!canRetry" @click="cutOut">Try again</AppButton>
+        <AppButton variant="tonal" @click="chooseAnother">{{ $t('chat.createSticker.chooseAnother') }}</AppButton>
+        <AppButton :disabled="!canRetry" @click="cutOut">{{ $t('common.tryAgain') }}</AppButton>
       </template>
       <template v-else-if="step === 'preview'">
-        <AppButton variant="tonal" :disabled="saving" @click="chooseAnother">Choose another photo</AppButton>
-        <AppButton :loading="saving" :disabled="!emoji || waitSeconds > 0" @click="save">Save</AppButton>
+        <AppButton variant="tonal" :disabled="saving" @click="chooseAnother">{{ $t('chat.createSticker.chooseAnother') }}</AppButton>
+        <AppButton :loading="saving" :disabled="!emoji || waitSeconds > 0" @click="save">{{ $t('common.save') }}</AppButton>
       </template>
     </template>
   </AppSheet>

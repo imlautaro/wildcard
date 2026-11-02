@@ -116,8 +116,8 @@ onBeforeUnmount(() => {
     <slot />
     <!-- Hover actions float beside the message, so they take no space in the conversation. -->
     <div class="message-actions">
-      <button v-if="replyable" class="reaction-trigger" aria-label="Reply to message" @click="reply"><AppIcon name="reply" /></button>
-      <button class="reaction-trigger" aria-label="React to message" :aria-expanded="open" @click="open = !open"><AppIcon name="add-reaction" /></button>
+      <button v-if="replyable" class="reaction-trigger" :aria-label="$t('chat.reactions.replyToMessage')" @click="reply"><AppIcon name="reply" /></button>
+      <button class="reaction-trigger" :aria-label="$t('chat.reactions.reactToMessage')" :aria-expanded="open" @click="open = !open"><AppIcon name="add-reaction" /></button>
     </div>
     <div v-if="summaries.length" class="reaction-badges">
       <button v-for="item in summaries" :key="item.emoji" class="reaction-badge" :class="{ selected: own === item.emoji }"
@@ -129,15 +129,15 @@ onBeforeUnmount(() => {
         <div class="reaction-scrim" @click="open = false" @contextmenu="open = false">
           <div v-if="position" class="reaction-spotlight" :style="{ top: `${position.message.top}px`, left: `${position.message.left}px`, width: `${position.message.width}px`, height: `${position.message.height}px` }" />
         </div>
-        <div ref="bar" class="reaction-panel reaction-picker" role="group" aria-label="Message reactions" :style="boxStyle(position?.bar)">
-          <button v-for="emoji in reactionEmojis" :key="emoji" :disabled="cache.busy.includes(key)" :aria-pressed="own === emoji" :aria-label="`React ${emoji}`" @click="choose(own === emoji ? null : emoji)">{{ emoji }}</button>
+        <div ref="bar" class="reaction-panel reaction-picker" role="group" :aria-label="$t('chat.reactions.picker')" :style="boxStyle(position?.bar)">
+          <button v-for="emoji in reactionEmojis" :key="emoji" :disabled="cache.busy.includes(key)" :aria-pressed="own === emoji" :aria-label="$t('chat.reactions.react', { emoji })" @click="choose(own === emoji ? null : emoji)">{{ emoji }}</button>
         </div>
-        <div v-if="hasMenu" ref="menu" class="menu reaction-menu" role="group" aria-label="Message actions" :style="boxStyle(position?.menu)">
-          <AppMenuItem v-if="replyable" icon="reply" @click="reply">Reply</AppMenuItem>
-          <AppMenuItem v-if="saveSticker" icon="sticker" @click="keepSticker">Save sticker</AppMenuItem>
-          <AppMenuItem v-if="receiptGroupID" icon="check" @click="open = false; showsReaders = true">Message info</AppMenuItem>
-          <AppMenuItem v-if="voice" icon="file" @click="viewTranscript">View transcript</AppMenuItem>
-          <AppMenuItem v-if="own" icon="close" :disabled="cache.busy.includes(key)" @click="choose(null)">Remove reaction</AppMenuItem>
+        <div v-if="hasMenu" ref="menu" class="menu reaction-menu" role="group" :aria-label="$t('chat.reactions.actions')" :style="boxStyle(position?.menu)">
+          <AppMenuItem v-if="replyable" icon="reply" @click="reply">{{ $t('chat.reactions.reply') }}</AppMenuItem>
+          <AppMenuItem v-if="saveSticker" icon="sticker" @click="keepSticker">{{ $t('chat.reactions.saveSticker') }}</AppMenuItem>
+          <AppMenuItem v-if="receiptGroupID" icon="check" @click="open = false; showsReaders = true">{{ $t('chat.reactions.messageInfo') }}</AppMenuItem>
+          <AppMenuItem v-if="voice" icon="file" @click="viewTranscript">{{ $t('chat.reactions.viewTranscript') }}</AppMenuItem>
+          <AppMenuItem v-if="own" icon="close" :disabled="cache.busy.includes(key)" @click="choose(null)">{{ $t('chat.reactions.remove') }}</AppMenuItem>
           <template v-if="rows.length">
             <hr v-if="hasActions" class="menu-divider">
             <div class="reaction-people"><div v-for="row in rows" :key="row.actorID">{{ row.emoji }} {{ row.name }}</div></div>
@@ -148,7 +148,7 @@ onBeforeUnmount(() => {
     <GroupMessageInfo v-if="receiptGroupID && showsReaders" :group-i-d="receiptGroupID" :message-i-d="messageID" @close="showsReaders = false" />
     <VoiceTranscriptDialog v-if="voice && showsTranscript" :transcript="transcript ?? null" @close="showsTranscript = false" />
     <div v-if="cache.pending[key] && cache.errors[key]" role="status" class="reaction-error">
-      {{ cache.errors[key] }} <button class="link-button" @click="choose(cache.pending[key]!.emoji)">Retry reaction</button>
+      {{ cache.errors[key] }} <button class="link-button" @click="choose(cache.pending[key]!.emoji)">{{ $t('chat.reactions.retry') }}</button>
     </div>
   </div>
 </template>

@@ -614,6 +614,6 @@ final class ContactsStore {
     }
 
     private struct MutationInProgress: LocalizedError {
-        var errorDescription: String? { "Please wait for the current change to finish." }
+        var errorDescription: String? { String(localized: "Please wait for the current change to finish.") }
     }
 }

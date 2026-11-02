@@ -124,7 +124,7 @@ function axis(points: { x: string }[]) {
           :disabled="!!busyAction && action.kind === 'remote'" @click="press(action)">{{ action.label === '-' ? '−' : action.label }}</button>
       </div>
       <button v-for="action in long(block.items)" :key="action.id" type="button" class="mini-button" data-ripple :class="{ primary: action.id === primary(block.items), danger: action.style === 'destructive' }"
-        :disabled="!!busyAction && action.kind === 'remote'" @click="press(action)">{{ busyAction === action.id && action.kind === 'remote' ? 'Working…' : action.label }}</button>
+        :disabled="!!busyAction && action.kind === 'remote'" @click="press(action)">{{ busyAction === action.id && action.kind === 'remote' ? $t('miniapps.view.working') : action.label }}</button>
     </div>
     <div v-else-if="block.kind === 'stats'" class="mini-stats">
       <div v-for="(stat, index) in block.items" :key="index" class="mini-stat">
@@ -141,7 +141,7 @@ function axis(points: { x: string }[]) {
     <div v-else-if="block.item.type === 'grid'" class="mini-grid" :style="{ '--columns': block.item.columns }">
       <template v-for="(card, index) in block.item.children" :key="index">
         <button v-if="card.type === 'action'" type="button" class="mini-card mini-card-button" data-ripple :class="{ danger: card.style === 'destructive' }"
-          :disabled="!!busyAction && card.kind === 'remote'" @click="press(card)">{{ busyAction === card.id && card.kind === 'remote' ? 'Working…' : card.label }}</button>
+          :disabled="!!busyAction && card.kind === 'remote'" @click="press(card)">{{ busyAction === card.id && card.kind === 'remote' ? $t('miniapps.view.working') : card.label }}</button>
         <button v-else-if="card.type === 'tile'" type="button" class="mini-card mini-tile" data-ripple :disabled="!card.tab && !card.action" @click="openTile(card)">
           <AppIcon :name="miniAppIcon(card.icon)" class="icon" />
           <span v-if="card.value !== null || card.state" class="value">{{ shown(card) }}</span>
@@ -184,7 +184,7 @@ function axis(points: { x: string }[]) {
         <text x="21" y="21">{{ miniAppValue(progress(block.item), block.item.format, block.item.currency) }}</text>
       </svg>
       <strong>{{ block.item.label }}</strong>
-      <span class="caption">{{ block.item.caption ?? `of ${miniAppValue(block.item.goal, block.item.format, block.item.currency)}` }}</span>
+      <span class="caption">{{ block.item.caption ?? $t('miniapps.view.ofGoal', { goal: miniAppValue(block.item.goal, block.item.format, block.item.currency) }) }}</span>
     </div></div>
     <div v-else-if="block.item.type === 'progress'" class="group"><div class="mini-progress">
       <div class="top"><strong>{{ block.item.label }}</strong><span :class="{ met: progress(block.item) >= block.item.goal }">{{ miniAppValue(progress(block.item), block.item.format, block.item.currency) }} / {{ miniAppValue(block.item.goal, block.item.format, block.item.currency) }}</span></div>
@@ -205,7 +205,7 @@ function axis(points: { x: string }[]) {
         <span v-if="row.value !== null" class="value">{{ miniAppValue(row.value, block.item.format, block.item.currency) }}</span>
         <AppButton v-for="action in block.item.actions ?? []" :key="action.id" variant="tonal" size="small" class="mini-row-action" :disabled="pending || !!busyAction"
           @click="runRow(action, { state: block.item.state, index })">{{ busyAction === action.id ? '…' : action.label }}</AppButton>
-        <AppIconButton v-if="block.item.removable" icon="close" label="Delete" class="remove" @click="emit('edit', { state: block.item.state, op: 'remove_item', index })" />
+        <AppIconButton v-if="block.item.removable" icon="close" :label="$t('common.delete')" class="remove" @click="emit('edit', { state: block.item.state, op: 'remove_item', index })" />
       </div>
     </div>
     <div v-else-if="block.item.type === 'toggle'" class="group">
@@ -237,15 +237,15 @@ function axis(points: { x: string }[]) {
         <template v-if="rowTarget(block.item, row.index)">
           <AppButton v-for="action in block.item.actions ?? []" :key="action.id" variant="tonal" size="small" class="mini-row-action" :disabled="pending || !!busyAction"
             @click="runRow(action, rowTarget(block.item, row.index)!)">{{ busyAction === action.id ? '…' : action.label }}</AppButton>
-          <AppIconButton v-if="block.item.removable" icon="close" label="Delete" class="remove" :disabled="pending" @click="emit('edit', { state: block.item.state!, op: 'remove_item', index: row.index! })" />
+          <AppIconButton v-if="block.item.removable" icon="close" :label="$t('common.delete')" class="remove" :disabled="pending" @click="emit('edit', { state: block.item.state!, op: 'remove_item', index: row.index! })" />
         </template>
       </div>
     </div>
     <div v-else-if="block.item.type === 'chart'" class="group mini-chart">
       <strong v-if="block.item.title" class="small">{{ block.item.title }}</strong>
-      <div v-if="!block.item.points.length" class="text-block">Nothing to chart.</div>
+      <div v-if="!block.item.points.length" class="text-block">{{ $t('miniapps.view.nothingToChart') }}</div>
       <div v-else-if="block.item.kind === 'pie'" class="mini-pie">
-        <svg viewBox="0 0 42 42" role="img" :aria-label="block.item.title ?? 'Chart'">
+        <svg viewBox="0 0 42 42" role="img" :aria-label="block.item.title ?? $t('miniapps.view.chart')">
           <circle v-for="(slice, index) in slices(block.item.points)" :key="index" cx="21" cy="21" :r="ringRadius" fill="none" :stroke="slice.color" stroke-width="7"
             :stroke-dasharray="`${slice.share} ${100 - slice.share}`" :stroke-dashoffset="25 - slice.offset"><title>{{ slice.point.x }}: {{ miniAppValue(slice.point.y, block.item.format, block.item.currency) }}</title></circle>
         </svg>
@@ -254,7 +254,7 @@ function axis(points: { x: string }[]) {
         </ul>
       </div>
       <template v-else>
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="block.item.title ?? 'Chart'">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="block.item.title ?? $t('miniapps.view.chart')">
           <rect v-for="(bar, index) in chart(block.item.points, block.item.kind).bars" :key="index" :x="bar.x" :y="bar.y" :width="bar.width" :height="Math.max(bar.height, 0.5)" rx="1.2" fill="var(--accent)">
             <title>{{ bar.point.x }}: {{ miniAppValue(bar.point.y, block.item.format, block.item.currency) }}</title>
           </rect>
@@ -269,7 +269,7 @@ function axis(points: { x: string }[]) {
     <!-- An action with fields is a button that opens its form in a sheet. -->
     <div v-else-if="block.item.type === 'action'" class="mini-buttons">
       <button type="button" class="mini-button" data-ripple :class="{ danger: block.item.style === 'destructive' }" :disabled="!!busyAction" @click="press(block.item as Action)">
-        {{ busyAction === block.item.id && block.item.kind === 'remote' ? 'Working…' : block.item.label }}
+        {{ busyAction === block.item.id && block.item.kind === 'remote' ? $t('miniapps.view.working') : block.item.label }}
       </button>
     </div>
   </template>

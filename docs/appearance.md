@@ -2,7 +2,8 @@
 
 Both clients let the user pick the app theme regardless of the system setting.
 **Account → Appearance** offers **System** (default, follows the device), **Light**
-and **Dark**. The choice applies immediately.
+and **Dark**. The choice applies immediately. The **Language** row next to it is
+described in [localization](localization.md).
 
 ## Storage and scope
 

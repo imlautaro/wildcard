@@ -36,7 +36,7 @@ struct HomeView: View {
         case updates
         case account
 
-        var title: String { self == .updates ? "For you" : self == .chats ? "Chats" : "Account" }
+        var title: String { self == .updates ? String(localized: "For you") : self == .chats ? String(localized: "Chats") : String(localized: "Account") }
     }
 
     @State private var nativeRouteError: String?
@@ -183,7 +183,7 @@ struct HomeView: View {
                         found = page.contacts.first { $0.agentID == agentID }
                         cursor = page.nextCursor; pages += 1
                     } while found == nil && cursor != nil && !Task.isCancelled && pages < 40
-                    guard let found else { nativeRouteError = "This contact link requires an existing invitation and accepted access."; native.route = nil; return }
+                    guard let found else { nativeRouteError = String(localized: "This contact link requires an existing invitation and accepted access."); native.route = nil; return }
                     id = found.id
                     try await contacts.refreshContact(id: id, using: auth, force: true)
                 } else { return }

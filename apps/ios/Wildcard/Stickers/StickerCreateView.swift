@@ -86,13 +86,13 @@ final class StickerCreateModel {
         task = Task {
             do {
                 guard let data = try await item.loadTransferable(type: Data.self), !data.isEmpty else {
-                    throw AuthAPI.Failure.rejected("This photo could not be loaded. Choose another one.")
+                    throw AuthAPI.Failure.rejected(String(localized: "This photo could not be loaded. Choose another one."))
                 }
                 try Task.checkCancellation()
                 let jpeg = await Task.detached(priority: .userInitiated) { StickerSourceImage.jpeg(from: data) }.value
                 try Task.checkCancellation()
                 guard mine == generation else { return }
-                guard let jpeg else { throw AuthAPI.Failure.rejected("This photo could not be prepared. Choose another one.") }
+                guard let jpeg else { throw AuthAPI.Failure.rejected(String(localized: "This photo could not be prepared. Choose another one.")) }
                 source = jpeg
                 await runCutout(subject: nil, generation: mine, using: auth)
             } catch is CancellationError { }
@@ -124,7 +124,7 @@ final class StickerCreateModel {
             let image = await Task.detached(priority: .userInitiated) { PrivateImageCache.decode(bytes, maxPixelSize: 1024) }.value
             try Task.checkCancellation()
             guard mine == generation, auth.user?.id == accountID else { return }
-            guard let image else { throw AuthAPI.Failure.rejected("The cutout could not be displayed. Please try again.") }
+            guard let image else { throw AuthAPI.Failure.rejected(String(localized: "The cutout could not be displayed. Please try again.")) }
             png = bytes
             cutout = image
             noSubject = false
@@ -307,7 +307,7 @@ struct StickerCreateView: View {
     }
 
     private var photoButton: some View {
-        let title = model.canRetry || model.noSubject ? "Choose another photo" : "Choose photo"
+        let title: LocalizedStringKey = model.canRetry || model.noSubject ? "Choose another photo" : "Choose photo"
         return PhotosPicker(selection: $item, matching: .images, preferredItemEncoding: .compatible) {
             Label(title, systemImage: "photo.on.rectangle")
                 .frame(maxWidth: .infinity)

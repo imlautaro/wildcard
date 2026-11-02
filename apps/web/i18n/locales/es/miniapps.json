@@ -1,0 +1,215 @@
+{
+  "miniapps": {
+    "issues": {
+      "TOOL_ERROR": "El servicio conectado devolvió un error.",
+      "RESULT_NOT_JSON": "El servicio conectado no devolvió datos estructurados.",
+      "TOOL_CHANGED": "Una herramienta cambió. Vuelve a revisar esta miniapp.",
+      "INVALID_ARGUMENTS": "La solicitud ya no coincide con la herramienta.",
+      "AUTHORIZATION_REQUIRED": "Vuelve a autorizar la conexión en Conexiones.",
+      "CONNECTION_UNAVAILABLE": "No se pudo acceder al servicio conectado.",
+      "NOT_AUTHORIZED": "Esta herramienta ya no está permitida.",
+      "PATH_NOT_FOUND": "Estos datos no estaban en el resultado.",
+      "NOT_A_LIST": "Se esperaba una lista de elementos.",
+      "TOO_MANY_ITEMS": "Hay demasiados elementos para mostrar.",
+      "TOO_MANY_GROUPS": "Hay demasiados grupos para mostrar.",
+      "RESULT_TOO_LARGE": "Este resultado es demasiado grande para mostrarlo.",
+      "unknown": "No se pudo cargar esta parte."
+    },
+    "list": {
+      "title": "Miniapps",
+      "emptyTitle": "Todavía no hay miniapps",
+      "enabled": "Activada",
+      "needsReview": "Requiere revisión",
+      "contactEmpty": "Pídele a este contacto en el chat que cree una con tus conexiones, por ejemplo: “Hazme una miniapp con los gastos de la semana pasada.”",
+      "contactFooter": "Las miniapps usan las conexiones de este contacto y solo tú puedes verlas.",
+      "groupEmpty": "Pídele a un contacto de este grupo que cree una, por ejemplo: “Haznos una lista de compras compartida.”",
+      "groupFooter": "Las miniapps de grupo son compartidas: todos los miembros ven y editan los mismos valores guardados. No pueden usar conexiones."
+    },
+    "card": {
+      "needsReview": "Revísala para activarla",
+      "needsReapproval": "Revisa los cambios para continuar",
+      "enabled": "Miniapp"
+    },
+    "screen": {
+      "fallbackTitle": "Miniapp",
+      "refresh": "Actualizar",
+      "disable": "Desactivar",
+      "delete": "Eliminar miniapp",
+      "deleteConfirm": "¿Eliminar {title}? El contacto puede volver a crearla más tarde.",
+      "unavailableTitle": "Miniapp no disponible",
+      "unavailableText": "Es posible que se haya eliminado.",
+      "actionDone": "{label}: listo.",
+      "actionFailed": "{label} falló. El servicio no confirmó nada.",
+      "actionUnknown": "{label}: no se sabe el resultado. Revisa el servicio antes de intentarlo de nuevo.",
+      "needsReapproval": "Una conexión o herramienta cambió desde que activaste esta miniapp. Vuelve a revisarla para seguir usándola.",
+      "needsReview": "Tu contacto creó esta miniapp. Revisa lo que puede hacer antes de activarla.",
+      "reads": "Se ejecutan cada vez que abres o actualizas",
+      "noReads": "Sin lecturas automáticas.",
+      "writes": "Solo cuando tocas y confirmas",
+      "permissionNote": "Estas herramientas usan los permisos de tu conexión, y el servicio decide qué hace cada una. Los datos se cargan solo para ti; no se envían al contacto ni se guardan en la memoria. Editar la miniapp requiere revisarla de nuevo.",
+      "enable": "Activar miniapp",
+      "loadingData": "Cargando datos…",
+      "updated": "Actualizado a las {time}",
+      "tabs": "Pestañas"
+    },
+    "form": {
+      "choose": "Elegir…",
+      "noItems": "Todavía no hay elementos"
+    },
+    "view": {
+      "working": "Procesando…",
+      "nothingToChart": "No hay nada que graficar.",
+      "chart": "Gráfico",
+      "ofGoal": "de {goal}"
+    },
+    "lesson": {
+      "questions": "{count} pregunta | {count} preguntas",
+      "start": "Empezar",
+      "hearts": "{count} corazón | {count} corazones",
+      "outOfHearts": "Sin corazones",
+      "complete": "¡Lección completada!",
+      "score": "{correct} de {total} correctas",
+      "xp": "+{count} XP",
+      "typeAnswer": "Escribe tu respuesta",
+      "correct": "¡Correcto!",
+      "correctAnswer": "Respuesta correcta:",
+      "check": "Comprobar"
+    },
+    "timer": {
+      "start": "Iniciar",
+      "pause": "Pausar",
+      "resume": "Reanudar",
+      "reset": "Restablecer"
+    },
+    "tasks": {
+      "title": "Tareas",
+      "newList": "Nueva lista",
+      "newListTitle": "Título de la nueva lista",
+      "intro": "Las listas guardan el trabajo compartido de este chat. Los contactos pueden crearlas, tomar tareas, esperar bloqueos e informar resultados. También puedes pedirlo en el chat, por ejemplo: “Divide la planificación del viaje en tareas.”",
+      "canceled": "Cancelada",
+      "working": "Trabajando",
+      "markDone": "Marcar “{title}” como hecha",
+      "markNotDone": "Marcar “{title}” como no hecha",
+      "nextStep": "Próximo paso: {text}",
+      "blocked": "Bloqueada: {text}",
+      "deliverable": "Entregable: {title}",
+      "aDocument": "un documento",
+      "revisionRound": "Ronda de revisión {round}/{limit}",
+      "revisionRoundFeedback": "Ronda de revisión {round}/{limit}: {feedback}",
+      "task": "Tarea",
+      "unassigned": "Sin asignar",
+      "memberYou": "{name} (Tú)",
+      "waitingFor": "Esperando {tasks}",
+      "aRemovedTask": "una tarea eliminada",
+      "waitsFor": "Espera a",
+      "addTask": "Añadir una tarea",
+      "addTaskTo": "Añadir una tarea a {list}",
+      "cancelList": "Cancelar lista",
+      "cancelListConfirm": "¿Cancelar “{title}” y todas sus tareas sin terminar? Los contactos dejarán de trabajar en ellas.",
+      "status": {
+        "open": "Por hacer",
+        "in_progress": "En curso",
+        "done": "Hecha",
+        "canceled": "Cancelada"
+      },
+      "fields": {
+        "title": "Título",
+        "status": "Estado",
+        "assignee": "Responsable",
+        "notes": "Notas",
+        "nextStep": "Próximo paso",
+        "evidence": "Evidencia",
+        "blockedReason": "Motivo del bloqueo"
+      },
+      "work": {
+        "label": "Trabajo",
+        "info": "El trabajo continúa con la app cerrada. Pausar detiene nuevos pasos y respuestas; un paso ya iniciado puede terminar. Reanudar conserva el presupuesto restante.",
+        "pause": "Pausar trabajo",
+        "resume": "Reanudar trabajo",
+        "cancelTask": "Cancelar tarea",
+        "paused": "En pausa",
+        "blocked": "Bloqueada",
+        "exhausted": "Presupuesto agotado",
+        "turns": "{used}/{limit} turnos de trabajo usados"
+      },
+      "research": {
+        "title": "Investigación web pública",
+        "info": "Guardar esta consulta autoriza una búsqueda pública con la app cerrada. Solo se envía esta consulta exacta; usa información pública. Déjala vacía para revocarla. Los intentos fallidos o inciertos cuentan. También se aplican límites diarios. Cambiar el responsable borra el permiso; guarda primero la asignación. Los informes aparecen en Documentos.",
+        "placeholder": "Consulta pública exacta",
+        "note": "Guardar autoriza una búsqueda pública con la app cerrada.",
+        "detail": "{used}/{limit} intentos de investigación web usados",
+        "detailStatus": "{used}/{limit} intentos de investigación web usados · {status}",
+        "statuses": {
+          "pending": "Pendiente o incierta",
+          "ready": "Borrador guardado",
+          "stopped": "Detenida antes de publicarse",
+          "complete": "Informe guardado",
+          "failed": "Falló"
+        }
+      },
+      "monitor": {
+        "title": "Monitor de página",
+        "info": "Guardar una página pública permite que el servidor la revise con la app cerrada, sin el modelo. El contacto recibe un turno solo cuando cambia el texto de la página (y coincide con una palabra clave, si la hay), hasta 3 por día y 20 en total. No se siguen redirecciones; guarda la dirección final. Déjala vacía para quitarlo. Cambiar el responsable quita el monitor; guarda primero la asignación. Pausar o terminar la tarea detiene las revisiones.",
+        "frequency": "Frecuencia de revisión",
+        "keywords": "Palabras clave separadas por comas (opcional)",
+        "keywordsLabel": "Palabras clave del monitor",
+        "note": "Guardar permite que el servidor revise esta página con la app cerrada.",
+        "active": "Monitor de página · {interval}",
+        "removed": "Monitor de página quitado",
+        "turns": "{used}/{limit} turnos por cambios usados",
+        "pending": "Cambio esperando un turno",
+        "last": "Última: {check}",
+        "notChecked": "Sin revisar todavía",
+        "intervals": {
+          "hourly": "Cada hora",
+          "sixHours": "Cada 6 horas",
+          "daily": "Cada día"
+        },
+        "intervalsInline": {
+          "hourly": "cada hora",
+          "sixHours": "cada 6 horas",
+          "daily": "cada día"
+        },
+        "outcomes": {
+          "baseline": "Primera revisión guardada",
+          "unchanged": "Sin cambios",
+          "repeated": "Otra vez una versión anterior",
+          "ignored": "Cambió, sin coincidencias de palabras clave",
+          "changed": "Cambio relevante",
+          "failed": "Revisión fallida"
+        }
+      }
+    },
+    "documents": {
+      "fallbackTitle": "Documento",
+      "editTitle": "Editar documento",
+      "emptyPreview": "Documento vacío",
+      "research": "Investigación web · {count} fuente citada | Investigación web · {count} fuentes citadas",
+      "revisions": "Revisiones",
+      "write": "Escribir",
+      "preview": "Vista previa",
+      "editorMode": "Modo del editor",
+      "discardConfirm": "¿Descartar los cambios sin guardar?",
+      "conflict": "{name} guardó una versión más reciente (revisión {revision}) mientras editabas.",
+      "someone": "Alguien",
+      "deleteConfirm": "¿Eliminar “{title}” para todos en este chat? También se eliminan sus revisiones.",
+      "useTheirs": "Usar su versión",
+      "keepMine": "Conservar la mía y guardarla encima",
+      "titleLabel": "Título",
+      "markdownLabel": "Markdown",
+      "placeholder": "Escribe en Markdown…",
+      "nothingToPreview": "*No hay nada que previsualizar.*",
+      "summaryPlaceholder": "¿Qué cambió? (opcional)",
+      "summaryLabel": "Resumen del cambio",
+      "meta": "Revisión {revision} · Actualizado por {name} · {date}",
+      "checked": "Revisado el {date} · Las fuentes corresponden a la revisión {revision}.",
+      "cited": "Citada",
+      "retrieved": "Consultada",
+      "noSummary": "Sin resumen",
+      "empty": "Este documento está vacío. Edítalo o pídele a un contacto en el chat que lo escriba.",
+      "delete": "Eliminar documento",
+      "unavailableTitle": "Documento no disponible",
+      "unavailableText": "Se eliminó o ya no tienes acceso."
+    }
+  }
+}

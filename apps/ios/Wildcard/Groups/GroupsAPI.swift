@@ -11,6 +11,8 @@ struct ChatGroup: Decodable, Hashable, Identifiable {
     let createdAt: Double
     let updatedAt: Double
     var replyActivity: String? = nil
+    /// Structured activity behind `replyActivity`, worded on device (docs/localization.md); absent from older APIs.
+    var replyActivityEntries: [ReplyActivityEntry]? = nil
     var lastMessageVoice: MessageVoice? = nil
     /// Newest reaction in this group; shown when newer than the last message (docs/chats.md#chat-list-previews).
     var lastReaction: LastReaction? = nil
@@ -407,7 +409,7 @@ final class GroupChatStore {
         pendingReadIDs = []
         receivedIDs = []
         readIDs = []
-        error = "This group is no longer available."
+        error = String(localized: "This group is no longer available.")
     }
 
     func didLeave() {
@@ -454,7 +456,7 @@ final class GroupChatStore {
             guard revision == detailsRevision else { throw CancellationError() }
             invalidate()
             await auth.images.clear(deactivate: false)
-            error = "This group is no longer available."
+            error = String(localized: "This group is no longer available.")
             throw AuthAPI.Failure.notFound
         } catch {
             guard !invalidated, revision == detailsRevision else { throw CancellationError() }
@@ -651,7 +653,7 @@ final class GroupChatStore {
             guard !invalidated, epoch == accessEpoch else { return }
             invalidate()
             await auth.images.clear(deactivate: false)
-            self.error = "This group is no longer available."
+            self.error = String(localized: "This group is no longer available.")
         } catch {
             guard !invalidated, epoch == accessEpoch, !(hasLoadedMessages && AuthAPI.isTransient(error)) else { return }
             self.error = error.localizedDescription

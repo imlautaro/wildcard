@@ -5,42 +5,43 @@ const root = ref<HTMLElement | null>(null);
 // Beats: 1 Alex fact · 2 typing · 3 ack · 4 Sam asks · 5 typing · 6 answer ·
 // 7 Alex relay request · 8 relayed · 9 timer request · 10 timer running
 const { step, fading } = useScene(root, [700, 1000, 1200, 1500, 1000, 1500, 2000, 1500, 2000, 1500], { hold: 5200 });
+const { t } = useI18n();
 </script>
 
 <template>
   <div ref="root" class="shared scene" :class="{ fading }">
-    <PhoneFrame caption="Alex's private chat" title="Coco" who="coco" status="Shared with Sam" class="shared-phone">
+    <PhoneFrame :caption="t('sharedScene.alexChat')" title="Coco" who="coco" :status="t('sharedScene.sharedWith')" class="shared-phone">
       <div class="thread">
-        <div v-if="step >= 1" class="bubble-row outgoing pop"><div class="bubble">Grandpa's flight lands at 6:40, terminal B ✈️</div></div>
+        <div v-if="step >= 1" class="bubble-row outgoing pop"><div class="bubble">{{ t('sharedScene.fact') }}</div></div>
         <div v-if="step === 2" class="bubble-row incoming pop"><div class="typing"><span /><span /><span /></div></div>
-        <div v-if="step >= 3" class="bubble-row incoming pop"><div class="bubble">Got it! I'll keep everyone posted 🐾</div></div>
-        <div v-if="step >= 7" class="bubble-row outgoing pop"><div class="bubble">Tell Sam I'm bringing dinner 🍝</div></div>
-        <div v-if="step >= 8" class="bubble-row incoming pop"><div class="bubble">Sent to Sam ✓</div></div>
-        <div v-if="step >= 9" class="bubble-row outgoing pop"><div class="bubble">And set a 20-minute timer on Sam's phone for the oven</div></div>
-        <div v-if="step >= 10" class="bubble-row incoming pop"><div class="bubble">Done, it's running on Sam's iPhone ⏱️</div></div>
+        <div v-if="step >= 3" class="bubble-row incoming pop"><div class="bubble">{{ t('sharedScene.ack') }}</div></div>
+        <div v-if="step >= 7" class="bubble-row outgoing pop"><div class="bubble">{{ t('sharedScene.relay') }}</div></div>
+        <div v-if="step >= 8" class="bubble-row incoming pop"><div class="bubble">{{ t('sharedScene.sent') }}</div></div>
+        <div v-if="step >= 9" class="bubble-row outgoing pop"><div class="bubble">{{ t('sharedScene.timer') }}</div></div>
+        <div v-if="step >= 10" class="bubble-row incoming pop"><div class="bubble">{{ t('sharedScene.timerDone') }}</div></div>
       </div>
     </PhoneFrame>
 
     <div class="bridge" aria-hidden="true">
       <span class="bridge-line" :class="{ live: step >= 4 }" />
-      <span class="bridge-node"><ContactAvatar who="coco" :size="44" /><small>One memory</small></span>
+      <span class="bridge-node"><ContactAvatar who="coco" :size="44" /><small>{{ t('sharedScene.oneMemory') }}</small></span>
       <span class="bridge-line" :class="{ live: step >= 4 }" />
     </div>
 
-    <PhoneFrame caption="Sam's private chat" title="Coco" who="coco" status="Shared by Alex" class="shared-phone">
+    <PhoneFrame :caption="t('sharedScene.samChat')" title="Coco" who="coco" :status="t('sharedScene.sharedBy')" class="shared-phone">
       <div class="thread">
-        <div v-if="step >= 4" class="bubble-row outgoing pop"><div class="bubble">What time do we pick up grandpa?</div></div>
+        <div v-if="step >= 4" class="bubble-row outgoing pop"><div class="bubble">{{ t('sharedScene.ask') }}</div></div>
         <div v-if="step === 5" class="bubble-row incoming pop"><div class="typing"><span /><span /><span /></div></div>
-        <div v-if="step >= 6" class="bubble-row incoming pop"><div class="bubble">His flight lands at <strong>6:40</strong>, terminal B. Alex told me this morning.</div></div>
+        <div v-if="step >= 6" class="bubble-row incoming pop"><i18n-t keypath="sharedScene.answer" tag="div" class="bubble" scope="global"><template #time><strong>{{ t('sharedScene.answerTime') }}</strong></template></i18n-t></div>
         <div v-if="step >= 8" class="bubble-row incoming pop">
-          <div class="bubble"><span class="relay">Message from "Alex"</span>I'm bringing dinner 🍝</div>
+          <div class="bubble"><span class="relay">{{ t('sharedScene.relayFrom') }}</span>{{ t('sharedScene.relayText') }}</div>
         </div>
       </div>
       <Transition name="alarm">
         <div v-if="step >= 10" class="timer">
           <span class="timer-ring"><SiteIcon name="stopwatch" /></span>
-          <span class="timer-text"><small>Oven · from Coco</small><strong class="tabular">19:59</strong></span>
-          <span class="timer-allowed"><SiteIcon name="user-check" />Allowed by Sam</span>
+          <span class="timer-text"><small>{{ t('sharedScene.timerLabel') }}</small><strong class="tabular">19:59</strong></span>
+          <span class="timer-allowed"><SiteIcon name="user-check" />{{ t('sharedScene.allowed') }}</span>
         </div>
       </Transition>
     </PhoneFrame>

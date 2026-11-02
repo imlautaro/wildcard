@@ -211,6 +211,16 @@ renders nothing instead of failing the build.
 4. Update the tables above, then run `npm run typecheck:web` and
    `npm run typecheck:admin`: both apps compile the layer.
 
+## Built-in strings
+
+The layer has no i18n dependency. Text that components render on their own (the
+sheet close button, the select's search placeholder and empty result, the notice
+dismiss button, the search field's clear button and AppLoading's default label)
+comes from `useUiStrings()` (`app/composables/useUiStrings.ts`), English by default.
+`apps/web` replaces the strings whenever its locale changes (`app/plugins/locale.ts`);
+`apps/admin` keeps English. Every other label is passed in by the app, already
+translated. See [localization](localization.md).
+
 ## Verification
 
 October 30, 2026: `npm run typecheck:web` and `npm run typecheck:admin` pass, and

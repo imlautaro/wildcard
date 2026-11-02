@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { Attachment, DraftAttachment, DraftVoice, GroupMember, GroupMessage, ReplyQuote, Sticker, StickerChoice } from '~/utils/types';
-import { replyActivityLabel } from '../../../../../../shared/activity';
 
 const route = useRoute();
+const { t } = useI18n();
 const groupID = computed(() => String(route.params.id));
 const chats = useChats();
 const { user } = useSession();
@@ -15,14 +15,32 @@ const composer = ref<{ focus: () => void }>();
 const group = computed(() => state.value.snapshot?.group ?? chats.groups.value.find((item) => item.id === groupID.value) ?? null);
 
 const members = computed(() => new Map((state.value.snapshot?.members ?? []).map((member) => [`${member.kind}/${member.id}`, member])));
-const memberLine = computed(() => (state.value.snapshot?.members ?? []).map((member) => member.kind === 'user' && member.id === user.value?.id ? 'You' : member.name).join(', '));
+const memberLine = computed(() => (state.value.snapshot?.members ?? []).map((member) => member.kind === 'user' && member.id === user.value?.id ? t('common.you') : member.name).join(', '));
 const activeReplies = computed(() => (state.value.snapshot?.replies ?? []).filter((reply) => reply.status === 'queued' || reply.status === 'running'));
 // Task work turns show what the contact is working on; other replies show typing dots.
 const workingReplies = computed(() => activeReplies.value.filter((reply) => reply.taskID));
 const typingReplies = computed(() => activeReplies.value.filter((reply) => !reply.taskID && reply.status === 'running' && reply.isTyping === 1));
-const subtitle = computed(() => typingReplies.value.length ? replyActivityLabel(typingReplies.value.map((reply) => ({ name: reply.name,
+// Localized by composables/useReplyActivityLabel.ts (shared/activity.ts stays English for the API).
+const subtitle = computed(() => typingReplies.value.length ? localizedReplyActivityLabel(typingReplies.value.map((reply) => ({ name: reply.name,
     activity: reply.replyActivity === 'researching' || reply.replyActivity === 'recording' ? reply.replyActivity : 'typing' }))) ?? memberLine.value
-  : workingReplies.value.length ? `${[...new Set(workingReplies.value.map((reply) => reply.name))].join(', ')} working…` : memberLine.value);
+  : localizedWorkingLabel(workingReplies.value.map((reply) => reply.name)) ?? memberLine.value);
+// Join banners are rebuilt from the structured event so they follow the app language.
+// The API's English text (resolved for this viewer) stays the fallback when a name
+// the banner needs is no longer in the member list.
+function eventText(message: GroupMessage) {
+  const event = message.event;
+  if (event?.kind !== 'member_joined') return message.text;
+  if (event.memberKind === 'agent') {
+    const member = members.value.get(`agent/${event.memberID}`)?.name;
+    const actor = members.value.get(`user/${event.actorID}`)?.name ?? message.senderName;
+    return member && actor ? t('groups.chat.events.added', { actor, member }) : message.text;
+  }
+  const name = members.value.get(`user/${event.memberID}`)?.name ?? message.senderName;
+  if (!name) return message.text;
+  if (!event.invitedByID) return t('groups.chat.events.joined', { name });
+  const inviter = members.value.get(`user/${event.invitedByID}`)?.name;
+  return inviter ? t('groups.chat.events.joinedInvited', { name, inviter }) : message.text;
+}
 function failedRepliesFor(message: GroupMessage) {
   return (state.value.snapshot?.replies ?? []).filter((reply) => reply.status === 'failed' && reply.sourceID === message.id
     && !state.value.messages.some((later) => later.agentID === reply.agentID && later.sequence > message.sequence));
@@ -81,10 +99,10 @@ function senderStyle(message: GroupMessage) {
   return senderColor(groupID.value, identity);
 }
 function replyPreview(quote: ReplyQuote) {
-  if (quote.agentID === null && quote.userID !== null && quote.userID === user.value?.id) return { quote, author: 'You', color: ownReplyColor };
+  if (quote.agentID === null && quote.userID !== null && quote.userID === user.value?.id) return { quote, author: t('common.you'), color: ownReplyColor };
   const member = quote.agentID ? members.value.get(`agent/${quote.agentID}`) : members.value.get(`user/${quote.userID}`);
   const identity = quote.agentID ? `agent/${quote.agentID}` : quote.userID ? `user/${quote.userID}` : `message/${quote.messageID}`;
-  return { quote, author: member?.name ?? quote.senderName ?? 'Unknown member', color: replyColor(groupID.value, identity) };
+  return { quote, author: member?.name ?? quote.senderName ?? t('groups.chat.unknownMember'), color: replyColor(groupID.value, identity) };
 }
 const replyTarget = computed(() => state.value.replyTo ? replyPreview(state.value.replyTo) : null);
 const canReply = computed(() => !!state.value.snapshot && !state.value.unavailable);
@@ -209,19 +227,19 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
 <template>
   <PageBar>
     <template #title>
-      <NuxtLink :to="`/groups/${groupID}/members`" class="title" aria-label="Group details">
+      <NuxtLink :to="`/groups/${groupID}/members`" class="title" :aria-label="$t('groups.chat.details')">
         <AppAvatar :name="group?.name ?? ''" :path="group ? groupPhotoPath(group) : null" :size="36" />
         <div>
-          <div class="name">{{ group?.name ?? 'Group' }}</div>
+          <div class="name">{{ group?.name ?? $t('groups.chat.fallbackName') }}</div>
           <div class="subtitle">{{ subtitle }}</div>
         </div>
       </NuxtLink>
     </template>
-    <AppIconButton v-if="hasTasks" :to="`/groups/${groupID}/tasks`" icon="tasks" label="Tasks" />
+    <AppIconButton v-if="hasTasks" :to="`/groups/${groupID}/tasks`" icon="tasks" :label="$t('groups.chat.tasks')" />
   </PageBar>
 
-  <AppEmptyState v-if="state.unavailable" icon="people" title="Group unavailable" text="This group is no longer available.">
-    <template #actions><AppButton to="/chats" variant="tonal">Back to Chats</AppButton></template>
+  <AppEmptyState v-if="state.unavailable" icon="people" :title="$t('groups.chat.unavailableTitle')" :text="$t('groups.chat.unavailableText')">
+    <template #actions><AppButton to="/chats" variant="tonal">{{ $t('groups.chat.backToChats') }}</AppButton></template>
   </AppEmptyState>
   <template v-else>
     <div class="message-viewport">
@@ -229,18 +247,18 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
       <div ref="messageContent" class="message-content">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
-        <AppButton variant="text" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</AppButton>
+        <AppButton variant="text" :disabled="state.loadingEarlier" @click="earlier">{{ $t('groups.chat.loadEarlier') }}</AppButton>
       </div>
-      <AppLoading v-if="!state.loaded && !state.error" label="Loading messages…" />
+      <AppLoading v-if="!state.loaded && !state.error" :label="$t('groups.chat.loading')" />
       <AppNotice v-if="state.error" tone="warning">
         {{ state.error }}
-        <template #actions><button class="link-button" @click="refresh">Retry</button></template>
+        <template #actions><button class="link-button" @click="refresh">{{ $t('common.retry') }}</button></template>
       </AppNotice>
-      <AppEmptyState v-if="state.loaded && !state.messages.length && !state.pending" icon="chat" title="Start the conversation" text="Send your first message." />
+      <AppEmptyState v-if="state.loaded && !state.messages.length && !state.pending" icon="chat" :title="$t('groups.chat.emptyTitle')" :text="$t('groups.chat.emptyText')" />
 
       <template v-for="item in items" :key="item.key">
         <div v-if="item.kind === 'day'" class="day">{{ item.label }}</div>
-        <div v-else-if="item.kind === 'event'" class="system-banner" role="note">{{ item.message.text }}</div>
+        <div v-else-if="item.kind === 'event'" class="system-banner" role="note">{{ eventText(item.message) }}</div>
         <div
           v-else :id="`message-${item.message.id}`" class="bubble-row"
           :class="[isMine(item.message) ? 'outgoing' : 'incoming', { highlighted: highlighted === item.message.id }]" :style="{ marginTop: item.first ? '6px' : '0' }"
@@ -270,8 +288,8 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
         </div>
         <template v-if="item.kind !== 'day'">
           <div v-for="reply in failedRepliesFor(item.message)" :key="reply.id" class="status-line" role="status">
-            {{ reply.name }} couldn't finish replying to this message.
-            <button class="link-button" :disabled="activeReplies.length > 0" @click="retryReply(reply.id)">Retry reply</button>
+            {{ $t('groups.chat.replyFailed', { name: reply.name }) }}
+            <button class="link-button" :disabled="activeReplies.length > 0" @click="retryReply(reply.id)">{{ $t('groups.chat.retryReply') }}</button>
           </div>
         </template>
       </template>
@@ -291,14 +309,14 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
         </div>
         <div v-if="state.pending.failed" class="status-line outgoing error">
           {{ state.pending.failed }}
-          <button class="link-button" @click="submit">Retry</button>
-          <button class="link-button danger" @click="discardPending">{{ state.pending.voice || state.pending.sticker ? 'Delete' : 'Edit' }}</button>
+          <button class="link-button" @click="submit">{{ $t('common.retry') }}</button>
+          <button class="link-button danger" @click="discardPending">{{ state.pending.voice || state.pending.sticker ? $t('common.delete') : $t('common.edit') }}</button>
         </div>
       </template>
 
       <div v-for="reply in workingReplies" :key="reply.id" class="bubble-row incoming">
         <div class="avatar-slot"><AppAvatar :name="reply.name" :path="memberPhoto(members.get(`agent/${reply.agentID}`))" :size="28" /></div>
-        <div class="work-status" role="status"><span class="typing-dots" aria-hidden="true"><span /><span /><span /></span><span><strong>{{ reply.name }}</strong> · {{ reply.taskTitle ? `Working on “${reply.taskTitle}”` : 'Working on a task' }}</span></div>
+        <div class="work-status" role="status"><span class="typing-dots" aria-hidden="true"><span /><span /><span /></span><span><strong>{{ reply.name }}</strong> · {{ reply.taskTitle ? $t('groups.chat.workingOn', { title: reply.taskTitle }) : $t('groups.chat.workingOnTask') }}</span></div>
       </div>
       <div v-for="reply in typingReplies" :key="reply.id" class="bubble-row incoming">
         <div class="avatar-slot" />

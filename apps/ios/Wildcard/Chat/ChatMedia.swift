@@ -24,7 +24,7 @@ struct ChatMediaPage: Decodable, Sendable {
 enum ChatMediaKind: String, CaseIterable, Identifiable {
     case image, file
     var id: String { rawValue }
-    var title: String { self == .image ? "Media" : "Docs" }
+    var title: String { self == .image ? String(localized: "Media") : String(localized: "Docs") }
 }
 
 /// Where a chat's media lives: a private chat with a contact, or a group.
@@ -151,7 +151,7 @@ struct ChatMediaSection: View {
         } catch is CancellationError { }
         catch AuthAPI.Failure.notFound {
             cache.forget(scope)
-            error = "This chat is no longer available."
+            error = String(localized: "This chat is no longer available.")
         }
         catch {
             // Keep usable content visible through transient failures.

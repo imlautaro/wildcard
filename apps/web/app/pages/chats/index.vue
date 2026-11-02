@@ -4,7 +4,7 @@
 </script>
 
 <template>
-  <AppEmptyState icon="chat" title="Select a chat" text="Choose a conversation, or open Contacts to start a new one.">
-    <template #actions><AppButton to="/contacts" variant="tonal">Open Contacts</AppButton></template>
+  <AppEmptyState icon="chat" :title="$t('chat.index.title')" :text="$t('chat.index.text')">
+    <template #actions><AppButton to="/contacts" variant="tonal">{{ $t('chat.index.openContacts') }}</AppButton></template>
   </AppEmptyState>
 </template>

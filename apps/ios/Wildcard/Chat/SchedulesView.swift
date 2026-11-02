@@ -14,7 +14,8 @@ struct ContactSchedule: Decodable, Identifiable, Sendable {
 
     var recipientLabel: String? {
         guard recipientUserID != nil else { return nil }
-        return "To \(recipientName ?? "a former participant")"
+        guard let recipientName else { return String(localized: "To a former participant") }
+        return String(localized: "To \(recipientName)")
     }
 
     var timing: String {
@@ -24,13 +25,10 @@ struct ContactSchedule: Decodable, Identifiable, Sendable {
     }
 
     var repetition: String {
-        guard let intervalSeconds else { return "Once" }
-        if intervalSeconds % 3600 == 0 {
-            let hours = intervalSeconds / 3600
-            return "Every \(hours) \(hours == 1 ? "hour" : "hours")"
-        }
-        if intervalSeconds % 60 == 0 { return "Every \(intervalSeconds / 60) minutes" }
-        return "Every \(intervalSeconds) seconds"
+        guard let intervalSeconds else { return String(localized: "Once") }
+        if intervalSeconds % 3600 == 0 { return String(localized: "Every \(intervalSeconds / 3600) hours") }
+        if intervalSeconds % 60 == 0 { return String(localized: "Every \(intervalSeconds / 60) minutes") }
+        return String(localized: "Every \(intervalSeconds) seconds")
     }
 }
 
@@ -85,7 +83,8 @@ struct SchedulesView: View {
                                 .manrope(.footnote, weight: .semibold).foregroundStyle(.secondary)
                         }
                         Text(schedule.instruction).manrope().lineLimit(3)
-                        Text("\(schedule.repetition) · \(schedule.status == .active ? "Next" : "Scheduled for") \(schedule.timing)")
+                        Text(schedule.status == .active ? "\(schedule.repetition) · Next \(schedule.timing)"
+                                : "\(schedule.repetition) · Scheduled for \(schedule.timing)")
                             .manrope(.footnote).foregroundStyle(.secondary)
                         if schedule.status == .cancelled {
                             Text("Cancelled").manrope(.caption).foregroundStyle(.secondary)
@@ -118,7 +117,7 @@ struct SchedulesView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                InfoButton(title: "Schedules", text: "Create or change schedules by messaging this contact. In a shared contact, you can also schedule a message for another participant: they receive your exact text with your name, and this chat confirms whether it was delivered. Swipe a schedule or hold it to cancel. Times use the saved time zone. Messages may arrive after the scheduled time while they are generated and delivered.")
+                InfoButton(title: String(localized: "Schedules"), text: String(localized: "Create or change schedules by messaging this contact. In a shared contact, you can also schedule a message for another participant: they receive your exact text with your name, and this chat confirms whether it was delivered. Swipe a schedule or hold it to cancel. Times use the saved time zone. Messages may arrive after the scheduled time while they are generated and delivered."))
             }
         }
         .navigationTitle("Schedules")
@@ -153,7 +152,7 @@ struct SchedulesView: View {
         } catch is CancellationError { }
         catch AuthAPI.Failure.notFound {
             contacts.scheduleSnapshots.remove(id: contactID)
-            self.error = "This contact is no longer available."
+            self.error = String(localized: "This contact is no longer available.")
         }
         catch { if started == refreshRevision { self.error = error.localizedDescription } }
     }

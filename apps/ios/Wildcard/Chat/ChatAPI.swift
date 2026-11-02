@@ -121,15 +121,18 @@ struct ContactPresence: Decodable, Sendable {
 
     var label: String {
         switch status {
-        case .online: return "Online"
-        case .typing: return isResearching == true ? "Researching..." : isRecording == true ? "Recording..." : "Typing..."
+        case .online: return String(localized: "Online")
+        case .typing:
+            return isResearching == true ? String(localized: "Researching...")
+                : isRecording == true ? String(localized: "Recording...") : String(localized: "Typing...")
         case .offline:
-            guard let lastSeenAt else { return "Offline" }
+            guard let lastSeenAt else { return String(localized: "Offline") }
             let date = Date(timeIntervalSince1970: lastSeenAt / 1000)
             let time = date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
-            if Calendar.current.isDateInToday(date) { return "Last seen today at \(time)" }
-            if Calendar.current.isDateInYesterday(date) { return "Last seen yesterday at \(time)" }
-            return "Last seen \(date.formatted(date: .abbreviated, time: .omitted)) at \(time)"
+            if Calendar.current.isDateInToday(date) { return String(localized: "Last seen today at \(time)") }
+            if Calendar.current.isDateInYesterday(date) { return String(localized: "Last seen yesterday at \(time)") }
+            let day = date.formatted(date: .abbreviated, time: .omitted)
+            return String(localized: "Last seen \(day) at \(time)")
         }
     }
 }
@@ -199,7 +202,7 @@ extension AuthAPI {
         } catch Failure.notFound where sticker != nil {
             // The route answers 404 "Choose a sticker from your library" (deleted on another device); a missing contact is
             // reported by the next history refresh.
-            throw Failure.rejected("This sticker is no longer in your library.")
+            throw Failure.rejected(String(localized: "This sticker is no longer in your library."))
         }
         return try JSONDecoder().decode(ChatSubmission.self, from: data)
     }

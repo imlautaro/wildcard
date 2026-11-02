@@ -68,19 +68,19 @@ const remove = () => act((target) => {
 </script>
 
 <template>
-  <div :id="menuID" ref="menu" popover="auto" class="menu row-menu" :aria-label="row ? `${row.name} actions` : 'Chat actions'"
+  <div :id="menuID" ref="menu" popover="auto" class="menu row-menu" :aria-label="row ? $t('chat.rowMenu.label', { name: row.name }) : $t('chat.rowMenu.fallbackLabel')"
        :style="position ? { top: `${position.top}px`, left: `${position.left}px` } : { visibility: 'hidden' }" @contextmenu.prevent>
     <template v-if="row">
-      <AppMenuItem :to="detailsPath" icon="info" @click="menu?.hidePopover()">{{ row.kind === 'contact' ? 'Contact details' : 'Group details' }}</AppMenuItem>
-      <AppMenuItem icon="archive" :disabled="busy" @click="archive">{{ row.archived ? 'Unarchive' : 'Archive' }}</AppMenuItem>
+      <AppMenuItem :to="detailsPath" icon="info" @click="menu?.hidePopover()">{{ row.kind === 'contact' ? $t('chat.rowMenu.contactDetails') : $t('chat.rowMenu.groupDetails') }}</AppMenuItem>
+      <AppMenuItem icon="archive" :disabled="busy" @click="archive">{{ row.archived ? $t('chat.rowMenu.unarchive') : $t('chat.rowMenu.archive') }}</AppMenuItem>
       <template v-if="row.canClear || row.canDelete">
         <hr class="menu-divider">
-        <AppMenuItem v-if="row.canClear" icon="x-circle" danger :disabled="busy" @click="clear">Clear chat…</AppMenuItem>
-        <AppMenuItem v-if="row.canDelete" icon="delete" danger :disabled="busy" @click="remove">Delete contact…</AppMenuItem>
+        <AppMenuItem v-if="row.canClear" icon="x-circle" danger :disabled="busy" @click="clear">{{ $t('chat.rowMenu.clear') }}</AppMenuItem>
+        <AppMenuItem v-if="row.canDelete" icon="delete" danger :disabled="busy" @click="remove">{{ $t('chat.rowMenu.deleteContact') }}</AppMenuItem>
       </template>
     </template>
   </div>
-  <AppSheet v-if="clearing" :title="`Clear ${clearing.name}`" @close="clearing = null">
+  <AppSheet v-if="clearing" :title="$t('chat.rowMenu.clearTitle', { name: clearing.name })" @close="clearing = null">
     <ChatClearActions :busy="busy" :group="clearing.kind === 'group'" @clear="confirmClear" />
   </AppSheet>
 </template>

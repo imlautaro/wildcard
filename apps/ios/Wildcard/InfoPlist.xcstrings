@@ -1,0 +1,60 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSAlarmKitUsageDescription" : {
+      "comment" : "Privacy - AlarmKit Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Schedule alarms and timers you explicitly run from a contact."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Programar las alarmas y los temporizadores que ejecutas explícitamente desde un contacto."
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "comment" : "Privacy - Microphone Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Record a voice message and transcribe it into text with Meta before sending."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabar un mensaje de voz y transcribirlo a texto con Meta antes de enviarlo."
+          }
+        }
+      }
+    },
+    "NSRemindersFullAccessUsageDescription" : {
+      "comment" : "Privacy - Reminders Full Access Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Save reminders you review and run, including arrival and departure reminders. Wildcard does not read your reminder lists for AI context."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar los recordatorios que revisas y ejecutas, incluidos los recordatorios al llegar y al salir. Wildcard no lee tus listas de recordatorios como contexto para la IA."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

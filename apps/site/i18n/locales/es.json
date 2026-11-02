@@ -1,0 +1,389 @@
+{
+  "seo": {
+    "tagline": "Contactos de IA que te escriben primero",
+    "description": "Crea contactos de IA con su propio nombre, cara, personalidad y memoria. Te escriben por iniciativa propia, recuerdan lo que importa y colaboran contigo y con las personas que quieres. Código abierto, con modelos de IA de Meta."
+  },
+  "common": {
+    "getStarted": "Empezar",
+    "poweredByMeta": "Con modelos de IA de Meta",
+    "openSource": "Código abierto"
+  },
+  "nav": {
+    "home": "Inicio de Wildcard",
+    "sections": "Secciones",
+    "menu": "Menú",
+    "items": {
+      "memory": "Memoria",
+      "together": "Compartir",
+      "groups": "Grupos",
+      "forYou": "Para ti",
+      "openSource": "Código abierto"
+    }
+  },
+  "language": {
+    "label": "Idioma"
+  },
+  "theme": {
+    "label": "Apariencia: {mode}",
+    "system": "Sistema",
+    "light": "Claro",
+    "dark": "Oscuro"
+  },
+  "footer": {
+    "label": "Pie de página",
+    "blurb": "Contactos de IA con nombre, cara, personalidad y memoria propios. De código abierto, y listos para que los alojes tú.",
+    "product": "Producto",
+    "webApp": "Abrir la app web",
+    "iosApp": "Descargar la app para iPhone",
+    "source": "Código fuente",
+    "sourceSoon": "Código fuente · pronto",
+    "faq": "Preguntas frecuentes",
+    "cloudflare": "Hecho sobre Cloudflare"
+  },
+  "error": {
+    "notFoundTitle": "Página no encontrada · Wildcard",
+    "errorTitle": "Algo salió mal · Wildcard",
+    "notFound": "Esta página se perdió.",
+    "notFoundText": "Pixel buscó por todas partes y no la encontró.",
+    "error": "Algo salió mal.",
+    "errorText": "Inténtalo de nuevo en un momento.",
+    "back": "Volver a Wildcard"
+  },
+  "hero": {
+    "chip": "Con modelos de IA de Meta · Código abierto",
+    "title": "Contactos de IA que te escriben primero.",
+    "lead": "Crea un elenco de contactos de IA, cada uno con su propio nombre, cara, personalidad y memoria. Te escriben por iniciativa propia, recuerdan lo que importa y colaboran contigo y con las personas que quieres.",
+    "meet": "Conoce a tus primeros contactos",
+    "selfHost": "Alójalo por tu cuenta",
+    "proof": {
+      "memory": "Una memoria por contacto",
+      "memoryText": "Nada se filtra entre chats",
+      "proactive": "Proactivos por diseño",
+      "proactiveText": "Te escriben primero",
+      "shareable": "Para compartir",
+      "shareableText": "Familia, amigos, grupos",
+      "openSource": "Código abierto",
+      "openSourceText": "Alójalo en Cloudflare"
+    }
+  },
+  "why": {
+    "eyebrow": "Por qué Wildcard",
+    "title": "Los chatbots esperan.",
+    "titleSoft": "Los contactos aparecen.",
+    "lead": "La mayoría de las apps de IA son un cuadro de texto que responde cuando le preguntas. Wildcard se parece más a la lista de contactos de tu teléfono: personajes distintos, con vida propia, que mantienen viva la conversación.",
+    "typical": "Un chat de IA típico",
+    "wildcard": "Un contacto de Wildcard",
+    "rows": {
+      "waitTypical": "Espera a que escribas",
+      "waitWildcard": "Te escribe primero y luego te da espacio",
+      "castTypical": "Un solo asistente para todo",
+      "castWildcard": "Un elenco de contactos, cada uno con su personalidad",
+      "memoryTypical": "Una memoria para todos los chats, o ninguna",
+      "memoryWildcard": "Una memoria separada para cada contacto",
+      "sharedTypical": "Solo tú y un cuadro de texto",
+      "sharedWildcard": "Compartido con familia, amigos y grupos"
+    }
+  },
+  "memory": {
+    "eyebrow": "Memoria, sin desorden",
+    "title": "Una memoria por contacto.",
+    "titleSoft": "Cero contaminación cruzada.",
+    "lead": "En la mayoría de las apps de IA, la memoria es todo o nada. Si la desactivas, cada chat empieza de cero. Si la activas, todo lo que has dicho se cuela en todo lo demás: el lanzamiento de tu panadería aparece en tu plan de entrenamiento, y tu examen, en tus ideas de negocio.",
+    "separate": "En Wildcard, {emphasis}. Theo conoce de memoria el lanzamiento de tu panadería. Ivy conoce tu plan para el maratón. Pixel sabe que la entropía se te está complicando. Ninguno saca a relucir los asuntos de los demás, salvo que tú quieras.",
+    "separateEmphasis": "cada contacto tiene su propia memoria"
+  },
+  "catchUp": {
+    "eyebrow": "Ponme al día",
+    "title": "¿Contacto nuevo? Pídele que consulte con uno que ya sabe.",
+    "lead": "¿Quieres que Nova te ayude con un proyecto que Theo sigue desde hace semanas? Solo díselo. Nova le pregunta a Theo, obtiene el contexto que necesita y continúa donde lo dejaste, sin que repitas una palabra.",
+    "permission": "Solo con tu permiso",
+    "permissionText": "Los contactos hablan entre sí cuando los vinculaste o activaste que tus contactos compartan entre sí.",
+    "private": "Lo privado sigue siendo privado",
+    "privateText": "Marca un chat como privado y ningún otro contacto, grupo o persona podrá aprender de él."
+  },
+  "initiative": {
+    "eyebrow": "Iniciativa",
+    "title": "Te escriben primero.",
+    "lead": "Los contactos de Wildcard no se quedan en silencio hasta que escribes. Te preguntan por la entrevista que mencionaste, te cuentan algo que pensaron más tarde o te saludan después de una semana tranquila, a las horas en que sueles estar.",
+    "lead2": "Y saben leer el ambiente: si un mensaje queda sin respuesta, esperan a que vuelvas a escribir. Desactiva la iniciativa de cualquier contacto cuando quieras."
+  },
+  "create": {
+    "eyebrow": "Crea a quien quieras",
+    "title": "Un elenco tan variado como tu chat de grupo.",
+    "lead": "Personajes de caricatura, héroes de anime, estrellas de película 3D, personas realistas, mascotas adorables o un estilo que describas tú, como robots de videojuego retro. Wildcard genera el retrato, un nombre y una personalidad, y puedes editarlo todo.",
+    "sliders": "Ajusta cómo son con {count}, desde el humor y la calidez hasta la paciencia, la frecuencia con que te escriben y cuántos emoji usan.",
+    "slidersCount": "17 controles de temperamento"
+  },
+  "together": {
+    "eyebrow": "Mejor en compañía",
+    "title": "Comparte un contacto.",
+    "titleSoft": "Conserva tu propio chat.",
+    "lead": "Invita a tu pareja, a un amigo o a tu familia a uno de tus contactos. Cada uno tiene su chat privado, y el contacto recuerda lo importante de todos. Cuéntale algo por la mañana y por la tarde podrá responderle a tu hermana sobre eso.",
+    "memory": "Memoria compartida, chats privados",
+    "memoryText": "Cada persona habla con el contacto por su cuenta. Recuerda datos, nunca transcripciones completas.",
+    "relay": "Pasa un mensaje",
+    "relayText": "\"Dile a Sam que llevo la cena.\" El contacto lo entrega en el chat privado de Sam, firmado con tu nombre.",
+    "timers": "Temporizadores en su teléfono",
+    "timersText": "Con su permiso, un contacto compartido puede poner un temporizador o una alarma en el iPhone de la otra persona."
+  },
+  "groups": {
+    "eyebrow": "Grupos",
+    "title": "Chats de grupo donde la IA hace su parte.",
+    "lead": "Reúne varios contactos en un grupo e invita también a personas reales, que pueden traer sus propios contactos. Pide algo grande y se lo reparten: tareas con responsable, trabajo que espera a otro trabajo y un documento compartido al final.",
+    "remember": "Todos recuerdan el grupo",
+    "rememberText": "Lo que se dice en un grupo queda con cada contacto del grupo, y solo llega a los chats privados de sus miembros.",
+    "context": "El contexto circula como entre personas",
+    "contextText": "Pregúntale en privado a un contacto qué decidió el grupo. Si lo permites, puede llevar tu contexto privado al grupo.",
+    "boundaries": "Tú pones los límites",
+    "boundariesText": "Compartir chats privados con un grupo está desactivado por defecto, por contacto y por grupo."
+  },
+  "forYou": {
+    "eyebrow": "Para ti",
+    "title": "Un feed escrito por tus contactos.",
+    "lead": "A medida que tus contactos aprenden qué te interesa, mantienen un feed de novedades solo para ti: titulares, resultados, precios, gráficos y seguimientos, que se actualizan solos. Menciona que le tienes el ojo puesto a una MacBook Pro nueva y las noticias aparecen ahí.",
+    "lead2": "Comenta una publicación y el contacto que la escribió te responde, o retoma la conversación contigo en privado."
+  },
+  "connectors": {
+    "eyebrow": "Conectores",
+    "title": "Dale a cada contacto sus propias herramientas.",
+    "lead": "Conecta servidores MCP una vez y luego decide qué recibe cada contacto. Tu contacto de trabajo lee Linear, tu coach ve tu calendario, tu compañero de estudio toma notas en Notion. Hay más de 30 conectores listos para añadir, o puedes traer tu propio servidor.",
+    "lead2": "Cada herramienta empieza desactivada hasta que la apruebas, y un chat con herramientas conectadas queda fuera de la memoria compartida."
+  },
+  "more": {
+    "eyebrow": "Y los pequeños detalles",
+    "title": "Todo lo que los hace sentir reales.",
+    "schedule": "Recordatorios y mensajes programados",
+    "scheduleText": "Pide que te avisen en dos horas o que te saluden cada semana. Los contactos hasta pueden programar uno para otra persona en un chat compartido.",
+    "scheduleToday": "Hoy, 16:00",
+    "scheduleTodayText": "“Llamar al proveedor de leche de avena”",
+    "scheduleWeekly": "Cada 7 días",
+    "scheduleWeeklyText": "“¿Cómo estuvo la semana?”",
+    "voice": "Mensajes de voz",
+    "voiceText": "Mantén presionado para hablar. Los contactos transcriben lo que dices y pueden responder con una voz propia.",
+    "stickers": "Stickers",
+    "stickersText": "Recorta un sticker de cualquier foto. Los contactos hacen los suyos, y a veces toman prestados los tuyos.",
+    "photos": "Imágenes y selfies",
+    "photosText": "Los contactos pueden enviar imágenes, incluso selfies en las que de verdad se parecen a ellos.",
+    "miniApps": "Miniapps",
+    "miniAppsText": "Seguimientos, cuestionarios y pequeñas herramientas que un contacto crea para ti, nativas y para compartir en grupos.",
+    "miniWater": "Agua",
+    "miniReading": "Lectura",
+    "miniSteps": "Pasos",
+    "research": "Investigación y documentos",
+    "researchText": "Haz una pregunta y recibe un informe con fuentes, guardado como documento compartido que ambos pueden editar.",
+    "monitors": "Monitores de páginas",
+    "monitorsText": "Un contacto vigila una página y solo te avisa cuando cambia algo que te importa.",
+    "monitorChanged": "Cambió la página de entradas",
+    "monitorChecked": "Revisada cada hora · solo cambios relevantes",
+    "reactions": "Reacciones y respuestas",
+    "reactionsText": "Los contactos reaccionan a los mensajes y citan el que responden, en chats privados y en grupos.",
+    "reactionBubble": "jaja tenías razón con el logo"
+  },
+  "meta": {
+    "title": "Conversaciones, retratos, notas de voz y stickers, todo con los modelos de Meta.",
+    "spark": "Conversaciones, memoria e iniciativa",
+    "image": "Retratos, selfies e imágenes",
+    "transcribe": "Transcripción de mensajes de voz",
+    "sam": "Recorte de stickers"
+  },
+  "openSource": {
+    "title": "Para que lo alojes tú, hasta el último Worker.",
+    "lead": "Wildcard es de código abierto y está construido íntegramente sobre Cloudflare. Despliégalo completo en tu propia cuenta de Cloudflare con tus propias claves de API. Tus contactos, tus datos, tu infraestructura.",
+    "cloudflareText": "Workers, D1, R2, Workflows y Cron",
+    "metaKey": "Clave de la Meta Model API",
+    "metaKeyText": "Obligatoria: conversaciones, imágenes y transcripciones",
+    "elevenLabsKey": "Clave de ElevenLabs",
+    "elevenLabsKeyText": "Opcional: voces de los contactos",
+    "appleKeys": "Claves de desarrollador de Apple",
+    "appleKeysText": "Opcionales: notificaciones en iPhone y funciones nativas",
+    "viewSource": "Ver el código",
+    "soon": "El repositorio será público pronto",
+    "footnote": "El uso de modelos y voces lo cobran esos proveedores a través de tus propias claves."
+  },
+  "faq": {
+    "eyebrow": "Preguntas frecuentes",
+    "title": "Buenas preguntas.",
+    "replaceQ": "¿Wildcard quiere reemplazar a ChatGPT, Claude o Grok?",
+    "replaceA": "No. Wildcard no maneja tu navegador, no ejecuta código en un entorno aislado ni levanta una máquina virtual, y no pretende hacerlo. Sigue usando esas herramientas para eso. Wildcard se centra en la parte de la IA que se siente como las personas: contactos con su propia personalidad y memoria, que se mantienen en contacto y trabajan contigo y con la gente que te rodea.",
+    "privacyQ": "¿Quién puede ver lo que le cuento a un contacto?",
+    "privacyA": "Tus contactos son tuyos. Si compartes uno, recuerda datos breves entre sus participantes (nunca transcripciones completas), y ambas partes lo aceptan cuando se comparte el contacto. Activa \"Mantener este chat privado\" y nada de ese chat sale de él: ni a grupos, ni a otras personas, ni a tus otros contactos.",
+    "spamQ": "¿Mis contactos me van a llenar de mensajes?",
+    "spamA": "No. Te escriben cuando hay algo que valga la pena, a las horas en que sueles responder. Si un mensaje queda sin respuesta, esperan a que vuelvas a escribir. Puedes desactivar la iniciativa de cualquier contacto, o simplemente pedirle que pare.",
+    "sharingQ": "¿Cómo se enteran los contactos de los proyectos de los demás?",
+    "sharingA": "Solo si lo permites. Vincula dos contactos o activa \"Los contactos comparten entre sí\", y podrás pedirle a uno que consulte con otro. Los chats privados y los chats con herramientas conectadas nunca forman parte de esto.",
+    "selfHostQ": "¿De verdad puedo alojarlo yo?",
+    "selfHostA": "Sí. Wildcard es de código abierto y está construido íntegramente sobre Cloudflare: Workers, D1, R2 y Workflows. Despliégalo en tu propia cuenta de Cloudflare con tus propias claves de API: una clave de la Meta Model API para los modelos y, de forma opcional, ElevenLabs para las voces y claves de Apple para las notificaciones en iPhone.",
+    "platformsQ": "¿Dónde funciona?",
+    "platformsA": "Wildcard tiene una app nativa para iPhone y una app web. Algunas funciones nativas, como temporizadores y alarmas en el teléfono de otra persona, son solo para iPhone."
+  },
+  "cta": {
+    "title": "Conoce a tus primeros cinco contactos.",
+    "lead": "Regístrate, cuéntale a Wildcard un poco sobre ti y te presentará cinco contactos creados para ti."
+  },
+  "cast": {
+    "mila": "Fan de la tecnología",
+    "theo": "Conoce el lanzamiento de tu panadería",
+    "ivy": "Coach de maratón",
+    "pixel": "Compañero de estudio",
+    "nova": "Apoyo en tu nuevo proyecto",
+    "coco": "Ayuda familiar",
+    "you": "Tú"
+  },
+  "phone": {
+    "message": "Mensaje",
+    "online": "en línea"
+  },
+  "heroScene": {
+    "chats": "Chats",
+    "now": "ahora",
+    "typing": "escribiendo…",
+    "milaNew": "Apple acaba de publicar el resumen de la MacBook Pro. ¿Quieres las 3 cosas que de verdad importan?",
+    "milaNewTime": "19:58",
+    "ivyNew": "Mañana es día de descanso 🧘 ¿Cómo están las piernas después de los 18 km?",
+    "ivyNewTime": "20:03",
+    "theoNew": "¿El proveedor de leche de avena llegó a mandar la segunda cotización?",
+    "theoNewTime": "20:11",
+    "nova": "¡Perfecto, hablamos mañana!",
+    "novaTime": "18:20",
+    "pixel": "Las tarjetas están listas: 24 sobre entropía 🔋",
+    "pixelTime": "17:02",
+    "theo": "Tú: El logo quedó definitivo 🎉",
+    "theoTime": "15:47",
+    "coco": "Lista de compras actualizada 🛒",
+    "cocoTime": "13:15",
+    "ivy": "Tú: ¡Listo! 18 km a 5:40/km",
+    "ivyTime": "9:12",
+    "mila": "jaja te lo dije",
+    "milaTime": "Ayer"
+  },
+  "memoryScene": {
+    "others": "Otras apps de IA",
+    "pooled": "Una memoria para todos los chats",
+    "noPool": "Sin memoria común",
+    "onTopic": "En tema",
+    "offTopic": "Memoria fuera de tema",
+    "theoChat": "Lanzamiento de la panadería",
+    "theoLeaked": "Para el logo, ¿qué tal un croissant cruzando la meta de un maratón? 🏃",
+    "theoClean": "La preapertura es el 14. ¿Quieres que arme la lista de invitados?",
+    "ivyChat": "Entrenamiento de maratón",
+    "ivyLeaked": "¡Gran entrenamiento de ritmo! Prémiate con el latte de leche de avena que estás por vender 🥐",
+    "ivyClean": "Semana 9 lista. El jueves toca un 8 km suave, a ritmo de conversación.",
+    "pixelChat": "Preparación del examen",
+    "pixelLeaked": "La entropía es como el presupuesto de tu panadería: solo sube 📈",
+    "pixelClean": "Pregunta 4 de entropía: ¿quieres una pista o la solución completa?",
+    "factOpening": "🥐 Abre el 14",
+    "factSupplier": "🥛 Proveedor de leche de avena",
+    "factMarathon": "🏃 Maratón el 3 de mayo",
+    "factPace": "⏱️ Ritmo objetivo 5:40/km",
+    "factExam": "📚 Examen de termo el viernes",
+    "factEntropy": "🔋 Dudas con la entropía"
+  },
+  "catchUpScene": {
+    "joined": "Nova se unió a tus contactos hoy",
+    "ask": "¿Puedes pedirle a Theo que te ponga al día con el lanzamiento de la panadería?",
+    "asking": "Nova le está preguntando a Theo…",
+    "caughtUp": "Theo puso al día a Nova",
+    "answer": "¡Ya estoy al día! Theo dice que la preapertura es el {date}, que el logo ya está definido y que todavía estás eligiendo un {supplier}. ¿Quieres que compare las cotizaciones?",
+    "answerDate": "14",
+    "answerSupplier": "proveedor de leche de avena",
+    "reply": "Sí, por favor 🙏"
+  },
+  "initiativeScene": {
+    "day": "martes, 3 de marzo",
+    "ivy": "¡Buen día! Hoy es día de descanso 🧘 ¿Cómo están las piernas después de los 18 km?",
+    "theo": "¿Cómo te fue en la llamada con el proveedor de leche de avena?",
+    "mila": "Apple acaba de publicar el resumen de la MacBook Pro. ¿Quieres la versión corta?",
+    "pixel": "Examen el viernes. ¿10 tarjetas antes de dormir? Te las hice fáciles 🤖"
+  },
+  "creatorScene": {
+    "cartoon": "Caricatura",
+    "anime": "Anime",
+    "movie": "Película animada en 3D",
+    "realistic": "Personas realistas",
+    "pets": "Mascotas animadas en 3D",
+    "custom": "Personalizado",
+    "generate": "Generar con IA",
+    "name": "Nombre",
+    "customStyle": "Estilo personalizado",
+    "whoTheyAre": "Quién es",
+    "customValue": "Robots de videojuego retro",
+    "humor": "Humor",
+    "warmth": "Calidez",
+    "initiative": "Iniciativa",
+    "emoji": "Emoji"
+  },
+  "sharedScene": {
+    "alexChat": "Chat privado de Alex",
+    "samChat": "Chat privado de Sam",
+    "sharedWith": "Compartido con Sam",
+    "sharedBy": "Compartido por Alex",
+    "oneMemory": "Una memoria",
+    "fact": "El vuelo del abuelo aterriza a las 18:40, terminal B ✈️",
+    "ack": "¡Entendido! Mantendré a todos al tanto 🐾",
+    "relay": "Dile a Sam que llevo la cena 🍝",
+    "sent": "Enviado a Sam ✓",
+    "timer": "Y pon un temporizador de 20 minutos en el teléfono de Sam para el horno",
+    "timerDone": "Listo, ya está corriendo en el iPhone de Sam ⏱️",
+    "ask": "¿A qué hora recogemos al abuelo?",
+    "answer": "Su vuelo aterriza a las {time}, terminal B. Alex me lo contó esta mañana.",
+    "answerTime": "18:40",
+    "relayFrom": "Mensaje de \"Alex\"",
+    "relayText": "Llevo la cena 🍝",
+    "timerLabel": "Horno · de Coco",
+    "allowed": "Permitido por Sam"
+  },
+  "groupScene": {
+    "title": "Lisboa en marzo ✈️",
+    "members": "Tú, Ana, Mila, Theo, Coco",
+    "ask": "Planeen 4 días en Lisboa para fines de marzo. ¿Pueden repartirse el trabajo?",
+    "mila": "¡Manos a la obra! Me encargo de los vuelos y de escribir el plan final 🛫",
+    "theo": "Yo me ocupo de los barrios y de dónde alojarse.",
+    "added": "Ana agregó a su contacto Coco",
+    "coco": "Ana dice que la comida no se negocia. Yo mapeo los pastéis de nata 🥧",
+    "tasks": "Tareas",
+    "progress": "{done}/{total} listas",
+    "todo": "Por hacer",
+    "doing": "En curso",
+    "done": "Listas",
+    "flights": "Comparar vuelos",
+    "stay": "Elegir un barrio",
+    "food": "Mapear los mejores pastéis",
+    "plan": "Escribir el plan del viaje",
+    "waits": "Espera 3 tareas",
+    "doc": "Lisboa en marzo: plan del viaje",
+    "docMeta": "Documento compartido · Vuelos · Estadía en Alfama · 12 paradas para comer"
+  },
+  "feedScene": {
+    "title": "Para ti",
+    "topicRunning": "Entrenamiento de maratón",
+    "topicButter": "Precio de la mantequilla",
+    "newPosts": "2 publicaciones nuevas",
+    "milaMeta": "Titulares · justo ahora",
+    "milaTitle": "MacBook Pro: qué cambió esta semana",
+    "milaHeadline1": "Llegan las primeras pruebas de rendimiento independientes",
+    "milaHeadline2": "Dos reseñas ponen a prueba lo que promete la batería",
+    "milaHeadline3": "Qué incluye el modelo base, y qué no",
+    "you": "Tú",
+    "comment": "¿El modelo base alcanza para editar video?",
+    "reply": "Para líneas de tiempo en 4K, sí. ¿Quieres que lo compare con el chip Pro en privado?",
+    "cocoMeta": "Partido · hace 12 min",
+    "cocoNote": "Final del partido en La Bombonera. ¿Quieres ver los mejores momentos?",
+    "theoMeta": "Gráfico · hace 2 h",
+    "theoTitle": "Precio de la mantequilla, últimas 10 semanas",
+    "theoNote": "Subió 9% desde enero. ¿Conviene fijar el precio con el proveedor antes de la apertura?",
+    "ivyMeta": "Seguimiento · hace 5 h",
+    "ivyTitle": "Bloque de maratón: semana 9 de 16",
+    "ivyNote": "142 km este mes. Carrera larga el domingo: 24 km."
+  },
+  "connectorScene": {
+    "approved": "Aprobado",
+    "off": "Desactivado"
+  },
+  "terminalScene": {
+    "database": "Base de datos D1 lista · binding DB",
+    "bucket": "Bucket R2 listo · binding CONTACT_PHOTOS",
+    "note": "# Añade META_API_KEY como secreto y conecta Workers Builds",
+    "api": "Workers Builds: migraciones aplicadas, wildcard-api publicado",
+    "web": "wildcard-web publicado · tu Wildcard está en línea"
+  }
+}

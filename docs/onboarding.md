@@ -21,7 +21,14 @@ it from generation. Study/work context shapes complementary, age-appropriate
 identities, without claiming credentials or forcing every conversation into a role. The shared catalog
 contains ISO 3166-1 country/territory codes and ISO 639-1 languages, with English
 labels from the runtime's Intl display names. Both clients consume the same
-server options. User-entered names can retain their original spelling.
+server options and re-label countries and languages by code in the interface
+language (`Intl.DisplayNames` on web, `Locale.localizedString` on iOS), sorted in
+that language, with an uppercase first letter; styles and circle types are
+translated by code, keeping the API name for an unknown code. A fresh draft
+suggests the interface language (Spanish or English) as the contacts' preferred
+language; it stays editable and is independent of the interface language
+afterwards ([localization](localization.md)). User-entered names can retain their
+original spelling.
 
 The screen explicitly asks for shared-memory acceptance before submitting. It
 explains that group members can read the full history and that facts from private

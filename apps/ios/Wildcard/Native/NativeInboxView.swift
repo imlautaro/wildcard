@@ -5,9 +5,9 @@ struct NativeExperimentsDirectoryView: View {
     @Environment(ContactsStore.self) private var contacts
     @Environment(NativeExperiments.self) private var native
     private static let capabilities: [(kind: String, symbol: String?, title: String)] = [
-        ("timer", nil, "Timers and alarms"),
-        ("calendar", nil, "Calendar and Reminders"),
-        ("default", "square.and.arrow.up", "Shortcuts, widgets and sharing"),
+        ("timer", nil, String(localized: "Timers and alarms")),
+        ("calendar", nil, String(localized: "Calendar and Reminders")),
+        ("default", "square.and.arrow.up", String(localized: "Shortcuts, widgets and sharing")),
     ]
     var body: some View {
         List {
@@ -80,11 +80,11 @@ struct NativeInboxView: View {
                     HStack(spacing: 10) {
                         ContactAvatar(contact: contacts.contact(id: draft.contactID), size: 32)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(contacts.contact(id: draft.contactID)?.name ?? "Contact").manrope(.headline, weight: .semibold)
+                            Text(contacts.contact(id: draft.contactID)?.name ?? String(localized: "Contact")).manrope(.headline, weight: .semibold)
                             Text(draft.createdAt, format: .relative(presentation: .named)).manrope(.caption).foregroundStyle(.secondary)
                         }
                     }
-                    Text(draft.text.isEmpty ? "Shared attachment" : draft.text).manrope(.subheadline).lineLimit(6)
+                    Text(draft.text.isEmpty ? String(localized: "Shared attachment") : draft.text).manrope(.subheadline).lineLimit(6)
                         .foregroundStyle(draft.text.isEmpty ? .secondary : .primary)
                     if let file = draft.filename {
                         Label(file, systemImage: "doc.fill").manrope(.footnote, weight: .medium).lineLimit(1)

@@ -5,7 +5,11 @@
 // initials instead, as the app does.
 const props = withDefaults(defineProps<{ who?: CastId; person?: PersonId; size?: number }>(), { size: 40, who: undefined, person: undefined });
 const member = computed(() => (props.who ? cast[props.who] : undefined));
-const initials = computed(() => (props.person ? people[props.person].name.slice(0, 1) : ''));
+const { t } = useI18n();
+const initials = computed(() => {
+  if (!props.person) return '';
+  return (props.person === 'you' ? t('cast.you') : people[props.person].name).slice(0, 1);
+});
 </script>
 
 <template>

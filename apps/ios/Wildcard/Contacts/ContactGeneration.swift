@@ -136,9 +136,9 @@ struct ContactGenerationSection: View {
                     Picker("Gender", selection: $store.draft.gender) {
                         Text("Male").tag("male"); Text("Female").tag("female")
                     }
-                    SearchablePicker(title: "Preferred language", selection: $store.draft.language, options: options.languages.pickerOptions)
-                    SearchablePicker(title: "Country", selection: $store.draft.country, options: options.countries.pickerOptions,
-                                     placeholder: "Choose a country")
+                    SearchablePicker(title: String(localized: "Preferred language"), selection: $store.draft.language, options: options.languages.pickerOptions)
+                    SearchablePicker(title: String(localized: "Country"), selection: $store.draft.country, options: options.countries.pickerOptions,
+                                     placeholder: String(localized: "Choose a country"))
                 }
                 .disabled(store.busy || store.job != nil)
             } else {
@@ -147,7 +147,7 @@ struct ContactGenerationSection: View {
         } header: {
             HStack {
                 Text("Your bot")
-                InfoButton(title: "Your bot", text: "These fields describe your bot. Your saved onboarding preferences are reused without asking for your details again. Generation uses Meta Standard processing.")
+                InfoButton(title: String(localized: "Your bot"), text: String(localized: "These fields describe your bot. Your saved onboarding preferences are reused without asking for your details again. Generation uses Meta Standard processing."))
             }
         }
         .task(id: scenePhase) {
@@ -191,9 +191,9 @@ private struct ContactGenerationProgressView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var messageIndex = 0
     private let messages = [
-        "A unique name, personality, and portrait are on the way.",
-        "Your contact is being created with the preferences you chose.",
-        "This can take a few minutes. We are still working on your contact.",
+        String(localized: "A unique name, personality, and portrait are on the way."),
+        String(localized: "Your contact is being created with the preferences you chose."),
+        String(localized: "This can take a few minutes. We are still working on your contact."),
     ]
 
     var body: some View {
@@ -202,7 +202,7 @@ private struct ContactGenerationProgressView: View {
                 .accessibilityLabel("Creating your contact")
             Text(running ? "Creating your contact…" : "Starting contact creation…")
                 .font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
-            Text(running ? messages[messageIndex] : "Sending your request…")
+            Text(running ? messages[messageIndex] : String(localized: "Sending your request…"))
                 .foregroundStyle(.secondary)
                 .frame(minHeight: 64)
             if running {

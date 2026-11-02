@@ -2,6 +2,7 @@
 import type { GroupMember, GroupPrivateSharing } from '~/utils/types';
 
 const route = useRoute();
+const { t } = useI18n();
 const id = computed(() => String(route.params.id));
 const chats = useChats();
 const { user } = useSession();
@@ -13,7 +14,7 @@ const shareMemory = ref(false);
 const contributorConsent = ref(false);
 // "Can see earlier messages" for the next invite or added contact; on by default.
 const includeHistory = ref(true);
-const historyHelp = "Off: they'll only see messages from when they join.";
+const historyHelp = computed(() => t('groups.members.historyHelp'));
 const busy = ref(false);
 const error = ref<string | null>(null);
 const notice = ref<string | null>(null);
@@ -28,9 +29,11 @@ const sheet = ref<'sharing' | 'invite' | 'add' | null>(null);
 const managing = ref<GroupMember | null>(null);
 const sharingSummary = computed(() => {
   const permissions = snapshot.value?.privateSharing ?? [];
-  return permissions.length ? `${permissions.filter(permission => permission.enabled).length} of ${permissions.length} on` : 'No contacts';
+  return permissions.length
+    ? t('groups.members.sharingSummary', { on: permissions.filter(permission => permission.enabled).length, total: permissions.length })
+    : t('groups.members.noContacts');
 });
-const sharingInfo = 'Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections and chats you keep private stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat.';
+const sharingInfo = computed(() => t('groups.members.sharingInfo'));
 // Missing (older cached snapshot) means full history.
 const withoutHistory = (member: GroupMember) => member.includesHistory === 0 || member.includesHistory === false;
 // Each sheet starts with history on, so an earlier "off" does not carry over.
@@ -39,7 +42,9 @@ function openSheet(next: 'invite' | 'add') {
   sheet.value = next;
 }
 function memberRole(member: GroupMember) {
-  return member.kind === 'agent' ? 'Contact' : member.id === snapshot.value?.group.ownerID ? 'Owner' : member.canInvite ? 'Can invite' : 'Member';
+  return member.kind === 'agent' ? t('groups.members.roles.contact')
+    : member.id === snapshot.value?.group.ownerID ? t('groups.members.roles.owner')
+      : member.canInvite ? t('groups.members.roles.canInvite') : t('groups.members.roles.member');
 }
 function canManage(member: GroupMember) {
   return canRemove(member) || (isOwner.value && member.kind === 'user' && member.id !== user.value?.id);
@@ -72,7 +77,7 @@ async function run(task: () => Promise<void>) {
 
 const invite = () => run(async () => {
   await api(`groups/${id.value}/invitations`, { json: { email: email.value.trim(), includeHistory: includeHistory.value } });
-  notice.value = `Invitation sent to ${email.value.trim()}. It appears in their Invitations and expires after 24 hours.`;
+  notice.value = translate('groups.members.inviteSent', { email: email.value.trim() });
   email.value = '';
   sheet.value = null;
 });
@@ -86,7 +91,7 @@ const addContact = () => run(async () => {
 
 const remove = (member: GroupMember) => run(async () => {
   managing.value = null;
-  if (!window.confirm(`Remove ${member.name}? This removes group access. Previous messages stay visible. Removing a user also removes the contacts they added.`)) return;
+  if (!window.confirm(t('groups.members.removeConfirm', { name: member.name }))) return;
   await api(member.kind === 'agent' ? `groups/${id.value}/agents/${member.id}` : `groups/${id.value}/members/${member.id}`, { method: 'DELETE' });
   await load();
 });
@@ -101,7 +106,7 @@ const togglePrivateSharing = (permission: GroupPrivateSharing) => run(async () =
   const groupID = id.value;
   const accountID = user.value?.id;
   const enabled = !permission.enabled;
-  if (enabled && !window.confirm('This contact may discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. You can turn this off later, but messages already sent remain visible.')) return;
+  if (enabled && !window.confirm(t('groups.members.privateSharingConfirm'))) return;
   await api(`groups/${groupID}/private-sharing/${permission.agentID}`, { method: 'PUT', json: { enabled } });
   if (accountID !== user.value?.id || groupID !== id.value) return;
   updateGroupPrivateSharing(groupID, permission.agentID, enabled);
@@ -118,8 +123,8 @@ const rename = (name: string) => run(async () => {
 
 const leave = () => run(async () => {
   const message = isOwner.value
-    ? 'Delete group? This deletes the group, its messages and memories sourced from those messages for everyone.'
-    : 'Leave group? Your contacts leave with you. Your messages remain in the group. Your contributed group memories stop being available to contacts, but replies already sent remain visible.';
+    ? t('groups.members.deleteConfirm')
+    : t('groups.members.leaveConfirm');
   if (!window.confirm(message)) return;
   await api(isOwner.value ? `groups/${id.value}` : `groups/${id.value}/members/${user.value!.id}`, { method: 'DELETE' });
   chats.removeGroup(id.value);
@@ -133,8 +138,8 @@ onMounted(() => run(async () => {
 </script>
 
 <template>
-  <PageBar :title="snapshot?.group.name ?? 'Group'" :back="`/groups/${id}`" always-back>
-    <AppIconButton icon="refresh" label="Refresh details" :disabled="busy" @click="run(load)" />
+  <PageBar :title="snapshot?.group.name ?? $t('groups.members.fallbackTitle')" :back="`/groups/${id}`" always-back>
+    <AppIconButton icon="refresh" :label="$t('groups.members.refresh')" :disabled="busy" @click="run(load)" />
   </PageBar>
   <div class="page">
     <div class="page-inner">
@@ -143,29 +148,29 @@ onMounted(() => run(async () => {
       <AppLoading v-if="!snapshot && busy" fill />
       <template v-if="snapshot">
         <IdentityEditor :name="snapshot.group.name" :path="groupPhotoPath(snapshot.group)" :renamable="isOwner" show-name :busy="busy" @rename="rename" />
-        <p class="identity-subtitle">{{ snapshot.members.length }} {{ snapshot.members.length === 1 ? 'member' : 'members' }}</p>
+        <p class="identity-subtitle">{{ $t('groups.members.memberCount', snapshot.members.length) }}</p>
 
         <AppListGroup>
-          <AppListItem icon="chat" opens :value="sharingSummary" @click="sheet = 'sharing'">Discuss my private chats</AppListItem>
-          <AppListItem :to="`/groups/${id}/connections`" icon="link">Connections</AppListItem>
-          <AppListItem :to="`/groups/${id}/learning`" icon="person">Conversation learning</AppListItem>
-          <AppListItem :to="`/groups/${id}/mini-apps`" icon="grid">Mini apps</AppListItem>
-          <AppListItem :to="`/groups/${id}/tasks`" icon="tasks">Tasks</AppListItem>
+          <AppListItem icon="chat" opens :value="sharingSummary" @click="sheet = 'sharing'">{{ $t('groups.members.discussPrivate') }}</AppListItem>
+          <AppListItem :to="`/groups/${id}/connections`" icon="link">{{ $t('groups.members.connections') }}</AppListItem>
+          <AppListItem :to="`/groups/${id}/learning`" icon="person">{{ $t('groups.members.learning') }}</AppListItem>
+          <AppListItem :to="`/groups/${id}/mini-apps`" icon="grid">{{ $t('groups.members.miniApps') }}</AppListItem>
+          <AppListItem :to="`/groups/${id}/tasks`" icon="tasks">{{ $t('groups.members.tasks') }}</AppListItem>
         </AppListGroup>
 
-        <AppListGroup title="Members">
+        <AppListGroup :title="$t('groups.members.members')">
           <template v-if="snapshot.canInvite">
-            <AppListItem icon="mail" :disabled="busy" @click="openSheet('invite')">Invite people</AppListItem>
-            <AppListItem icon="group-add" :disabled="busy" @click="openSheet('add')">Add a contact</AppListItem>
+            <AppListItem icon="mail" :disabled="busy" @click="openSheet('invite')">{{ $t('groups.members.invitePeople') }}</AppListItem>
+            <AppListItem icon="group-add" :disabled="busy" @click="openSheet('add')">{{ $t('groups.members.addContact') }}</AppListItem>
           </template>
           <div v-for="member in snapshot.members" :key="`${member.kind}/${member.id}`" class="field member-row">
             <AppAvatar :name="member.name" :path="photoPath(member)" :size="40" />
             <span class="two-line">
-              {{ member.kind === 'user' && member.id === user?.id ? `${member.name} (You)` : member.name }}
+              {{ member.kind === 'user' && member.id === user?.id ? $t('groups.members.you', { name: member.name }) : member.name }}
               <span class="small">{{ memberRole(member) }}</span>
-              <span v-if="withoutHistory(member)" class="small">Joined without earlier messages</span>
+              <span v-if="withoutHistory(member)" class="small">{{ $t('groups.members.withoutHistory') }}</span>
             </span>
-            <AppIconButton v-if="canManage(member)" icon="more" :label="`Manage ${member.name}`" :disabled="busy" @click="managing = member" />
+            <AppIconButton v-if="canManage(member)" icon="more" :label="$t('groups.members.manage', { name: member.name })" :disabled="busy" @click="managing = member" />
           </div>
         </AppListGroup>
 
@@ -178,77 +183,77 @@ onMounted(() => run(async () => {
             @archive="run(() => chats.archiveChat('group', id, !archived))"
             @clear="memory => run(() => chats.clearChat('group', id, memory))"
           />
-          <AppListItem danger :icon="isOwner ? 'delete' : 'logout'" :disabled="busy" @click="leave">{{ isOwner ? 'Delete group' : 'Leave group' }}</AppListItem>
+          <AppListItem danger :icon="isOwner ? 'delete' : 'logout'" :disabled="busy" @click="leave">{{ isOwner ? $t('groups.members.deleteGroup') : $t('groups.members.leaveGroup') }}</AppListItem>
         </AppListGroup>
 
-        <AppSheet v-if="sheet === 'sharing'" title="Discuss my private chats" @close="sheet = null">
-          <template #header><InfoButton label="Discuss my private chats" :text="sharingInfo" /></template>
+        <AppSheet v-if="sheet === 'sharing'" :title="$t('groups.members.discussPrivate')" @close="sheet = null">
+          <template #header><InfoButton :label="$t('groups.members.discussPrivate')" :text="sharingInfo" /></template>
           <AppListGroup>
             <label v-for="permission in snapshot.privateSharing ?? []" :key="permission.agentID" class="toggle">
               <span class="two-line">
-                {{ snapshot.members.find(member => member.kind === 'agent' && member.id === permission.agentID)?.name ?? 'Contact' }}
-                <span v-if="!permission.available && !permission.enabled" class="small">Needs a private chat that isn't kept private</span>
+                {{ snapshot.members.find(member => member.kind === 'agent' && member.id === permission.agentID)?.name ?? $t('groups.members.contactFallback') }}
+                <span v-if="!permission.available && !permission.enabled" class="small">{{ $t('groups.members.needsPrivateChat') }}</span>
               </span>
               <input
                 type="checkbox" role="switch" :checked="!!permission.enabled" :disabled="busy || (!permission.available && !permission.enabled)"
                 @change="($event.target as HTMLInputElement).checked = !!permission.enabled; togglePrivateSharing(permission)"
               >
             </label>
-            <div v-if="!snapshot.privateSharing?.length" class="text-block">Add a contact to manage private chat sharing.</div>
+            <div v-if="!snapshot.privateSharing?.length" class="text-block">{{ $t('groups.members.addToManage') }}</div>
           </AppListGroup>
           <AppNotice v-if="error">{{ error }}</AppNotice>
         </AppSheet>
 
-        <AppSheet v-if="sheet === 'invite'" title="Invite people" @close="sheet = null">
-          <template #header><InfoButton label="Invite people" text="They will receive an invitation in Wildcard and can choose whether to join the group. Invitations expire after 24 hours." /></template>
+        <AppSheet v-if="sheet === 'invite'" :title="$t('groups.members.invitePeople')" @close="sheet = null">
+          <template #header><InfoButton :label="$t('groups.members.invitePeople')" :text="$t('groups.members.inviteInfo')" /></template>
           <form id="invite-form" class="group" @submit.prevent="invite">
-            <div class="field"><input v-model="email" type="email" placeholder="Email of an existing account" aria-label="Email" autocomplete="off" autofocus></div>
+            <div class="field"><input v-model="email" type="email" :placeholder="$t('groups.members.emailPlaceholder')" :aria-label="$t('groups.members.email')" autocomplete="off" autofocus></div>
           </form>
           <AppListGroup>
-            <AppSwitch v-model="includeHistory" label="Can see earlier messages" :supporting="historyHelp" :disabled="busy" />
+            <AppSwitch v-model="includeHistory" :label="$t('groups.members.canSeeEarlier')" :supporting="historyHelp" :disabled="busy" />
           </AppListGroup>
           <AppNotice v-if="error">{{ error }}</AppNotice>
           <template #actions>
-            <AppButton variant="text" @click="sheet = null">Cancel</AppButton>
-            <AppButton type="submit" form="invite-form" :disabled="busy || !email.trim()">Invite</AppButton>
+            <AppButton variant="text" @click="sheet = null">{{ $t('common.cancel') }}</AppButton>
+            <AppButton type="submit" form="invite-form" :disabled="busy || !email.trim()">{{ $t('groups.members.invite') }}</AppButton>
           </template>
         </AppSheet>
 
-        <AppSheet v-if="sheet === 'add'" title="Add a contact" @close="sheet = null">
-          <AppListGroup v-if="!addable.length"><div class="text-block">Only contacts you created can be added. All of them are already in this group.</div></AppListGroup>
+        <AppSheet v-if="sheet === 'add'" :title="$t('groups.members.addContact')" @close="sheet = null">
+          <AppListGroup v-if="!addable.length"><div class="text-block">{{ $t('groups.members.onlyCreated') }}</div></AppListGroup>
           <template v-else>
             <AppListGroup>
               <div class="field">
-                <label for="add-contact">Contact</label>
+                <label for="add-contact">{{ $t('groups.members.contact') }}</label>
                 <AppSelect
-                  id="add-contact" v-model="contactID" variant="plain" placeholder="Choose a contact"
+                  id="add-contact" v-model="contactID" variant="plain" :placeholder="$t('groups.members.chooseContact')"
                   :options="addable.map(contact => ({ value: contact.id, label: contact.name }))"
                 />
               </div>
-              <AppSwitch v-model="includeHistory" label="Can see earlier messages" :supporting="historyHelp" :disabled="busy" />
+              <AppSwitch v-model="includeHistory" :label="$t('groups.members.canSeeEarlier')" :supporting="historyHelp" :disabled="busy" />
             </AppListGroup>
             <!-- Consent covers this text, so it stays visible beside the checkboxes. -->
             <ConsentFields
               v-model:share-memory="shareMemory" v-model:contributor-consent="contributorConsent"
               :contributor-model="snapshot.contributorModel"
-              :disclosure="['Adding this contact lets it use what group members, including you, have told it with everyone in the group, except chats kept private. It remains the same contact in your other chats.']"
-              memory-label="I accept shared memory"
-              contributor-note="Your selected model is Contributor. Messages and memories sent to Meta may be used for model training."
+              :disclosure="[$t('groups.members.addDisclosure')]"
+              :memory-label="$t('groups.members.memoryLabel')"
+              :contributor-note="$t('groups.members.contributorNote')"
             />
           </template>
           <AppNotice v-if="error">{{ error }}</AppNotice>
           <template #actions>
-            <AppButton variant="text" @click="sheet = null">Cancel</AppButton>
-            <AppButton v-if="addable.length" :disabled="!contactID || !consented || busy" @click="addContact">Add</AppButton>
+            <AppButton variant="text" @click="sheet = null">{{ $t('common.cancel') }}</AppButton>
+            <AppButton v-if="addable.length" :disabled="!contactID || !consented || busy" @click="addContact">{{ $t('common.add') }}</AppButton>
           </template>
         </AppSheet>
 
         <AppSheet v-if="managing" :title="managing.name" @close="managing = null">
           <AppListGroup>
             <AppListItem v-if="isOwner && managing.kind === 'user' && managing.id !== user?.id" icon="mail" :disabled="busy" @click="togglePermission(managing)">
-              {{ managing.canInvite ? 'Stop allowing invites' : 'Allow invites' }}
+              {{ managing.canInvite ? $t('groups.members.stopInvites') : $t('groups.members.allowInvites') }}
             </AppListItem>
-            <AppListItem v-if="canRemove(managing)" danger icon="delete" :disabled="busy" @click="remove(managing)">Remove from group</AppListItem>
+            <AppListItem v-if="canRemove(managing)" danger icon="delete" :disabled="busy" @click="remove(managing)">{{ $t('groups.members.removeFromGroup') }}</AppListItem>
           </AppListGroup>
         </AppSheet>
       </template>

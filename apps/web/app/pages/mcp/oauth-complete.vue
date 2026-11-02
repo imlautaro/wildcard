@@ -1,5 +1,6 @@
 <script setup lang="ts">
-const message = ref('Completing authorization…');
+// null while the authorization completes, so the default status follows the language.
+const message = ref<string | null>(null);
 const destination = ref('/');
 onMounted(async () => {
   const params = new URLSearchParams(window.location.hash.slice(1));
@@ -11,22 +12,22 @@ onMounted(async () => {
   try {
     const pending = saved ? JSON.parse(saved) as { flowID: string; connectionID: string; contactID: string; userID: string } : null;
     if (!pending || pending.flowID !== flowID || !proof || pending.userID !== useSession().user.value?.id ||
-      !/^[a-f0-9-]{36}$/.test(pending.connectionID) || (pending.contactID !== 'account' && !/^[a-f0-9-]{36}$/.test(pending.contactID))) throw new Error('Authorization does not match this signed-in session. Return to Connections and try again.');
+      !/^[a-f0-9-]{36}$/.test(pending.connectionID) || (pending.contactID !== 'account' && !/^[a-f0-9-]{36}$/.test(pending.contactID))) throw new Error(translate('errors.oauthMismatch'));
     destination.value = '/account/connections';
     await api(`me/mcp/${pending.connectionID}/oauth/finish`, { json: { flowID, proof } });
     forgetMcpConnections('account');
     // Catalog discovery is separate; new permissions always start disabled.
     try { await api(`me/mcp/${pending.connectionID}/refresh`, { json: {} }); }
-    catch { message.value = 'Account authorized. Open Connections and refresh tools to review permissions.'; return; }
+    catch { message.value = translate('account.connections.oauth.authorized'); return; }
     await navigateTo(destination.value, { replace: true });
   } catch (failure) { message.value = errorMessage(failure); }
 });
 </script>
 <template>
-  <PageBar title="Authorization" />
+  <PageBar :title="$t('account.connections.oauth.title')" />
   <div class="page"><div class="page-inner">
-    <AppListGroup><p class="text-block message" role="status">{{ message }}</p></AppListGroup>
-    <div class="actions-row"><AppButton :to="destination">Return to Connections</AppButton></div>
+    <AppListGroup><p class="text-block message" role="status">{{ message ?? $t('account.connections.oauth.completing') }}</p></AppListGroup>
+    <div class="actions-row"><AppButton :to="destination">{{ $t('account.connections.oauth.return') }}</AppButton></div>
   </div></div>
 </template>
 

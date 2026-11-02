@@ -22,6 +22,7 @@ export const appIcons = {
   close: ['solar:close-linear', 'solar:close-linear'],
   gear: ['solar:settings-linear', 'solar:settings-bold'],
   appearance: ['solar:pallete-2-linear', 'solar:pallete-2-linear'],
+  language: ['solar:translation-linear', 'solar:translation-linear'],
   share: ['solar:share-linear', 'solar:share-bold'],
   'group-add': ['solar:user-plus-rounded-linear', 'solar:user-plus-rounded-bold'],
   reply: ['solar:reply-linear', 'solar:reply-linear'],

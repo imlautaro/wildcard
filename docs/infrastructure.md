@@ -354,8 +354,10 @@ so the Workers Builds root must stay `/`.
 Provisioning:
 
 1. In `apps/site/wrangler.jsonc`, replace `account_id`, and `name` if `wildcard-site`
-   is taken. In `apps/site/app/utils/site.ts`, set `appUrl` to your web app origin,
-   `repositoryUrl` to your repository and `iosUrl` if you distribute the iPhone app.
+   is taken. In `apps/site/app/utils/site.ts`, set `url` to the site's own public
+   origin (canonical and hreflang links for `/` and `/es`), `appUrl` to your web app
+   origin, `repositoryUrl` to your repository and `iosUrl` if you distribute the
+   iPhone app.
    Leave `repositoryPublic: false` until the repository is public, so the site
    doesn't link to a page that returns 404.
 2. In Cloudflare, create another Workers Builds project on the same repository and

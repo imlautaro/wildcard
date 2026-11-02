@@ -14,7 +14,10 @@ struct AuthenticationView: View {
 
     private enum Input: Hashable { case email, password }
     private var colors: SignInColors { SignInColors(dark: colorScheme == .dark) }
-    private var heading: [String] { registration ? ["Make yourself", "at home."] : ["Welcome", "back."] }
+    /// One key per heading; the translation places the line break.
+    private var heading: [String] {
+        (registration ? String(localized: "Make yourself\nat home.") : String(localized: "Welcome\nback.")).components(separatedBy: "\n")
+    }
 
     var body: some View {
         NavigationStack {
@@ -168,11 +171,11 @@ struct AuthenticationView: View {
         switch field {
         case .email:
             let value = email.trimmingCharacters(in: .whitespacesAndNewlines)
-            if value.isEmpty { return "Enter your email address." }
-            return !value.contains("@") || value.hasSuffix("@") ? "Enter a valid email address." : nil
+            if value.isEmpty { return String(localized: "Enter your email address.") }
+            return !value.contains("@") || value.hasSuffix("@") ? String(localized: "Enter a valid email address.") : nil
         case .password:
-            if password.isEmpty { return "Enter your password." }
-            return registration && !(8...128).contains(password.utf16.count) ? "Use 8–128 characters." : nil
+            if password.isEmpty { return String(localized: "Enter your password.") }
+            return registration && !(8...128).contains(password.utf16.count) ? String(localized: "Use 8–128 characters.") : nil
         }
     }
 
@@ -197,7 +200,7 @@ struct AuthenticationView: View {
 }
 
 private struct CredentialBox<Content: View>: View {
-    let title: String
+    let title: LocalizedStringResource
     let symbol: String
     let error: String?
     let active: Bool

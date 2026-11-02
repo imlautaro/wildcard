@@ -2,22 +2,22 @@
 // Clear chat with the optional memory removal, shared by the details pages and the chat-list menu.
 const props = defineProps<{ busy: boolean; group?: boolean }>();
 const emit = defineEmits<{ clear: [clearMemory: boolean] }>();
+const { t } = useI18n();
 const clearMemory = ref(false);
 
 function clear() {
-  const scope = props.group ? 'for everyone in this group' : 'from your private chat';
-  const memory = clearMemory.value ? 'Memory learned here will also be deleted.' : 'Extracted memories will be kept without the original messages.';
-  if (window.confirm(`Permanently clear all messages, files, tasks, documents, mini apps, and scheduled work ${scope}? ${memory}`)) {
+  const memory = t(clearMemory.value ? 'chat.clear.memoryDeleted' : 'chat.clear.memoryKept');
+  if (window.confirm(t(props.group ? 'chat.clear.confirmGroup' : 'chat.clear.confirmPrivate', { memory }))) {
     emit('clear', clearMemory.value);
   }
 }
 </script>
 
 <template>
-  <p class="text-block">{{ group ? 'Clear the group for everyone.' : 'Clear your private conversation.' }} This also removes files, tasks, documents, mini apps, and scheduled work.</p>
+  <p class="text-block">{{ group ? $t('chat.clear.introGroup') : $t('chat.clear.introPrivate') }}</p>
   <label class="toggle">
-    <span>Also delete memory learned in this chat</span>
+    <span>{{ $t('chat.clear.deleteMemory') }}</span>
     <input v-model="clearMemory" type="checkbox" :disabled="busy">
   </label>
-  <AppListItem danger :disabled="busy" @click="clear">Clear chat</AppListItem>
+  <AppListItem danger :disabled="busy" @click="clear">{{ $t('chat.clear.action') }}</AppListItem>
 </template>

@@ -31,7 +31,7 @@ function refreshSupport() {
 
 async function send(subscription: PushSubscription, method: 'PUT' | 'DELETE') {
   const json = subscription.toJSON();
-  if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error('This browser returned an incomplete subscription.');
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error(translate('errors.push.incompleteSubscription'));
   await api('push/web-device', { method, json: method === 'PUT'
     ? { endpoint: json.endpoint, keys: { p256dh: json.keys.p256dh, auth: json.keys.auth } } : { endpoint: json.endpoint } });
 }
@@ -55,13 +55,13 @@ async function subscribe(): Promise<void> {
 
 async function enable(userID: string) {
   refreshSupport();
-  if (!supported.value) throw new Error('This browser does not support notifications.');
+  if (!supported.value) throw new Error(translate('errors.push.unsupported'));
   // Must run inside the click that asked for it.
   permission.value = await Notification.requestPermission();
   if (permission.value !== 'granted') {
     throw new Error(permission.value === 'denied'
-      ? 'Notifications are blocked for this site. Allow them in your browser settings, then try again.'
-      : 'Notifications were not enabled.');
+      ? translate('errors.push.blocked')
+      : translate('errors.push.notEnabled'));
   }
   await subscribe();
   writeOptIn(userID, true);

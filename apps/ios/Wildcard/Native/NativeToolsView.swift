@@ -23,16 +23,16 @@ struct NativeToolsView: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .tools: "Allowed tools"
-            case .automatic: "Run without confirmation"
-            case .examples: "Try it in chat"
+            case .tools: String(localized: "Allowed tools")
+            case .automatic: String(localized: "Run without confirmation")
+            case .examples: String(localized: "Try it in chat")
             }
         }
         var info: String {
             switch self {
-            case .tools: "Tools this contact can use on this iPhone. Each request still appears in Requests on this iPhone."
-            case .automatic: "Applies to new requests on this iPhone while Wildcard is open. iOS may ask for permission the first time. Calendar and location reminders still require review. Older requests remain manual."
-            case .examples: "Run an Open contact or Draft message shortcut from Siri, Spotlight or the Action button. Add the Contact widget to your Home Screen. Shared inputs remain drafts until you send them."
+            case .tools: String(localized: "Tools this contact can use on this iPhone. Each request still appears in Requests on this iPhone.")
+            case .automatic: String(localized: "Applies to new requests on this iPhone while Wildcard is open. iOS may ask for permission the first time. Calendar and location reminders still require review. Older requests remain manual.")
+            case .examples: String(localized: "Run an Open contact or Draft message shortcut from Siri, Spotlight or the Action button. Add the Contact widget to your Home Screen. Shared inputs remain drafts until you send them.")
             }
         }
     }
@@ -42,7 +42,7 @@ struct NativeToolsView: View {
         // Deprecated examples retained for reference:
         // ("focus", "“Help me focus for 25 minutes”"), ("recipe", "“Guide me through a recipe”"),
         // ("speech", "“Read this aloud”"),
-        ("timer", "“Set a timer for 12 minutes”"), ("calendar", "“Add an event tomorrow at 3 PM”"),
+        ("timer", String(localized: "“Set a timer for 12 minutes”")), ("calendar", String(localized: "“Add an event tomorrow at 3 PM”")),
     ]
     var body: some View {
         Form {
@@ -50,7 +50,7 @@ struct NativeToolsView: View {
                 HStack(spacing: 14) {
                     ContactAvatar(contact: contact, size: 52)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(contact?.name ?? "Contact").manrope(.headline, weight: .bold)
+                        Text(contact?.name ?? String(localized: "Contact")).manrope(.headline, weight: .bold)
                         Text(kinds.isEmpty ? "Off on this iPhone" : "\(kinds.count) of \(NativeExperiments.kinds.count) tools enabled on this iPhone")
                             .manrope(.footnote).foregroundStyle(.secondary)
                     }
@@ -59,21 +59,21 @@ struct NativeToolsView: View {
                     Toggle("Enable native experiments", isOn: Binding(get: { !kinds.isEmpty }, set: {
                         native.setKinds($0 ? Set(NativeExperiments.kinds) : [], contactID: contactID)
                     }))
-                    InfoButton(title: "Native experiments", text: "Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms you ask for in this chat on this iPhone run while Wildcard is open. To get them from the web or from people who also chat with this contact, open Timers and alarms in this contact's details. Choose other automatic tools below. Lock Screen activities may show their titles.")
+                    InfoButton(title: String(localized: "Native experiments"), text: String(localized: "Enables this contact's name in Shortcuts, Siri, widgets and the share sheet on this device. Timers and alarms you ask for in this chat on this iPhone run while Wildcard is open. To get them from the web or from people who also chat with this contact, open Timers and alarms in this contact's details. Choose other automatic tools below. Lock Screen activities may show their titles."))
                 }
             }
             if !kinds.isEmpty {
                 Section {
                     let automatic = NativeExperiments.kinds.filter { kinds.contains($0) && NativeExperiments.automaticKinds.contains($0) }
-                    SheetRow(title: "Allowed tools", systemImage: "wrench.and.screwdriver",
-                             value: "\(kinds.count) of \(NativeExperiments.kinds.count)") { sheet = .tools }
-                    SheetRow(title: "Run without confirmation", systemImage: "bolt",
-                             value: "\(automatic.filter { native.automaticSince[contactID]?[$0] != nil }.count) of \(automatic.count)") { sheet = .automatic }
-                    SheetRow(title: "Try it in chat", systemImage: "text.bubble", value: "\(Self.examples.count) ideas") { sheet = .examples }
+                    SheetRow(title: String(localized: "Allowed tools"), systemImage: "wrench.and.screwdriver",
+                             value: String(localized: "\(kinds.count) of \(NativeExperiments.kinds.count)")) { sheet = .tools }
+                    SheetRow(title: String(localized: "Run without confirmation"), systemImage: "bolt",
+                             value: String(localized: "\(automatic.filter { native.automaticSince[contactID]?[$0] != nil }.count) of \(automatic.count)")) { sheet = .automatic }
+                    SheetRow(title: String(localized: "Try it in chat"), systemImage: "text.bubble", value: String(localized: "\(Self.examples.count) ideas")) { sheet = .examples }
                 }
                 Section {
                     NavigationLink { ContactPhonesView(contactID: contactID) } label: {
-                        NativeToolLabel(kind: "timer", title: "Timers and alarms from other people", symbol: "iphone.radiowaves.left.and.right")
+                        NativeToolLabel(kind: "timer", title: String(localized: "Timers and alarms from other people"), symbol: "iphone.radiowaves.left.and.right")
                     }
                 }
                 if let agent = contact?.agentID {
@@ -93,7 +93,7 @@ struct NativeToolsView: View {
                     } header: {
                         HStack {
                             Text("Contact link")
-                            InfoButton(title: "Contact link", text: "This link opens the same agent for existing participants. It does not invite people or grant access.")
+                            InfoButton(title: String(localized: "Contact link"), text: String(localized: "This link opens the same agent for existing participants. It does not invite people or grant access."))
                         }
                     }
                 }
@@ -146,7 +146,7 @@ struct NativeToolsView: View {
                 } header: {
                     HStack {
                         Text("Requests on this iPhone")
-                        InfoButton(title: "Requests", text: "Completed means this device finished the requested operation, such as scheduling an alarm. It does not mean the alarm rang or a real-world task was completed. Requests expire after 24 hours. Calendar and reminder items you save remain in their system apps.")
+                        InfoButton(title: String(localized: "Requests"), text: String(localized: "Completed means this device finished the requested operation, such as scheduling an alarm. It does not mean the alarm rang or a real-world task was completed. Requests expire after 24 hours. Calendar and reminder items you save remain in their system apps."))
                     }
                 }
             }
@@ -214,7 +214,7 @@ struct NativeToolsView: View {
             HStack(alignment: .top, spacing: 12) {
                 NativeGlyph(kind: action.kind, size: 32)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(action.payload?.title ?? "Native action").manrope(.headline, weight: .semibold)
+                    Text(action.payload?.title ?? String(localized: "Native action")).manrope(.headline, weight: .semibold)
                     Text(NativeExperiments.labels[action.kind] ?? action.kind).manrope(.caption).foregroundStyle(.secondary)
                     if let payload = action.payload { NativePayloadDetails(payload: payload) }
                     Label { Text(statusLabel(action)).manrope(.caption, weight: .semibold) } icon: { Image(systemName: tone.symbol) }
@@ -246,13 +246,13 @@ struct NativeToolsView: View {
     }
     private func statusLabel(_ action: NativeAction) -> String {
         switch action.status {
-        case "pending": action.expiresAt <= Date.now.timeIntervalSince1970 * 1000 ? "Expired" : action.remoteDeviceID != nil ? "Sent to this iPhone · awaiting background execution" : "Waiting for you to run on this device"
-        case "running": "Execution started · outcome not confirmed"
-        case "completed": "Completed on this device"
-        case "cancelled": "Cancelled"
-        case "unknown": "Outcome unknown · inspect the system app"
-        case "expired": "Expired"
-        default: "Failed"
+        case "pending": action.expiresAt <= Date.now.timeIntervalSince1970 * 1000 ? String(localized: "Expired") : action.remoteDeviceID != nil ? String(localized: "Sent to this iPhone · awaiting background execution") : String(localized: "Waiting for you to run on this device")
+        case "running": String(localized: "Execution started · outcome not confirmed")
+        case "completed": String(localized: "Completed on this device")
+        case "cancelled": String(localized: "Cancelled")
+        case "unknown": String(localized: "Outcome unknown · inspect the system app")
+        case "expired": String(localized: "Expired")
+        default: String(localized: "Failed")
         }
     }
 }
@@ -265,8 +265,8 @@ private struct NativePayloadDetails: View {
             if let seconds = payload.durationSeconds {
                 detail("hourglass", Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide)))
             }
-            if let date = payload.date { detail("calendar", "Starts \(Self.format(date))") }
-            if let date = payload.endDate { detail("calendar.badge.checkmark", "Ends \(Self.format(date))") }
+            if let date = payload.date { detail("calendar", String(localized: "Starts \(Self.format(date))")) }
+            if let date = payload.endDate { detail("calendar.badge.checkmark", String(localized: "Ends \(Self.format(date))")) }
             if let steps = payload.steps {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
@@ -278,8 +278,12 @@ private struct NativePayloadDetails: View {
                 }.padding(.top, 2)
             }
             if payload.kind == "location_reminder" {
-                detail(payload.trigger == "departure" ? "figure.walk.departure" : "figure.walk.arrival",
-                       "\(payload.trigger == "departure" ? "On departure" : "On arrival") · radius \(Int(payload.radius ?? 200)) m")
+                let radius = Int(payload.radius ?? 200)
+                if payload.trigger == "departure" {
+                    detail("figure.walk.departure", String(localized: "On departure · radius \(radius) m"))
+                } else {
+                    detail("figure.walk.arrival", String(localized: "On arrival · radius \(radius) m"))
+                }
                 if let lat = payload.latitude, let lon = payload.longitude {
                     Text("\(lat), \(lon)").manrope(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                 } else {
@@ -399,7 +403,7 @@ struct NativeLocationPicker: View {
         do {
             let request = MKLocalSearch.Request(); request.naturalLanguageQuery = query
             let response = try await MKLocalSearch(request: request).start()
-            guard let item = response.mapItems.first else { error = "No place found. Tap the map to choose."; return }
+            guard let item = response.mapItems.first else { error = String(localized: "No place found. Tap the map to choose."); return }
             coordinate = item.location.coordinate
             position = .region(MKCoordinateRegion(center: item.location.coordinate, span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)))
         } catch { self.error = error.localizedDescription }

@@ -13,9 +13,9 @@ struct ContactDetailView: View {
     private var statusLabel: String {
         let chat = contacts.conversations.store(for: contactID)
         if let turn = chat.turns.first(where: { $0.taskID != nil && ($0.status == .queued || $0.status == .running) }) {
-            return turn.taskTitle.map { "Working on “\($0)”…" } ?? "Working on a task…"
+            return turn.taskTitle.map { String(localized: "Working on “\($0)”…") } ?? String(localized: "Working on a task…")
         }
-        return chat.presence?.label ?? "Loading..."
+        return chat.presence?.label ?? String(localized: "Loading...")
     }
 
     var body: some View {

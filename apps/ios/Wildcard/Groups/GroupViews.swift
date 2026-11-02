@@ -13,8 +13,8 @@ struct GroupConsentFields: View {
     /// True when reviewing consent as a current member (past tense for the floor).
     var alreadyMember = false
     private var historySentence: String {
-        !seesEarlierMessages && alreadyMember ? "You can read messages from when you joined." : seesEarlierMessages ? "Members can read the group's history, including messages sent before they joined, unless they were added without earlier messages."
-            : "You'll see messages from when you join."
+        !seesEarlierMessages && alreadyMember ? String(localized: "You can read messages from when you joined.") : seesEarlierMessages ? String(localized: "Members can read the group's history, including messages sent before they joined, unless they were added without earlier messages.")
+            : String(localized: "You'll see messages from when you join.")
     }
     var body: some View {
         Section("Shared memory") {
@@ -222,8 +222,26 @@ struct GroupChatView: View {
     }
     private var subtitle: String {
         let names = workingReplies.map(\.name).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
-        if !names.isEmpty { return "\(names.joined(separator: ", ")) working…" }
-        return store.snapshot?.members.map(\.name).joined(separator: ", ") ?? "Loading..."
+        if !names.isEmpty { return String(localized: "\(names.formatted(.list(type: .and))) working…") }
+        return store.snapshot?.members.map(\.name).joined(separator: ", ") ?? String(localized: "Loading...")
+    }
+    /// Join banners are rebuilt from the structured event in the app language, like the web.
+    /// The API's English text (resolved for this viewer) stays the fallback when a name the
+    /// banner needs is no longer in the member list. docs/localization.md.
+    private func eventText(_ message: GroupMessage) -> String {
+        guard let event = message.event, event.kind == "member_joined" else { return message.text }
+        var names: [String: String] = [:]
+        for member in store.snapshot?.members ?? [] where names[member.identity] == nil { names[member.identity] = member.name }
+        if event.memberKind == "agent" {
+            guard let member = event.memberID.flatMap({ names["agent/\($0)"] }) else { return message.text }
+            let actor = event.actorID.flatMap { names["user/\($0)"] } ?? message.senderName
+            return actor.isEmpty ? message.text : String(localized: "\(actor) added \(member)")
+        }
+        let name = event.memberID.flatMap { names["user/\($0)"] } ?? message.senderName
+        if name.isEmpty { return message.text }
+        guard let inviterID = event.invitedByID else { return String(localized: "\(name) joined") }
+        guard let inviter = names["user/\(inviterID)"] else { return message.text }
+        return String(localized: "\(name) joined · invited by \(inviter)")
     }
     private func failedReplies(for message: GroupMessage) -> [GroupReply] {
         (store.snapshot?.replies ?? []).filter { reply in
@@ -233,13 +251,13 @@ struct GroupChatView: View {
     }
     private func replyPreview(_ quote: MessageReplyQuote) -> MessageReplyPreview {
         if quote.agentID == nil, let userID = quote.userID, userID == auth.user?.id {
-            return MessageReplyPreview(quote: quote, author: "You", color: .accentColor)
+            return MessageReplyPreview(quote: quote, author: String(localized: "You"), color: .accentColor)
         }
         let member = store.snapshot?.members.first {
             $0.id == (quote.agentID ?? quote.userID) && $0.kind == (quote.agentID == nil ? "user" : "agent")
         }
         let identity = quote.agentID.map { "agent/\($0)" } ?? quote.userID.map { "user/\($0)" } ?? "message/\(quote.messageID)"
-        return MessageReplyPreview(quote: quote, author: member?.name ?? quote.senderName ?? "Unknown member",
+        return MessageReplyPreview(quote: quote, author: member?.name ?? quote.senderName ?? String(localized: "Unknown member"),
                                    color: GroupMemberColor.color(groupID: groupID, identity: identity))
     }
     private func reply(to message: GroupMessage) {
@@ -296,7 +314,7 @@ struct GroupChatView: View {
                     ForEach(store.messages) { message in
                         if message.event != nil {
                             // Membership notices: a centered banner without bubble, sender, receipts or actions.
-                            GroupEventBanner(text: message.text)
+                            GroupEventBanner(text: eventText(message))
                                 .id(message.id)
                         } else {
                             GroupMessageRow(message: message, groupID: groupID, members: store.snapshot?.members ?? [],
@@ -423,7 +441,7 @@ struct GroupChatView: View {
                     HStack(spacing: 6) {
                         GroupPhotoAvatar(group: store.snapshot?.group, size: 38)
                         VStack(alignment: .leading, spacing: -2) {
-                            Text(store.snapshot?.group.name ?? "Group")
+                            Text(store.snapshot?.group.name ?? String(localized: "Group"))
                                 .manrope(.headline, weight: .semibold)
                                 .foregroundStyle(Color(uiColor: .label))
                                 .lineLimit(1)
@@ -434,7 +452,7 @@ struct GroupChatView: View {
                     .frame(width: ChatHeaderLayout.width(barWidth: barWidth), alignment: .leading)
                 }
                 .tint(Color(uiColor: .label))
-                .accessibilityLabel(store.snapshot?.group.name ?? "Group details")
+                .accessibilityLabel(store.snapshot?.group.name ?? String(localized: "Group details"))
                 .accessibilityValue(subtitle)
             }
         }
@@ -466,7 +484,7 @@ struct GroupChatView: View {
                 do {
                     guard let data = try await selected.loadTransferable(type: Data.self), data.count <= DraftAttachment.limit,
                           let image = UIImage(data: data) else {
-                        throw AuthAPI.Failure.rejected("Choose a photo up to 5 MB.")
+                        throw AuthAPI.Failure.rejected(String(localized: "Choose a photo up to 5 MB."))
                     }
                     try Task.checkCancellation()
                     let scale = min(1, 2048 / max(image.size.width, image.size.height))
@@ -480,7 +498,7 @@ struct GroupChatView: View {
                         image.draw(in: CGRect(origin: .zero, size: size))
                     }
                     guard let bytes = resized.jpegData(compressionQuality: 0.85), bytes.count <= DraftAttachment.limit else {
-                        throw AuthAPI.Failure.rejected("Choose a photo up to 5 MB.")
+                        throw AuthAPI.Failure.rejected(String(localized: "Choose a photo up to 5 MB."))
                     }
                     guard store.snapshot != nil else { return }
                     attachment = DraftAttachment(name: "Photo.jpg", mimeType: "image/jpeg", data: bytes)

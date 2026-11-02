@@ -88,7 +88,7 @@ struct GroupMessageInfoView: View {
         } catch is CancellationError { }
         catch AuthAPI.Failure.notFound {
             cache.invalidate(remove: true)
-            error = "This message is no longer available."
+            error = String(localized: "This message is no longer available.")
         } catch { self.error = error.localizedDescription }
     }
 }

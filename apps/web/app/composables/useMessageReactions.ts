@@ -42,7 +42,7 @@ export async function setMessageReaction(cache: ReactionCache, path: string, mes
   const own = (row: MessageReaction) => row.messageID === messageID && row.side === side && row.actorID === actorID;
   const replaceOwn = (row: MessageReaction | undefined) => { cache.rows = [...cache.rows.filter((value) => !own(value)), ...(row ? [row] : [])]; };
   const previous = cache.rows.find(own);
-  replaceOwn(emoji === null ? undefined : { messageID, side, actorID, name: user.value?.name ?? 'You', emoji });
+  replaceOwn(emoji === null ? undefined : { messageID, side, actorID, name: user.value?.name ?? translate('common.you'), emoji });
   try {
     await api(path, { method: 'PUT', json: { messageID, side, emoji } });
     if (cache.invalidated || account !== user.value?.id) return;

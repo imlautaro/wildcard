@@ -822,8 +822,10 @@ replies and silent decisions never imply typing; planned speakers type while the
 reply is generated (see [round coordinator](#round-coordinator-migration-0071)). Both
 iOS and web require this explicit flag; missing fields from older API snapshots
 show no indicator. The web subtitle follows the same rule and formats the typing
-contacts with the same `replyActivityLabel` (`shared/activity.ts`) the API uses for
-the chat-list `replyActivity` summary ("Ana and Bo are typing...", "4 people are
+contacts with the rules of `replyActivityLabel` (`shared/activity.ts`), worded in the
+interface language by `useReplyActivityLabel.ts` (iOS: `ReplyActivityLabel.swift` for
+the chat list); the API keeps the English function for the chat-list `replyActivity`
+summary ("Ana and Bo are typing...", "4 people are
 typing..."; see [chats](chats.md)). The summary query returns at most 50 active
 replies as JSON and the API formats them, so no migration is needed. Retry availability
 continues to consider all queued/running jobs. No migration or new service is needed.

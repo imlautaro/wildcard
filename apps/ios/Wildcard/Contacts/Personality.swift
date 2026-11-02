@@ -95,23 +95,23 @@ struct PersonalityTrait: Identifiable, Sendable {
     let high: String
     var id: String { key }
     static let all: [Self] = [
-        .init(key: "energy", label: "Energy", low: "Calm", high: "Energetic"),
-        .init(key: "patience", label: "Patience", low: "Restless", high: "Patient"),
-        .init(key: "sensitivity", label: "Sensitivity", low: "Thick-skinned", high: "Sensitive"),
-        .init(key: "expressiveness", label: "Expression", low: "Restrained", high: "Expressive"),
-        .init(key: "playfulness", label: "Humor", low: "Serious", high: "Playful"),
-        .init(key: "warmth", label: "Warmth", low: "Reserved", high: "Affectionate"),
-        .init(key: "assertiveness", label: "Assertiveness", low: "Accommodating", high: "Direct"),
-        .init(key: "curiosity", label: "Curiosity", low: "Focused", high: "Exploratory"),
-        .init(key: "optimism", label: "Outlook", low: "Skeptical", high: "Optimistic"),
-        .init(key: "formality", label: "Formality", low: "Casual", high: "Formal"),
-        .init(key: "verbosity", label: "Detail", low: "Concise", high: "Expansive"),
-        .init(key: "volatility", label: "Temper", low: "Even-tempered", high: "Quick-tempered"),
-        .init(key: "resilience", label: "Recovery", low: "Slow to settle", high: "Quick to settle"),
-        .init(key: "initiative", label: "Initiative", low: "Waits for you", high: "Starts conversations"),
-        .init(key: "sarcasm", label: "Irony", low: "Literal", high: "Wry"),
-        .init(key: "emoji", label: "Emoji", low: "Rarely", high: "Often"),
-        .init(key: "stickers", label: "Stickers", low: "Rarely", high: "Often"),
+        .init(key: "energy", label: String(localized: "Energy"), low: String(localized: "Calm"), high: String(localized: "Energetic")),
+        .init(key: "patience", label: String(localized: "Patience"), low: String(localized: "Restless"), high: String(localized: "Patient")),
+        .init(key: "sensitivity", label: String(localized: "Sensitivity"), low: String(localized: "Thick-skinned"), high: String(localized: "Sensitive")),
+        .init(key: "expressiveness", label: String(localized: "Expression"), low: String(localized: "Restrained"), high: String(localized: "Expressive")),
+        .init(key: "playfulness", label: String(localized: "Humor"), low: String(localized: "Serious"), high: String(localized: "Playful")),
+        .init(key: "warmth", label: String(localized: "Warmth"), low: String(localized: "Reserved"), high: String(localized: "Affectionate")),
+        .init(key: "assertiveness", label: String(localized: "Assertiveness"), low: String(localized: "Accommodating"), high: String(localized: "Direct")),
+        .init(key: "curiosity", label: String(localized: "Curiosity"), low: String(localized: "Focused"), high: String(localized: "Exploratory")),
+        .init(key: "optimism", label: String(localized: "Outlook"), low: String(localized: "Skeptical"), high: String(localized: "Optimistic")),
+        .init(key: "formality", label: String(localized: "Formality"), low: String(localized: "Casual"), high: String(localized: "Formal")),
+        .init(key: "verbosity", label: String(localized: "Detail"), low: String(localized: "Concise"), high: String(localized: "Expansive")),
+        .init(key: "volatility", label: String(localized: "Temper"), low: String(localized: "Even-tempered"), high: String(localized: "Quick-tempered")),
+        .init(key: "resilience", label: String(localized: "Recovery"), low: String(localized: "Slow to settle"), high: String(localized: "Quick to settle")),
+        .init(key: "initiative", label: String(localized: "Initiative"), low: String(localized: "Waits for you"), high: String(localized: "Starts conversations")),
+        .init(key: "sarcasm", label: String(localized: "Irony"), low: String(localized: "Literal"), high: String(localized: "Wry")),
+        .init(key: "emoji", label: String(localized: "Emoji"), low: String(localized: "Rarely"), high: String(localized: "Often")),
+        .init(key: "stickers", label: String(localized: "Stickers"), low: String(localized: "Rarely"), high: String(localized: "Often")),
     ]
 }
 
@@ -195,7 +195,7 @@ struct ContactPersonalityView: View {
                                 if draft.dirty { confirmGenerate = true } else { Task { await generate() } }
                             }.disabled(draft.saving || loading)
                             Spacer()
-                            InfoButton(title: "Generate with AI", text: "Generate all personality fields with Meta Standard, then review and save the draft. Your contact name and adult birthday stay the same.")
+                            InfoButton(title: String(localized: "Generate with AI"), text: String(localized: "Generate all personality fields with Meta Standard, then review and save the draft. Your contact name and adult birthday stay the same."))
                         }
                     }
                 }
@@ -203,7 +203,7 @@ struct ContactPersonalityView: View {
                     HStack {
                         Toggle(isOn: $draft.profile.enabled) { Label("Personality experiment", systemImage: "theatermasks") }
                             .disabled(!canEdit || draft.saving)
-                        InfoButton(title: "Personality experiment", text: "One shared character, with a relationship that follows each person across chats and groups. Private conversations stay private. Only its creator can edit these settings.")
+                        InfoButton(title: String(localized: "Personality experiment"), text: String(localized: "One shared character, with a relationship that follows each person across chats and groups. Private conversations stay private. Only its creator can edit these settings."))
                     }
                 }
                 Section {
@@ -213,7 +213,7 @@ struct ContactPersonalityView: View {
                 } header: {
                     HStack {
                         Text("Stable identity")
-                        InfoButton(title: "Stable identity", text: "Briefly describe values, ways of thinking, conversational quirks and flaws. Expertise and topic interests are welcome; avoid invented jobs, studies, physical experiences or daily routines. Identity is expressed through replies and shared with everyone who talks to the contact. Conversation and mood do not rewrite it. Saving changes starts a fresh emotional history.")
+                        InfoButton(title: String(localized: "Stable identity"), text: String(localized: "Briefly describe values, ways of thinking, conversational quirks and flaws. Expertise and topic interests are welcome; avoid invented jobs, studies, physical experiences or daily routines. Identity is expressed through replies and shared with everyone who talks to the contact. Conversation and mood do not rewrite it. Saving changes starts a fresh emotional history."))
                     }
                 }
                 Section {
@@ -223,7 +223,7 @@ struct ContactPersonalityView: View {
                 } header: {
                     HStack {
                         Text("Specialties")
-                        InfoButton(title: "Specialties", text: "Things this contact is especially good at. These strengths are shared with everyone and independent of temperament. They can still talk about anything. Optional, up to 1,000 characters.")
+                        InfoButton(title: String(localized: "Specialties"), text: String(localized: "Things this contact is especially good at. These strengths are shared with everyone and independent of temperament. They can still talk about anything. Optional, up to 1,000 characters."))
                     }
                 }
                 Section {
@@ -241,7 +241,7 @@ struct ContactPersonalityView: View {
                         .environment(\.timeZone, TimeZone(secondsFromGMT: 0)!)
                         .disabled(!canEdit || draft.saving)
                     }
-                    SearchablePicker(title: "Time zone", selection: $draft.profile.timeZone, options: timeZoneOptions)
+                    SearchablePicker(title: String(localized: "Time zone"), selection: $draft.profile.timeZone, options: timeZoneOptions)
                         .disabled(!canEdit || draft.saving)
                     if !draft.dirty, let age = cache.value?.age {
                         LabeledContent("Age", value: "\(age)")
@@ -250,11 +250,11 @@ struct ContactPersonalityView: View {
                 } header: {
                     HStack {
                         Text("Birthday")
-                        InfoButton(title: "Birthday", text: "Age is calculated from the date of birth in the birthday time zone. February 29 is observed on February 28 in other years.")
+                        InfoButton(title: String(localized: "Birthday"), text: String(localized: "Age is calculated from the date of birth in the birthday time zone. February 29 is observed on February 28 in other years."))
                     }
                 }
                 Section {
-                    SheetRow(title: "Temperament", systemImage: "slider.horizontal.3", value: "\(PersonalityTrait.all.count) traits") { showingTemperament = true }
+                    SheetRow(title: String(localized: "Temperament"), systemImage: "slider.horizontal.3", value: String(localized: "\(PersonalityTrait.all.count) traits")) { showingTemperament = true }
                 }
             } else if loading { ProgressView("Loading personality…") }
             if let error = draft.error { Text(error).foregroundStyle(.red).manrope(.footnote) }
@@ -313,7 +313,7 @@ struct ContactPersonalityView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    InfoButton(title: "Temperament", text: "The contact expresses tendencies through tone and timing. It does not receive these scores. Feelings settle over time. Its acting direction adapts to each person without exposing private causes. Conversations with connections stay isolated. Follow-ups still respect your initiative switch and delivery limits.")
+                    InfoButton(title: String(localized: "Temperament"), text: String(localized: "The contact expresses tendencies through tone and timing. It does not receive these scores. Feelings settle over time. Its acting direction adapts to each person without exposing private causes. Conversations with connections stay isolated. Follow-ups still respect your initiative switch and delivery limits."))
                 }
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { showingTemperament = false } }
             }
@@ -334,7 +334,7 @@ struct ContactPersonalityView: View {
         } catch is CancellationError { }
         catch AuthAPI.Failure.notFound {
             contacts.forgetPersonality(id: contactID)
-            draft.error = "This contact is no longer available."
+            draft.error = String(localized: "This contact is no longer available.")
         } catch { draft.error = error.localizedDescription }
     }
 
@@ -347,7 +347,7 @@ struct ContactPersonalityView: View {
             let result = try await auth.withSession { api, token in try await api.generatePersonality(id: contactID, token: token) }
             guard auth.user?.id == accountID, draft.loaded else { return }
             guard result.revision == expectedRevision else {
-                draft.error = "Personality changed. Refresh before generating again."
+                draft.error = String(localized: "Personality changed. Refresh before generating again.")
                 return
             }
             draft.profile = result.personality; draft.saved = false

@@ -25,10 +25,9 @@ struct ChatExportRow: View {
     @State private var error: String?
 
     private var message: String {
-        "Download this \(scope.isGroup ? "group" : "chat") as a JSON file with every message you can read, who sent it and when, replies and reactions. "
-            + (scope.isGroup ? "It includes messages from every member. " : "")
-            + "Attachments are listed by name only; files, images and audio are not included. "
-            + "Review the file before sharing it with anyone or with an AI. Nothing is sent to an AI by this download."
+        scope.isGroup
+            ? String(localized: "Download this group as a JSON file with every message you can read, who sent it and when, replies and reactions. It includes messages from every member. Attachments are listed by name only; files, images and audio are not included. Review the file before sharing it with anyone or with an AI. Nothing is sent to an AI by this download.")
+            : String(localized: "Download this chat as a JSON file with every message you can read, who sent it and when, replies and reactions. Attachments are listed by name only; files, images and audio are not included. Review the file before sharing it with anyone or with an AI. Nothing is sent to an AI by this download.")
     }
 
     var body: some View {

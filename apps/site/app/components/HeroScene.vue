@@ -3,30 +3,32 @@
 // its row jumps to the top with an unread badge and a notification banner drops in.
 interface Row { who: CastId; preview: string; time: string; unread: number; typing: boolean }
 
-const events: { who: CastId; text?: string; time?: string }[] = [
+// Times are messages too: the mock clock reads as each locale writes it.
+const { t } = useI18n();
+const events = computed<{ who: CastId; text?: string; time?: string }[]>(() => [
   { who: 'mila' },
-  { who: 'mila', text: 'Apple just posted the MacBook Pro recap. Want the 3 things that actually matter?', time: '7:58 PM' },
+  { who: 'mila', text: t('heroScene.milaNew'), time: t('heroScene.milaNewTime') },
   { who: 'ivy' },
-  { who: 'ivy', text: 'Rest day tomorrow 🧘 How are the legs after the 18K?', time: '8:03 PM' },
+  { who: 'ivy', text: t('heroScene.ivyNew'), time: t('heroScene.ivyNewTime') },
   { who: 'theo' },
-  { who: 'theo', text: 'Did the oat-milk supplier ever send the second quote?', time: '8:11 PM' },
-];
-const base: Row[] = [
-  { who: 'nova', preview: 'Sounds good, talk tomorrow!', time: '6:20 PM', unread: 0, typing: false },
-  { who: 'pixel', preview: 'Flashcards are ready: 24 on entropy 🔋', time: '5:02 PM', unread: 0, typing: false },
-  { who: 'theo', preview: 'You: Logo is final 🎉', time: '3:47 PM', unread: 0, typing: false },
-  { who: 'coco', preview: 'Grocery list updated 🛒', time: '1:15 PM', unread: 0, typing: false },
-  { who: 'ivy', preview: 'You: Done! 18K at 5:40/km', time: '9:12 AM', unread: 0, typing: false },
-  { who: 'mila', preview: 'haha told you so', time: 'Yesterday', unread: 0, typing: false },
-];
+  { who: 'theo', text: t('heroScene.theoNew'), time: t('heroScene.theoNewTime') },
+]);
+const base = computed<Row[]>(() => [
+  { who: 'nova', preview: t('heroScene.nova'), time: t('heroScene.novaTime'), unread: 0, typing: false },
+  { who: 'pixel', preview: t('heroScene.pixel'), time: t('heroScene.pixelTime'), unread: 0, typing: false },
+  { who: 'theo', preview: t('heroScene.theo'), time: t('heroScene.theoTime'), unread: 0, typing: false },
+  { who: 'coco', preview: t('heroScene.coco'), time: t('heroScene.cocoTime'), unread: 0, typing: false },
+  { who: 'ivy', preview: t('heroScene.ivy'), time: t('heroScene.ivyTime'), unread: 0, typing: false },
+  { who: 'mila', preview: t('heroScene.mila'), time: t('heroScene.milaTime'), unread: 0, typing: false },
+]);
 
 const root = ref<HTMLElement | null>(null);
 const { step, fading } = useScene(root, [1100, 1500, 2600, 1500, 2600, 1500], { hold: 3600 });
 
 const state = computed(() => {
-  const rows = base.map((row) => ({ ...row }));
+  const rows = base.value.map((row) => ({ ...row }));
   let banner: { who: CastId; text: string } | null = null;
-  for (const event of events.slice(0, step.value)) {
+  for (const event of events.value.slice(0, step.value)) {
     const index = rows.findIndex((row) => row.who === event.who);
     const row = rows[index]!;
     if (!event.text) { row.typing = true; banner = null; continue; }
@@ -42,14 +44,14 @@ const state = computed(() => {
   <div ref="root" class="hero-scene scene" :class="{ fading }">
     <PhoneFrame class="hero-phone">
       <div class="list-head">
-        <span>Chats</span>
+        <span>{{ t('heroScene.chats') }}</span>
         <span class="compose" aria-hidden="true"><AppIcon name="compose" /></span>
       </div>
       <Transition name="banner">
         <div v-if="state.banner" :key="state.banner.who" class="banner">
           <ContactAvatar :who="state.banner.who" :size="36" />
           <div class="banner-text">
-            <span class="banner-top"><strong>{{ cast[state.banner.who].name }}</strong><small>now</small></span>
+            <span class="banner-top"><strong>{{ cast[state.banner.who].name }}</strong><small>{{ t('heroScene.now') }}</small></span>
             <span class="banner-body">{{ state.banner.text }}</span>
           </div>
         </div>
@@ -63,7 +65,7 @@ const state = computed(() => {
               <small class="tabular">{{ row.time }}</small>
             </span>
             <span class="row-bottom">
-              <span v-if="row.typing" class="row-typing">typing…</span>
+              <span v-if="row.typing" class="row-typing">{{ t('heroScene.typing') }}</span>
               <span v-else class="row-preview">{{ row.preview }}</span>
               <span v-if="row.unread" class="badge">{{ row.unread }}</span>
             </span>

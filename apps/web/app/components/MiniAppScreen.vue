@@ -33,7 +33,7 @@ const toolbar = computed(() => components.value?.flatMap(c => c.type === 'toolba
 // Row controls wait while taps are unconfirmed: their row indexes come from the server's view.
 const pending = computed(() => (app.value ? apps.view(app.value.id).taps.length > 0 : false));
 const firstScreen = computed(() => !currentTab.value || currentTab.value.id === tabs.value[0]?.id);
-const permissionNote = 'These tools use your connection permissions, and the service decides what each one does. Data is loaded for you only; it is not sent to the contact or saved to memory. Editing the mini app requires review again.';
+const { t } = useI18n();
 
 const reads = computed(() => app.value?.tools.filter(t => t.role === 'read') ?? []);
 const writes = computed(() => app.value?.tools.filter(t => t.role === 'write') ?? []);
@@ -100,7 +100,7 @@ async function approve(allowed: boolean) {
 }
 async function remove() {
   menuOpen.value = false;
-  if (!app.value || !window.confirm(`Delete ${app.value.title}? The contact can build it again later.`)) return;
+  if (!app.value || !window.confirm(t('miniapps.screen.deleteConfirm', { title: app.value.title }))) return;
   try { await apps.remove(app.value); await navigateTo(props.back, { replace: true }); }
   catch (failure) { error.value = errorMessage(failure); }
 }
@@ -117,8 +117,7 @@ async function run(actionID: string, fields: Record<string, unknown>, row?: Mini
     pendingExecution.value = null;
     // Local state changes show up in the view itself; only external writes report an outcome.
     if (action.kind === 'state') return true;
-    notice.value = status === 'completed' ? `${action.label}: done.` : status === 'failed' ? `${action.label} failed. Nothing was confirmed by the service.`
-      : `${action.label}: the outcome is unknown. Check the service before trying again.`;
+    notice.value = t(status === 'completed' ? 'miniapps.screen.actionDone' : status === 'failed' ? 'miniapps.screen.actionFailed' : 'miniapps.screen.actionUnknown', { label: action.label });
     return true;
   } catch (failure) {
     if (!(failure instanceof ApiError && failure.status === 0)) pendingExecution.value = null;
@@ -137,7 +136,7 @@ onMounted(() => load());
 
 <template>
   <div class="mini-app-screen">
-    <PageBar :title="currentTab?.title ?? app?.title ?? 'Mini app'" :back="back" always-back>
+    <PageBar :title="currentTab?.title ?? app?.title ?? $t('miniapps.screen.fallbackTitle')" :back="back" always-back>
       <template v-if="app?.status === 'enabled'">
         <template v-for="item in toolbar" :key="item.action.id">
           <AppIconButton v-if="item.icon === 'plus'" icon="plus" :label="item.action.label" :disabled="busyAction === item.action.id" @click="press(item.action)" />
@@ -145,22 +144,22 @@ onMounted(() => load());
         </template>
       </template>
       <div v-if="app?.status === 'enabled'" class="mini-menu">
-        <AppIconButton icon="more" label="More" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen" />
+        <AppIconButton icon="more" :label="$t('common.more')" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen" />
         <template v-if="menuOpen">
           <div class="backdrop" @click="menuOpen = false" />
           <div class="menu" role="menu">
             <AppMenuItem v-for="action in view.value?.menu ?? []" :key="action.id" role="menuitem" :danger="action.style === 'destructive'" :disabled="busyAction === action.id" @click="press(action)">{{ action.label }}</AppMenuItem>
             <hr v-if="view.value?.menu?.length" class="menu-divider">
-            <AppMenuItem role="menuitem" :disabled="!!view.request" @click="menuOpen = false; load(true)">Refresh</AppMenuItem>
-            <AppMenuItem role="menuitem" :disabled="busy" @click="menuOpen = false; approve(false)">Disable</AppMenuItem>
-            <AppMenuItem role="menuitem" danger @click="remove">Delete mini app</AppMenuItem>
+            <AppMenuItem role="menuitem" :disabled="!!view.request" @click="menuOpen = false; load(true)">{{ $t('miniapps.screen.refresh') }}</AppMenuItem>
+            <AppMenuItem role="menuitem" :disabled="busy" @click="menuOpen = false; approve(false)">{{ $t('miniapps.screen.disable') }}</AppMenuItem>
+            <AppMenuItem role="menuitem" danger @click="remove">{{ $t('miniapps.screen.delete') }}</AppMenuItem>
           </div>
         </template>
       </div>
     </PageBar>
     <div class="page" @pointerdown="blurComposer">
       <AppLoading v-if="!app && !apps.state.value.loaded" fill />
-      <AppEmptyState v-else-if="!app" icon="grid" title="Mini app unavailable" :text="apps.state.value.error ?? 'It may have been deleted.'" />
+      <AppEmptyState v-else-if="!app" icon="grid" :title="$t('miniapps.screen.unavailableTitle')" :text="apps.state.value.error ?? $t('miniapps.screen.unavailableText')" />
       <div v-else class="page-inner">
         <AppNotice v-if="error">{{ error }}</AppNotice>
         <AppNotice v-if="notice" tone="info">{{ notice }}</AppNotice>
@@ -172,17 +171,17 @@ onMounted(() => load());
             <p v-if="app.subtitle" class="identity-subtitle">{{ app.subtitle }}</p>
           </div>
           <AppNotice :tone="app.status === 'needs_reapproval' ? 'warning' : 'info'">
-            {{ app.status === 'needs_reapproval' ? 'A connection or tool changed since you enabled this mini app. Review it again to keep using it.' : 'Your contact built this mini app. Review what it can do before enabling it.' }}
+            {{ app.status === 'needs_reapproval' ? $t('miniapps.screen.needsReapproval') : $t('miniapps.screen.needsReview') }}
           </AppNotice>
-          <AppListGroup title="Runs each time you open or refresh" :footer="writes.length ? undefined : permissionNote">
-            <div v-if="!reads.length" class="text-block">No automatic reads.</div>
+          <AppListGroup :title="$t('miniapps.screen.reads')" :footer="writes.length ? undefined : $t('miniapps.screen.permissionNote')">
+            <div v-if="!reads.length" class="text-block">{{ $t('miniapps.screen.noReads') }}</div>
             <div v-for="tool in reads" :key="`${tool.connectionID}/${tool.toolName}`" class="mini-row"><span class="copy"><strong>{{ tool.toolName }}</strong><span>{{ tool.connectionName }}</span></span></div>
           </AppListGroup>
-          <AppListGroup v-if="writes.length" title="Only when you tap and confirm" :footer="permissionNote">
+          <AppListGroup v-if="writes.length" :title="$t('miniapps.screen.writes')" :footer="$t('miniapps.screen.permissionNote')">
             <div v-for="tool in writes" :key="`${tool.connectionID}/${tool.toolName}`" class="mini-row"><span class="copy"><strong>{{ tool.toolName }}</strong><span>{{ tool.connectionName }}</span></span></div>
           </AppListGroup>
-          <AppButton block class="enable-button" :disabled="busy" @click="approve(true)">Enable mini app</AppButton>
-          <AppListGroup><AppListItem danger @click="remove">Delete mini app</AppListItem></AppListGroup>
+          <AppButton block class="enable-button" :disabled="busy" @click="approve(true)">{{ $t('miniapps.screen.enable') }}</AppButton>
+          <AppListGroup><AppListItem danger @click="remove">{{ $t('miniapps.screen.delete') }}</AppListItem></AppListGroup>
         </template>
 
         <template v-else>
@@ -197,15 +196,15 @@ onMounted(() => load());
               </div>
             </template>
           </template>
-          <AppLoading v-if="!view.value && view.request" label="Loading data…" />
+          <AppLoading v-if="!view.value && view.request" :label="$t('miniapps.screen.loadingData')" />
           <AppNotice v-else-if="view.error" :tone="view.value ? 'warning' : 'error'">
             {{ view.error }}
-            <template #actions><button class="link-button" @click="load(true)">Retry</button></template>
+            <template #actions><button class="link-button" @click="load(true)">{{ $t('common.retry') }}</button></template>
           </AppNotice>
           <MiniAppView v-if="components" :components="components" :busy-action="busyAction" :state="apps.displayState(app.id)" :pending="pending" @action="(id, fields) => run(id, fields)"
             @tap="(id, updates) => apps.tap(app!, id, updates)" @edit="update => apps.tap(app!, null, [update])" @select-tab="tab => selectedTab = tab"
             @open="(action, row, values) => { error = null; sheet = { action, row, values } }" @row-action="(action, row) => run(action.id, {}, row)" />
-          <p v-if="view.value?.remote && firstScreen" class="group-footer">Updated {{ messageTime(view.value.resolvedAt) }}</p>
+          <p v-if="view.value?.remote && firstScreen" class="group-footer">{{ $t('miniapps.screen.updated', { time: messageTime(view.value.resolvedAt) }) }}</p>
         </template>
       </div>
     </div>
@@ -215,7 +214,7 @@ onMounted(() => load());
       <button type="submit" class="send" data-ripple :aria-label="composer.label" :disabled="!draft.trim() || busyAction === composer.action"><AppIcon name="send" /></button>
     </form>
     <MiniAppForm v-if="sheet" :key="`${sheet.action.id}:${sheet.row?.index ?? ''}`" :action="sheet.action" :values="sheet.values" :busy="busyAction === sheet.action.id" :error="error" @submit="submitSheet" @close="sheet = null" />
-    <nav v-if="tabs.length" class="mini-tabs" aria-label="Tabs">
+    <nav v-if="tabs.length" class="mini-tabs" :aria-label="$t('miniapps.screen.tabs')">
       <button v-for="tab in tabs" :key="tab.id" type="button" :aria-current="tab.id === currentTab?.id ? 'page' : undefined" @click="selectedTab = tab.id">
         <AppIcon :name="miniAppIcon(tab.icon)" />{{ tab.title }}
       </button>

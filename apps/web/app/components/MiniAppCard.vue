@@ -4,7 +4,8 @@ import type { MiniApp } from '~/utils/types';
 // Compact native-style entry point under the reply that built it; opens the full app.
 // `base` is `contacts/<id>` or `groups/<id>`.
 const props = defineProps<{ app: MiniApp; base: string }>();
-const status = computed(() => ({ needs_review: 'Review to enable', needs_reapproval: 'Review changes to continue', enabled: 'Mini app' })[props.app.status]);
+const { t } = useI18n();
+const status = computed(() => ({ needs_review: t('miniapps.card.needsReview'), needs_reapproval: t('miniapps.card.needsReapproval'), enabled: t('miniapps.card.enabled') })[props.app.status]);
 </script>
 
 <template>

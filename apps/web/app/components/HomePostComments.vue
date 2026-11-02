@@ -10,13 +10,14 @@ import type { HomePost } from '~/utils/types';
 // person privately after a comment (docs/updates.md#private-messages-from-comments); that reply
 // then links to the chat, where the message already carries the post.
 const props = defineProps<{ post: HomePost }>();
+const { t } = useI18n();
 const home = useHome();
 const { user } = useSession();
 const text = ref('');
 const error = ref<string | null>(null);
 const sending = ref(false);
 const input = ref<HTMLTextAreaElement | null>(null);
-const name = computed(() => props.post.contactName ?? 'this contact');
+const name = computed(() => props.post.contactName ?? t('updates.comments.thisContact'));
 const comments = computed(() => props.post.comments ?? []);
 const waiting = computed(() => comments.value.some(comment => comment.status === 'pending'));
 const myPhoto = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
@@ -25,10 +26,6 @@ function continueInChat(contactID: string) {
   void navigateTo(`/chats/${contactID}`);
 }
 const contactPhoto = computed(() => props.post.contactID ? contactPhotoPath({ id: props.post.contactID, photoVersion: props.post.contactPhotoVersion }) : null);
-const age = (at: number) => {
-  const minutes = Math.max(0, Math.round((Date.now() - at) / 60_000));
-  return minutes < 1 ? 'now' : minutes < 60 ? `${minutes}m` : minutes < 1440 ? `${Math.round(minutes / 60)}h` : `${Math.round(minutes / 1440)}d`;
-};
 
 async function send() {
   const value = text.value.trim();
@@ -46,37 +43,37 @@ onMounted(() => input.value?.focus({ preventScroll: true }));
 </script>
 
 <template>
-  <section class="comments" aria-label="Comments">
+  <section class="comments" :aria-label="$t('updates.comments.label')">
     <template v-for="comment in comments" :key="comment.id">
       <div class="comment">
-        <AppAvatar :name="user?.name ?? 'You'" :path="myPhoto" :size="32" />
+        <AppAvatar :name="user?.name ?? $t('common.you')" :path="myPhoto" :size="32" />
         <div class="bubble-copy">
-          <p class="head"><strong>You</strong><span>{{ age(comment.createdAt) }}</span></p>
+          <p class="head"><strong>{{ $t('common.you') }}</strong><span>{{ compactAge(comment.createdAt) }}</span></p>
           <p class="body">{{ comment.text }}</p>
         </div>
       </div>
       <div class="comment reply">
         <AppAvatar :name="name" :path="contactPhoto" :size="32" />
         <div class="bubble-copy">
-          <p class="head"><strong>{{ name }}</strong><span v-if="comment.repliedAt">{{ age(comment.repliedAt) }}</span></p>
+          <p class="head"><strong>{{ name }}</strong><span v-if="comment.repliedAt">{{ compactAge(comment.repliedAt) }}</span></p>
           <p v-if="comment.status === 'complete'" class="body">{{ comment.reply }}</p>
           <NuxtLink v-if="comment.status === 'complete' && comment.privateMessage && post.contactID" class="private" :to="`/chats/${post.contactID}`">
-            <AppIcon name="chat" />Messaged you privately
+            <AppIcon name="chat" />{{ $t('updates.comments.messagedPrivately') }}
           </NuxtLink>
-          <p v-else-if="comment.status === 'pending'" class="body typing" role="status" :aria-label="`${name} is replying`"><span /><span /><span /></p>
-          <p v-else class="body failed">{{ name }} couldn’t answer this one. Try again or continue in the chat.</p>
+          <p v-else-if="comment.status === 'pending'" class="body typing" role="status" :aria-label="$t('updates.comments.replying', { name })"><span /><span /><span /></p>
+          <p v-else class="body failed">{{ $t('updates.comments.failed', { name }) }}</p>
         </div>
       </div>
     </template>
 
     <form class="composer" @submit.prevent="send">
-      <AppAvatar :name="user?.name ?? 'You'" :path="myPhoto" :size="32" />
-      <textarea ref="input" v-model="text" rows="1" maxlength="1000" :placeholder="waiting ? `${name} is replying…` : `Reply to ${name}…`"
-        :disabled="waiting" :aria-label="`Comment on ${name}’s post`" @keydown="keydown" />
-      <AppIconButton type="submit" icon="send" label="Send comment" variant="filled" size="small" :disabled="!text.trim() || waiting || sending" />
+      <AppAvatar :name="user?.name ?? $t('common.you')" :path="myPhoto" :size="32" />
+      <textarea ref="input" v-model="text" rows="1" maxlength="1000" :placeholder="waiting ? $t('updates.comments.replyingEllipsis', { name }) : $t('updates.comments.replyTo', { name })"
+        :disabled="waiting" :aria-label="$t('updates.post.commentOn', { name })" @keydown="keydown" />
+      <AppIconButton type="submit" icon="send" :label="$t('updates.comments.send')" variant="filled" size="small" :disabled="!text.trim() || waiting || sending" />
     </form>
     <AppNotice v-if="error">{{ error }}</AppNotice>
-    <AppButton v-if="post.contactID" variant="tonal" icon="chat" class="continue" @click="continueInChat(post.contactID)">Continue in chat with {{ name }}</AppButton>
+    <AppButton v-if="post.contactID" variant="tonal" icon="chat" class="continue" @click="continueInChat(post.contactID)">{{ $t('updates.comments.continueWith', { name }) }}</AppButton>
   </section>
 </template>
 

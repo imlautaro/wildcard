@@ -7,9 +7,9 @@ useWebPushLifecycle();
 <template>
   <div v-if="status === 'unreachable'" class="auth">
     <div class="auth-card empty">
-      <h2>Wildcard is unavailable</h2>
-      <p>Check your connection and try again.</p>
-      <AppButton @click="restore().then(() => $router.replace($route.fullPath))">Try again</AppButton>
+      <h2>{{ $t('common.unavailableTitle') }}</h2>
+      <p>{{ $t('common.unavailableText') }}</p>
+      <AppButton @click="restore().then(() => $router.replace($route.fullPath))">{{ $t('common.tryAgain') }}</AppButton>
     </div>
   </div>
   <NuxtLayout v-else>

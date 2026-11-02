@@ -1,0 +1,213 @@
+{
+  "account": {
+    "title": "Cuenta",
+    "profile": "Tu perfil",
+    "profileInfo": "Los miembros de tus grupos y las personas con quienes compartes contactos pueden ver tu nombre y tu foto.",
+    "refresh": "Actualizar",
+    "schedulesFooter": "Los mensajes programados están disponibles en la app de iOS.",
+    "nav": {
+      "main": "Navegación principal",
+      "forYou": "Para ti",
+      "chats": "Chats",
+      "account": "Cuenta",
+      "forYouBadge": "{count} novedad en Para ti | {count} novedades en Para ti",
+      "chatsBadge": "{count} mensaje sin leer | {count} mensajes sin leer"
+    },
+    "chatModel": {
+      "title": "Modelo de chat",
+      "standard": "Estándar",
+      "standardDetail": "Meta no entrena con tus datos.",
+      "contributor": "Contributor",
+      "contributorDetail": "Meta puede entrenar modelos con lo que envíes.",
+      "info": "Contributor permite que Meta use los mensajes, archivos, contexto y respuestas enviados para entrenar modelos. Estándar no lo permite. Se aplica a los nuevos trabajos de chat, programaciones e intercambios de grupo que inicies; los trabajos ya iniciados conservan su modelo. Los datos compartidos pueden seguir usando Contributor si das tu consentimiento por separado. Los chats con MCP siempre usan Estándar.",
+      "contributorConsent": "Acepto el uso de datos de Contributor de Meta"
+    },
+    "appearance": {
+      "title": "Apariencia",
+      "system": "Sistema",
+      "light": "Claro",
+      "dark": "Oscuro"
+    },
+    "notifications": {
+      "title": "Notificaciones del navegador",
+      "unsupported": "Este navegador no admite notificaciones.",
+      "blocked": "Bloqueadas en la configuración del navegador para este sitio.",
+      "on": "Avisos de mensajes nuevos, incluso cuando esta pestaña está en segundo plano.",
+      "off": "Recibe avisos de mensajes nuevos cuando esta pestaña esté en segundo plano."
+    },
+    "privacy": {
+      "title": "Privacidad",
+      "contactsShare": "Los contactos comparten entre sí",
+      "contactsShareInfo": "Tus contactos pueden recordar lo que les contaste a cualquiera de los demás y preguntarse entre sí, en tus chats privados, sin que tengas que vincularlos uno por uno. Los grupos y otras personas no se ven afectados. Los chats que mantienes privados y los chats con conexiones quedan fuera.",
+      "howItWorks": "Cómo funciona la privacidad",
+      "rules": {
+        "privateChats": {
+          "title": "Tus chats privados",
+          "text": "Un contacto recuerda datos de tu chat, nunca la conversación completa. Esos datos pueden usarse en tus chats con él, en los grupos en los que ambos son miembros y por las personas con quienes compartes ese contacto."
+        },
+        "groups": {
+          "title": "Grupos",
+          "text": "Lo que se dice en un grupo solo se usa en ese grupo y en chats privados con personas que forman parte de él. Los contactos nunca llevan la conversación de un grupo a otro grupo."
+        },
+        "keepPrivate": {
+          "title": "Mantener este chat privado",
+          "text": "Se configura en los detalles de cada contacto. Lo que le cuentas a ese contacto se queda en ese chat: no en grupos, no con las personas con quienes lo compartes, no con tus otros contactos y no en Para ti."
+        },
+        "contactsShare": {
+          "title": "Los contactos comparten entre sí",
+          "text": "Se configura aquí. Tus propios contactos reúnen lo que saben de ti en tus chats privados y pueden preguntarse entre sí. Desactivado de forma predeterminada."
+        },
+        "alwaysPrivate": {
+          "title": "Siempre privado",
+          "text": "Las transcripciones completas de los chats, los archivos y las programaciones nunca se comparten, salvo que actives Hablar de mis chats privados para un contacto en un grupo. Los chats con conexiones nunca salen de su chat."
+        },
+        "forYou": {
+          "title": "Para ti",
+          "text": "Se crea solo a partir de tus propios chats y solo lo ves tú. Los chats que mantienes privados quedan fuera."
+        }
+      }
+    },
+    "debugExport": {
+      "title": "Exportar JSON de depuración",
+      "intro": "Descarga tu historial de chats privados y de grupo, incluidos los chats archivados, contactos, memorias locales, estado de las respuestas, programaciones, tareas, documentos y miniapps.",
+      "warning": "Este archivo contiene texto privado y participantes de grupos. Revísalo antes de compartirlo con una IA o con cualquier persona. Se excluyen las credenciales, los chats privados de otras personas y los archivos multimedia. Esta descarga no envía nada a ninguna IA. Las descargas tienen un límite de 100 MB; las exportaciones que lo superan fallan sin guardar un archivo parcial.",
+      "cancel": "Cancelar exportación",
+      "exporting": "Exportando…",
+      "download": "Descargar JSON",
+      "progress": "Exportando {dataset} · {count} registro | Exportando {dataset} · {count} registros",
+      "ready": "Exportación lista. Tu navegador guardará el archivo JSON."
+    },
+    "photoCrop": {
+      "title": "Recortar foto",
+      "help": "Arrastra para cambiar la posición y pellizca para hacer zoom. También puedes usar las flechas del teclado y el control de zoom.",
+      "position": "Posición del recorte de la foto",
+      "preview": "Vista previa del recorte de la foto",
+      "zoom": "Zoom de la foto",
+      "preparing": "Preparando…",
+      "use": "Usar foto"
+    },
+    "mcpAccess": {
+      "title": "Acceso",
+      "confirmGroup": "¿Permitir que {agent} use {connection} en este grupo? Cualquier miembro humano puede solicitar las herramientas activadas, incluidas lecturas, cambios y envíos. Las respuestas pueden mostrar datos externos a todo el grupo. Este grupo siempre usará Estándar. La memoria queda disponible dentro de este grupo y nunca se comparte con otros chats, incluso después de revocar el acceso.",
+      "confirmContact": "¿Permitir que este contacto use {connection}? Podrá usar todas las herramientas activadas en Cuenta sin volver a preguntar. Este chat privado siempre usará Estándar. La memoria queda disponible dentro de este chat y nunca se comparte con otros chats, incluso después de revocar el acceso. Se desactivarán las publicaciones en grupos y la creación o edición de programaciones desde este chat privado.",
+      "infoGroup": "Da a tus bots acceso a los conectores que tienen asignados en este grupo. Los demás miembros pueden solicitar herramientas; las respuestas son visibles para todos. Solo quien añadió el bot puede dar acceso.",
+      "infoContact": "Configura los conectores una vez en Cuenta y luego da acceso a este contacto. Las aprobaciones de herramientas se gestionan en Cuenta.",
+      "emptyGroup": "Primero asigna un conector a uno de tus bots en sus detalles de contacto.",
+      "emptyContact": "Aún no hay conexiones en la cuenta.",
+      "manage": "Gestionar conexiones de la cuenta"
+    },
+    "connections": {
+      "title": "Conexiones",
+      "loading": "Cargando conexiones…",
+      "refresh": "Actualizar conexiones",
+      "notice": "Configura un conector una vez y luego da acceso a los contactos desde su pantalla de Conexiones. Las aprobaciones de herramientas se aplican a todos los contactos y grupos que autorices. Conecta solo servidores de confianza. Las herramientas activadas pueden leer o cambiar datos externos sin volver a preguntar. Los datos se envían al servidor y se procesan con Estándar.",
+      "supported": "Servidores remotos Streamable HTTP con acceso público, un token Bearer u OAuth. Aún no se admiten los servidores SSE heredados ni los de comandos locales.",
+      "supportedTitle": "Servidores compatibles",
+      "servers": "Servidores",
+      "empty": "Aún no hay conexiones.",
+      "browseLibrary": "Explorar la biblioteca de conectores",
+      "addCustom": "Añadir servidor personalizado",
+      "library": "Biblioteca de conectores",
+      "libraryInfo": "Servidores MCP remotos oficiales de cada proveedor, con su endpoint y modo de acceso ya completados. Igualmente revisas los términos de privacidad, inicias sesión con el proveedor y apruebas cada herramienta. Wildcard no opera estos servidores y los proveedores pueden cambiarlos.",
+      "searchConnectors": "Buscar conectores",
+      "connected": "Conectado",
+      "access": "Acceso",
+      "issuer": "Emisor: {issuer}",
+      "scopes": "Permisos solicitados: {scopes}",
+      "authorize": "Autorizar",
+      "reauthorize": "Volver a autorizar",
+      "reauthorizeInfo": "Volver a autorizar borra los permisos de herramientas existentes. Revísalos y actívalos de nuevo después.",
+      "configureOAuth": "Configurar OAuth",
+      "enableAll": "Activar todas las herramientas",
+      "refreshTools": "Actualizar herramientas",
+      "tools": "Herramientas",
+      "searchTools": "Buscar herramientas",
+      "runsWithoutAsking": "Se ejecuta sin preguntar",
+      "asksBeforeRunning": "Pregunta antes de ejecutarse",
+      "inputSchema": "Esquema de entrada",
+      "allowTool": "Permitir {tool} sin volver a preguntar",
+      "disconnect": "Desconectar",
+      "connectPreset": "Conectar {name}",
+      "addServer": "Añadir servidor",
+      "name": "Nombre",
+      "namePlaceholder": "Mi servidor",
+      "endpoint": "Endpoint HTTPS",
+      "token": "Token",
+      "required": "Obligatorio",
+      "optional": "Opcional",
+      "bearerOptional": "Token Bearer (opcional)",
+      "oauthInfo": "Wildcard detecta la configuración de OAuth y abre la página de inicio de sesión del proveedor. Autorizar una cuenta no activa herramientas. La mayoría de los servidores no necesitan configuración manual. Si usas tus propias credenciales de cliente, introduce también su servidor de autorización de confianza. Google requiere tu propio cliente OAuth web registrado, marcado para un agente con IA, y acceso a la vista previa de Workspace.",
+      "callbackMissing": "OAuth requiere una configuración de API pública con HTTPS.",
+      "advanced": "Avanzado (opcional)",
+      "issuerField": "Servidor de autorización (automático si está vacío)",
+      "issuerAria": "Servidor de autorización personalizado",
+      "scopesField": "Permisos (automáticos si está vacío)",
+      "scopesAria": "Permisos solicitados personalizados",
+      "clientIDField": "ID de cliente (solo si es obligatorio)",
+      "clientIDAria": "ID de cliente de OAuth",
+      "clientSecretField": "Secreto de cliente (si es obligatorio)",
+      "clientSecretAria": "Secreto de cliente de OAuth",
+      "redirectURI": "URI de redirección de OAuth:",
+      "acceptTerms": "Acepto estos términos de acceso a datos y privacidad.",
+      "connect": "Conectar",
+      "needsAuthorization": "Requiere autorización",
+      "toolCount": "{allowed}/{total} herramientas",
+      "confirmTool": "¿Permitir {tool} sin volver a preguntar? Puede leer, cambiar o enviar datos externos. Activa solo herramientas que entiendas y en las que confíes.",
+      "confirmAll": "¿Activar {count} herramienta de {name} sin volver a preguntar? Esto incluye las herramientas ocultas por la búsqueda. Estas herramientas pueden leer, cambiar o enviar datos externos. Activa solo herramientas que entiendas y en las que confíes. | ¿Activar las {count} herramientas de {name} sin volver a preguntar? Esto incluye las herramientas ocultas por la búsqueda. Estas herramientas pueden leer, cambiar o enviar datos externos. Activa solo herramientas que entiendas y en las que confíes.",
+      "confirmDisconnect": "¿Desconectar este servidor? Se bloquearán las llamadas futuras. Las acciones ya iniciadas pueden terminar. Los mensajes anteriores siguen siendo privados.",
+      "auth": {
+        "oauthConnected": "OAuth conectado",
+        "required": "Se requiere autorización",
+        "bearer": "Token Bearer",
+        "public": "Acceso público"
+      },
+      "oauth": {
+        "title": "Autorización",
+        "completing": "Completando la autorización…",
+        "authorized": "Cuenta autorizada. Abre Conexiones y actualiza las herramientas para revisar los permisos.",
+        "return": "Volver a Conexiones"
+      }
+    },
+    "native": {
+      "title": "Experimentos nativos",
+      "heroTitle": "Pruébalo en tu iPhone",
+      "heroText": "Activa un contacto en Experimentos nativos de la app de iOS y luego pídeselo en su chat privado.",
+      "capabilitiesTitle": "Qué puedes probar",
+      "learnMore": "Más información",
+      "capabilities": {
+        "systemTools": {
+          "title": "Herramientas del sistema",
+          "text": "Temporizadores y alarmas del sistema, eventos de Calendario y Recordatorios, incluidos recordatorios al llegar y al salir."
+        },
+        "shortcuts": {
+          "title": "Atajos y widgets",
+          "text": "Siri y Atajos, atajos del botón de acción y un widget de contacto en la pantalla de inicio."
+        },
+        "sharing": {
+          "title": "Compartir",
+          "text": "Borradores compartidos desde Safari, Fotos o Archivos, y enlaces de contacto autorizados."
+        }
+      },
+      "topics": {
+        "automatic": {
+          "title": "Ejecución automática",
+          "text": "Los temporizadores y las alarmas se ejecutan sin confirmación adicional en el iPhone que los solicita mientras Wildcard está abierta. En Experimentos nativos, elige otras herramientas en Ejecutar sin confirmación o desactiva la ejecución automática. Los recordatorios de Calendario y de ubicación siguen requiriendo revisión; las solicitudes anteriores siguen siendo manuales. iOS puede pedir permiso la primera vez. Activar un contacto compartido no da a los demás participantes acceso al dispositivo. Por separado, puedes permitir que un participante concreto envíe temporizadores y alarmas a tu iPhone vinculado desde Temporizadores y alarmas en los detalles del contacto, en el iPhone o en la web."
+        },
+        "receipts": {
+          "title": "Estado en vivo y comprobantes",
+          "text": "En el iPhone, los temporizadores y las alarmas activos aparecen dentro de Wildcard. Las tarjetas de temporizador muestran la cuenta regresiva del sistema cuando está disponible, con controles para pausar, reanudar y cancelar. Cada solicitud nativa también tiene un comprobante de operación en su chat. Tras la actualización del backend, el contacto espera brevemente el comprobante del dispositivo antes de confirmar la ejecución automática; una solicitud sin confirmar nunca se describe como completada."
+        },
+        "remote": {
+          "title": "Temporizadores y alarmas remotos",
+          "text1": "Para solicitar un temporizador o una alarma desde este navegador, activa Recibir temporizadores y alarmas en los detalles del contacto en el iPhone y luego pídelo en el chat, por ejemplo “pon un temporizador de 10 minutos” o “pon una alarma en el teléfono de Lucía para las 7”. El contacto elige entre los teléfonos que puedes usar. Los propietarios pueden permitir que participantes concretos de un contacto compartido usen su teléfono desde la misma configuración de Temporizadores y alarmas, y desactivarlo desde cualquiera de los dos clientes. No es necesario que Wildcard esté abierta en el teléfono: una notificación visible le permite configurar el temporizador o la alarma con el teléfono bloqueado o la app en segundo plano. Las solicitudes vencen al cabo de un minuto; el chat muestra el comprobante del dispositivo.",
+          "text2": "Esta función experimental requiere el backend, la app y la firma de la extensión actualizados, y aún no se ha verificado en nuestro dispositivo firmado. La iniciativa autónoma de los bots todavía no puede activarla.",
+          "text3": "Estos frameworks de Apple requieren la app nativa de iOS. Este navegador no ejecuta frameworks de Apple localmente. Solo ofrece herramientas remotas de temporizador y alarma para los teléfonos cuyos propietarios las activaron. Los enlaces de contacto también abren en la web conversaciones autorizadas existentes."
+        },
+        "onDevice": {
+          "title": "Qué se queda en tu iPhone",
+          "text": "Los elementos guardados en Calendario y Recordatorios y las alarmas del sistema programadas permanecen en iOS hasta que los elimines. Gestiona las alarmas de Wildcard en la pantalla Experimentos nativos de la app de iOS; no se añaden a la app Reloj de Apple. Los borradores compartidos se guardan en el dispositivo y solo se envían cuando tocas Enviar."
+        }
+      }
+    }
+  }
+}

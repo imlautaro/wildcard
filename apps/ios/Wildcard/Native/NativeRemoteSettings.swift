@@ -14,7 +14,7 @@ import SwiftUI
         let config = RemoteNativeConfiguration(userID: userID, deviceID: id, contacts: contacts)
         guard config != RemoteNativeShared.configuration else { return }
         do { try RemoteNativeShared.writeConfiguration(config) }
-        catch { self.error = "Remote actions are unavailable. Check App Group signing for the notification extension." }
+        catch { self.error = String(localized: "Remote actions are unavailable. Check App Group signing for the notification extension.") }
     }
     func setRemoteEnabled(_ on: Bool, contactID: String, using auth: AuthStore, requestPermission: Bool = true) async {
         guard let owner = userID, owner == auth.user?.id, !remoteBusy else { return }
@@ -31,16 +31,16 @@ import SwiftUI
                 }
                 return
             }
-            guard !(enabled[contactID] ?? []).intersection(["timer", "alarm"]).isEmpty else { throw AuthAPI.Failure.rejected("Enable timers or alarms for this contact first.") }
+            guard !(enabled[contactID] ?? []).intersection(["timer", "alarm"]).isEmpty else { throw AuthAPI.Failure.rejected(String(localized: "Enable timers or alarms for this contact first.")) }
             let alarmAuthorization = requestPermission ? try await AlarmManager.shared.requestAuthorization() : AlarmManager.shared.authorizationState
-            guard alarmAuthorization == .authorized else { throw AuthAPI.Failure.rejected("Allow AlarmKit in Settings first.") }
+            guard alarmAuthorization == .authorized else { throw AuthAPI.Failure.rejected(String(localized: "Allow AlarmKit in Settings first.")) }
             if requestPermission { await PushNotifications.shared.activate(using: auth, requestPermission: true) }
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             guard settings.alertSetting == .enabled, let pushToken = PushNotifications.shared.deviceToken,
                   let environment = Bundle.main.object(forInfoDictionaryKey: "WildcardPushEnvironment") as? String else {
                 // At launch APNs delivers the token after this refresh starts; Home reruns it when the token arrives.
                 guard requestPermission else { return }
-                throw AuthAPI.Failure.rejected("Enable visible notifications, then try again once this iPhone is registered.")
+                throw AuthAPI.Failure.rejected(String(localized: "Enable visible notifications, then try again once this iPhone is registered."))
             }
             guard auth.user?.id == owner, userID == owner else { return }
             struct Registration: Encodable { let token: String; let environment: String; let name: String; let grant: String; let kinds: [String] }
@@ -81,7 +81,7 @@ extension RemoteNativeSnapshot {
     /// "Your iPhone" for this account's phones, "Ana’s iPhone" for a phone shared with you.
     /// The installation suffix appears only when two phones would otherwise read the same.
     func label(for device: RemoteNativeDevice) -> String {
-        func base(_ device: RemoteNativeDevice) -> String { device.owned == 1 ? "Your \(device.name)" : device.name }
+        func base(_ device: RemoteNativeDevice) -> String { device.owned == 1 ? String(localized: "Your \(device.name)") : device.name }
         let name = base(device)
         return devices.filter { base($0) == name }.count > 1 ? "\(name) · \(device.id.suffix(4))" : name
     }
@@ -134,7 +134,7 @@ struct RemoteNativeAccessSection: View {
     private var hasKinds: Bool { !(native.enabled[contactID] ?? []).isDisjoint(with: ["timer", "alarm"]) }
     private var isOn: Bool { native.remoteEnabled.contains(contactID) }
     private var registered: Bool { snapshot?.devices.contains { $0.id == thisDevice && $0.owned == 1 } ?? false }
-    private var contactName: String { contacts.contact(id: contactID)?.name ?? "this contact" }
+    private var contactName: String { contacts.contact(id: contactID)?.name ?? String(localized: "this contact") }
     private var status: Status {
         if !hasKinds { return .needsTools }
         if !isOn { return .off }
@@ -145,12 +145,12 @@ struct RemoteNativeAccessSection: View {
     }
     private var statusText: String {
         switch status {
-        case .needsTools: "Turn on Timers or Alarms in this contact’s Native experiments first."
-        case .off: "Off. Only this chat on this iPhone can set them."
-        case .needsNotifications: "Paused. Notifications for Wildcard are off."
-        case .needsAlarms: "Paused. Wildcard isn’t allowed to set alarms."
-        case .registering: "Connecting this iPhone…"
-        case .on: "On. Works in the background and while locked."
+        case .needsTools: String(localized: "Turn on Timers or Alarms in this contact’s Native experiments first.")
+        case .off: String(localized: "Off. Only this chat on this iPhone can set them.")
+        case .needsNotifications: String(localized: "Paused. Notifications for Wildcard are off.")
+        case .needsAlarms: String(localized: "Paused. Wildcard isn’t allowed to set alarms.")
+        case .registering: String(localized: "Connecting this iPhone…")
+        case .on: String(localized: "On. Works in the background and while locked.")
         }
     }
     private var statusColor: Color {
@@ -253,13 +253,13 @@ struct ContactPhonesView: View {
     private var thisDevice: String? { try? native.deviceID() }
     // This iPhone is covered by the switch below; its own requests run locally.
     private var phones: [RemoteNativeDevice] { (snapshot?.devices ?? []).filter { $0.id != thisDevice } }
-    private var contactName: String { contacts.contact(id: contactID)?.name ?? "this contact" }
+    private var contactName: String { contacts.contact(id: contactID)?.name ?? String(localized: "this contact") }
     private var example: String {
         if let other = phones.first(where: { $0.owned == 0 }) {
             let owner = other.name.components(separatedBy: "’s ").first ?? other.name
-            return "“Set a timer on \(owner)’s phone for 10 minutes”"
+            return String(localized: "“Set a timer on \(owner)’s phone for 10 minutes”")
         }
-        return "“Set a timer for 10 minutes”"
+        return String(localized: "“Set a timer for 10 minutes”")
     }
     var body: some View {
         Form {
@@ -311,13 +311,13 @@ struct SharedRemoteReceiptView: View {
     private var status: String {
         let device = action.deviceName
         return switch action.status {
-        case "completed": "Set on \(device)"
-        case "pending": "Sending to \(device)…"
-        case "running": "Reached \(device) · not confirmed yet"
-        case "expired": "\(device) didn’t respond in time"
-        case "failed": "\(device) couldn’t set it"
-        case "cancelled": "Cancelled on \(device)"
-        default: "Not confirmed · check \(device)"
+        case "completed": String(localized: "Set on \(device)")
+        case "pending": String(localized: "Sending to \(device)…")
+        case "running": String(localized: "Reached \(device) · not confirmed yet")
+        case "expired": String(localized: "\(device) didn’t respond in time")
+        case "failed": String(localized: "\(device) couldn’t set it")
+        case "cancelled": String(localized: "Cancelled on \(device)")
+        default: String(localized: "Not confirmed · check \(device)")
         }
     }
     var body: some View {

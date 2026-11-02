@@ -5,7 +5,8 @@ struct OnboardingInput: Codable, Sendable {
     var name = ""
     var age: Int? = nil
     var gender = "male"
-    var language = "en"
+    /// Suggests the app language for contacts (still editable), like the web.
+    var language = Bundle.main.preferredLocalizations.first == "es" ? "es" : "en"
     var country = ""
     var style = "cartoon"
     var createGroup = true
@@ -44,6 +45,37 @@ struct OnboardingOption: Decodable, Identifiable, Sendable {
 }
 extension [OnboardingOption] {
     var pickerOptions: [SearchablePicker.Option] { map { SearchablePicker.Option(value: $0.code, label: $0.name) } }
+    /// The API names languages in English; name them on device in the app's language by ISO 639-1 code.
+    var languagePickerOptions: [SearchablePicker.Option] {
+        Self.localized(self) { code in
+            Locale.current.localizedString(forLanguageCode: code).map { name in
+                // Spanish and other locales name languages in lowercase ("español").
+                name.prefix(1).uppercased(with: Locale.current) + name.dropFirst()
+            }
+        }
+    }
+    /// The API names countries in English; name them on device in the app's language by region code.
+    var countryPickerOptions: [SearchablePicker.Option] {
+        Self.localized(self) { Locale.current.localizedString(forRegionCode: $0) }
+    }
+    private static func localized(_ options: [OnboardingOption], name: (String) -> String?) -> [SearchablePicker.Option] {
+        options.map { SearchablePicker.Option(value: $0.code, label: name($0.code) ?? $0.name) }
+            .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
+    }
+}
+extension OnboardingOption {
+    /// Avatar style names by code (shared/onboarding.ts); an unknown code keeps the API's name.
+    var styleName: String {
+        switch code {
+        case "cartoon": String(localized: "Cartoon", comment: "Avatar style")
+        case "anime": String(localized: "Anime", comment: "Avatar style")
+        case "3d": String(localized: "3D animated movie", comment: "Avatar style")
+        case "realistic": String(localized: "Realistic people", comment: "Avatar style")
+        case "pets": String(localized: "3D animated pets", comment: "Avatar style")
+        case "custom": String(localized: "Custom", comment: "Avatar style")
+        default: name
+        }
+    }
 }
 struct OnboardingOptions: Decodable, Sendable {
     let countries: [OnboardingOption]
@@ -181,13 +213,13 @@ struct OnboardingView: View {
                             Text("Male").tag("male")
                             Text("Female").tag("female")
                         }
-                        SearchablePicker(title: "Preferred language", selection: $store.draft.language, options: options.languages.pickerOptions)
-                        SearchablePicker(title: "Country", selection: $store.draft.country, options: options.countries.pickerOptions,
-                                         placeholder: "Choose your country")
+                        SearchablePicker(title: "Preferred language", selection: $store.draft.language, options: options.languages.languagePickerOptions)
+                        SearchablePicker(title: "Country", selection: $store.draft.country, options: options.countries.countryPickerOptions,
+                                         placeholder: String(localized: "Choose your country"))
                     } header: {
                         HStack {
                             Text("About you")
-                            InfoButton(title: "About you", text: "Your contacts will have names common in your country and speak your preferred language. Contacts in every style are adults, usually within two years of your age, with a minimum age of 18. Gender does not determine your contacts’ personalities.")
+                            InfoButton(title: String(localized: "About you"), text: String(localized: "Your contacts will have names common in your country and speak your preferred language. Contacts in every style are adults, usually within two years of your age, with a minimum age of 18. Gender does not determine your contacts’ personalities."))
                         }
                     }
                     .disabled(store.locked || store.busy)
@@ -198,7 +230,7 @@ struct OnboardingView: View {
                     if store.draft.createContacts {
                     Section("Agent appearance") {
                         Picker("Style", selection: $store.draft.style) {
-                            ForEach(options.styles) { Text($0.name).tag($0.code) }
+                            ForEach(options.styles) { Text($0.styleName).tag($0.code) }
                         }
                         if store.draft.style == "custom" {
                             TextField("Describe your characters (friendly robots, kittens…)", text: $store.draft.customStyle)
@@ -221,7 +253,7 @@ struct OnboardingView: View {
                     } header: {
                         HStack {
                             Text("Your circle")
-                            InfoButton(title: "Your circle", text: "Friends have varied interests. Study and work teams use your field to create complementary contacts.")
+                            InfoButton(title: String(localized: "Your circle"), text: String(localized: "Friends have varied interests. Study and work teams use your field to create complementary contacts."))
                         }
                     }
                     .disabled(store.locked || store.busy)

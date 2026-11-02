@@ -352,18 +352,20 @@ function draftPreview(text: string | undefined) {
   return value ? [...value].slice(0, 500).join('') : null;
 }
 function withDraft(row: ChatRow, draft: string | null): ChatRow {
-  return draft ? { ...row, draft: true, preview: draft, sender: 'Draft', voice: null, own: false, sending: false, readAt: null, receiptState: null } : row;
+  return draft ? { ...row, draft: true, preview: draft, sender: translate('chat.preview.draft'), voice: null, own: false, sending: false, readAt: null, receiptState: null } : row;
 }
 function withReaction(row: ChatRow, reaction: LastReaction | null | undefined, group: boolean): ChatRow {
   if (!reaction || reaction.at <= row.at || row.sending) return row;
-  const sender = reaction.own ? 'You' : group ? (reaction.name || null) : null;
-  return { ...row, preview: `${sender ? 'reacted' : 'Reacted'} with ${reaction.emoji}`, sender, voice: null, own: false, readAt: null, receiptState: null };
+  const sender = reaction.own ? translate('common.you') : group ? (reaction.name || null) : null;
+  // Whole phrases per sender kind: Spanish conjugates the verb for "You" ("reaccionaste").
+  const preview = translate(reaction.own ? 'chat.preview.reactedOwn' : sender ? 'chat.preview.reactedNamed' : 'chat.preview.reacted', { emoji: reaction.emoji });
+  return { ...row, preview, sender, voice: null, own: false, readAt: null, receiptState: null };
 }
 
 function contactRow(contact: Contact): ChatRow | null {
   if (contact.setupPending === 1) {
     return { kind: 'contact', archived: false, canClear: false, canDelete: false, id: contact.id, name: contact.name, photoPath: contactPhotoPath(contact),
-      voice: null, preview: 'Creating…', sender: null, at: contact.createdAt, unread: 0, own: false, sending: false, readAt: null, receiptState: null, setupPending: true };
+      voice: null, preview: translate('chat.preview.creating'), sender: null, at: contact.createdAt, unread: 0, own: false, sending: false, readAt: null, receiptState: null, setupPending: true };
   }
   const draft = contact.clearing === 1 ? null : draftPreview(peekConversation(contact.id)?.draft);
   const message = contactMessageRow(contact);
@@ -371,9 +373,9 @@ function contactRow(contact: Contact): ChatRow | null {
   const row = message ?? (draft ? { kind: 'contact' as const, archived: contact.archivedAt != null, canClear: true, canDelete: true, id: contact.id, name: contact.name,
     photoPath: contactPhotoPath(contact), voice: null, preview: '', sender: null, at: contact.createdAt, unread: Math.max(0, contact.unreadCount ?? 0),
     own: false, sending: false, readAt: null, receiptState: null } : null);
-  if (row && contact.clearing === 1) return { ...row, voice: null, preview: 'Cleaning up...' };
+  if (row && contact.clearing === 1) return { ...row, voice: null, preview: translate('chat.preview.cleaningUp') };
   if (row && (contact.replyActivity === 'typing' || contact.replyActivity === 'recording' || contact.replyActivity === 'researching')) {
-    return { ...row, voice: null, preview: contact.replyActivity === 'researching' ? 'Researching...' : contact.replyActivity === 'recording' ? 'Recording...' : 'Typing...', own: false, sender: null, sending: false, receiptState: null };
+    return { ...row, voice: null, preview: contact.replyActivity === 'researching' ? translate('common.researching') : contact.replyActivity === 'recording' ? translate('common.recording') : translate('common.typing'), own: false, sender: null, sending: false, receiptState: null };
   }
   return row && withDraft(withReaction(row, contact.lastReaction, false), draft);
 }
@@ -386,7 +388,7 @@ function contactMessageRow(contact: Contact): ChatRow | null {
   };
   const pending = cached?.pending;
   if (pending && !cached.turns.some((turn) => turn.id === pending.id)) {
-    return { ...base, voice: pending.voice ? { durationMs: pending.voice.durationMs, listenedAt: null, transcript: null } : null, preview: pending.voice ? voicePreviewLabel(pending.voice) : pending.text || (pending.sticker ? `Sticker ${pending.sticker.emoji}` : pending.attachment ? `Attachment: ${pending.attachment.name}` : ''),
+    return { ...base, voice: pending.voice ? { durationMs: pending.voice.durationMs, listenedAt: null, transcript: null } : null, preview: pending.voice ? voicePreviewLabel(pending.voice) : pending.text || (pending.sticker ? translate('chat.preview.sticker', { emoji: pending.sticker.emoji }) : pending.attachment ? translate('chat.preview.attachment', { name: pending.attachment.name }) : ''),
       at: pending.createdAt, own: true, sending: true, readAt: null };
   }
   const latest = cached?.turns.at(-1);
@@ -398,15 +400,15 @@ function contactMessageRow(contact: Contact): ChatRow | null {
       readAt: reads.length ? Math.max(...reads) : null };
   }
   if (contact.lastMessageAt == null) return contact.onboardingChat === 1 || contact.archivedAt != null || contact.clearing === 1
-    ? { ...base, preview: contact.clearing === 1 ? 'Cleaning up...' : 'No messages yet', at: contact.createdAt, own: false, sending: false, readAt: null } : null;
-  return { ...base, voice: contact.lastMessageVoice, preview: contact.lastMessageVoice ? voicePreviewLabel(contact.lastMessageVoice) : contact.lastMessagePreview ?? (contact.lastMessageFromUser === 0 ? plainMessageMarkdown(contact.lastMessageText ?? '') : contact.lastMessageText ?? ''), at: contact.lastMessageAt, own: contact.lastMessageFromUser === 1,
+    ? { ...base, preview: contact.clearing === 1 ? translate('chat.preview.cleaningUp') : translate('chat.preview.noMessages'), at: contact.createdAt, own: false, sending: false, readAt: null } : null;
+  return { ...base, voice: contact.lastMessageVoice, preview: contact.lastMessageVoice ? voicePreviewLabel(contact.lastMessageVoice) : localizeServerPreview(contact.lastMessagePreview ?? (contact.lastMessageFromUser === 0 ? plainMessageMarkdown(contact.lastMessageText ?? '') : contact.lastMessageText ?? '')), at: contact.lastMessageAt, own: contact.lastMessageFromUser === 1,
     sending: false, readAt: contact.lastMessageReadAt ?? null };
 }
 
 function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   const cached = peekGroupConversation(group.id);
   let voice = group.lastMessageVoice;
-  let preview = group.lastMessagePreview ?? (group.lastMessageUserID == null ? plainMessageMarkdown(group.lastMessageText ?? 'No messages yet') : group.lastMessageText ?? 'No messages yet');
+  let preview = localizeServerPreview(group.lastMessagePreview ?? (group.lastMessageUserID == null ? plainMessageMarkdown(group.lastMessageText ?? translate('chat.preview.noMessages')) : group.lastMessageText ?? translate('chat.preview.noMessages')));
   let at = group.lastMessageAt ?? group.createdAt;
   let sender = group.lastMessageSenderName;
   let userID = group.lastMessageUserID ?? null;
@@ -415,7 +417,7 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   const last = cached ? lastGroupChatMessage(cached.messages) : undefined;
   if (last && (last.id === group.lastMessageID || last.createdAt >= (group.lastMessageAt ?? 0))) {
     voice = last.id === group.lastMessageID ? mergeVoice(last.voice, group.lastMessageVoice) : last.voice;
-    preview = last.text ? [...(last.agentID ? plainMessageMarkdown(last.text) : last.text)].slice(0, 500).join('') : (last.attachments?.length ?? 0) > 1 ? `${last.attachments!.length} photos` : last.attachment?.sticker ? `Sticker ${last.attachment.sticker.emoji}` : last.attachment ? `Attachment: ${last.attachment.name}` : '';
+    preview = last.text ? [...(last.agentID ? plainMessageMarkdown(last.text) : last.text)].slice(0, 500).join('') : (last.attachments?.length ?? 0) > 1 ? translate('chat.preview.photos', last.attachments!.length) : last.attachment?.sticker ? translate('chat.preview.sticker', { emoji: last.attachment.sticker.emoji }) : last.attachment ? translate('chat.preview.attachment', { name: last.attachment.name }) : '';
     at = last.createdAt;
     sender = last.senderName;
     userID = last.userID;
@@ -424,7 +426,7 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   const pending = cached?.pending;
   if (pending && !cached.messages.some((message) => message.id === pending.id)) {
     voice = pending.voice ? { durationMs: pending.voice.durationMs, listenedAt: null, transcript: null } : null;
-    preview = pending.text || (pending.sticker ? `Sticker ${pending.sticker.emoji}` : pending.attachment ? `Attachment: ${pending.attachment.name}` : '');
+    preview = pending.text || (pending.sticker ? translate('chat.preview.sticker', { emoji: pending.sticker.emoji }) : pending.attachment ? translate('chat.preview.attachment', { name: pending.attachment.name }) : '');
     at = pending.createdAt;
     userID = me ?? null;
     receiptState = 'sent';
@@ -432,12 +434,14 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
   }
   if (voice) preview = voicePreviewLabel(voice);
   const own = !!userID && userID === me;
+  // Structured entries (current API) are worded in the app language; older APIs only send the English sentence.
+  const activity = group.replyActivityEntries?.length ? localizedReplyActivityLabel(group.replyActivityEntries) : group.replyActivity || null;
   const row: ChatRow = {
-    kind: 'group', voice: group.replyActivity || group.clearing === 1 ? null : voice, archived: group.archivedAt != null, canClear: group.ownerID === me, canDelete: false, id: group.id, name: group.name, photoPath: groupPhotoPath(group), preview: group.clearing===1 ? 'Cleaning up...' : group.replyActivity ?? preview,
-    sender: group.replyActivity ? null : own ? 'You' : sender, at, unread: Math.max(0, group.unreadCount ?? 0),
-    own: group.replyActivity ? false : own, sending, readAt: null, receiptState: receiptState ?? 'sent',
+    kind: 'group', voice: activity || group.clearing === 1 ? null : voice, archived: group.archivedAt != null, canClear: group.ownerID === me, canDelete: false, id: group.id, name: group.name, photoPath: groupPhotoPath(group), preview: group.clearing===1 ? translate('chat.preview.cleaningUp') : activity ?? preview,
+    sender: activity ? null : own ? translate('common.you') : sender, at, unread: Math.max(0, group.unreadCount ?? 0),
+    own: activity ? false : own, sending, readAt: null, receiptState: receiptState ?? 'sent',
   };
-  if (group.replyActivity || group.clearing === 1) return row;
+  if (activity || group.clearing === 1) return row;
   return withDraft(withReaction(row, group.lastReaction, true), draftPreview(cached?.draft));
 }
 
@@ -456,7 +460,7 @@ const allRows = computed<ChatRow[]>(() => {
 
 const rows = computed(() => allRows.value.filter(row => !row.archived));
 const archivedRows = computed(() => allRows.value.filter(row => row.archived));
-const directory = computed(() => [...contacts.value].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })));
+const directory = computed(() => [...contacts.value].sort((a, b) => a.name.localeCompare(b.name, appLocale(), { sensitivity: 'base' })));
 const totalUnread = computed(() => allRows.value.reduce((sum, row) => sum + row.unread, 0));
 const invitationCount = computed(() => contactInvitations.value.length + groupInvitations.value.length);
 
@@ -478,7 +482,7 @@ function purgeHistory(kind: 'contact' | 'group', id: string) {
 
 let lifecycleBusy = false;
 async function lifecycleMutation(operation: () => Promise<void>) {
-  if (lifecycleBusy) throw new Error('Please wait for the current change to finish.');
+  if (lifecycleBusy) throw new Error(translate('chat.preview.busy'));
   const owner = useSession().user.value?.id;
   lifecycleBusy = true;
   generation += 1;
@@ -532,6 +536,6 @@ async function deleteChatContact(id: string) {
 // Creators delete the contact for everyone; shared participants only leave it.
 export function contactDeletionWarning(name: string | undefined, canManage: boolean) {
   return canManage
-    ? `This permanently deletes ${name ?? 'this contact'} for everyone, including all participants' chats, schedules, memories, and this contact's group messages and work.`
-    : 'This removes your access and deletes your private chat, schedules, and contributed memories. Other participants keep the contact.';
+    ? translate('chat.deleteContact.warningManage', { name: name ?? translate('chat.deleteContact.thisContact') })
+    : translate('chat.deleteContact.warningMember');
 }

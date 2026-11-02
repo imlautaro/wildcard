@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const props = defineProps<{ source: ImageBitmap }>();
+const { t } = useI18n();
 const emit = defineEmits<{ cancel: []; save: [photo: Blob] }>();
 const dialog = ref<HTMLDialogElement>();
 const canvas = ref<HTMLCanvasElement>();
@@ -12,6 +13,7 @@ const helpID = useId();
 const zoomID = useId();
 const pointers = new Map<number, { x: number; y: number }>();
 let active = true;
+const zoomText = computed(() => new Intl.NumberFormat(appLocale(), { style: 'percent', maximumFractionDigits: 0 }).format(zoom.value));
 const side = computed(() => Math.min(props.source.width, props.source.height) / zoom.value);
 
 function draw() {
@@ -19,7 +21,7 @@ function draw() {
   center.x = Math.max(half, Math.min(props.source.width - half, center.x));
   center.y = Math.max(half, Math.min(props.source.height - half, center.y));
   const context = canvas.value?.getContext('2d');
-  if (!context) { problem.value = 'Photo editing is unavailable in this browser.'; return; }
+  if (!context) { problem.value = t('errors.photoEditingUnavailable'); return; }
   context.fillStyle = '#ffffff';
   context.fillRect(0, 0, 640, 640);
   context.drawImage(props.source, center.x - half, center.y - half, side.value, side.value, 0, 0, 640, 640);
@@ -83,20 +85,20 @@ onBeforeUnmount(() => { active = false; pointers.clear(); dialog.value?.close();
   <Teleport to="body">
     <dialog ref="dialog" class="photo-crop-dialog" :aria-labelledby="titleID" :aria-describedby="helpID" @cancel.prevent="emit('cancel')">
       <div class="crop-content">
-        <h2 :id="titleID">Crop Photo</h2>
-        <p :id="helpID" class="small muted">Drag to reposition and pinch to zoom. You can also use the arrow keys and zoom slider.</p>
-        <div class="crop-viewport" tabindex="0" role="group" aria-label="Photo crop position" :aria-disabled="saving"
+        <h2 :id="titleID">{{ $t('account.photoCrop.title') }}</h2>
+        <p :id="helpID" class="small muted">{{ $t('account.photoCrop.help') }}</p>
+        <div class="crop-viewport" tabindex="0" role="group" :aria-label="$t('account.photoCrop.position')" :aria-disabled="saving"
           @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointers.delete($event.pointerId)"
           @pointercancel="pointers.delete($event.pointerId)" @lostpointercapture="pointers.delete($event.pointerId)" @keydown="keyMove">
-          <canvas ref="canvas" width="640" height="640" aria-label="Selected photo crop preview" />
+          <canvas ref="canvas" width="640" height="640" :aria-label="$t('account.photoCrop.preview')" />
           <div class="crop-guide" aria-hidden="true" />
         </div>
-        <label :for="zoomID" class="small">Photo zoom</label>
-        <input :id="zoomID" v-model.number="zoom" type="range" min="1" max="4" step="0.01" :disabled="saving" :aria-valuetext="`${Math.round(zoom * 100)}%`">
+        <label :for="zoomID" class="small">{{ $t('account.photoCrop.zoom') }}</label>
+        <input :id="zoomID" v-model.number="zoom" type="range" min="1" max="4" step="0.01" :disabled="saving" :aria-valuetext="zoomText">
         <AppNotice v-if="problem">{{ problem }}</AppNotice>
         <div class="crop-actions">
-          <AppButton variant="text" autofocus @click="emit('cancel')">Cancel</AppButton>
-          <AppButton :disabled="saving" @click="save">{{ saving ? 'Preparing…' : 'Use Photo' }}</AppButton>
+          <AppButton variant="text" autofocus @click="emit('cancel')">{{ $t('common.cancel') }}</AppButton>
+          <AppButton :disabled="saving" @click="save">{{ saving ? $t('account.photoCrop.preparing') : $t('account.photoCrop.use') }}</AppButton>
         </div>
       </div>
     </dialog>

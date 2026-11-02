@@ -12,7 +12,7 @@ final class McpOAuthBrowser: NSObject, ASWebAuthenticationPresentationContextPro
         guard session == nil,
               let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
                 .filter({ $0.activationState == .foregroundActive }).flatMap(\.windows).first(where: \.isKeyWindow) else {
-            throw AuthAPI.Failure.rejected("Unable to open authorization. Try again from Connections.")
+            throw AuthAPI.Failure.rejected(String(localized: "Unable to open authorization. Try again from Connections."))
         }
         anchor = window
         return try await withCheckedThrowingContinuation { continuation in
@@ -23,7 +23,7 @@ final class McpOAuthBrowser: NSObject, ASWebAuthenticationPresentationContextPro
                     self.completion = nil; self.session = nil; self.anchor = nil
                     if let callback { pending.resume(returning: callback) }
                     else if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin { pending.resume(throwing: CancellationError()) }
-                    else { pending.resume(throwing: AuthAPI.Failure.rejected("Authorization could not be completed. Return to Connections and try again.")) }
+                    else { pending.resume(throwing: AuthAPI.Failure.rejected(String(localized: "Authorization could not be completed. Return to Connections and try again."))) }
                 }
             }
             session = browser
@@ -31,7 +31,7 @@ final class McpOAuthBrowser: NSObject, ASWebAuthenticationPresentationContextPro
             browser.prefersEphemeralWebBrowserSession = true
             if !browser.start() {
                 completion = nil; session = nil; anchor = nil
-                continuation.resume(throwing: AuthAPI.Failure.rejected("Unable to open authorization. Try again from Connections."))
+                continuation.resume(throwing: AuthAPI.Failure.rejected(String(localized: "Unable to open authorization. Try again from Connections.")))
             }
         }
     }

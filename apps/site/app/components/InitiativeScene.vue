@@ -1,16 +1,17 @@
 <script setup lang="ts">
 // Initiative: a lock screen across a day. The clock moves forward and contacts'
 // notifications stack up without the person writing first.
-const moments = [
-  { time: '8:12', day: 'Tuesday, March 3', who: 'ivy' as CastId, text: 'Morning! Rest day today 🧘 How are the legs after the 18K?' },
-  { time: '13:40', day: 'Tuesday, March 3', who: 'theo' as CastId, text: 'How did the call with the oat-milk supplier go?' },
-  { time: '19:05', day: 'Tuesday, March 3', who: 'mila' as CastId, text: 'Apple just posted the MacBook Pro recap. Want the short version?' },
-  { time: '21:30', day: 'Tuesday, March 3', who: 'pixel' as CastId, text: 'Exam Friday. 10 flashcards before bed? I made them easy ones 🤖' },
-];
+const { t } = useI18n();
+const moments = computed(() => [
+  { time: '8:12', day: t('initiativeScene.day'), who: 'ivy' as CastId, text: t('initiativeScene.ivy') },
+  { time: '13:40', day: t('initiativeScene.day'), who: 'theo' as CastId, text: t('initiativeScene.theo') },
+  { time: '19:05', day: t('initiativeScene.day'), who: 'mila' as CastId, text: t('initiativeScene.mila') },
+  { time: '21:30', day: t('initiativeScene.day'), who: 'pixel' as CastId, text: t('initiativeScene.pixel') },
+]);
 const root = ref<HTMLElement | null>(null);
 const { step, fading } = useScene(root, [900, 1900, 1900, 1900], { hold: 4000 });
-const clock = computed(() => (step.value ? moments[step.value - 1]! : { time: '7:30', day: moments[0]!.day }));
-const shown = computed(() => moments.slice(0, step.value).reverse());
+const clock = computed(() => (step.value ? moments.value[step.value - 1]! : { time: '7:30', day: moments.value[0]!.day }));
+const shown = computed(() => moments.value.slice(0, step.value).reverse());
 </script>
 
 <template>

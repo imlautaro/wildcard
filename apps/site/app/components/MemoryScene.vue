@@ -3,31 +3,20 @@
 // one memory per contact. The chips fly between the pool and the per-contact
 // vaults (FLIP), and each chat's latest reply changes with the mode.
 interface Lane { who: CastId; chat: string; leaked: string; clean: string }
-const lanes: Lane[] = [
-  {
-    who: 'theo', chat: 'Bakery launch',
-    leaked: 'For the logo, what about a croissant crossing a marathon finish line? 🏃',
-    clean: 'Soft opening is on the 14th. Want me to draft the invite list?',
-  },
-  {
-    who: 'ivy', chat: 'Marathon training',
-    leaked: 'Great tempo run! Treat yourself with the oat-milk latte you are about to sell 🥐',
-    clean: 'Week 9 done. Thursday is an easy 8K, keep it conversational.',
-  },
-  {
-    who: 'pixel', chat: 'Exam prep',
-    leaked: 'Entropy is like your bakery budget: it only goes up 📈',
-    clean: 'Entropy question 4: want a hint or the full solution?',
-  },
-];
-const chips: { id: string; text: string; lane: number }[] = [
-  { id: 'opening', text: '🥐 Opens on the 14th', lane: 0 },
-  { id: 'supplier', text: '🥛 Oat-milk supplier', lane: 0 },
-  { id: 'marathon', text: '🏃 Marathon on May 3', lane: 1 },
-  { id: 'pace', text: '⏱️ Goal pace 5:40/km', lane: 1 },
-  { id: 'exam', text: '📚 Thermo exam Friday', lane: 2 },
-  { id: 'entropy', text: '🔋 Stuck on entropy', lane: 2 },
-];
+const { t } = useI18n();
+const lanes = computed<Lane[]>(() => [
+  { who: 'theo', chat: t('memoryScene.theoChat'), leaked: t('memoryScene.theoLeaked'), clean: t('memoryScene.theoClean') },
+  { who: 'ivy', chat: t('memoryScene.ivyChat'), leaked: t('memoryScene.ivyLeaked'), clean: t('memoryScene.ivyClean') },
+  { who: 'pixel', chat: t('memoryScene.pixelChat'), leaked: t('memoryScene.pixelLeaked'), clean: t('memoryScene.pixelClean') },
+]);
+const chips = computed<{ id: string; text: string; lane: number }[]>(() => [
+  { id: 'opening', text: t('memoryScene.factOpening'), lane: 0 },
+  { id: 'supplier', text: t('memoryScene.factSupplier'), lane: 0 },
+  { id: 'marathon', text: t('memoryScene.factMarathon'), lane: 1 },
+  { id: 'pace', text: t('memoryScene.factPace'), lane: 1 },
+  { id: 'exam', text: t('memoryScene.factExam'), lane: 2 },
+  { id: 'entropy', text: t('memoryScene.factEntropy'), lane: 2 },
+]);
 
 const root = ref<HTMLElement | null>(null);
 // 0 pooled · 1–3 leaked replies · 4 separated · 5–7 clean replies
@@ -48,7 +37,7 @@ watch(separated, async () => {
     el.animate([
       { transform: `translate(${from.left - to.left}px, ${from.top - to.top}px)` },
       { transform: 'none' },
-    ], { duration: 900, easing: 'cubic-bezier(0.2, 0, 0, 1)', delay: chips.findIndex((c) => c.id === id) * 50, fill: 'backwards' });
+    ], { duration: 900, easing: 'cubic-bezier(0.2, 0, 0, 1)', delay: chips.value.findIndex((c) => c.id === id) * 50, fill: 'backwards' });
   }
 }, { flush: 'pre' });
 </script>
@@ -56,12 +45,12 @@ watch(separated, async () => {
 <template>
   <div ref="root" class="memory-scene scene stage" :class="{ fading, separated }">
     <div class="mode" aria-hidden="true">
-      <span :class="{ on: !separated }"><SiteIcon v-if="!separated" name="done" />Other AI apps</span>
+      <span :class="{ on: !separated }"><SiteIcon v-if="!separated" name="done" />{{ t('memoryScene.others') }}</span>
       <span :class="{ on: separated }"><SiteIcon v-if="separated" name="done" />Wildcard</span>
     </div>
 
     <div class="pool" :class="{ empty: separated }">
-      <span class="pool-label"><SiteIcon name="brain" />{{ separated ? 'No shared pool' : 'One memory for every chat' }}</span>
+      <span class="pool-label"><SiteIcon name="brain" />{{ separated ? t('memoryScene.noPool') : t('memoryScene.pooled') }}</span>
       <div class="chip-row">
         <template v-if="!separated">
           <span v-for="chip in chips" :key="chip.id" :ref="setChip(chip.id)" class="fact">{{ chip.text }}</span>
@@ -89,7 +78,7 @@ watch(separated, async () => {
             </div>
           </Transition>
           <span v-if="replyShown(index)" class="verdict" :class="separated ? 'ok' : 'bad'">
-            <SiteIcon :name="separated ? 'check' : 'close'" />{{ separated ? 'On topic' : 'Off-topic memory' }}
+            <SiteIcon :name="separated ? 'check' : 'close'" />{{ separated ? t('memoryScene.onTopic') : t('memoryScene.offTopic') }}
           </span>
         </div>
       </div>

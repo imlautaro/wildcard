@@ -38,7 +38,7 @@ function fallbackMediaArtwork(): MediaImage[] {
 function updateMediaMetadata() {
   if (!import.meta.client || !('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
   navigator.mediaSession.metadata = messagePlayback
-    ? new MediaMetadata({ title: 'Voice message', artwork: mediaArtwork }) : null;
+    ? new MediaMetadata({ title: translate('chat.voice.title'), artwork: mediaArtwork }) : null;
 }
 
 function loadSenderArtwork(path: string | null | undefined, started: number) {

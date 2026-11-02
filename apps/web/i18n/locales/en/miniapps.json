@@ -1,0 +1,215 @@
+{
+  "miniapps": {
+    "issues": {
+      "TOOL_ERROR": "The connected service returned an error.",
+      "RESULT_NOT_JSON": "The connected service did not return structured data.",
+      "TOOL_CHANGED": "A tool changed. Review this mini app again.",
+      "INVALID_ARGUMENTS": "The request no longer matches the tool.",
+      "AUTHORIZATION_REQUIRED": "Authorize the connection again in Connections.",
+      "CONNECTION_UNAVAILABLE": "Couldn't reach the connected service.",
+      "NOT_AUTHORIZED": "This tool is no longer allowed.",
+      "PATH_NOT_FOUND": "This data wasn't in the result.",
+      "NOT_A_LIST": "Expected a list of items.",
+      "TOO_MANY_ITEMS": "Too many items to show.",
+      "TOO_MANY_GROUPS": "Too many groups to show.",
+      "RESULT_TOO_LARGE": "This result is too large to show.",
+      "unknown": "Couldn't load this part."
+    },
+    "list": {
+      "title": "Mini apps",
+      "emptyTitle": "No mini apps yet",
+      "enabled": "Enabled",
+      "needsReview": "Needs review",
+      "contactEmpty": "Ask this contact in chat to build one from your connections, for example “Make me a mini app for last week’s expenses.”",
+      "contactFooter": "Mini apps use this contact’s connections and are visible only to you.",
+      "groupEmpty": "Ask a contact in this group to build one, for example “Make us a shared shopping list.”",
+      "groupFooter": "Group mini apps are shared: every member sees and edits the same saved values. They cannot use connections."
+    },
+    "card": {
+      "needsReview": "Review to enable",
+      "needsReapproval": "Review changes to continue",
+      "enabled": "Mini app"
+    },
+    "screen": {
+      "fallbackTitle": "Mini app",
+      "refresh": "Refresh",
+      "disable": "Disable",
+      "delete": "Delete mini app",
+      "deleteConfirm": "Delete {title}? The contact can build it again later.",
+      "unavailableTitle": "Mini app unavailable",
+      "unavailableText": "It may have been deleted.",
+      "actionDone": "{label}: done.",
+      "actionFailed": "{label} failed. Nothing was confirmed by the service.",
+      "actionUnknown": "{label}: the outcome is unknown. Check the service before trying again.",
+      "needsReapproval": "A connection or tool changed since you enabled this mini app. Review it again to keep using it.",
+      "needsReview": "Your contact built this mini app. Review what it can do before enabling it.",
+      "reads": "Runs each time you open or refresh",
+      "noReads": "No automatic reads.",
+      "writes": "Only when you tap and confirm",
+      "permissionNote": "These tools use your connection permissions, and the service decides what each one does. Data is loaded for you only; it is not sent to the contact or saved to memory. Editing the mini app requires review again.",
+      "enable": "Enable mini app",
+      "loadingData": "Loading data…",
+      "updated": "Updated {time}",
+      "tabs": "Tabs"
+    },
+    "form": {
+      "choose": "Choose…",
+      "noItems": "No items yet"
+    },
+    "view": {
+      "working": "Working…",
+      "nothingToChart": "Nothing to chart.",
+      "chart": "Chart",
+      "ofGoal": "of {goal}"
+    },
+    "lesson": {
+      "questions": "{count} question | {count} questions",
+      "start": "Start",
+      "hearts": "{count} heart | {count} hearts",
+      "outOfHearts": "Out of hearts",
+      "complete": "Lesson complete!",
+      "score": "{correct} of {total} correct",
+      "xp": "+{count} XP",
+      "typeAnswer": "Type your answer",
+      "correct": "Correct!",
+      "correctAnswer": "Correct answer:",
+      "check": "Check"
+    },
+    "timer": {
+      "start": "Start",
+      "pause": "Pause",
+      "resume": "Resume",
+      "reset": "Reset"
+    },
+    "tasks": {
+      "title": "Tasks",
+      "newList": "New list",
+      "newListTitle": "New list title",
+      "intro": "Lists keep shared work in this chat. Contacts can create them, take tasks, wait for blockers, and report results. You can also ask in the chat, for example “Split the trip planning into tasks.”",
+      "canceled": "Canceled",
+      "working": "Working",
+      "markDone": "Mark “{title}” done",
+      "markNotDone": "Mark “{title}” not done",
+      "nextStep": "Next step: {text}",
+      "blocked": "Blocked: {text}",
+      "deliverable": "Deliverable: {title}",
+      "aDocument": "a document",
+      "revisionRound": "Revision round {round}/{limit}",
+      "revisionRoundFeedback": "Revision round {round}/{limit}: {feedback}",
+      "task": "Task",
+      "unassigned": "Unassigned",
+      "memberYou": "{name} (You)",
+      "waitingFor": "Waiting for {tasks}",
+      "aRemovedTask": "a removed task",
+      "waitsFor": "Waits for",
+      "addTask": "Add a task",
+      "addTaskTo": "Add a task to {list}",
+      "cancelList": "Cancel list",
+      "cancelListConfirm": "Cancel “{title}” and every unfinished task in it? Contacts stop working on them.",
+      "status": {
+        "open": "To do",
+        "in_progress": "In progress",
+        "done": "Done",
+        "canceled": "Canceled"
+      },
+      "fields": {
+        "title": "Title",
+        "status": "Status",
+        "assignee": "Assignee",
+        "notes": "Notes",
+        "nextStep": "Next step",
+        "evidence": "Evidence",
+        "blockedReason": "Blocked reason"
+      },
+      "work": {
+        "label": "Work",
+        "info": "Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget.",
+        "pause": "Pause work",
+        "resume": "Resume work",
+        "cancelTask": "Cancel task",
+        "paused": "Paused",
+        "blocked": "Blocked",
+        "exhausted": "Budget exhausted",
+        "turns": "{used}/{limit} work turns used"
+      },
+      "research": {
+        "title": "Public web research",
+        "info": "Saving this query authorizes one public search with the app closed. Only this exact query is sent; use public information. Leave empty to revoke. Failed or uncertain attempts count. Daily limits also apply. Changing assignee clears permission; save the assignment first. Reports appear in Docs.",
+        "placeholder": "Exact public query",
+        "note": "Saving authorizes one public search with the app closed.",
+        "detail": "{used}/{limit} web research attempts used",
+        "detailStatus": "{used}/{limit} web research attempts used · {status}",
+        "statuses": {
+          "pending": "Pending or uncertain",
+          "ready": "Draft saved",
+          "stopped": "Stopped before publication",
+          "complete": "Report saved",
+          "failed": "Failed"
+        }
+      },
+      "monitor": {
+        "title": "Page monitor",
+        "info": "Saving a public page lets the server check it with the app closed, without the model. The contact gets a turn only when the page text changes (and matches a keyword, if set), up to 3 per day and 20 in total. Redirects are not followed; save the final address. Leave empty to remove. Changing assignee removes the monitor; save the assignment first. Pausing or finishing the task stops checks.",
+        "frequency": "Check frequency",
+        "keywords": "Keywords, comma-separated (optional)",
+        "keywordsLabel": "Monitor keywords",
+        "note": "Saving lets the server check this page with the app closed.",
+        "active": "Page monitor · {interval}",
+        "removed": "Page monitor removed",
+        "turns": "{used}/{limit} change turns used",
+        "pending": "Change waiting for a turn",
+        "last": "Last: {check}",
+        "notChecked": "Not checked yet",
+        "intervals": {
+          "hourly": "Every hour",
+          "sixHours": "Every 6 hours",
+          "daily": "Every day"
+        },
+        "intervalsInline": {
+          "hourly": "every hour",
+          "sixHours": "every 6 hours",
+          "daily": "every day"
+        },
+        "outcomes": {
+          "baseline": "First check saved",
+          "unchanged": "Unchanged",
+          "repeated": "Earlier version again",
+          "ignored": "Changed, no keyword match",
+          "changed": "Relevant change",
+          "failed": "Check failed"
+        }
+      }
+    },
+    "documents": {
+      "fallbackTitle": "Document",
+      "editTitle": "Edit document",
+      "emptyPreview": "Empty document",
+      "research": "Web research · {count} cited source | Web research · {count} cited sources",
+      "revisions": "Revisions",
+      "write": "Write",
+      "preview": "Preview",
+      "editorMode": "Editor mode",
+      "discardConfirm": "Discard your unsaved changes?",
+      "conflict": "{name} saved a newer version (revision {revision}) while you were editing.",
+      "someone": "Someone",
+      "deleteConfirm": "Delete “{title}” for everyone in this chat? Its revisions are deleted too.",
+      "useTheirs": "Use their version",
+      "keepMine": "Keep mine and save over it",
+      "titleLabel": "Title",
+      "markdownLabel": "Markdown",
+      "placeholder": "Write in Markdown…",
+      "nothingToPreview": "*Nothing to preview.*",
+      "summaryPlaceholder": "What changed? (optional)",
+      "summaryLabel": "Change summary",
+      "meta": "Revision {revision} · Updated by {name} · {date}",
+      "checked": "Checked {date} · Sources refer to revision {revision}.",
+      "cited": "Cited",
+      "retrieved": "Retrieved",
+      "noSummary": "No summary",
+      "empty": "This document is empty. Edit it, or ask a contact in the chat to write it.",
+      "delete": "Delete document",
+      "unavailableTitle": "Document unavailable",
+      "unavailableText": "It was deleted or you no longer have access."
+    }
+  }
+}

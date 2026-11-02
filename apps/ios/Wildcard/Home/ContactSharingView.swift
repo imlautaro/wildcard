@@ -19,7 +19,7 @@ struct ContactSharingView: View {
     }
 
     @State private var showingInvite = false
-    private static let aboutSharing = "Everyone talks to the same contact, with shared memories and presence. Each person starts an empty, private chat and keeps their own schedules and notifications. Ask the contact to message another participant privately, now or at a scheduled time, or to send them an image; only your requested message and image are delivered, with your name attached. Invitations appear inside Wildcard; no email is sent. They expire after 24 hours. Up to four participants, including you."
+    private static var aboutSharing: String { String(localized: "Everyone talks to the same contact, with shared memories and presence. Each person starts an empty, private chat and keeps their own schedules and notifications. Ask the contact to message another participant privately, now or at a scheduled time, or to send them an image; only your requested message and image are delivered, with your name attached. Invitations appear inside Wildcard; no email is sent. They expire after 24 hours. Up to four participants, including you.") }
 
     var body: some View {
         Form {
@@ -30,7 +30,7 @@ struct ContactSharingView: View {
                         HStack {
                             ShareLink(item: code) { Label("Share code", systemImage: "square.and.arrow.up") }
                             Spacer()
-                            InfoButton(title: "Invitation code", text: "The recipient signs in, taps + → Join Shared Contact, and pastes this code. Anyone with this code can accept it, so share it only with your intended recipient.")
+                            InfoButton(title: String(localized: "Invitation code"), text: String(localized: "The recipient signs in, taps + → Join Shared Contact, and pastes this code. Anyone with this code can accept it, so share it only with your intended recipient."))
                         }
                     } else if let email = invitation.recipientEmail {
                         Label("Invitation sent to \(email)", systemImage: "checkmark.circle")
@@ -57,7 +57,7 @@ struct ContactSharingView: View {
                 } header: {
                     HStack {
                         Text("Participants")
-                        InfoButton(title: "Shared contacts", text: Self.aboutSharing)
+                        InfoButton(title: String(localized: "Shared contacts"), text: Self.aboutSharing)
                     }
                 }
                 if !sharing.invitations.isEmpty {
@@ -65,7 +65,7 @@ struct ContactSharingView: View {
                         ForEach(sharing.invitations) { invite in
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(invite.recipientEmail ?? "Invitation code")
+                                    Text(invite.recipientEmail ?? String(localized: "Invitation code"))
                                     Text("Expires \(Date(timeIntervalSince1970: invite.expiresAt / 1000).formatted(date: .abbreviated, time: .shortened))")
                                         .manrope(.caption).foregroundStyle(.secondary)
                                 }
@@ -132,7 +132,7 @@ struct ContactSharingView: View {
             .navigationTitle("Invite")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { InfoButton(title: "Shared contacts", text: Self.aboutSharing) }
+                ToolbarItem(placement: .topBarLeading) { InfoButton(title: String(localized: "Shared contacts"), text: Self.aboutSharing) }
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { showingInvite = false } }
             }
         }
@@ -151,7 +151,7 @@ struct ContactSharingView: View {
         } catch is CancellationError { }
         catch AuthAPI.Failure.notFound {
             contacts.sharingSnapshots.remove(id: contactID)
-            error = "This contact is no longer available."
+            error = String(localized: "This contact is no longer available.")
         }
         catch { self.error = error.localizedDescription }
     }
@@ -160,7 +160,7 @@ struct ContactSharingView: View {
         let email = byEmail ? recipientEmail.trimmingCharacters(in: .whitespacesAndNewlines) : nil
         if let email, let ownEmail = auth.user?.email,
            email.lowercased() == ownEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-            error = "You cannot invite your own account. Enter another user's email."
+            error = String(localized: "You cannot invite your own account. Enter another user's email.")
             return
         }
         busy = true

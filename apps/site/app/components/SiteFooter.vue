@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const { t } = useI18n();
+const localePath = useLocalePath();
 const year = new Date().getFullYear();
 </script>
 
@@ -7,29 +9,29 @@ const year = new Date().getFullYear();
     <div class="container">
       <div class="footer-top">
         <div class="footer-brand">
-          <NuxtLink to="/" class="brand"><WildcardMark :size="28" /><span>Wildcard</span></NuxtLink>
-          <p>AI contacts with their own names, faces, personalities and memories. Open source, and yours to run.</p>
+          <NuxtLink :to="localePath('/')" class="brand"><WildcardMark :size="28" /><span>Wildcard</span></NuxtLink>
+          <p>{{ t('footer.blurb') }}</p>
         </div>
-        <nav class="footer-links" aria-label="Footer">
+        <nav class="footer-links" :aria-label="t('footer.label')">
           <div>
-            <h3>Product</h3>
-            <a v-for="item in navigation" :key="item.id" :href="`/#${item.id}`">{{ item.label }}</a>
+            <h3>{{ t('footer.product') }}</h3>
+            <a v-for="item in navigation" :key="item.id" :href="`${localePath('/')}#${item.id}`">{{ t(`nav.items.${item.key}`) }}</a>
           </div>
           <div>
             <h3>Wildcard</h3>
-            <a :href="site.appUrl">Open the web app</a>
-            <a v-if="site.iosUrl" :href="site.iosUrl">Get the iPhone app</a>
-            <a v-if="site.repositoryPublic" :href="site.repositoryUrl">Source code</a>
-            <span v-else class="soon">Source code · soon</span>
-            <a href="/#faq">FAQ</a>
+            <a :href="site.appUrl">{{ t('footer.webApp') }}</a>
+            <a v-if="site.iosUrl" :href="site.iosUrl">{{ t('footer.iosApp') }}</a>
+            <a v-if="site.repositoryPublic" :href="site.repositoryUrl">{{ t('footer.source') }}</a>
+            <span v-else class="soon">{{ t('footer.sourceSoon') }}</span>
+            <a :href="`${localePath('/')}#faq`">{{ t('footer.faq') }}</a>
           </div>
         </nav>
       </div>
       <div class="footer-bottom">
         <span>© {{ year }} Wildcard</span>
-        <span class="powered"><SiteIcon name="meta" /> Powered by Meta AI models</span>
-        <span class="powered"><SiteIcon name="cloudflare" /> Built on Cloudflare</span>
-        <ThemeSwitch />
+        <span class="powered"><SiteIcon name="meta" /> {{ t('common.poweredByMeta') }}</span>
+        <span class="powered"><SiteIcon name="cloudflare" /> {{ t('footer.cloudflare') }}</span>
+        <span class="footer-prefs"><LanguageSwitch /><ThemeSwitch /></span>
       </div>
     </div>
   </footer>
@@ -51,6 +53,7 @@ const year = new Date().getFullYear();
   border-top: 1px solid var(--md-outline-variant); color: var(--md-on-surface-variant); font: var(--type-body-small); font-size: 13px;
 }
 .footer-bottom > :last-child { margin-left: auto; }
+.footer-prefs { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .powered { display: inline-flex; align-items: center; gap: var(--space-1-5); }
 .powered svg { width: 16px; height: 16px; }
 </style>

@@ -23,7 +23,7 @@ nonisolated struct NativeLocalAlarm: Codable, Identifiable, Sendable {
     func rememberAlarm(_ record: NativeLocalAlarm) throws {
         let active = Set(try AlarmManager.shared.alarms.map { $0.id.uuidString.lowercased() })
         var records = Self.alarmRecords().filter { active.contains($0.id) }
-        guard records.count < 200 else { throw AuthAPI.Failure.rejected("Remove earlier Wildcard alarms before scheduling more.") }
+        guard records.count < 200 else { throw AuthAPI.Failure.rejected(String(localized: "Remove earlier Wildcard alarms before scheduling more.")) }
         records.removeAll { $0.id == record.id }; records.append(record)
         try Self.saveAlarms(records)
         localAlarms = records.filter { $0.userID == userID }
@@ -64,7 +64,7 @@ nonisolated struct NativeLocalAlarm: Codable, Identifiable, Sendable {
             if pause { try AlarmManager.shared.pause(id: id) }
             else { try AlarmManager.shared.resume(id: id) }
             refreshLocalAlarms()
-        } catch { self.error = "Unable to update this timer: \(error.localizedDescription)" }
+        } catch { self.error = String(localized: "Unable to update this timer: \(error.localizedDescription)") }
     }
     func cancelLocalAlarm(_ record: NativeLocalAlarm) {
         guard record.userID == userID, busy.isEmpty, let id = UUID(uuidString: record.id) else { return }
@@ -73,6 +73,6 @@ nonisolated struct NativeLocalAlarm: Codable, Identifiable, Sendable {
             try Self.saveAlarms(Self.alarmRecords().filter { $0.id != record.id })
             localAlarms.removeAll { $0.id == record.id }
             systemAlarms.removeValue(forKey: record.id)
-        } catch { self.error = "Unable to confirm cancellation: \(error.localizedDescription)" }
+        } catch { self.error = String(localized: "Unable to confirm cancellation: \(error.localizedDescription)") }
     }
 }

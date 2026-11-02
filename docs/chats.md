@@ -931,11 +931,17 @@ Text fallback restores typing, and a finished turn returns to the normal presenc
 Chat list second lines temporarily replace the last message with **Typing...** or
 **Recording...**, hiding the last message's sender/checks. Groups name the contacts
 in a sentence built by the API (`shared/activity.ts`): **Ana is typing...**, **Ana
-and Bo are typing...**, **Ana, Bo and Cy are typing...**, or **Ana is researching,
+and Bo are typing...**, **Ana, Bo and Cy are typing...** (current clients word it
+themselves with a locale list format: **Ana, Bo, and Cy are typing...**), or **Ana is researching,
 Bo is typing...** for mixed activities. More than three contacts, or a line longer
 than 48 characters, collapses to **4 people are typing...** (**are replying...**
-when activities differ). Clients show `replyActivity` verbatim, so older builds get
-the new wording without an update. Message timestamps, unread counts and ordering do not change. Task
+when activities differ). Group summaries also carry the same entries structured as
+`replyActivityEntries` (`[{ name, activity }]` or `null`); current clients word the
+line themselves in the interface language with the same rules
+([localization](localization.md)), while older builds keep showing `replyActivity`
+verbatim. Previews the API words itself for non-text messages (`Voice message`,
+`Scheduled message`, `Group response`, `Working on a task`, `Sticker <emoji>`,
+`Attachment: <name>`, `<n> photos`) are translated by both clients at display time. Message timestamps, unread counts and ordering do not change. Task
 work bubbles keep their existing task label. This applies to both iOS and web.
 
 Activity comes from the existing session-owned contact/group summaries and the

@@ -138,6 +138,8 @@ export type ChatGroup = {
   createdAt: number;
   updatedAt: number;
   replyActivity?: string | null;
+  /** Structured activity behind `replyActivity`, worded by the client (docs/localization.md); absent from older APIs. */
+  replyActivityEntries?: { name: string; activity: 'typing' | 'recording' | 'researching' }[] | null;
   lastMessageVoice?: VoiceInfo | null;
   /** Newest reaction in the chat (docs/chats.md#chat-list-previews); shown when newer than the last message. */
   lastReaction?: LastReaction | null;

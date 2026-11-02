@@ -1,0 +1,99 @@
+{
+  "updates": {
+    "aContact": "A contact",
+    "aContactLower": "a contact",
+    "time": {
+      "now": "now",
+      "minutes": "{n}m",
+      "hours": "{n}h",
+      "days": "{n}d"
+    },
+    "feed": {
+      "title": "For you",
+      "post": "Post",
+      "thread": "Thread",
+      "backToForYou": "Back to For you",
+      "chats": "Chats",
+      "topics": "Topics",
+      "updateNow": "Update now",
+      "followSomethingInForYou": "Follow something in For you",
+      "seeAllPosts": "See all {count} posts on {title}",
+      "postGoneTitle": "This post isn’t in For you anymore",
+      "postGoneText": "Its topic was hidden or retired, or the post is older than two weeks.",
+      "threadGoneTitle": "This thread isn’t in For you anymore",
+      "threadGoneText": "Its topic was hidden or retired, or its posts are older than two weeks.",
+      "preparing": "{name} is preparing {title}",
+      "preparingAll": "Your contacts are preparing updates…",
+      "disabled": "Curated cards are turned off on this server. Your apps and agenda still show here.",
+      "failed": "Your contacts couldn’t finish your updates. They’ll try again in a few minutes.",
+      "composerHint": "What should your contacts follow?",
+      "follow": "Follow",
+      "comingUp": "Coming up",
+      "yourApps": "Your apps",
+      "assignedToYou": "Assigned to you",
+      "newPosts": "{count} new post | {count} new posts",
+      "circleTitle": "Your circle is taking shape",
+      "circleText": "Your contacts are being created. Head to Chats to meet each one as soon as they’re ready. Posts will appear here as you get to know them.",
+      "goToChats": "Go to Chats",
+      "welcomeTitle": "Make yourself at home",
+      "welcomeText": "Add your first contact and start a conversation. This feed will fill with posts about the things you’re into.",
+      "addContact": "Add a contact",
+      "emptyTitle": "A feed that grows with you",
+      "emptyText": "Chat with your contacts or follow a topic you’re into. They’ll bring fresh posts here when there’s something to share.",
+      "startChat": "Start a chat",
+      "followSomething": "Follow something",
+      "followSheetTitle": "Follow in For you",
+      "followPlaceholder": "A topic you’re interested in…",
+      "followNote": "Your contacts decide how to show it and who keeps it up to date. Public questions may be searched on the web.",
+      "topicsNote": "Your contacts add and retire their own picks as your interests change. Topics you or a contact asked for stay until you hide them.",
+      "hidden": "Hidden",
+      "show": "Show",
+      "hide": "Hide",
+      "nothingYet": "Nothing yet.",
+      "origin": {
+        "person": "You asked",
+        "personWaiting": "You asked · Waiting for its first card",
+        "contact": "Suggested by {name}",
+        "contactWaiting": "Suggested by {name} · Waiting for its first card",
+        "contacts": "Picked by your contacts",
+        "contactsWaiting": "Picked by your contacts · Waiting for its first card"
+      }
+    },
+    "post": {
+      "options": "Post options",
+      "message": "Message {name}",
+      "lessLikeThis": "Less like this",
+      "undoLessLikeThis": "Undo less like this",
+      "hide": "Hide from For you",
+      "replyingTo": "Replying to {name}",
+      "showLess": "Show less",
+      "showMore": "Show more",
+      "showCountMore": "Show {count} more",
+      "moreLikeThis": "More like this",
+      "commentOn": "Comment on {name}’s post",
+      "threadCount": "{count} posts in this thread"
+    },
+    "comments": {
+      "label": "Comments",
+      "thisContact": "this contact",
+      "messagedPrivately": "Messaged you privately",
+      "replying": "{name} is replying",
+      "replyingEllipsis": "{name} is replying…",
+      "replyTo": "Reply to {name}…",
+      "failed": "{name} couldn’t answer this one. Try again or continue in the chat.",
+      "send": "Send comment",
+      "continueWith": "Continue in chat with {name}"
+    },
+    "replyTemplate": {
+      "blank": "Blank {index} of {count}",
+      "continue": "Continue in chat"
+    },
+    "reference": {
+      "label": "For you post",
+      "aria": "For you post: {title}",
+      "ariaGone": "For you post: {title} (no longer in For you)",
+      "post": "Post",
+      "gone": "No longer in For you"
+    }
+  }
+}

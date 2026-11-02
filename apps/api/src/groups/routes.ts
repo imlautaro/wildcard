@@ -46,10 +46,14 @@ type GroupSummary = Record<string, unknown> & { lastMessageText: string | null; 
 function groupPreview(row: GroupSummary) {
   const source = row.lastMessageText;
   const { lastMessageVoiceJSON, replyActivityJSON, lastReactionJSON, ...fields } = row;
+  const activity = typeof replyActivityJSON === 'string' ? JSON.parse(replyActivityJSON) as ReplyActivityEntry[] : [];
   return { ...fields, lastMessageVoice: typeof lastMessageVoiceJSON === 'string' ? JSON.parse(lastMessageVoiceJSON) : null,
     // Newest reaction in this group (docs/chats.md#chat-list-previews); clients show it when newer than the last message.
     lastReaction: typeof lastReactionJSON === 'string' ? JSON.parse(lastReactionJSON) as { at: number; emoji: string; own: boolean; name: string | null } : null,
-    replyActivity: replyActivityLabel(typeof replyActivityJSON === 'string' ? JSON.parse(replyActivityJSON) as ReplyActivityEntry[] : []),
+    replyActivity: replyActivityLabel(activity),
+    // The same entries, structured, so clients can word the line in their own language
+    // (docs/localization.md); `replyActivity` stays for older clients.
+    replyActivityEntries: activity.length ? activity : null,
     lastMessagePreview: source == null ? null : [...(row.lastMessageUserID == null ? plainMessageMarkdown(source) : source)].slice(0, 500).join('') };
 }
 // Task work triggers (task_id set, no sender) are internal: the assignee's own reply is

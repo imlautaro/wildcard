@@ -7,7 +7,7 @@ watch(() => useSession().user.value?.id, () => { open.value = false; });
 </script>
 
 <template>
-  <button type="button" class="media-cell" :disabled="!source" :aria-label="`Open image full screen: ${name}`" @click="open = true">
+  <button type="button" class="media-cell" :disabled="!source" :aria-label="$t('chat.attachment.openImage', { name })" @click="open = true">
     <img v-if="source" :src="source" :alt="name">
     <span v-else class="spinner" />
   </button>

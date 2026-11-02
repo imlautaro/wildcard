@@ -12,7 +12,7 @@ const hasPage = computed(() => route.path !== '/chats' && route.path !== '/');
 <template>
   <div class="shell" :class="{ 'has-page': hasPage, 'without-chat-list': !showChatList }">
     <NavSidebar class="shell-navigation" />
-    <aside v-show="showChatList" aria-label="Chats"><ChatList /></aside>
+    <aside v-show="showChatList" :aria-label="$t('account.nav.chats')"><ChatList /></aside>
     <main><slot /></main>
   </div>
 </template>

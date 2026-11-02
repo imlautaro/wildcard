@@ -11,29 +11,46 @@ struct SearchablePicker: View {
     }
 
     static let threshold = 10
-    let title: String
+    let title: Text
     @Binding var selection: String
     let options: [Option]
     /// Shown when the selection matches no option, such as an unchosen country.
-    var placeholder = "Choose"
+    let placeholder: String
+
+    /// Literal titles are localized (`LocalizedStringResource` literals are extracted for the catalog).
+    init(title: LocalizedStringResource, selection: Binding<String>, options: [Option], placeholder: String = String(localized: "Choose")) {
+        self.init(title: Text(title), selection: selection, options: options, placeholder: placeholder)
+    }
+    /// Titles that are already localized strings are shown as they are. Disfavored, like
+    /// SwiftUI's `Text` overload, so a literal title picks the localized initializer.
+    @_disfavoredOverload
+    init<S: StringProtocol>(title: S, selection: Binding<String>, options: [Option], placeholder: String = String(localized: "Choose")) {
+        self.init(title: Text(title), selection: selection, options: options, placeholder: placeholder)
+    }
+    private init(title: Text, selection: Binding<String>, options: [Option], placeholder: String) {
+        self.title = title
+        _selection = selection
+        self.options = options
+        self.placeholder = placeholder
+    }
     @Environment(\.isEnabled) private var isEnabled
     @State private var presented = false
 
     var body: some View {
         if options.count <= Self.threshold {
-            Picker(title, selection: $selection) {
+            Picker(selection: $selection) {
                 if !options.contains(where: { $0.value == selection }) { Text(placeholder).tag(selection) }
                 ForEach(options) { Text($0.label).tag($0.value) }
-            }
+            } label: { title }
         } else {
             Button { presented = true } label: {
-                LabeledContent(title) {
+                LabeledContent {
                     HStack(spacing: 4) {
                         Text(options.first { $0.value == selection }?.label ?? placeholder)
                         Image(systemName: "chevron.up.chevron.down").imageScale(.small)
                     }
                     .foregroundStyle(isEnabled ? Color.accentColor : .secondary)
-                }
+                } label: { title }
                 .foregroundStyle(Color(uiColor: .label))
             }
             .sheet(isPresented: $presented) {
@@ -44,7 +61,7 @@ struct SearchablePicker: View {
 }
 
 private struct SearchablePickerSheet: View {
-    let title: String
+    let title: Text
     @Binding var selection: String
     let options: [SearchablePicker.Option]
     @Environment(\.dismiss) private var dismiss

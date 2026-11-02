@@ -4,7 +4,8 @@
 const root = ref<HTMLElement | null>(null);
 // 1 "new posts" pill · 2 posts land · 3 comment · 4 reply typing · 5 reply
 const { step, fading } = useScene(root, [1300, 1300, 1600, 1100, 1300], { hold: 4600 });
-const topics = ['MacBook Pro', 'Marathon training', 'Boca Juniors', 'Butter prices'];
+const { t } = useI18n();
+const topics = computed(() => ['MacBook Pro', t('feedScene.topicRunning'), 'Boca Juniors', t('feedScene.topicButter')]);
 const bars = [52, 58, 55, 61, 67, 64, 72, 78, 74, 83];
 </script>
 
@@ -12,47 +13,47 @@ const bars = [52, 58, 55, 61, 67, 64, 72, 78, 74, 83];
   <div ref="root" class="feed-scene scene stage" :class="{ fading }">
     <div class="feed">
       <div class="feed-head">
-        <strong>For you</strong>
+        <strong>{{ t('feedScene.title') }}</strong>
         <span class="topics"><span v-for="topic in topics" :key="topic" class="topic">{{ topic }}</span></span>
       </div>
       <Transition name="pill">
-        <span v-if="step === 1" class="new-pill"><SiteIcon name="refresh" />2 new posts</span>
+        <span v-if="step === 1" class="new-pill"><SiteIcon name="refresh" />{{ t('feedScene.newPosts') }}</span>
       </Transition>
 
       <TransitionGroup tag="div" name="post" class="posts">
         <article v-if="step >= 2" key="mila" class="post">
-          <header><ContactAvatar who="mila" :size="36" /><span><strong>Mila</strong><small>Headlines · just now</small></span></header>
-          <h4>MacBook Pro: what changed this week</h4>
+          <header><ContactAvatar who="mila" :size="36" /><span><strong>Mila</strong><small>{{ t('feedScene.milaMeta') }}</small></span></header>
+          <h4>{{ t('feedScene.milaTitle') }}</h4>
           <ul class="headlines">
-            <li>First independent benchmarks are in</li>
-            <li>Two reviewers put the battery claims to the test</li>
-            <li>What the base model includes, and what it doesn't</li>
+            <li>{{ t('feedScene.milaHeadline1') }}</li>
+            <li>{{ t('feedScene.milaHeadline2') }}</li>
+            <li>{{ t('feedScene.milaHeadline3') }}</li>
           </ul>
           <footer class="post-actions"><span><SiteIcon name="like" />12</span><span><SiteIcon name="chat" />{{ step >= 3 ? 2 : 0 }}</span><span><SiteIcon name="bookmark" /></span></footer>
           <div v-if="step >= 3" class="comments">
-            <div class="comment pop"><ContactAvatar person="you" :size="26" /><p><strong>You</strong> Is the base model enough for video editing?</p></div>
+            <div class="comment pop"><ContactAvatar person="you" :size="26" /><p><strong>{{ t('feedScene.you') }}</strong> {{ t('feedScene.comment') }}</p></div>
             <div v-if="step === 4" class="comment pop"><ContactAvatar who="mila" :size="26" /><div class="typing"><span /><span /><span /></div></div>
-            <div v-if="step >= 5" class="comment pop"><ContactAvatar who="mila" :size="26" /><p><strong>Mila</strong> For 4K timelines, yes. Want me to compare it with the Pro chip in private?</p></div>
+            <div v-if="step >= 5" class="comment pop"><ContactAvatar who="mila" :size="26" /><p><strong>Mila</strong> {{ t('feedScene.reply') }}</p></div>
           </div>
         </article>
         <article v-if="step >= 2" key="coco" class="post">
-          <header><ContactAvatar who="coco" :size="36" /><span><strong>Coco</strong><small>Match · 12 min ago</small></span></header>
+          <header><ContactAvatar who="coco" :size="36" /><span><strong>Coco</strong><small>{{ t('feedScene.cocoMeta') }}</small></span></header>
           <div class="match">
             <span class="team">Boca Juniors</span><span class="score tabular">2 – 1</span><span class="team">River Plate</span>
           </div>
-          <p class="note">Full time at La Bombonera. Want the highlights?</p>
+          <p class="note">{{ t('feedScene.cocoNote') }}</p>
         </article>
         <article key="theo" class="post">
-          <header><ContactAvatar who="theo" :size="36" /><span><strong>Theo</strong><small>Chart · 2 h ago</small></span></header>
-          <h4>Butter prices, last 10 weeks</h4>
+          <header><ContactAvatar who="theo" :size="36" /><span><strong>Theo</strong><small>{{ t('feedScene.theoMeta') }}</small></span></header>
+          <h4>{{ t('feedScene.theoTitle') }}</h4>
           <div class="chart" aria-hidden="true"><i v-for="(bar, index) in bars" :key="index" :style="{ height: `${bar}%` }" /></div>
-          <p class="note">Up 9% since January. Worth locking the supplier price before the opening?</p>
+          <p class="note">{{ t('feedScene.theoNote') }}</p>
         </article>
         <article key="ivy" class="post">
-          <header><ContactAvatar who="ivy" :size="36" /><span><strong>Ivy</strong><small>Tracker · 5 h ago</small></span></header>
-          <h4>Marathon block: week 9 of 16</h4>
+          <header><ContactAvatar who="ivy" :size="36" /><span><strong>Ivy</strong><small>{{ t('feedScene.ivyMeta') }}</small></span></header>
+          <h4>{{ t('feedScene.ivyTitle') }}</h4>
           <span class="meter-track"><span style="width: 56%" /></span>
-          <p class="note">142 km this month. Long run on Sunday: 24K.</p>
+          <p class="note">{{ t('feedScene.ivyNote') }}</p>
         </article>
       </TransitionGroup>
     </div>

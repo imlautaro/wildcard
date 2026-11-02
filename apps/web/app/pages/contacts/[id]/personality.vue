@@ -3,6 +3,7 @@ import { birthdayFacts, latestAdultBirthDate, parsePersonality, personalityTrait
 import type { Contact } from '~/utils/types';
 
 const route = useRoute();
+const { t } = useI18n();
 const id = computed(() => String(route.params.id));
 const chats = useChats();
 const session = useSession();
@@ -27,16 +28,23 @@ const timeZoneOptions = computed(() => {
   const all = zones.includes(draft.value.timeZone) ? zones : [...zones, draft.value.timeZone];
   return [...all].sort().map(zone => ({ value: zone, label: zone.replaceAll('_', ' ') }));
 });
-const info = {
-  generate: 'Generate all personality fields with Meta Standard, then review and save the draft. Your contact name and adult birthday stay the same.',
-  experiment: 'One shared character, with a relationship that follows each person across chats and groups. Private conversations stay private. Only its creator can edit these settings.',
-  identity: 'Briefly describe values, ways of thinking, conversational quirks and flaws. Expertise and topic interests are welcome; avoid invented jobs, studies, physical experiences or daily routines. Identity is expressed through replies and shared with everyone who talks to the contact. Conversation and mood do not rewrite it. Saving changes starts a fresh emotional history.',
-  specialties: 'Things this contact is especially good at. These strengths are shared with everyone and independent of temperament. They can still talk about anything. Optional, up to 1,000 characters.',
-  birthday: 'Age is calculated from the date of birth in the birthday time zone. February 29 is observed on February 28 in other years.',
-  temperament: 'The contact expresses tendencies through tone and timing. It does not receive these scores. Feelings settle over time. Its acting direction adapts to each person without exposing private causes. Conversations with connections stay isolated. Follow-ups still respect your initiative switch and delivery limits.',
-};
+const info = computed(() => ({
+  generate: t('contacts.personality.info.generate'),
+  experiment: t('contacts.personality.info.experiment'),
+  identity: t('contacts.personality.info.identity'),
+  specialties: t('contacts.personality.info.specialties'),
+  birthday: t('contacts.personality.info.birthday'),
+  temperament: t('contacts.personality.info.temperament'),
+}));
+// Trait copy is keyed by shared/personality.ts `key` (shared/ stays API-only, untranslated).
+const traits = computed(() => personalityTraits.map(trait => ({
+  key: trait.key,
+  label: t(`contacts.personality.traits.${trait.key}.label`),
+  low: t(`contacts.personality.traits.${trait.key}.low`),
+  high: t(`contacts.personality.traits.${trait.key}.high`),
+})));
 async function generateDraft() {
-  if (dirty.value && !window.confirm('Replace your unsaved personality draft with AI generation?')) return;
+  if (dirty.value && !window.confirm(t('contacts.personality.replaceConfirm'))) return;
   await generate();
 }
 
@@ -58,7 +66,7 @@ async function submit() {
   if (result) { apply(); saved.value = true; }
 }
 async function discardAndRefresh() {
-  if (dirty.value && !window.confirm('Discard your unsaved personality changes?')) return;
+  if (dirty.value && !window.confirm(t('contacts.personality.discardConfirm'))) return;
   await refresh(); apply(); saved.value = false;
 }
 onMounted(async () => {
@@ -79,51 +87,51 @@ onMounted(async () => {
 </script>
 
 <template>
-  <PageBar title="Personality" :back="`/contacts/${id}/edit`" always-back>
-    <AppIconButton icon="refresh" label="Refresh personality" :disabled="busy" @click="discardAndRefresh" />
+  <PageBar :title="$t('contacts.personality.title')" :back="`/contacts/${id}/edit`" always-back>
+    <AppIconButton icon="refresh" :label="$t('contacts.personality.refresh')" :disabled="busy" @click="discardAndRefresh" />
   </PageBar>
   <div class="page"><form class="page-inner" @submit.prevent="submit">
     <AppNotice v-if="error || loadError">{{ error ?? loadError }}</AppNotice>
-    <AppLoading v-if="!value && busy" label="Loading personality…" fill />
+    <AppLoading v-if="!value && busy" :label="$t('contacts.personality.loading')" fill />
     <template v-if="value">
       <AppListGroup>
         <div v-if="canEdit" class="button-row-with-info">
-          <AppListItem icon="star" :disabled="busy" @click="generateDraft">{{ draft.description ? 'Regenerate with AI' : 'Generate with AI' }}</AppListItem>
-          <InfoButton label="Generate with AI" :text="info.generate" />
+          <AppListItem icon="star" :disabled="busy" @click="generateDraft">{{ draft.description ? $t('contacts.personality.regenerate') : $t('contacts.personality.generate') }}</AppListItem>
+          <InfoButton :label="$t('contacts.personality.generate')" :text="info.generate" />
         </div>
-        <AppSwitch v-model="draft.enabled" icon="person" label="Personality experiment" :info="info.experiment" :disabled="!canEdit || busy" />
+        <AppSwitch v-model="draft.enabled" icon="person" :label="$t('contacts.personality.experiment')" :info="info.experiment" :disabled="!canEdit || busy" />
       </AppListGroup>
-      <AppListGroup title="Stable identity" :info="info.identity">
-        <div class="field personality-field"><textarea v-model="draft.description" :readonly="!canEdit" :disabled="busy" rows="5" aria-label="Stable identity" placeholder="Values, ways of thinking, humor, and conversational quirks. Two or three sentences are enough." /></div>
+      <AppListGroup :title="$t('contacts.personality.identity')" :info="info.identity">
+        <div class="field personality-field"><textarea v-model="draft.description" :readonly="!canEdit" :disabled="busy" rows="5" :aria-label="$t('contacts.personality.identity')" :placeholder="$t('contacts.personality.identityPlaceholder')" /></div>
       </AppListGroup>
-      <AppListGroup title="Specialties" :info="info.specialties">
-        <div class="field personality-field"><textarea v-model="draft.specialties" :readonly="!canEdit" :disabled="busy" rows="4" aria-label="Specialties" placeholder="Things this contact is especially good at." /></div>
+      <AppListGroup :title="$t('contacts.personality.specialties')" :info="info.specialties">
+        <div class="field personality-field"><textarea v-model="draft.specialties" :readonly="!canEdit" :disabled="busy" rows="4" :aria-label="$t('contacts.personality.specialties')" :placeholder="$t('contacts.personality.specialtiesPlaceholder')" /></div>
       </AppListGroup>
-      <AppListGroup title="Birthday" :info="info.birthday">
-        <div class="field"><label for="birth-date">Date of birth</label><input id="birth-date" :value="draft.birthDate ?? ''" type="date" :disabled="!canEdit || busy" min="1900-01-01" :max="latestBirthday" @input="draft.birthDate = ($event.target as HTMLInputElement).value || null"></div>
-        <div class="field"><label for="birth-zone">Time zone</label><AppSelect id="birth-zone" v-model="draft.timeZone" variant="plain" :options="timeZoneOptions" :disabled="!canEdit || busy" /></div>
-        <AppListItem v-if="facts?.age != null" plain :value="`${facts.age}${facts.isBirthday ? ' · Birthday today' : ''}`">Age</AppListItem>
+      <AppListGroup :title="$t('contacts.personality.birthday')" :info="info.birthday">
+        <div class="field"><label for="birth-date">{{ $t('contacts.personality.birthDate') }}</label><input id="birth-date" :value="draft.birthDate ?? ''" type="date" :disabled="!canEdit || busy" min="1900-01-01" :max="latestBirthday" @input="draft.birthDate = ($event.target as HTMLInputElement).value || null"></div>
+        <div class="field"><label for="birth-zone">{{ $t('contacts.personality.timeZone') }}</label><AppSelect id="birth-zone" v-model="draft.timeZone" variant="plain" :options="timeZoneOptions" :disabled="!canEdit || busy" /></div>
+        <AppListItem v-if="facts?.age != null" plain :value="facts.isBirthday ? $t('contacts.personality.ageBirthday', { age: facts.age }) : String(facts.age)">{{ $t('contacts.personality.age') }}</AppListItem>
       </AppListGroup>
       <AppListGroup>
-        <AppListItem icon="chart" opens :value="`${personalityTraits.length} traits`" @click="temperamentOpen = true">Temperament</AppListItem>
+        <AppListItem icon="chart" opens :value="$t('contacts.personality.traitCount', personalityTraits.length)" @click="temperamentOpen = true">{{ $t('contacts.personality.temperament') }}</AppListItem>
       </AppListGroup>
-      <AppNotice v-if="!valid">Use a birthday at least 18 years ago, a valid time zone, description up to 2,000 characters, specialties up to 1,000 characters, and whole-number traits from 1 to 10.</AppNotice>
-      <p v-if="saved && !dirty" class="group-footer" role="status">Saved.</p>
-      <AppButton v-if="canEdit" type="submit" block class="save" :disabled="busy || !valid || !dirty">Save personality</AppButton>
+      <AppNotice v-if="!valid">{{ $t('contacts.personality.invalid') }}</AppNotice>
+      <p v-if="saved && !dirty" class="group-footer" role="status">{{ $t('contacts.personality.saved') }}</p>
+      <AppButton v-if="canEdit" type="submit" block class="save" :disabled="busy || !valid || !dirty">{{ $t('contacts.personality.save') }}</AppButton>
 
-      <AppSheet v-if="temperamentOpen" title="Temperament" @close="temperamentOpen = false">
-        <template #header><InfoButton label="Temperament" :text="info.temperament" /></template>
+      <AppSheet v-if="temperamentOpen" :title="$t('contacts.personality.temperament')" @close="temperamentOpen = false">
+        <template #header><InfoButton :label="$t('contacts.personality.temperament')" :text="info.temperament" /></template>
         <AppListGroup>
-          <label v-for="trait in personalityTraits" :key="trait.key" class="personality-trait">
+          <label v-for="trait in traits" :key="trait.key" class="personality-trait">
             <span>{{ trait.label }} <output>{{ draft.traits[trait.key] }}</output></span>
             <input v-model.number="draft.traits[trait.key]" type="range" min="1" max="10" step="1" :aria-label="trait.label" :disabled="!canEdit || busy">
             <small><span>{{ trait.low }}</span><span>{{ trait.high }}</span></small>
           </label>
         </AppListGroup>
-        <template #actions><AppButton @click="temperamentOpen = false">Done</AppButton></template>
+        <template #actions><AppButton @click="temperamentOpen = false">{{ $t('common.done') }}</AppButton></template>
       </AppSheet>
     </template>
-    <AppButton v-else-if="!busy" variant="text" icon="refresh" @click="reload">Retry</AppButton>
+    <AppButton v-else-if="!busy" variant="text" icon="refresh" @click="reload">{{ $t('common.retry') }}</AppButton>
   </form></div>
 </template>
 

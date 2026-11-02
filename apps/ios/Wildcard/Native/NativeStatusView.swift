@@ -33,7 +33,7 @@ struct NativeActiveStatusView: View {
                                 sessionCard(session).nativeStatusCard(single: count == 1)
                             }
                             if showSpeech {
-                                NativeStatusRow(kind: "speech", title: "Reading aloud", contactID: nil) {
+                                NativeStatusRow(kind: "speech", title: String(localized: "Reading aloud"), contactID: nil) {
                                     EmptyView()
                                 } controls: {
                                     NativeStatusButton(label: "Stop reading", symbol: "stop.fill", prominent: true) { native.stopSpeaking() }
@@ -149,7 +149,7 @@ private struct NativeStatusRow<Detail: View, Controls: View>: View {
 }
 
 private struct NativeStatusButton: View {
-    let label: String
+    let label: LocalizedStringKey
     let symbol: String
     var prominent = false
     var role: ButtonRole? = nil
@@ -225,24 +225,24 @@ struct NativeActionReceiptView: View {
     }
     private var status: String {
         if NativeExperiments.deprecatedKinds.contains(action.kind), action.status == "pending" {
-            return "Deprecated experiment · unavailable"
+            return String(localized: "Deprecated experiment · unavailable")
         }
         return switch action.status {
         case "completed":
             switch action.kind {
-            case "timer": "Timer scheduled on this iPhone"
-            case "alarm": "Alarm scheduled on this iPhone"
-            case "focus", "recipe": "Live session started on this iPhone"
-            case "calendar": "Event saved on this iPhone"
-            case "reminder", "location_reminder": "Reminder saved on this iPhone"
-            case "speech": "Reading finished on this iPhone"
-            default: "Completed on this iPhone"
+            case "timer": String(localized: "Timer scheduled on this iPhone")
+            case "alarm": String(localized: "Alarm scheduled on this iPhone")
+            case "focus", "recipe": String(localized: "Live session started on this iPhone")
+            case "calendar": String(localized: "Event saved on this iPhone")
+            case "reminder", "location_reminder": String(localized: "Reminder saved on this iPhone")
+            case "speech": String(localized: "Reading finished on this iPhone")
+            default: String(localized: "Completed on this iPhone")
             }
-        case "running": native.busy.contains(action.id) ? "Running on this iPhone…" : "Outcome not confirmed · check before retrying"
-        case "cancelled": "Cancelled"
-        case "failed": "Could not complete on this iPhone"
-        case "unknown": "Outcome unknown · check the system app"
-        default: action.remoteDeviceID != nil && action.expiresAt > Date.now.timeIntervalSince1970 * 1000 ? "Sent to iPhone · awaiting device confirmation" : action.expiresAt <= Date.now.timeIntervalSince1970 * 1000 ? "Expired" : automatic ? "Waiting for automatic execution…" : "Ready for review"
+        case "running": native.busy.contains(action.id) ? String(localized: "Running on this iPhone…") : String(localized: "Outcome not confirmed · check before retrying")
+        case "cancelled": String(localized: "Cancelled")
+        case "failed": String(localized: "Could not complete on this iPhone")
+        case "unknown": String(localized: "Outcome unknown · check the system app")
+        default: action.remoteDeviceID != nil && action.expiresAt > Date.now.timeIntervalSince1970 * 1000 ? String(localized: "Sent to iPhone · awaiting device confirmation") : action.expiresAt <= Date.now.timeIntervalSince1970 * 1000 ? String(localized: "Expired") : automatic ? String(localized: "Waiting for automatic execution…") : String(localized: "Ready for review")
         }
     }
     var body: some View {
@@ -251,7 +251,7 @@ struct NativeActionReceiptView: View {
             HStack(alignment: .center, spacing: 10) {
                 NativeGlyph(kind: action.kind, size: 30)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(action.payload?.title ?? "Native action").manrope(.subheadline, weight: .semibold)
+                    Text(action.payload?.title ?? String(localized: "Native action")).manrope(.subheadline, weight: .semibold)
                         .fixedSize(horizontal: false, vertical: true)
                     Label { Text(status).manrope(.caption) } icon: {
                         Image(systemName: tone.symbol).foregroundStyle(tone.color)

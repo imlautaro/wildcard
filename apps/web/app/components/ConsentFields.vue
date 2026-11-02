@@ -10,7 +10,7 @@ const contributorConsent = defineModel<boolean>('contributorConsent', { required
     <div class="text-block"><p v-for="paragraph in disclosure" :key="paragraph">{{ paragraph }}</p></div>
     <AppSwitch v-model="shareMemory" :label="memoryLabel" />
     <template v-if="contributorModel">
-      <AppSwitch v-model="contributorConsent">I agree to Meta's Contributor data use</AppSwitch>
+      <AppSwitch v-model="contributorConsent">{{ $t('account.chatModel.contributorConsent') }}</AppSwitch>
       <div class="text-block">{{ contributorNote }}</div>
     </template>
   </AppListGroup>

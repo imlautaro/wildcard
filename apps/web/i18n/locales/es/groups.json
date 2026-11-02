@@ -1,0 +1,116 @@
+{
+  "groups": {
+    "new": {
+      "title": "Nuevo grupo",
+      "footer": "Después de crear el grupo, añade tus contactos e invita a personas por correo.",
+      "name": "Nombre del grupo",
+      "sharedMemory": "Memoria compartida",
+      "disclosure": "Los miembros del grupo pueden ver tu nombre y tu foto de perfil. Los miembros pueden leer el historial del grupo, incluidos los mensajes enviados antes de unirse, salvo que se los haya añadido sin mensajes anteriores. Los contactos usan lo que les contaron los miembros del grupo, excepto los chats que se mantienen privados. Lo que digas aquí puede convertirse en una memoria compartida, que se usa en este grupo y en los chats privados con sus miembros, nunca en otros grupos. Al salir, se deja de tener acceso a las memorias de grupo que aportaste; los mensajes siguen visibles en el grupo hasta que se elimine.",
+      "memoryLabel": "Acepto la memoria compartida",
+      "contributorNote": "Tu modelo seleccionado es Contributor. Los mensajes del grupo y las memorias compartidas que se envían a Meta pueden usarse para entrenar modelos.",
+      "create": "Crear grupo"
+    },
+    "chat": {
+      "details": "Detalles del grupo",
+      "fallbackName": "Grupo",
+      "tasks": "Tareas",
+      "unavailableTitle": "Grupo no disponible",
+      "unavailableText": "Este grupo ya no está disponible.",
+      "backToChats": "Volver a Chats",
+      "loadEarlier": "Cargar mensajes anteriores",
+      "loading": "Cargando mensajes…",
+      "emptyTitle": "Empieza la conversación",
+      "emptyText": "Envía tu primer mensaje.",
+      "replyFailed": "{name} no pudo terminar de responder a este mensaje.",
+      "retryReply": "Reintentar respuesta",
+      "workingOn": "Trabajando en “{title}”",
+      "workingOnTask": "Trabajando en una tarea",
+      "unknownMember": "Miembro desconocido",
+      "events": {
+        "added": "{actor} añadió a {member}",
+        "joined": "{name} se unió",
+        "joinedInvited": "{name} se unió · invitación de {inviter}"
+      },
+      "activity": {
+        "typing": "{names} está escribiendo | {names} están escribiendo",
+        "recording": "{names} está grabando | {names} están grabando",
+        "researching": "{names} está investigando | {names} están investigando",
+        "line1": "{first}...",
+        "line2": "{first}, {second}...",
+        "line3": "{first}, {second}, {third}..."
+      },
+      "people": {
+        "typing": "{count} persona está escribiendo... | {count} personas están escribiendo...",
+        "recording": "{count} persona está grabando... | {count} personas están grabando...",
+        "researching": "{count} persona está investigando... | {count} personas están investigando...",
+        "replying": "{count} persona está respondiendo... | {count} personas están respondiendo..."
+      },
+      "working": "{names} está trabajando… | {names} están trabajando…"
+    },
+    "members": {
+      "fallbackTitle": "Grupo",
+      "refresh": "Actualizar detalles",
+      "memberCount": "{count} miembro | {count} miembros",
+      "discussPrivate": "Hablar de mis chats privados",
+      "connections": "Conexiones",
+      "learning": "Aprendizaje de la conversación",
+      "miniApps": "Miniapps",
+      "tasks": "Tareas",
+      "members": "Miembros",
+      "invitePeople": "Invitar personas",
+      "addContact": "Añadir un contacto",
+      "you": "{name} (Tú)",
+      "withoutHistory": "Se unió sin mensajes anteriores",
+      "manage": "Administrar a {name}",
+      "deleteGroup": "Eliminar grupo",
+      "leaveGroup": "Salir del grupo",
+      "roles": {
+        "contact": "Contacto",
+        "owner": "Propietario",
+        "canInvite": "Puede invitar",
+        "member": "Miembro"
+      },
+      "sharingSummary": "{on} de {total} activados",
+      "noContacts": "Sin contactos",
+      "sharingInfo": "Permite que cada contacto hable de toda tu conversación privada de texto, pasada y futura, con todas las personas de este grupo, incluidos los miembros futuros. Esto incluye datos personales y planes temporales. Solo se autoriza tu propia conversación. Se excluyen los archivos adjuntos y los mensajes programados; los chats con conexiones y los chats que mantienes privados siguen siendo privados. Desactivarlo detiene las respuestas pendientes; los mensajes ya enviados siguen visibles. Las memorias compartidas existentes mantienen sus reglas actuales. Los contactos no disponibles necesitan un chat privado apto.",
+      "contactFallback": "Contacto",
+      "needsPrivateChat": "Necesita un chat privado que no se mantenga privado",
+      "addToManage": "Añade un contacto para administrar el uso compartido de chats privados.",
+      "inviteInfo": "Recibirán una invitación en Wildcard y podrán elegir si se unen al grupo. Las invitaciones vencen a las 24 horas.",
+      "emailPlaceholder": "Correo de una cuenta existente",
+      "email": "Correo",
+      "canSeeEarlier": "Puede ver mensajes anteriores",
+      "historyHelp": "Desactivado: solo verán los mensajes desde que se unan.",
+      "invite": "Invitar",
+      "onlyCreated": "Solo se pueden añadir los contactos que creaste. Todos ya están en este grupo.",
+      "contact": "Contacto",
+      "chooseContact": "Elige un contacto",
+      "addDisclosure": "Al añadir este contacto, podrá usar lo que le contaron los miembros del grupo, incluido lo que le contaste tú, con todas las personas del grupo, excepto los chats que se mantienen privados. Sigue siendo el mismo contacto en tus otros chats.",
+      "memoryLabel": "Acepto la memoria compartida",
+      "contributorNote": "Tu modelo seleccionado es Contributor. Los mensajes y las memorias que se envían a Meta pueden usarse para entrenar modelos.",
+      "stopInvites": "Dejar de permitir invitaciones",
+      "allowInvites": "Permitir invitaciones",
+      "removeFromGroup": "Quitar del grupo",
+      "inviteSent": "Invitación enviada a {email}. Aparece en sus Invitaciones y vence a las 24 horas.",
+      "removeConfirm": "¿Quitar a {name}? Se quitará su acceso al grupo. Los mensajes anteriores siguen visibles. Quitar a un usuario también quita los contactos que añadió.",
+      "privateSharingConfirm": "Este contacto podrá hablar de toda tu conversación privada de texto, pasada y futura, con todas las personas de este grupo, incluidos los miembros futuros. Esto incluye datos personales y planes temporales. Puedes desactivarlo más tarde, pero los mensajes ya enviados seguirán visibles.",
+      "deleteConfirm": "¿Eliminar el grupo? Se eliminarán el grupo, sus mensajes y las memorias que provienen de esos mensajes para todos.",
+      "leaveConfirm": "¿Salir del grupo? Tus contactos salen contigo. Tus mensajes se quedan en el grupo. Las memorias de grupo que aportaste dejan de estar disponibles para los contactos, pero las respuestas ya enviadas siguen visibles."
+    },
+    "connections": {
+      "title": "Conexiones"
+    },
+    "messageInfo": {
+      "title": "Información del mensaje",
+      "refresh": "Actualizar",
+      "untracked": "La información de lectura no está disponible para este mensaje anterior.",
+      "readBy": "Leído por · {count}",
+      "noneRead": "Nadie ha leído este mensaje todavía.",
+      "notRead": "Sin leer · {count}",
+      "sent": "Enviado",
+      "received": "Recibido",
+      "noRecipients": "No hay otros destinatarios.",
+      "readNote": "Leído no significa que alguien haya respondido. Los contactos pueden confirmar la lectura antes de preparar una respuesta."
+    }
+  }
+}

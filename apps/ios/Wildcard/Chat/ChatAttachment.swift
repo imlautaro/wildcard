@@ -34,14 +34,14 @@ struct DraftAttachment: Encodable, Equatable, Sendable {
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey, .isRegularFileKey])
         guard values.isRegularFile == true, let size = values.fileSize, size > 0, size <= limit else {
-            throw AuthAPI.Failure.rejected("Choose a file up to 5 MB.")
+            throw AuthAPI.Failure.rejected(String(localized: "Choose a file up to 5 MB."))
         }
         guard let type = values.contentType, types.contains(where: { type.conforms(to: $0) }),
               let mime = type.preferredMIMEType else {
-            throw AuthAPI.Failure.rejected("Choose a JPEG, PNG, GIF, WebP, or PDF.")
+            throw AuthAPI.Failure.rejected(String(localized: "Choose a JPEG, PNG, GIF, WebP, or PDF."))
         }
         let bytes = try Data(contentsOf: url, options: .mappedIfSafe)
-        guard bytes.count <= limit else { throw AuthAPI.Failure.rejected("Choose a file up to 5 MB.") }
+        guard bytes.count <= limit else { throw AuthAPI.Failure.rejected(String(localized: "Choose a file up to 5 MB.")) }
         let name = String(url.lastPathComponent.prefix(180))
         return DraftAttachment(name: name, mimeType: mime, data: bytes)
     }
@@ -57,7 +57,7 @@ extension DraftAttachment {
             types.first { provider.hasItemConformingToTypeIdentifier($0.identifier) }.map { (provider, $0) }
         }
         guard let (provider, type) = candidates.first else {
-            throw AuthAPI.Failure.rejected("Choose a JPEG, PNG, GIF, WebP, or PDF.")
+            throw AuthAPI.Failure.rejected(String(localized: "Choose a JPEG, PNG, GIF, WebP, or PDF."))
         }
         let copy: URL = try await withCheckedThrowingContinuation { continuation in
             _ = provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { @Sendable url, error in
@@ -232,7 +232,7 @@ struct ChatAttachmentView: View {
                         PrivateImageCache.decode(localData, maxPixelSize: 520)
                     }.value
                     try Task.checkCancellation()
-                    guard let decoded else { throw AuthAPI.Failure.rejected("This image could not be displayed.") }
+                    guard let decoded else { throw AuthAPI.Failure.rejected(String(localized: "This image could not be displayed.")) }
                     thumbnail = decoded
                 } else {
                     thumbnail = try await auth.cachedImage(imageResource, maxPixelSize: 520)

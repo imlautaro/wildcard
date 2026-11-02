@@ -229,7 +229,7 @@ export function useConversation(contactID: MaybeRefOrGetter<string>) {
     } catch (error) {
       // The chat route reports a missing contact for any 404, but a sticker send fails with 404 when the sticker left the library.
       if (entry.pending?.id === pending.id) entry.pending.failed = pending.sticker && error instanceof ApiError && error.status === 404
-        ? 'This sticker is no longer in your library.' : errorMessage(error);
+        ? translate('chat.conversation.stickerMissing') : errorMessage(error);
     }
   }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Attachment, ChatTurn, Contact, DraftAttachment, DraftVoice, ReplyQuote, Sticker, StickerChoice } from '~/utils/types';
 
+const { t } = useI18n();
 const route = useRoute();
 const contactID = computed(() => String(route.params.id));
 const chats = useChats();
@@ -14,8 +15,8 @@ const documents = useDocuments(() => `contacts/${contactID.value}`);
 watch(() => state.value.turns.at(-1)?.assistantMessages?.length, () => documents.refresh(), { immediate: true });
 // Receipt copy names the phone; deviceName already reads "Ana’s iPhone" for a shared phone.
 function remoteStatus(action: { status: string; deviceName: string }) {
-  const device = action.deviceName;
-  return ({ completed: `Set on ${device}`, pending: `Sending to ${device}…`, running: `Reached ${device} · not confirmed yet`, expired: `${device} didn’t respond in time`, failed: `${device} couldn’t set it`, cancelled: `Cancelled on ${device}` } as Record<string, string>)[action.status] ?? `Not confirmed · check ${device}`;
+  const known = ['completed', 'pending', 'running', 'expired', 'failed', 'cancelled'];
+  return t(`chat.remote.${known.includes(action.status) ? action.status : 'unknown'}`, { device: action.deviceName });
 }
 // Visual tone per status; the same mapping as NativeActionTone on iOS.
 function remoteTone(status: string) {
@@ -74,12 +75,12 @@ const lastTurnID = computed(() => state.value.turns.at(-1)?.id);
 const replying = computed(() => state.value.turns.some((turn) => turn.status === 'queued' || turn.status === 'running'));
 // A task work turn has no human message; say what the contact is working on instead.
 const working = computed(() => state.value.turns.find((turn) => turn.taskID && (turn.status === 'queued' || turn.status === 'running')));
-const workLabel = (turn: ChatTurn) => turn.taskTitle ? `Working on “${turn.taskTitle}”` : 'Working on a task';
+const workLabel = (turn: ChatTurn) => turn.taskTitle ? t('chat.conversation.workingOn', { title: turn.taskTitle }) : t('chat.conversation.workingOnTask');
 
 function replyPreview(quote: ReplyQuote) {
   return quote.side === 'user'
-    ? { quote, author: 'You', color: ownReplyColor }
-    : { quote, author: contact.value?.name ?? 'Contact', color: replyColor(contactID.value, 'contact') };
+    ? { quote, author: t('common.you'), color: ownReplyColor }
+    : { quote, author: contact.value?.name ?? t('chat.contactFallback'), color: replyColor(contactID.value, 'contact') };
 }
 const replyTarget = computed(() => state.value.replyTo ? replyPreview(state.value.replyTo) : null);
 const canReply = computed(() => state.value.loaded && !state.value.unavailable);
@@ -122,10 +123,10 @@ function assistantVoicePath(item: MessageItem) {
   return `${attachmentPath(item.turn)}?side=assistant&part=${item.part ?? 0}`;
 }
 function failureText(turn: ChatTurn) {
-  if (turn.errorCode === 'SCHEDULE_CANCELLED') return 'Scheduled message cancelled.';
-  if (turn.errorCode === 'GROUP_REQUEST_CANCELLED') return 'Group request cancelled.';
-  if (turn.errorCode === 'VOICE_TRANSCRIPTION_FAILED') return "This voice message couldn't be transcribed.";
-  return "The reply to this message couldn't be completed.";
+  if (turn.errorCode === 'SCHEDULE_CANCELLED') return t('chat.conversation.scheduleCancelled');
+  if (turn.errorCode === 'GROUP_REQUEST_CANCELLED') return t('chat.conversation.groupRequestCancelled');
+  if (turn.errorCode === 'VOICE_TRANSCRIPTION_FAILED') return t('chat.conversation.transcriptionFailed');
+  return t('chat.conversation.replyFailed');
 }
 
 async function refresh() {
@@ -174,7 +175,7 @@ async function saveSticker(item: MessageItem) {
   let note: { text: string; tone: 'success' | 'error' };
   try {
     await stickers.saveFromMessage(id, item.turn.id, item.part ?? 0);
-    note = { text: `Sticker ${emoji} saved to My stickers.`, tone: 'success' };
+    note = { text: t('chat.conversation.stickerSaved', { emoji }), tone: 'success' };
   } catch (failure) { note = { text: errorMessage(failure), tone: 'error' }; }
   if (contactID.value !== id) return;
   stickerNote.value = note;
@@ -222,19 +223,19 @@ onBeforeUnmount(() => {
 <template>
   <PageBar>
     <template #title>
-      <NuxtLink :to="`/contacts/${contactID}/edit`" class="title" aria-label="Contact details">
+      <NuxtLink :to="`/contacts/${contactID}/edit`" class="title" :aria-label="$t('chat.conversation.contactDetails')">
         <AppAvatar :name="contact?.name ?? ''" :path="contact ? contactPhotoPath(contact) : null" :size="36" />
         <div>
-          <div class="name">{{ contact?.name ?? 'Chat' }}</div>
+          <div class="name">{{ contact?.name ?? $t('chat.titleFallback') }}</div>
           <div class="subtitle">{{ working ? `${workLabel(working)}…` : presenceLabel(state.presence) }}</div>
         </div>
       </NuxtLink>
     </template>
-    <AppIconButton v-if="hasTasks" :to="`/contacts/${contactID}/tasks`" icon="tasks" label="Tasks" />
+    <AppIconButton v-if="hasTasks" :to="`/contacts/${contactID}/tasks`" icon="tasks" :label="$t('chat.conversation.tasks')" />
   </PageBar>
 
-  <AppEmptyState v-if="state.unavailable" icon="person" title="Contact unavailable" text="This contact is no longer available.">
-    <template #actions><AppButton to="/chats" variant="tonal">Back to Chats</AppButton></template>
+  <AppEmptyState v-if="state.unavailable" icon="person" :title="$t('chat.conversation.unavailableTitle')" :text="$t('chat.conversation.unavailableText')">
+    <template #actions><AppButton to="/chats" variant="tonal">{{ $t('chat.conversation.backToChats') }}</AppButton></template>
   </AppEmptyState>
   <template v-else>
     <div class="message-viewport">
@@ -242,14 +243,14 @@ onBeforeUnmount(() => {
       <div ref="messageContent" class="message-content">
       <div class="spacer" />
       <div v-if="state.nextBefore" class="center">
-        <AppButton variant="text" :disabled="state.loadingEarlier" @click="earlier">Load earlier messages</AppButton>
+        <AppButton variant="text" :disabled="state.loadingEarlier" @click="earlier">{{ $t('chat.conversation.loadEarlier') }}</AppButton>
       </div>
-      <AppLoading v-if="!state.loaded && !state.error" label="Loading messages…" />
+      <AppLoading v-if="!state.loaded && !state.error" :label="$t('chat.conversation.loading')" />
       <AppNotice v-if="state.error" tone="warning">
         {{ state.error }}
-        <template #actions><button class="link-button" @click="refresh">Retry</button></template>
+        <template #actions><button class="link-button" @click="refresh">{{ $t('common.retry') }}</button></template>
       </AppNotice>
-      <AppEmptyState v-if="state.loaded && !state.turns.length && !state.pending" icon="chat" title="Start a conversation" text="Send your first message." />
+      <AppEmptyState v-if="state.loaded && !state.turns.length && !state.pending" icon="chat" :title="$t('chat.conversation.emptyTitle')" :text="$t('chat.conversation.emptyText')" />
 
       <template v-for="item in items" :key="item.key">
         <div v-if="item.kind === 'day'" class="day">{{ item.label }}</div>
@@ -284,8 +285,8 @@ onBeforeUnmount(() => {
         </div>
         <div v-if="state.pending.failed" class="status-line outgoing error">
           {{ state.pending.failed }}
-          <button class="link-button" @click="submit">Retry</button>
-          <button class="link-button danger" @click="discardPending">{{ state.pending.voice || state.pending.sticker ? 'Delete' : 'Edit' }}</button>
+          <button class="link-button" @click="submit">{{ $t('common.retry') }}</button>
+          <button class="link-button danger" @click="discardPending">{{ state.pending.voice || state.pending.sticker ? $t('common.delete') : $t('common.edit') }}</button>
         </div>
       </template>
         <template v-else-if="item.kind !== 'pending'">
@@ -348,7 +349,7 @@ onBeforeUnmount(() => {
             <button
               v-if="item.turn.scheduleID === null && item.turn.groupRequestID === null && !item.turn.taskID && item.turn.id === lastTurnID"
               class="link-button" :disabled="state.retrying || replying || !!state.pending" @click="retryReply(item.turn)"
-            >Retry reply</button>
+            >{{ $t('chat.conversation.retryReply') }}</button>
           </div>
           <div v-for="action in remote.state.value.actions.filter(a => item.kind === 'user' && a.turnID === item.turn.id)" :key="action.id" class="native-receipt" :class="remoteTone(action.status)">
             <span class="native-glyph" :data-kind="action.kind"><AppIcon :name="action.kind === 'alarm' ? 'alarm' : 'timer'" /></span>

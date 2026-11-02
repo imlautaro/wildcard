@@ -20,7 +20,7 @@ final class NativeExperiments {
     var remoteBusy = false
     private(set) var automaticSince: [String: [String: Double]] = [:]
     private var automaticAttempts: Set<String> = []
-    static let labels = ["focus": "Focus sessions", "recipe": "Guided recipes", "timer": "Timers", "alarm": "Alarms", "calendar": "Calendar events", "reminder": "Reminders", "location_reminder": "Location reminders", "speech": "Spoken responses"]
+    static let labels = ["focus": String(localized: "Focus sessions"), "recipe": String(localized: "Guided recipes"), "timer": String(localized: "Timers"), "alarm": String(localized: "Alarms"), "calendar": String(localized: "Calendar events"), "reminder": String(localized: "Reminders"), "location_reminder": String(localized: "Location reminders"), "speech": String(localized: "Spoken responses")]
     private(set) var userID: String?
     private(set) var enabled: [String: Set<String>] = [:]
     private(set) var actions: [String: [NativeAction]] = [:]
@@ -174,7 +174,7 @@ final class NativeExperiments {
         let directory = NativeDirectory(userID: userID, contacts: identities)
         guard NativeShared.directory != directory else { return }
         do { try NativeShared.publish(directory); WildcardShortcuts.updateAppShortcutParameters(); error = nil }
-        catch { self.error = "System integrations are unavailable. Check App Group signing in Xcode." }
+        catch { self.error = String(localized: "System integrations are unavailable. Check App Group signing in Xcode.") }
         WidgetCenter.shared.reloadAllTimelines()
     }
     func deviceID() throws -> String {
@@ -186,10 +186,10 @@ final class NativeExperiments {
         var item: CFTypeRef?
         let status = SecItemCopyMatching(request as CFDictionary, &item)
         if status == errSecSuccess, let bytes = item as? Data, let id = String(data: bytes, encoding: .utf8), UUID(uuidString: id) != nil { device = id; return id }
-        guard status == errSecItemNotFound else { throw AuthAPI.Failure.rejected("Unlock your iPhone to use native tools.") }
+        guard status == errSecItemNotFound else { throw AuthAPI.Failure.rejected(String(localized: "Unlock your iPhone to use native tools.")) }
         let id = UUID().uuidString.lowercased()
         var entry = query; entry[kSecValueData as String] = Data(id.utf8); entry[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        guard SecItemAdd(entry as CFDictionary, nil) == errSecSuccess else { throw AuthAPI.Failure.rejected("Unable to register this device for native tools.") }
+        guard SecItemAdd(entry as CFDictionary, nil) == errSecSuccess else { throw AuthAPI.Failure.rejected(String(localized: "Unable to register this device for native tools.")) }
         device = id
         return id
     }
@@ -269,7 +269,7 @@ final class NativeExperiments {
             update(finished, contactID: contactID)
         } catch {
             guard generation == current else { return }
-            self.error = "\(error.localizedDescription) If execution was interrupted, inspect the system app before asking for another action."
+            self.error = String(localized: "\(error.localizedDescription) If execution was interrupted, inspect the system app before asking for another action.")
             await refresh(contactID: contactID, using: auth, force: true)
         }
     }
@@ -285,11 +285,11 @@ final class NativeExperiments {
     }
     func stopSpeaking() { speaker.stop() }
     private func date(_ value: String?) throws -> Date {
-        guard let value else { throw AuthAPI.Failure.rejected("A date is required.") }
+        guard let value else { throw AuthAPI.Failure.rejected(String(localized: "A date is required.")) }
         let parser = ISO8601DateFormatter()
         var date = parser.date(from: value)
         if date == nil { parser.formatOptions.insert(.withFractionalSeconds); date = parser.date(from: value) }
-        guard let date, date > .now else { throw AuthAPI.Failure.rejected("This date has passed. Ask for a new proposal.") }
+        guard let date, date > .now else { throw AuthAPI.Failure.rejected(String(localized: "This date has passed. Ask for a new proposal.")) }
         return date
     }
     private func execute(_ p: NativePayload, actionID: String, executionID: String, contactID: String, automatically: Bool) async throws -> String {
@@ -297,17 +297,17 @@ final class NativeExperiments {
         // Deprecated focus/recipe/speech handlers remain below but cannot pass the allowlist.
         switch p.kind {
         case "focus", "recipe":
-            guard ActivityAuthorizationInfo().areActivitiesEnabled else { throw AuthAPI.Failure.rejected("Enable Live Activities for Wildcard in Settings.") }
+            guard ActivityAuthorizationInfo().areActivitiesEnabled else { throw AuthAPI.Failure.rejected(String(localized: "Enable Live Activities for Wildcard in Settings.")) }
             guard !Activity<ContactSessionAttributes>.activities.contains(where: { $0.attributes.actionID == actionID }) else { return "completed" }
             let attributes = ContactSessionAttributes(actionID: actionID, userID: owner, contactID: contactID,
-                contactName: knownContacts.first(where: { $0.id == contactID })?.name ?? "Contact", title: p.title, kind: p.kind, steps: p.steps ?? [], startedAt: .now)
+                contactName: knownContacts.first(where: { $0.id == contactID })?.name ?? String(localized: "Contact"), title: p.title, kind: p.kind, steps: p.steps ?? [], startedAt: .now)
             let state = ContactSessionAttributes.ContentState(endDate: p.kind == "focus" ? Date.now.addingTimeInterval(Double(p.durationSeconds ?? 1500)) : nil)
             let encodedSize = try JSONEncoder().encode(attributes).count + JSONEncoder().encode(state).count
-            guard encodedSize <= 3800 else { throw AuthAPI.Failure.rejected("This activity is too large. Ask for a shorter title or fewer recipe steps.") }
+            guard encodedSize <= 3800 else { throw AuthAPI.Failure.rejected(String(localized: "This activity is too large. Ask for a shorter title or fewer recipe steps.")) }
             _ = try Activity.request(attributes: attributes, content: ActivityContent(state: state, staleDate: state.endDate ?? attributes.expiresAt), pushType: nil)
             return "completed"
         case "timer", "alarm":
-            guard try await AlarmManager.shared.requestAuthorization() == .authorized else { throw AuthAPI.Failure.rejected("Alarm permission was denied. Enable it in Settings.") }
+            guard try await AlarmManager.shared.requestAuthorization() == .authorized else { throw AuthAPI.Failure.rejected(String(localized: "Alarm permission was denied. Enable it in Settings.")) }
             guard userID == owner, enabled[contactID]?.contains(p.kind) == true,
                   !automatically || (UIApplication.shared.applicationState == .active && automaticSince[contactID]?[p.kind] != nil) else { return "cancelled" }
             let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: p.title))
@@ -334,12 +334,12 @@ final class NativeExperiments {
                 calendarRequest = CalendarRequest(event: event, store: eventStore) { continuation.resume(returning: $0) }
             }
         case "reminder", "location_reminder":
-            guard try await eventStore.requestFullAccessToReminders() else { throw AuthAPI.Failure.rejected("Allow Reminders access in Settings to save this reminder.") }
+            guard try await eventStore.requestFullAccessToReminders() else { throw AuthAPI.Failure.rejected(String(localized: "Allow Reminders access in Settings to save this reminder.")) }
             guard userID == owner, enabled[contactID]?.contains(p.kind) == true,
                   !automatically || (UIApplication.shared.applicationState == .active && automaticSince[contactID]?[p.kind] != nil) else { return "cancelled" }
             let reminder = EKReminder(eventStore: eventStore)
             reminder.title = p.title; reminder.notes = p.body
-            guard let calendar = eventStore.defaultCalendarForNewReminders() else { throw AuthAPI.Failure.rejected("Create a reminder list in Reminders first.") }
+            guard let calendar = eventStore.defaultCalendarForNewReminders() else { throw AuthAPI.Failure.rejected(String(localized: "Create a reminder list in Reminders first.")) }
             reminder.calendar = calendar
             if let value = p.date {
                 let due = try date(value)
@@ -368,7 +368,7 @@ final class NativeExperiments {
             speaking = true; speakingContactID = contactID
             defer { speaking = false; speakingContactID = nil }
             return await speaker.speak(p.body ?? p.title)
-        default: throw AuthAPI.Failure.rejected("This native action is not supported.")
+        default: throw AuthAPI.Failure.rejected(String(localized: "This native action is not supported."))
         }
     }
 }

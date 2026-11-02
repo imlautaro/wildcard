@@ -1,0 +1,24 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSAlarmKitUsageDescription" : {
+      "comment" : "Privacy - AlarmKit Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Schedule timers and alarms you request from your other devices."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Programar los temporizadores y las alarmas que pides desde tus otros dispositivos."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

@@ -6,6 +6,7 @@ import type { VoiceInfo } from '~/utils/types';
 // microphone and seek thumb share the recipient listening state.
 // `path` is the audio download path and the player key; `blob` is a pending local clip.
 const props = defineProps<{ voice: VoiceInfo; path: string; blob?: Blob | null; outgoing?: boolean; senderName?: string; senderPhoto?: string | null }>();
+const { t } = useI18n();
 const { user } = useSession();
 const ownPhoto = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
 const root = ref<HTMLElement>();
@@ -52,6 +53,8 @@ const clock = (seconds: number) => {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 };
 const label = computed(() => clock(playing.value || position.value > 0 ? position.value : total.value));
+const rate = (value: number) => value.toLocaleString(appLocale());
+const speeds = computed(() => [1, 1.5, 2].map(value => `${rate(value)}x`).join(', '));
 watch(() => voicePlayer.key, (current, previous) => {
   if (previous === props.path && current !== props.path) selectedTime.value = 0;
 });
@@ -76,18 +79,18 @@ function seek(event: Event) {
     <div class="voice-controls">
       <div v-if="outgoing" class="voice-avatar">
         <button v-if="playing" type="button" class="voice-speed"
-          :aria-label="`Playback speed: ${voicePlayer.rate}x`"
-          title="Cycle playback speed: 1x, 1.5x, 2x" @click.stop="cycleVoicePlaybackRate">
-          {{ voicePlayer.rate }}x
+          :aria-label="t('chat.voice.speed', { rate: rate(voicePlayer.rate) })"
+          :title="t('chat.voice.cycleSpeed', { speeds })" @click.stop="cycleVoicePlaybackRate">
+          {{ rate(voicePlayer.rate) }}x
         </button>
         <template v-else>
-          <AppAvatar :name="user?.name ?? 'You'" :path="ownPhoto" :size="40" />
-          <span class="voice-mic" role="img" :aria-label="listened ? 'Listened' : 'Not listened yet'"><AppIcon name="mic" filled /></span>
+          <AppAvatar :name="user?.name ?? t('common.you')" :path="ownPhoto" :size="40" />
+          <span class="voice-mic" role="img" :aria-label="listened ? t('chat.voice.listened') : t('chat.voice.notListened')"><AppIcon name="mic" filled /></span>
         </template>
       </div>
       <button
         type="button" class="voice-play" :disabled="loading"
-        :aria-label="failed ? 'Retry loading voice message' : playing ? 'Pause voice message' : 'Play voice message'" @click="toggle"
+        :aria-label="failed ? t('chat.voice.retry') : playing ? t('chat.voice.pause') : t('chat.voice.play')" @click="toggle"
       >
         <span v-if="loading" class="spinner" />
         <AppIcon v-else :name="failed ? 'refresh' : playing ? 'pause' : 'play'" filled />
@@ -100,24 +103,24 @@ function seek(event: Event) {
           <span class="voice-thumb" aria-hidden="true" :style="{ left: `calc(6px + (100% - 12px) * ${progress})` }" />
           <input
             type="range" min="0" :max="Math.max(total, 0.1)" step="0.1" :value="position" :disabled="loading"
-            aria-label="Playback position" :aria-valuetext="`${clock(position)} of ${clock(total)}`" @input="seek"
+            :aria-label="t('chat.voice.position')" :aria-valuetext="t('chat.voice.positionValue', { position: clock(position), total: clock(total) })" @input="seek"
           >
         </div>
       </div>
       <div v-if="!outgoing" class="voice-avatar">
         <button v-if="playing" type="button" class="voice-speed"
-          :aria-label="`Playback speed: ${voicePlayer.rate}x`"
-          title="Cycle playback speed: 1x, 1.5x, 2x" @click.stop="cycleVoicePlaybackRate">
-          {{ voicePlayer.rate }}x
+          :aria-label="t('chat.voice.speed', { rate: rate(voicePlayer.rate) })"
+          :title="t('chat.voice.cycleSpeed', { speeds })" @click.stop="cycleVoicePlaybackRate">
+          {{ rate(voicePlayer.rate) }}x
         </button>
         <template v-else>
-          <AppAvatar :name="senderName ?? 'Contact'" :path="senderPhoto" :size="40" />
-          <span class="voice-mic" role="img" :aria-label="listened ? 'Listened' : 'Not listened yet'"><AppIcon name="mic" filled /></span>
+          <AppAvatar :name="senderName ?? t('chat.contactFallback')" :path="senderPhoto" :size="40" />
+          <span class="voice-mic" role="img" :aria-label="listened ? t('chat.voice.listened') : t('chat.voice.notListened')"><AppIcon name="mic" filled /></span>
         </template>
       </div>
     </div>
     <div class="voice-info">
-      <span v-if="failed" class="voice-error">Couldn't load audio</span>
+      <span v-if="failed" class="voice-error">{{ t('chat.voice.loadFailed') }}</span>
       <span v-else>{{ label }}</span>
     </div>
   </div>

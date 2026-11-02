@@ -123,10 +123,10 @@ struct McpConnectionsView: View {
     @State private var sheet: SheetKind?
     @State private var preset: McpPreset?
     @State private var libraryQuery = ""
-    private let notice = "Configure a connector once, then grant contacts access from their Connections screen. Tool approvals apply to every contact and group you authorize. Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard."
-    private let supported = "Remote Streamable HTTP servers with public access, a Bearer token, or OAuth. Legacy SSE and local command servers are not supported yet."
+    private let notice = String(localized: "Configure a connector once, then grant contacts access from their Connections screen. Tool approvals apply to every contact and group you authorize. Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard.")
+    private let supported = String(localized: "Remote Streamable HTTP servers with public access, a Bearer token, or OAuth. Legacy SSE and local command servers are not supported yet.")
 
-    private let libraryInfo = "Official remote MCP servers from each provider, prefilled with their endpoint and access mode. You still review the privacy terms, sign in with the provider and approve each tool. Wildcard does not operate these servers, and providers can change them."
+    private let libraryInfo = String(localized: "Official remote MCP servers from each provider, prefilled with their endpoint and access mode. You still review the privacy terms, sign in with the provider and approve each tool. Wildcard does not operate these servers, and providers can change them.")
     private var connections: [McpConnection]? { cache.value?.connections }
     private var callbackURL: String? { cache.value?.callbackURL }
     private var presets: [McpPreset] { cache.value?.presets ?? [] }
@@ -175,7 +175,7 @@ struct McpConnectionsView: View {
             } header: {
                 HStack {
                     Text("Servers")
-                    InfoButton(title: "Connections", text: "\(notice)\n\n\(supported)")
+                    InfoButton(title: String(localized: "Connections"), text: "\(notice)\n\n\(supported)")
                 }
             }
             if let error, sheet == nil { Section { Text(error).foregroundStyle(.red) } }
@@ -196,11 +196,11 @@ struct McpConnectionsView: View {
     }
 
     private func authLabel(_ connection: McpConnection) -> String {
-        connection.authType == "oauth" ? (connection.authenticated ? "OAuth connected" : "Authorization required")
-            : connection.authenticated ? "Bearer token" : "Public access"
+        connection.authType == "oauth" ? (connection.authenticated ? String(localized: "OAuth connected") : String(localized: "Authorization required"))
+            : connection.authenticated ? String(localized: "Bearer token") : String(localized: "Public access")
     }
     private func summary(_ connection: McpConnection) -> String {
-        let state = connection.authType == "oauth" && !connection.authenticated ? "Needs authorization" : "\(connection.tools.filter(\.allowed).count)/\(connection.tools.count) tools"
+        let state = connection.authType == "oauth" && !connection.authenticated ? String(localized: "Needs authorization") : String(localized: "\(connection.tools.filter(\.allowed).count)/\(connection.tools.count) tools")
         return state
     }
 
@@ -222,7 +222,7 @@ struct McpConnectionsView: View {
                                     HStack {
                                         Button(connection.authenticated ? "Reauthorize" : "Authorize", systemImage: "key") { Task { await authorize(connection.id) } }
                                         Spacer()
-                                        InfoButton(title: "Reauthorize", text: "Reauthorizing clears existing tool permissions. Review and enable them again afterward.")
+                                        InfoButton(title: String(localized: "Reauthorize"), text: String(localized: "Reauthorizing clears existing tool permissions. Review and enable them again afterward."))
                                     }
                                 }
                                 Button("Configure OAuth", systemImage: "gearshape") { configure(connection); sheet = .form }
@@ -246,7 +246,7 @@ struct McpConnectionsView: View {
                                                 Text(tool.name)
                                                 Text(tool.allowed ? "Runs without asking" : "Asks before running").font(.caption).foregroundStyle(.secondary)
                                             }
-                                            InfoButton(title: tool.name, text: "\(tool.description)\n\nInput schema\n\(tool.inputSchema.text)")
+                                            InfoButton(title: tool.name, text: String(localized: "\(tool.description)\n\nInput schema\n\(tool.inputSchema.text)"))
                                         }
                                     }
                                 }
@@ -313,7 +313,7 @@ struct McpConnectionsView: View {
                 } header: {
                     HStack {
                         Text("Server")
-                        InfoButton(title: "Supported servers", text: supported)
+                        InfoButton(title: String(localized: "Supported servers"), text: supported)
                     }
                 }
                 if authType == "oauth" {
@@ -329,7 +329,7 @@ struct McpConnectionsView: View {
                     } header: {
                         HStack {
                             Text("OAuth")
-                            InfoButton(title: "OAuth", text: "Wildcard discovers the OAuth settings and opens the provider's sign-in page. Authorizing an account does not enable tools. Most servers need no manual settings. If you use your own client credentials, enter their trusted authorization server too. Google requires your own registered Web OAuth client marked for an AI-powered agent and Workspace preview access.")
+                            InfoButton(title: "OAuth", text: String(localized: "Wildcard discovers the OAuth settings and opens the provider's sign-in page. Authorizing an account does not enable tools. Most servers need no manual settings. If you use your own client credentials, enter their trusted authorization server too. Google requires your own registered Web OAuth client marked for an AI-powered agent and Workspace preview access."))
                         }
                     }
                 }
@@ -398,7 +398,7 @@ struct McpConnectionsView: View {
             .navigationTitle("Connector library")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { InfoButton(title: "Connector library", text: libraryInfo) }
+                ToolbarItem(placement: .cancellationAction) { InfoButton(title: String(localized: "Connector library"), text: libraryInfo) }
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { libraryQuery = ""; sheet = nil } }
             }
         }
@@ -413,7 +413,7 @@ struct McpConnectionsView: View {
         do {
             try await cache.refresh { try await auth.withSession { api, token in try await api.mcpCatalog(contactID: contactID, token: token) } }
             error = nil
-        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = "This contact is no longer available." }
+        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = String(localized: "This contact is no longer available.") }
         catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }
@@ -426,7 +426,7 @@ struct McpConnectionsView: View {
             try await auth.withSession { api, token in try await api.changeMcp(contactID: contactID, suffix: suffix, method: method, body: data, token: token) }
             await refresh()
             return true
-        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = "This contact is no longer available."; return false }
+        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = String(localized: "This contact is no longer available."); return false }
         catch is CancellationError { return false }
         catch { self.error = error.localizedDescription; return false }
     }
@@ -502,12 +502,12 @@ struct McpConnectionsView: View {
               params.filter({ $0.name == "flow" }).count == 1, params.filter({ $0.name == "proof" }).count == 1,
               params.first(where: { $0.name == "flow" })?.value == launch.flowID,
               let proof = params.first(where: { $0.name == "proof" })?.value else {
-            throw AuthAPI.Failure.rejected("Authorization does not match this signed-in session. Return to Connections and try again.")
+            throw AuthAPI.Failure.rejected(String(localized: "Authorization does not match this signed-in session. Return to Connections and try again."))
         }
         let completion = try JSONSerialization.data(withJSONObject: ["flowID": launch.flowID, "proof": proof])
         try await auth.withSession { api, token in try await api.changeMcp(contactID: contactID, suffix: "/\(id)/oauth/finish", method: "POST", body: completion, token: token) }
         do { try await auth.withSession { api, token in try await api.changeMcp(contactID: contactID, suffix: "/\(id)/refresh", method: "POST", body: Data("{}".utf8), token: token) } }
-        catch { throw AuthAPI.Failure.rejected("Account authorized. Open Connections and refresh tools to review permissions.") }
+        catch { throw AuthAPI.Failure.rejected(String(localized: "Account authorized. Open Connections and refresh tools to review permissions.")) }
         resetForm(); consent = false
     }
     private func permission(_ connection: String, _ tool: McpTool, _ allowed: Bool) async {
@@ -560,9 +560,9 @@ struct McpAccessView: View {
             } header: {
                 HStack {
                     Text("Access")
-                    InfoButton(title: "Connections", text: group
-                        ? "Grant your bots access to their assigned connectors in this group. Other members can request tools; responses are visible to everyone. Only the bot owner who added it can grant access."
-                        : "Configure connectors once in Account, then grant this contact access. Tool approvals are managed in Account.")
+                    InfoButton(title: String(localized: "Connections"), text: group
+                        ? String(localized: "Grant your bots access to their assigned connectors in this group. Other members can request tools; responses are visible to everyone. Only the bot owner who added it can grant access.")
+                        : String(localized: "Configure connectors once in Account, then grant this contact access. Tool approvals are managed in Account."))
                 }
             }
             if let error { Section { Text(error).foregroundStyle(.red) } }
@@ -581,7 +581,7 @@ struct McpAccessView: View {
         } message: {
             if let item = pending {
                 Text(group
-                     ? "Allow \(item.agentName ?? "this bot") to use \(item.name) in this group? Any human member can request enabled tools, including reads, changes and sends. Responses may expose external data to everyone in the group. This group will always use Standard. Memory stays available within this group and is never shared with other chats, even after revocation."
+                     ? "Allow \(item.agentName ?? String(localized: "this bot")) to use \(item.name) in this group? Any human member can request enabled tools, including reads, changes and sends. Responses may expose external data to everyone in the group. This group will always use Standard. Memory stays available within this group and is never shared with other chats, even after revocation."
                      : "Allow this contact to use \(item.name)? It can use all tools enabled in Account without asking again. This private chat will always use Standard. Memory stays available within this chat and is never shared with other chats, even after revocation. Group posting and schedule creation/editing from this private chat will be disabled.")
             }
         }
@@ -595,7 +595,7 @@ struct McpAccessView: View {
                 }
             }
             error = nil
-        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = "This resource is no longer available." }
+        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = String(localized: "This resource is no longer available.") }
         catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }
@@ -611,7 +611,7 @@ struct McpAccessView: View {
                 try await api.send(path: "\(path)/\(item.id)", method: "PATCH", body: data, token: token)
             }
             await refresh()
-        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = "This resource is no longer available." }
+        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = String(localized: "This resource is no longer available.") }
         catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }

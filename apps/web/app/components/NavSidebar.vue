@@ -3,22 +3,23 @@
 // screens (docs/web.md#design). Chats owns every conversation and new-chat flow, Account its
 // settings pages. Hidden below 860px, where the chat list header menu navigates instead.
 const route = useRoute();
+const { t } = useI18n();
 const chats = useChats();
 const updatesUnseen = updatesBadge();
 const chatSection = ['/chats', '/groups', '/contacts', '/invitations', '/join'];
 const accountSection = ['/account', '/native'];
 const within = (prefixes: string[]) => prefixes.some(prefix => route.path === prefix || route.path.startsWith(`${prefix}/`));
 const items = computed(() => [
-  { to: '/updates', icon: 'home' as const, label: 'For you', active: route.path === '/updates',
-    badge: route.path === '/updates' ? 0 : updatesUnseen.value, badgeLabel: `${updatesUnseen.value} new in For you` },
-  { to: '/chats', icon: 'chat' as const, label: 'Chats', active: within(chatSection),
-    badge: chats.totalUnread.value, badgeLabel: `${chats.totalUnread.value} unread messages` },
-  { to: '/account', icon: 'person' as const, label: 'Account', active: within(accountSection), badge: 0, badgeLabel: '' },
+  { to: '/updates', icon: 'home' as const, label: t('account.nav.forYou'), active: route.path === '/updates',
+    badge: route.path === '/updates' ? 0 : updatesUnseen.value, badgeLabel: t('account.nav.forYouBadge', updatesUnseen.value) },
+  { to: '/chats', icon: 'chat' as const, label: t('account.nav.chats'), active: within(chatSection),
+    badge: chats.totalUnread.value, badgeLabel: t('account.nav.chatsBadge', chats.totalUnread.value) },
+  { to: '/account', icon: 'person' as const, label: t('account.nav.account'), active: within(accountSection), badge: 0, badgeLabel: '' },
 ]);
 </script>
 
 <template>
-  <nav class="nav-sidebar" aria-label="Main navigation">
+  <nav class="nav-sidebar" :aria-label="$t('account.nav.main')">
     <NuxtLink to="/updates" class="nav-sidebar-logo" aria-label="Wildcard"><img src="/icon.svg" alt="" width="44" height="44"><span>Wildcard</span></NuxtLink>
     <NuxtLink v-for="item in items" :key="item.to" :to="item.to" class="nav-sidebar-item" :class="{ active: item.active }"
               :aria-current="item.active ? 'page' : undefined" data-ripple>

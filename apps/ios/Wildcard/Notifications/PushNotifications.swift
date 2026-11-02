@@ -15,8 +15,10 @@ final class PushNotifications {
 
     static let shared = PushNotifications()
     private(set) var deviceToken: String?
-    private(set) var status = "Not enabled"
-    private(set) var badgeStatus = "Not enabled"
+    private(set) var status = String(localized: "Not enabled")
+    private(set) var badgeStatus = String(localized: "Not enabled")
+    /// Use this, not `badgeStatus` (localized display text), to decide whether to offer enabling the badge.
+    private(set) var isBadgeEnabled = false
     private var desiredBadgeCount = 0
     private var appliedBadgeCount: Int?
     private var isUpdatingBadge = false
@@ -43,8 +45,8 @@ final class PushNotifications {
     }
 
     func registrationFailed() {
-        status = "Registration failed"
-        error = "Unable to register for notifications. Check your connection and try again."
+        status = String(localized: "Registration failed")
+        error = String(localized: "Unable to register for notifications. Check your connection and try again.")
     }
 
     func activate(using auth: AuthStore, requestPermission: Bool = false) async {
@@ -58,7 +60,7 @@ final class PushNotifications {
             do { _ = try await center.requestAuthorization(options: [.alert, .sound, .badge]) }
             catch {
                 permissionRequestInFlight = false
-                self.error = "Unable to request notification permission. Please try again."
+                self.error = String(localized: "Unable to request notification permission. Please try again.")
                 return
             }
             permissionRequestInFlight = false
@@ -66,28 +68,29 @@ final class PushNotifications {
         }
         guard auth.state == .signedIn else { return }
         switch settings.badgeSetting {
-        case .enabled: badgeStatus = "Enabled"
-        case .disabled: badgeStatus = "Disabled in Settings"
-        case .notSupported: badgeStatus = "Unavailable on this installation"
-        @unknown default: badgeStatus = "Unknown"
+        case .enabled: badgeStatus = String(localized: "Enabled")
+        case .disabled: badgeStatus = String(localized: "Disabled in Settings")
+        case .notSupported: badgeStatus = String(localized: "Unavailable on this installation")
+        @unknown default: badgeStatus = String(localized: "Unknown")
         }
+        isBadgeEnabled = settings.badgeSetting == .enabled
         switch settings.authorizationStatus {
         case .authorized, .provisional, .ephemeral:
-            status = "Connecting…"
+            status = String(localized: "Connecting…")
             UIApplication.shared.registerForRemoteNotifications()
             await synchronize(using: auth)
         case .denied:
-            status = "Disabled in Settings"
+            status = String(localized: "Disabled in Settings")
             await synchronize(using: auth, remove: true)
         default:
-            status = "Not enabled"
+            status = String(localized: "Not enabled")
         }
     }
 
     func synchronize(using auth: AuthStore, remove: Bool = false) async {
         guard let deviceToken, !isBusy, auth.state == .signedIn else { return }
         guard let environment, ["development", "production"].contains(environment) else {
-            error = "The push environment is missing from the app configuration."
+            error = String(localized: "The push environment is missing from the app configuration.")
             return
         }
         isBusy = true
@@ -101,11 +104,11 @@ final class PushNotifications {
             try await auth.withSession { api, token in
                 _ = try await api.send(path: "push/device", method: shouldRemove ? "DELETE" : "PUT", body: body, token: token)
             }
-            if !shouldRemove { status = "Enabled" }
+            if !shouldRemove { status = String(localized: "Enabled") }
         } catch is CancellationError { }
         // Activation and token changes retry registration; connectivity blips stay silent.
         catch where AuthAPI.isTransient(error) { }
-        catch { self.error = "Unable to update notifications. Open the app or tap Enable notifications to retry." }
+        catch { self.error = String(localized: "Unable to update notifications. Open the app or tap Enable notifications to retry.") }
     }
 
     func updateBadge(count: Int) async {
@@ -122,7 +125,8 @@ final class PushNotifications {
                 try await UNUserNotificationCenter.current().setBadgeCount(current)
                 appliedBadgeCount = current
             } catch {
-                badgeStatus = "Unable to update. Check Settings."
+                badgeStatus = String(localized: "Unable to update. Check Settings.")
+                isBadgeEnabled = false
                 return
             }
         }
@@ -189,8 +193,9 @@ final class PushNotifications {
         destination = nil
         incomingEvent = nil
         error = nil
-        status = "Not enabled"
-        badgeStatus = "Not enabled"
+        status = String(localized: "Not enabled")
+        badgeStatus = String(localized: "Not enabled")
+        isBadgeEnabled = false
         desiredBadgeCount = 0
         Task { await updateBadge(count: desiredBadgeCount) }
         // APNs tokens identify this installation, and must be registered on every sign-in.

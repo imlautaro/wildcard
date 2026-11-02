@@ -19,7 +19,7 @@ export function mergeVoice(current: VoiceInfo | null | undefined, incoming: Voic
 }
 export function voicePreviewLabel(voice: { durationMs: number }) {
   const seconds = Math.max(0, Math.round(voice.durationMs / 1000));
-  return `Voice message (${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')})`;
+  return translate('chat.preview.voice', { duration: `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` });
 }
 export function latestTurnVoice(turn: ChatTurn) {
   return turn.assistantText == null ? turn.voice : turn.assistantMessages?.at(-1)?.voice;
@@ -46,9 +46,9 @@ export function mergeTurn(current: ChatTurn, incoming: ChatTurn): ChatTurn {
 
 // Matches the API's chat list summary for the latest turn.
 export function turnPreview(turn: ChatTurn) {
-  const fallback = turn.scheduleID ? 'Scheduled message' : turn.groupRequestID ? 'Group response'
-    : !turn.userText && turn.attachment?.sticker ? `Sticker ${turn.attachment.sticker.emoji}`
-    : !turn.userText && turn.attachment ? `Attachment: ${turn.attachment.name}` : turn.userText;
+  const fallback = turn.scheduleID ? translate('chat.preview.scheduled') : turn.groupRequestID ? translate('chat.preview.groupResponse')
+    : !turn.userText && turn.attachment?.sticker ? translate('chat.preview.sticker', { emoji: turn.attachment.sticker.emoji })
+    : !turn.userText && turn.attachment ? translate('chat.preview.attachment', { name: turn.attachment.name }) : turn.userText;
   return [...(turn.assistantText ?? fallback)].slice(0, 500).join('');
 }
 export function turnTimestamp(turn: ChatTurn) {

@@ -45,26 +45,26 @@ async function open() {
 </script>
 
 <template>
-  <div v-if="album" class="chat-album" :class="`count-${album.length}`" role="group" :aria-label="`${album.length} photos`">
+  <div v-if="album" class="chat-album" :class="`count-${album.length}`" role="group" :aria-label="$t('chat.attachment.photos', album.length)">
     <button
       v-for="(item, index) in album" :key="index" type="button" class="link-button chat-album-item"
-      :disabled="!albumSources[index]!.value" :aria-label="`Open photo ${index + 1} of ${album.length} full screen: ${item.name}`" @click.stop="viewing = index"
+      :disabled="!albumSources[index]!.value" :aria-label="$t('chat.attachment.openAlbumPhoto', { index: index + 1, count: album.length, name: item.name })" @click.stop="viewing = index"
     >
       <img v-if="albumSources[index]!.value" :src="albumSources[index]!.value!" :alt="item.name">
       <span v-else class="center"><span class="spinner" /></span>
     </button>
   </div>
   <span v-else-if="attachment.sticker" class="chat-sticker-frame">
-    <img v-if="source" class="chat-sticker" :src="source" :alt="`Sticker ${attachment.sticker.emoji}`" draggable="false">
+    <img v-if="source" class="chat-sticker" :src="source" :alt="$t('chat.attachment.sticker', { emoji: attachment.sticker.emoji })" draggable="false">
     <span v-else class="center"><span class="spinner" aria-hidden="true" /></span>
   </span>
-  <button v-else-if="isImage" type="button" class="link-button chat-image-thumbnail" :disabled="!source" :aria-label="`Open image full screen: ${attachment.name}`" @click.stop="open">
+  <button v-else-if="isImage" type="button" class="link-button chat-image-thumbnail" :disabled="!source" :aria-label="$t('chat.attachment.openImage', { name: attachment.name })" @click.stop="open">
     <img v-if="source" class="chat-image" :src="source" :alt="attachment.name">
     <span v-else class="center"><span class="spinner" /></span>
   </button>
   <button v-else type="button" class="file link-button" @click="open">
     <AppIcon name="file" />
-    <span><span class="name">{{ attachment.name }}</span><br><span class="small muted">PDF · {{ fileSize(attachment.size) }}</span></span>
+    <span><span class="name">{{ attachment.name }}</span><br><span class="small muted">{{ $t('chat.attachment.pdf', { size: fileSize(attachment.size) }) }}</span></span>
   </button>
   <ChatImageViewer v-if="viewing !== null && viewerImages[viewing]?.source" :images="viewerImages" :start="viewing" @close="viewing = null" />
 </template>

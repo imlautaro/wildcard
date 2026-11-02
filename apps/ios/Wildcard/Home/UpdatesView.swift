@@ -56,7 +56,7 @@ struct UpdatesView: View {
                         fresh = 0
                         withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo("updates-top", anchor: .top) }
                     } label: {
-                        Label(fresh == 1 ? "1 new post" : "\(fresh) new posts", systemImage: "arrow.up")
+                        Label("\(fresh) new posts", systemImage: "arrow.up")
                             .manrope(.subheadline, weight: .semibold)
                             .padding(.horizontal, 16).padding(.vertical, 10)
                     }
@@ -114,11 +114,11 @@ struct UpdatesView: View {
     private var notice: String? {
         if let error = store.error, feed == nil { return error }
         guard let feed else { return nil }
-        if !feed.enabled { return "Curated cards are turned off on this server. Your apps and agenda still show here." }
+        if !feed.enabled { return String(localized: "Curated cards are turned off on this server. Your apps and agenda still show here.") }
         if feed.setupState != nil || feed.isUpdating { return nil }
         switch feed.error {
         case nil: return nil
-        default: return "Your contacts couldn’t finish your updates. They’ll try again in a few minutes."
+        default: return String(localized: "Your contacts couldn’t finish your updates. They’ll try again in a few minutes.")
         }
     }
 
@@ -172,7 +172,7 @@ struct UpdatesView: View {
                             .background(Color(.secondarySystemBackground), in: Capsule())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(app.title), mini app\(app.ownerName.map { " by \($0)" } ?? "")")
+                        .accessibilityLabel(app.ownerName.map { Text("\(app.title), mini app by \($0)") } ?? Text("\(app.title), mini app"))
                     }
                 }
                 .padding(.horizontal, 16)
@@ -185,7 +185,7 @@ struct UpdatesView: View {
         if let at = item.at {
             return "\(owner) · \(Date(timeIntervalSince1970: at / 1000).formatted(.relative(presentation: .named)))"
         }
-        return item.kind == "task" ? "\(owner) · Assigned to you" : owner
+        return item.kind == "task" ? String(localized: "\(owner) · Assigned to you") : owner
     }
 
     @ViewBuilder private var timeline: some View {
@@ -237,17 +237,17 @@ struct UpdatesView: View {
 
     private var emptyTitle: String {
         switch feed?.setupState {
-        case "needs_contacts": "Make yourself at home"
-        case "creating_contacts": "Your circle is taking shape"
-        default: "A feed that grows with you"
+        case "needs_contacts": String(localized: "Make yourself at home")
+        case "creating_contacts": String(localized: "Your circle is taking shape")
+        default: String(localized: "A feed that grows with you")
         }
     }
 
     private var emptyMessage: String {
         switch feed?.setupState {
-        case "needs_contacts": "Add your first contact and start a conversation. This feed will fill with posts about the things you’re into."
-        case "creating_contacts": "Your contacts are being created. Head to Chats to meet each one as soon as they’re ready. Posts will appear here as you get to know them."
-        default: "Chat with your contacts or follow a topic you’re into. They’ll bring fresh posts here when there’s something to share."
+        case "needs_contacts": String(localized: "Add your first contact and start a conversation. This feed will fill with posts about the things you’re into.")
+        case "creating_contacts": String(localized: "Your contacts are being created. Head to Chats to meet each one as soon as they’re ready. Posts will appear here as you get to know them.")
+        default: String(localized: "Chat with your contacts or follow a topic you’re into. They’ll bring fresh posts here when there’s something to share.")
         }
     }
 
@@ -273,7 +273,7 @@ private struct HomeStatusPill: View {
         HStack(spacing: 10) {
             if let progress = feed.progress {
                 ContactAvatar(contact: contacts.contact(id: progress.contactID), size: 24)
-                Text("\(progress.contactName ?? "A contact") is preparing \(progress.title)")
+                Text("\(progress.contactName ?? String(localized: "A contact")) is preparing \(progress.title)")
                     .manrope(.footnote, weight: .semibold).lineLimit(1)
                 Spacer(minLength: 4)
                 Text("\(min(progress.done + 1, progress.total))/\(progress.total)").manrope(.caption, weight: .bold).monospacedDigit().foregroundStyle(.secondary)
@@ -403,11 +403,13 @@ struct HomeTopicsSheet: View {
     }
 
     private func origin(_ topic: HomeFeed.Topic) -> String {
-        let pending = topic.status == "active" && !topic.hasCard ? " · Waiting for its first card" : ""
+        let pending = topic.status == "active" && !topic.hasCard
         switch topic.source {
-        case "person": return "You asked\(pending)"
-        case "contact": return "Suggested by \(topic.contactID.flatMap { contacts.contact(id: $0)?.name } ?? "a contact")\(pending)"
-        default: return "Picked by your contacts\(pending)"
+        case "person": return pending ? String(localized: "You asked · Waiting for its first card") : String(localized: "You asked")
+        case "contact":
+            let name = topic.contactID.flatMap { contacts.contact(id: $0)?.name } ?? String(localized: "a contact")
+            return pending ? String(localized: "Suggested by \(name) · Waiting for its first card") : String(localized: "Suggested by \(name)")
+        default: return pending ? String(localized: "Picked by your contacts · Waiting for its first card") : String(localized: "Picked by your contacts")
         }
     }
 }
@@ -472,7 +474,7 @@ struct HomeThreadView: View {
             }
         }
         .background(Color(.systemBackground))
-        .navigationTitle(posts.first?.content.title ?? "Thread")
+        .navigationTitle(posts.first?.content.title ?? String(localized: "Thread"))
         .navigationBarTitleDisplayMode(.inline)
         .alert("For you", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
@@ -500,7 +502,7 @@ struct HomePostDetailView: View {
     private var post: HomePost? { store.feed?.timeline.first { $0.id == postID } }
     private var comments: [HomeComment] { post?.comments ?? [] }
     private var waiting: Bool { comments.contains { $0.status == "pending" } }
-    private var name: String { post?.contactName ?? "this contact" }
+    private var name: String { post?.contactName ?? String(localized: "this contact") }
     private var threadCount: Int { post.map { post in store.feed?.timeline.filter { $0.topicID == post.topicID }.count ?? 0 } ?? 0 }
 
     var body: some View {
@@ -519,7 +521,7 @@ struct HomePostDetailView: View {
                     }
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(comments) { comment in
-                            row(user: true, name: "You", at: comment.createdAt) { Text(comment.text) }
+                            row(user: true, name: String(localized: "You", comment: "The user, as a sender label"), at: comment.createdAt) { Text(comment.text) }
                             row(user: false, name: name, at: comment.repliedAt) {
                                 switch comment.status {
                                 case "complete":

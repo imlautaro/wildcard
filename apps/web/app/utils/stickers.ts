@@ -29,12 +29,12 @@ export const stickerEmojis = [
 // edge, flatten transparency on white and encode a JPEG under the cutout's 5 MB limit.
 // The decoded bitmap is closed before returning; nothing is kept besides the returned blob.
 export async function stickerSourceJPEG(file: File): Promise<Blob> {
-  if (!file.type.startsWith('image/')) throw new Error('Choose an image.');
+  if (!file.type.startsWith('image/')) throw new Error(translate('chat.image.chooseImage'));
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => {
-    throw new Error('This image could not be read. Choose a JPEG, PNG, or WebP photo.');
+    throw new Error(translate('chat.image.unreadable'));
   });
   try {
-    if (Math.min(bitmap.width, bitmap.height) < 64) throw new Error('Choose a photo at least 64 pixels wide and tall.');
+    if (Math.min(bitmap.width, bitmap.height) < 64) throw new Error(translate('chat.image.tooSmall'));
     const factor = Math.min(1, longEdge / Math.max(bitmap.width, bitmap.height));
     const width = Math.max(1, Math.round(bitmap.width * factor));
     const height = Math.max(1, Math.round(bitmap.height * factor));
@@ -42,7 +42,7 @@ export async function stickerSourceJPEG(file: File): Promise<Blob> {
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext('2d');
-    if (!context) throw new Error('Image editing is unavailable in this browser.');
+    if (!context) throw new Error(translate('chat.image.editingUnavailable'));
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, width, height);
     context.imageSmoothingQuality = 'high';
@@ -51,6 +51,6 @@ export async function stickerSourceJPEG(file: File): Promise<Blob> {
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
       if (blob && blob.type === 'image/jpeg' && blob.size <= sourceLimit) return blob;
     }
-    throw new Error('Choose a smaller photo.');
+    throw new Error(translate('chat.image.tooLarge'));
   } finally { bitmap.close(); }
 }

@@ -6,6 +6,7 @@
 import type { RemoteNativeDevice } from '~/composables/useRemoteNative';
 
 const props = defineProps<{ contactId: string; contactName: string }>();
+const { t } = useI18n();
 const remote = useRemoteNative(() => props.contactId);
 const open = ref(false);
 const error = ref<string | null>(null);
@@ -16,21 +17,25 @@ onMounted(() => { void remote.refresh(); });
 const devices = computed(() => remote.state.value.devices);
 const owned = computed(() => devices.value.filter(device => device.owned));
 const others = computed(() => devices.value.filter(device => !device.owned));
-// "Your iPhone" for this account, "Ana’s iPhone" for a shared one; a suffix only when two read the same.
+// The device name plus an id suffix only when two devices read the same ("Your iPhone"
+// for this account's own, "Ana’s iPhone" for a shared one).
+function deviceName(device: RemoteNativeDevice) {
+  const same = devices.value.filter(d => d.owned === device.owned && d.name === device.name).length > 1;
+  return same ? `${device.name} · ${device.id.slice(-4)}` : device.name;
+}
 function label(device: RemoteNativeDevice) {
-  const base = (d: RemoteNativeDevice) => d.owned ? `Your ${d.name}` : d.name;
-  const name = base(device);
-  return devices.value.filter(d => base(d) === name).length > 1 ? `${name} · ${device.id.slice(-4)}` : name;
+  return device.owned ? t('contacts.phones.yourDevice', { name: deviceName(device) }) : deviceName(device);
 }
 const summary = computed(() => {
-  if (!remote.state.value.loaded) return 'Loading…';
-  if (!devices.value.length) return 'Not set up';
-  return devices.value.length === 1 ? label(devices.value[0]!) : `${devices.value.length} phones`;
+  if (!remote.state.value.loaded) return t('common.loading');
+  if (!devices.value.length) return t('contacts.phones.notSetUp');
+  return devices.value.length === 1 ? label(devices.value[0]!) : t('contacts.phones.phoneCount', devices.value.length);
 });
 const example = computed(() => {
   const other = others.value[0];
-  return other ? `“Set a timer on ${other.name.replace(/’s .*/, '')}’s phone for 10 minutes”` : '“Set a timer for 10 minutes”';
+  return other ? t('contacts.phones.exampleOther', { owner: other.name.replace(/’s .*/, '') }) : t('contacts.phones.exampleOwn');
 });
+const footer = computed(() => t(owned.value.length ? 'contacts.phones.footerOwned' : 'contacts.phones.footerOthers', { name: props.contactName, example: example.value }));
 function delegated(deviceID: string, participantID: string) {
   return remote.state.value.delegations.some(g => g.deviceID === deviceID && g.participantID === participantID);
 }
@@ -46,34 +51,33 @@ async function stop(deviceID: string) {
 </script>
 
 <template>
-  <AppListItem icon="timer" opens :value="summary" @click="open = true">Timers and alarms</AppListItem>
-  <AppSheet v-if="open" title="Timers and alarms" @close="open = false">
+  <AppListItem icon="timer" opens :value="summary" @click="open = true">{{ $t('contacts.phones.title') }}</AppListItem>
+  <AppSheet v-if="open" :title="$t('contacts.phones.title')" @close="open = false">
     <AppNotice v-if="error || remote.state.value.error">{{ error || remote.state.value.error }}</AppNotice>
     <template v-if="devices.length">
-      <AppListGroup title="Phones you can use" :footer="`Just ask ${contactName} in chat, for example ${example}. ${owned.length ? 'If you don’t name anyone, it goes to your own phone.' : 'Say whose phone you mean.'} The phone gets it as a notification, even while locked, and the chat shows when it’s set.`">
+      <AppListGroup :title="$t('contacts.phones.phonesYouCanUse')" :footer="footer">
         <AppListItem v-for="device in devices" :key="device.id" plain icon="iphone"
-          :supporting="device.owned ? 'Timers and alarms you ask for' : 'They allowed you to send timers and alarms'">
+          :supporting="device.owned ? $t('contacts.phones.ownedSupporting') : $t('contacts.phones.sharedSupporting')">
           {{ label(device) }}
         </AppListItem>
       </AppListGroup>
       <template v-for="device in owned" :key="device.id">
-        <AppListGroup :title="`Who can send to ${label(device).replace(/^Your /, 'your ')}`"
-          footer="They can’t see your chats or anything else on your phone. Turning someone off doesn’t remove alarms they already set.">
-          <AppListItem plain icon="person" supporting="From this browser and your other devices">You</AppListItem>
+        <AppListGroup :title="$t('contacts.phones.whoCanSend', { name: deviceName(device) })"
+          :footer="$t('contacts.phones.whoFooter')">
+          <AppListItem plain icon="person" :supporting="$t('contacts.phones.youSupporting')">{{ $t('common.you') }}</AppListItem>
           <AppSwitch
             v-for="participant in remote.state.value.participants" :key="participant.id" icon="person"
-            :label="participant.name" :supporting="`Asks ${contactName} in their own chat`"
+            :label="participant.name" :supporting="$t('contacts.phones.asks', { name: contactName })"
             :checked="delegated(device.id, participant.id)" :disabled="remote.state.value.mutating"
             @change="setDelegate(device.id, participant.id, $event)"
           />
-          <AppListItem danger icon="block" @click="stop(device.id)">Stop receiving on {{ label(device).replace(/^Your /, 'your ') }}</AppListItem>
+          <AppListItem danger icon="block" @click="stop(device.id)">{{ $t('contacts.phones.stop', { name: deviceName(device) }) }}</AppListItem>
         </AppListGroup>
       </template>
     </template>
     <p v-else-if="remote.state.value.loaded" class="muted small">
-      {{ contactName }} can set timers and alarms on an iPhone that allows it. On your iPhone, open this contact’s Native experiments
-      and turn on Receive timers and alarms. People who also chat with {{ contactName }} can let you use their phone the same way.
+      {{ $t('contacts.phones.empty', { name: contactName }) }}
     </p>
-    <template #actions><AppButton @click="open = false">Done</AppButton></template>
+    <template #actions><AppButton @click="open = false">{{ $t('common.done') }}</AppButton></template>
   </AppSheet>
 </template>

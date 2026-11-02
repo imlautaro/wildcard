@@ -32,14 +32,14 @@ function submit() {
         <input v-if="field.kind === 'toggle'" v-model="form[field.id]" type="checkbox" role="switch">
         <input v-else-if="field.kind === 'number'" v-model.number="form[field.id]" type="number" step="any" :required="field.required" inputmode="decimal">
         <select v-else-if="field.kind === 'select'" v-model="form[field.id]" :required="field.required" :disabled="!field.options?.length">
-          <option value="" :disabled="field.required">{{ field.options?.length ? 'Choose…' : 'No items yet' }}</option>
+          <option value="" :disabled="field.required">{{ field.options?.length ? $t('miniapps.form.choose') : $t('miniapps.form.noItems') }}</option>
           <option v-for="option in field.options ?? []" :key="option.value" :value="option.value">{{ option.label }}</option>
         </select>
         <input v-else v-model="form[field.id]" :type="field.kind === 'date' ? 'date' : 'text'" :required="field.required" maxlength="500">
       </label>
     </form>
     <template #actions>
-      <AppButton variant="text" @click="emit('close')">Cancel</AppButton>
+      <AppButton variant="text" @click="emit('close')">{{ $t('common.cancel') }}</AppButton>
       <AppButton type="submit" :form="formID" :variant="action.style === 'destructive' ? 'danger' : 'filled'" :disabled="blocked || busy" :loading="busy">{{ action.label }}</AppButton>
     </template>
   </AppSheet>

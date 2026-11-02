@@ -39,6 +39,6 @@ enum SessionKeychain {
     }
 
     private struct KeychainFailure: LocalizedError {
-        var errorDescription: String? { "Unable to access your saved session. Please try again." }
+        var errorDescription: String? { String(localized: "Unable to access your saved session. Please try again.") }
     }
 }

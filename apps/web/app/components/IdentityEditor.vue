@@ -66,31 +66,31 @@ async function choose(event: Event) {
     <div class="identity-avatar">
       <AppAvatar :name="name" :path="path" :size="104" />
       <template v-if="editable">
-        <button type="button" class="identity-camera" :aria-label="path ? 'Change photo' : 'Add photo'" :disabled="busy || loading" @click="changePhoto">
+        <button type="button" class="identity-camera" :aria-label="path ? $t('contacts.identity.changePhoto') : $t('contacts.identity.addPhoto')" :disabled="busy || loading" @click="changePhoto">
           <span v-if="loading" class="spinner" /><AppIcon v-else name="camera" />
         </button>
         <input ref="picker" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="visually-hidden" tabindex="-1" @change="choose">
       </template>
     </div>
-    <button v-if="renamable" type="button" class="identity-name" :disabled="busy" :aria-label="`Edit name, ${name}`" @click="startRename">
-      <span>{{ name || 'Add name' }}</span><AppIcon name="compose" />
+    <button v-if="renamable" type="button" class="identity-name" :disabled="busy" :aria-label="$t('contacts.identity.editName', { name })" @click="startRename">
+      <span>{{ name || $t('contacts.identity.addName') }}</span><AppIcon name="compose" />
     </button>
     <h2 v-else-if="showName" class="identity-title">{{ name }}</h2>
     <p v-if="problem" class="small problem">{{ problem }}</p>
   </div>
   <PhotoCropDialog v-if="source" :source="source" @cancel="cancel" @save="confirm" />
-  <AppSheet v-if="choosingPhoto" title="Photo" @close="choosingPhoto = false">
+  <AppSheet v-if="choosingPhoto" :title="$t('contacts.identity.photo')" @close="choosingPhoto = false">
     <AppListGroup>
-      <AppListItem icon="image" @click="choosingPhoto = false; picker?.click()">Choose photo</AppListItem>
-      <AppListItem icon="delete" danger @click="choosingPhoto = false; emit('photo', null)">Remove photo</AppListItem>
+      <AppListItem icon="image" @click="choosingPhoto = false; picker?.click()">{{ $t('contacts.identity.choosePhoto') }}</AppListItem>
+      <AppListItem icon="delete" danger @click="choosingPhoto = false; emit('photo', null)">{{ $t('contacts.identity.removePhoto') }}</AppListItem>
     </AppListGroup>
   </AppSheet>
-  <AppSheet v-if="renaming" title="Name" @close="renaming = false">
+  <AppSheet v-if="renaming" :title="$t('contacts.identity.name')" @close="renaming = false">
     <form @submit.prevent="rename">
-      <AppListGroup><div class="field"><input v-model="draftName" type="text" maxlength="100" aria-label="Name" autofocus></div></AppListGroup>
+      <AppListGroup><div class="field"><input v-model="draftName" type="text" maxlength="100" :aria-label="$t('contacts.identity.name')" autofocus></div></AppListGroup>
       <div class="actions-row">
-        <AppButton variant="text" @click="renaming = false">Cancel</AppButton>
-        <AppButton type="submit" :disabled="!validName">Save</AppButton>
+        <AppButton variant="text" @click="renaming = false">{{ $t('common.cancel') }}</AppButton>
+        <AppButton type="submit" :disabled="!validName">{{ $t('common.save') }}</AppButton>
       </div>
     </form>
   </AppSheet>

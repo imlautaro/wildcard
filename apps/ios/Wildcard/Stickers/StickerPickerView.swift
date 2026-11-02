@@ -215,7 +215,7 @@ struct StickerPickerView: View {
         defer { loadingContact = false }
         do { try await store.loadContact(contact.id, using: auth); contactError = nil }
         catch is CancellationError { }
-        catch AuthAPI.Failure.notFound { store.forget(contactID: contact.id); contactError = "This contact is no longer available." }
+        catch AuthAPI.Failure.notFound { store.forget(contactID: contact.id); contactError = String(localized: "This contact is no longer available.") }
         catch { contactError = error.localizedDescription }
     }
 }

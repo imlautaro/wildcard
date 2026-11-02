@@ -10,6 +10,7 @@ const route = useRoute();
 const home = useHome();
 const chats = useChats();
 const { user } = useSession();
+const { t } = useI18n();
 const feed = computed<HomeFeed | null>(() => home.state.value);
 const setup = computed(() => feed.value?.setup ?? (feed.value?.error === 'HOME_NO_CONTACTS' ? 'needs_contacts' : null));
 const updating = computed(() => homeUpdating(feed.value));
@@ -30,7 +31,7 @@ const thread = computed(() => typeof route.query.thread === 'string' ? route.que
 const threadPosts = computed(() => thread.value ? posts.value.filter(post => post.topicID === thread.value) : []);
 const focusID = computed(() => typeof route.query.post === 'string' ? route.query.post : null);
 const focusPost = computed(() => focusID.value ? posts.value.find(post => post.id === focusID.value) ?? null : null);
-const threadTitle = computed(() => threadPosts.value[0]?.content.title ?? 'Thread');
+const threadTitle = computed(() => threadPosts.value[0]?.content.title ?? t('updates.feed.thread'));
 const myPhoto = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
 
 // "N new posts": posts that arrive while the person is scrolled down are announced instead
@@ -58,9 +59,9 @@ function openPost(postID: string | null) {
 const notice = computed(() => {
   if (home.state.error && !feed.value) return home.state.error;
   if (!feed.value) return null;
-  if (!feed.value.enabled) return 'Curated cards are turned off on this server. Your apps and agenda still show here.';
+  if (!feed.value.enabled) return t('updates.feed.disabled');
   if (setup.value || updating.value || !feed.value.error) return null;
-  return 'Your contacts couldn’t finish your updates. They’ll try again in a few minutes.';
+  return t('updates.feed.failed');
 });
 // A failed first load is an error; the other notices explain the feed's state.
 const noticeTone = computed(() => home.state.error && !feed.value ? 'error'
@@ -102,21 +103,24 @@ const progressPhoto = computed(() => {
 const agendaPath = (item: HomeFeed['agenda'][number]) => item.contactID ? `/chats/${item.contactID}` : item.groupID ? `/groups/${item.groupID}` : '/chats';
 const appPath = (app: HomeFeed['apps'][number]) => app.groupID ? `/groups/${app.groupID}/mini-apps/${app.id}` : `/contacts/${app.contactID}/mini-apps/${app.id}`;
 function agendaDetail(item: HomeFeed['agenda'][number]) {
-  if (item.at == null) return [item.name, item.kind === 'task' ? 'Assigned to you' : null].filter(Boolean).join(' · ');
-  return [item.name, new Intl.DateTimeFormat('en', { weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(item.at)].filter(Boolean).join(' · ');
+  if (item.at == null) return [item.name, item.kind === 'task' ? t('updates.feed.assignedToYou') : null].filter(Boolean).join(' · ');
+  return [item.name, new Intl.DateTimeFormat(appLocale(), { weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(item.at)].filter(Boolean).join(' · ');
 }
 function origin(topic: HomeFeed['topics'][number]) {
-  const pending = topic.status === 'active' && !topic.hasCard ? ' · Waiting for its first card' : '';
-  if (topic.source === 'person') return `You asked${pending}`;
-  if (topic.source === 'contact') return `Suggested by ${chats.contacts.value.find(item => item.id === topic.contactID)?.name ?? 'a contact'}${pending}`;
-  return `Picked by your contacts${pending}`;
+  const pending = topic.status === 'active' && !topic.hasCard;
+  if (topic.source === 'person') return pending ? t('updates.feed.origin.personWaiting') : t('updates.feed.origin.person');
+  if (topic.source === 'contact') {
+    const name = chats.contacts.value.find(item => item.id === topic.contactID)?.name ?? t('updates.aContactLower');
+    return pending ? t('updates.feed.origin.contactWaiting', { name }) : t('updates.feed.origin.contact', { name });
+  }
+  return pending ? t('updates.feed.origin.contactsWaiting') : t('updates.feed.origin.contacts');
 }
 </script>
 
 <template>
   <div v-if="focusID" ref="page" class="page home-page">
-    <AppTopBar title="Post">
-      <template #leading><AppIconButton icon="back" label="Back" :tooltip="false" @click="openPost(null)" /></template>
+    <AppTopBar :title="$t('updates.feed.post')">
+      <template #leading><AppIconButton icon="back" :label="$t('common.back')" :tooltip="false" @click="openPost(null)" /></template>
     </AppTopBar>
     <div class="home-inner thread">
       <AppNotice v-if="actionError">{{ actionError }}</AppNotice>
@@ -127,16 +131,16 @@ function origin(topic: HomeFeed['topics'][number]) {
         </div>
         <HomePostComments :post="focusPost" />
         <button v-if="(threadCounts.get(focusPost.topicID) ?? 0) > 1" class="link-button thread-more" @click="openThread(focusPost.topicID)">
-          See all {{ threadCounts.get(focusPost.topicID) }} posts on {{ focusPost.content.title }}
+          {{ $t('updates.feed.seeAllPosts', { count: threadCounts.get(focusPost.topicID), title: focusPost.content.title }) }}
         </button>
       </template>
-      <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" title="This post isn’t in For you anymore"
-        text="Its topic was hidden or retired, or the post is older than two weeks." />
+      <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" :title="$t('updates.feed.postGoneTitle')"
+        :text="$t('updates.feed.postGoneText')" />
     </div>
   </div>
   <div v-else-if="thread" ref="page" class="page home-page">
     <AppTopBar :title="threadTitle">
-      <template #leading><AppIconButton icon="back" label="Back to For you" :tooltip="false" @click="openThread(null)" /></template>
+      <template #leading><AppIconButton icon="back" :label="$t('updates.feed.backToForYou')" :tooltip="false" @click="openThread(null)" /></template>
     </AppTopBar>
     <div class="home-inner thread">
       <AppNotice v-if="actionError">{{ actionError }}</AppNotice>
@@ -144,46 +148,46 @@ function origin(topic: HomeFeed['topics'][number]) {
         <HomePost v-for="(post, index) in threadPosts" :key="post.id" :post="post" in-thread :chained="index < threadPosts.length - 1"
           @action="(kind, prompt) => act(post, kind, prompt)" />
       </div>
-      <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" title="This thread isn’t in For you anymore"
-        text="Its topic was hidden or retired, or its posts are older than two weeks." />
+      <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" :title="$t('updates.feed.threadGoneTitle')"
+        :text="$t('updates.feed.threadGoneText')" />
     </div>
   </div>
   <div v-else ref="page" class="page home-page" @scroll.passive="onScroll">
-    <AppTopBar title="For you">
-      <template #leading><AppIconButton to="/chats" icon="back" label="Chats" class="back" :tooltip="false" /></template>
-      <AppIconButton icon="list" label="Topics" @click="managing = true" />
-      <AppIconButton v-if="!setup" icon="refresh" label="Update now" :disabled="!feed?.enabled || updating || busy" @click="run(home.update)" />
-      <AppIconButton v-if="!setup" icon="plus" label="Follow something in For you" variant="filled" @click="following = true" />
+    <AppTopBar :title="$t('updates.feed.title')">
+      <template #leading><AppIconButton to="/chats" icon="back" :label="$t('updates.feed.chats')" class="back" :tooltip="false" /></template>
+      <AppIconButton icon="list" :label="$t('updates.feed.topics')" @click="managing = true" />
+      <AppIconButton v-if="!setup" icon="refresh" :label="$t('updates.feed.updateNow')" :disabled="!feed?.enabled || updating || busy" @click="run(home.update)" />
+      <AppIconButton v-if="!setup" icon="plus" :label="$t('updates.feed.followSomethingInForYou')" variant="filled" @click="following = true" />
     </AppTopBar>
     <div class="home-inner">
       <div v-if="updating && !setup" class="home-status" role="status">
         <template v-if="feed?.progress">
           <AppAvatar :name="feed.progress.contactName ?? '?'" :path="progressPhoto" :size="24" />
-          <span class="grow">{{ feed.progress.contactName ?? 'A contact' }} is preparing {{ feed.progress.title }}</span>
+          <span class="grow">{{ $t('updates.feed.preparing', { name: feed.progress.contactName ?? $t('updates.aContact'), title: feed.progress.title }) }}</span>
           <span class="count">{{ Math.min(feed.progress.done + 1, feed.progress.total) }}/{{ feed.progress.total }}</span>
         </template>
-        <template v-else><span class="spinner" /><span class="grow">Your contacts are preparing updates…</span></template>
+        <template v-else><span class="spinner" /><span class="grow">{{ $t('updates.feed.preparingAll') }}</span></template>
       </div>
       <AppNotice v-if="notice" :tone="noticeTone">
         {{ notice }}
-        <template v-if="home.state.error && !feed" #actions><button class="link-button" @click="home.refresh(true)">Retry</button></template>
+        <template v-if="home.state.error && !feed" #actions><button class="link-button" @click="home.refresh(true)">{{ $t('common.retry') }}</button></template>
       </AppNotice>
       <AppNotice v-if="actionError">{{ actionError }}</AppNotice>
 
       <button v-if="!setup" class="composer" @click="following = true">
         <AppAvatar :name="user?.name ?? ''" :path="myPhoto" :size="36" />
-        <span class="composer-hint">What should your contacts follow?</span>
-        <span class="composer-action">Follow</span>
+        <span class="composer-hint">{{ $t('updates.feed.composerHint') }}</span>
+        <span class="composer-action">{{ $t('updates.feed.follow') }}</span>
       </button>
 
-      <section v-if="feed?.agenda.length" class="home-agenda" aria-label="Coming up">
+      <section v-if="feed?.agenda.length" class="home-agenda" :aria-label="$t('updates.feed.comingUp')">
         <NuxtLink v-for="item in feed.agenda" :key="item.id" :to="agendaPath(item)" class="agenda-row" data-ripple>
           <span class="agenda-icon" :class="item.kind"><AppIcon :name="item.kind === 'task' ? 'tasks' : 'clock'" /></span>
           <span class="copy"><strong>{{ item.title }}</strong><small>{{ agendaDetail(item) }}</small></span>
         </NuxtLink>
       </section>
 
-      <section v-if="feed?.apps.length" class="home-apps" aria-label="Your apps">
+      <section v-if="feed?.apps.length" class="home-apps" :aria-label="$t('updates.feed.yourApps')">
         <div class="apps-row">
           <NuxtLink v-for="app in feed.apps" :key="app.id" :to="appPath(app)" class="app-tile" data-ripple :title="app.ownerName ?? undefined">
             <span class="mini-app-glyph"><AppIcon :name="miniAppIcon(app.icon)" /></span>
@@ -192,54 +196,54 @@ function origin(topic: HomeFeed['topics'][number]) {
         </div>
       </section>
 
-      <button v-if="fresh" class="fresh" @click="showFresh"><AppIcon name="arrow-up" />{{ fresh === 1 ? '1 new post' : `${fresh} new posts` }}</button>
+      <button v-if="fresh" class="fresh" @click="showFresh"><AppIcon name="arrow-up" />{{ $t('updates.feed.newPosts', fresh) }}</button>
       <div v-if="posts.length" class="timeline">
         <HomePost v-for="post in posts" :key="post.id" :post="post" :thread-count="threadCounts.get(post.topicID)"
           @action="(kind, prompt) => act(post, kind, prompt)" />
       </div>
-      <AppEmptyState v-else-if="setup === 'creating_contacts'" class="home-empty" icon="sparkle" title="Your circle is taking shape"
-        text="Your contacts are being created. Head to Chats to meet each one as soon as they’re ready. Posts will appear here as you get to know them.">
-        <template #actions><AppButton to="/chats">Go to Chats</AppButton></template>
+      <AppEmptyState v-else-if="setup === 'creating_contacts'" class="home-empty" icon="sparkle" :title="$t('updates.feed.circleTitle')"
+        :text="$t('updates.feed.circleText')">
+        <template #actions><AppButton to="/chats">{{ $t('updates.feed.goToChats') }}</AppButton></template>
       </AppEmptyState>
-      <AppEmptyState v-else-if="setup === 'needs_contacts'" class="home-empty" icon="sparkle" title="Make yourself at home"
-        text="Add your first contact and start a conversation. This feed will fill with posts about the things you’re into.">
-        <template #actions><AppButton to="/contacts" icon="plus">Add a contact</AppButton></template>
+      <AppEmptyState v-else-if="setup === 'needs_contacts'" class="home-empty" icon="sparkle" :title="$t('updates.feed.welcomeTitle')"
+        :text="$t('updates.feed.welcomeText')">
+        <template #actions><AppButton to="/contacts" icon="plus">{{ $t('updates.feed.addContact') }}</AppButton></template>
       </AppEmptyState>
       <div v-else-if="updating || (!feed && !home.state.error)" class="timeline" aria-hidden="true">
         <div v-for="index in 3" :key="index" class="placeholder"><span class="avatar-dot" /><span class="lines"><span /><span /><span /></span></div>
       </div>
-      <AppEmptyState v-else-if="feed?.enabled" class="home-empty" icon="sparkle" title="A feed that grows with you"
-        text="Chat with your contacts or follow a topic you’re into. They’ll bring fresh posts here when there’s something to share.">
+      <AppEmptyState v-else-if="feed?.enabled" class="home-empty" icon="sparkle" :title="$t('updates.feed.emptyTitle')"
+        :text="$t('updates.feed.emptyText')">
         <template #actions>
-          <AppButton to="/chats">Start a chat</AppButton>
-          <AppButton variant="text" @click="following = true">Follow something</AppButton>
+          <AppButton to="/chats">{{ $t('updates.feed.startChat') }}</AppButton>
+          <AppButton variant="text" @click="following = true">{{ $t('updates.feed.followSomething') }}</AppButton>
         </template>
       </AppEmptyState>
     </div>
 
-    <AppSheet v-if="following" title="Follow in For you" @close="following = false">
+    <AppSheet v-if="following" :title="$t('updates.feed.followSheetTitle')" @close="following = false">
       <form id="home-follow" @submit.prevent="follow">
         <textarea v-model="followText" class="follow-input" rows="3" maxlength="400" autofocus
-          placeholder="A topic you’re interested in…" aria-label="What should your contacts follow?" />
-        <p class="muted small">Your contacts decide how to show it and who keeps it up to date. Public questions may be searched on the web.</p>
+          :placeholder="$t('updates.feed.followPlaceholder')" :aria-label="$t('updates.feed.composerHint')" />
+        <p class="muted small">{{ $t('updates.feed.followNote') }}</p>
       </form>
       <template #actions>
-        <AppButton variant="text" @click="following = false">Cancel</AppButton>
-        <AppButton type="submit" form="home-follow" :disabled="!followText.trim() || busy">Add</AppButton>
+        <AppButton variant="text" @click="following = false">{{ $t('common.cancel') }}</AppButton>
+        <AppButton type="submit" form="home-follow" :disabled="!followText.trim() || busy">{{ $t('common.add') }}</AppButton>
       </template>
     </AppSheet>
 
-    <AppSheet v-if="managing" title="Topics" @close="managing = false">
-      <p class="muted small">Your contacts add and retire their own picks as your interests change. Topics you or a contact asked for stay until you hide them.</p>
+    <AppSheet v-if="managing" :title="$t('updates.feed.topics')" @close="managing = false">
+      <p class="muted small">{{ $t('updates.feed.topicsNote') }}</p>
       <ul class="topics">
         <li v-for="topic in feed?.topics ?? []" :key="topic.id" :class="{ hidden: topic.status === 'hidden' }">
-          <span class="copy"><strong>{{ topic.title }}</strong><small>{{ topic.status === 'hidden' ? 'Hidden' : origin(topic) }}</small></span>
+          <span class="copy"><strong>{{ topic.title }}</strong><small>{{ topic.status === 'hidden' ? $t('updates.feed.hidden') : origin(topic) }}</small></span>
           <AppButton variant="outlined" :disabled="busy"
             @click="run(() => home.setTopic(topic.id, { status: topic.status === 'hidden' ? 'active' : 'hidden' }))">
-            {{ topic.status === 'hidden' ? 'Show' : 'Hide' }}
+            {{ topic.status === 'hidden' ? $t('updates.feed.show') : $t('updates.feed.hide') }}
           </AppButton>
         </li>
-        <li v-if="!feed?.topics.length" class="muted">Nothing yet.</li>
+        <li v-if="!feed?.topics.length" class="muted">{{ $t('updates.feed.nothingYet') }}</li>
       </ul>
     </AppSheet>
   </div>

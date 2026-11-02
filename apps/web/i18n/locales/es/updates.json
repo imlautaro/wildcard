@@ -1,0 +1,99 @@
+{
+  "updates": {
+    "aContact": "Un contacto",
+    "aContactLower": "un contacto",
+    "time": {
+      "now": "ahora",
+      "minutes": "{n} min",
+      "hours": "{n} h",
+      "days": "{n} d"
+    },
+    "feed": {
+      "title": "Para ti",
+      "post": "Publicación",
+      "thread": "Hilo",
+      "backToForYou": "Volver a Para ti",
+      "chats": "Chats",
+      "topics": "Temas",
+      "updateNow": "Actualizar ahora",
+      "followSomethingInForYou": "Seguir algo en Para ti",
+      "seeAllPosts": "Ver las {count} publicaciones sobre {title}",
+      "postGoneTitle": "Esta publicación ya no está en Para ti",
+      "postGoneText": "Su tema se ocultó o se retiró, o la publicación tiene más de dos semanas.",
+      "threadGoneTitle": "Este hilo ya no está en Para ti",
+      "threadGoneText": "Su tema se ocultó o se retiró, o sus publicaciones tienen más de dos semanas.",
+      "preparing": "{name} está preparando {title}",
+      "preparingAll": "Tus contactos están preparando novedades…",
+      "disabled": "Las tarjetas seleccionadas están desactivadas en este servidor. Tus apps y tu agenda siguen apareciendo aquí.",
+      "failed": "Tus contactos no pudieron terminar tus novedades. Lo intentarán de nuevo en unos minutos.",
+      "composerHint": "¿Qué deberían seguir tus contactos?",
+      "follow": "Seguir",
+      "comingUp": "Próximos",
+      "yourApps": "Tus apps",
+      "assignedToYou": "Asignada a ti",
+      "newPosts": "{count} publicación nueva | {count} publicaciones nuevas",
+      "circleTitle": "Tu círculo está tomando forma",
+      "circleText": "Se están creando tus contactos. Ve a Chats para conocer a cada uno en cuanto esté listo. Las publicaciones aparecerán aquí a medida que los conozcas.",
+      "goToChats": "Ir a Chats",
+      "welcomeTitle": "Siéntete como en casa",
+      "welcomeText": "Añade tu primer contacto y empieza una conversación. Este feed se llenará de publicaciones sobre lo que te interesa.",
+      "addContact": "Añadir un contacto",
+      "emptyTitle": "Un feed que crece contigo",
+      "emptyText": "Chatea con tus contactos o sigue un tema que te interese. Traerán publicaciones nuevas aquí cuando haya algo que compartir.",
+      "startChat": "Iniciar un chat",
+      "followSomething": "Seguir algo",
+      "followSheetTitle": "Seguir en Para ti",
+      "followPlaceholder": "Un tema que te interese…",
+      "followNote": "Tus contactos deciden cómo mostrarlo y quién lo mantiene al día. Las preguntas públicas pueden buscarse en la web.",
+      "topicsNote": "Tus contactos añaden y retiran sus propias sugerencias a medida que cambian tus intereses. Los temas que pediste tú o un contacto se quedan hasta que los ocultes.",
+      "hidden": "Oculto",
+      "show": "Mostrar",
+      "hide": "Ocultar",
+      "nothingYet": "Nada por ahora.",
+      "origin": {
+        "person": "Lo pediste tú",
+        "personWaiting": "Lo pediste tú · Esperando su primera tarjeta",
+        "contact": "Sugerido por {name}",
+        "contactWaiting": "Sugerido por {name} · Esperando su primera tarjeta",
+        "contacts": "Elegido por tus contactos",
+        "contactsWaiting": "Elegido por tus contactos · Esperando su primera tarjeta"
+      }
+    },
+    "post": {
+      "options": "Opciones de la publicación",
+      "message": "Enviar mensaje a {name}",
+      "lessLikeThis": "Menos como esto",
+      "undoLessLikeThis": "Deshacer menos como esto",
+      "hide": "Ocultar de Para ti",
+      "replyingTo": "En respuesta a {name}",
+      "showLess": "Mostrar menos",
+      "showMore": "Mostrar más",
+      "showCountMore": "Mostrar {count} más",
+      "moreLikeThis": "Más como esto",
+      "commentOn": "Comentar la publicación de {name}",
+      "threadCount": "{count} publicaciones en este hilo"
+    },
+    "comments": {
+      "label": "Comentarios",
+      "thisContact": "este contacto",
+      "messagedPrivately": "Te escribió en privado",
+      "replying": "{name} está respondiendo",
+      "replyingEllipsis": "{name} está respondiendo…",
+      "replyTo": "Responder a {name}…",
+      "failed": "{name} no pudo responder a esto. Inténtalo de nuevo o continúa en el chat.",
+      "send": "Enviar comentario",
+      "continueWith": "Continuar en el chat con {name}"
+    },
+    "replyTemplate": {
+      "blank": "Espacio {index} de {count}",
+      "continue": "Continuar en el chat"
+    },
+    "reference": {
+      "label": "Publicación de Para ti",
+      "aria": "Publicación de Para ti: {title}",
+      "ariaGone": "Publicación de Para ti: {title} (ya no está en Para ti)",
+      "post": "Publicación",
+      "gone": "Ya no está en Para ti"
+    }
+  }
+}

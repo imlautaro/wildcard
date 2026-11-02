@@ -86,7 +86,7 @@ export function usePersonality(contactID: MaybeRefOrGetter<string>) {
     try {
       const result = await api<{ personality: Personality; revision: number }>(`contacts/${id}/personality/generate`, { json: {} });
       if (snapshots.get(id) !== current || current.revision !== mutation) return;
-      if (result.revision !== baselineRevision) throw new Error('Personality changed. Refresh before generating again.');
+      if (result.revision !== baselineRevision) throw new Error(translate('contacts.personality.changed'));
       current.editor.draft = result.personality;
       current.editor.saved = false;
     } catch (failure) {

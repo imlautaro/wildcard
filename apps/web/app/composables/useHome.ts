@@ -54,6 +54,15 @@ export function homePosts(feed: HomeFeed | null): HomePost[] {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+/** A compact post or comment age, like a timeline: "now", "27m", "2h", "3d". */
+export function compactAge(at: number) {
+  const minutes = Math.max(0, Math.round((Date.now() - at) / 60_000));
+  if (minutes < 1) return translate('updates.time.now');
+  if (minutes < 60) return translate('updates.time.minutes', { n: minutes });
+  if (minutes < 1440) return translate('updates.time.hours', { n: Math.round(minutes / 60) });
+  return translate('updates.time.days', { n: Math.round(minutes / 1440) });
+}
+
 export function homeUpdating(feed: HomeFeed | null) { return !!feed && !feed.setup && feed.error !== 'HOME_NO_CONTACTS' && (feed.status === 'updating' || feed.pending); }
 /** A contact is answering a comment: poll like a run so the reply shows up soon. */
 export function homeReplying(feed: HomeFeed | null) { return !!feed?.posts?.some(post => post.comments?.some(comment => comment.status === 'pending')); }

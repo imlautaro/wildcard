@@ -166,7 +166,7 @@ struct AddGroupContactConsentView: View {
             Section {
                 VStack(spacing: 12) {
                     ContactAvatar(contact: contact, size: 96)
-                    Text(contact?.name ?? "Contact").manrope(.title2, weight: .semibold)
+                    Text(contact?.name ?? String(localized: "Contact")).manrope(.title2, weight: .semibold)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 12)
                 .listRowBackground(Color.clear)

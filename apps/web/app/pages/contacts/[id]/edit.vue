@@ -3,6 +3,7 @@ import { speechAccents } from '../../../../../../shared/voice';
 import type { ChatMediaItem, Contact, VoiceOption } from '~/utils/types';
 
 const route = useRoute();
+const { t } = useI18n();
 const id = computed(() => String(route.params.id));
 const chats = useChats();
 const session = useSession();
@@ -58,7 +59,7 @@ const setInitiative = (event: Event) => run(async () => {
 });
 
 // "Keep this chat private" (docs/privacy.md#keep-a-chat-private): this person's choice for their own chat.
-const privateInfo = computed(() => `What you tell ${contact.value?.name ?? 'this contact'} stays in this chat. It is not used in groups, by people this contact is shared with, by your other contacts or in For you, and this chat cannot be linked or discussed in a group. Things you explicitly ask it to send or post still go where you ask.`);
+const privateInfo = computed(() => t('contacts.edit.privateInfo', { name: contact.value?.name ?? '' }));
 const setKeepPrivate = (event: Event) => run(async () => {
   const input = event.target as HTMLInputElement;
   try {
@@ -74,9 +75,11 @@ const setKeepPrivate = (event: Event) => run(async () => {
 const voiceFeature = computed(() => !!session.features.value?.voiceMessages);
 const voiceCatalog = useVoices();
 const voiceSheet = ref(false);
+// Accent names come from shared/voice.ts codes, translated here (shared/ stays API-only).
+const accentName = (code: string) => t(`contacts.edit.accents.${code}`);
 const voiceSummary = computed(() => [
-  speechAccents.find(accent => accent.code === contact.value?.speechAccent)?.name ?? 'Default accent',
-  contact.value?.voiceName ?? 'Automatic voice',
+  speechAccents.some(accent => accent.code === contact.value?.speechAccent) ? accentName(contact.value!.speechAccent!) : t('contacts.edit.defaultAccent'),
+  contact.value?.voiceName ?? t('contacts.edit.automaticVoice'),
 ].join(' · '));
 const setVoiceMessages = (event: Event) => run(async () => {
   const input = event.target as HTMLInputElement;
@@ -90,7 +93,7 @@ const chooseVoice = (voiceID: string) => run(async () => {
   if (contact.value?.voiceID === voiceID) return;
   apply((await api<{ contact: Contact }>(`contacts/${id.value}/voice`, { method: 'PUT', json: { voiceID } })).contact);
 });
-const accentOptions = [{ value: '', label: 'Voice default' }, ...speechAccents.map(accent => ({ value: accent.code as string, label: accent.name }))];
+const accentOptions = computed(() => [{ value: '', label: t('contacts.edit.voiceDefault') }, ...speechAccents.map(accent => ({ value: accent.code as string, label: accentName(accent.code) }))]);
 const speechAccent = computed({
   get: () => contact.value?.speechAccent ?? '',
   set: (value: string) => run(async () => {
@@ -143,42 +146,42 @@ onMounted(() => { void session.refreshProfile().catch(() => {}); });
 onMounted(() => run(async () => {
   apply((await api<{ contact: Contact }>(`contacts/${id.value}`)).contact);
 }));
-const initiativeInfo = "The contact can add a thought without another prompt and start a conversation later. Timing adapts to this chat and its personality. Leaving the chat open does not prevent follow-ups; active typing gives you space. Unanswered greetings stop further social openers until you engage again. Ask the contact to pause, or turn this off. Applies only to your private chat.";
-const voiceInfo = computed(() => `With voice messages on, ${contact.value?.name ?? 'this contact'} sometimes answers your private chat with a short voice message. In groups, the creator's setting applies.`);
-const voiceChoiceInfo = computed(() => `Accent guides regional wording in text and voice, without forcing slang or changing the language. Audio results depend on the voice; samples keep their original accent. ${canManage.value ? 'Everyone who chats with this contact hears the voice you choose.' : "The contact's creator chooses its voice."}`);
+const initiativeInfo = computed(() => t('contacts.edit.initiativeInfo'));
+const voiceInfo = computed(() => t('contacts.edit.voiceInfo', { name: contact.value?.name ?? '' }));
+const voiceChoiceInfo = computed(() => canManage.value ? t('contacts.edit.voiceChoiceInfoOwner') : t('contacts.edit.voiceChoiceInfoMember'));
 </script>
 
 <template>
-  <PageBar :title="contact?.name ?? 'Contact'" :back="`/chats/${id}`" always-back />
+  <PageBar :title="contact?.name ?? $t('contacts.edit.fallbackTitle')" :back="`/chats/${id}`" always-back />
   <div class="page">
     <AppLoading v-if="!contact && busy" fill />
-    <div v-else-if="!contact" class="page-inner"><AppNotice>{{ error ?? 'This contact is no longer available.' }}</AppNotice></div>
+    <div v-else-if="!contact" class="page-inner"><AppNotice>{{ error ?? $t('contacts.edit.unavailable') }}</AppNotice></div>
     <div v-else class="page-inner">
       <IdentityEditor :name="canManage ? realName : contact.name" :path="contactPhotoPath(contact)" :editable="canManage" :renamable="canManage" show-name :busy="busy" @photo="savePhoto" @rename="rename" />
-      <p v-if="!canManage" class="identity-subtitle">Shared contact · managed by its creator</p>
-      <p v-if="contact.alias && !canManage" class="identity-subtitle">Others see {{ realName }}</p>
+      <p v-if="!canManage" class="identity-subtitle">{{ $t('contacts.edit.sharedSubtitle') }}</p>
+      <p v-if="contact.alias && !canManage" class="identity-subtitle">{{ $t('contacts.edit.othersSee', { name: realName }) }}</p>
       <AppNotice v-if="error">{{ error }}</AppNotice>
 
       <AppListGroup>
-        <AppListItem icon="person" opens :value="contact.alias ?? 'None'" :disabled="busy" @click="openAlias">Alias</AppListItem>
-        <AppSwitch icon="initiative" label="Conversation initiative" :info="initiativeInfo" :checked="contact.initiativeEnabled !== 0" :disabled="busy" @change="setInitiative" />
-        <AppSwitch icon="lock" label="Keep this chat private" :info="privateInfo" :checked="contact.keepPrivate === 1" :disabled="busy" @change="setKeepPrivate" />
+        <AppListItem icon="person" opens :value="contact.alias ?? $t('contacts.edit.none')" :disabled="busy" @click="openAlias">{{ $t('contacts.edit.alias') }}</AppListItem>
+        <AppSwitch icon="initiative" :label="$t('contacts.edit.initiative')" :info="initiativeInfo" :checked="contact.initiativeEnabled !== 0" :disabled="busy" @change="setInitiative" />
+        <AppSwitch icon="lock" :label="$t('contacts.edit.keepPrivate')" :info="privateInfo" :checked="contact.keepPrivate === 1" :disabled="busy" @change="setKeepPrivate" />
         <template v-if="voiceFeature">
-          <AppSwitch icon="mic" label="Voice messages" :info="voiceInfo" :checked="contact.voiceMessagesEnabled === 1" :disabled="busy" @change="setVoiceMessages" />
-          <AppListItem icon="voice" opens :value="voiceSummary" @click="openVoiceSheet">Voice</AppListItem>
+          <AppSwitch icon="mic" :label="$t('contacts.edit.voiceMessages')" :info="voiceInfo" :checked="contact.voiceMessagesEnabled === 1" :disabled="busy" @change="setVoiceMessages" />
+          <AppListItem icon="voice" opens :value="voiceSummary" @click="openVoiceSheet">{{ $t('contacts.edit.voice') }}</AppListItem>
         </template>
         <ContactEnergySection v-if="contact.role === 'owner'" :contact-id="id" />
         <ContactPhonesSection :contact-id="id" :contact-name="contact.name" />
       </AppListGroup>
 
       <AppListGroup>
-        <AppListItem :to="`/contacts/${id}/personality`" icon="person">Personality</AppListItem>
-        <AppListItem :to="`/contacts/${id}/learning`" icon="person">Conversation learning</AppListItem>
-        <AppListItem :to="`/contacts/${id}/connections`" icon="link">Connections</AppListItem>
-        <AppListItem :to="`/contacts/${id}/links`" icon="people">Linked contacts</AppListItem>
-        <AppListItem :to="`/contacts/${id}/mini-apps`" icon="grid">Mini apps</AppListItem>
-        <AppListItem :to="`/contacts/${id}/tasks`" icon="tasks">Tasks</AppListItem>
-        <AppListItem v-if="canManage" :to="`/contacts/${id}/sharing`" icon="share">Share contact</AppListItem>
+        <AppListItem :to="`/contacts/${id}/personality`" icon="person">{{ $t('contacts.edit.personality') }}</AppListItem>
+        <AppListItem :to="`/contacts/${id}/learning`" icon="person">{{ $t('contacts.edit.learning') }}</AppListItem>
+        <AppListItem :to="`/contacts/${id}/connections`" icon="link">{{ $t('contacts.edit.connections') }}</AppListItem>
+        <AppListItem :to="`/contacts/${id}/links`" icon="people">{{ $t('contacts.edit.links') }}</AppListItem>
+        <AppListItem :to="`/contacts/${id}/mini-apps`" icon="grid">{{ $t('contacts.edit.miniApps') }}</AppListItem>
+        <AppListItem :to="`/contacts/${id}/tasks`" icon="tasks">{{ $t('contacts.edit.tasks') }}</AppListItem>
+        <AppListItem v-if="canManage" :to="`/contacts/${id}/sharing`" icon="share">{{ $t('contacts.edit.share') }}</AppListItem>
       </AppListGroup>
 
       <ChatMediaTabs :base="`contacts/${id}/chat`" :attachment-path="mediaPath" :documents-base="`contacts/${id}`" :document-route="`/contacts/${id}/documents`" />
@@ -190,42 +193,42 @@ const voiceChoiceInfo = computed(() => `Accent guides regional wording in text a
             @archive="run(() => chats.archiveChat('contact', id, !archived))"
             @clear="memory => run(() => chats.clearChat('contact', id, memory))"
           />
-          <AppListItem icon="delete" danger :disabled="busy" @click="remove">Delete contact and data</AppListItem>
+          <AppListItem icon="delete" danger :disabled="busy" @click="remove">{{ $t('contacts.edit.deleteContact') }}</AppListItem>
         </AppListGroup>
       </div>
 
-      <AppSheet v-if="aliasSheet" title="Alias" @close="aliasSheet = false">
+      <AppSheet v-if="aliasSheet" :title="$t('contacts.edit.alias')" @close="aliasSheet = false">
         <form @submit.prevent="aliasValid && saveAlias(aliasDraft)">
-          <AppListGroup><div class="field"><input v-model="aliasDraft" type="text" maxlength="100" :placeholder="realName" aria-label="Alias" autofocus></div></AppListGroup>
-          <p class="small muted">Only you see this name. Others still see {{ realName }}.</p>
+          <AppListGroup><div class="field"><input v-model="aliasDraft" type="text" maxlength="100" :placeholder="realName" :aria-label="$t('contacts.edit.alias')" autofocus></div></AppListGroup>
+          <p class="small muted">{{ $t('contacts.edit.aliasHint', { name: realName }) }}</p>
           <div class="actions-row">
-            <AppButton v-if="contact.alias" variant="text" :disabled="busy" @click="saveAlias(null)">Remove alias</AppButton>
-            <AppButton variant="text" @click="aliasSheet = false">Cancel</AppButton>
-            <AppButton type="submit" :disabled="busy || !aliasValid">Save</AppButton>
+            <AppButton v-if="contact.alias" variant="text" :disabled="busy" @click="saveAlias(null)">{{ $t('contacts.edit.removeAlias') }}</AppButton>
+            <AppButton variant="text" @click="aliasSheet = false">{{ $t('common.cancel') }}</AppButton>
+            <AppButton type="submit" :disabled="busy || !aliasValid">{{ $t('common.save') }}</AppButton>
           </div>
         </form>
       </AppSheet>
 
-      <AppSheet v-if="voiceSheet" title="Voice" @close="voiceSheet = false">
-        <template #header><InfoButton label="Voice" :text="voiceChoiceInfo" /></template>
+      <AppSheet v-if="voiceSheet" :title="$t('contacts.edit.voice')" @close="voiceSheet = false">
+        <template #header><InfoButton :label="$t('contacts.edit.voice')" :text="voiceChoiceInfo" /></template>
         <AppListGroup>
           <div class="field">
-            <label for="speech-accent">Accent</label>
+            <label for="speech-accent">{{ $t('contacts.edit.accent') }}</label>
             <AppSelect id="speech-accent" v-model="speechAccent" variant="plain" :options="accentOptions" :disabled="!canManage || busy" />
           </div>
-          <AppListItem v-if="!canManage" plain :value="contact.voiceName ?? 'Automatic'">Voice</AppListItem>
+          <AppListItem v-if="!canManage" plain :value="contact.voiceName ?? $t('contacts.edit.automatic')">{{ $t('contacts.edit.voice') }}</AppListItem>
         </AppListGroup>
         <template v-if="canManage">
           <!-- The search field sits between the title and the rows, so the title stays markup. -->
-          <div class="group-title">Voice</div>
-          <AppSearchField v-if="(voiceCatalog.voices.value?.length ?? 0) > 10" v-model="voiceQuery" label="Search voices" class="voice-search" autocomplete="off" />
-          <AppListGroup class="voice-options" role="radiogroup" aria-label="Contact voice">
-            <AppLoading v-if="!voiceCatalog.voices.value && !voiceCatalog.error.value" label="Loading voices…" />
+          <div class="group-title">{{ $t('contacts.edit.voice') }}</div>
+          <AppSearchField v-if="(voiceCatalog.voices.value?.length ?? 0) > 10" v-model="voiceQuery" :label="$t('contacts.edit.searchVoices')" class="voice-search" autocomplete="off" />
+          <AppListGroup class="voice-options" role="radiogroup" :aria-label="$t('contacts.edit.contactVoice')">
+            <AppLoading v-if="!voiceCatalog.voices.value && !voiceCatalog.error.value" :label="$t('contacts.edit.loadingVoices')" />
             <div v-else-if="!voiceCatalog.voices.value" class="voice-row">
               <span class="muted">{{ voiceCatalog.error.value }}</span>
-              <button type="button" class="link-button" @click="voiceCatalog.load(true)">Retry</button>
+              <button type="button" class="link-button" @click="voiceCatalog.load(true)">{{ $t('common.retry') }}</button>
             </div>
-            <p v-if="voiceCatalog.voices.value?.length && !visibleVoices.length" class="voice-row muted">No matches</p>
+            <p v-if="voiceCatalog.voices.value?.length && !visibleVoices.length" class="voice-row muted">{{ $t('common.noMatches') }}</p>
             <div v-for="voice in visibleVoices" :key="voice.id" class="voice-option">
               <label>
                 <input type="radio" name="contact-voice" :checked="contact.voiceID === voice.id" :disabled="busy" @change="chooseVoice(voice.id)">
@@ -234,7 +237,7 @@ const voiceChoiceInfo = computed(() => `Accent guides regional wording in text a
               <!-- Raw markup: AppIconButton can't show a spinner while the sample loads. -->
               <button
                 type="button" class="icon-button" :disabled="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.loading"
-                :aria-label="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.playing ? `Pause ${voice.name} sample` : `Play ${voice.name} sample`"
+                :aria-label="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.playing ? $t('contacts.edit.pauseSample', { name: voice.name }) : $t('contacts.edit.playSample', { name: voice.name })"
                 @click="previewVoice(voice)"
               >
                 <span v-if="voicePlayer.key === voicePreviewPath(voice.id) && voicePlayer.loading" class="spinner" />

@@ -12,10 +12,10 @@ onMounted(() => { void refresh(); });
 </script>
 
 <template>
-  <AppListItem icon="bolt" opens :value="energy ? `${energy.points} / ${energy.capacity}` : busy ? 'Loading…' : '—'" @click="open = true">Group energy</AppListItem>
-  <AppSheet v-if="open" title="Group energy" @close="open = false">
+  <AppListItem icon="bolt" opens :value="energy ? `${energy.points} / ${energy.capacity}` : busy ? $t('common.loading') : '—'" @click="open = true">{{ $t('contacts.energy.title') }}</AppListItem>
+  <AppSheet v-if="open" :title="$t('contacts.energy.title')" @close="open = false">
     <template #header>
-      <InfoButton label="Group energy" text="Each group message uses one point. One point recharges every five minutes, even offline. Private replies do not use energy." />
+      <InfoButton :label="$t('contacts.energy.title')" :text="$t('contacts.energy.info')" />
     </template>
     <AppListGroup>
       <div v-if="energy" class="text-block">
@@ -23,14 +23,14 @@ onMounted(() => { void refresh(); });
         <div class="meter" :class="{ low: energy.points <= 5 }" role="progressbar" :aria-valuenow="energy.points" aria-valuemin="0" :aria-valuemax="energy.capacity">
           <span :style="{ width: `${Math.min(100, (energy.points / energy.capacity) * 100)}%` }" />
         </div>
-        <p v-if="nextPoint" class="next-point">Next point at {{ nextPoint }}</p>
+        <p v-if="nextPoint" class="next-point">{{ $t('contacts.energy.nextPoint', { time: nextPoint }) }}</p>
       </div>
-      <AppLoading v-else-if="busy" label="Loading energy…" />
-      <AppListItem icon="refresh" :disabled="busy || !energy" @click="reset">Reset to 50</AppListItem>
+      <AppLoading v-else-if="busy" :label="$t('contacts.energy.loading')" />
+      <AppListItem icon="refresh" :disabled="busy || !energy" @click="reset">{{ $t('contacts.energy.reset') }}</AppListItem>
     </AppListGroup>
     <AppNotice v-if="error">
       {{ error }}
-      <template #actions><button type="button" class="link-button" :disabled="busy" @click="refresh()">Retry</button></template>
+      <template #actions><button type="button" class="link-button" :disabled="busy" @click="refresh()">{{ $t('common.retry') }}</button></template>
     </AppNotice>
   </AppSheet>
 </template>

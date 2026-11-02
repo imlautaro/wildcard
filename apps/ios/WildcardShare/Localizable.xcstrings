@@ -1,0 +1,166 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ · Open Wildcard to review and send. Only the first shared item is imported." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · Abre Wildcard para revisarlo y enviarlo. Solo se importa el primer elemento compartido."
+          }
+        }
+      }
+    },
+    "Action" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acción"
+          }
+        }
+      }
+    },
+    "Activity" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actividad"
+          }
+        }
+      }
+    },
+    "Alarm" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alarma"
+          }
+        }
+      }
+    },
+    "Cancel" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        }
+      }
+    },
+    "Control Wildcard alarm" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controlar alarma de Wildcard"
+          }
+        }
+      }
+    },
+    "Draft saved. Open Wildcard to review and send it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrador guardado. Abre Wildcard para revisarlo y enviarlo."
+          }
+        }
+      }
+    },
+    "Draft to Wildcard" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrador para Wildcard"
+          }
+        }
+      }
+    },
+    "No supported content found." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se encontró contenido compatible."
+          }
+        }
+      }
+    },
+    "Open Wildcard to review and send. Only the first shared item is imported." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre Wildcard para revisarlo y enviarlo. Solo se importa el primer elemento compartido."
+          }
+        }
+      }
+    },
+    "Save draft" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar borrador"
+          }
+        }
+      }
+    },
+    "Sign in to Wildcard and enable a contact in Native experiments first." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primero inicia sesión en Wildcard y activa un contacto en Experimentos nativos."
+          }
+        }
+      }
+    },
+    "The signed-in account changed. Open Wildcard and share again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cuenta con la sesión iniciada cambió. Abre Wildcard y vuelve a compartir."
+          }
+        }
+      }
+    },
+    "Unable to import this item. Share text, a link, an image or a PDF up to 5 MB." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo importar este elemento. Comparte texto, un enlace, una imagen o un PDF de hasta 5 MB."
+          }
+        }
+      }
+    },
+    "Unable to save. Unlock your iPhone, check native experiments, or clear old shared drafts in Wildcard." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar. Desbloquea tu iPhone, revisa los experimentos nativos o borra borradores compartidos antiguos en Wildcard."
+          }
+        }
+      }
+    },
+    "Update contact session" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualizar sesión del contacto"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

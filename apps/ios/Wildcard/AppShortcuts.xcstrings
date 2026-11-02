@@ -1,0 +1,26 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Draft a message in ${applicationName}" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redactar un mensaje en ${applicationName}"
+          }
+        }
+      }
+    },
+    "Open a contact in ${applicationName}" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir un contacto en ${applicationName}"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

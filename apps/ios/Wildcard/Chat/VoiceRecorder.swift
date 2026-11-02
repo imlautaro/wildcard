@@ -34,7 +34,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
     var isBusy: Bool { phase == .requestingPermission || phase == .recording || phase == .ready }
     var elapsed: Int { min(60, max(0, Int(startedAt.map { Date().timeIntervalSince($0) } ?? 0))) }
     static let minimumDuration: TimeInterval = 0.5
-    static let shortHint = "Hold to record, release to send."
+    static let shortHint = String(localized: "Hold to record, release to send.")
 
     /// Enters `.requestingPermission` synchronously, so a release that arrives before the
     /// microphone is ready (a quick tap) sees the pending start and can cancel it.
@@ -53,7 +53,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         guard current == operation else { return }
         guard allowed else {
             phase = .failed
-            error = "Microphone access is disabled. Enable it for Wildcard in Settings to record audio."
+            error = String(localized: "Microphone access is disabled. Enable it for Wildcard in Settings to record audio.")
             return
         }
         guard !prompted else {
@@ -92,7 +92,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         } catch {
             cancel()
             phase = .failed
-            self.error = "Recording could not start. Check your microphone and try again."
+            self.error = String(localized: "Recording could not start. Check your microphone and try again.")
         }
     }
 
@@ -118,7 +118,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         cancel()
         guard let data, let duration = VoiceClip.wavDurationMs(data) else {
             phase = .failed
-            error = "This recording could not be read. Please record again."
+            error = String(localized: "This recording could not be read. Please record again.")
             return nil
         }
         guard duration >= Int(Self.minimumDuration * 1000) else {
@@ -157,7 +157,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         guard phase == .recording else { return }
         cancel()
         phase = .failed
-        error = "Recording was interrupted. Please record again."
+        error = String(localized: "Recording was interrupted. Please record again.")
     }
 
     nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
@@ -173,7 +173,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             else {
                 self.cancel()
                 self.phase = .failed
-                self.error = "Recording could not be completed. Please record again."
+                self.error = String(localized: "Recording could not be completed. Please record again.")
             }
         }
     }
@@ -184,7 +184,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             guard let self, let active = self.recorder, ObjectIdentifier(active) == identifier else { return }
             self.cancel()
             self.phase = .failed
-            self.error = "Recording could not be completed. Please record again."
+            self.error = String(localized: "Recording could not be completed. Please record again.")
         }
     }
 

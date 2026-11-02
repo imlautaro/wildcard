@@ -41,11 +41,11 @@ onBeforeUnmount(() => { dialog.value?.close(); });
 
 <template>
   <Teleport to="body">
-    <dialog ref="dialog" class="chat-image-viewer" :aria-label="`Image: ${current?.name ?? ''}`" @cancel.prevent="emit('close')" @keydown="onKey">
+    <dialog ref="dialog" class="chat-image-viewer" :aria-label="$t('chat.viewer.label', { name: current?.name ?? '' })" @cancel.prevent="emit('close')" @keydown="onKey">
       <div class="image-toolbar">
         <span v-if="multiple" class="counter" aria-live="polite">{{ index + 1 }} / {{ images.length }}</span>
-        <button type="button" class="viewer-button" :aria-pressed="zoomed" @click="toggleZoom">{{ zoomed ? 'Fit image' : 'Zoom in' }}</button>
-        <button type="button" class="viewer-button close" aria-label="Close image" autofocus @click="emit('close')"><AppIcon name="close" /></button>
+        <button type="button" class="viewer-button" :aria-pressed="zoomed" @click="toggleZoom">{{ zoomed ? $t('chat.viewer.fit') : $t('chat.viewer.zoom') }}</button>
+        <button type="button" class="viewer-button close" :aria-label="$t('chat.viewer.close')" autofocus @click="emit('close')"><AppIcon name="close" /></button>
       </div>
       <div ref="viewport" class="image-viewport" @dblclick.prevent="toggleZoom" @click.self="emit('close')" @touchstart.passive="touchStart" @touchend="touchEnd">
         <div class="image-stage" :class="{ zoomed }" @click.self="emit('close')">
@@ -54,8 +54,8 @@ onBeforeUnmount(() => { dialog.value?.close(); });
         </div>
       </div>
       <template v-if="multiple">
-        <button type="button" class="viewer-button nav previous" aria-label="Previous image" :disabled="index === 0" @click="go(-1)">‹</button>
-        <button type="button" class="viewer-button nav next" aria-label="Next image" :disabled="index === images.length - 1" @click="go(1)">›</button>
+        <button type="button" class="viewer-button nav previous" :aria-label="$t('chat.viewer.previous')" :disabled="index === 0" @click="go(-1)">‹</button>
+        <button type="button" class="viewer-button nav next" :aria-label="$t('chat.viewer.next')" :disabled="index === images.length - 1" @click="go(1)">›</button>
       </template>
     </dialog>
   </Teleport>

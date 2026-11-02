@@ -1,0 +1,389 @@
+{
+  "seo": {
+    "tagline": "AI contacts that text you first",
+    "description": "Create AI contacts with their own name, face, personality and memory. They reach out on their own, remember what matters, and work together with you and the people you love. Open source, powered by Meta AI models."
+  },
+  "common": {
+    "getStarted": "Get started",
+    "poweredByMeta": "Powered by Meta AI models",
+    "openSource": "Open source"
+  },
+  "nav": {
+    "home": "Wildcard home",
+    "sections": "Sections",
+    "menu": "Menu",
+    "items": {
+      "memory": "Memory",
+      "together": "Sharing",
+      "groups": "Groups",
+      "forYou": "For you",
+      "openSource": "Open source"
+    }
+  },
+  "language": {
+    "label": "Language"
+  },
+  "theme": {
+    "label": "Appearance: {mode}",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "footer": {
+    "label": "Footer",
+    "blurb": "AI contacts with their own names, faces, personalities and memories. Open source, and yours to run.",
+    "product": "Product",
+    "webApp": "Open the web app",
+    "iosApp": "Get the iPhone app",
+    "source": "Source code",
+    "sourceSoon": "Source code · soon",
+    "faq": "FAQ",
+    "cloudflare": "Built on Cloudflare"
+  },
+  "error": {
+    "notFoundTitle": "Page not found · Wildcard",
+    "errorTitle": "Something went wrong · Wildcard",
+    "notFound": "This page wandered off.",
+    "notFoundText": "Pixel looked everywhere and couldn't find it.",
+    "error": "Something went wrong.",
+    "errorText": "Please try again in a moment.",
+    "back": "Back to Wildcard"
+  },
+  "hero": {
+    "chip": "Powered by Meta AI models · Open source",
+    "title": "AI contacts that text you first.",
+    "lead": "Create a cast of AI contacts, each with their own name, face, personality and memory. They reach out on their own, remember what matters, and work together with you and the people you love.",
+    "meet": "Meet your first contacts",
+    "selfHost": "Self-host it",
+    "proof": {
+      "memory": "One memory per contact",
+      "memoryText": "No cross-chat bleed",
+      "proactive": "Proactive by design",
+      "proactiveText": "They message first",
+      "shareable": "Shareable",
+      "shareableText": "Family, friends, groups",
+      "openSource": "Open source",
+      "openSourceText": "Self-host on Cloudflare"
+    }
+  },
+  "why": {
+    "eyebrow": "Why Wildcard",
+    "title": "Chatbots wait.",
+    "titleSoft": "Contacts show up.",
+    "lead": "Most AI apps are a single text box that answers when asked. Wildcard is closer to your phone's contact list: different characters with their own lives, who keep the conversation going.",
+    "typical": "A typical AI chat",
+    "wildcard": "A Wildcard contact",
+    "rows": {
+      "waitTypical": "Waits for you to type",
+      "waitWildcard": "Reaches out first, then gives you space",
+      "castTypical": "One assistant for everything",
+      "castWildcard": "A cast of contacts, each with a personality",
+      "memoryTypical": "One memory for every chat, or none",
+      "memoryWildcard": "A separate memory for each contact",
+      "sharedTypical": "Just you and a text box",
+      "sharedWildcard": "Shared with family, friends and groups"
+    }
+  },
+  "memory": {
+    "eyebrow": "Memory, without the mess",
+    "title": "One memory per contact.",
+    "titleSoft": "Zero cross‑contamination.",
+    "lead": "In most AI apps, memory is all or nothing. Turn it off and every chat starts from zero. Turn it on and everything you've ever said leaks into everything else: your bakery launch shows up in your training plan, your exam in your business ideas.",
+    "separate": "In Wildcard, {emphasis}. Theo knows your bakery launch inside out. Ivy knows your marathon plan. Pixel knows you're stuck on entropy. None of them brings up the others' business, unless you want them to.",
+    "separateEmphasis": "each contact keeps its own memory"
+  },
+  "catchUp": {
+    "eyebrow": "Catch me up",
+    "title": "New contact? Ask it to check with one who already knows.",
+    "lead": "Want Nova to help with a project Theo has followed for weeks? Just say so. Nova asks Theo, gets the context it needs and picks up where you left off, without you repeating a word.",
+    "permission": "Only with your permission",
+    "permissionText": "Contacts talk to each other when you've linked them, or turned on sharing between your contacts.",
+    "private": "Private stays private",
+    "privateText": "Mark a chat private and no other contact, group or person can learn from it."
+  },
+  "initiative": {
+    "eyebrow": "Initiative",
+    "title": "They text first.",
+    "lead": "Wildcard contacts don't sit in silence until you type. They follow up on the interview you mentioned, share a thought they had later, or check in after a quiet week, timed to when you're usually around.",
+    "lead2": "And they read the room: if a message goes unanswered, they wait until you write back. Switch initiative off for any contact, any time."
+  },
+  "create": {
+    "eyebrow": "Create anyone",
+    "title": "A cast as varied as your group chat.",
+    "lead": "Cartoon characters, anime heroes, 3D movie stars, realistic people, adorable pets, or a style you describe yourself, like retro video game robots. Wildcard generates the portrait, a name and a personality, all yours to edit.",
+    "sliders": "Fine-tune who they are with {count}, from humor and warmth to patience, how often they reach out and how many emoji they use.",
+    "slidersCount": "17 temperament sliders"
+  },
+  "together": {
+    "eyebrow": "Better together",
+    "title": "Share a contact.",
+    "titleSoft": "Keep your own chat.",
+    "lead": "Invite your partner, a friend or your family to one of your contacts. Each of you gets a private chat, while the contact remembers what matters across all of them. Tell it something in the morning, and it can answer your sister about it in the afternoon.",
+    "memory": "Shared memory, private chats",
+    "memoryText": "Everyone talks to the contact on their own. It remembers facts, never full transcripts.",
+    "relay": "Pass a message along",
+    "relayText": "\"Tell Sam I'm bringing dinner.\" The contact delivers it to Sam's private chat, signed with your name.",
+    "timers": "Timers on their phone",
+    "timersText": "With their permission, a shared contact can set a timer or alarm on the other person's iPhone."
+  },
+  "groups": {
+    "eyebrow": "Groups",
+    "title": "Group chats where the AI pulls its weight.",
+    "lead": "Put several contacts in a group, and invite real people too, who can bring their own contacts along. Ask for something big and they split it up: tasks with owners, work that waits on other work, and a shared document at the end.",
+    "remember": "Everyone remembers the group",
+    "rememberText": "What's said in a group stays with every contact in it, and only reaches the private chats of its members.",
+    "context": "Context moves like it would with people",
+    "contextText": "Ask a contact in private what the group decided. Allow it, and it can bring your private context to the group.",
+    "boundaries": "You set the boundaries",
+    "boundariesText": "Sharing private chats with a group is off by default, per contact and per group."
+  },
+  "forYou": {
+    "eyebrow": "For you",
+    "title": "A feed written by your contacts.",
+    "lead": "As your contacts learn what you care about, they keep a feed of updates just for you: headlines, scores, prices, charts and trackers, refreshed automatically. Mention you're eyeing a new MacBook Pro, and the news shows up there.",
+    "lead2": "Comment on a post and the contact who wrote it answers, or picks the conversation up with you in private."
+  },
+  "connectors": {
+    "eyebrow": "Connectors",
+    "title": "Give each contact its own tools.",
+    "lead": "Connect MCP servers once, then decide which contact gets what. Your work contact reads Linear, your coach sees your calendar, your study partner keeps notes in Notion. Over 30 connectors are ready to add, or bring your own server.",
+    "lead2": "Every tool starts off until you approve it, and a chat with connected tools stays out of shared memory."
+  },
+  "more": {
+    "eyebrow": "And the little things",
+    "title": "Everything that makes them feel real.",
+    "schedule": "Reminders and scheduled messages",
+    "scheduleText": "Ask for a nudge in two hours or a check-in every week. Contacts can even schedule one for someone else in a shared chat.",
+    "scheduleToday": "Today, 4:00 PM",
+    "scheduleTodayText": "“Call the oat-milk supplier”",
+    "scheduleWeekly": "Every 7 days",
+    "scheduleWeeklyText": "“How was the week?”",
+    "voice": "Voice messages",
+    "voiceText": "Hold to talk. Contacts transcribe what you say and can answer in a voice of their own.",
+    "stickers": "Stickers",
+    "stickersText": "Cut a sticker out of any photo. Contacts make their own, and might borrow yours.",
+    "photos": "Pictures and selfies",
+    "photosText": "Contacts can send images, including selfies that actually look like them.",
+    "miniApps": "Mini apps",
+    "miniAppsText": "Trackers, quizzes and small tools a contact builds for you, rendered natively and shareable in groups.",
+    "miniWater": "Water",
+    "miniReading": "Reading",
+    "miniSteps": "Steps",
+    "research": "Research and documents",
+    "researchText": "Ask a question, get a sourced report saved as a shared document you can both edit.",
+    "monitors": "Page monitors",
+    "monitorsText": "A contact watches a page and only wakes up when something you care about changes.",
+    "monitorChanged": "Ticket page changed",
+    "monitorChecked": "Checked hourly · only relevant changes",
+    "reactions": "Reactions and replies",
+    "reactionsText": "Contacts react to messages and quote the one they're answering, in private chats and in groups.",
+    "reactionBubble": "haha you were right about the logo"
+  },
+  "meta": {
+    "title": "Conversations, portraits, voice notes and stickers, all on Meta's models.",
+    "spark": "Conversations, memory and initiative",
+    "image": "Portraits, selfies and pictures",
+    "transcribe": "Voice message transcripts",
+    "sam": "Sticker cutouts"
+  },
+  "openSource": {
+    "title": "Yours to run, down to the last Worker.",
+    "lead": "Wildcard is open source and built entirely on Cloudflare. Deploy the whole thing to your own Cloudflare account with your own API keys. Your contacts, your data, your infrastructure.",
+    "cloudflareText": "Workers, D1, R2, Workflows and Cron",
+    "metaKey": "Meta Model API key",
+    "metaKeyText": "Required: conversations, images and transcripts",
+    "elevenLabsKey": "ElevenLabs key",
+    "elevenLabsKeyText": "Optional: contact voices",
+    "appleKeys": "Apple developer keys",
+    "appleKeysText": "Optional: iPhone notifications and native extras",
+    "viewSource": "View the source",
+    "soon": "Repository going public soon",
+    "footnote": "Model and voice usage is billed by those providers under your own keys."
+  },
+  "faq": {
+    "eyebrow": "FAQ",
+    "title": "Good questions.",
+    "replaceQ": "Is Wildcard trying to replace ChatGPT, Claude or Grok?",
+    "replaceA": "No. Wildcard won't drive your browser, run code in a sandbox or spin up a virtual machine, and it isn't trying to. Keep using those tools for that. Wildcard is about the part of AI that feels like people: contacts with their own personality and memory, who stay in touch and work alongside you and the people around you.",
+    "privacyQ": "Who can see what I tell a contact?",
+    "privacyA": "Your contacts are yours. If you share one, it remembers short facts across its participants (never full transcripts), and both sides agree to that when the contact is shared. Turn on \"Keep this chat private\" and nothing from that chat leaves it: not to groups, not to other people, not to your other contacts.",
+    "spamQ": "Will my contacts spam me?",
+    "spamA": "No. They reach out when there's something worth saying, around the times you usually reply. If one message goes unanswered, they wait for you to write back. You can switch initiative off for any contact, or just tell it to stop.",
+    "sharingQ": "How do contacts learn about each other's projects?",
+    "sharingA": "Only when you allow it. Link two contacts, or turn on \"Contacts share with each other\", and you can ask one to check with another. Private chats and chats with connected tools are never part of it.",
+    "selfHostQ": "Can I really run it myself?",
+    "selfHostA": "Yes. Wildcard is open source and built entirely on Cloudflare: Workers, D1, R2 and Workflows. Deploy it to your own Cloudflare account and bring your own API keys: a Meta Model API key for the models, and optionally ElevenLabs for voices and Apple keys for iPhone notifications.",
+    "platformsQ": "Where does it run?",
+    "platformsA": "Wildcard has a native iPhone app and a web app. A few native extras, like timers and alarms on someone else's phone, are iPhone only."
+  },
+  "cta": {
+    "title": "Meet your first five contacts.",
+    "lead": "Sign up, tell Wildcard a little about yourself, and it introduces you to five contacts made for you."
+  },
+  "cast": {
+    "mila": "Tech-obsessed friend",
+    "theo": "Knows your bakery launch",
+    "ivy": "Marathon coach",
+    "pixel": "Study partner",
+    "nova": "New project partner",
+    "coco": "Family helper",
+    "you": "You"
+  },
+  "phone": {
+    "message": "Message",
+    "online": "online"
+  },
+  "heroScene": {
+    "chats": "Chats",
+    "now": "now",
+    "typing": "typing…",
+    "milaNew": "Apple just posted the MacBook Pro recap. Want the 3 things that actually matter?",
+    "milaNewTime": "7:58 PM",
+    "ivyNew": "Rest day tomorrow 🧘 How are the legs after the 18K?",
+    "ivyNewTime": "8:03 PM",
+    "theoNew": "Did the oat-milk supplier ever send the second quote?",
+    "theoNewTime": "8:11 PM",
+    "nova": "Sounds good, talk tomorrow!",
+    "novaTime": "6:20 PM",
+    "pixel": "Flashcards are ready: 24 on entropy 🔋",
+    "pixelTime": "5:02 PM",
+    "theo": "You: Logo is final 🎉",
+    "theoTime": "3:47 PM",
+    "coco": "Grocery list updated 🛒",
+    "cocoTime": "1:15 PM",
+    "ivy": "You: Done! 18K at 5:40/km",
+    "ivyTime": "9:12 AM",
+    "mila": "haha told you so",
+    "milaTime": "Yesterday"
+  },
+  "memoryScene": {
+    "others": "Other AI apps",
+    "pooled": "One memory for every chat",
+    "noPool": "No shared pool",
+    "onTopic": "On topic",
+    "offTopic": "Off-topic memory",
+    "theoChat": "Bakery launch",
+    "theoLeaked": "For the logo, what about a croissant crossing a marathon finish line? 🏃",
+    "theoClean": "Soft opening is on the 14th. Want me to draft the invite list?",
+    "ivyChat": "Marathon training",
+    "ivyLeaked": "Great tempo run! Treat yourself with the oat-milk latte you are about to sell 🥐",
+    "ivyClean": "Week 9 done. Thursday is an easy 8K, keep it conversational.",
+    "pixelChat": "Exam prep",
+    "pixelLeaked": "Entropy is like your bakery budget: it only goes up 📈",
+    "pixelClean": "Entropy question 4: want a hint or the full solution?",
+    "factOpening": "🥐 Opens on the 14th",
+    "factSupplier": "🥛 Oat-milk supplier",
+    "factMarathon": "🏃 Marathon on May 3",
+    "factPace": "⏱️ Goal pace 5:40/km",
+    "factExam": "📚 Thermo exam Friday",
+    "factEntropy": "🔋 Stuck on entropy"
+  },
+  "catchUpScene": {
+    "joined": "Nova joined your contacts today",
+    "ask": "Can you ask Theo to catch you up on the bakery launch?",
+    "asking": "Nova is asking Theo…",
+    "caughtUp": "Theo caught Nova up",
+    "answer": "All caught up! Theo says the soft opening is on the {date}, the logo is final, and you're still choosing an {supplier}. Want me to compare the quotes?",
+    "answerDate": "14th",
+    "answerSupplier": "oat-milk supplier",
+    "reply": "Yes please 🙏"
+  },
+  "initiativeScene": {
+    "day": "Tuesday, March 3",
+    "ivy": "Morning! Rest day today 🧘 How are the legs after the 18K?",
+    "theo": "How did the call with the oat-milk supplier go?",
+    "mila": "Apple just posted the MacBook Pro recap. Want the short version?",
+    "pixel": "Exam Friday. 10 flashcards before bed? I made them easy ones 🤖"
+  },
+  "creatorScene": {
+    "cartoon": "Cartoon",
+    "anime": "Anime",
+    "movie": "3D animated movie",
+    "realistic": "Realistic people",
+    "pets": "3D animated pets",
+    "custom": "Custom",
+    "generate": "Generate with AI",
+    "name": "Name",
+    "customStyle": "Custom style",
+    "whoTheyAre": "Who they are",
+    "customValue": "Retro video game robots",
+    "humor": "Humor",
+    "warmth": "Warmth",
+    "initiative": "Initiative",
+    "emoji": "Emoji"
+  },
+  "sharedScene": {
+    "alexChat": "Alex's private chat",
+    "samChat": "Sam's private chat",
+    "sharedWith": "Shared with Sam",
+    "sharedBy": "Shared by Alex",
+    "oneMemory": "One memory",
+    "fact": "Grandpa's flight lands at 6:40, terminal B ✈️",
+    "ack": "Got it! I'll keep everyone posted 🐾",
+    "relay": "Tell Sam I'm bringing dinner 🍝",
+    "sent": "Sent to Sam ✓",
+    "timer": "And set a 20-minute timer on Sam's phone for the oven",
+    "timerDone": "Done, it's running on Sam's iPhone ⏱️",
+    "ask": "What time do we pick up grandpa?",
+    "answer": "His flight lands at {time}, terminal B. Alex told me this morning.",
+    "answerTime": "6:40",
+    "relayFrom": "Message from \"Alex\"",
+    "relayText": "I'm bringing dinner 🍝",
+    "timerLabel": "Oven · from Coco",
+    "allowed": "Allowed by Sam"
+  },
+  "groupScene": {
+    "title": "Lisbon in March ✈️",
+    "members": "You, Ana, Mila, Theo, Coco",
+    "ask": "Plan 4 days in Lisbon for late March. Can you split it up?",
+    "mila": "On it! I'll take flights and write up the final plan 🛫",
+    "theo": "I've got neighborhoods and where to stay.",
+    "added": "Ana added her contact Coco",
+    "coco": "Ana says food is non-negotiable. I'll map the pastéis de nata 🥧",
+    "tasks": "Tasks",
+    "progress": "{done}/{total} done",
+    "todo": "To do",
+    "doing": "Working",
+    "done": "Done",
+    "flights": "Compare flights",
+    "stay": "Pick a neighborhood",
+    "food": "Map the best pastéis",
+    "plan": "Write the trip plan",
+    "waits": "Waits on 3 tasks",
+    "doc": "Lisbon in March: trip plan",
+    "docMeta": "Shared document · Flights · Alfama stay · 12 food stops"
+  },
+  "feedScene": {
+    "title": "For you",
+    "topicRunning": "Marathon training",
+    "topicButter": "Butter prices",
+    "newPosts": "2 new posts",
+    "milaMeta": "Headlines · just now",
+    "milaTitle": "MacBook Pro: what changed this week",
+    "milaHeadline1": "First independent benchmarks are in",
+    "milaHeadline2": "Two reviewers put the battery claims to the test",
+    "milaHeadline3": "What the base model includes, and what it doesn't",
+    "you": "You",
+    "comment": "Is the base model enough for video editing?",
+    "reply": "For 4K timelines, yes. Want me to compare it with the Pro chip in private?",
+    "cocoMeta": "Match · 12 min ago",
+    "cocoNote": "Full time at La Bombonera. Want the highlights?",
+    "theoMeta": "Chart · 2 h ago",
+    "theoTitle": "Butter prices, last 10 weeks",
+    "theoNote": "Up 9% since January. Worth locking the supplier price before the opening?",
+    "ivyMeta": "Tracker · 5 h ago",
+    "ivyTitle": "Marathon block: week 9 of 16",
+    "ivyNote": "142 km this month. Long run on Sunday: 24K."
+  },
+  "connectorScene": {
+    "approved": "Approved",
+    "off": "Off"
+  },
+  "terminalScene": {
+    "database": "D1 database ready · binding DB",
+    "bucket": "R2 bucket ready · binding CONTACT_PHOTOS",
+    "note": "# Add META_API_KEY as a secret, connect Workers Builds",
+    "api": "Workers Builds: migrations applied, wildcard-api released",
+    "web": "wildcard-web released · your Wildcard is live"
+  }
+}

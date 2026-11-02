@@ -1,0 +1,213 @@
+{
+  "account": {
+    "title": "Account",
+    "profile": "Your profile",
+    "profileInfo": "Group members and people you share contacts with can see your name and photo.",
+    "refresh": "Refresh",
+    "schedulesFooter": "Scheduled messages are available in the iOS app.",
+    "nav": {
+      "main": "Main navigation",
+      "forYou": "For you",
+      "chats": "Chats",
+      "account": "Account",
+      "forYouBadge": "{count} new in For you | {count} new in For you",
+      "chatsBadge": "{count} unread message | {count} unread messages"
+    },
+    "chatModel": {
+      "title": "Chat model",
+      "standard": "Standard",
+      "standardDetail": "Meta does not train on your data.",
+      "contributor": "Contributor",
+      "contributorDetail": "Meta may train models on what you send.",
+      "info": "Contributor allows Meta to use submitted messages, files, context and responses to train models. Standard does not. Applies to new chat jobs, schedules and group exchanges you start; jobs already started keep their model. Shared data may still use Contributor when you separately consent. MCP chats always use Standard.",
+      "contributorConsent": "I agree to Meta's Contributor data use"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "notifications": {
+      "title": "Browser notifications",
+      "unsupported": "This browser does not support notifications.",
+      "blocked": "Blocked in your browser settings for this site.",
+      "on": "Alerts for new messages, even when this tab is in the background.",
+      "off": "Get alerts for new messages when this tab is in the background."
+    },
+    "privacy": {
+      "title": "Privacy",
+      "contactsShare": "Contacts share with each other",
+      "contactsShareInfo": "Your contacts can recall what you told any of the others and ask each other, in your private chats, without linking them one by one. Groups and other people are not affected. Chats you keep private and chats with connections stay out.",
+      "howItWorks": "How privacy works",
+      "rules": {
+        "privateChats": {
+          "title": "Your private chats",
+          "text": "A contact remembers facts from your chat, never the whole conversation. Those facts can be used in your chats with it, in groups where you are both members, and by people you share that contact with."
+        },
+        "groups": {
+          "title": "Groups",
+          "text": "What is said in a group is used only in that group and in private chats with people who are in it. Contacts never carry one group's conversation into another group."
+        },
+        "keepPrivate": {
+          "title": "Keep this chat private",
+          "text": "Set in each contact's details. What you tell that contact stays in that chat: not in groups, not with people you share it with, not with your other contacts and not in For you."
+        },
+        "contactsShare": {
+          "title": "Contacts share with each other",
+          "text": "Set here. Your own contacts pool what they know about you in your private chats and can ask each other. Off by default."
+        },
+        "alwaysPrivate": {
+          "title": "Always private",
+          "text": "Whole chat transcripts, files and schedules are never shared, unless you turn on Discuss my private chats for one contact in one group. Chats with connections never leave their chat."
+        },
+        "forYou": {
+          "title": "For you",
+          "text": "Built only from your own chats and seen only by you. Chats you keep private are left out."
+        }
+      }
+    },
+    "debugExport": {
+      "title": "Export debug JSON",
+      "intro": "Download your private and group chat history, including archived chats, contacts, local memories, reply status, schedules, tasks, documents and mini apps.",
+      "warning": "This file contains private text and group participants. Review it before sharing with an AI or anyone else. Credentials, other people's private chats and media files are excluded. Nothing is sent to an AI by this download. Downloads are limited to 100 MB; exports over this limit fail without saving a partial file.",
+      "cancel": "Cancel export",
+      "exporting": "Exporting…",
+      "download": "Download JSON",
+      "progress": "Exporting {dataset} · {count} record | Exporting {dataset} · {count} records",
+      "ready": "Export ready. Your browser will save the JSON file."
+    },
+    "photoCrop": {
+      "title": "Crop Photo",
+      "help": "Drag to reposition and pinch to zoom. You can also use the arrow keys and zoom slider.",
+      "position": "Photo crop position",
+      "preview": "Selected photo crop preview",
+      "zoom": "Photo zoom",
+      "preparing": "Preparing…",
+      "use": "Use Photo"
+    },
+    "mcpAccess": {
+      "title": "Access",
+      "confirmGroup": "Allow {agent} to use {connection} in this group? Any human member can request enabled tools, including reads, changes and sends. Responses may expose external data to everyone in the group. This group will always use Standard. Memory stays available within this group and is never shared with other chats, even after revocation.",
+      "confirmContact": "Allow this contact to use {connection}? It can use all tools enabled in Account without asking again. This private chat will always use Standard. Memory stays available within this chat and is never shared with other chats, even after revocation. Group posting and schedule creation/editing from this private chat will be disabled.",
+      "infoGroup": "Grant your bots access to their assigned connectors in this group. Other members can request tools; responses are visible to everyone. Only the bot owner who added it can grant access.",
+      "infoContact": "Configure connectors once in Account, then grant this contact access. Tool approvals are managed in Account.",
+      "emptyGroup": "Assign a connector to one of your bots in its contact details first.",
+      "emptyContact": "No account connections yet.",
+      "manage": "Manage account connections"
+    },
+    "connections": {
+      "title": "Connections",
+      "loading": "Loading connections…",
+      "refresh": "Refresh connections",
+      "notice": "Configure a connector once, then grant contacts access from their Connections screen. Tool approvals apply to every contact and group you authorize. Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard.",
+      "supported": "Remote Streamable HTTP servers with public access, a Bearer token, or OAuth. Legacy SSE and local command servers are not supported yet.",
+      "supportedTitle": "Supported servers",
+      "servers": "Servers",
+      "empty": "No connections yet.",
+      "browseLibrary": "Browse connector library",
+      "addCustom": "Add custom server",
+      "library": "Connector library",
+      "libraryInfo": "Official remote MCP servers from each provider, prefilled with their endpoint and access mode. You still review the privacy terms, sign in with the provider and approve each tool. Wildcard does not operate these servers, and providers can change them.",
+      "searchConnectors": "Search connectors",
+      "connected": "Connected",
+      "access": "Access",
+      "issuer": "Issuer: {issuer}",
+      "scopes": "Requested scopes: {scopes}",
+      "authorize": "Authorize",
+      "reauthorize": "Reauthorize",
+      "reauthorizeInfo": "Reauthorizing clears existing tool permissions. Review and enable them again afterward.",
+      "configureOAuth": "Configure OAuth",
+      "enableAll": "Enable all tools",
+      "refreshTools": "Refresh tools",
+      "tools": "Tools",
+      "searchTools": "Search tools",
+      "runsWithoutAsking": "Runs without asking",
+      "asksBeforeRunning": "Asks before running",
+      "inputSchema": "Input schema",
+      "allowTool": "Allow {tool} without asking again",
+      "disconnect": "Disconnect",
+      "connectPreset": "Connect {name}",
+      "addServer": "Add server",
+      "name": "Name",
+      "namePlaceholder": "My server",
+      "endpoint": "HTTPS endpoint",
+      "token": "Token",
+      "required": "Required",
+      "optional": "Optional",
+      "bearerOptional": "Bearer token (optional)",
+      "oauthInfo": "Wildcard discovers the OAuth settings and opens the provider's sign-in page. Authorizing an account does not enable tools. Most servers need no manual settings. If you use your own client credentials, enter their trusted authorization server too. Google requires your own registered Web OAuth client marked for an AI-powered agent and Workspace preview access.",
+      "callbackMissing": "OAuth requires a public HTTPS API configuration.",
+      "advanced": "Advanced (optional)",
+      "issuerField": "Authorization server (automatic when empty)",
+      "issuerAria": "Authorization server override",
+      "scopesField": "Scopes (automatic when empty)",
+      "scopesAria": "Requested scopes override",
+      "clientIDField": "Client ID (only if required)",
+      "clientIDAria": "OAuth client ID",
+      "clientSecretField": "Client secret (if required)",
+      "clientSecretAria": "OAuth client secret",
+      "redirectURI": "OAuth redirect URI:",
+      "acceptTerms": "I accept these data access and privacy terms.",
+      "connect": "Connect",
+      "needsAuthorization": "Needs authorization",
+      "toolCount": "{allowed}/{total} tools",
+      "confirmTool": "Allow {tool} without asking again? It may read, change, or send external data. Only enable tools you understand and trust.",
+      "confirmAll": "Enable all {count} tool for {name} without asking again? This includes tools hidden by search. These tools may read, change, or send external data. Only enable tools you understand and trust. | Enable all {count} tools for {name} without asking again? This includes tools hidden by search. These tools may read, change, or send external data. Only enable tools you understand and trust.",
+      "confirmDisconnect": "Disconnect this server? Future calls will be blocked. Actions already started may finish. Historical messages remain private.",
+      "auth": {
+        "oauthConnected": "OAuth connected",
+        "required": "Authorization required",
+        "bearer": "Bearer token",
+        "public": "Public access"
+      },
+      "oauth": {
+        "title": "Authorization",
+        "completing": "Completing authorization…",
+        "authorized": "Account authorized. Open Connections and refresh tools to review permissions.",
+        "return": "Return to Connections"
+      }
+    },
+    "native": {
+      "title": "Native experiments",
+      "heroTitle": "Try it on your iPhone",
+      "heroText": "Enable a contact in the iOS app’s Native experiments, then ask in its private chat.",
+      "capabilitiesTitle": "What you can try",
+      "learnMore": "Learn more",
+      "capabilities": {
+        "systemTools": {
+          "title": "System tools",
+          "text": "System timers and alarms, Calendar events, and Reminders, including arrival and departure reminders."
+        },
+        "shortcuts": {
+          "title": "Shortcuts and widgets",
+          "text": "Siri and Shortcuts, Action button shortcuts, and a Home Screen contact widget."
+        },
+        "sharing": {
+          "title": "Sharing",
+          "text": "Shared drafts from Safari, Photos or Files, and authorized contact links."
+        }
+      },
+      "topics": {
+        "automatic": {
+          "title": "Automatic execution",
+          "text": "Timers and alarms run without extra app confirmation on the requesting iPhone while Wildcard is open. In Native experiments, choose other tools under Run without confirmation or turn automatic execution off. Calendar and location reminders still require review; older requests remain manual. iOS may request permission the first time. Enabling a shared contact does not give other participants device access. You can separately let a named participant send timers and alarms to your linked iPhone from Timers and alarms in the contact’s details, on iPhone or the web."
+        },
+        "receipts": {
+          "title": "Live status and receipts",
+          "text": "On iPhone, active timers and alarms appear inside Wildcard. Timer cards show the system countdown when available, with pause, resume and cancel controls. Each native request also has an operation receipt in its chat. After the backend update, the contact briefly waits for the device receipt before confirming automatic execution; an unconfirmed request is never described as completed."
+        },
+        "remote": {
+          "title": "Remote timers and alarms",
+          "text1": "To request a timer or alarm from this browser, turn on Receive timers and alarms in the contact’s details on the iPhone, then just ask in chat, for example “set a timer for 10 minutes” or “set an alarm on Lucía’s phone for 7”. The contact picks among the phones you may use. Owners can let individual shared-contact participants use their phone from the same Timers and alarms settings, and switch them off from either client. Wildcard doesn’t need to be open on the phone: a visible notification lets it set the timer or alarm while the phone is locked or the app is in the background. Requests expire after one minute; the chat shows the device receipt.",
+          "text2": "This experimental path requires updated backend, app and extension signing, and has not yet been verified on our signed device. Autonomous bot initiative cannot trigger it yet.",
+          "text3": "These Apple frameworks require the native iOS app. This browser does not execute Apple frameworks locally. It exposes remote timer/alarm tools only for phones whose owners turned them on. Contact links also open existing authorized conversations on the web."
+        },
+        "onDevice": {
+          "title": "What stays on your iPhone",
+          "text": "Saved Calendar and Reminders items and scheduled system alarms remain in iOS until you remove them. Manage Wildcard alarms in the iOS app’s Native experiments screen; they are not added to Apple’s Clock app. Shared drafts are stored on the device and are sent only when you tap Send."
+        }
+      }
+    }
+  }
+}

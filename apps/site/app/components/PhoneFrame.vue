@@ -10,6 +10,7 @@ withDefaults(defineProps<{
   person?: PersonId;
   group?: CastId[];
 }>(), { caption: undefined, title: undefined, status: undefined, who: undefined, person: undefined, group: undefined });
+const { t } = useI18n();
 </script>
 
 <template>
@@ -32,7 +33,7 @@ withDefaults(defineProps<{
       <div class="phone-screen"><slot /></div>
       <div v-if="title" class="phone-composer" aria-hidden="true">
         <span class="composer-icon"><AppIcon name="attach" /></span>
-        <span class="composer-input">Message</span>
+        <span class="composer-input">{{ t('phone.message') }}</span>
         <span class="composer-mic"><AppIcon name="mic" /></span>
       </div>
     </div>

@@ -52,7 +52,7 @@ struct TaskWorkIndicator: View {
     let title: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    private var label: String { title.map { "Working on “\($0)”" } ?? "Working on a task" }
+    private var label: String { title.map { String(localized: "Working on “\($0)”") } ?? String(localized: "Working on a task") }
 
     var body: some View {
         HStack {
@@ -83,7 +83,7 @@ struct TaskWorkIndicator: View {
 private struct AnimatedTypingLabel: View {
     var recording = false
     var researching = false
-    private var title: String { researching ? "Researching" : recording ? "Recording" : "Typing" }
+    private var title: String { researching ? String(localized: "Researching") : recording ? String(localized: "Recording") : String(localized: "Typing") }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @ScaledMetric(relativeTo: .subheadline) private var dotSize: CGFloat = 3

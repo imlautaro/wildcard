@@ -113,7 +113,7 @@ struct PhotoCropView: View {
                 width: fitted.width * zoom * scale, height: fitted.height * zoom * scale))
         }
         guard let data = image.jpegData(compressionQuality: 0.85), data.count <= 512 * 1024 else {
-            error = "Unable to prepare this photo. Please choose another image."
+            error = String(localized: "Unable to prepare this photo. Please choose another image.")
             return
         }
         onSave(data)

@@ -9,6 +9,7 @@ const props = withDefaults(defineProps<{
   dismissible?: boolean;
 }>(), { tone: 'error', icon: undefined });
 const emit = defineEmits<{ dismiss: [] }>();
+const strings = useUiStrings();
 const toneIcons = { error: 'error', warning: 'alert', success: 'check', info: 'info' } as const satisfies Record<string, AppIconName>;
 const glyph = computed(() => props.icon === undefined ? toneIcons[props.tone] : props.icon);
 </script>
@@ -19,7 +20,7 @@ const glyph = computed(() => props.icon === undefined ? toneIcons[props.tone] : 
     <div class="notice-text"><slot /></div>
     <div v-if="$slots.actions || dismissible" class="notice-actions">
       <slot name="actions" />
-      <AppIconButton v-if="dismissible" icon="close" label="Dismiss" size="small" @click="emit('dismiss')" />
+      <AppIconButton v-if="dismissible" icon="close" :label="strings.dismiss" size="small" @click="emit('dismiss')" />
     </div>
   </div>
 </template>

@@ -8,8 +8,8 @@ type Phase = 'idle' | 'requesting' | 'recording' | 'processing';
 const maxSeconds = 60;
 const minimumMs = 500;
 const sampleRate = 16_000;
-export const shortRecordingHint = 'Hold to record, release to send.';
-export const mouseRecordingHint = 'Click to start recording, click again to send.';
+export const shortRecordingHint = () => translate('chat.recorder.holdHint');
+export const mouseRecordingHint = () => translate('chat.recorder.clickHint');
 
 export const voiceRecordingSupported = () => import.meta.client && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
 
@@ -40,7 +40,7 @@ async function toWav(recording: Blob): Promise<{ blob: Blob; durationMs: number 
 }
 
 /** `onClip` receives each finished recording; the composer sends it immediately. */
-export function useVoiceRecorder(onClip: (clip: DraftVoice) => void, tooShortHint: () => string = () => shortRecordingHint) {
+export function useVoiceRecorder(onClip: (clip: DraftVoice) => void, tooShortHint: () => string = shortRecordingHint) {
   const phase = ref<Phase>('idle');
   // A hint (too short) or an error (permission, unreadable audio) below the composer.
   const notice = ref<{ text: string; error: boolean } | null>(null);
@@ -81,8 +81,8 @@ export function useVoiceRecorder(onClip: (clip: DraftVoice) => void, tooShortHin
       release();
       phase.value = 'idle';
       notice.value = { error: true, text: failure instanceof DOMException && failure.name === 'NotAllowedError'
-        ? 'Microphone access is disabled. Allow it for this site in your browser settings to record audio.'
-        : 'Recording could not start. Check your microphone and try again.' };
+        ? translate('chat.recorder.microphoneBlocked')
+        : translate('chat.recorder.startFailed') };
       return;
     }
     // Released before permission was granted (the first press may only show the prompt).
@@ -126,7 +126,7 @@ export function useVoiceRecorder(onClip: (clip: DraftVoice) => void, tooShortHin
     } catch {
       if (current !== run) return;
       phase.value = 'idle'; elapsedMs.value = 0;
-      notice.value = { error: true, text: 'This recording could not be read. Please record again.' };
+      notice.value = { error: true, text: translate('chat.recorder.unreadable') };
     }
   }
   function discardShort() {

@@ -70,8 +70,8 @@ struct ChatView: View {
 
     private func replyPreview(_ quote: MessageReplyQuote) -> MessageReplyPreview {
         quote.side == "user"
-            ? MessageReplyPreview(quote: quote, author: "You", color: .accentColor)
-            : MessageReplyPreview(quote: quote, author: contacts.contact(id: contactID)?.name ?? "Contact",
+            ? MessageReplyPreview(quote: quote, author: String(localized: "You"), color: .accentColor)
+            : MessageReplyPreview(quote: quote, author: contacts.contact(id: contactID)?.name ?? String(localized: "Contact"),
                                   color: GroupMemberColor.color(groupID: contactID, identity: "contact"))
     }
 
@@ -298,7 +298,7 @@ struct ChatView: View {
         }
         .task(id: native.selectedDraft?.id) {
             guard let item = native.selectedDraft, item.contactID == contactID, item.userID == auth.user?.id else { return }
-            guard draftIsEmpty else { attachmentError = "Finish or clear your current draft, then import the shared draft from the inbox."; return }
+            guard draftIsEmpty else { attachmentError = String(localized: "Finish or clear your current draft, then import the shared draft from the inbox."); return }
             draft = item.text
             if let bytes = item.data, let mime = item.mimeType {
                 attachment = DraftAttachment(name: item.filename ?? "Shared file", mimeType: mime, data: bytes)
@@ -311,7 +311,7 @@ struct ChatView: View {
             await contacts.documentCaches.refresh("contacts/\(contactID)", auth: auth)
         }
         .sheet(isPresented: $showStickers) {
-            StickerPickerView(contact: .init(id: contactID, name: contacts.contact(id: contactID)?.name ?? "Contact"),
+            StickerPickerView(contact: .init(id: contactID, name: contacts.contact(id: contactID)?.name ?? String(localized: "Contact")),
                               canSend: chat.hasLoaded && !chat.isSending && !chat.isUnavailable && !isClearing,
                               onSelect: sendSticker)
                 .presentationDetents([.medium, .large])
@@ -338,7 +338,7 @@ struct ChatView: View {
                 do {
                     guard let data = try await selected.loadTransferable(type: Data.self), data.count <= DraftAttachment.limit,
                           let image = UIImage(data: data) else {
-                        throw AuthAPI.Failure.rejected("Choose a photo up to 5 MB.")
+                        throw AuthAPI.Failure.rejected(String(localized: "Choose a photo up to 5 MB."))
                     }
                     try Task.checkCancellation()
                     let scale = min(1, 2048 / max(image.size.width, image.size.height))
@@ -352,7 +352,7 @@ struct ChatView: View {
                         image.draw(in: CGRect(origin: .zero, size: size))
                     }
                     guard let bytes = resized.jpegData(compressionQuality: 0.85), bytes.count <= DraftAttachment.limit else {
-                        throw AuthAPI.Failure.rejected("Choose a photo up to 5 MB.")
+                        throw AuthAPI.Failure.rejected(String(localized: "Choose a photo up to 5 MB."))
                     }
                     guard isVisible, !chat.isUnavailable else { return }
                     attachment = DraftAttachment(name: "Photo.jpg", mimeType: "image/jpeg", data: bytes)
@@ -541,7 +541,7 @@ struct ChatView: View {
         Task {
             do {
                 try await contacts.stickers.saveMessageSticker(contactID: contactID, turnID: turnID, part: part, using: auth)
-                stickerNotice = "Saved to your stickers."
+                stickerNotice = String(localized: "Saved to your stickers.")
             } catch is CancellationError { }
             catch { attachmentError = error.localizedDescription }
         }

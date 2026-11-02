@@ -64,8 +64,10 @@ private struct SessionHeading: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(attributes.title).font(.headline).lineLimit(1)
-            Text("\(attributes.contactName) · \(attributes.kind == "recipe" ? "Recipe" : "Focus")")
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Group {
+                if attributes.kind == "recipe" { Text("\(attributes.contactName) · Recipe") } else { Text("\(attributes.contactName) · Focus") }
+            }
+            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 }
@@ -135,7 +137,7 @@ private struct SessionButtons: View {
     }
 }
 private struct ActivityButtonLabel: View {
-    let title: String
+    let title: LocalizedStringKey
     let symbol: String
     let prominent: Bool
     var tint: Color = NativeStyle.accent

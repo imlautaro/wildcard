@@ -16,12 +16,12 @@ function open() {
 <template>
   <button
     type="button" class="post-reference" :class="[`accent-${accent}`, { active }]" :disabled="!active"
-    :aria-label="`For you post: ${post.title}${post.available ? '' : ' (no longer in For you)'}`" @click.stop="open"
+    :aria-label="$t(post.available ? 'updates.reference.aria' : 'updates.reference.ariaGone', { title: post.title })" @click.stop="open"
   >
-    <span class="label"><AppIcon name="sparkle" />For you post</span>
-    <span class="title">{{ post.title || 'Post' }}</span>
+    <span class="label"><AppIcon name="sparkle" />{{ $t('updates.reference.label') }}</span>
+    <span class="title">{{ post.title || $t('updates.reference.post') }}</span>
     <span v-if="post.text" class="text">{{ post.text }}</span>
-    <span v-if="!post.available" class="gone">No longer in For you</span>
+    <span v-if="!post.available" class="gone">{{ $t('updates.reference.gone') }}</span>
   </button>
 </template>
 

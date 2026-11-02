@@ -19,10 +19,10 @@ struct GroupMembersView: View {
     @State private var sharingAgent: String?
     @State private var showingSharing = false
     @State private var showingConsent = false
-    private static let sharingInfo = "Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections and chats you keep private stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat."
+    private static let sharingInfo = String(localized: "Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections and chats you keep private stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat.")
     private var sharingSummary: String {
         let permissions = snapshot?.privateSharing ?? []
-        return permissions.isEmpty ? "No contacts" : "\(permissions.filter { $0.enabled == 1 }.count) of \(permissions.count) on"
+        return permissions.isEmpty ? String(localized: "No contacts") : String(localized: "\(permissions.filter { $0.enabled == 1 }.count) of \(permissions.count) on")
     }
     private var owner: Bool { snapshot?.group.ownerID == auth.user?.id }
     var body: some View {
@@ -45,7 +45,7 @@ struct GroupMembersView: View {
                     .listRowBackground(Color.clear).listRowSeparator(.hidden)
                 }
                 Section {
-                    SheetRow(title: "Discuss my private chats", systemImage: "bubble.left.and.bubble.right", value: sharingSummary) { showingSharing = true }
+                    SheetRow(title: String(localized: "Discuss my private chats"), systemImage: "bubble.left.and.bubble.right", value: sharingSummary) { showingSharing = true }
                     NavigationLink { ConversationLearningView(base: "groups/\(groupID)", cache: groups.conversations.learning.store(for: groupID)) }
                         label: { Label("Conversation learning", systemImage: "lightbulb") }
                     NavigationLink { McpAccessView(path: "groups/\(groupID)/mcp", group: true, cache: contacts.mcpAccessSnapshots.store(for: "group:\(groupID)")) }
@@ -53,7 +53,7 @@ struct GroupMembersView: View {
                     NavigationLink { MiniAppListView(base: "groups/\(groupID)") } label: { Label("Mini apps", systemImage: "square.grid.2x2") }
                     NavigationLink { TasksView(base: "groups/\(groupID)", snapshot: groups.conversations.tasks.store(for: "groups/\(groupID)")) }
                         label: { Label("Tasks", systemImage: "checklist") }
-                    SheetRow(title: "Shared memory consent", systemImage: "hand.raised", value: "Review") {
+                    SheetRow(title: String(localized: "Shared memory consent"), systemImage: "hand.raised", value: String(localized: "Review")) {
                         shareMemory = false; contributorConsent = false; showingConsent = true
                     }
                 }
@@ -98,7 +98,7 @@ struct GroupMembersView: View {
             } else if error == nil && store.error == nil { ProgressView("Loading group…") }
         }
         .disabled(busy)
-        .navigationTitle(snapshot?.group.name ?? "Group details").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(snapshot?.group.name ?? String(localized: "Group details")).navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(busy || editingIdentity)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -120,7 +120,7 @@ struct GroupMembersView: View {
                 Form {
                     Section {
                         ForEach(snapshot?.privateSharing ?? []) { permission in
-                            let name = snapshot?.members.first { $0.kind == "agent" && $0.id == permission.agentID }?.name ?? "Contact"
+                            let name = snapshot?.members.first { $0.kind == "agent" && $0.id == permission.agentID }?.name ?? String(localized: "Contact")
                             Toggle(isOn: Binding(get: { permission.enabled == 1 }, set: { enabled in
                                 if enabled { sharingAgent = permission.agentID }
                                 else { mutate("private-sharing/\(permission.agentID)", method: "PUT", input: ["enabled": false], sharing: (permission.agentID, false)) }
@@ -142,7 +142,7 @@ struct GroupMembersView: View {
                 .navigationTitle("Private chats")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) { InfoButton(title: "Discuss my private chats", text: Self.sharingInfo) }
+                    ToolbarItem(placement: .topBarLeading) { InfoButton(title: String(localized: "Discuss my private chats"), text: Self.sharingInfo) }
                     ToolbarItem(placement: .confirmationAction) { Button("Done") { showingSharing = false } }
                 }
                 .alert("Allow private chat sharing?", isPresented: Binding(get: { sharingAgent != nil }, set: { if !$0 { sharingAgent = nil } })) {
@@ -210,7 +210,7 @@ struct GroupMembersView: View {
             try await store.refreshDetails(id: groupID, auth: auth)
             error = nil
         }
-        catch AuthAPI.Failure.notFound { error = "This group is no longer available." }
+        catch AuthAPI.Failure.notFound { error = String(localized: "This group is no longer available.") }
         catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }

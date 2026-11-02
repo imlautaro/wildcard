@@ -1,11 +1,11 @@
 // Everything installation-specific on the marketing site lives here. Replace the
-// URLs for an independent deployment; a null link hides its call to action.
+// URLs for an independent deployment; a null link hides its call to action. The
+// copy (tagline, description, section labels) lives in i18n/locales/<locale>.json.
 export const site = {
   name: 'Wildcard',
-  tagline: 'AI contacts that text you first',
-  description:
-    'Create AI contacts with their own name, face, personality and memory. They reach out on their own, '
-    + 'remember what matters, and work together with you and the people you love. Open source, powered by Meta AI models.',
+  // The site's own public origin, without a trailing slash. Canonical and hreflang
+  // links are absolute URLs on it (nuxt.config.ts `i18n.baseUrl`).
+  url: 'https://wildcard-site.imlautaro.workers.dev',
   // The web app. "Get started" buttons open it.
   appUrl: 'https://wildcard-web.imlautaro.workers.dev',
   // The source repository. While `repositoryPublic` is false the site says the code
@@ -16,10 +16,11 @@ export const site = {
   iosUrl: null as string | null,
 } as const;
 
+// Section anchors on the landing page; labels are the `nav.items.<key>` messages.
 export const navigation = [
-  { id: 'memory', label: 'Memory' },
-  { id: 'together', label: 'Sharing' },
-  { id: 'groups', label: 'Groups' },
-  { id: 'for-you', label: 'For you' },
-  { id: 'open-source', label: 'Open source' },
+  { id: 'memory', key: 'memory' },
+  { id: 'together', key: 'together' },
+  { id: 'groups', key: 'groups' },
+  { id: 'for-you', key: 'forYou' },
+  { id: 'open-source', key: 'openSource' },
 ] as const;

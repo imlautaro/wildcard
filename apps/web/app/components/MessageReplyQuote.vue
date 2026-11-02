@@ -13,13 +13,13 @@ const active = computed(() => props.interactive && props.preview.quote.available
   <button
     type="button" class="reply-quote" :class="{ active }" :disabled="!active"
     :style="{ '--quote-light': preview.color.light, '--quote-dark': preview.color.dark }"
-    :aria-label="`Reply to ${preview.author}: ${summary}${preview.quote.beforeJoin ? ' (before you joined)' : ''}`" @click.stop="emit('open')"
+    :aria-label="$t(preview.quote.beforeJoin ? 'chat.quote.labelBeforeJoin' : 'chat.quote.label', { author: preview.author, summary })" @click.stop="emit('open')"
   >
     <span class="author">{{ preview.author }}</span>
     <span class="text" :class="{ unavailable: !preview.quote.available }">
       <AppIcon v-if="preview.quote.available && preview.quote.attachment" :name="preview.quote.attachment.mimeType.startsWith('image/') ? 'image' : 'file'" />{{ summary }}
     </span>
-    <span v-if="preview.quote.beforeJoin" class="before-join">Before you joined</span>
+    <span v-if="preview.quote.beforeJoin" class="before-join">{{ $t('chat.quote.beforeJoin') }}</span>
   </button>
 </template>
 

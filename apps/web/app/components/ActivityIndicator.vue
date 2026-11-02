@@ -2,7 +2,8 @@
 // "<name> is typing / researching / recording" with an animation that matches the activity.
 // Without a name the label is the bare activity, for the contact header.
 const props = defineProps<{ activity: 'typing' | 'researching' | 'recording'; name?: string }>();
-const label = computed(() => `${props.name ? `${props.name} is ` : ''}${props.activity}`);
+const { t } = useI18n();
+const label = computed(() => props.name ? t(`chat.activity.${props.activity}Named`, { name: props.name }) : t(`chat.activity.${props.activity}`));
 </script>
 
 <template>

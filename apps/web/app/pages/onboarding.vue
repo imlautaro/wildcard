@@ -3,9 +3,36 @@ import { circleTypes, customStyleLimit } from '../../../../shared/onboarding';
 definePageMeta({ layout: false });
 const { user, refreshProfile, signOut } = useSession();
 const { options, snapshot, draft, busy, refresh, submit } = useOnboarding();
-const circleOptions = circleTypes.map(option => ({ value: option.code, label: option.name }));
+const { t, te } = useI18n();
+// The API names countries and languages in English (Intl.DisplayNames(['en'])); re-label
+// them by code in the app language and sort them in that language's order.
+function localized(list: readonly { code: string; name: string }[], type: 'region' | 'language') {
+  const locale = appLocale();
+  let names: Intl.DisplayNames | null = null;
+  try { names = new Intl.DisplayNames([locale], { type }); } catch { /* Keep the API names. */ }
+  return list.map(option => {
+    let label: string | undefined;
+    try { label = names?.of(option.code); } catch { /* Unknown code: keep the API name. */ }
+    // Spanish and other locales name languages in lowercase ("inglés"); list entries start uppercase, like iOS.
+    if (label && type === 'language') label = label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
+    return { value: option.code, label: label && label !== option.code ? label : option.name };
+  }).sort((a, b) => a.label.localeCompare(b.label, locale));
+}
+// Style and circle names are translated by code; an unknown code keeps the API's English name.
+const styleKeys: Record<string, string> = { '3d': 'animated3d', pets: 'animatedPets', realistic: 'realisticPeople' };
+const labelFor = (prefix: string, code: string, fallback: string) => {
+  const key = `auth.onboarding.${prefix}.${styleKeys[code] ?? code}`;
+  return te(key) ? t(key) : fallback;
+};
+const countryOptions = computed(() => localized(options.value?.countries ?? [], 'region'));
+const languageOptions = computed(() => localized(options.value?.languages ?? [], 'language'));
+const styleOptions = computed(() => (options.value?.styles ?? []).map(option => ({ value: option.code, label: labelFor('styles', option.code, option.name) })));
+const circleOptions = computed(() => circleTypes.map(option => ({ value: option.code, label: labelFor('circles', option.code, option.name) })));
+const genderOptions = computed(() => [{ value: 'male' as const, label: t('auth.onboarding.male') }, { value: 'female' as const, label: t('auth.onboarding.female') }]);
 const error = ref<string | null>(null);
 const locked = computed(() => !!snapshot.value?.input);
+// A fresh draft suggests the interface language for contacts (still editable), like iOS.
+onMounted(() => { if (!locked.value && !draft.name && draft.language === 'en') draft.language = appLocale(); });
 const running = computed(() => snapshot.value?.status === 'queued' || snapshot.value?.status === 'generating');
 const withContacts = computed(() => draft.createContacts !== false);
 const customReady = computed(() => draft.style !== 'custom' || !!draft.customStyle?.trim());
@@ -40,6 +67,7 @@ async function start() {
   catch (failure) { error.value = errorMessage(failure); }
 }
 onMounted(() => {
+  // 'New member' is the API's placeholder name from sign-up, not UI copy.
   if (!draft.name && user.value?.name !== 'New member') draft.name = user.value?.name ?? '';
   void update();
 });
@@ -49,59 +77,59 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
 <template>
   <main class="auth">
     <form class="auth-card onboarding" @submit.prevent="start">
-      <p class="eyebrow">Your Wildcard circle</p>
-      <h1>Make yourself at home.</h1>
-      <p class="lead">Start with five AI contacts with different personalities, or start empty and add contacts later.</p>
+      <p class="eyebrow">{{ t('auth.onboarding.eyebrow') }}</p>
+      <h1>{{ t('auth.onboarding.title') }}</h1>
+      <p class="lead">{{ t('auth.onboarding.lead') }}</p>
       <template v-if="options">
         <fieldset :disabled="locked || busy" class="onboarding-fields">
           <div class="pair">
-            <AppTextField v-model="draft.name" label="Your name" autocomplete="given-name" maxlength="100" required />
+            <AppTextField v-model="draft.name" :label="t('auth.onboarding.name')" autocomplete="given-name" maxlength="100" required />
             <!-- Raw field: AppTextField's model is a string and the age is a number. -->
-            <label class="text-field"><input v-model.number="draft.age" type="number" min="1" max="120" step="1" placeholder=" " :required="!locked"><span>Your age</span></label>
+            <label class="text-field"><input v-model.number="draft.age" type="number" min="1" max="120" step="1" placeholder=" " :required="!locked"><span>{{ t('auth.onboarding.age') }}</span></label>
           </div>
           <div class="pair">
-            <AppSelect v-model="draft.gender" label="Gender" :disabled="locked || busy" :options="[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]" />
-            <AppSelect v-model="draft.language" label="Preferred language" :disabled="locked || busy" :options="options.languages.map(option => ({ value: option.code, label: option.name }))" />
+            <AppSelect v-model="draft.gender" :label="t('auth.onboarding.gender')" :disabled="locked || busy" :options="genderOptions" />
+            <AppSelect v-model="draft.language" :label="t('auth.onboarding.language')" :disabled="locked || busy" :options="languageOptions" />
           </div>
-          <AppSelect v-model="draft.country" label="Country" :disabled="locked || busy" :options="options.countries.map(option => ({ value: option.code, label: option.name }))" />
-          <label class="check-row"><input v-model="draft.createContacts" type="checkbox"><span>Create my first five contacts with AI</span></label>
+          <AppSelect v-model="draft.country" :label="t('auth.onboarding.country')" :disabled="locked || busy" :options="countryOptions" />
+          <label class="check-row"><input v-model="draft.createContacts" type="checkbox"><span>{{ t('auth.onboarding.createContacts') }}</span></label>
         </fieldset>
         <fieldset v-if="withContacts" :disabled="locked || busy" class="onboarding-fields">
-          <AppSelect v-model="draft.style" label="Agent appearance" :disabled="locked || busy" :options="options.styles.map(option => ({ value: option.code, label: option.name }))" />
-          <AppTextField v-if="draft.style === 'custom'" v-model="draft.customStyle" label="Describe your characters" placeholder="Friendly robots, kittens…"
+          <AppSelect v-model="draft.style" :label="t('auth.onboarding.appearance')" :disabled="locked || busy" :options="styleOptions" />
+          <AppTextField v-if="draft.style === 'custom'" v-model="draft.customStyle" :label="t('auth.onboarding.customStyle')" :placeholder="t('auth.onboarding.customStylePlaceholder')"
                         :maxlength="customStyleLimit" :required="!locked" />
-          <AppSelect v-model="draft.circleType" label="Your circle" :disabled="locked || busy" :options="circleOptions" />
-          <AppTextField v-if="draft.circleType !== 'friends'" v-model="draft.occupation" :label="draft.circleType === 'study' ? 'What are you studying?' : 'What do you do for work?'"
+          <AppSelect v-model="draft.circleType" :label="t('auth.onboarding.circle')" :disabled="locked || busy" :options="circleOptions" />
+          <AppTextField v-if="draft.circleType !== 'friends'" v-model="draft.occupation" :label="draft.circleType === 'study' ? t('auth.onboarding.studying') : t('auth.onboarding.work')"
                         maxlength="200" :required="!locked" />
-          <label class="check-row"><input v-model="draft.createGroup" type="checkbox"><span>Create a group with my five contacts</span></label>
+          <label class="check-row"><input v-model="draft.createGroup" type="checkbox"><span>{{ t('auth.onboarding.createGroup') }}</span></label>
         </fieldset>
         <template v-if="withContacts">
-        <p class="hint info-title">About your contacts <InfoButton label="About your contacts" text="Your contacts will have names common in your country and speak your preferred language. Contacts in every style are adults, usually within two years of your age, with a minimum age of 18. Gender does not determine your contacts’ personalities. Friends have varied interests. Study and work teams use your field to create complementary contacts." /></p>
+        <p class="hint info-title">{{ t('auth.onboarding.about') }} <InfoButton :label="t('auth.onboarding.about')" :text="t('auth.onboarding.aboutInfo')" /></p>
         <AppListGroup class="consent">
           <label class="check-row">
             <input v-model="draft.sharedMemoryConsent" type="checkbox" :disabled="locked || busy">
-            <span>I agree to enable shared memory for my five AI contacts. If I create a group, its members can read the full group history. Facts shared in private or group chats may become shared memories recalled by these contacts in other chats; private transcripts remain access controlled. Setup uses Meta Standard processing.</span>
+            <span>{{ t('auth.onboarding.consent') }}</span>
           </label>
         </AppListGroup>
         </template>
         <div v-if="running" role="status" aria-live="polite" class="progress">
           <span class="spinner" />
           <div>
-            <strong>{{ snapshot?.status === 'queued' ? 'Preparing your circle…' : `Creating your circle… ${snapshot?.photoCount ?? 0} of 5 portraits ready.` }}</strong>
-            <p>You can close the app. Your circle will keep taking shape.</p>
+            <strong>{{ snapshot?.status === 'queued' ? t('auth.onboarding.preparing') : t('auth.onboarding.creating', { count: snapshot?.photoCount ?? 0 }) }}</strong>
+            <p>{{ t('auth.onboarding.canClose') }}</p>
           </div>
         </div>
-        <AppNotice v-if="snapshot?.status === 'failed'">We could not finish your circle. Retry to continue with your saved preferences and portraits.</AppNotice>
+        <AppNotice v-if="snapshot?.status === 'failed'">{{ t('auth.onboarding.failed') }}</AppNotice>
         <AppButton v-if="!running && snapshot?.status !== 'complete'" type="submit" block :disabled="!ready || busy">
-          {{ busy ? 'Saving…' : locked ? 'Retry setup' : withContacts ? 'Create my circle' : 'Start' }}
+          {{ busy ? t('common.saving') : locked ? t('auth.onboarding.retrySetup') : withContacts ? t('auth.onboarding.createCircle') : t('auth.onboarding.start') }}
         </AppButton>
       </template>
-      <AppLoading v-else label="Loading your preferences…" />
+      <AppLoading v-else :label="t('auth.onboarding.loading')" />
       <AppNotice v-if="error" class="refresh-error">
         {{ error }}
-        <template #actions><button type="button" class="link-button" @click="update">Refresh</button></template>
+        <template #actions><button type="button" class="link-button" @click="update">{{ t('auth.refresh') }}</button></template>
       </AppNotice>
-      <AppButton variant="text" block class="sign-out" @click="signOut">Sign out</AppButton>
+      <AppButton variant="text" block class="sign-out" @click="signOut">{{ t('auth.signOut') }}</AppButton>
     </form>
   </main>
 </template>

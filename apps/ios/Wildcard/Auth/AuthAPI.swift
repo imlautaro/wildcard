@@ -43,18 +43,18 @@ struct AuthAPI: Sendable {
 
         var errorDescription: String? {
             switch self {
-            case .invalidConfiguration: "The API URL is missing or invalid. Check the app configuration."
-            case .insecureURL: "The API URL must use HTTPS."
-            case .unauthorized: "Your session has expired. Please sign in again."
-            case .notFound: "This contact is no longer available."
+            case .invalidConfiguration: String(localized: "The API URL is missing or invalid. Check the app configuration.")
+            case .insecureURL: String(localized: "The API URL must use HTTPS.")
+            case .unauthorized: String(localized: "Your session has expired. Please sign in again.")
+            case .notFound: String(localized: "This contact is no longer available.")
             case .rejected(let message): message
-            case .invalidResponse: "The server returned an unexpected response. Please try again."
-            case .temporarilyUnavailable: "Groups are temporarily unavailable. Please try again."
-            case .reviewRequired: "Review and enable this mini app first."
+            case .invalidResponse: String(localized: "The server returned an unexpected response. Please try again.")
+            case .temporarilyUnavailable: String(localized: "Groups are temporarily unavailable. Please try again.")
+            case .reviewRequired: String(localized: "Review and enable this mini app first.")
             case .conflict(let message): message
             case .noSubject(let message): message
             case .rateLimited(let retryAfter, let message):
-                retryAfter.map { "Too many requests. Please wait \($0) second\($0 == 1 ? "" : "s") and try again." } ?? message
+                retryAfter.map { seconds in String(localized: "Too many requests. Please wait \(seconds) seconds and try again.") } ?? message
             }
         }
     }
@@ -151,14 +151,14 @@ struct AuthAPI: Sendable {
         }
         switch response.statusCode {
         case 404 where message == "Contact not found": return .notFound
-        case 404: return .rejected(message ?? "This sticker is no longer available.")
+        case 404: return .rejected(message ?? String(localized: "This sticker is no longer available."))
         case 422 where body?["code"] as? String == "NO_SUBJECT":
-            return .noSubject(message ?? "Could not find a subject to cut out.")
+            return .noSubject(message ?? String(localized: "Could not find a subject to cut out."))
         case 429:
             return .rateLimited(retryAfter: response.value(forHTTPHeaderField: "Retry-After").flatMap { Int($0) }.map { max($0, 1) },
-                                message: message ?? "Too many requests. Please wait a minute and try again.")
-        case 400, 409, 413, 415, 422: return .rejected(message ?? "This sticker could not be used.")
-        default: return .rejected("Stickers are unavailable right now. Please try again.")
+                                message: message ?? String(localized: "Too many requests. Please wait a minute and try again."))
+        case 400, 409, 413, 415, 422: return .rejected(message ?? String(localized: "This sticker could not be used."))
+        default: return .rejected(String(localized: "Stickers are unavailable right now. Please try again."))
         }
     }
 
@@ -203,9 +203,9 @@ struct AuthAPI: Sendable {
             }
             // Per-chat JSON export (docs/chat-export.md): the API's messages are accurate for every status.
             if path.hasSuffix("/export") {
-                if response.statusCode == 429 { throw Failure.rejected("Too many exports. Please wait a minute and try again.") }
+                if response.statusCode == 429 { throw Failure.rejected(String(localized: "Too many exports. Please wait a minute and try again.")) }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
-                throw Failure.rejected(message ?? "The chat could not be exported. Please try again.")
+                throw Failure.rejected(message ?? String(localized: "The chat could not be exported. Please try again."))
             }
             if path.hasPrefix("onboarding") {
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
@@ -213,26 +213,26 @@ struct AuthAPI: Sendable {
                    !message.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
                     throw Failure.rejected(message)
                 }
-                throw Failure.rejected("Setup is temporarily unavailable. Please try again.")
+                throw Failure.rejected(String(localized: "Setup is temporarily unavailable. Please try again."))
             }
             if path == "contacts/generation" {
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
-                throw Failure.rejected(message ?? "Contact generation is temporarily unavailable. Please try again.")
+                throw Failure.rejected(message ?? String(localized: "Contact generation is temporarily unavailable. Please try again."))
             }
             if path.contains("/personality") {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
-                throw Failure.rejected(message ?? "Personality is temporarily unavailable. Please try again.")
+                throw Failure.rejected(message ?? String(localized: "Personality is temporarily unavailable. Please try again."))
             }
             if path.contains("/native-actions") || path.contains("/native-remote") {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
-                throw Failure.rejected(message ?? "Native requests are temporarily unavailable.")
+                throw Failure.rejected(message ?? String(localized: "Native requests are temporarily unavailable."))
             }
             if path.contains("/tasks") || path.contains("/documents") {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }
                 if response.statusCode == 429 || response.statusCode >= 500 { throw Failure.temporarilyUnavailable }
-                let message = (try? JSONDecoder().decode(ErrorResponse.self, from: data).error) ?? "Please try again."
+                let message = (try? JSONDecoder().decode(ErrorResponse.self, from: data).error) ?? String(localized: "Please try again.")
                 if response.statusCode == 409 && path.contains("/documents") { throw Failure.conflict(message) }
                 throw Failure.rejected(message)
             }
@@ -241,28 +241,28 @@ struct AuthAPI: Sendable {
                 if response.statusCode >= 500 { throw Failure.temporarilyUnavailable }
                 let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 if response.statusCode == 409, body?["code"] as? String == "REVIEW_REQUIRED" { throw Failure.reviewRequired }
-                throw Failure.rejected(body?["error"] as? String ?? "Mini apps are temporarily unavailable. Please try again.")
+                throw Failure.rejected(body?["error"] as? String ?? String(localized: "Mini apps are temporarily unavailable. Please try again."))
             }
             if path.contains("/mcp") {
                 if response.statusCode == 404 { throw Failure.notFound }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
-                throw Failure.rejected(message ?? "Connections are temporarily unavailable. Please try again.")
+                throw Failure.rejected(message ?? String(localized: "Connections are temporarily unavailable. Please try again."))
             }
             if path.hasPrefix("home") {
                 if response.statusCode == 429 || response.statusCode >= 500 { throw Failure.temporarilyUnavailable }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
-                throw Failure.rejected(message ?? "For you is temporarily unavailable. Please try again.")
+                throw Failure.rejected(message ?? String(localized: "For you is temporarily unavailable. Please try again."))
             }
             if path.hasSuffix("/reactions") {
                 if [403, 404].contains(response.statusCode) { throw Failure.notFound }
                 if response.statusCode >= 500 { throw Failure.temporarilyUnavailable }
                 let message = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
-                throw Failure.rejected(message ?? "Reactions are temporarily unavailable. Please try again.")
+                throw Failure.rejected(message ?? String(localized: "Reactions are temporarily unavailable. Please try again."))
             }
             if path.hasPrefix("groups") {
                 if path.hasSuffix("/transcriptions"), response.statusCode == 422 {
                     let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["code"] as? String
-                    throw Failure.rejected(code == "NO_SPEECH" ? "No speech was detected. Please record again." : "The transcript is too long. Please record a shorter message.")
+                    throw Failure.rejected(code == "NO_SPEECH" ? String(localized: "No speech was detected. Please record again.") : String(localized: "The transcript is too long. Please record a shorter message."))
                 }
                 if response.statusCode == 404 && method == "GET" && !path.contains("/photos/") { throw Failure.notFound }
                 if response.statusCode == 429 || response.statusCode >= 500 { throw Failure.temporarilyUnavailable }
@@ -275,13 +275,13 @@ struct AuthAPI: Sendable {
                 throw Failure.temporarilyUnavailable
             }
             if path == "me/model", response.statusCode == 422 {
-                throw Failure.rejected("Choose a supported model and agree to Meta's Contributor data use before enabling Contributor.")
+                throw Failure.rejected(String(localized: "Choose a supported model and agree to Meta's Contributor data use before enabling Contributor."))
             }
             if path == "me", [400, 422].contains(response.statusCode) {
-                throw Failure.rejected("Use a name with 1–100 characters and no control characters.")
+                throw Failure.rejected(String(localized: "Use a name with 1–100 characters and no control characters."))
             }
             if path == "me/photo", response.statusCode == 409 {
-                throw Failure.rejected("Your profile changed. Go back, refresh, and try again.")
+                throw Failure.rejected(String(localized: "Your profile changed. Go back, refresh, and try again."))
             }
             if path.hasPrefix("contacts/sharing/") {
                 if [400, 403, 404, 409, 413, 422, 429].contains(response.statusCode),
@@ -291,55 +291,55 @@ struct AuthAPI: Sendable {
                    !message.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
                     throw Failure.rejected(message)
                 }
-                throw Failure.rejected("Contact sharing is temporarily unavailable. Please try again.")
+                throw Failure.rejected(String(localized: "Contact sharing is temporarily unavailable. Please try again."))
             }
             if path.hasSuffix("/photo") {
                 switch response.statusCode {
-                case 400, 413, 415, 422: throw Failure.rejected("Choose a square JPEG photo smaller than 512 KB.")
-                case 409: throw Failure.rejected("This contact changed. Go back, refresh, and try again.")
+                case 400, 413, 415, 422: throw Failure.rejected(String(localized: "Choose a square JPEG photo smaller than 512 KB."))
+                case 409: throw Failure.rejected(String(localized: "This contact changed. Go back, refresh, and try again."))
                 default: break
                 }
             }
             if path.hasSuffix("/transcriptions") {
                 switch response.statusCode {
-                case 400, 413, 415: throw Failure.rejected("Record a message between a quarter second and one minute long.")
+                case 400, 413, 415: throw Failure.rejected(String(localized: "Record a message between a quarter second and one minute long."))
                 case 422:
                     let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["code"] as? String
-                    throw Failure.rejected(code == "NO_SPEECH" ? "No speech was detected. Please record again." : "The transcript is too long. Please record a shorter message.")
-                case 429: throw Failure.rejected("Too many recordings. Wait a minute before trying again.")
-                case 502, 503, 504: throw Failure.rejected("Transcription is unavailable right now. Please try again.")
+                    throw Failure.rejected(code == "NO_SPEECH" ? String(localized: "No speech was detected. Please record again.") : String(localized: "The transcript is too long. Please record a shorter message."))
+                case 429: throw Failure.rejected(String(localized: "Too many recordings. Wait a minute before trying again."))
+                case 502, 503, 504: throw Failure.rejected(String(localized: "Transcription is unavailable right now. Please try again."))
                 default: break
                 }
             }
             if path.contains("/chat/") {
                 if response.statusCode == 403,
                    (try? JSONDecoder().decode(ErrorResponse.self, from: data).error) == "Remote device unavailable or permission revoked" {
-                    throw Failure.rejected("Remote device unavailable or permission revoked")
+                    throw Failure.rejected(String(localized: "Remote device unavailable or permission revoked"))
                 }
-                if response.statusCode == 413 { throw Failure.rejected("Choose a file up to 5 MB.") }
+                if response.statusCode == 413 { throw Failure.rejected(String(localized: "Choose a file up to 5 MB.")) }
                 if response.statusCode == 400, let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String {
                     throw Failure.rejected(message)
                 }
                 switch response.statusCode {
-                case 400, 422: throw Failure.rejected("Use a message with 1–4,000 characters.")
-                case 409: throw Failure.rejected("A reply is already in progress or the conversation changed. Refresh and try again.")
-                case 503: throw Failure.rejected("AI replies are temporarily unavailable. Please try again later.")
+                case 400, 422: throw Failure.rejected(String(localized: "Use a message with 1–4,000 characters."))
+                case 409: throw Failure.rejected(String(localized: "A reply is already in progress or the conversation changed. Refresh and try again."))
+                case 503: throw Failure.rejected(String(localized: "AI replies are temporarily unavailable. Please try again later."))
                 default: break
                 }
             }
             // Super admins can close registration at runtime (docs/admin.md).
             if path == "auth/sign-up/email", response.statusCode == 403 {
-                throw Failure.rejected("New accounts are not being accepted right now. Existing accounts can still sign in.")
+                throw Failure.rejected(String(localized: "New accounts are not being accepted right now. Existing accounts can still sign in."))
             }
             switch response.statusCode {
-            case 401: throw Failure.rejected("Incorrect email or password.")
-            case 429: throw Failure.rejected("Too many attempts. Please wait a minute and try again.")
+            case 401: throw Failure.rejected(String(localized: "Incorrect email or password."))
+            case 429: throw Failure.rejected(String(localized: "Too many attempts. Please wait a minute and try again."))
             case 400, 422:
-                if path.hasPrefix("contacts") { throw Failure.rejected("Use a contact name with 1–100 characters and no control characters.") }
-                throw Failure.rejected("Check your details, or try signing in if you already have an account.")
+                if path.hasPrefix("contacts") { throw Failure.rejected(String(localized: "Use a contact name with 1–100 characters and no control characters.")) }
+                throw Failure.rejected(String(localized: "Check your details, or try signing in if you already have an account."))
             case 404 where path.hasPrefix("contacts/"): throw Failure.notFound
-            case 409: throw Failure.rejected("Unable to create this account. Try signing in instead.")
-            default: throw Failure.rejected("Unable to complete the request. Please try again later.")
+            case 409: throw Failure.rejected(String(localized: "Unable to create this account. Try signing in instead."))
+            default: throw Failure.rejected(String(localized: "Unable to complete the request. Please try again later."))
             }
         }
         return (data, response)

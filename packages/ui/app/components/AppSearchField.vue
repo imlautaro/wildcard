@@ -6,6 +6,7 @@ import type { StyleValue } from 'vue';
 defineOptions({ inheritAttrs: false });
 defineProps<{ label: string; placeholder?: string }>();
 const model = defineModel<string>({ default: '' });
+const strings = useUiStrings();
 const attrs = useAttrs();
 const input = ref<HTMLInputElement>();
 const inputAttrs = computed(() => {
@@ -24,6 +25,6 @@ defineExpose({ focus: () => input.value?.focus() });
   <label class="search-field" :class="attrs.class" :style="attrs.style as StyleValue">
     <AppIcon name="search" />
     <input ref="input" v-bind="inputAttrs" v-model="model" type="search" :placeholder="placeholder ?? label" :aria-label="label">
-    <AppIconButton v-if="model" icon="close" label="Clear search" @click="clear" />
+    <AppIconButton v-if="model" icon="close" :label="strings.clearSearch" @click="clear" />
   </label>
 </template>

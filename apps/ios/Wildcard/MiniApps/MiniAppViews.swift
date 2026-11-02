@@ -30,7 +30,7 @@ struct MiniAppCardView: View {
                 MiniAppGlyph(app: app)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(app.title).manrope(.subheadline, weight: .bold).foregroundStyle(.primary).lineLimit(1)
-                    Text(app.isEnabled ? (app.subtitle ?? "Mini app") : app.status == "needs_reapproval" ? "Review changes to continue" : "Review to enable")
+                    Text(app.isEnabled ? (app.subtitle ?? String(localized: "Mini app")) : app.status == "needs_reapproval" ? String(localized: "Review changes to continue") : String(localized: "Review to enable"))
                         .manrope(.footnote, weight: app.isEnabled ? .regular : .semibold)
                         .foregroundStyle(app.isEnabled ? Color.secondary : Color.orange).lineLimit(1)
                 }
@@ -98,16 +98,16 @@ struct MiniAppScreen: View {
                         } else if store.apps[base] == nil {
                             ProgressView()
                         } else {
-                            ContentUnavailableView("Mini app unavailable", systemImage: "square.dashed", description: Text(store.errors[base] ?? "It may have been deleted."))
+                            ContentUnavailableView("Mini app unavailable", systemImage: "square.dashed", description: Text(store.errors[base] ?? String(localized: "It may have been deleted.")))
                         }
                     }
-                    .navigationTitle(app?.title ?? "Mini app")
+                    .navigationTitle(app?.title ?? String(localized: "Mini app"))
                     .navigationBarTitleDisplayMode(app?.isEnabled == true ? .large : .inline)
                     .toolbar { toolbar(app, components: store.views[key]?.view) }
                 }
             }
         }
-        .confirmationDialog("Delete \(app?.title ?? "mini app")?", isPresented: $confirmDelete, titleVisibility: .visible) {
+        .confirmationDialog("Delete \(app?.title ?? String(localized: "mini app"))?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) { Task { await delete() } }
         } message: { Text("The contact can build it again later.") }
         .alert(pendingAction?.label ?? "", isPresented: $confirming, presenting: pendingAction) { action in
@@ -328,8 +328,8 @@ struct MiniAppScreen: View {
             execution = nil
             // Local state changes show up in the view itself; only external writes report an outcome.
             guard !local else { return }
-            notice = status == "completed" ? "\(label): done." : status == "failed" ? "\(label) failed. Nothing was confirmed by the service."
-                : "\(label): the outcome is unknown. Check the service before trying again."
+            notice = status == "completed" ? String(localized: "\(label): done.") : status == "failed" ? String(localized: "\(label) failed. Nothing was confirmed by the service.")
+                : String(localized: "\(label): the outcome is unknown. Check the service before trying again.")
         } catch is CancellationError { }
         catch {
             if !AuthAPI.isTransient(error) { execution = nil }
@@ -629,7 +629,7 @@ struct MiniAppRenderer: View {
                 VStack(spacing: 8) {
                     MiniAppRing(fraction: current / goal, text: MiniAppFormat.text(.number(current), format: format, currency: currency, compact: true), size: 120)
                     Text(label).manrope(.headline, weight: .semibold)
-                    Text(caption ?? "of \(MiniAppFormat.text(.number(goal), format: format, currency: currency))").manrope(.footnote).foregroundStyle(.secondary)
+                    Text(caption ?? String(localized: "of \(MiniAppFormat.text(.number(goal), format: format, currency: currency))")).manrope(.footnote).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 8)
             } else {
@@ -929,7 +929,7 @@ struct MiniAppChart: View {
             }
             .chartLegend(position: .bottom, alignment: .center)
             .frame(height: height)
-            .accessibilityLabel(title ?? "Chart")
+            .accessibilityLabel(title ?? String(localized: "Chart"))
         } else {
             Chart(Array(points.enumerated()), id: \.offset) { _, point in
                 switch kind {
@@ -949,7 +949,7 @@ struct MiniAppChart: View {
                 AxisValueLabel { if let number = value.as(Double.self) { Text(MiniAppFormat.text(.number(number), format: format, currency: currency, compact: true)) } }
             } }
             .frame(height: height)
-            .accessibilityLabel(title ?? "Chart")
+            .accessibilityLabel(title ?? String(localized: "Chart"))
         }
     }
 }
@@ -1282,13 +1282,14 @@ enum MiniAppFormat {
         }
     }
     static func issue(_ code: String) -> String {
-        [
-            "TOOL_ERROR": "The connected service returned an error.", "RESULT_NOT_JSON": "The connected service did not return structured data.",
-            "TOOL_CHANGED": "A tool changed. Review this mini app again.", "INVALID_ARGUMENTS": "The request no longer matches the tool.",
-            "AUTHORIZATION_REQUIRED": "Authorize the connection again in Connections.", "CONNECTION_UNAVAILABLE": "Couldn't reach the connected service.",
-            "NOT_AUTHORIZED": "This tool is no longer allowed.", "PATH_NOT_FOUND": "This data wasn't in the result.", "NOT_A_LIST": "Expected a list of items.",
-            "TOO_MANY_ITEMS": "Too many items to show.", "TOO_MANY_GROUPS": "Too many groups to show.", "RESULT_TOO_LARGE": "This result is too large to show.",
-        ][code] ?? "Couldn't load this part."
+        let issues: [String: String] = [
+            "TOOL_ERROR": String(localized: "The connected service returned an error."), "RESULT_NOT_JSON": String(localized: "The connected service did not return structured data."),
+            "TOOL_CHANGED": String(localized: "A tool changed. Review this mini app again."), "INVALID_ARGUMENTS": String(localized: "The request no longer matches the tool."),
+            "AUTHORIZATION_REQUIRED": String(localized: "Authorize the connection again in Connections."), "CONNECTION_UNAVAILABLE": String(localized: "Couldn't reach the connected service."),
+            "NOT_AUTHORIZED": String(localized: "This tool is no longer allowed."), "PATH_NOT_FOUND": String(localized: "This data wasn't in the result."), "NOT_A_LIST": String(localized: "Expected a list of items."),
+            "TOO_MANY_ITEMS": String(localized: "Too many items to show."), "TOO_MANY_GROUPS": String(localized: "Too many groups to show."), "RESULT_TOO_LARGE": String(localized: "This result is too large to show."),
+        ]
+        return issues[code] ?? String(localized: "Couldn't load this part.")
     }
 }
 
@@ -1312,7 +1313,7 @@ struct MiniAppListView: View {
                                 MiniAppGlyph(app: app, size: 34)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(app.title).manrope(.body, weight: .semibold).foregroundStyle(.primary)
-                                    Text(app.isEnabled ? (app.subtitle ?? "Enabled") : "Needs review").manrope(.footnote).foregroundStyle(.secondary)
+                                    Text(app.isEnabled ? (app.subtitle ?? String(localized: "Enabled")) : String(localized: "Needs review")).manrope(.footnote).foregroundStyle(.secondary)
                                 }
                             }
                         }

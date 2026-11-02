@@ -3,11 +3,12 @@
 // stays reactive, so "Transcribing…" turns into the text when polling delivers it.
 const props = defineProps<{ transcript: string | null }>();
 const emit = defineEmits<{ close: [] }>();
-const text = computed(() => props.transcript === null ? 'Transcribing…' : props.transcript === '' ? 'No speech was detected.' : props.transcript);
+const { t } = useI18n();
+const text = computed(() => props.transcript === null ? t('chat.transcript.transcribing') : props.transcript === '' ? t('chat.transcript.noSpeech') : props.transcript);
 </script>
 
 <template>
-  <AppSheet title="Transcript" @close="emit('close')">
+  <AppSheet :title="$t('chat.transcript.title')" @close="emit('close')">
     <p class="sheet-text" :class="{ muted: !transcript }" role="status">{{ text }}</p>
   </AppSheet>
 </template>

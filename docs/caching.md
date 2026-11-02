@@ -183,6 +183,15 @@ available through the existing pagination API. Unread acknowledgements invalidat
 cannot resurrect a cleared counter. Read state is persisted on the server; the
 navigation cache itself remains in memory.
 
+## Localization
+
+Translations are bundled with each client and never fetched from the API, so they
+need no cache, invalidation or account isolation. The web language preference
+(`localStorage` `wildcard-language`) and the iOS per-app language are device
+settings that survive sign-out. Chat-list labels the clients translate (activity
+lines, previews the API words in English) are derived at render time from the
+existing cached summaries, with no extra request. See [localization](localization.md).
+
 ## Chats and Contacts lists
 
 The initial Chats list waits for both the contacts and groups caches to load before

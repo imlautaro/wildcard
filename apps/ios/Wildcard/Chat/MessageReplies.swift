@@ -29,7 +29,9 @@ struct MessageReplyQuoteView: View {
     var tinted = true
     private var beforeJoin: Bool { preview.quote.beforeJoin == true }
     private var label: String {
-        "Reply to \(preview.author): \(MessageReplySummary.description(preview.quote))" + (beforeJoin ? ". Before you joined" : "")
+        let summary = MessageReplySummary.description(preview.quote)
+        return beforeJoin ? String(localized: "Reply to \(preview.author): \(summary). Before you joined")
+            : String(localized: "Reply to \(preview.author): \(summary)")
     }
 
     var body: some View {
@@ -75,12 +77,14 @@ private struct MessageReplySummary: View {
     let quote: MessageReplyQuote
 
     static func description(_ quote: MessageReplyQuote) -> String {
-        guard quote.available else { return "Original message unavailable" }
-        if let sticker = quote.attachment?.sticker, quote.available { return "Sticker \(sticker.emoji)" }
+        guard quote.available else { return String(localized: "Original message unavailable") }
+        if let sticker = quote.attachment?.sticker, quote.available { return String(localized: "Sticker \(sticker.emoji)") }
+        // The server (and the local optimistic quote) stores a voice message's quote text as "Voice message".
+        if quote.text == "Voice message" && quote.attachment == nil { return String(localized: "Voice message") }
         if !quote.text.isEmpty { return quote.previewText ?? (quote.side == "assistant" || quote.agentID != nil ? MessageMarkdown.plainText(quote.text) : quote.text) }
         guard let attachment = quote.attachment else { return "" }
-        if let sticker = attachment.sticker { return "Sticker \(sticker.emoji)" }
-        return attachment.isImage ? "Photo" : attachment.name
+        if let sticker = attachment.sticker { return String(localized: "Sticker \(sticker.emoji)") }
+        return attachment.isImage ? String(localized: "Photo") : attachment.name
     }
 
     var body: some View {

@@ -15,7 +15,7 @@ struct ContentView: View {
                     Label("Unable to restore session", systemImage: "wifi.exclamationmark")
                         .manrope(.title2, weight: .semibold)
                 } description: {
-                    Text(auth.error ?? "Please try again when you are connected.")
+                    Text(auth.error ?? String(localized: "Please try again when you are connected."))
                 } actions: {
                     Button("Try again") { Task { await auth.restore() } }
                 }

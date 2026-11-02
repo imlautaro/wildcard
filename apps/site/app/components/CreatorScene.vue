@@ -3,7 +3,11 @@
 // the portrait, types the name and moves the temperament sliders (the app has 17;
 // four are shown).
 const order: CastId[] = ['mila', 'nova', 'ivy', 'theo', 'coco', 'pixel'];
-const styles = ['Cartoon', 'Anime', '3D animated movie', 'Realistic people', '3D animated pets', 'Custom'];
+const { t } = useI18n();
+const styles = computed(() => [
+  t('creatorScene.cartoon'), t('creatorScene.anime'), t('creatorScene.movie'),
+  t('creatorScene.realistic'), t('creatorScene.pets'), t('creatorScene.custom'),
+]);
 const traits: Record<CastId, number[]> = {
   mila: [86, 70, 64, 92],
   nova: [58, 82, 74, 40],
@@ -12,7 +16,7 @@ const traits: Record<CastId, number[]> = {
   coco: [78, 96, 70, 76],
   pixel: [90, 54, 66, 58],
 };
-const traitNames = ['Humor', 'Warmth', 'Initiative', 'Emoji'];
+const traitNames = computed(() => [t('creatorScene.humor'), t('creatorScene.warmth'), t('creatorScene.initiative'), t('creatorScene.emoji')]);
 
 const root = ref<HTMLElement | null>(null);
 const { step, fading } = useScene(root, [2600, 2600, 2600, 2600, 2600], { hold: 2600 });
@@ -34,18 +38,18 @@ const styleIndex = computed(() => Math.min(step.value, order.length - 1));
         <Transition name="morph" mode="out-in">
           <ContactAvatar :key="current" :who="current" :size="168" />
         </Transition>
-        <span class="regen"><SiteIcon name="wand" />Generate with AI</span>
+        <span class="regen"><SiteIcon name="wand" />{{ t('creatorScene.generate') }}</span>
       </div>
 
       <div class="fields">
         <div class="field-box">
-          <small>Name</small>
+          <small>{{ t('creatorScene.name') }}</small>
           <span :key="current" class="typed" :style="{ '--chars': member.name.length }">{{ member.name }}</span>
         </div>
         <div class="field-box">
-          <small>{{ current === 'pixel' ? 'Custom style' : 'Who they are' }}</small>
+          <small>{{ current === 'pixel' ? t('creatorScene.customStyle') : t('creatorScene.whoTheyAre') }}</small>
           <Transition name="fade" mode="out-in">
-            <span :key="current">{{ current === 'pixel' ? 'Retro video game robots' : member.role }}</span>
+            <span :key="current">{{ current === 'pixel' ? t('creatorScene.customValue') : t(`cast.${current}`) }}</span>
           </Transition>
         </div>
         <div class="sliders">

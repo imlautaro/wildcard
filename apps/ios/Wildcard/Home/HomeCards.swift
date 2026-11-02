@@ -55,7 +55,7 @@ struct HomePostView: View {
     private var content: HomeCardContent { post.content }
     private var accent: Color { HomeStyle.accent(content.accent) }
     private var isNote: Bool { content.kind == "note" }
-    private var name: String { post.contactName ?? "A contact" }
+    private var name: String { post.contactName ?? String(localized: "A contact") }
 
     // How much of each kind shows before "Show more".
     private static let collapsedCount: [String: Int] = ["matches": 2, "metrics": 3, "list": 3]
@@ -92,7 +92,7 @@ struct HomePostView: View {
             VStack(alignment: .leading, spacing: 6) {
                 header
                 if let reply = post.replyTo {
-                    Text("Replying to \(reply.contactName ?? "a contact")").manrope(.caption).foregroundStyle(.secondary)
+                    Text("Replying to \(reply.contactName ?? String(localized: "a contact"))").manrope(.caption).foregroundStyle(.secondary)
                 }
                 if let text = post.text {
                     Text(text).manrope(.body).fixedSize(horizontal: false, vertical: true)
@@ -252,13 +252,21 @@ struct HomePostView: View {
         URL(string: value)?.host()?.replacingOccurrences(of: "www.", with: "") ?? value
     }
 
-    /// Compact, like a timeline: "now", "27m", "2h", "3d", then the date.
+    /// Compact, like a timeline: "now", "27m", "2h", "3d", then the date. The abbreviations are
+    /// localized keys rather than `Duration.UnitsFormatStyle`, whose narrow Spanish output varies by
+    /// region (es_419 renders days as "3dd.").
     static func age(_ at: Double) -> String {
         let minutes = max(0, Int((Date.now.timeIntervalSince1970 * 1000 - at) / 60_000))
-        if minutes < 1 { return "now" }
-        if minutes < 60 { return "\(minutes)m" }
-        if minutes < 60 * 24 { return "\(Int((Double(minutes) / 60).rounded()))h" }
-        if minutes < 60 * 24 * 7 { return "\(Int((Double(minutes) / 1440).rounded()))d" }
+        if minutes < 1 { return String(localized: "now", comment: "Compact post age") }
+        if minutes < 60 { return String(localized: "\(minutes)m", comment: "Compact post age in minutes") }
+        if minutes < 60 * 24 {
+            let hours = Int((Double(minutes) / 60).rounded())
+            return String(localized: "\(hours)h", comment: "Compact post age in hours")
+        }
+        if minutes < 60 * 24 * 7 {
+            let days = Int((Double(minutes) / 1440).rounded())
+            return String(localized: "\(days)d", comment: "Compact post age in days")
+        }
         return Date(timeIntervalSince1970: at / 1000).formatted(.dateTime.month(.abbreviated).day())
     }
 }
@@ -571,9 +579,9 @@ private struct HomeReplyTemplate: View {
 
     /// The few words before a blank, so each field says what it is for.
     private func hint(_ blank: Int) -> String {
-        guard let position = segments.firstIndex(where: { $0.blank == blank }), position > 0, segments[position - 1].blank == nil else { return "Blank \(blank + 1)" }
+        guard let position = segments.firstIndex(where: { $0.blank == blank }), position > 0, segments[position - 1].blank == nil else { return String(localized: "Blank \(blank + 1)") }
         let words = segments[position - 1].text.split(separator: " ").suffix(3).joined(separator: " ")
-        return words.isEmpty ? "Blank \(blank + 1)" : "\(words) …"
+        return words.isEmpty ? String(localized: "Blank \(blank + 1)") : "\(words) …"
     }
 
     private func submit(_ blank: Int) {

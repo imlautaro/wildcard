@@ -105,7 +105,7 @@ struct DocumentCardView: View {
                     if let research = document.research {
                         Text("Web research · \(research.citedCount) cited sources").manrope(.footnote).foregroundStyle(.secondary)
                     }
-                    Text(document.preview.isEmpty ? "Empty document" : document.preview).manrope(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                    Text(document.preview.isEmpty ? String(localized: "Empty document") : document.preview).manrope(.footnote).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
@@ -214,7 +214,7 @@ struct DocumentScreen: View {
                     ProgressView("Loading…").frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .navigationTitle(editing ? "Edit document" : snapshot.value?.title ?? "Document")
+            .navigationTitle(editing ? String(localized: "Edit document") : snapshot.value?.title ?? String(localized: "Document"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if editing {
@@ -268,7 +268,7 @@ struct DocumentScreen: View {
                             ForEach(research.sources, id: \.url) { source in
                                 if let url = URL(string: source.url), ["https", "http"].contains(url.scheme?.lowercased() ?? "") {
                                     Link(destination: url) {
-                                        Text("\(source.title) · \(source.cited ? "Cited" : "Retrieved")").manrope(.footnote)
+                                        Text("\(source.title) · \(source.cited ? String(localized: "Cited", comment: "Research source state") : String(localized: "Retrieved", comment: "Research source state"))").manrope(.footnote)
                                     }
                                 }
                             }
@@ -283,7 +283,7 @@ struct DocumentScreen: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("\(revision.revision) · \(revision.authorName) · \(Date(timeIntervalSince1970: revision.createdAt / 1000).formatted(date: .abbreviated, time: .shortened))")
                                     .manrope(.footnote, weight: .semibold)
-                                Text(revision.summary ?? "No summary").manrope(.footnote).foregroundStyle(.secondary)
+                                Text(revision.summary ?? String(localized: "No summary")).manrope(.footnote).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -323,7 +323,7 @@ struct DocumentScreen: View {
             }
             .pickerStyle(.segmented)
             if preview {
-                ScrollView { MessageMarkdownView(markdown: MessageMarkdown(draftBody.isEmpty ? "*Nothing to preview.*" : draftBody)).frame(maxWidth: .infinity, alignment: .leading) }
+                ScrollView { MessageMarkdownView(markdown: MessageMarkdown(draftBody.isEmpty ? String(localized: "*Nothing to preview.*") : draftBody)).frame(maxWidth: .infinity, alignment: .leading) }
             } else {
                 TextEditor(text: $draftBody).font(.system(.body, design: .monospaced))
                     .scrollContentBackground(.hidden)
@@ -350,7 +350,7 @@ struct DocumentScreen: View {
         } catch is CancellationError { }
         catch AuthAPI.Failure.notFound {
             caches.documents.remove(id: "\(base)/\(documentID)")
-            error = "It was deleted or you no longer have access."
+            error = String(localized: "It was deleted or you no longer have access.")
         } catch {
             if snapshot.value == nil { self.error = error.localizedDescription }
         }
@@ -374,7 +374,9 @@ struct DocumentScreen: View {
         } catch is CancellationError { }
         catch AuthAPI.Failure.conflict(let message) {
             await load()
-            conflict = "\(message) Latest: revision \(snapshot.value?.revision ?? 0) by \(snapshot.value?.updatedByName ?? "someone")."
+            let revision = snapshot.value?.revision ?? 0
+            let author = snapshot.value?.updatedByName ?? String(localized: "someone")
+            conflict = String(localized: "\(message) Latest: revision \(revision) by \(author).")
         } catch { self.error = error.localizedDescription }
     }
 

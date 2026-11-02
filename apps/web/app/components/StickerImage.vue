@@ -6,7 +6,7 @@ const source = usePrivateImage(() => props.path);
 </script>
 
 <template>
-  <img v-if="source" class="sticker-image" :src="source" :alt="`Sticker ${emoji}`" draggable="false">
+  <img v-if="source" class="sticker-image" :src="source" :alt="$t('chat.stickers.image', { emoji })" draggable="false">
   <span v-else class="sticker-image sticker-loading"><span class="spinner" aria-hidden="true" /></span>
 </template>
 

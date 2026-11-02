@@ -147,7 +147,7 @@ final class PrivateImageCache {
         guard let image else {
             originals.removeObject(forKey: resource.key as NSString)
             await disk.remove(userID: userID, key: resource.key)
-            throw AuthAPI.Failure.rejected("This image could not be displayed. Please try again.")
+            throw AuthAPI.Failure.rejected(String(localized: "This image could not be displayed. Please try again."))
         }
         let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? maxPixelSize * maxPixelSize * 4
         // Large fullscreen images are retained by their viewer, not the thumbnail cache.

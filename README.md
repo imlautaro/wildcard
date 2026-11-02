@@ -164,7 +164,8 @@ auth, account, the unified chat list, private and group chats with attachments,
 contacts, and contact sharing. Voice dictation, push, and schedules are not
 available on the web yet. Its look comes from the shared
 [design system](docs/design-system.md) layer in `packages/ui`, which the admin panel
-extends too. With the API running locally:
+extends too. The iOS app, the web app and the marketing site ship in English and
+Spanish; see [localization](docs/localization.md). With the API running locally:
 
 ```sh
 npm run dev:web        # http://localhost:3000

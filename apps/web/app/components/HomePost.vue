@@ -9,6 +9,7 @@ export type HomePostAction = 'more' | 'less' | 'hide' | 'message' | 'reply' | 't
 // In a thread the attachments start expanded and a line joins the avatars.
 const props = defineProps<{ post: HomePost; threadCount?: number; inThread?: boolean; chained?: boolean }>();
 const emit = defineEmits<{ action: [kind: HomePostAction, prompt?: string] }>();
+const { t } = useI18n();
 const card = computed(() => props.post);
 const content = computed(() => props.post.content);
 const menuOpen = ref(false);
@@ -24,9 +25,9 @@ const preview = useLinkPreview(() => lead.value?.url ?? null);
 const image = usePrivateImage(() => preview.value?.status === 'ready' && preview.value.imageVersion
   ? `link-previews/${preview.value.hash}/image?v=${preview.value.imageVersion}` : null);
 const avatar = computed(() => props.post.contactID ? contactPhotoPath({ id: props.post.contactID, photoVersion: props.post.contactPhotoVersion }) : null);
-const name = computed(() => props.post.contactName ?? 'A contact');
+const name = computed(() => props.post.contactName ?? t('updates.aContact'));
 const time = computed(() => relativeTime(props.post.createdAt));
-const exactTime = computed(() => new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(props.post.createdAt));
+const exactTime = computed(() => new Intl.DateTimeFormat(appLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(props.post.createdAt));
 // A note's text is the post; any other post shows the contact's text above its card.
 const note = computed(() => content.value.kind === 'note');
 
@@ -58,11 +59,8 @@ const host = (url: string) => { try { return new URL(url).hostname.replace(/^www
 // Compact, like a timeline: "now", "27m", "2h", "3d", then the date.
 function relativeTime(at: number) {
   const minutes = Math.max(0, Math.round((Date.now() - at) / 60_000));
-  if (minutes < 1) return 'now';
-  if (minutes < 60) return `${minutes}m`;
-  if (minutes < 60 * 24) return `${Math.round(minutes / 60)}h`;
-  if (minutes < 60 * 24 * 7) return `${Math.round(minutes / 1440)}d`;
-  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(at);
+  if (minutes < 60 * 24 * 7) return compactAge(at);
+  return new Intl.DateTimeFormat(appLocale(), { month: 'short', day: 'numeric' }).format(at);
 }
 
 // Smooth line/area or bars in a 100×100 box, like the mini app charts.
@@ -100,18 +98,18 @@ function act(kind: HomePostAction, prompt?: string) { menuOpen.value = false; em
         <button v-if="!inThread" class="when link-button" :title="exactTime" @click="act('thread')">{{ time }}</button>
         <span v-else class="when" :title="exactTime">{{ time }}</span>
         <div class="mini-menu">
-          <AppIconButton icon="more" label="Post options" size="small" :tooltip="false" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen" />
+          <AppIconButton icon="more" :label="$t('updates.post.options')" size="small" :tooltip="false" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen" />
           <template v-if="menuOpen">
             <div class="backdrop" @click="menuOpen = false" />
             <div class="menu card-menu" role="menu">
-              <AppMenuItem v-if="card.contactID && card.contactName" icon="chat" role="menuitem" @click="act('message')">Message {{ card.contactName }}</AppMenuItem>
-              <AppMenuItem icon="thumb-down" role="menuitem" @click="act('less')">{{ card.feedback === 'less' ? 'Undo less like this' : 'Less like this' }}</AppMenuItem>
-              <AppMenuItem icon="hide" danger role="menuitem" @click="act('hide')">Hide from For you</AppMenuItem>
+              <AppMenuItem v-if="card.contactID && card.contactName" icon="chat" role="menuitem" @click="act('message')">{{ $t('updates.post.message', { name: card.contactName }) }}</AppMenuItem>
+              <AppMenuItem icon="thumb-down" role="menuitem" @click="act('less')">{{ card.feedback === 'less' ? $t('updates.post.undoLessLikeThis') : $t('updates.post.lessLikeThis') }}</AppMenuItem>
+              <AppMenuItem icon="hide" danger role="menuitem" @click="act('hide')">{{ $t('updates.post.hide') }}</AppMenuItem>
             </div>
           </template>
         </div>
       </header>
-      <p v-if="post.replyTo" class="replying">Replying to {{ post.replyTo.contactName ?? 'a contact' }}</p>
+      <p v-if="post.replyTo" class="replying">{{ $t('updates.post.replyingTo', { name: post.replyTo.contactName ?? $t('updates.aContactLower') }) }}</p>
       <p v-if="post.text" class="post-text" :class="{ open: !inThread }" @click="!inThread && act('thread')">{{ post.text }}</p>
 
       <div :class="note ? 'note-body' : 'attachment'">
@@ -221,16 +219,16 @@ function act(kind: HomePostAction, prompt?: string) { menuOpen.value = false; em
         </span>
       </div>
       <button v-if="expandable" class="expand link-button" :aria-expanded="expanded" @click="expanded = !expanded">
-        {{ expanded ? 'Show less' : hidden ? `Show ${hidden} more` : 'Show more' }}
+        {{ expanded ? $t('updates.post.showLess') : hidden ? $t('updates.post.showCountMore', { count: hidden }) : $t('updates.post.showMore') }}
       </button>
       </div>
 
       <footer class="post-actions">
-        <AppIconButton icon="heart" label="More like this" size="small" class="like" :selected="card.feedback === 'more'" @click="act('more')" />
-        <button v-if="card.contactID" class="comment-button" :aria-label="`Comment on ${name}’s post`" :title="`Comment on ${name}’s post`" @click="act('comment')">
+        <AppIconButton icon="heart" :label="$t('updates.post.moreLikeThis')" size="small" class="like" :selected="card.feedback === 'more'" @click="act('more')" />
+        <button v-if="card.contactID" class="comment-button" :aria-label="$t('updates.post.commentOn', { name })" :title="$t('updates.post.commentOn', { name })" @click="act('comment')">
           <AppIcon name="chat" /><span v-if="post.comments?.length">{{ post.comments.length }}</span>
         </button>
-        <button v-if="!inThread && (threadCount ?? 0) > 1" class="thread-link link-button" @click="act('thread')">{{ threadCount }} posts in this thread</button>
+        <button v-if="!inThread && (threadCount ?? 0) > 1" class="thread-link link-button" @click="act('thread')">{{ $t('updates.post.threadCount', { count: threadCount }) }}</button>
       </footer>
     </div>
   </article>

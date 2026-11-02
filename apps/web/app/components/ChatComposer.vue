@@ -16,7 +16,9 @@ const props = defineProps<{ disabled?: boolean; sending?: boolean; placeholder?:
 const draft = defineModel<string>({ required: true });
 const emit = defineEmits<{ send: [text: string, attachments: DraftAttachment[]]; voice: [clip: DraftVoice]; typing: []; cancelReply: []; cancelPost: []; sticker: [sticker: Sticker] }>();
 
+const { t } = useI18n();
 const maxAttachments = 10;
+const maxLength = 4000;
 const attachments = ref<DraftAttachment[]>([]);
 const preparing = ref(false);
 const problem = ref<string | null>(null);
@@ -24,13 +26,13 @@ const textarea = ref<HTMLTextAreaElement>();
 const picker = ref<HTMLInputElement>();
 const micButton = ref<HTMLButtonElement>();
 const length = computed(() => [...draft.value.trim()].length);
-const canSend = computed(() => !props.disabled && !props.sending && !preparing.value && length.value <= 4000 && (length.value > 0 || attachments.value.length > 0));
+const canSend = computed(() => !props.disabled && !props.sending && !preparing.value && length.value <= maxLength && (length.value > 0 || attachments.value.length > 0));
 // Mouse users click to start and click again to send; touch and pen keep hold-to-record.
 const mouseMode = ref(false);
 const recorder = useVoiceRecorder((clip) => {
   if (props.disabled || props.sending) return;
   emit('voice', clip);
-}, () => (mouseMode.value ? mouseRecordingHint : shortRecordingHint));
+}, () => (mouseMode.value ? mouseRecordingHint() : shortRecordingHint()));
 const supportsVoice = ref(false);
 onMounted(() => { supportsVoice.value = voiceRecordingSupported(); });
 const recording = computed(() => recorder.phase.value !== 'idle');
@@ -147,7 +149,7 @@ async function addFiles(files: File[]) {
   problem.value = null;
   try {
     for (const file of files) {
-      if (attachments.value.length >= maxAttachments) { problem.value = `Attach up to ${maxAttachments} files per message.`; break; }
+      if (attachments.value.length >= maxAttachments) { problem.value = t('chat.composer.tooManyFiles', { max: maxAttachments.toLocaleString(appLocale()) }); break; }
       try {
         attachments.value.push(await draftAttachment(file));
       } catch (error) {
@@ -255,38 +257,38 @@ defineExpose({ focus: () => textarea.value?.focus() });
   <div class="composer">
     <form @submit.prevent="submit">
       <div v-if="recording" class="voice-recording" :class="{ locked }" role="status">
-        <AppIconButton v-if="locked" icon="delete" label="Delete recording" danger @click="discardRecording" />
+        <AppIconButton v-if="locked" icon="delete" :label="$t('chat.composer.deleteRecording')" danger @click="discardRecording" />
         <span class="voice-dot" aria-hidden="true" />
-        <span class="voice-timer">{{ recorder.phase.value === 'requesting' ? 'Waiting for the microphone…' : recorder.phase.value === 'processing' ? 'Sending…' : clock(recorder.elapsedMs.value) }}</span>
+        <span class="voice-timer">{{ recorder.phase.value === 'requesting' ? $t('chat.composer.waitingMicrophone') : recorder.phase.value === 'processing' ? $t('chat.composer.sending') : clock(recorder.elapsedMs.value) }}</span>
         <span v-if="recorder.phase.value === 'processing'" />
-        <span v-else-if="!locked" class="voice-slide" :style="{ transform: `translateX(${drag.x}px)`, opacity: 1 + drag.x / cancelDistance }">‹ Slide to cancel</span>
-        <span v-else class="voice-slide">Recording</span>
+        <span v-else-if="!locked" class="voice-slide" :style="{ transform: `translateX(${drag.x}px)`, opacity: 1 + drag.x / cancelDistance }">{{ $t('chat.composer.slideToCancel') }}</span>
+        <span v-else class="voice-slide">{{ $t('chat.composer.recording') }}</span>
       </div>
-      <AppIconButton v-else icon="attach" label="Attach images or PDFs" size="large" :disabled="disabled || preparing" @click="picker?.click()" />
+      <AppIconButton v-else icon="attach" :label="$t('chat.composer.attach')" size="large" :disabled="disabled || preparing" @click="picker?.click()" />
       <input ref="picker" type="file" multiple class="visually-hidden" :accept="attachmentTypes.join(',')" tabindex="-1" @change="choose">
       <div v-show="!recording" class="input">
         <div v-if="post" class="draft-reply">
           <MessagePostReference :post="post" />
-          <AppIconButton icon="close" label="Don’t reply to this post" size="small" :disabled="disabled" @click="emit('cancelPost')" />
+          <AppIconButton icon="close" :label="$t('chat.composer.cancelPost')" size="small" :disabled="disabled" @click="emit('cancelPost')" />
         </div>
         <div v-if="reply" class="draft-reply">
           <MessageReplyQuote :preview="reply" />
-          <AppIconButton icon="close" label="Cancel reply" size="small" :disabled="disabled" @click="emit('cancelReply')" />
+          <AppIconButton icon="close" :label="$t('chat.composer.cancelReply')" size="small" :disabled="disabled" @click="emit('cancelReply')" />
         </div>
         <div v-for="item in attachments" :key="item.previewURL ?? item.name + item.size" class="draft-attachment">
           <img v-if="item.previewURL" :src="item.previewURL" alt="">
           <AppIcon v-else name="file" class="draft-file" />
           <span class="name">{{ item.name }} · {{ fileSize(item.size) }}</span>
-          <AppIconButton icon="close" :label="`Remove ${item.name}`" size="small" @click="removeAttachment(item)" />
+          <AppIconButton icon="close" :label="$t('chat.composer.removeAttachment', { name: item.name })" size="small" @click="removeAttachment(item)" />
         </div>
-        <div v-if="preparing" class="draft-attachment muted"><span class="spinner" /> Preparing attachment…</div>
+        <div v-if="preparing" class="draft-attachment muted"><span class="spinner" /> {{ $t('chat.composer.preparing') }}</div>
         <textarea
-          ref="textarea" v-model="draft" rows="1" :placeholder="placeholder ?? 'Message'" aria-label="Message"
+          ref="textarea" v-model="draft" rows="1" :placeholder="placeholder ?? $t('chat.composer.placeholder')" :aria-label="$t('chat.composer.placeholder')"
           @keydown="onKey" @input="emit('typing')" @paste="onPaste"
         />
       </div>
       <AppIconButton
-        v-if="stickers && !recording" ref="stickerButton" icon="sticker" label="Stickers" size="large"
+        v-if="stickers && !recording" ref="stickerButton" icon="sticker" :label="$t('chat.composer.stickers')" size="large"
         :disabled="disabled || sending" aria-haspopup="dialog" @click="stickerPanel = 'picker'"
       />
       <div v-if="showsMicrophone" class="mic-slot">
@@ -295,14 +297,14 @@ defineExpose({ focus: () => textarea.value?.focus() });
         </div>
         <button
           ref="micButton" type="button" class="send mic" data-ripple :class="{ recording: recording && !locked, locked }"
-          :aria-label="locked ? 'Stop and send voice message' : 'Record a voice message'"
-          :title="locked ? undefined : mouseMode ? 'Click to record' : 'Hold to record, release to send'"
+          :aria-label="locked ? $t('chat.composer.stopAndSend') : $t('chat.composer.record')"
+          :title="locked ? undefined : mouseMode ? $t('chat.composer.clickToRecord') : $t('chat.composer.holdToRecord')"
           :disabled="(disabled || sending) && !recording"
           @pointerdown="micDown" @pointermove="micMove" @pointerup="micUp" @pointercancel="micCancel" @lostpointercapture="micCancel"
           @click="micClick" @keydown="micKey" @contextmenu.prevent
         ><AppIcon :name="locked ? 'stop' : 'mic'" /></button>
       </div>
-      <button v-else type="submit" class="send" data-ripple :disabled="!canSend" aria-label="Send"><AppIcon name="send" /></button>
+      <button v-else type="submit" class="send" data-ripple :disabled="!canSend" :aria-label="$t('chat.composer.send')"><AppIcon name="send" /></button>
     </form>
     <StickerPicker
       v-if="stickers && stickerPanel === 'picker'" :contact-i-d="stickers.contactID" :contact-name="stickers.contactName"
@@ -313,12 +315,12 @@ defineExpose({ focus: () => textarea.value?.focus() });
       <div class="drop-overlay" aria-hidden="true">
         <div class="drop-target">
           <AppIcon name="attach" />
-          <strong>Drop to attach</strong>
-          <span>Images or PDFs, up to 5 MB each</span>
+          <strong>{{ $t('chat.composer.dropTitle') }}</strong>
+          <span>{{ $t('chat.composer.dropText') }}</span>
         </div>
       </div>
     </Teleport>
-    <p v-if="length > 4000" class="hint">Messages can contain up to 4,000 characters.</p>
+    <p v-if="length > maxLength" class="hint">{{ $t('chat.composer.tooLong', { max: maxLength.toLocaleString(appLocale()) }) }}</p>
     <p v-else-if="problem" class="hint">{{ problem }}</p>
     <p v-else-if="recorder.notice.value && !recording" class="hint" :class="{ info: !recorder.notice.value.error }" :role="recorder.notice.value.error ? 'alert' : 'status'">{{ recorder.notice.value.text }}</p>
   </div>

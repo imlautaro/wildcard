@@ -9,6 +9,7 @@ import type { Sticker } from '~/utils/types';
 const props = defineProps<{ contactID?: string | null; contactName?: string | null }>();
 const emit = defineEmits<{ close: []; pick: [sticker: Sticker]; create: [] }>();
 
+const { t } = useI18n();
 const stickers = useStickers();
 const { library } = stickers;
 type Mode = { kind: 'grid' } | { kind: 'actions' | 'emoji' | 'delete'; sticker: Sticker };
@@ -18,9 +19,9 @@ const busy = ref<string[]>([]);
 const problem = ref<string | null>(null);
 const emoji = ref('');
 const contact = computed(() => props.contactID ? stickers.contactList(props.contactID) : null);
-const tabs = computed(() => [{ value: 'mine' as const, label: 'My stickers' }, { value: 'contact' as const, label: props.contactName?.trim() || 'Contact' }]);
+const tabs = computed(() => [{ value: 'mine' as const, label: t('chat.stickers.mine') }, { value: 'contact' as const, label: props.contactName?.trim() || t('chat.contactFallback') }]);
 const current = computed(() => tab.value === 'contact' && contact.value ? contact.value : library);
-const title = computed(() => mode.value.kind === 'grid' ? 'Stickers' : 'Sticker');
+const title = computed(() => mode.value.kind === 'grid' ? t('chat.stickers.title') : t('chat.stickers.detailTitle'));
 const full = computed(() => library.limit !== null && library.items.length >= library.limit);
 
 function load(force = false) {
@@ -87,71 +88,71 @@ watch(() => library.items, (items) => {
 <template>
   <AppSheet :title="title" wide @close="dismiss">
     <template v-if="mode.kind === 'grid'">
-      <AppSegmented v-if="contactID" v-model="tab" :options="tabs" label="Sticker library" class="sticker-tabs" />
+      <AppSegmented v-if="contactID" v-model="tab" :options="tabs" :label="$t('chat.stickers.library')" class="sticker-tabs" />
       <AppNotice v-if="problem" dismissible @dismiss="problem = null">{{ problem }}</AppNotice>
       <AppNotice v-if="current.error" :tone="current.loaded ? 'warning' : 'error'">
         {{ current.error }}
-        <template #actions><button type="button" class="link-button" @click="load(true)">Retry</button></template>
+        <template #actions><button type="button" class="link-button" @click="load(true)">{{ $t('common.retry') }}</button></template>
       </AppNotice>
-      <AppLoading v-else-if="!current.loaded" label="Loading stickers…" />
-      <ul v-if="current.loaded || tab === 'mine'" class="sticker-grid" :aria-label="tab === 'mine' ? 'My stickers' : `${contactName ?? 'Contact'} stickers`">
+      <AppLoading v-else-if="!current.loaded" :label="$t('chat.stickers.loading')" />
+      <ul v-if="current.loaded || tab === 'mine'" class="sticker-grid" :aria-label="tab === 'mine' ? $t('chat.stickers.mine') : $t('chat.stickers.contactStickers', { name: contactName ?? $t('chat.contactFallback') })">
         <li v-if="tab === 'mine'">
-          <button type="button" class="sticker-create" :disabled="full" :aria-label="full ? 'Create sticker (library full)' : 'Create sticker'" @click="emit('create')">
-            <AppIcon name="plus" /><span>Create sticker</span>
+          <button type="button" class="sticker-create" :disabled="full" :aria-label="full ? $t('chat.stickers.createFull') : $t('chat.stickers.create')" @click="emit('create')">
+            <AppIcon name="plus" /><span>{{ $t('chat.stickers.create') }}</span>
           </button>
         </li>
         <template v-if="tab === 'mine'">
           <li v-for="sticker in library.items" :key="sticker.id" class="sticker-tile">
             <button
-              type="button" class="sticker-button" :aria-label="`Send sticker ${sticker.emoji}`" @click="choose(sticker)"
+              type="button" class="sticker-button" :aria-label="$t('chat.stickers.send', { emoji: sticker.emoji })" @click="choose(sticker)"
               @pointerdown="press($event, sticker)" @pointerup="release" @pointercancel="release" @pointermove="release" @contextmenu.prevent="mode = { kind: 'actions', sticker }"
             >
               <StickerImage :path="stickerImagePath(sticker)" :emoji="sticker.emoji" />
               <span class="sticker-emoji" aria-hidden="true">{{ sticker.emoji }}</span>
             </button>
-            <AppIconButton class="sticker-more" icon="more" size="small" :label="`Actions for sticker ${sticker.emoji}`" @click="mode = { kind: 'actions', sticker }" />
+            <AppIconButton class="sticker-more" icon="more" size="small" :label="$t('chat.stickers.actionsFor', { emoji: sticker.emoji })" @click="mode = { kind: 'actions', sticker }" />
           </li>
         </template>
         <template v-else-if="contactID && contact">
           <li v-for="sticker in contact.items" :key="sticker.id" class="sticker-tile">
             <button
               type="button" class="sticker-button" :disabled="stickers.hasDigest(sticker.digest) || isBusy(sticker)"
-              :aria-label="stickers.hasDigest(sticker.digest) ? `Sticker ${sticker.emoji} saved to my stickers` : `Save sticker ${sticker.emoji} to my stickers`"
+              :aria-label="stickers.hasDigest(sticker.digest) ? $t('chat.stickers.savedLabel', { emoji: sticker.emoji }) : $t('chat.stickers.saveLabel', { emoji: sticker.emoji })"
               @click="saveContactSticker(sticker)"
             >
               <StickerImage :path="contactStickerImagePath(contactID, sticker)" :emoji="sticker.emoji" />
               <span class="sticker-emoji" aria-hidden="true">{{ sticker.emoji }}</span>
               <span v-if="isBusy(sticker)" class="sticker-state"><span class="spinner" aria-hidden="true" /></span>
-              <span v-else-if="stickers.hasDigest(sticker.digest)" class="sticker-state saved"><AppIcon name="check" filled /><span>Saved</span></span>
-              <span v-else class="sticker-state save"><AppIcon name="plus" /><span>Save</span></span>
+              <span v-else-if="stickers.hasDigest(sticker.digest)" class="sticker-state saved"><AppIcon name="check" filled /><span>{{ $t('chat.stickers.saved') }}</span></span>
+              <span v-else class="sticker-state save"><AppIcon name="plus" /><span>{{ $t('chat.stickers.save') }}</span></span>
             </button>
           </li>
         </template>
       </ul>
       <p v-if="tab === 'mine' && library.loaded && !library.items.length" class="sticker-empty">
-        No stickers yet. Create one from a photo{{ contactID ? `, or save one of ${contactName ?? 'your contact'}’s` : '' }}.
+        {{ contactID ? $t('chat.stickers.emptyMineContact', { name: contactName ?? $t('chat.stickers.yourContact') }) : $t('chat.stickers.emptyMine') }}
       </p>
       <p v-else-if="tab === 'contact' && contact?.loaded && !contact.items.length" class="sticker-empty">
-        {{ contactName ?? 'This contact' }} has no stickers to save yet.
+        {{ $t('chat.stickers.emptyContact', { name: contactName ?? $t('chat.stickers.thisContact') }) }}
       </p>
-      <p v-if="tab === 'mine' && library.limit !== null" class="sticker-count small muted">{{ library.items.length }} of {{ library.limit }} stickers</p>
+      <p v-if="tab === 'mine' && library.limit !== null" class="sticker-count small muted">{{ $t('chat.stickers.count', { count: library.items.length, limit: library.limit }) }}</p>
     </template>
 
     <template v-else>
       <div class="sticker-detail"><StickerImage :path="stickerImagePath(mode.sticker)" :emoji="mode.sticker.emoji" /></div>
       <AppNotice v-if="problem" dismissible @dismiss="problem = null">{{ problem }}</AppNotice>
-      <div v-if="mode.kind === 'actions'" class="menu sticker-actions" role="group" aria-label="Sticker actions">
-        <AppMenuItem icon="sparkle" @click="startEmoji(mode.sticker)">Change emoji ({{ mode.sticker.emoji }})</AppMenuItem>
-        <AppMenuItem icon="delete" danger @click="mode = { kind: 'delete', sticker: mode.sticker }">Delete</AppMenuItem>
+      <div v-if="mode.kind === 'actions'" class="menu sticker-actions" role="group" :aria-label="$t('chat.stickers.actions')">
+        <AppMenuItem icon="sparkle" @click="startEmoji(mode.sticker)">{{ $t('chat.stickers.changeEmoji', { emoji: mode.sticker.emoji }) }}</AppMenuItem>
+        <AppMenuItem icon="delete" danger @click="mode = { kind: 'delete', sticker: mode.sticker }">{{ $t('common.delete') }}</AppMenuItem>
       </div>
       <StickerEmojiPicker v-else-if="mode.kind === 'emoji'" v-model="emoji" />
-      <p v-else class="sticker-empty">Delete this sticker from your library? Messages you already sent keep it.</p>
+      <p v-else class="sticker-empty">{{ $t('chat.stickers.deleteConfirm') }}</p>
     </template>
 
     <template v-if="mode.kind !== 'grid'" #actions>
-      <AppButton variant="text" @click="back">Back</AppButton>
-      <AppButton v-if="mode.kind === 'emoji'" :loading="isBusy(mode.sticker)" :disabled="!emoji || emoji === mode.sticker.emoji" @click="saveEmoji(mode.sticker)">Save emoji</AppButton>
-      <AppButton v-else-if="mode.kind === 'delete'" variant="danger" :loading="isBusy(mode.sticker)" @click="confirmDelete(mode.sticker)">Delete</AppButton>
+      <AppButton variant="text" @click="back">{{ $t('common.back') }}</AppButton>
+      <AppButton v-if="mode.kind === 'emoji'" :loading="isBusy(mode.sticker)" :disabled="!emoji || emoji === mode.sticker.emoji" @click="saveEmoji(mode.sticker)">{{ $t('chat.stickers.saveEmoji') }}</AppButton>
+      <AppButton v-else-if="mode.kind === 'delete'" variant="danger" :loading="isBusy(mode.sticker)" @click="confirmDelete(mode.sticker)">{{ $t('common.delete') }}</AppButton>
     </template>
   </AppSheet>
 </template>

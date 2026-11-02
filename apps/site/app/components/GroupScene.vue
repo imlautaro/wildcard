@@ -3,12 +3,13 @@
 // another person in the group), the board moves, and a shared document lands.
 type Column = 'todo' | 'doing' | 'done';
 interface Task { id: string; title: string; who: CastId; waits?: string }
-const tasks: Task[] = [
-  { id: 'flights', title: 'Compare flights', who: 'mila' },
-  { id: 'stay', title: 'Pick a neighborhood', who: 'theo' },
-  { id: 'food', title: 'Map the best pastéis', who: 'coco' },
-  { id: 'plan', title: 'Write the trip plan', who: 'mila', waits: 'Waits on 3 tasks' },
-];
+const { t } = useI18n();
+const tasks = computed<Task[]>(() => [
+  { id: 'flights', title: t('groupScene.flights'), who: 'mila' },
+  { id: 'stay', title: t('groupScene.stay'), who: 'theo' },
+  { id: 'food', title: t('groupScene.food'), who: 'coco' },
+  { id: 'plan', title: t('groupScene.plan'), who: 'mila', waits: t('groupScene.waits') },
+]);
 // Column of each task at each beat (index = step).
 const columns: Record<string, Column[]> = {
   flights: ['todo', 'todo', 'doing', 'doing', 'doing', 'doing', 'done', 'done', 'done', 'done'],
@@ -19,35 +20,35 @@ const columns: Record<string, Column[]> = {
 const root = ref<HTMLElement | null>(null);
 // 1 ask · 2 Mila · 3 Theo · 4 Ana adds Coco · 5 Coco · 6–8 progress · 9 plan · (final) doc
 const { step, fading } = useScene(root, [700, 1300, 1300, 1300, 1400, 1300, 1300, 1300, 1600], { hold: 4600 });
-const lanes: { id: Column; label: string }[] = [
-  { id: 'todo', label: 'To do' }, { id: 'doing', label: 'Working' }, { id: 'done', label: 'Done' },
-];
-const inLane = (lane: Column) => tasks.filter((task) => columns[task.id]![Math.min(step.value, 9)] === lane);
+const lanes = computed<{ id: Column; label: string }[]>(() => [
+  { id: 'todo', label: t('groupScene.todo') }, { id: 'doing', label: t('groupScene.doing') }, { id: 'done', label: t('groupScene.done') },
+]);
+const inLane = (lane: Column) => tasks.value.filter((task) => columns[task.id]![Math.min(step.value, 9)] === lane);
 </script>
 
 <template>
   <div ref="root" class="group-scene scene stage" :class="{ fading }">
-    <PhoneFrame title="Lisbon in March ✈️" :group="['mila', 'theo', 'coco']" status="You, Ana, Mila, Theo, Coco" class="group-phone">
+    <PhoneFrame :title="t('groupScene.title')" :group="['mila', 'theo', 'coco']" :status="t('groupScene.members')" class="group-phone">
       <div class="thread">
-        <div v-if="step >= 1" class="bubble-row outgoing pop"><div class="bubble">Plan 4 days in Lisbon for late March. Can you split it up?</div></div>
+        <div v-if="step >= 1" class="bubble-row outgoing pop"><div class="bubble">{{ t('groupScene.ask') }}</div></div>
         <div v-if="step >= 2" class="bubble-row incoming pop">
           <ContactAvatar who="mila" :size="28" />
-          <div class="bubble" :style="{ '--sender-light': cast.mila.tint[0], '--sender-dark': cast.mila.tint[1] }"><span class="sender">Mila</span>On it! I'll take flights and write up the final plan 🛫</div>
+          <div class="bubble" :style="{ '--sender-light': cast.mila.tint[0], '--sender-dark': cast.mila.tint[1] }"><span class="sender">Mila</span>{{ t('groupScene.mila') }}</div>
         </div>
         <div v-if="step >= 3" class="bubble-row incoming pop">
           <ContactAvatar who="theo" :size="28" />
-          <div class="bubble" :style="{ '--sender-light': cast.theo.tint[0], '--sender-dark': cast.theo.tint[1] }"><span class="sender">Theo</span>I've got neighborhoods and where to stay.</div>
+          <div class="bubble" :style="{ '--sender-light': cast.theo.tint[0], '--sender-dark': cast.theo.tint[1] }"><span class="sender">Theo</span>{{ t('groupScene.theo') }}</div>
         </div>
-        <div v-if="step >= 4" class="system-banner pop"><SiteIcon name="users" />Ana added her contact Coco</div>
+        <div v-if="step >= 4" class="system-banner pop"><SiteIcon name="users" />{{ t('groupScene.added') }}</div>
         <div v-if="step >= 5" class="bubble-row incoming pop">
           <ContactAvatar who="coco" :size="28" />
-          <div class="bubble" :style="{ '--sender-light': cast.coco.tint[0], '--sender-dark': cast.coco.tint[1] }"><span class="sender">Coco</span>Ana says food is non-negotiable. I'll map the pastéis de nata 🥧</div>
+          <div class="bubble" :style="{ '--sender-light': cast.coco.tint[0], '--sender-dark': cast.coco.tint[1] }"><span class="sender">Coco</span>{{ t('groupScene.coco') }}</div>
         </div>
       </div>
     </PhoneFrame>
 
     <div class="board">
-      <div class="board-head"><SiteIcon name="checklist" /><strong>Tasks</strong><small>{{ inLane('done').length }}/{{ tasks.length }} done</small></div>
+      <div class="board-head"><SiteIcon name="checklist" /><strong>{{ t('groupScene.tasks') }}</strong><small>{{ t('groupScene.progress', { done: inLane('done').length, total: tasks.length }) }}</small></div>
       <div class="board-lanes">
         <div v-for="lane in lanes" :key="lane.id" class="board-lane">
           <span class="lane-label">{{ lane.label }}</span>
@@ -68,7 +69,7 @@ const inLane = (lane: Column) => tasks.filter((task) => columns[task.id]![Math.m
       <Transition name="doc">
         <div v-if="step >= 9" class="doc">
           <span class="doc-icon"><SiteIcon name="doc" /></span>
-          <span class="doc-text"><strong>Lisbon in March: trip plan</strong><small>Shared document · Flights · Alfama stay · 12 food stops</small></span>
+          <span class="doc-text"><strong>{{ t('groupScene.doc') }}</strong><small>{{ t('groupScene.docMeta') }}</small></span>
         </div>
       </Transition>
     </div>

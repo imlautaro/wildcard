@@ -20,10 +20,15 @@ struct AccountView: View {
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
 
     private static let models = [
-        (value: "muse-spark-1.3", label: "Standard", detail: "Meta does not train on your data."),
-        (value: "muse-spark-1.3-contributor", label: "Contributor", detail: "Meta may train models on what you send."),
+        (value: "muse-spark-1.3", label: String(localized: "Standard", comment: "Chat model tier"), detail: String(localized: "Meta does not train on your data.")),
+        (value: "muse-spark-1.3-contributor", label: "Contributor", detail: String(localized: "Meta may train models on what you send.")),
     ]
     private var currentModel: String { auth.user?.chatModel ?? "muse-spark-1.3" }
+    /// The language iOS chose for the app (its per-app Language setting), named in that language.
+    private var languageName: String {
+        let code = Bundle.main.preferredLocalizations.first ?? "en"
+        return Locale.current.localizedString(forLanguageCode: code)?.capitalized(with: Locale.current) ?? code
+    }
 
     var body: some View {
         Form {
@@ -48,13 +53,13 @@ struct AccountView: View {
                     } label: {
                         HStack {
                             Label("Email", systemImage: "envelope")
-                            InfoButton(title: "Your profile", text: "Group members and people you share contacts with can see your name and photo.")
+                            InfoButton(title: String(localized: "Your profile"), text: String(localized: "Group members and people you share contacts with can see your name and photo."))
                         }
                     }
                 }
             }
             Section {
-                SheetRow(title: "Chat model", systemImage: "cpu",
+                SheetRow(title: String(localized: "Chat model"), systemImage: "cpu",
                          value: Self.models.first { $0.value == currentModel }?.label ?? currentModel) {
                     chatModel = currentModel
                     contributorConsent = false
@@ -62,16 +67,22 @@ struct AccountView: View {
                     showingModel = true
                 }
                 .disabled(refreshingProfile || auth.isBusy)
-                SheetRow(title: "Notifications", systemImage: "bell", value: push.status) { showingNotifications = true }
+                SheetRow(title: String(localized: "Notifications"), systemImage: "bell", value: push.status) { showingNotifications = true }
                 Picker(selection: $appearance) {
                     ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
                 } label: {
                     Label("Appearance", systemImage: "circle.lefthalf.filled")
                 }
                 .pickerStyle(.menu)
+                // iOS shows its per-app Language picker in Settings once the app has two localizations.
+                SheetRow(title: String(localized: "Language"), systemImage: "globe", value: languageName) {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
                 NavigationLink { McpConnectionsView(contactID: "account", cache: contacts.mcpSnapshots.store(for: "account")) }
                     label: { Label("Connections", systemImage: "link") }
                 NavigationLink(value: HomeDestination.nativeExperiments) { Label("Native experiments", systemImage: "iphone") }
+            } footer: {
+                Text("Change the app language in Settings.")
             }
             Section {
                 Toggle(isOn: Binding(
@@ -91,11 +102,11 @@ struct AccountView: View {
                 )) {
                     HStack {
                         Label("Contacts share with each other", systemImage: "person.2")
-                        InfoButton(title: "Contacts share with each other", text: PrivacyGuide.contactsShareInfo)
+                        InfoButton(title: String(localized: "Contacts share with each other"), text: PrivacyGuide.contactsShareInfo)
                     }
                 }
                 .disabled(savingPrivacy || refreshingProfile || auth.isBusy)
-                SheetRow(title: "How privacy works", systemImage: "lock", value: "") { showingPrivacy = true }
+                SheetRow(title: String(localized: "How privacy works"), systemImage: "lock", value: "") { showingPrivacy = true }
                 if let privacyError { Text(privacyError).foregroundStyle(.red) }
             } header: {
                 Text("Privacy")
@@ -154,7 +165,7 @@ struct AccountView: View {
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 4) {
                         Text("Chat model").manrope(.headline, weight: .semibold)
-                        InfoButton(title: "Chat model", text: "Contributor allows Meta to use submitted messages, files, context and responses to train models. Standard does not. Applies to new chat jobs, schedules and group exchanges you start; jobs already started keep their model. Shared data may still use Contributor when you separately consent. MCP chats always use Standard.")
+                        InfoButton(title: String(localized: "Chat model"), text: String(localized: "Contributor allows Meta to use submitted messages, files, context and responses to train models. Standard does not. Applies to new chat jobs, schedules and group exchanges you start; jobs already started keep their model. Shared data may still use Contributor when you separately consent. MCP chats always use Standard."))
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -188,7 +199,7 @@ struct AccountView: View {
                         Task { await push.activate(using: auth, requestPermission: true) }
                     }
                     .disabled(push.isBusy)
-                    if push.badgeStatus != "Enabled" {
+                    if !push.isBadgeEnabled {
                         Button("Enable app icon badge", systemImage: "app.badge") {
                             Task { await push.activate(using: auth, requestPermission: true) }
                         }

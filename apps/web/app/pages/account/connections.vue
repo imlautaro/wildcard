@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { McpConnection, McpPreset } from '~/composables/useMcpConnections';
+const { t } = useI18n();
 const id = computed(() => 'account');
 const { connections, callbackURL, presets, busy, error, refresh, mutate } = useMcpConnections(id);
 const name = ref('');
@@ -62,10 +63,11 @@ const detailID = ref<string | null>(null);
 const formOpen = ref(false);
 const detail = computed(() => connections.value?.find(connection => connection.id === detailID.value) ?? null);
 function authLabel(connection: McpConnection) {
-  return connection.authType === 'oauth' ? (connection.authenticated ? 'OAuth connected' : 'Authorization required') : connection.authenticated ? 'Bearer token' : 'Public access';
+  return connection.authType === 'oauth' ? (connection.authenticated ? t('account.connections.auth.oauthConnected') : t('account.connections.auth.required')) : connection.authenticated ? t('account.connections.auth.bearer') : t('account.connections.auth.public');
 }
 function summary(connection: McpConnection) {
-  return connection.authType === 'oauth' && !connection.authenticated ? 'Needs authorization' : `${connection.tools.filter(tool => tool.allowed).length}/${connection.tools.length} tools`;
+  return connection.authType === 'oauth' && !connection.authenticated ? t('account.connections.needsAuthorization')
+    : t('account.connections.toolCount', { allowed: connection.tools.filter(tool => tool.allowed).length, total: connection.tools.length });
 }
 function openForm() {
   if (configureID.value || preset.value) resetForm();
@@ -76,10 +78,11 @@ function cancelForm() {
   formOpen.value = false;
 }
 function configureFromDetail(connection: McpConnection) { configure(connection); detailID.value = null; formOpen.value = true; }
-const libraryInfo = 'Official remote MCP servers from each provider, prefilled with their endpoint and access mode. You still review the privacy terms, sign in with the provider and approve each tool. Wildcard does not operate these servers, and providers can change them.';
-const supported = 'Remote Streamable HTTP servers with public access, a Bearer token, or OAuth. Legacy SSE and local command servers are not supported yet.';
-const oauthInfo = "Wildcard discovers the OAuth settings and opens the provider's sign-in page. Authorizing an account does not enable tools. Most servers need no manual settings. If you use your own client credentials, enter their trusted authorization server too. Google requires your own registered Web OAuth client marked for an AI-powered agent and Workspace preview access.";
-const notice = 'Configure a connector once, then grant contacts access from their Connections screen. Tool approvals apply to every contact and group you authorize. Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard.';
+const authOptions = computed(() => [
+  { value: 'none' as const, label: t('account.connections.auth.public') },
+  { value: 'bearer' as const, label: t('account.connections.auth.bearer') },
+  { value: 'oauth' as const, label: 'OAuth' },
+]);
 async function connect() {
   let connectionID = configureID.value;
   if (!connectionID) {
@@ -93,15 +96,15 @@ async function connect() {
   else if (!error.value) { resetForm(); consent.value = false; formOpen.value = false; }
 }
 async function permission(connection: string, tool: { name: string; fingerprint: string; allowed: boolean }) {
-  if (!tool.allowed && !window.confirm(`Allow ${tool.name} without asking again? It may read, change, or send external data. Only enable tools you understand and trust.`)) return;
+  if (!tool.allowed && !window.confirm(t('account.connections.confirmTool', { tool: tool.name }))) return;
   await mutate(`/${connection}`, 'PATCH', { fingerprint: tool.fingerprint, allowed: !tool.allowed });
 }
 async function enableAll(connection: McpConnection) {
-  if (!window.confirm(`Enable all ${connection.tools.length} tools for ${connection.name} without asking again? This includes tools hidden by search. These tools may read, change, or send external data. Only enable tools you understand and trust.`)) return;
+  if (!window.confirm(t('account.connections.confirmAll', { count: connection.tools.length, name: connection.name }, connection.tools.length))) return;
   await mutate(`/${connection.id}`, 'PATCH', { fingerprints: connection.tools.map(tool => tool.fingerprint), allowed: true });
 }
 async function disconnect(connection: string) {
-  if (!window.confirm('Disconnect this server? Future calls will be blocked. Actions already started may finish. Historical messages remain private.')) return;
+  if (!window.confirm(t('account.connections.confirmDisconnect'))) return;
   await mutate(`/${connection}`, 'DELETE');
   if (!error.value) detailID.value = null;
 }
@@ -109,35 +112,35 @@ onMounted(() => { void refresh(); });
 onBeforeUnmount(() => { token.value = ''; clientSecret.value = ''; });
 </script>
 <template>
-  <PageBar title="Connections" back="/account" always-back>
-    <InfoButton label="Connections" :text="`${notice}\n\n${supported}`" />
-    <AppIconButton icon="refresh" label="Refresh connections" :disabled="busy" @click="refresh()" />
+  <PageBar :title="t('account.connections.title')" back="/account" always-back>
+    <InfoButton :label="t('account.connections.title')" :text="`${t('account.connections.notice')}\n\n${t('account.connections.supported')}`" />
+    <AppIconButton icon="refresh" :label="t('account.connections.refresh')" :disabled="busy" @click="refresh()" />
   </PageBar>
   <div class="page"><div class="page-inner">
     <AppNotice v-if="error && !detailID && !formOpen">{{ error }}</AppNotice>
-    <div class="group-title">Servers</div>
-    <AppLoading v-if="connections === null" label="Loading connections…" />
+    <div class="group-title">{{ t('account.connections.servers') }}</div>
+    <AppLoading v-if="connections === null" :label="t('account.connections.loading')" />
     <AppListGroup v-else>
-      <div v-if="!connections.length" class="text-block">No connections yet.</div>
+      <div v-if="!connections.length" class="text-block">{{ t('account.connections.empty') }}</div>
       <AppListItem v-for="connection in connections" :key="connection.id" icon="link" opens :value="summary(connection)" @click="detailID = connection.id">
         <template v-if="presetFor(connection.url)" #leading><ConnectorLogo :id="presetFor(connection.url)!.id" /></template>
         {{ connection.name }}
       </AppListItem>
-      <AppListItem icon="grid" :disabled="busy || !presets.length" @click="libraryOpen = true">Browse connector library</AppListItem>
-      <AppListItem icon="plus" :disabled="busy" @click="openForm">Add custom server</AppListItem>
+      <AppListItem icon="grid" :disabled="busy || !presets.length" @click="libraryOpen = true">{{ t('account.connections.browseLibrary') }}</AppListItem>
+      <AppListItem icon="plus" :disabled="busy" @click="openForm">{{ t('account.connections.addCustom') }}</AppListItem>
     </AppListGroup>
 
-    <AppSheet v-if="libraryOpen" title="Connector library" @close="libraryOpen = false; libraryQuery = ''">
-      <template #header><InfoButton label="Connector library" :text="libraryInfo" /></template>
-      <AppSearchField v-model="libraryQuery" label="Search connectors" maxlength="200" class="tool-search" />
-      <p v-if="!library.length" class="text-block">No matches</p>
+    <AppSheet v-if="libraryOpen" :title="t('account.connections.library')" @close="libraryOpen = false; libraryQuery = ''">
+      <template #header><InfoButton :label="t('account.connections.library')" :text="t('account.connections.libraryInfo')" /></template>
+      <AppSearchField v-model="libraryQuery" :label="t('account.connections.searchConnectors')" maxlength="200" class="tool-search" />
+      <p v-if="!library.length" class="text-block">{{ t('common.noMatches') }}</p>
       <template v-for="group in library" :key="group.category">
         <div class="group-title">{{ group.category }}</div>
         <AppListGroup>
           <AppListItem v-for="entry in group.entries" :key="entry.id" opens :supporting="entry.description" @click="choosePreset(entry)">
             <template #leading><ConnectorLogo :id="entry.id" /></template>
             {{ entry.name }}
-            <template #trailing><AppChip v-if="connectedURLs.has(entry.url)" tone="success">Connected</AppChip></template>
+            <template #trailing><AppChip v-if="connectedURLs.has(entry.url)" tone="success">{{ t('account.connections.connected') }}</AppChip></template>
           </AppListItem>
         </AppListGroup>
       </template>
@@ -145,44 +148,44 @@ onBeforeUnmount(() => { token.value = ''; clientSecret.value = ''; });
 
     <AppSheet v-if="detail" :title="detail.name" @close="detailID = null">
       <AppListGroup>
-        <AppListItem plain :value="authLabel(detail)">Access</AppListItem>
+        <AppListItem plain :value="authLabel(detail)">{{ t('account.connections.access') }}</AppListItem>
         <div class="text-block">
           <p class="wrap">{{ detail.url }}</p>
-          <p v-if="detail.oauthIssuer" class="wrap">Issuer: {{ detail.oauthIssuer }}<br>Requested scopes: {{ detail.oauthScope }}</p>
+          <p v-if="detail.oauthIssuer" class="wrap">{{ t('account.connections.issuer', { issuer: detail.oauthIssuer }) }}<br>{{ t('account.connections.scopes', { scopes: detail.oauthScope ?? '' }) }}</p>
         </div>
       </AppListGroup>
       <AppListGroup>
         <div v-if="detail.authType === 'oauth' && detail.oauthConfigured" class="button-row-with-info">
-          <AppListItem icon="key" :disabled="busy" @click="authorize(detail.id)">{{ detail.authenticated ? 'Reauthorize' : 'Authorize' }}</AppListItem>
-          <InfoButton label="Reauthorize" text="Reauthorizing clears existing tool permissions. Review and enable them again afterward." />
+          <AppListItem icon="key" :disabled="busy" @click="authorize(detail.id)">{{ detail.authenticated ? t('account.connections.reauthorize') : t('account.connections.authorize') }}</AppListItem>
+          <InfoButton :label="t('account.connections.reauthorize')" :text="t('account.connections.reauthorizeInfo')" />
         </div>
-        <AppListItem v-if="detail.authType === 'oauth'" icon="gear" :disabled="busy" @click="configureFromDetail(detail)">Configure OAuth</AppListItem>
-        <AppListItem v-if="detail.tools.length" icon="check" :disabled="busy || detail.tools.every(tool => tool.allowed) || (detail.authType === 'oauth' && !detail.authenticated)" @click="enableAll(detail)">Enable all tools</AppListItem>
-        <AppListItem icon="refresh" :disabled="busy" @click="mutate(`/${detail.id}/refresh`, 'POST', {})">Refresh tools</AppListItem>
+        <AppListItem v-if="detail.authType === 'oauth'" icon="gear" :disabled="busy" @click="configureFromDetail(detail)">{{ t('account.connections.configureOAuth') }}</AppListItem>
+        <AppListItem v-if="detail.tools.length" icon="check" :disabled="busy || detail.tools.every(tool => tool.allowed) || (detail.authType === 'oauth' && !detail.authenticated)" @click="enableAll(detail)">{{ t('account.connections.enableAll') }}</AppListItem>
+        <AppListItem icon="refresh" :disabled="busy" @click="mutate(`/${detail.id}/refresh`, 'POST', {})">{{ t('account.connections.refreshTools') }}</AppListItem>
       </AppListGroup>
       <template v-if="detail.tools.length">
-        <div class="group-title">Tools</div>
-        <AppSearchField v-if="detail.tools.length > 10" v-model="toolQuery" label="Search tools" maxlength="200" class="tool-search" />
+        <div class="group-title">{{ t('account.connections.tools') }}</div>
+        <AppSearchField v-if="detail.tools.length > 10" v-model="toolQuery" :label="t('account.connections.searchTools')" maxlength="200" class="tool-search" />
         <AppListGroup>
-          <div v-if="!visibleTools(detail).length" class="text-block">No matches</div>
+          <div v-if="!visibleTools(detail).length" class="text-block">{{ t('common.noMatches') }}</div>
           <label v-for="tool in visibleTools(detail)" :key="tool.fingerprint" class="toggle">
             <span class="toggle-label">
-              <span class="two-line"><strong>{{ tool.name }}</strong><span class="small">{{ tool.allowed ? 'Runs without asking' : 'Asks before running' }}</span></span>
-              <InfoButton :label="tool.name" :text="`${tool.description}\n\nInput schema\n${JSON.stringify(tool.inputSchema, null, 2)}`" />
+              <span class="two-line"><strong>{{ tool.name }}</strong><span class="small">{{ tool.allowed ? t('account.connections.runsWithoutAsking') : t('account.connections.asksBeforeRunning') }}</span></span>
+              <InfoButton :label="tool.name" :text="`${tool.description}\n\n${t('account.connections.inputSchema')}\n${JSON.stringify(tool.inputSchema, null, 2)}`" />
             </span>
-            <input type="checkbox" role="switch" :checked="tool.allowed" :disabled="busy" :aria-label="`Allow ${tool.name} without asking again`"
+            <input type="checkbox" role="switch" :checked="tool.allowed" :disabled="busy" :aria-label="t('account.connections.allowTool', { tool: tool.name })"
               @change="($event.target as HTMLInputElement).checked = tool.allowed; permission(detail.id, tool)">
           </label>
         </AppListGroup>
       </template>
       <AppListGroup>
-        <AppListItem icon="close" danger :disabled="busy" @click="disconnect(detail.id)">Disconnect</AppListItem>
+        <AppListItem icon="close" danger :disabled="busy" @click="disconnect(detail.id)">{{ t('account.connections.disconnect') }}</AppListItem>
       </AppListGroup>
       <AppNotice v-if="error">{{ error }}</AppNotice>
     </AppSheet>
 
-    <AppSheet v-if="formOpen" :title="configureID ? 'Configure OAuth' : preset ? `Connect ${preset.name}` : 'Add server'" @close="cancelForm">
-      <template #header><InfoButton label="Supported servers" :text="supported" /></template>
+    <AppSheet v-if="formOpen" :title="configureID ? t('account.connections.configureOAuth') : preset ? t('account.connections.connectPreset', { name: preset.name }) : t('account.connections.addServer')" @close="cancelForm">
+      <template #header><InfoButton :label="t('account.connections.supportedTitle')" :text="t('account.connections.supported')" /></template>
       <form id="mcp-form" @submit.prevent="connect">
         <AppListGroup v-if="preset">
           <div class="preset-summary">
@@ -192,40 +195,40 @@ onBeforeUnmount(() => { token.value = ''; clientSecret.value = ''; });
           <p v-if="preset.note" class="text-block">{{ preset.note }}</p>
         </AppListGroup>
         <AppListGroup>
-          <div class="field"><label for="mcp-name">Name</label><input id="mcp-name" v-model="name" :readonly="!!configureID" placeholder="My server" maxlength="80" required></div>
-          <div class="field"><label for="mcp-url">URL</label><input id="mcp-url" v-model="url" :readonly="!!configureID || !!preset" type="url" placeholder="https://example.com/mcp" aria-label="HTTPS endpoint" maxlength="2048" required></div>
+          <div class="field"><label for="mcp-name">{{ t('account.connections.name') }}</label><input id="mcp-name" v-model="name" :readonly="!!configureID" :placeholder="t('account.connections.namePlaceholder')" maxlength="80" required></div>
+          <div class="field"><label for="mcp-url">URL</label><input id="mcp-url" v-model="url" :readonly="!!configureID || !!preset" type="url" placeholder="https://example.com/mcp" :aria-label="t('account.connections.endpoint')" maxlength="2048" required></div>
           <div class="field">
-            <label for="mcp-auth">Access</label>
+            <label for="mcp-auth">{{ t('account.connections.access') }}</label>
             <AppSelect
               id="mcp-auth" v-model="authType" variant="plain" :disabled="!!configureID || !!preset"
-              :options="[{ value: 'none', label: 'Public access' }, { value: 'bearer', label: 'Bearer token' }, { value: 'oauth', label: 'OAuth' }]"
+              :options="authOptions"
             />
           </div>
-          <div v-if="authType === 'bearer'" class="field"><label for="mcp-token">Token</label><input id="mcp-token" v-model="token" type="password" :placeholder="preset ? 'Required' : 'Optional'" :aria-label="preset ? 'Bearer token' : 'Bearer token (optional)'" autocomplete="off" maxlength="4096"></div>
+          <div v-if="authType === 'bearer'" class="field"><label for="mcp-token">{{ t('account.connections.token') }}</label><input id="mcp-token" v-model="token" type="password" :placeholder="preset ? t('account.connections.required') : t('account.connections.optional')" :aria-label="preset ? t('account.connections.auth.bearer') : t('account.connections.bearerOptional')" autocomplete="off" maxlength="4096"></div>
         </AppListGroup>
-        <AppListGroup v-if="authType === 'oauth'" title="OAuth" :info="oauthInfo">
-          <p v-if="!callbackURL" class="text-block callback-missing">OAuth requires a public HTTPS API configuration.</p>
+        <AppListGroup v-if="authType === 'oauth'" title="OAuth" :info="t('account.connections.oauthInfo')">
+          <p v-if="!callbackURL" class="text-block callback-missing">{{ t('account.connections.callbackMissing') }}</p>
           <details class="text-block" :open="advancedOAuth" @toggle="advancedOAuth = ($event.target as HTMLDetailsElement).open">
-            <summary>Advanced (optional)</summary>
+            <summary>{{ t('account.connections.advanced') }}</summary>
             <div class="oauth-fields">
-              <AppTextField v-model="issuer" label="Authorization server (automatic when empty)" type="url" aria-label="Authorization server override" />
-              <AppTextField v-model="scope" label="Scopes (automatic when empty)" aria-label="Requested scopes override" maxlength="2000" />
-              <AppTextField v-model="clientID" label="Client ID (only if required)" aria-label="OAuth client ID" autocomplete="off" maxlength="2048" />
-              <AppTextField v-model="clientSecret" label="Client secret (if required)" type="password" aria-label="OAuth client secret" autocomplete="off" maxlength="4096" />
+              <AppTextField v-model="issuer" :label="t('account.connections.issuerField')" type="url" :aria-label="t('account.connections.issuerAria')" />
+              <AppTextField v-model="scope" :label="t('account.connections.scopesField')" :aria-label="t('account.connections.scopesAria')" maxlength="2000" />
+              <AppTextField v-model="clientID" :label="t('account.connections.clientIDField')" :aria-label="t('account.connections.clientIDAria')" autocomplete="off" maxlength="2048" />
+              <AppTextField v-model="clientSecret" :label="t('account.connections.clientSecretField')" type="password" :aria-label="t('account.connections.clientSecretAria')" autocomplete="off" maxlength="4096" />
             </div>
-            <p v-if="callbackURL" class="wrap">OAuth redirect URI: <span class="code">{{ callbackURL }}</span></p>
+            <p v-if="callbackURL" class="wrap">{{ t('account.connections.redirectURI') }} <span class="code">{{ callbackURL }}</span></p>
           </details>
         </AppListGroup>
         <!-- Consent covers this text, so it stays visible beside the checkbox. -->
         <AppListGroup>
-          <p class="text-block">{{ notice }}</p>
-          <label class="check-row"><input v-model="consent" type="checkbox" required><span>I accept these data access and privacy terms.</span></label>
+          <p class="text-block">{{ t('account.connections.notice') }}</p>
+          <label class="check-row"><input v-model="consent" type="checkbox" required><span>{{ t('account.connections.acceptTerms') }}</span></label>
         </AppListGroup>
         <AppNotice v-if="error">{{ error }}</AppNotice>
       </form>
       <template #actions>
-        <AppButton variant="text" @click="cancelForm">Cancel</AppButton>
-        <AppButton type="submit" form="mcp-form" :disabled="busy || !consent || !name.trim() || !url.trim() || (preset?.authType === 'bearer' && !token.trim())">{{ authType === 'oauth' ? 'Continue' : 'Connect' }}</AppButton>
+        <AppButton variant="text" @click="cancelForm">{{ t('common.cancel') }}</AppButton>
+        <AppButton type="submit" form="mcp-form" :disabled="busy || !consent || !name.trim() || !url.trim() || (preset?.authType === 'bearer' && !token.trim())">{{ authType === 'oauth' ? t('common.continue') : t('account.connections.connect') }}</AppButton>
       </template>
     </AppSheet>
   </div></div>

@@ -1,20 +1,23 @@
 <script setup lang="ts">
 // Self-hosting: the provisioning steps from docs/infrastructure.md typed into a
 // terminal, ending with the automatic release from Workers Builds.
-const lines: { kind: 'cmd' | 'ok' | 'note'; text: string }[] = [
+// Commands stay as typed; the output and the comment are messages.
+type Line = { kind: 'cmd' | 'ok' | 'note'; text: string };
+const { t } = useI18n();
+const lines = computed<Line[]>(() => [
   { kind: 'cmd', text: 'git clone https://github.com/imlautaro/wildcard && cd wildcard' },
   { kind: 'cmd', text: 'npm ci && npx wrangler login' },
   { kind: 'cmd', text: 'npm run infra:provision' },
-  { kind: 'ok', text: 'D1 database ready · binding DB' },
+  { kind: 'ok', text: t('terminalScene.database') },
   { kind: 'cmd', text: 'npm run infra:photos' },
-  { kind: 'ok', text: 'R2 bucket ready · binding CONTACT_PHOTOS' },
-  { kind: 'note', text: '# Add META_API_KEY as a secret, connect Workers Builds' },
+  { kind: 'ok', text: t('terminalScene.bucket') },
+  { kind: 'note', text: t('terminalScene.note') },
   { kind: 'cmd', text: 'git push origin main' },
-  { kind: 'ok', text: 'Workers Builds: migrations applied, wildcard-api released' },
-  { kind: 'ok', text: 'wildcard-web released · your Wildcard is live' },
-];
+  { kind: 'ok', text: t('terminalScene.api') },
+  { kind: 'ok', text: t('terminalScene.web') },
+]);
 const root = ref<HTMLElement | null>(null);
-const { step, fading } = useScene(root, lines.map((line) => (line.kind === 'cmd' ? 900 : 600)), { hold: 5000 });
+const { step, fading } = useScene(root, lines.value.map((line) => (line.kind === 'cmd' ? 900 : 600)), { hold: 5000 });
 </script>
 
 <template>

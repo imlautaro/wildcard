@@ -29,22 +29,22 @@ onMounted(() => { if (!chats.loaded.value) void chats.refresh(); });
 </script>
 
 <template>
-  <PageBar title="New Group" back="/contacts" always-back />
+  <PageBar :title="$t('groups.new.title')" back="/contacts" always-back />
   <div class="page">
     <form class="page-inner" @submit.prevent="create">
-      <AppListGroup footer="After creating the group, add your contacts and invite people by email.">
-        <div class="field"><input v-model="name" type="text" placeholder="Group name" aria-label="Group name" maxlength="100" autofocus></div>
+      <AppListGroup :footer="$t('groups.new.footer')">
+        <div class="field"><input v-model="name" type="text" :placeholder="$t('groups.new.name')" :aria-label="$t('groups.new.name')" maxlength="100" autofocus></div>
       </AppListGroup>
-      <div class="group-title">Shared memory</div>
+      <div class="group-title">{{ $t('groups.new.sharedMemory') }}</div>
       <ConsentFields
         v-model:share-memory="shareMemory" v-model:contributor-consent="contributorConsent"
         :contributor-model="chats.contributorModel.value"
-        :disclosure="['Group members can see your name and profile photo. Members can read the group\'s history, including messages sent before they joined, unless they were added without earlier messages. Contacts use what group members have told them, except chats kept private. What you say here can become a shared memory, used in this group and in private chats with its members, never in other groups. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.']"
-        memory-label="I accept shared memory"
-        contributor-note="Your selected model is Contributor. Group messages and shared memories sent to Meta may be used for model training."
+        :disclosure="[$t('groups.new.disclosure')]"
+        :memory-label="$t('groups.new.memoryLabel')"
+        :contributor-note="$t('groups.new.contributorNote')"
       />
       <AppNotice v-if="error">{{ error }}</AppNotice>
-      <AppButton type="submit" block :disabled="!valid || busy">Create Group</AppButton>
+      <AppButton type="submit" block :disabled="!valid || busy">{{ $t('groups.new.create') }}</AppButton>
     </form>
   </div>
 </template>

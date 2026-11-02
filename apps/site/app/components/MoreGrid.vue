@@ -1,17 +1,18 @@
 <script setup lang="ts">
 // Smaller features as a bento grid, each tile with a CSS-only loop.
 const wave = [6, 14, 22, 12, 26, 18, 8, 20, 28, 16, 10, 24, 14, 6, 18, 22, 12, 8];
+const { t } = useI18n();
 </script>
 
 <template>
   <div class="bento">
     <article class="tile reveal">
       <div class="art art-schedule" aria-hidden="true">
-        <span class="sched"><AppIcon name="clock" /><span><strong>Today, 4:00 PM</strong><small>“Call the oat-milk supplier”</small></span></span>
-        <span class="sched second"><AppIcon name="refresh" /><span><strong>Every 7 days</strong><small>“How was the week?”</small></span></span>
+        <span class="sched"><AppIcon name="clock" /><span><strong>{{ t('more.scheduleToday') }}</strong><small>{{ t('more.scheduleTodayText') }}</small></span></span>
+        <span class="sched second"><AppIcon name="refresh" /><span><strong>{{ t('more.scheduleWeekly') }}</strong><small>{{ t('more.scheduleWeeklyText') }}</small></span></span>
       </div>
-      <h3>Reminders and scheduled messages</h3>
-      <p>Ask for a nudge in two hours or a check-in every week. Contacts can even schedule one for someone else in a shared chat.</p>
+      <h3>{{ t('more.schedule') }}</h3>
+      <p>{{ t('more.scheduleText') }}</p>
     </article>
     <article class="tile reveal delay-1">
       <div class="art art-voice" aria-hidden="true">
@@ -19,16 +20,16 @@ const wave = [6, 14, 22, 12, 26, 18, 8, 20, 28, 16, 10, 24, 14, 6, 18, 22, 12, 8
         <span class="wave"><i v-for="(h, i) in wave" :key="i" :style="{ height: `${h}px`, animationDelay: `${i * 70}ms` }" /></span>
         <small class="tabular">0:14</small>
       </div>
-      <h3>Voice messages</h3>
-      <p>Hold to talk. Contacts transcribe what you say and can answer in a voice of their own.</p>
+      <h3>{{ t('more.voice') }}</h3>
+      <p>{{ t('more.voiceText') }}</p>
     </article>
     <article class="tile reveal delay-2">
       <div class="art art-sticker" aria-hidden="true">
         <span class="sticker"><ContactAvatar who="coco" :size="84" /></span>
         <span class="sticker two"><ContactAvatar who="pixel" :size="64" /></span>
       </div>
-      <h3>Stickers</h3>
-      <p>Cut a sticker out of any photo. Contacts make their own, and might borrow yours.</p>
+      <h3>{{ t('more.stickers') }}</h3>
+      <p>{{ t('more.stickersText') }}</p>
     </article>
     <article class="tile reveal">
       <div class="art art-photos" aria-hidden="true">
@@ -36,40 +37,40 @@ const wave = [6, 14, 22, 12, 26, 18, 8, 20, 28, 16, 10, 24, 14, 6, 18, 22, 12, 8
         <span class="photo p2" />
         <span class="photo p3" />
       </div>
-      <h3>Pictures and selfies</h3>
-      <p>Contacts can send images, including selfies that actually look like them.</p>
+      <h3>{{ t('more.photos') }}</h3>
+      <p>{{ t('more.photosText') }}</p>
     </article>
     <article class="tile reveal delay-1">
       <div class="art art-mini" aria-hidden="true">
-        <span class="mini-row"><span>Water</span><span class="mini-bar"><i style="--w: 75%" /></span><small>6/8</small></span>
-        <span class="mini-row"><span>Reading</span><span class="mini-bar"><i style="--w: 40%" /></span><small>12/30</small></span>
-        <span class="mini-row"><span>Steps</span><span class="mini-bar"><i style="--w: 90%" /></span><small>9k</small></span>
+        <span class="mini-row"><span>{{ t('more.miniWater') }}</span><span class="mini-bar"><i style="--w: 75%" /></span><small>6/8</small></span>
+        <span class="mini-row"><span>{{ t('more.miniReading') }}</span><span class="mini-bar"><i style="--w: 40%" /></span><small>12/30</small></span>
+        <span class="mini-row"><span>{{ t('more.miniSteps') }}</span><span class="mini-bar"><i style="--w: 90%" /></span><small>9k</small></span>
       </div>
-      <h3>Mini apps</h3>
-      <p>Trackers, quizzes and small tools a contact builds for you, rendered natively and shareable in groups.</p>
+      <h3>{{ t('more.miniApps') }}</h3>
+      <p>{{ t('more.miniAppsText') }}</p>
     </article>
     <article class="tile reveal delay-2">
       <div class="art art-doc" aria-hidden="true">
         <span class="doc-line w90" /><span class="doc-line w70" /><span class="doc-line w80"><b>[1]</b></span><span class="doc-line w60"><b>[2]</b></span>
       </div>
-      <h3>Research and documents</h3>
-      <p>Ask a question, get a sourced report saved as a shared document you can both edit.</p>
+      <h3>{{ t('more.research') }}</h3>
+      <p>{{ t('more.researchText') }}</p>
     </article>
     <article class="tile reveal">
       <div class="art art-monitor" aria-hidden="true">
         <span class="radar"><SiteIcon name="radar" /></span>
-        <span class="monitor-text"><strong>Ticket page changed</strong><small>Checked hourly · only relevant changes</small></span>
+        <span class="monitor-text"><strong>{{ t('more.monitorChanged') }}</strong><small>{{ t('more.monitorChecked') }}</small></span>
       </div>
-      <h3>Page monitors</h3>
-      <p>A contact watches a page and only wakes up when something you care about changes.</p>
+      <h3>{{ t('more.monitors') }}</h3>
+      <p>{{ t('more.monitorsText') }}</p>
     </article>
     <article class="tile reveal delay-1">
       <div class="art art-react" aria-hidden="true">
-        <span class="mini-bubble">haha you were right about the logo</span>
+        <span class="mini-bubble">{{ t('more.reactionBubble') }}</span>
         <span class="reactions"><span>😂</span><span>❤️</span></span>
       </div>
-      <h3>Reactions and replies</h3>
-      <p>Contacts react to messages and quote the one they're answering, in private chats and in groups.</p>
+      <h3>{{ t('more.reactions') }}</h3>
+      <p>{{ t('more.reactionsText') }}</p>
     </article>
   </div>
 </template>

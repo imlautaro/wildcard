@@ -14,7 +14,24 @@ struct ConversationLearningItem: Decodable, Sendable, Identifiable {
     let expiresAt: Double
     let evidence: [Evidence]
     var id: String { key }
-    var label: String { ["observation": "Observation", "adjustment": "Conversation adjustment", "question": "Optional question"][kind] ?? kind }
+    var label: String {
+        switch kind {
+        case "observation": String(localized: "Observation")
+        case "adjustment": String(localized: "Conversation adjustment")
+        case "question": String(localized: "Optional question")
+        default: kind
+        }
+    }
+    /// Question status (`pending | asked | answered | dismissed`).
+    var statusLabel: String {
+        switch status {
+        case "pending": String(localized: "Pending", comment: "Status of an optional question a contact may ask")
+        case "asked": String(localized: "Asked", comment: "Status of an optional question a contact may ask")
+        case "answered": String(localized: "Answered", comment: "Status of an optional question a contact may ask")
+        case "dismissed": String(localized: "Dismissed", comment: "Status of an optional question a contact may ask")
+        default: status.capitalized
+        }
+    }
 }
 
 struct ConversationLearningSnapshot: Decodable, Sendable {
@@ -68,17 +85,17 @@ struct ConversationLearningView: View {
                         }
                         ForEach(profile.items) { item in
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("\(item.label) · \(item.confidence == "supported" ? "Repeated evidence" : "Tentative")")
+                                Text(item.confidence == "supported" ? "\(item.label) · Repeated evidence" : "\(item.label) · Tentative")
                                     .font(.caption).foregroundStyle(.secondary)
                                 Text(item.text)
-                                if item.kind == "question" { Text(item.status.capitalized).font(.caption).foregroundStyle(.secondary) }
+                                if item.kind == "question" { Text(item.statusLabel).font(.caption).foregroundStyle(.secondary) }
                                 if !item.answer.isEmpty { Text(item.answer) }
                                 DisclosureGroup("Context and evidence") {
                                     VStack(alignment: .leading, spacing: 8) {
                                         if !item.opportunity.isEmpty { Text("May fit: \(item.opportunity)") }
                                         if !item.avoid.isEmpty { Text("Avoid: \(item.avoid)") }
                                         ForEach(Array(item.evidence.enumerated()), id: \.offset) { _, evidence in
-                                            Text("\(evidence.side == "human" ? "You" : profile.agentName): \(evidence.quote)")
+                                            Text("\(evidence.side == "human" ? String(localized: "You") : profile.agentName): \(evidence.quote)")
                                         }
                                     }.font(.caption).foregroundStyle(.secondary)
                                 }
@@ -119,7 +136,7 @@ struct ConversationLearningView: View {
             }
             error = nil
         } catch is CancellationError { }
-        catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = "This conversation is no longer available." }
+        catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = String(localized: "This conversation is no longer available.") }
         catch { self.error = error.localizedDescription }
     }
 }

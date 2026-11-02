@@ -90,7 +90,7 @@ struct ContactLinksView: View {
                 }
             }
             error = nil
-        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = "This contact is no longer available." }
+        } catch AuthAPI.Failure.notFound { cache.invalidate(remove: true); error = String(localized: "This contact is no longer available.") }
         catch is CancellationError { }
         catch { self.error = error.localizedDescription }
     }

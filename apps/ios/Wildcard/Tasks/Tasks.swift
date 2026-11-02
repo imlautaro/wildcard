@@ -32,9 +32,11 @@ struct TaskItem: Decodable, Hashable, Sendable, Identifiable {
     let researchLimit: Int?
     let researchStatus: String?
     var researchDetail: String {
-        let labels = ["pending": "Pending or uncertain", "ready": "Draft saved", "stopped": "Stopped before publication", "complete": "Report saved", "failed": "Failed"]
-        let status = researchStatus.map { " · \(labels[$0] ?? $0)" } ?? ""
-        return "\(researchUsed ?? 0)/\(researchLimit ?? 1) web research attempts used\(status)"
+        let labels = ["pending": String(localized: "Pending or uncertain"), "ready": String(localized: "Draft saved"), "stopped": String(localized: "Stopped before publication"), "complete": String(localized: "Report saved"), "failed": String(localized: "Failed")]
+        let used = researchUsed ?? 0, limit = researchLimit ?? 1
+        guard let researchStatus else { return String(localized: "\(used)/\(limit) web research attempts used") }
+        let status = labels[researchStatus] ?? researchStatus
+        return String(localized: "\(used)/\(limit) web research attempts used · \(status)")
     }
     let monitorURL: String?
     let monitorKeywords: String?
@@ -50,21 +52,22 @@ struct TaskItem: Decodable, Hashable, Sendable, Identifiable {
     let reviewFeedback: String?
     var reviewDetail: String? {
         guard let rounds = reviewRounds, rounds > 0 else { return nil }
-        let feedback = !isFinished ? reviewFeedback.map { ": \($0)" } ?? "" : ""
-        return "Revision round \(rounds)/\(reviewRoundLimit ?? 2)\(feedback)"
+        let limit = reviewRoundLimit ?? 2
+        if !isFinished, let reviewFeedback { return String(localized: "Revision round \(rounds)/\(limit): \(reviewFeedback)") }
+        return String(localized: "Revision round \(rounds)/\(limit)")
     }
-    static let monitorIntervals = [(60, "Every hour"), (360, "Every 6 hours"), (1440, "Every day")]
+    static let monitorIntervals = [(60, String(localized: "Every hour")), (360, String(localized: "Every 6 hours")), (1440, String(localized: "Every day"))]
     var monitorDetail: String {
         let interval = Self.monitorIntervals.first { $0.0 == (monitorInterval ?? 360) }?.1.lowercased() ?? ""
-        let last = monitorChecks?.first.map { "Last: \($0.label)" } ?? (monitorURL == nil ? "" : "Not checked yet")
-        return [monitorURL == nil ? "Page monitor removed" : "Page monitor · \(interval)",
-                "\(monitorTurnsUsed ?? 0)/\(monitorTurnLimit ?? 20) change turns used",
-                monitorPending == true ? "Change waiting for a turn" : "", last].filter { !$0.isEmpty }.joined(separator: " · ")
+        let last = monitorChecks?.first.map { String(localized: "Last: \($0.label)") } ?? (monitorURL == nil ? "" : String(localized: "Not checked yet"))
+        return [monitorURL == nil ? String(localized: "Page monitor removed") : String(localized: "Page monitor · \(interval)"),
+                String(localized: "\(monitorTurnsUsed ?? 0)/\(monitorTurnLimit ?? 20) change turns used"),
+                monitorPending == true ? String(localized: "Change waiting for a turn") : "", last].filter { !$0.isEmpty }.joined(separator: " · ")
     }
     var workLabel: String? {
-        if workState == "paused" { return "Paused" }
-        if workState == "blocked" { return "Blocked" }
-        if let workUsed, let workLimit, workUsed >= workLimit { return "Budget exhausted" }
+        if workState == "paused" { return String(localized: "Paused") }
+        if workState == "blocked" { return String(localized: "Blocked") }
+        if let workUsed, let workLimit, workUsed >= workLimit { return String(localized: "Budget exhausted") }
         return nil
     }
     var assigneeKey: String { assigneeKind.map { "\($0):\(assigneeID ?? "")" } ?? "" }
@@ -77,7 +80,8 @@ struct TaskMonitorCheck: Decodable, Hashable, Sendable {
     let errorCode: String?
     let httpStatus: Int?
     var label: String {
-        let labels = ["baseline": "First check saved", "unchanged": "Unchanged", "repeated": "Earlier version again", "ignored": "Changed, no keyword match", "changed": "Relevant change", "failed": "Check failed"]
+        let labels = ["baseline": String(localized: "First check saved"), "unchanged": String(localized: "Unchanged"), "repeated": String(localized: "Earlier version again"),
+                      "ignored": String(localized: "Changed, no keyword match"), "changed": String(localized: "Relevant change"), "failed": String(localized: "Check failed")]
         let error = errorCode.map { " (\($0)\(httpStatus.map { " \($0)" } ?? ""))" } ?? ""
         let date = Date(timeIntervalSince1970: checkedAt / 1000).formatted(date: .numeric, time: .shortened)
         return "\(labels[outcome] ?? outcome)\(error) · \(date)"
@@ -102,10 +106,10 @@ enum TaskStatusOption: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .open: "To do"
-        case .in_progress: "In progress"
-        case .done: "Done"
-        case .canceled: "Canceled"
+        case .open: String(localized: "To do")
+        case .in_progress: String(localized: "In progress")
+        case .done: String(localized: "Done")
+        case .canceled: String(localized: "Canceled")
         }
     }
 }
@@ -229,7 +233,7 @@ struct TasksView: View {
                     if let next = task.nextStep { Text("Next step: \(next)").manrope(.caption) }
                     if task.researchQuery != nil || (task.researchUsed ?? 0) > 0 { Text(task.researchDetail).manrope(.caption) }
                     if task.monitorURL != nil || (task.monitorTurnsUsed ?? 0) > 0 { Text(task.monitorDetail).manrope(.caption) }
-                    if task.documentID != nil { Text("Deliverable: \(task.documentTitle ?? "a document")").manrope(.caption) }
+                    if task.documentID != nil { Text("Deliverable: \(task.documentTitle ?? String(localized: "a document"))").manrope(.caption) }
                     if let review = task.reviewDetail { Text(review).manrope(.caption) }
                     if let reason = task.blockedReason { Text("Blocked: \(reason)").manrope(.caption) }
                     if let result = task.result { Text(result).manrope(.footnote) }
@@ -249,15 +253,15 @@ struct TasksView: View {
     }
 
     private func detail(_ task: TaskItem, in list: TaskListValue) -> String {
-        var parts = [task.assigneeName ?? "Unassigned"]
+        var parts = [task.assigneeName ?? String(localized: "Unassigned")]
         if task.status != "open" { parts.append(TaskStatusOption(rawValue: task.status)?.label ?? task.status) }
         if task.assigneeKind == "agent" {
             if let label = task.workLabel, !task.isFinished { parts.append(label) }
-            if let used = task.workUsed, let limit = task.workLimit { parts.append("\(used)/\(limit) work turns used") }
+            if let used = task.workUsed, let limit = task.workLimit { parts.append(String(localized: "\(used)/\(limit) work turns used")) }
         }
         if task.blocked {
             let waiting = task.blockedBy.compactMap { id in list.tasks.first { $0.id == id && !$0.isFinished }?.title }
-            parts.append("Waiting for \(waiting.joined(separator: ", "))")
+            parts.append(String(localized: "Waiting for \(waiting.formatted(.list(type: .and)))"))
         }
         return parts.joined(separator: " · ")
     }
@@ -286,7 +290,7 @@ struct TasksView: View {
             }
             error = nil
         } catch is CancellationError { }
-        catch AuthAPI.Failure.notFound { error = "These tasks are no longer available." }
+        catch AuthAPI.Failure.notFound { error = String(localized: "These tasks are no longer available.") }
         catch {
             // Keep the cached board visible through transient failures.
             if snapshot.value == nil { self.error = error.localizedDescription }
@@ -370,7 +374,7 @@ private struct TaskEditorView: View {
                 Picker("Assignee", selection: $assignee) {
                     Text("Unassigned").tag("")
                     ForEach(members) { member in
-                        Text(member.kind == "user" && member.id == selfID ? "\(member.name) (You)" : member.name).tag(member.key)
+                        Text(member.kind == "user" && member.id == selfID ? String(localized: "\(member.name) (You)") : member.name).tag(member.key)
                     }
                 }
                 Section("Notes") { TextField("Notes", text: $notes, axis: .vertical).lineLimit(2...6) }
@@ -384,7 +388,7 @@ private struct TaskEditorView: View {
                     } header: {
                         HStack {
                             Label("Public web research", systemImage: "globe")
-                            InfoButton(title: "Public web research", text: "Saving this query authorizes one public search with the app closed. Only this exact query is sent; use public information. Leave empty to revoke. Failed or uncertain attempts count. Daily limits also apply. Changing assignee clears permission; save the assignment first. Reports appear in Docs.")
+                            InfoButton(title: String(localized: "Public web research"), text: String(localized: "Saving this query authorizes one public search with the app closed. Only this exact query is sent; use public information. Leave empty to revoke. Failed or uncertain attempts count. Daily limits also apply. Changing assignee clears permission; save the assignment first. Reports appear in Docs."))
                         }
                     } footer: {
                         // What saving authorizes stays visible next to the field.
@@ -406,7 +410,7 @@ private struct TaskEditorView: View {
                     } header: {
                         HStack {
                             Label("Page monitor", systemImage: "eye")
-                            InfoButton(title: "Page monitor", text: "Saving a public page lets the server check it with the app closed, without the model. The contact gets a turn only when the page text changes (and matches a keyword, if set), up to 3 per day and 20 in total. Redirects are not followed; save the final address. Leave empty to remove. Changing assignee removes the monitor; save the assignment first. Pausing or finishing the task stops checks.")
+                            InfoButton(title: String(localized: "Page monitor"), text: String(localized: "Saving a public page lets the server check it with the app closed, without the model. The contact gets a turn only when the page text changes (and matches a keyword, if set), up to 3 per day and 20 in total. Redirects are not followed; save the final address. Leave empty to remove. Changing assignee removes the monitor; save the assignment first. Pausing or finishing the task stops checks."))
                         }
                     } footer: {
                         // What saving authorizes stays visible next to the field.
@@ -427,7 +431,7 @@ private struct TaskEditorView: View {
                     } header: {
                         HStack {
                             Text("Work")
-                            InfoButton(title: "Work", text: "Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget.")
+                            InfoButton(title: String(localized: "Work"), text: String(localized: "Work continues with the app closed. Pausing stops new steps and replies; a step already started may finish. Resuming keeps the remaining budget."))
                         }
                     }
                 }

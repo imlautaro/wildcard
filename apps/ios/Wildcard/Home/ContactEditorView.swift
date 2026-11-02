@@ -101,7 +101,7 @@ struct ContactEditorView: View {
                     )) {
                         HStack {
                             Label("Conversation initiative", systemImage: "bubble.left.and.text.bubble.right")
-                            InfoButton(title: "Conversation initiative", text: "The contact can add a thought without another prompt and start a conversation later. Timing adapts to this chat and its personality. Leaving the chat open does not prevent follow-ups; active typing gives you space. Unanswered greetings stop further social openers until you engage again. Ask the contact to pause, or turn this off. Applies only to your private chat.")
+                            InfoButton(title: String(localized: "Conversation initiative"), text: String(localized: "The contact can add a thought without another prompt and start a conversation later. Timing adapts to this chat and its personality. Leaving the chat open does not prevent follow-ups; active typing gives you space. Unanswered greetings stop further social openers until you engage again. Ask the contact to pause, or turn this off. Applies only to your private chat."))
                         }
                     }
                     .disabled(saving || contacts.isMutating)
@@ -118,7 +118,7 @@ struct ContactEditorView: View {
                     )) {
                         HStack {
                             Label("Keep this chat private", systemImage: "lock")
-                            InfoButton(title: "Keep this chat private", text: PrivacyGuide.keepPrivateInfo(contactName: contacts.contact(id: contactID)?.name))
+                            InfoButton(title: String(localized: "Keep this chat private"), text: PrivacyGuide.keepPrivateInfo(contactName: contacts.contact(id: contactID)?.name))
                         }
                     }
                     .disabled(saving || contacts.isMutating)
@@ -194,7 +194,7 @@ struct ContactEditorView: View {
         let trimmed = clear ? "" : aliasText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.unicodeScalars.count <= 100,
               !trimmed.unicodeScalars.contains(where: { $0.value < 0x20 || (0x7f...0x9f).contains($0.value) }) else {
-            error = "Use an alias with at most 100 characters and no control characters."
+            error = String(localized: "Use an alias with at most 100 characters and no control characters.")
             return
         }
         aliasSaving = true
@@ -217,7 +217,7 @@ struct ContactEditorView: View {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.unicodeScalars.count <= 100,
               !trimmed.unicodeScalars.contains(where: { $0.value < 0x20 || (0x7f...0x9f).contains($0.value) }) else {
-            error = "Use a name with 1–100 characters and no control characters."
+            error = String(localized: "Use a name with 1–100 characters and no control characters.")
             return
         }
         saving = true
@@ -231,7 +231,7 @@ struct ContactEditorView: View {
                     do { try await contacts.savePhoto(contactID: saved.id, data: photoData, using: auth) }
                     catch is CancellationError { return }
                     catch {
-                        self.error = "Contact saved, but the photo could not be saved. \(error.localizedDescription) Tap Save to retry."
+                        self.error = String(localized: "Contact saved, but the photo could not be saved. \(error.localizedDescription) Tap Save to retry.")
                         return
                     }
                 }
@@ -258,8 +258,8 @@ private struct ContactEnergyRow: View {
     @State private var presented = false
 
     var body: some View {
-        SheetRow(title: "Group energy", systemImage: "bolt",
-                 value: cache.value.map { "\($0.points) / \($0.capacity)" } ?? (busy ? "Loading…" : "—")) { presented = true }
+        SheetRow(title: String(localized: "Group energy"), systemImage: "bolt",
+                 value: cache.value.map { "\($0.points) / \($0.capacity)" } ?? (busy ? String(localized: "Loading…") : "—")) { presented = true }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await refresh()
@@ -301,7 +301,7 @@ private struct ContactEnergyRow: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        InfoButton(title: "Group energy", text: "Each group message uses one point. One point recharges every five minutes, even offline. Private replies do not use energy.")
+                        InfoButton(title: String(localized: "Group energy"), text: String(localized: "Each group message uses one point. One point recharges every five minutes, even offline. Private replies do not use energy."))
                     }
                     ToolbarItem(placement: .confirmationAction) { Button("Done") { presented = false } }
                 }
@@ -325,7 +325,7 @@ private struct ContactEnergyRow: View {
         } catch is CancellationError { }
         catch AuthAPI.Failure.notFound {
             contacts.energySnapshots.remove(id: contactID)
-            error = "This contact is no longer available to its creator."
+            error = String(localized: "This contact is no longer available to its creator.")
         }
         catch { self.error = error.localizedDescription }
     }
@@ -336,23 +336,23 @@ private struct ContactEnergyRow: View {
 private struct ContactVoiceRows: View {
     // Keep codes and labels aligned with shared/voice.ts.
     private let accents: [(code: String, name: String)] = [
-        ("AR", "Argentine"),
-        ("UY", "Uruguayan"),
-        ("MX", "Mexican"),
-        ("ES", "Spanish (Spain)"),
-        ("CL", "Chilean"),
-        ("CO", "Colombian"),
-        ("PE", "Peruvian"),
-        ("VE", "Venezuelan"),
-        ("US", "American"),
-        ("GB", "British"),
-        ("AU", "Australian"),
-        ("IE", "Irish"),
-        ("BR", "Brazilian"),
-        ("PT", "Portuguese (Portugal)"),
-        ("FR", "French"),
-        ("IT", "Italian"),
-        ("DE", "German"),
+        ("AR", String(localized: "Argentine", comment: "Speech accent")),
+        ("UY", String(localized: "Uruguayan", comment: "Speech accent")),
+        ("MX", String(localized: "Mexican", comment: "Speech accent")),
+        ("ES", String(localized: "Spanish (Spain)", comment: "Speech accent")),
+        ("CL", String(localized: "Chilean", comment: "Speech accent")),
+        ("CO", String(localized: "Colombian", comment: "Speech accent")),
+        ("PE", String(localized: "Peruvian", comment: "Speech accent")),
+        ("VE", String(localized: "Venezuelan", comment: "Speech accent")),
+        ("US", String(localized: "American", comment: "Speech accent")),
+        ("GB", String(localized: "British", comment: "Speech accent")),
+        ("AU", String(localized: "Australian", comment: "Speech accent")),
+        ("IE", String(localized: "Irish", comment: "Speech accent")),
+        ("BR", String(localized: "Brazilian", comment: "Speech accent")),
+        ("PT", String(localized: "Portuguese (Portugal)", comment: "Speech accent")),
+        ("FR", String(localized: "French", comment: "Speech accent")),
+        ("IT", String(localized: "Italian", comment: "Speech accent")),
+        ("DE", String(localized: "German", comment: "Speech accent")),
     ]
     let contactID: String
     let disabled: Bool
@@ -362,7 +362,7 @@ private struct ContactVoiceRows: View {
     private var contact: Contact? { contacts.contact(id: contactID) }
 
     @State private var presented = false
-    private var accentName: String { accents.first { $0.code == contact?.speechAccent }?.name ?? "Default accent" }
+    private var accentName: String { accents.first { $0.code == contact?.speechAccent }?.name ?? String(localized: "Default accent") }
 
     var body: some View {
         Toggle(isOn: Binding(
@@ -378,11 +378,11 @@ private struct ContactVoiceRows: View {
         )) {
             HStack {
                 Label("Voice messages", systemImage: "mic")
-                InfoButton(title: "Voice messages", text: "With voice messages on, \(contact?.name ?? "this contact") sometimes answers your private chat with a short voice message. In groups, the creator's setting applies.")
+                InfoButton(title: String(localized: "Voice messages"), text: String(localized: "With voice messages on, \(contact?.name ?? String(localized: "this contact")) sometimes answers your private chat with a short voice message. In groups, the creator's setting applies."))
             }
         }
         .disabled(disabled || contacts.isMutating)
-        SheetRow(title: "Voice", systemImage: "person.wave.2", value: "\(accentName) · \(contact?.voiceName ?? "Automatic voice")") { presented = true }
+        SheetRow(title: String(localized: "Voice"), systemImage: "person.wave.2", value: "\(accentName) · \(contact?.voiceName ?? String(localized: "Automatic voice"))") { presented = true }
             .sheet(isPresented: $presented) {
                 NavigationStack {
                     Form {
@@ -396,25 +396,27 @@ private struct ContactVoiceRows: View {
                                     catch { report(error.localizedDescription) }
                                 }
                             }
-                        ), options: [SearchablePicker.Option(value: "", label: "Default accent")]
+                        ), options: [SearchablePicker.Option(value: "", label: String(localized: "Default accent"))]
                             + accents.map { SearchablePicker.Option(value: $0.code, label: $0.name) })
                         .disabled(disabled || contacts.isMutating || contact?.canManage != true)
                         if contact?.canManage == true {
                             NavigationLink {
                                 ContactVoicePickerView(contactID: contactID, catalog: contacts.voiceCatalog.store(for: "voices"))
                             } label: {
-                                LabeledContent("Voice", value: contact?.voiceName ?? "Automatic")
+                                LabeledContent("Voice", value: contact?.voiceName ?? String(localized: "Automatic", comment: "Voice chosen automatically"))
                             }
                             .disabled(disabled)
                         } else {
-                            LabeledContent("Voice", value: contact?.voiceName ?? "Automatic")
+                            LabeledContent("Voice", value: contact?.voiceName ?? String(localized: "Automatic", comment: "Voice chosen automatically"))
                         }
                     }
                     .navigationTitle("Voice")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
-                            InfoButton(title: "Voice", text: "Accent guides regional wording in text and voice, without forcing slang or changing the language. Audio results depend on the voice; samples keep their original accent. " + (contact?.canManage == true ? "Everyone who chats with this contact hears the voice you choose." : "The contact's creator chooses its voice."))
+                            InfoButton(title: String(localized: "Voice"), text: contact?.canManage == true
+                            ? String(localized: "Accent guides regional wording in text and voice, without forcing slang or changing the language. Audio results depend on the voice; samples keep their original accent. Everyone who chats with this contact hears the voice you choose.")
+                            : String(localized: "Accent guides regional wording in text and voice, without forcing slang or changing the language. Audio results depend on the voice; samples keep their original accent. The contact's creator chooses its voice."))
                         }
                         ToolbarItem(placement: .confirmationAction) { Button("Done") { presented = false } }
                     }
@@ -510,7 +512,7 @@ private struct ContactVoicePickerView: View {
                     let data = try await auth.voiceAudio(resource)
                     try Task.checkCancellation()
                     if !player.play(data, key: key) {
-                        error = "This sample could not be played."
+                        error = String(localized: "This sample could not be played.")
                         await auth.images.audio.remove(resource)
                     }
                 } catch is CancellationError { }

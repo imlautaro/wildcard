@@ -14,32 +14,32 @@ watch(id, () => { void links.refresh(); });
 </script>
 
 <template>
-  <PageBar title="Linked contacts" :back="`/contacts/${id}/edit`" always-back />
+  <PageBar :title="$t('contacts.links.title')" :back="`/contacts/${id}/edit`" always-back />
   <div class="page"><div class="page-inner">
-    <p class="hint">Linked contacts can ask each other things and pass messages along in your chats, for example "ask Tomi what we decided" or "tell Vale about the trip". Links work both ways and only between your own contacts.</p>
-    <AppLoading v-if="!links.state.value && !links.error.value" label="Loading linked contacts…" />
+    <p class="hint">{{ $t('contacts.links.hint') }}</p>
+    <AppLoading v-if="!links.state.value && !links.error.value" :label="$t('contacts.links.loading')" />
     <template v-else-if="links.state.value">
       <AppNotice v-if="links.state.value.unavailable">{{ links.state.value.unavailable }}</AppNotice>
       <template v-else>
-        <AppNotice v-if="links.state.value.allContacts">Contacts share with each other is on, so this contact can already reach all your contacts except private chats. Links you add here stay if you turn it off.</AppNotice>
+        <AppNotice v-if="links.state.value.allContacts">{{ $t('contacts.links.allContacts') }}</AppNotice>
         <AppListGroup v-if="links.state.value.links.length">
           <div v-for="item in links.state.value.links" :key="item.id" class="button-row static link-row">
             <AppAvatar :name="item.name" :path="photoPath(item)" :size="36" />
             <span class="link-name">{{ item.name }}</span>
-            <AppButton variant="text" :disabled="links.busy.value" @click="links.unlink(item.id)">Unlink</AppButton>
+            <AppButton variant="text" :disabled="links.busy.value" @click="links.unlink(item.id)">{{ $t('contacts.links.unlink') }}</AppButton>
           </div>
         </AppListGroup>
-        <p v-else class="hint">No linked contacts yet.</p>
+        <p v-else class="hint">{{ $t('contacts.links.empty') }}</p>
         <form v-if="links.state.value.available.length" class="add-link" @submit.prevent="add">
-          <AppSelect v-model="choice" label="Link a contact" :disabled="links.busy.value"
+          <AppSelect v-model="choice" :label="$t('contacts.links.linkContact')" :disabled="links.busy.value"
                      :options="links.state.value.available.map(item => ({ value: item.id, label: item.name }))" />
-          <AppButton type="submit" :disabled="!choice || links.busy.value">Link</AppButton>
+          <AppButton type="submit" :disabled="!choice || links.busy.value">{{ $t('contacts.links.link') }}</AppButton>
         </form>
       </template>
     </template>
     <AppNotice v-if="links.error.value">
       {{ links.error.value }}
-      <template #actions><button type="button" class="link-button" @click="links.refresh()">Retry</button></template>
+      <template #actions><button type="button" class="link-button" @click="links.refresh()">{{ $t('common.retry') }}</button></template>
     </AppNotice>
   </div></div>
 </template>

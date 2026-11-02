@@ -4,7 +4,8 @@
 const props = defineProps<{ sending?: boolean; readAt?: number | null; receiptState?: string | null }>();
 const read = computed(() => props.receiptState === 'read' || props.readAt != null);
 const doubled = computed(() => props.receiptState == null || props.receiptState === 'received' || props.receiptState === 'read');
-const label = computed(() => (props.sending ? 'Sending' : read.value ? 'Read' : props.receiptState === 'sent' ? 'Sent' : 'Received'));
+const { t } = useI18n();
+const label = computed(() => t(props.sending ? 'chat.receipt.sending' : read.value ? 'chat.receipt.read' : props.receiptState === 'sent' ? 'chat.receipt.sent' : 'chat.receipt.received'));
 </script>
 
 <template>

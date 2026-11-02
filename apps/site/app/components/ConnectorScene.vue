@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Connectors: MCP servers granted per contact. Lines draw from each contact to
 // the tools it may use, then the tool approval flips on.
+const { t } = useI18n();
 const contacts: CastId[] = ['theo', 'ivy', 'pixel', 'mila'];
 const tools: { id: SiteGlyph; name: string }[] = [
   { id: 'linear', name: 'Linear' },
@@ -47,7 +48,7 @@ const contactOn = (index: number) => links.some(([c], linkIndex) => c === index 
     <div class="col">
       <div v-for="(who, index) in contacts" :key="who" :ref="(el) => { contactEls[index] = el as HTMLElement }" class="node contact" :class="{ on: contactOn(index) }">
         <ContactAvatar :who="who" :size="36" />
-        <span><strong>{{ cast[who].name }}</strong><small>{{ cast[who].role }}</small></span>
+        <span><strong>{{ cast[who].name }}</strong><small>{{ t(`cast.${who}`) }}</small></span>
       </div>
     </div>
     <span class="gap" aria-hidden="true" />
@@ -58,7 +59,7 @@ const contactOn = (index: number) => links.some(([c], linkIndex) => c === index 
       <div v-for="(tool, index) in tools" :key="tool.id" :ref="(el) => { toolEls[index] = el as HTMLElement }" class="node tool" :class="{ on: toolOn(index) }">
         <span class="logo"><SiteIcon :name="tool.id" /></span>
         <strong>{{ tool.name }}</strong>
-        <span class="state">{{ toolOn(index) ? 'Approved' : 'Off' }}</span>
+        <span class="state">{{ toolOn(index) ? t('connectorScene.approved') : t('connectorScene.off') }}</span>
       </div>
     </div>
   </div>

@@ -4,7 +4,9 @@
 const { preference, setPreference } = useTheme();
 const order = ['system', 'light', 'dark'] as const;
 const glyph = { system: 'monitor', light: 'sun', dark: 'moon' } as const;
-const label = computed(() => `Appearance: ${preference.value[0]!.toUpperCase()}${preference.value.slice(1)}`);
+const { t } = useI18n();
+const modes = computed(() => ({ system: t('theme.system'), light: t('theme.light'), dark: t('theme.dark') }));
+const label = computed(() => t('theme.label', { mode: modes.value[preference.value] }));
 const mounted = ref(false);
 onMounted(() => { mounted.value = true; });
 function next() {

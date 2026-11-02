@@ -1,0 +1,116 @@
+{
+  "groups": {
+    "new": {
+      "title": "New Group",
+      "footer": "After creating the group, add your contacts and invite people by email.",
+      "name": "Group name",
+      "sharedMemory": "Shared memory",
+      "disclosure": "Group members can see your name and profile photo. Members can read the group's history, including messages sent before they joined, unless they were added without earlier messages. Contacts use what group members have told them, except chats kept private. What you say here can become a shared memory, used in this group and in private chats with its members, never in other groups. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted.",
+      "memoryLabel": "I accept shared memory",
+      "contributorNote": "Your selected model is Contributor. Group messages and shared memories sent to Meta may be used for model training.",
+      "create": "Create Group"
+    },
+    "chat": {
+      "details": "Group details",
+      "fallbackName": "Group",
+      "tasks": "Tasks",
+      "unavailableTitle": "Group unavailable",
+      "unavailableText": "This group is no longer available.",
+      "backToChats": "Back to Chats",
+      "loadEarlier": "Load earlier messages",
+      "loading": "Loading messages…",
+      "emptyTitle": "Start the conversation",
+      "emptyText": "Send your first message.",
+      "replyFailed": "{name} couldn't finish replying to this message.",
+      "retryReply": "Retry reply",
+      "workingOn": "Working on “{title}”",
+      "workingOnTask": "Working on a task",
+      "unknownMember": "Unknown member",
+      "events": {
+        "added": "{actor} added {member}",
+        "joined": "{name} joined",
+        "joinedInvited": "{name} joined · invited by {inviter}"
+      },
+      "activity": {
+        "typing": "{names} is typing | {names} are typing",
+        "recording": "{names} is recording | {names} are recording",
+        "researching": "{names} is researching | {names} are researching",
+        "line1": "{first}...",
+        "line2": "{first}, {second}...",
+        "line3": "{first}, {second}, {third}..."
+      },
+      "people": {
+        "typing": "{count} person is typing... | {count} people are typing...",
+        "recording": "{count} person is recording... | {count} people are recording...",
+        "researching": "{count} person is researching... | {count} people are researching...",
+        "replying": "{count} person is replying... | {count} people are replying..."
+      },
+      "working": "{names} working… | {names} working…"
+    },
+    "members": {
+      "fallbackTitle": "Group",
+      "refresh": "Refresh details",
+      "memberCount": "{count} member | {count} members",
+      "discussPrivate": "Discuss my private chats",
+      "connections": "Connections",
+      "learning": "Conversation learning",
+      "miniApps": "Mini apps",
+      "tasks": "Tasks",
+      "members": "Members",
+      "invitePeople": "Invite people",
+      "addContact": "Add a contact",
+      "you": "{name} (You)",
+      "withoutHistory": "Joined without earlier messages",
+      "manage": "Manage {name}",
+      "deleteGroup": "Delete group",
+      "leaveGroup": "Leave group",
+      "roles": {
+        "contact": "Contact",
+        "owner": "Owner",
+        "canInvite": "Can invite",
+        "member": "Member"
+      },
+      "sharingSummary": "{on} of {total} on",
+      "noContacts": "No contacts",
+      "sharingInfo": "Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections and chats you keep private stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat.",
+      "contactFallback": "Contact",
+      "needsPrivateChat": "Needs a private chat that isn't kept private",
+      "addToManage": "Add a contact to manage private chat sharing.",
+      "inviteInfo": "They will receive an invitation in Wildcard and can choose whether to join the group. Invitations expire after 24 hours.",
+      "emailPlaceholder": "Email of an existing account",
+      "email": "Email",
+      "canSeeEarlier": "Can see earlier messages",
+      "historyHelp": "Off: they'll only see messages from when they join.",
+      "invite": "Invite",
+      "onlyCreated": "Only contacts you created can be added. All of them are already in this group.",
+      "contact": "Contact",
+      "chooseContact": "Choose a contact",
+      "addDisclosure": "Adding this contact lets it use what group members, including you, have told it with everyone in the group, except chats kept private. It remains the same contact in your other chats.",
+      "memoryLabel": "I accept shared memory",
+      "contributorNote": "Your selected model is Contributor. Messages and memories sent to Meta may be used for model training.",
+      "stopInvites": "Stop allowing invites",
+      "allowInvites": "Allow invites",
+      "removeFromGroup": "Remove from group",
+      "inviteSent": "Invitation sent to {email}. It appears in their Invitations and expires after 24 hours.",
+      "removeConfirm": "Remove {name}? This removes group access. Previous messages stay visible. Removing a user also removes the contacts they added.",
+      "privateSharingConfirm": "This contact may discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. You can turn this off later, but messages already sent remain visible.",
+      "deleteConfirm": "Delete group? This deletes the group, its messages and memories sourced from those messages for everyone.",
+      "leaveConfirm": "Leave group? Your contacts leave with you. Your messages remain in the group. Your contributed group memories stop being available to contacts, but replies already sent remain visible."
+    },
+    "connections": {
+      "title": "Connections"
+    },
+    "messageInfo": {
+      "title": "Message info",
+      "refresh": "Refresh",
+      "untracked": "Read information is unavailable for this older message.",
+      "readBy": "Read by · {count}",
+      "noneRead": "No one has read this message yet.",
+      "notRead": "Not read yet · {count}",
+      "sent": "Sent",
+      "received": "Received",
+      "noRecipients": "No other recipients.",
+      "readNote": "Read does not mean someone replied. Contacts can acknowledge reading before preparing a response."
+    }
+  }
+}

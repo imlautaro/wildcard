@@ -176,7 +176,7 @@ struct ChatsView: View {
                         Text("Creating your contacts… \(auth.onboarding.snapshot?.photoCount ?? 0) of 5 ready. Each one opens as soon as it is ready.")
                             .manrope(.footnote).foregroundStyle(.secondary)
                     }
-                    ForEach(0..<circlePlaceholders, id: \.self) { _ in pendingRow(name: "New contact", contact: nil) }
+                    ForEach(0..<circlePlaceholders, id: \.self) { _ in pendingRow(name: String(localized: "New contact"), contact: nil) }
                 }
                 .listSectionSeparator(.hidden, edges: .all)
             } else if circleFailed {
@@ -359,8 +359,8 @@ private struct ChatListRow: View {
     @Environment(ContactsStore.self) private var contacts
 
     private var activity: String? {
-        contact.replyActivity == "researching" ? "Researching..."
-            : contact.replyActivity == "recording" ? "Recording..." : contact.replyActivity == "typing" ? "Typing..." : nil
+        contact.replyActivity == "researching" ? String(localized: "Researching...")
+            : contact.replyActivity == "recording" ? String(localized: "Recording...") : contact.replyActivity == "typing" ? String(localized: "Typing...") : nil
     }
     private var draft: String? {
         contact.clearing == 1 || activity != nil ? nil : ChatListPreview.draft(contacts.conversations.cachedStore(for: contact.id)?.draft)
@@ -372,7 +372,7 @@ private struct ChatListRow: View {
     }
     /// The second line: live activity, then a draft, then a newer reaction, then the last message.
     private var preview: AttributedString {
-        if let draft { return ChatListPreview.labeled("Draft", draft, size: previewSize, accent: true) }
+        if let draft { return ChatListPreview.labeled(String(localized: "Draft", comment: "Chat list label before an unsent message"), draft, size: previewSize, accent: true) }
         if let reaction { return reaction.sender.map { ChatListPreview.labeled($0, reaction.text, size: previewSize) } ?? AttributedString(reaction.text) }
         return AttributedString(messagePreview)
     }
@@ -380,11 +380,11 @@ private struct ChatListRow: View {
     private var showsMessage: Bool { activity == nil && draft == nil && reaction == nil }
     @ScaledMetric(relativeTo: .subheadline) private var previewSize: CGFloat = 15
     private var messagePreview: String {
-        if contact.clearing == 1 { return "Cleaning up..." }
+        if contact.clearing == 1 { return String(localized: "Cleaning up...") }
         if let activity { return activity }
-        if let voice = contact.lastMessageVoice { return "Voice message (\(VoiceDuration.format(milliseconds: voice.durationMs)))" }
-        guard let text = contact.lastMessageText else { return "No messages yet" }
-        return (contact.lastMessagePreview ?? (contact.lastMessageFromUser == 0 ? MessageMarkdown.plainText(text) : text)).components(separatedBy: .newlines)
+        if let voice = contact.lastMessageVoice { return String(localized: "Voice message (\(VoiceDuration.format(milliseconds: voice.durationMs)))") }
+        guard let text = contact.lastMessageText else { return String(localized: "No messages yet") }
+        return ServerPreviewText.localized(contact.lastMessagePreview ?? (contact.lastMessageFromUser == 0 ? MessageMarkdown.plainText(text) : text)).components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
@@ -459,31 +459,36 @@ private struct GroupChatListRow: View {
     private var own: Bool { group.lastMessageUserID == auth.user?.id && group.lastMessageUserID != nil }
     @ScaledMetric(relativeTo: .subheadline) private var previewSize: CGFloat = 15
 
+    /// Live activity, worded on device from the structured entries; older APIs only send the English sentence.
+    private var activity: String? {
+        if let entries = group.replyActivityEntries, !entries.isEmpty { return ReplyActivityLabel.localized(entries) }
+        return group.replyActivity
+    }
     private var draft: String? {
-        group.clearing == 1 || group.replyActivity != nil ? nil : ChatListPreview.draft(groups.conversations.cachedStore(for: group.id)?.draft)
+        group.clearing == 1 || activity != nil ? nil : ChatListPreview.draft(groups.conversations.cachedStore(for: group.id)?.draft)
     }
     private var sending: Bool {
         groups.conversations.cachedStore(for: group.id).map { $0.pendingID == group.lastMessageID && !$0.pendingAccepted } ?? false
     }
     private var reaction: (sender: String?, text: String)? {
-        guard group.clearing != 1, group.replyActivity == nil, draft == nil, !sending else { return nil }
+        guard group.clearing != 1, activity == nil, draft == nil, !sending else { return nil }
         return ChatListPreview.reaction(group.lastReaction, after: group.lastMessageAt, group: true)
     }
     /// Receipts and the microphone belong to the last message only.
-    private var showsMessage: Bool { group.replyActivity == nil && draft == nil && reaction == nil }
+    private var showsMessage: Bool { activity == nil && draft == nil && reaction == nil }
 
     /// The second line: live activity, then a draft, then a newer reaction, then the last message.
     private var messagePreview: AttributedString {
-        if group.clearing == 1 { return AttributedString("Cleaning up...") }
-        if let activity = group.replyActivity { return AttributedString(activity) }
-        if let draft { return ChatListPreview.labeled("Draft", draft, size: previewSize, accent: true) }
+        if group.clearing == 1 { return AttributedString(String(localized: "Cleaning up...")) }
+        if let activity { return AttributedString(activity) }
+        if let draft { return ChatListPreview.labeled(String(localized: "Draft", comment: "Chat list label before an unsent message"), draft, size: previewSize, accent: true) }
         if let reaction { return reaction.sender.map { ChatListPreview.labeled($0, reaction.text, size: previewSize) } ?? AttributedString(reaction.text) }
         let source = group.lastMessageText
-        let cleaned = group.lastMessagePreview ?? source.map { group.lastMessageUserID == nil ? MessageMarkdown.plainText($0) : $0 }
-        let voiceLabel = group.lastMessageVoice.map { "Voice message (\(VoiceDuration.format(milliseconds: $0.durationMs)))" }
+        let cleaned = (group.lastMessagePreview ?? source.map { group.lastMessageUserID == nil ? MessageMarkdown.plainText($0) : $0 }).map(ServerPreviewText.localized)
+        let voiceLabel = group.lastMessageVoice.map { String(localized: "Voice message (\(VoiceDuration.format(milliseconds: $0.durationMs)))") }
         let message = (voiceLabel ?? cleaned)?.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ") ?? "No messages yet"
-        guard let sender = own ? "You" : group.lastMessageSenderName, !sender.isEmpty else { return AttributedString(message) }
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ") ?? String(localized: "No messages yet")
+        guard let sender = own ? String(localized: "You", comment: "The user, as a sender label") : group.lastMessageSenderName, !sender.isEmpty else { return AttributedString(message) }
         var preview = AttributedString(sender + ": ")
         preview.font = Font(AppTypography.font(size: previewSize, weight: .bold))
         preview += AttributedString(message)
@@ -538,8 +543,10 @@ private enum ChatListPreview {
     /// reaction is newer than the last message.
     static func reaction(_ reaction: LastReaction?, after lastMessageAt: Double?, group: Bool) -> (sender: String?, text: String)? {
         guard let reaction, reaction.at > (lastMessageAt ?? 0) else { return nil }
-        let sender = reaction.own ? "You" : group ? reaction.name.flatMap { $0.isEmpty ? nil : $0 } : nil
-        return (sender, "\(sender == nil ? "Reacted" : "reacted") with \(reaction.emoji)")
+        let sender = reaction.own ? String(localized: "You", comment: "The user, as a sender label") : group ? reaction.name.flatMap { $0.isEmpty ? nil : $0 } : nil
+        let emoji = reaction.emoji
+        return (sender, sender == nil ? String(localized: "Reacted with \(emoji)")
+            : String(localized: "reacted with \(emoji)", comment: "After a sender label, as in 'Ana: reacted with 👍'"))
     }
     static func labeled(_ label: String, _ text: String, size: CGFloat, accent: Bool = false) -> AttributedString {
         var prefix = AttributedString(label + ": ")
@@ -565,13 +572,10 @@ private struct ChatListTimestamp: View {
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date),
                                            to: calendar.startOfDay(for: now)).day ?? 0
         if days == 0 { return date.formatted(.dateTime.hour().minute()) }
-        if days == 1 { return "Yesterday" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = .current
-        formatter.dateFormat = (2...6).contains(days) ? "EEEE" : "dd/MM/yyyy"
-        return formatter.string(from: date)
+        if days == 1 { return String(localized: "Yesterday") }
+        // The weekday within a week, then a numeric date in the person's locale order.
+        if (2...6).contains(days) { return date.formatted(.dateTime.weekday(.wide)) }
+        return date.formatted(.dateTime.day(.twoDigits).month(.twoDigits).year())
     }
 
 }

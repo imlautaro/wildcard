@@ -35,12 +35,12 @@ function next(index: number) {
         <template v-if="segment.blank === null">{{ segment.text }}</template>
         <span v-else class="blank" :data-value="values[segment.blank]">
           <input :ref="element => { if (element) fields[segment.blank!] = element as HTMLInputElement; }" v-model="values[segment.blank]"
-            type="text" maxlength="120" enterkeyhint="next" autocomplete="off" placeholder="…" :aria-label="`Blank ${segment.blank + 1} of ${count}`"
+            type="text" maxlength="120" enterkeyhint="next" autocomplete="off" placeholder="…" :aria-label="$t('updates.replyTemplate.blank', { index: segment.blank + 1, count })"
             @keydown.enter.prevent="next(segment.blank)">
         </span>
       </template>
     </p>
-    <AppButton type="submit" size="small" icon="reply" :disabled="!complete">Continue in chat</AppButton>
+    <AppButton type="submit" size="small" icon="reply" :disabled="!complete">{{ $t('updates.replyTemplate.continue') }}</AppButton>
   </form>
 </template>
 

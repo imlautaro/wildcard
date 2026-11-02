@@ -1516,3 +1516,25 @@ Account → **Privacy** has **Contacts share with each other** and **How privacy
 shows a notice while the account switch is on; "Discuss my private chats" explains that a
 private chat is unavailable. iOS has the same rows and copy (`PrivacyGuide.swift`). See
 [privacy](privacy.md). Typecheck only; browser rendering is unverified.
+
+## Localization (English and Spanish, 2026-11-01)
+
+The web app ships in English (default and fallback) and Spanish with
+`@nuxtjs/i18n` 10 (`strategy: 'no_prefix'`, so no route or deep link changes).
+**Account → Language** offers **System** (the browser languages: the first of
+English or Spanish, else English), **English** and **Español**; the choice applies
+live and is stored per browser in `localStorage` (`wildcard-language`), like
+Appearance. Dates and numbers follow the app language. Messages live in
+`apps/web/i18n/locales/<locale>/<area>.json`; components use `useI18n()` and other
+code uses `translate()` from `app/utils/i18n.ts`. Validate with
+`node scripts/check-locales.mjs apps/web`.
+
+Platform difference: iOS has no in-app language override. Its Account → Language
+row shows the current app language and opens the app's page in the Settings app,
+where iOS offers its per-app language (English or Español), so widgets, extensions
+and system dialogs always match. Behavior and copy are otherwise the same on both
+clients, including the localized group activity line built from the API's new
+`replyActivityEntries` and the translated previews the API words in English.
+Server error messages, push text and AI or user content stay as the server sends
+them. Details, iOS String Catalogs and verification: [localization](localization.md).
+
