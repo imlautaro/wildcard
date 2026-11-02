@@ -128,7 +128,7 @@ for (const locale of ['en', 'es']) {
   const intro = locale === 'es'
     ? 'Guías completas de funciones, configuración y operaciones. Incluyen contratos de API, migraciones, permisos, reglas de caché y estado de verificación.'
     : 'Complete feature, setup and operations guides, including API contracts, migrations, permissions, cache rules and verification status.';
-  await writeFile(path.join(destination, 'index.md'), `---\ntitle: ${label}\n---\n\n${intro}\n\n${entries.join('\n')}\n`);
+  await writeFile(path.join(destination, '1.overview.md'), `---\ntitle: ${label}\n---\n\n${intro}\n\n${entries.join('\n')}\n`);
 }
 const assets = path.join(root, 'apps/docs/public/reference-assets');
 await mkdir(assets, { recursive: true });

@@ -395,6 +395,11 @@ en Git. Reinicia servidor de desarrollo tras cambiar fuentes para regenerar.
 No extiende `packages/ui` ni tiene script, binding, D1, R2, Workflow, Cron, secreto
 ni migración.
 
+El índice usa `/en/reference/overview` y `/es/reference/overview`. Un `index.md`
+de sección entra en conflicto con la ruta de portada localizada de Docus; por eso
+el generador escribe `1.overview.md`. Las entradas versionadas de `public/_redirects`
+redirigen `/en/reference` y `/es/reference` a sus páginas de índice.
+
 El JSON de filtros se publica como página de código en
 `/en/reference/workers-build-paths` y `/es/reference/workers-build-paths`, para que
 Docus no convierta un enlace de recurso raíz en un archivo localizado inexistente.

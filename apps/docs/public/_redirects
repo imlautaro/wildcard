@@ -1,2 +1,6 @@
 # The docs are served at /en and /es; the bare origin goes to the default locale.
 / /en 302
+
+# Keep reference section shortcuts away from Docus's localized landing route.
+/en/reference /en/reference/overview 302
+/es/reference /es/reference/overview 302

@@ -437,6 +437,11 @@ dev server after changing reference sources to regenerate them.
 It does not extend `packages/ui` and has no script, binding, D1, R2,
 Workflow, Cron, secret or migration.
 
+The reference index uses `/en/reference/overview` and `/es/reference/overview`.
+A nested section `index.md` collides with Docus's localized landing route; the
+generator therefore writes `1.overview.md`. Versioned `public/_redirects` entries
+redirect `/en/reference` and `/es/reference` to their overview pages.
+
 Build-path JSON is published as a code page at `/en/reference/workers-build-paths`
 and `/es/reference/workers-build-paths`, so Docus locale routing cannot turn a
 root asset link into a missing localized file. Open Graph rendering has a bounded

@@ -60,6 +60,7 @@ for (const [route, page] of pages) {
   }
 }
 for (const locale of ['en', 'es']) {
+  if (pages.has(`/${locale}/reference`) || !pages.has(`/${locale}/reference/overview`)) errors.push(`Use ${locale}/reference/overview to avoid the Docus landing-route collision.`);
   const configuration = pages.get(`/${locale}/reference/workers-build-paths`);
   if (!configuration?.markdown.includes(`\`\`\`json\n${asset.trim()}\n\`\`\``)) errors.push(`Missing or stale ${locale} build-path configuration page.`);
   for (const guide of (await readdir(path.join(root, 'docs'))).filter(name => name.endsWith('.md'))) {
