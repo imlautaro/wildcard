@@ -16,8 +16,6 @@ export default defineNuxtConfig({
   },
   // The MCP server needs a server runtime; this site is static.
   mcp: { enabled: false },
-  // Cold image rendering competes with the full bilingual reference in CI.
-  ogImage: { security: { renderTimeout: 60_000 } },
   i18n: {
     defaultLocale: 'en',
     locales: [

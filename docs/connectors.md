@@ -708,7 +708,7 @@ and [private recovery](chats.md#failed-replies-and-response-recovery).
 
 ## Updates reads
 
-[Updates](updates.md#connectors-in-for-you) can read the person's own connector data for a
+[Updates](updates.md#connectors-in-updates) can read the person's own connector data for a
 card (for example exchange rates or monthly spending) without a chat turn. It uses
 any of the person's account connectors, but only tools approved here that it
 classifies as reads (server `readOnlyHint` without `destructiveHint`, or a read-verb

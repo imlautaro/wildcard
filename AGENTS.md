@@ -64,11 +64,7 @@
   change makes their behavior, limitations, setup, or links inaccurate. Review
   the corresponding published guides in `apps/docs/content/en/` and `es/` and
   update both languages whenever their coverage is affected. The published site
-  includes curated overviews and full reference guides generated from `docs/*.md`.
-  Keep the full Spanish translations in `apps/docs/reference/es/` and their source
-  SHA-256 entries in `sources.json` current in the same change. Run
-  `node scripts/prepare-docs-reference.mjs` to refresh ignored reference pages;
-  never edit or commit generated `content/*/6.reference/` files.
+  is a curated guide, not a verbatim copy of every internal feature document.
 - For new, changed, or removed services, bindings, secrets, migrations, release
   inputs, or operational requirements, apply the reproducible infrastructure rule
   above and update affected published setup/operations guides in both languages.
