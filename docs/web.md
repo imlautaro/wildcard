@@ -280,10 +280,11 @@ onboarding layouts were checked as static markup in light and dark.
 
 ```sh
 npm ci
-npm run auth:setup:local
-npm run dev          # API on http://localhost:8787
-npm run dev:web      # Web on http://localhost:3000
+npm run setup
+npm run dev:all      # API on http://localhost:8787 + Web on http://localhost:3000
 ```
+
+`npm run dev` and `npm run dev:web` start each one separately.
 
 In `nuxt dev` the proxy calls the API over HTTP at `runtimeConfig.apiOrigin`
 (default `http://localhost:8787`, override with `NUXT_API_ORIGIN`). Production

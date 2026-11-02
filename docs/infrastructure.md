@@ -493,22 +493,44 @@ other Worker depends on it.
 
 ```sh
 npm ci
-npm run auth:setup:local
+npm run setup     # alias: npm run auth:setup:local
 npm run typecheck
-npm run dev
+npm run dev       # API only; npm run dev:all starts the API and the web app together
 npm run dev:web   # optional web app on http://localhost:3000, proxied to the local API
 npm run dev:admin # optional admin panel on http://localhost:3001; needs ADMIN_LOCAL_ROUTES=true in .dev.vars
 ```
 
-Local setup generates an ignored, owner-only `apps/api/.dev.vars` containing a
-random `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL=http://localhost:8787`, and applies
-all pending versioned migrations, including `0001_auth.sql` and
-`0002_contacts.sql`, and `0003_chat_turns.sql`, to Wrangler's local D1. Existing `.dev.vars` files are
-preserved. A safe template is versioned as `.dev.vars.example`. Local D1 state is
-ignored under `.wrangler/`; these commands do not connect to production bindings.
-No Cloudflare login is required for local emulation. For local model calls, add
-`META_API_KEY` to that ignored file; calls use Meta and may consume credits. Without
-it, new sends return 503 while auth/contacts still work.
+`npm run setup` (`scripts/setup-local.mjs`) checks the Node.js version (24
+recommended, 22 minimum), copies the versioned template `.dev.vars.example` to an
+ignored, owner-only `apps/api/.dev.vars` with a random `BETTER_AUTH_SECRET` and
+`BETTER_AUTH_URL=http://localhost:8787`, and applies all pending versioned
+migrations to Wrangler's local D1. It copies `META_API_KEY` and `ELEVENLABS_API_KEY`
+from environment variables or an ignored `.env` at the repository root without
+printing them, and only fills empty values: an existing `.dev.vars` is preserved.
+With an ElevenLabs key it also inserts `voice_messages_enabled=true` into the local
+`app_setting` table unless that row already exists. Local D1 state is ignored under
+`.wrangler/`; these commands do not connect to production bindings. Model calls use
+Meta and may consume credits. Without `META_API_KEY`, new sends return 503 while
+auth/contacts still work.
+
+`npm run dev` (`scripts/dev-api.mjs`) writes an ignored
+`apps/api/wrangler.local.json` from `wrangler.jsonc` and runs `wrangler dev --local
+--test-scheduled` with it. The derived config differs in two ways, so no Cloudflare
+login is required and every `.dev.vars` value reaches the Worker:
+
+- It drops the `ai` binding. Workers AI is always remote, so Wrangler would otherwise
+  require a login; locally it only backs the AI Gateway and semantic memory, both
+  off by default.
+- It drops `secrets.required`. With that block, Wrangler loads only the declared
+  secrets from `.dev.vars` and silently ignores optional ones such as
+  `ELEVENLABS_API_KEY`, `VAPID_*`, `APNS_*` and `ADMIN_LOCAL_ROUTES`.
+
+Wrangler never fires cron triggers locally, so the script calls `/__scheduled` every
+minute to run the same handler as the production `* * * * *` trigger (reminders,
+tasks, monitors, For you, initiative, welcomes, recovery and push delivery). Set
+`WILDCARD_LOCAL_CRON=0` to turn that off, or `WILDCARD_REMOTE_BINDINGS=1` (after
+`npx wrangler login`) to keep the remote AI binding. Deployments and
+`wrangler types` keep using `wrangler.jsonc` unchanged.
 
 `npm run db:migrate:local` reapplies only pending local migrations. The separate
 `db:migrate:remote` command modifies the configured production database and should
@@ -533,7 +555,8 @@ new bucket, binding or Cron is needed.
   an encrypted build variable of the API's Workers Builds project; the release script
   copies it to the runtime secret, like `META_API_KEY`, and preserves an existing
   runtime key when the build omits it. Locally, add it to ignored
-  `apps/api/.dev.vars`. Never commit it.
+  `apps/api/.dev.vars` (`npm run setup` copies it from the environment or a root
+  `.env`). Never commit it.
 - **Operator flag:** contact voices stay off until a super admin turns on **Contact
   voice messages** (`voice_messages_enabled`) in [the admin panel](admin.md). With the
   flag on but no key, the feature remains off.
@@ -2468,8 +2491,9 @@ Versioned flag `SEMANTIC_MEMORY_ENABLED` in `apps/api/wrangler.jsonc` vars, ship
 `"false"`; set `"true"` and release to enable (staging can enable independently).
 Run `npm run types` in `apps/api` after changing vars.
 
-Local: `npm run db:migrate:local`; local `wrangler dev` calls remote Workers AI with
-your account. Release through committed/pushed automatic publication; clients are
+Local: `npm run db:migrate:local`; semantic memory needs the remote Workers AI
+binding, so start the API with `WILDCARD_REMOTE_BINDINGS=1 npm run dev` after
+`npx wrangler login` (calls use your account). Release through committed/pushed automatic publication; clients are
 unchanged. Authorized verification: 0057 applied once, flag on in staging, a
 cross-language fictional memory recalled without shared words, vectors written once
 and cleared after an edit, deletion cascades, isolated chats never embedded, and
