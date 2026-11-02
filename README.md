@@ -387,3 +387,10 @@ are excluded. The feature is web-only and uses existing infrastructure.
 
 Automatic build selection is documented in [Build watch paths](docs/infrastructure.md#build-watch-paths),
 with exact dashboard settings in [workers-build-paths.json](docs/workers-build-paths.json).
+
+## License
+
+[MIT](LICENSE). Bundled third-party assets keep their own terms: the Manrope font
+is under the SIL Open Font License (`OFL.txt` next to each copy), the notification
+sounds are from Mixkit under its license, and connector logos are trademarks of
+their respective owners.
