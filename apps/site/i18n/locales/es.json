@@ -4,6 +4,7 @@
     "description": "Crea contactos de IA con su propio nombre, cara, personalidad y memoria. Te escriben por iniciativa propia, recuerdan lo que importa y colaboran contigo y con las personas que quieres. Código abierto, con modelos de IA de Meta."
   },
   "common": {
+    "documentation": "Documentación",
     "getStarted": "Empezar",
     "poweredByMeta": "Con modelos de IA de Meta",
     "openSource": "Código abierto"

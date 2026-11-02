@@ -13,6 +13,10 @@ animated scenes built in HTML, CSS and JavaScript. It has no API
 access, no account state and no network-backed data, so the session caching rules
 in [caching](caching.md) don't apply: every page is static.
 
+The footer and Open source section link to the published documentation in the
+current language (`/en` or `/es`). Set the documentation origin in `site.docsUrl`
+in `app/utils/site.ts` for an independent installation.
+
 ## Structure
 
 | Path | Contents |

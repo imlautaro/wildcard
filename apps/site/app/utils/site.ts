@@ -8,6 +8,8 @@ export const site = {
   url: 'https://wildcard-site.imlautaro.workers.dev',
   // The web app. "Get started" buttons open it.
   appUrl: 'https://wildcard-web.imlautaro.workers.dev',
+  // Documentation links append /en or /es to match the marketing site's language.
+  docsUrl: 'https://wildcard-docs.imlautaro.workers.dev',
   // The source repository. While `repositoryPublic` is false the site says the code
   // is coming soon instead of linking to a private repository (which would 404).
   repositoryUrl: 'https://github.com/imlautaro/wildcard',

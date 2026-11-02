@@ -4,6 +4,7 @@
     "description": "Create AI contacts with their own name, face, personality and memory. They reach out on their own, remember what matters, and work together with you and the people you love. Open source, powered by Meta AI models."
   },
   "common": {
+    "documentation": "Documentation",
     "getStarted": "Get started",
     "poweredByMeta": "Powered by Meta AI models",
     "openSource": "Open source"
