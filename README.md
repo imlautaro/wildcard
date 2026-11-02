@@ -253,8 +253,9 @@ The web Worker `wildcard-web` needs a second Workers Builds project on the same
 repository (build `npm ci && npm run typecheck:web && npm run build:web`, deploy
 `npm run release:web`). See [Web Worker](docs/infrastructure.md#web-worker).
 
-Follow the [working agreements](AGENTS.md), including English-only project content
-and reproducible infrastructure documentation.
+Follow the [working agreements](AGENTS.md), including English source content,
+English/Spanish localization, and keeping affected documentation, infrastructure
+guides, and marketing claims current in the same change.
 
 ## MCP connections
 
