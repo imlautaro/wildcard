@@ -322,8 +322,17 @@ release's clean-checkout check still passes after the build.
 Status (November 1, 2026): `npm run build:site` was run locally (prerendered `/`,
 `200.html`, `404.html`; 1.2 MB) and served with `wrangler dev --config
 apps/site/wrangler.jsonc`: `/` returned 200, an unknown path 404 with the site's
-error page. The Workers Builds project and the first automatic release were not yet
-verified when this was written.
+error page.
+
+Initial release (November 1, 2026): as a one-time exception to the automatic-release
+rule, approved by the owner because the Builds API isn't reachable with the local
+Wrangler credential, `wildcard-site` was first deployed manually with
+`npx wrangler deploy --config apps/site/wrangler.jsonc --tag a1a6464…` from a clean
+checkout of pushed commit `a1a6464` (version `356fc40b-5b76-4885-b265-897b7e3f44a9`).
+It serves `https://wildcard-site.imlautaro.workers.dev`: `/` 200, unknown paths 404,
+no console errors at 1280 and 390 px. Later releases must come from Workers Builds:
+connect the existing Worker under Settings → Builds with the commands above. That
+project was not yet created when this was written.
 
 Rollback: roll back or delete the `wildcard-site` Worker. It stores no data and no
 other Worker depends on it.
