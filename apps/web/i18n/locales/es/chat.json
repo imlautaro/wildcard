@@ -171,7 +171,8 @@
       "openAlbumPhoto": "Abrir la foto {index} de {count} en pantalla completa: {name}",
       "sticker": "Sticker {emoji}",
       "openImage": "Abrir imagen en pantalla completa: {name}",
-      "pdf": "PDF · {size}"
+      "pdf": "PDF · {size}",
+      "markdown": "Markdown · {size}"
     },
     "viewer": {
       "label": "Imagen: {name}",
@@ -283,7 +284,7 @@
       "supporting": "Un emoji les indica a los contactos cuándo usar el sticker."
     },
     "files": {
-      "unsupported": "Elige un archivo JPEG, PNG, GIF, WebP o PDF.",
+      "unsupported": "Elige un archivo JPEG, PNG, GIF, WebP, PDF o Markdown.",
       "tooLarge": "Elige un archivo de hasta 5 MB.",
       "cropInvalid": "Ajusta el recorte de la foto e inténtalo de nuevo.",
       "photoEditingUnavailable": "La edición de fotos no está disponible en este navegador."

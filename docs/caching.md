@@ -1783,3 +1783,7 @@ Document Markdown/PDF export and copying reuse the loaded saved document snapsho
 They make no network request and add no cache. Web revokes download blob URLs and
 removes its print frame; iOS releases in-memory export data after file export.
 User-saved files and clipboard text remain independent of later document changes.
+
+Markdown attachments reuse file metadata in conversation/media snapshots and the
+existing temporary preview/download lifecycle, with no new persistent byte cache.
+They use the same account/access invalidation as other chat files.

@@ -182,7 +182,7 @@ chats.post('/turns', attachmentBody, async (c) => {
   const attachment = sticker ? { metadata: sticker.metadata, bytes: sticker.bytes } : body.voice !== undefined ? await parseVoice(body.voice)
     : body.attachment === undefined ? null : await parseAttachment(body.attachment);
   if (body.voice !== undefined && !attachment) return c.json({ error: 'Use a mono 16-bit 16 kHz WAV lasting 0.25–60 seconds' }, 400);
-  if (body.attachment !== undefined && !attachment) return c.json({ error: 'Choose a JPEG, PNG, GIF, WebP, or PDF up to 5 MB' }, 400);
+  if (body.attachment !== undefined && !attachment) return c.json({ error: 'Choose a JPEG, PNG, GIF, WebP, PDF, or Markdown up to 5 MB' }, 400);
   const id = body.id.toLowerCase();
   const text = body.text.trim();
   // A transcribed voice turn has text; the audio digest alone identifies the send.

@@ -1,6 +1,6 @@
 import type { DraftAttachment } from './types';
 
-export const attachmentTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+export const attachmentTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/markdown', '.md', '.markdown'];
 const attachmentLimit = 5 * 1024 * 1024;
 const photoLimit = 500 * 1024;
 
@@ -14,12 +14,14 @@ export function base64(bytes: Uint8Array) {
 
 // The API validates magic bytes and accepts these formats up to 5 MB.
 export async function draftAttachment(file: File): Promise<DraftAttachment> {
-  if (!attachmentTypes.includes(file.type)) throw new Error(translate('chat.files.unsupported'));
-  if (file.size > attachmentLimit) throw new Error(translate('chat.files.tooLarge'));
+  const markdown = /\.(md|markdown)$/i.test(file.name);
+  const mimeType = markdown ? 'text/markdown' : file.type;
+  if (!attachmentTypes.includes(mimeType)) throw new Error(translate('chat.files.unsupported'));
+  if (!file.size || file.size > attachmentLimit) throw new Error(translate('chat.files.tooLarge'));
   const name = (file.name || 'attachment').replace(/[\u0000-\u001f\u007f/\\]/g, '_').slice(0, 180);
   const data = base64(new Uint8Array(await file.arrayBuffer()));
-  const previewURL = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
-  return { name, mimeType: file.type, size: file.size, data, previewURL };
+  const previewURL = mimeType.startsWith('image/') ? URL.createObjectURL(file) : null;
+  return { name, mimeType, size: file.size, data, previewURL };
 }
 
 // Apply EXIF orientation and bound the in-memory editor source, as on iOS.

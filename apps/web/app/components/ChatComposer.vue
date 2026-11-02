@@ -2,7 +2,7 @@
 import type { DraftAttachment, DraftVoice, HomePostReference, Sticker } from '~/utils/types';
 import type { ReplyPreview } from '~/utils/replies';
 
-// Text plus optional image/PDF attachments (picked, pasted, or dropped anywhere on the chat
+// Text plus optional image/PDF/Markdown attachments (picked, pasted, or dropped anywhere on the chat
 // page, e.g. from Finder), sent as
 // one message each with the text on the first, matching the API's 4,000 character limit.
 // The parent owns the reply target so it survives navigation with the draft.

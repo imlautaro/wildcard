@@ -508,7 +508,7 @@ groups.post('/:id/messages', async (c) => {
   const attachment = sticker ? { metadata: sticker.metadata, bytes: sticker.bytes } : b.voice !== undefined ? await parseVoice(b.voice)
     : b.attachment === undefined ? null : await parseAttachment(b.attachment);
   if (b.voice !== undefined && !attachment) return c.json({ error: 'Use a mono 16-bit 16 kHz WAV lasting 0.25–60 seconds' }, 400);
-  if (b.attachment !== undefined && !attachment) return c.json({ error: 'Choose a JPEG, PNG, GIF, WebP, or PDF up to 5 MB' }, 400);
+  if (b.attachment !== undefined && !attachment) return c.json({ error: 'Choose a JPEG, PNG, GIF, WebP, PDF, or Markdown up to 5 MB' }, 400);
   // A transcribed voice message has text; the audio digest alone identifies the send.
   const sameText = (saved: { text: string; attachmentJSON: string | null }) => saved.text === (b.text as string).trim()
     || (b.voice !== undefined && isVoice(storedAttachment(saved)));

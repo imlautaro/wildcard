@@ -36,14 +36,15 @@ final class ShareViewController: UIViewController, UIPickerViewDataSource, UIPic
         let providers = (extensionContext?.inputItems as? [NSExtensionItem] ?? []).flatMap { $0.attachments ?? [] }
         guard let provider = providers.first else { status.text = String(localized: "No supported content found."); return }
         do {
-            for type in [UTType.pdf, .jpeg, .png, .gif, .webP, .image] where provider.hasItemConformingToTypeIdentifier(type.identifier) {
+            let markdownTypes = [UTType(filenameExtension: "md"), UTType(filenameExtension: "markdown")].compactMap { $0 }
+            for type in [UTType.pdf, .jpeg, .png, .gif, .webP, .image] + markdownTypes where provider.hasItemConformingToTypeIdentifier(type.identifier) {
                 var data = try await provider.loadDataRepresentation(for: type)
                 guard !data.isEmpty, data.count <= 5 * 1024 * 1024 else { throw CocoaError(.fileReadTooLarge) }
                 if type == .image {
                     guard let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.85), jpeg.count <= 5 * 1024 * 1024 else { throw CocoaError(.fileReadCorruptFile) }
                     data = jpeg; mimeType = "image/jpeg"; filename = "Shared image.jpg"
                 } else {
-                    mimeType = type.preferredMIMEType
+                    mimeType = ["md", "markdown"].contains(type.preferredFilenameExtension ?? "") ? "text/markdown" : type.preferredMIMEType
                     filename = "Shared file.\(type.preferredFilenameExtension ?? "bin")"
                 }
                 bytes = data
@@ -59,7 +60,7 @@ final class ShareViewController: UIViewController, UIPickerViewDataSource, UIPic
             } else { throw CocoaError(.fileReadUnknown) }
             status.text = String(localized: "Open Wildcard to review and send. Only the first shared item is imported.")
             save.isEnabled = true
-        } catch { status.text = String(localized: "Unable to import this item. Share text, a link, an image or a PDF up to 5 MB.") }
+        } catch { status.text = String(localized: "Unable to import this item. Share text, a link, an image, a PDF or a Markdown file up to 5 MB.") }
     }
     @objc private func saveDraft() {
         guard let directory, directory.contacts.indices.contains(picker.selectedRow(inComponent: 0)), !text.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || bytes != nil else { return }

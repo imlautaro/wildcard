@@ -113,7 +113,7 @@ Matching iOS:
   idempotent UUIDs, reply retry, receipts (clock while sending, two checks once
   accepted, colored when the agent read it), Online/Typing/Last seen presence in
   the server's delivered → online → read → typing order, activity leases
-  (`open`/`typing`/`leave`, with no draft text, which never connect the contact), and image/PDF
+  (`open`/`typing`/`leave`, with no draft text, which never connect the contact), and image/PDF/Markdown
   attachments up to 5 MB, added with the paperclip, by pasting, or by dragging files from
   Finder/the desktop onto the chat page (private chats and groups; see
   [attachments](attachments.md#drag-and-drop)).
@@ -1562,3 +1562,10 @@ Web opens the browser print dialog for Save as PDF using only the rendered docum
 These actions reuse the loaded revision without fetching or adding a cache.
 Clipboard failure is shown inline. Browser print/save and clipboard behavior remain
 unverified; see [documents](documents.md#export-and-clipboard).
+
+Markdown (`.md`, `.markdown`) chat attachments use the existing picker/drop,
+5 MiB limit, file bubbles, Docs list and temporary blob download behavior in private
+and group chats. File MIME is normalized to `text/markdown`; the API validates
+UTF-8 and supplies bounded text to the contact. No cache or service is added.
+See [Markdown files](attachments.md#markdown-files) for inference limits and
+manual browser/device checks.

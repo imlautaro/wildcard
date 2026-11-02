@@ -2642,16 +2642,6 @@
         }
       }
     },
-    "Choose a JPEG, PNG, GIF, WebP, or PDF." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige un archivo JPEG, PNG, GIF, WebP o PDF."
-          }
-        }
-      }
-    },
     "Choose a photo to cut out" : {
       "localizations" : {
         "es" : {
@@ -12959,6 +12949,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exportar PDF"
+          }
+        }
+      }
+    },
+    "Choose a JPEG, PNG, GIF, WebP, PDF, or Markdown file." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige un archivo JPEG, PNG, GIF, WebP, PDF o Markdown."
           }
         }
       }

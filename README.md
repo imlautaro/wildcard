@@ -211,7 +211,7 @@ history check sends a stale draft through up to two reviews; canceled, supersede
 or continuously changing turns can finish without a message. See the
 [reply policy and review limits](docs/groups.md#reply-rounds-and-exclusive-attention).
 Participants can optionally allow a contact to [discuss their private text](docs/groups.md#optional-private-text-sharing) in one group from Group details, with per-person consent and revocation. Groups support editable avatars,
-image/PDF attachments with native previews, voice messages, and foreground polling. Chats interleaves groups and individual
+image/PDF/Markdown attachments with native previews, voice messages, and foreground polling. Chats interleaves groups and individual
 conversations by latest message, with dates and a bold sender prefix on group
 previews. Group messages from other members generate push alerts, persistent
 unread counts and foreground banner/sound notifications; tapping an alert opens

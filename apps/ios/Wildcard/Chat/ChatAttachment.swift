@@ -27,7 +27,8 @@ struct DraftAttachment: Encodable, Equatable, Sendable {
     let data: Data
     enum CodingKeys: String, CodingKey { case name, mimeType, data }
     nonisolated static let limit = 5 * 1024 * 1024
-    nonisolated static let types: [UTType] = [.jpeg, .png, .gif, .webP, .pdf]
+    nonisolated static let markdownTypes = [UTType(filenameExtension: "md"), UTType(filenameExtension: "markdown")].compactMap { $0 }
+    nonisolated static let types: [UTType] = [.jpeg, .png, .gif, .webP, .pdf] + markdownTypes
 
     static func load(url: URL) throws -> DraftAttachment {
         let access = url.startAccessingSecurityScopedResource()
@@ -36,9 +37,10 @@ struct DraftAttachment: Encodable, Equatable, Sendable {
         guard values.isRegularFile == true, let size = values.fileSize, size > 0, size <= limit else {
             throw AuthAPI.Failure.rejected(String(localized: "Choose a file up to 5 MB."))
         }
-        guard let type = values.contentType, types.contains(where: { type.conforms(to: $0) }),
-              let mime = type.preferredMIMEType else {
-            throw AuthAPI.Failure.rejected(String(localized: "Choose a JPEG, PNG, GIF, WebP, or PDF."))
+        let markdown = ["md", "markdown"].contains(url.pathExtension.lowercased())
+        guard let type = values.contentType, markdown || types.contains(where: { type.conforms(to: $0) }),
+              let mime = markdown ? "text/markdown" : type.preferredMIMEType else {
+            throw AuthAPI.Failure.rejected(String(localized: "Choose a JPEG, PNG, GIF, WebP, PDF, or Markdown file."))
         }
         let bytes = try Data(contentsOf: url, options: .mappedIfSafe)
         guard bytes.count <= limit else { throw AuthAPI.Failure.rejected(String(localized: "Choose a file up to 5 MB.")) }
@@ -48,7 +50,7 @@ struct DraftAttachment: Encodable, Equatable, Sendable {
 }
 
 extension DraftAttachment {
-    /// The first image or PDF from a drop (Files, another app, or Finder when the iPad app runs
+    /// The first image, PDF or Markdown file from a drop (Files, another app, or Finder when the iPad app runs
     /// on a Mac). Messages carry one attachment, so further dropped items are ignored. The
     /// provider's file is only valid inside its callback, so it is copied to a private
     /// temporary folder, validated like a picked file, and removed.
@@ -57,7 +59,7 @@ extension DraftAttachment {
             types.first { provider.hasItemConformingToTypeIdentifier($0.identifier) }.map { (provider, $0) }
         }
         guard let (provider, type) = candidates.first else {
-            throw AuthAPI.Failure.rejected(String(localized: "Choose a JPEG, PNG, GIF, WebP, or PDF."))
+            throw AuthAPI.Failure.rejected(String(localized: "Choose a JPEG, PNG, GIF, WebP, PDF, or Markdown file."))
         }
         let copy: URL = try await withCheckedThrowingContinuation { continuation in
             _ = provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { @Sendable url, error in

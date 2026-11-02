@@ -135,16 +135,6 @@
         }
       }
     },
-    "Unable to import this item. Share text, a link, an image or a PDF up to 5 MB." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo importar este elemento. Comparte texto, un enlace, una imagen o un PDF de hasta 5 MB."
-          }
-        }
-      }
-    },
     "Unable to save. Unlock your iPhone, check native experiments, or clear old shared drafts in Wildcard." : {
       "localizations" : {
         "es" : {
@@ -162,6 +152,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Actualizar sesión del contacto"
+          }
+        }
+      }
+    },
+    "Unable to import this item. Share text, a link, an image, a PDF or a Markdown file up to 5 MB." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo importar este elemento. Comparte texto, un enlace, una imagen, un PDF o un archivo Markdown de hasta 5 MB."
           }
         }
       }

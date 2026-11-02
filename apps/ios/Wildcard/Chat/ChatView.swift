@@ -321,7 +321,7 @@ struct ChatView: View {
             do { try selectFile(result.get()) }
             catch { attachmentError = error.localizedDescription }
         }
-        // Drag an image or PDF onto the chat (Files, another app, or Finder on a Mac); same rules as the paperclip.
+        // Drag an image, PDF or Markdown file onto the chat (Files, another app, or Finder on a Mac); same rules as the paperclip.
         .onDrop(of: DraftAttachment.types, isTargeted: $isDropTargeted) { providers in
             guard canAttachDrop else { return false }
             receiveDrop(providers)

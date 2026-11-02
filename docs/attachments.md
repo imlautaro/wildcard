@@ -50,7 +50,7 @@ the same private image cache, and never appear in **Shared in this chat**.
 
 ## Drag and drop
 
-Both clients accept an image or PDF dragged onto an open private chat or group, with the
+Both clients accept an image, PDF or Markdown file dragged onto an open private chat or group, with the
 same types, 5 MB limit and enabled state as the paperclip (not while the chat is loading,
 unavailable, clearing, sending a blocking message, preparing another attachment or recording
 voice). The file becomes a draft attachment to review before sending; nothing is sent on drop.
@@ -73,7 +73,7 @@ iPad app on a Mac.
 
 ## Formats and limits
 
-This implementation accepts JPEG, PNG, GIF, WebP, and PDF, up to 5 MiB per file.
+This implementation accepts JPEG, PNG, GIF, WebP, PDF, and UTF-8 Markdown (`.md` or `.markdown`), up to 5 MiB per file.
 These are application limits, narrower than Meta's provider limits. The Files picker
 preserves bytes; Photo library selection converts to JPEG with a maximum 2048-point
 long edge rendered at scale 1, with a white background for transparency. The selected
@@ -242,3 +242,23 @@ for scope, lazy old-history indexing, limits, retention and verification.
 ## History cleanup
 
 [Clear/delete](chat-lifecycle.md) register immutable image/PDF/voice keys and generated media for durable R2 deletion, with a final delayed sweep for in-flight uploads. Source indexes and client media/image/audio caches are invalidated. Archive preserves files. Live R2 failure/retry verification is pending.
+
+## Markdown files
+
+Private chats and groups accept `.md` and `.markdown` files through the file picker
+and drag and drop on iOS and web. The iOS share extension also imports Markdown
+as a file. Clients normalize its MIME type to `text/markdown`, including browsers
+that report an empty or generic type for these extensions. The same 5 MiB limit,
+private R2 storage, membership checks, idempotency, file bubbles and Docs lists apply.
+The API additionally requires a Markdown extension, valid UTF-8 and no binary
+control characters (tabs and newlines are allowed). A Markdown-only message is
+valid. These are attachments, not automatically imported collaborative documents.
+
+The contact receives the current/selected historical file as an untrusted text
+block, with its filename and at most the first 100,000 characters; larger files
+carry an explicit truncation marker. Download retains the complete original bytes.
+Existing Meta model selection/consent remains unchanged. No migration, service,
+secret or additional cache is needed. Opening uses the existing temporary file
+preview on iOS and a temporary blob on web (browser may download Markdown).
+Manual verification remains: pick/drop/share, Unicode, malformed UTF-8, oversized
+and binary files, captionless sends and follow-up questions in private/group chats.

@@ -180,7 +180,7 @@ explicit identity changes request a reload. No real-time widget refresh guarante
 
 From Safari, Photos, or Files, choose **Share → Wildcard**, select an enabled contact,
 and save a draft. Only the first shared item is imported. Supports plain text,
-HTTP(S) links, images, and PDF files up to 5 MB; generic images are converted to JPEG.
+HTTP(S) links, images, PDF and UTF-8 Markdown files up to 5 MB; generic images are converted to JPEG.
 The extension reads a size-checked temporary file before importing file bytes.
 At most ten drafts are kept. Each draft expires after 24 hours, has a random ID,
 and is bound to the current account and selected contact. Files are atomically
@@ -314,7 +314,7 @@ Device checks after an authorized release:
    alarm countdown/paused presentations on the Lock Screen and Island.
 5. Save a location reminder at a chosen fictional/test location; inspect its arrival
    or departure condition in Reminders. No actual location history is required.
-6. Share text, URL, image and PDF, including unsupported/oversized content; reopen,
+6. Share text, URL, image, PDF and Markdown, including unsupported/oversized content; reopen,
    navigate away/back, preserve a nonempty draft, send once, discard, and cold launch.
 7. Exercise offline refresh, duplicate taps, interrupted execution, lost acknowledgement,
    expired proposals, contact removal, sign-out and account switching. Never retry

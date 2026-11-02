@@ -64,7 +64,7 @@ async function open() {
   </button>
   <button v-else type="button" class="file link-button" @click="open">
     <AppIcon name="file" />
-    <span><span class="name">{{ attachment.name }}</span><br><span class="small muted">{{ $t('chat.attachment.pdf', { size: fileSize(attachment.size) }) }}</span></span>
+    <span><span class="name">{{ attachment.name }}</span><br><span class="small muted">{{ $t(attachment.mimeType === 'text/markdown' ? 'chat.attachment.markdown' : 'chat.attachment.pdf', { size: fileSize(attachment.size) }) }}</span></span>
   </button>
   <ChatImageViewer v-if="viewing !== null && viewerImages[viewing]?.source" :images="viewerImages" :start="viewing" @close="viewing = null" />
 </template>
