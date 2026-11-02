@@ -354,7 +354,7 @@ A **curation run** is a `kind: 'home'` instance of the existing `CHAT_WORKFLOW`
 directly by an API request, with one durable step per stage:
 
 1. **Plan** (one model call, structured output). The editor reads the person's
-   [signals](#what-updates-reads) and returns 2–8 topics in order, each with a layout,
+   [signals](#what-for-you-reads) and returns 2–8 topics in order, each with a layout,
    the contact that prepares it, whether it needs web research or a connector, a
    reason shown to the person, up to five [topics to follow](#topics-to-follow), plus a
    one-sentence briefing retained in the API for

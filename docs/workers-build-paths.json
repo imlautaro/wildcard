@@ -72,6 +72,8 @@
       "productionBranch": "main",
       "includePaths": [
         "apps/docs/*",
+        "docs/*",
+        "scripts/prepare-docs-reference.mjs",
         "package.json",
         "package-lock.json",
         ".nvmrc",

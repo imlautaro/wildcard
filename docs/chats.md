@@ -428,7 +428,7 @@ before Online, or Typing before Online and Read, from the server state.
   paces replies and follow-ups (see [visiting a chat](#visiting-a-chat-and-composing-a-draft)).
 - Follow-up checks connect the contact for the decision, type for `messageDelay`
   when they send, and otherwise go Offline about five seconds after the check. See
-  [conversation initiative](initiative.md#publication-and-control).
+  [conversation initiative](initiative.md#delivery-limits-and-control).
 - Groups follow the same order; see [group receipts](groups.md#delivery-and-read-receipts).
 
 A read is therefore a simulated contact action, not proof that a model response

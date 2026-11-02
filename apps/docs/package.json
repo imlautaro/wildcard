@@ -6,7 +6,10 @@
     "dev": "nuxt dev --port 3004",
     "build": "nuxt generate",
     "preview": "wrangler dev --config wrangler.jsonc --port 3005",
-    "typecheck": "nuxt prepare"
+    "typecheck": "nuxt prepare",
+    "predev": "node ../../scripts/prepare-docs-reference.mjs",
+    "prebuild": "node ../../scripts/prepare-docs-reference.mjs",
+    "pretypecheck": "node ../../scripts/prepare-docs-reference.mjs"
   },
   "dependencies": {
     "@nuxtjs/i18n": "10.6.0",

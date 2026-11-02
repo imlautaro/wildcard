@@ -90,7 +90,7 @@ npm configuration even though no root `.npmrc` currently exists.
 | `wildcard-web` (production and previews) | `apps/web/*`, `packages/ui/*`, `shared/*`, `scripts/release-web.mjs`, `scripts/preview-web.mjs` |
 | `wildcard-admin` | `apps/admin/*`, `packages/ui/*`, `scripts/release-admin.mjs` |
 | `wildcard-site` | `apps/site/*`, `packages/ui/*`, `scripts/release-site.mjs` |
-| `wildcard-docs` | `apps/docs/*`, `scripts/release-docs.mjs` |
+| `wildcard-docs` | `apps/docs/*`, `docs/*`, `scripts/prepare-docs-reference.mjs`, `scripts/release-docs.mjs` |
 
 The Nuxt layer is used by web, admin and site, while `shared/` is imported by API
 and web. API migrations and each app's configuration/scripts/assets remain covered
@@ -102,8 +102,10 @@ to this reference and the dashboard filters in the same change.
 Expected push behavior: a site-only edit builds site; a Nuxt-layer edit builds
 web/admin/site; a `shared/` edit builds API/web; root dependency or build-environment
 changes build all five projects. An edit only in `apps/docs/` builds only docs.
-Changes only in `apps/ios/`, `docs/`, root `README.md` or
-unrelated root scripts match none. The broad per-app filters deliberately include
+An edit only in `docs/` also builds docs because the full reference is generated
+from those guides. Changes only in `apps/ios/`, root `README.md` or unrelated root
+scripts match none. The `docs/*` and reference-preparation script filters were
+added to the production dashboard on November 2, 2026. The broad per-app filters deliberately include
 future files inside that app, avoiding fragile lists of individual source files.
 
 Cloudflare's [watch-path rules](https://developers.cloudflare.com/workers/ci-cd/builds/build-watch-paths/)
@@ -422,7 +424,17 @@ It is the npm workspace `@wildcard/docs`, built with [Docus](https://docus.dev) 
 (a Nuxt layer over Nuxt Content, Nuxt UI and Tailwind CSS) and `@nuxtjs/i18n`, with
 English pages in `apps/docs/content/en` and Spanish pages in `apps/docs/content/es`
 (identical trees; this site is the owner-approved bilingual exception to English-only
-documentation). It does not extend `packages/ui` and has no script, binding, D1, R2,
+documentation). Complete English reference pages are generated from `docs/*.md`;
+full Spanish translations are maintained in `apps/docs/reference/es/`. Both appear
+in the Reference tab, with in-site links from the overview pages and between
+guides. `scripts/prepare-docs-reference.mjs` runs before docs development, type
+checking and builds. It refuses stale/missing Spanish source revisions recorded
+in `sources.json`; translate changed guides and update their SHA-256 entries in
+the same change. Generated `content/*/6.reference/` and
+`public/reference-assets/` are ignored and must not be committed. Restart the docs
+dev server after changing reference sources to regenerate them.
+
+It does not extend `packages/ui` and has no script, binding, D1, R2,
 Workflow, Cron, secret or migration.
 
 `npm run build:docs` runs `nuxt generate` with `nitro.preset: 'static'` (explicit, so
@@ -449,9 +461,18 @@ Provisioning:
    `npm run release:docs`. A credential limited to Workers Scripts edit and account
    read is enough. Disable preview builds.
 3. Configure the [build watch paths](#build-watch-paths) for docs (`apps/docs/*`,
-   `scripts/release-docs.mjs` and the root build inputs) and remove the default `*`.
+   `docs/*`, `scripts/prepare-docs-reference.mjs`, `scripts/release-docs.mjs` and
+   the root build inputs) and remove the default `*`.
 4. Push a commit. `scripts/release-docs.mjs` applies the same guards as the other
    releases and deploys `apps/docs/wrangler.jsonc` tagged with the commit.
+
+Reference verification: run `node scripts/prepare-docs-reference.mjs` and
+`node scripts/check-docs-reference.mjs` to check source/translation coverage,
+Markdown parsing, in-site links and section anchors without building the site.
+When a build is authorized, open `/en/reference/chats`, `/es/reference/chats`,
+`/en/reference/groups` and `/es/reference/groups`; check the Reference tab, search,
+long tables/code blocks and links from Conversations on desktop and mobile.
+This new full-reference UI has not yet been checked in a browser.
 
 Verification: `/` answers 302 to `/en`; `/en`, `/es`, a page in each locale and
 `/llms.txt` answer 200; an unknown path answers 404 with the docs error page.
@@ -471,10 +492,11 @@ overflow. Workers Builds was not connected for those initial manual releases.
 Workers Builds connection (November 2, 2026): the existing `wildcard-docs` Worker
 is connected to `imlautaro/wildcard`, production branch `main`, root `/`, with the
 build and release commands above. Production builds and build caching are enabled;
-preview builds are disabled. Include paths match the versioned
-[reference](workers-build-paths.json): `apps/docs/*`, `scripts/release-docs.mjs`,
+preview builds are disabled. At connection time, the inspected include paths were: `apps/docs/*`, `scripts/release-docs.mjs`,
 `package.json`, `package-lock.json`, `.nvmrc`, `.npmrc` and `.gitignore`, with no
-exclusions. This project extends Docus rather than `packages/ui`, so changes to
+exclusions. The versioned [reference](workers-build-paths.json) now additionally
+requires `docs/*` and `scripts/prepare-docs-reference.mjs`; both filters were
+added and saved in the production dashboard on November 2, 2026. This project extends Docus rather than `packages/ui`, so changes to
 the app's shared UI layer do not trigger docs builds. The existing GitHub connection
 and `Workers Builds - 2026-05-27 10:54` credential were reused; no credentials,
 permissions, build variables or secrets were added. Independent installations must
@@ -2623,7 +2645,7 @@ See [successive messages](reply-messages.md) for the delivery and cache contract
 
 The length-aware pacing refinement uses the same D1 and Workflow bindings with
 no additional migration, secret, permission or service. Each text message waits
-up to 60 seconds; the Workflow checkpoints composition deadlines and refreshes the
+up to 15 seconds; the Workflow checkpoints composition deadlines and refreshes the
 existing attended presence lease per part. Private initiative reserves 90 seconds
 of presence for its bounded wait. Sleep does not depend on an open client. Existing
 Cron recovery recognizes sleeping Workflows as active rather than failed. Commit

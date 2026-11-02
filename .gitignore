@@ -32,3 +32,7 @@ apps/docs/dist
 worker-configuration.d.ts
 *.tsbuildinfo
 .mini-app-eval/
+
+# Complete documentation references, generated from docs/
+apps/docs/content/*/6.reference/
+apps/docs/public/reference-assets/
