@@ -582,8 +582,13 @@ struct GroupChatView: View {
                 HStack(alignment: .top) {
                     Text(error).manrope(.footnote).foregroundStyle(.red)
                     Spacer()
-                    Button("Refresh") { Task { await store.refresh(id: groupID, auth: auth) } }
-                        .manrope(.footnote)
+                    if store.consentBlocked {
+                        Button("Members") { open(.groupDetails(groupID)) }
+                            .manrope(.footnote)
+                    } else {
+                        Button("Refresh") { Task { await store.refresh(id: groupID, auth: auth) } }
+                            .manrope(.footnote)
+                    }
                 }
             }
             if let pending = store.pendingText, !store.isSending, !store.pendingAccepted {

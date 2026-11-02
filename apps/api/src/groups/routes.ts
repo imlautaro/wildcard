@@ -3,6 +3,7 @@ import { plainMessageMarkdown } from '../../../../shared/messageMarkdown';
 import { replyActivityLabel, type ReplyActivityEntry } from '../../../../shared/activity';
 import { learningRoutes } from '../chat/learning-routes';
 import { accountEnvironment } from '../lib/model-preference';
+import { consentFailure, groupConsentMissing } from '../chat/consent';
 import { reactionRoutes } from '../reactions/routes';
 import { groupQuotes, parseGroupReply } from '../replies/data';
 import { receiptState } from './receipts';
@@ -522,6 +523,13 @@ groups.post('/:id/messages', async (c) => {
     AND sequence >= ${userHistoryStart('?2', '?3')}`).bind(replyToID, id, owner).first()) {
     return c.json({ error: 'The message you are replying to is no longer available' }, 400);
   }
+  const consentBlock = async () => {
+    const missing = contributor(c.env) ? await groupConsentMissing(c.env.DB, id, owner) : null;
+    return missing && c.json(await consentFailure(c.env, 'GROUP_CONTRIBUTOR_CONSENT_REQUIRED',
+      'Every member must give Contributor consent before contacts can reply in this group', missing), 403);
+  };
+  const blocked = await consentBlock();
+  if (blocked) return blocked;
   const now = Date.now();
   const key = attachment ? `group-attachments/${id}/${owner}/${b.id}/${crypto.randomUUID()}` : null;
   const attachmentJSON = attachment && key ? JSON.stringify({ ...attachment.metadata, key, ...(sticker ? { sticker: sticker.sticker } : {}) }) : null;
@@ -556,7 +564,9 @@ groups.post('/:id/messages', async (c) => {
   const saved = await c.env.DB.prepare('SELECT id, text, attachment_json AS attachmentJSON, reply_to_id AS replyToID FROM group_message WHERE id = ? AND group_id = ? AND user_id = ?')
     .bind(b.id, id, owner).first<{ id: string; text: string; attachmentJSON: string | null; replyToID: string | null }>();
   if (!saved && key) await discardChatObject(c.env,key,id);
-  if (!saved || !sameText(saved) || !sameAttachment(saved, attachment?.metadata) || saved.replyToID !== replyToID) return c.json({ error: 'The group queue is full or model consent is required' }, 409);
+  if (!saved || !sameText(saved) || !sameAttachment(saved, attachment?.metadata) || saved.replyToID !== replyToID) {
+    return (!saved && await consentBlock()) || c.json({ error: 'The group queue is full or model consent is required' }, 409);
+  }
   c.executionCtx.waitUntil(dispatchGroup(c.env, id));
   c.executionCtx.waitUntil(deliverGroupPush(c.env, saved.id));
   return c.json({ id: saved.id }, 202);

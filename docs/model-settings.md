@@ -69,6 +69,17 @@ agent owner's contact used to locate the shared agent.
 Groups with missing required consent continue to reject/stop Contributor replies;
 users can choose Standard or explicitly update that group's consent.
 
+Sends refused for missing consent return 403 with a `code` that both clients
+localize instead of the English `error`: `CONTACT_CONTRIBUTOR_CONSENT_REQUIRED`
+(private chat with a shared contact accepted without Contributor consent; the fix
+is a new invitation accepted with consent) and `GROUP_CONTRIBUTOR_CONSENT_REQUIRED`
+(group message while any member lacks it). The group body adds
+`selfConsentMissing` and `membersMissing`, and the group chat offers **Members**,
+where each person gives their own consent. Both bodies add `contributorOnly`, and
+the message then notes that the admin flag is on. A reply that fails later
+because consent changed mid-job still shows the generic failure, and skipped
+proactive messages are not reported.
+
 MCP-isolated private contact chats always use Standard, regardless of Account,
 and retain their permanent shared-memory isolation. Do not infer that granting
 MCP access permits Contributor processing or public/group disclosure.

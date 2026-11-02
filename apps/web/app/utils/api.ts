@@ -26,7 +26,20 @@ function serverMessage(body: unknown): string | null {
     ? message : null;
 }
 
+// Sends refused for missing Contributor consent (docs/model-settings.md#sharing-and-mcp).
+function consentMessage(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const { code, contributorOnly, selfConsentMissing } = body as Record<string, unknown>;
+  const reason = code === 'CONTACT_CONTRIBUTOR_CONSENT_REQUIRED' ? translate('errors.contactContributorConsent')
+    : code === 'GROUP_CONTRIBUTOR_CONSENT_REQUIRED'
+      ? translate(selfConsentMissing === true ? 'errors.groupContributorConsentSelf' : 'errors.groupContributorConsentOthers')
+      : null;
+  return reason && contributorOnly === true ? `${reason} ${translate('errors.contributorOnlyActive')}` : reason;
+}
+
 function failureMessage(path: string, method: string, status: number, body: unknown): string {
+  const consent = consentMessage(body);
+  if (consent) return consent;
   if (path === 'me/debug-export') return serverMessage(body) ?? translate('errors.debugExportFailed');
   // Per-chat JSON export (docs/chat-export.md): the API's messages are accurate for every status.
   if (/^(contacts\/[^/]+\/chat|groups\/[^/]+)\/export$/.test(path)) {

@@ -3104,6 +3104,46 @@
         }
       }
     },
+    "This shared contact can't reply because you accepted it without Contributor consent. Ask its creator for a new invitation and accept it with Contributor consent." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este contacto compartido no puede responder porque lo aceptaste sin el consentimiento de Contributor. Pídele a quien lo creó una nueva invitación y acéptala con el consentimiento de Contributor."
+          }
+        }
+      }
+    },
+    "Contacts can't reply in this group until you give Contributor consent. Turn it on in Members." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los contactos no pueden responder en este grupo hasta que des el consentimiento de Contributor. Actívalo en Miembros."
+          }
+        }
+      }
+    },
+    "Contacts can't reply in this group until every member gives Contributor consent. Members who haven't can turn it on in Members." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los contactos no pueden responder en este grupo hasta que todos los miembros den el consentimiento de Contributor. Quienes no lo hayan dado pueden activarlo en Miembros."
+          }
+        }
+      }
+    },
+    "Contributor is on for every account right now." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contributor está activado para todas las cuentas en este momento."
+          }
+        }
+      }
+    },
     "Contributor is on for every account for now. Your saved choice returns when this ends." : {
       "localizations" : {
         "es" : {

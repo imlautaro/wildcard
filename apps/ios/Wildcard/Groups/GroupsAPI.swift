@@ -503,6 +503,8 @@ final class GroupChatStore {
     private(set) var failedVoice: (clip: VoiceClip, replyTo: MessageReplyQuote?)?
     func discardFailedVoice() { failedVoice = nil }
     private(set) var pendingAccepted = false
+    /// The last send was refused for missing Contributor consent; the chat offers Members.
+    private(set) var consentBlocked = false
     private var pendingSender: (id: String, name: String)?
     var pendingText: String? { pending.map { value in messages.contains(where: { $0.id == value.id }) ? nil : value.text } ?? nil }
 
@@ -703,6 +705,7 @@ final class GroupChatStore {
             return false
         }
         isSending = true
+        consentBlocked = false
         if voice != nil { failedVoice = nil }
         if pending == nil {
             pending = (historyRevision, UUID().uuidString.lowercased(), text, attachment, voice, Date.now.timeIntervalSince1970 * 1000, replyTo, sticker)
@@ -737,6 +740,7 @@ final class GroupChatStore {
             if messages.contains(where: { $0.id == submitted.id }) { pending = nil; pendingAccepted = false; return true }
             if case AuthAPI.Failure.rejected = error { pending = nil }
             if case AuthAPI.Failure.unauthorized = error { pending = nil }
+            if case AuthAPI.Failure.consentRequired(_, true) = error { pending = nil; consentBlocked = true }
             // A rejected clip is not pending anymore, but the person can still retry or discard it.
             if pending == nil, let clip = submitted.voice { failedVoice = (clip, submitted.replyTo) }
             self.error = error.localizedDescription

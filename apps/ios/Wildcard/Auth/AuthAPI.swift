@@ -43,6 +43,8 @@ struct AuthAPI: Sendable {
         case noSubject(String)
         /// HTTP 429 with the server's `Retry-After` seconds when it sent one.
         case rateLimited(retryAfter: Int?, message: String)
+        /// A send refused for missing Contributor consent; `group` offers Members as the fix.
+        case consentRequired(message: String, group: Bool)
 
         var errorDescription: String? {
             switch self {
@@ -56,6 +58,7 @@ struct AuthAPI: Sendable {
             case .reviewRequired: String(localized: "Review and enable this mini app first.")
             case .conflict(let message): message
             case .noSubject(let message): message
+            case .consentRequired(let message, _): message
             case .rateLimited(let retryAfter, let message):
                 retryAfter.map { seconds in String(localized: "Too many requests. Please wait \(seconds) seconds and try again.") } ?? message
             }
@@ -165,6 +168,24 @@ struct AuthAPI: Sendable {
         }
     }
 
+    /// Sends refused for missing Contributor consent (docs/model-settings.md#sharing-and-mcp).
+    private static func consentFailure(_ data: Data) -> Failure? {
+        guard let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let reason: String
+        switch body["code"] as? String {
+        case "CONTACT_CONTRIBUTOR_CONSENT_REQUIRED":
+            reason = String(localized: "This shared contact can't reply because you accepted it without Contributor consent. Ask its creator for a new invitation and accept it with Contributor consent.")
+        case "GROUP_CONTRIBUTOR_CONSENT_REQUIRED":
+            reason = body["selfConsentMissing"] as? Bool == true
+                ? String(localized: "Contacts can't reply in this group until you give Contributor consent. Turn it on in Members.")
+                : String(localized: "Contacts can't reply in this group until every member gives Contributor consent. Members who haven't can turn it on in Members.")
+        default: return nil
+        }
+        let message = body["contributorOnly"] as? Bool == true
+            ? reason + " " + String(localized: "Contributor is on for every account right now.") : reason
+        return .consentRequired(message: message, group: body["code"] as? String == "GROUP_CONTRIBUTOR_CONSENT_REQUIRED")
+    }
+
     func send(path: String, method: String = "GET", body: Data? = nil, token: String? = nil, query: [URLQueryItem] = [], contentType: String = "application/json", timeout: TimeInterval = 30) async throws -> (Data, HTTPURLResponse) {
         guard let baseURL, baseURL.host != nil else { throw Failure.invalidConfiguration }
         #if DEBUG
@@ -201,6 +222,7 @@ struct AuthAPI: Sendable {
         guard let response = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         if response.statusCode == 401, token != nil { throw Failure.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
+            if response.statusCode == 403, let consent = Self.consentFailure(data) { throw consent }
             if path.hasPrefix("stickers") || path.contains("/stickers") {
                 throw Self.stickerFailure(response, data: data, path: path)
             }

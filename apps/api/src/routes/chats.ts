@@ -3,7 +3,7 @@ import { parseNativeContext } from '../native/actions';
 import { reactionRoutes } from '../reactions/routes';
 import { parsePrivateReply, privateQuotes, privateTarget } from '../replies/data';
 import { albumAttachments, albumIndex, mediaPage, parseAttachment, sameAttachment, storedAttachment, type Attachment } from '../chat/attachments';
-import { contactModelAllowed } from '../chat/consent';
+import { consentFailure, contactModelAllowed } from '../chat/consent';
 import { validTimeZone } from '../schedules/data';
 import { lingerInChat, readPresence } from '../chat/presence';
 import { totalUnreadReplies } from '../lib/unread';
@@ -39,7 +39,8 @@ chats.use('*', async (c, next) => {
   }
   if (c.req.method === 'POST' && !c.req.path.endsWith('/activity')
     && !await contactModelAllowed(c.env, id, c.get('owner'))) {
-    return c.json({ error: 'Accept a new invitation with Contributor model consent before using this contact' }, 403);
+    return c.json(await consentFailure(c.env, 'CONTACT_CONTRIBUTOR_CONSENT_REQUIRED',
+      'Accept a new invitation with Contributor model consent before using this contact'), 403);
   }
   await next();
 });

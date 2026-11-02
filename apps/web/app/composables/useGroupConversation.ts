@@ -4,7 +4,7 @@ import type { DraftAttachment, DraftVoice, GroupMessage, GroupMessagesPage, Grou
 // Session cache of group conversations, mirroring useConversation. A pending send
 // becomes `accepted` (Sent) on HTTP acceptance, before the follow-up history
 // request; history then replaces it by UUID.
-export type GroupPending = { historyRevision: number; id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; sticker: StickerChoice | null; replyTo: ReplyQuote | null; failed: string | null; accepted: boolean; createdAt: number };
+export type GroupPending = { historyRevision: number; id: string; text: string; attachment: DraftAttachment | null; voice: DraftVoice | null; sticker: StickerChoice | null; replyTo: ReplyQuote | null; failed: string | null; failedCode?: string | null; accepted: boolean; createdAt: number };
 export type GroupConversation = {
   reactions: ReactionCache;
   snapshot: GroupSnapshot | null;
@@ -336,6 +336,7 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
     const pending = entry.pending;
     if (!pending) return;
     pending.failed = null;
+    pending.failedCode = null;
     const attachment = pending.attachment
       ? { name: pending.attachment.name, mimeType: pending.attachment.mimeType, data: pending.attachment.data }
       : undefined;
@@ -351,7 +352,10 @@ export function useGroupConversation(groupID: MaybeRefOrGetter<string>) {
       await load();
     } catch (error) {
       // A transient failure keeps the UUID so Retry cannot duplicate the message.
-      if (entry.pending?.id === pending.id && !entry.pending.accepted) entry.pending.failed = errorMessage(error);
+      if (entry.pending?.id === pending.id && !entry.pending.accepted) {
+        entry.pending.failed = errorMessage(error);
+        entry.pending.failedCode = error instanceof ApiError ? error.code ?? null : null;
+      }
     }
   }
 
