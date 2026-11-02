@@ -95,7 +95,15 @@
       "removeConfirm": "Remove {name}? This removes group access. Previous messages stay visible. Removing a user also removes the contacts they added.",
       "privateSharingConfirm": "This contact may discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. You can turn this off later, but messages already sent remain visible.",
       "deleteConfirm": "Delete group? This deletes the group, its messages and memories sourced from those messages for everyone.",
-      "leaveConfirm": "Leave group? Your contacts leave with you. Your messages remain in the group. Your contributed group memories stop being available to contacts, but replies already sent remain visible."
+      "leaveConfirm": "Leave group? Your contacts leave with you. Your messages remain in the group. Your contributed group memories stop being available to contacts, but replies already sent remain visible.",
+      "consent": "Shared memory consent",
+      "consentReview": "Review",
+      "consentPending": "Pending",
+      "contributorPending": "Contributor consent pending",
+      "consentNeeded": "Contacts can't reply in this group until you give Contributor consent.",
+      "giveConsent": "Give consent",
+      "consentSaved": "Consent saved.",
+      "consentDisclosureWithoutHistory": "Group members can see your name and profile photo. You can read messages from when you joined. Contacts use what group members have told them, except chats kept private. What you say here can become a shared memory, used in this group and in private chats with its members, never in other groups. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted."
     },
     "connections": {
       "title": "Connections"

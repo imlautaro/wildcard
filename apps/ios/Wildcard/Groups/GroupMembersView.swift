@@ -25,6 +25,13 @@ struct GroupMembersView: View {
         return permissions.isEmpty ? String(localized: "No contacts") : String(localized: "\(permissions.filter { $0.enabled == 1 }.count) of \(permissions.count) on")
     }
     private var owner: Bool { snapshot?.group.ownerID == auth.user?.id }
+    /// Only this account can consent for itself; other members renew from their own Members screen.
+    private var selfConsentMissing: Bool {
+        snapshot?.contributorModel == true
+            && snapshot?.members.first { $0.kind == "user" && $0.id == auth.user?.id }?.contributorConsentMissing == true
+    }
+    /// Consent is always re-confirmed explicitly, so both toggles start off.
+    private func reviewConsent() { shareMemory = false; contributorConsent = false; showingConsent = true }
     var body: some View {
         Form {
             if let error = error ?? store.error { Text(error).foregroundStyle(.red) }
@@ -44,6 +51,13 @@ struct GroupMembersView: View {
                     }) { GroupPhotoAvatar(group: self.snapshot?.group, size: 96) }
                     .listRowBackground(Color.clear).listRowSeparator(.hidden)
                 }
+                if selfConsentMissing {
+                    Section {
+                        Text("Contacts can't reply in this group until you give Contributor consent.")
+                            .manrope(.footnote).foregroundStyle(.secondary)
+                        Button("Give consent", systemImage: "hand.raised") { reviewConsent() }
+                    }
+                }
                 Section {
                     SheetRow(title: String(localized: "Discuss my private chats"), systemImage: "bubble.left.and.bubble.right", value: sharingSummary) { showingSharing = true }
                     NavigationLink { ConversationLearningView(base: "groups/\(groupID)", cache: groups.conversations.learning.store(for: groupID)) }
@@ -53,9 +67,8 @@ struct GroupMembersView: View {
                     NavigationLink { MiniAppListView(base: "groups/\(groupID)") } label: { Label("Mini apps", systemImage: "square.grid.2x2") }
                     NavigationLink { TasksView(base: "groups/\(groupID)", snapshot: groups.conversations.tasks.store(for: "groups/\(groupID)")) }
                         label: { Label("Tasks", systemImage: "checklist") }
-                    SheetRow(title: String(localized: "Shared memory consent"), systemImage: "hand.raised", value: String(localized: "Review")) {
-                        shareMemory = false; contributorConsent = false; showingConsent = true
-                    }
+                    SheetRow(title: String(localized: "Shared memory consent"), systemImage: "hand.raised",
+                        value: selfConsentMissing ? String(localized: "Pending") : String(localized: "Review")) { reviewConsent() }
                 }
                 Section("Members") {
                     ForEach(snapshot.members, id: \.identity) { member in
@@ -69,6 +82,9 @@ struct GroupMembersView: View {
                                     .manrope(.caption).foregroundStyle(.secondary)
                                 if member.joinedWithoutHistory {
                                     Text("Joined without earlier messages").manrope(.caption).foregroundStyle(.secondary)
+                                }
+                                if snapshot.contributorModel == true && member.contributorConsentMissing {
+                                    Text("Contributor consent pending").manrope(.caption).foregroundStyle(.secondary)
                                 }
                             }
                             Spacer()

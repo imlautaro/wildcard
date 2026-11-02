@@ -204,8 +204,9 @@ groups.get('/:id', async (c) => {
   const group = await c.env.DB.prepare(`SELECT ${summary} FROM chat_group g JOIN group_member m ON m.group_id = g.id
     WHERE g.id = ? AND m.user_id = ?`).bind(id, owner).first<GroupSummary>();
   const { results: members } = await c.env.DB.prepare(`SELECT u.id, 'user' AS kind, u.name, u.photo_version AS photoVersion,
-    m.can_invite AS canInvite, NULL AS addedBy, (m.history_start IS NULL) AS includesHistory FROM group_member m JOIN user u ON u.id = m.user_id WHERE m.group_id = ?1
-    UNION ALL SELECT a.id, 'agent', ${agentDisplayName('a.id', 'a.name', '?2')}, a.photo_version, 0, ga.added_by, (ga.history_start IS NULL) FROM group_agent ga
+    m.can_invite AS canInvite, NULL AS addedBy, (m.history_start IS NULL) AS includesHistory,
+    m.contributor_consent AS contributorConsent FROM group_member m JOIN user u ON u.id = m.user_id WHERE m.group_id = ?1
+    UNION ALL SELECT a.id, 'agent', ${agentDisplayName('a.id', 'a.name', '?2')}, a.photo_version, 0, ga.added_by, (ga.history_start IS NULL), NULL FROM group_agent ga
     JOIN contact_agent a ON a.id = ga.agent_id WHERE ga.group_id = ?1`).bind(id, owner).all();
   const { results: replies } = await c.env.DB.prepare(`SELECT r.id, r.agent_id AS agentID, ${agentDisplayName('a.id', 'a.name', '?3')} AS name, r.status,
     r.source_id AS sourceID, source.sequence AS sourceSequence, r.attempt,

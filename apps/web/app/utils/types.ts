@@ -156,7 +156,9 @@ export type ChatGroup = {
 };
 // includesHistory is 0 when the member joined without earlier messages; missing means full history.
 export type GroupMember = { id: string; kind: 'user' | 'agent'; name: string; photoVersion: string | null; canInvite: number; addedBy: string | null;
-  includesHistory?: number | boolean };
+  includesHistory?: number | boolean;
+  // Humans only: 0 until the member gives Contributor consent; null for contacts, missing in older payloads.
+  contributorConsent?: number | boolean | null };
 // taskID/taskTitle are set when the reply is a task work turn (its trigger is hidden from the transcript).
 export type GroupReply = { replyActivity?: string; isTyping?: number; id: string; agentID: string; name: string; status: string; sourceID?: string; sourceSequence?: number; attempt?: number;
   taskID?: string | null; taskTitle?: string | null };

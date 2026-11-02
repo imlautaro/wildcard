@@ -1,6 +1,36 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Contacts can't reply in this group until you give Contributor consent." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los contactos no pueden responder en este grupo hasta que des el consentimiento de Contributor."
+          }
+        }
+      }
+    },
+    "Give consent" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dar consentimiento"
+          }
+        }
+      }
+    },
+    "Contributor consent pending" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consentimiento de Contributor pendiente"
+          }
+        }
+      }
+    },
     "" : {
       "shouldTranslate" : false
     },

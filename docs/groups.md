@@ -91,7 +91,13 @@ Web refresh is an icon in the page bar; iOS uses pull to refresh.
 
 Creation, acceptance and adding a contact require an unchecked, explicit shared
 memory confirmation. With the Contributor model they also require separate
-Contributor data-use consent. Group details can renew consent for future messages.
+Contributor data-use consent. Group details can renew consent for future messages:
+**Shared memory consent** in the details list on iOS and web shows "Pending" while this
+account's Contributor consent is missing, a notice with **Give consent** appears above
+it, and human members without consent are labeled "Contributor consent pending". Only
+the member can consent for themselves (`POST /:id/consent`); removing and re-adding
+is not needed. The chat's consent notice links to Members (`?consent=1` on web opens
+the consent sheet when this account's consent is missing).
 The disclosure covers group history (including messages before joining unless the
 inviter or adder turned off **Can see earlier messages**; see
 [join banners and welcomes](#join-banners-and-welcomes)),
@@ -298,7 +304,7 @@ photos and mutations require current membership. Responses have `no-store`.
 | GET /invitations | Pending invitations for the signed-in recipient |
 | POST /invitations/:id/accept | Explicit consent; returns group `id` |
 | DELETE /invitations/:id | Decline own invitation |
-| GET /:id | Group, members, queued/running/failed replies and permissions |
+| GET /:id | Group, members (humans include `contributorConsent` 0/1), queued/running/failed replies and permissions |
 | POST /:id/consent | Renew own consent for future messages |
 | PATCH /:id | Owner updates `name` |
 | GET /:id/photo?version=uuid | Current group avatar, members only |
@@ -1225,12 +1231,12 @@ means full history; memberships before 0081 keep full history. With a floor:
 - Private chats: when a person asks a contact about a group, retrieval also starts
   at that person's floor.
 
-Consent text (create, invitation, add, iOS consent review) now reads "Members can
+Consent text (create, invitation, add, consent review) now reads "Members can
 read the group's history, including messages sent before they joined, unless they
 were added without earlier messages." An invitation without history replaces it
 with "You'll see messages from when you join."; on iOS, the consent review for a
 member who joined without history shows "You can read messages from when you
-joined." (web has no consent review screen).
+joined." (web shows the same sentence in its consent sheet).
 
 Limits: existing contacts and people remember earlier discussion and may mention it;
 the floor restricts reading, searching and downloading, not what others say. Group

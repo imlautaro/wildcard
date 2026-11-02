@@ -309,7 +309,7 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
         </div>
         <div v-if="state.pending.failed" class="status-line outgoing error">
           {{ state.pending.failed }}
-          <NuxtLink v-if="state.pending.failedCode === 'GROUP_CONTRIBUTOR_CONSENT_REQUIRED'" class="link-button" :to="`/groups/${groupID}/members`">{{ $t('groups.members.members') }}</NuxtLink>
+          <NuxtLink v-if="state.pending.failedCode === 'GROUP_CONTRIBUTOR_CONSENT_REQUIRED'" class="link-button" :to="`/groups/${groupID}/members?consent=1`">{{ $t('groups.members.members') }}</NuxtLink>
           <button class="link-button" @click="submit">{{ $t('common.retry') }}</button>
           <button class="link-button danger" @click="discardPending">{{ state.pending.voice || state.pending.sticker ? $t('common.delete') : $t('common.edit') }}</button>
         </div>

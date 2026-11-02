@@ -48,8 +48,11 @@ struct GroupMember: Decodable, Hashable, Identifiable {
     let addedBy: String?
     /// 0 when the member joined without earlier messages; missing for older payloads (full history).
     var includesHistory: LenientBool? = nil
+    /// Humans only: 0 until the member gives Contributor consent; nil for contacts and older payloads.
+    var contributorConsent: LenientBool? = nil
     var identity: String { "\(kind)/\(id)" }
     var joinedWithoutHistory: Bool { includesHistory?.value == false }
+    var contributorConsentMissing: Bool { kind == "user" && contributorConsent?.value == false }
 }
 /// A flag the API sends as a JSON boolean or as a SQLite 0/1 integer.
 struct LenientBool: Decodable, Hashable, Sendable {

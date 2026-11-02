@@ -25,7 +25,14 @@ const agentIDs = computed(() => new Set(snapshot.value?.members.filter((member) 
 // Only a contact's creator can add it to a group.
 const addable = computed(() => chats.directory.value.filter((contact) => contact.role !== 'member' && contact.agentID && !agentIDs.value.has(contact.agentID)));
 const consented = computed(() => shareMemory.value && (!snapshot.value?.contributorModel || contributorConsent.value));
-const sheet = ref<'sharing' | 'invite' | 'add' | null>(null);
+const sheet = ref<'sharing' | 'invite' | 'add' | 'consent' | null>(null);
+const self = computed(() => snapshot.value?.members.find(member => member.kind === 'user' && member.id === user.value?.id));
+// Missing (older payload) counts as given, so the warning only shows when the API says so.
+const contributorPending = (member: GroupMember) => !!snapshot.value?.contributorModel && member.kind === 'user'
+  && (member.contributorConsent === 0 || member.contributorConsent === false);
+const selfConsentMissing = computed(() => !!self.value && contributorPending(self.value));
+const consentDisclosure = computed(() => self.value && withoutHistory(self.value)
+  ? t('groups.members.consentDisclosureWithoutHistory') : t('groups.new.disclosure'));
 const managing = ref<GroupMember | null>(null);
 const sharingSummary = computed(() => {
   const permissions = snapshot.value?.privateSharing ?? [];
@@ -40,6 +47,12 @@ const withoutHistory = (member: GroupMember) => member.includesHistory === 0 || 
 function openSheet(next: 'invite' | 'add') {
   includeHistory.value = true;
   sheet.value = next;
+}
+// Consent is always re-confirmed explicitly, so both switches start off.
+function openConsent() {
+  shareMemory.value = false;
+  contributorConsent.value = false;
+  sheet.value = 'consent';
 }
 function memberRole(member: GroupMember) {
   return member.kind === 'agent' ? t('groups.members.roles.contact')
@@ -89,6 +102,14 @@ const addContact = () => run(async () => {
   await load();
 });
 
+// Renews this account's own consent; nobody can consent for another member.
+const giveConsent = () => run(async () => {
+  await api(`groups/${id.value}/consent`, { json: { shareMemory: true, contributorConsent: contributorConsent.value } });
+  sheet.value = null;
+  await load();
+  notice.value = t('groups.members.consentSaved');
+});
+
 const remove = (member: GroupMember) => run(async () => {
   managing.value = null;
   if (!window.confirm(t('groups.members.removeConfirm', { name: member.name }))) return;
@@ -134,6 +155,8 @@ const leave = () => run(async () => {
 
 onMounted(() => run(async () => {
   await Promise.all([load(), chats.loadAllContacts()]);
+  // The chat's consent notice links here with ?consent=1.
+  if (route.query.consent === '1' && selfConsentMissing.value) openConsent();
 }));
 </script>
 
@@ -150,12 +173,20 @@ onMounted(() => run(async () => {
         <IdentityEditor :name="snapshot.group.name" :path="groupPhotoPath(snapshot.group)" :renamable="isOwner" show-name :busy="busy" @rename="rename" />
         <p class="identity-subtitle">{{ $t('groups.members.memberCount', snapshot.members.length) }}</p>
 
+        <AppNotice v-if="selfConsentMissing" tone="warning">
+          {{ $t('groups.members.consentNeeded') }}
+          <template #actions><button type="button" class="link-button" :disabled="busy" @click="openConsent">{{ $t('groups.members.giveConsent') }}</button></template>
+        </AppNotice>
+
         <AppListGroup>
           <AppListItem icon="chat" opens :value="sharingSummary" @click="sheet = 'sharing'">{{ $t('groups.members.discussPrivate') }}</AppListItem>
           <AppListItem :to="`/groups/${id}/connections`" icon="link">{{ $t('groups.members.connections') }}</AppListItem>
           <AppListItem :to="`/groups/${id}/learning`" icon="person">{{ $t('groups.members.learning') }}</AppListItem>
           <AppListItem :to="`/groups/${id}/mini-apps`" icon="grid">{{ $t('groups.members.miniApps') }}</AppListItem>
           <AppListItem :to="`/groups/${id}/tasks`" icon="tasks">{{ $t('groups.members.tasks') }}</AppListItem>
+          <AppListItem icon="lock" opens :value="selfConsentMissing ? $t('groups.members.consentPending') : $t('groups.members.consentReview')" :disabled="busy" @click="openConsent">
+            {{ $t('groups.members.consent') }}
+          </AppListItem>
         </AppListGroup>
 
         <AppListGroup :title="$t('groups.members.members')">
@@ -169,6 +200,7 @@ onMounted(() => run(async () => {
               {{ member.kind === 'user' && member.id === user?.id ? $t('groups.members.you', { name: member.name }) : member.name }}
               <span class="small">{{ memberRole(member) }}</span>
               <span v-if="withoutHistory(member)" class="small">{{ $t('groups.members.withoutHistory') }}</span>
+              <span v-if="contributorPending(member)" class="small">{{ $t('groups.members.contributorPending') }}</span>
             </span>
             <AppIconButton v-if="canManage(member)" icon="more" :label="$t('groups.members.manage', { name: member.name })" :disabled="busy" @click="managing = member" />
           </div>
@@ -245,6 +277,22 @@ onMounted(() => run(async () => {
           <template #actions>
             <AppButton variant="text" @click="sheet = null">{{ $t('common.cancel') }}</AppButton>
             <AppButton v-if="addable.length" :disabled="!contactID || !consented || busy" @click="addContact">{{ $t('common.add') }}</AppButton>
+          </template>
+        </AppSheet>
+
+        <AppSheet v-if="sheet === 'consent'" :title="$t('groups.members.consent')" @close="sheet = null">
+          <!-- Consent covers this text, so it stays visible beside the switches. -->
+          <ConsentFields
+            v-model:share-memory="shareMemory" v-model:contributor-consent="contributorConsent"
+            :contributor-model="snapshot.contributorModel"
+            :disclosure="[consentDisclosure]"
+            :memory-label="$t('groups.new.memoryLabel')"
+            :contributor-note="$t('groups.new.contributorNote')"
+          />
+          <AppNotice v-if="error">{{ error }}</AppNotice>
+          <template #actions>
+            <AppButton variant="text" @click="sheet = null">{{ $t('common.cancel') }}</AppButton>
+            <AppButton :disabled="!consented || busy" @click="giveConsent">{{ $t('common.confirm') }}</AppButton>
           </template>
         </AppSheet>
 
