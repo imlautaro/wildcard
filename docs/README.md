@@ -62,12 +62,16 @@ Use Node.js 24 or later and npm. From the repository root:
 
 ```sh
 npm ci
-npm run auth:setup:local
-npm run dev
+npm run setup      # alias: npm run auth:setup:local
+npm run dev        # or npm run dev:all for the API and the web app together
 ```
 
 Wrangler serves the API locally at `http://localhost:8787`. Local setup creates an
-ignored auth secret and applies D1 migrations. Sign in through `/api/v1/auth/sign-in/email` or register through `/api/v1/auth/sign-up/email`. New accounts complete [onboarding](onboarding.md), which can create five personalized AI contacts (in any of six styles, including 3D animated pets or a custom theme), generated portraits and an optional Friends, Study or Work group; the person enters the app while those contacts are still being created.
+ignored `apps/api/.dev.vars` (auth secret plus any `META_API_KEY` /
+`ELEVENLABS_API_KEY` found in the environment or a root `.env`) and applies D1
+migrations. `npm run dev` runs `scripts/dev-api.mjs`, which starts Wrangler without
+remote bindings or a Cloudflare login, loads every `.dev.vars` value and triggers the
+Worker's cron every minute (see [infrastructure](infrastructure.md#local-setup)). Sign in through `/api/v1/auth/sign-in/email` or register through `/api/v1/auth/sign-up/email`. New accounts complete [onboarding](onboarding.md), which can create five personalized AI contacts (in any of six styles, including 3D animated pets or a custom theme), generated portraits and an optional Friends, Study or Work group; the person enters the app while those contacts are still being created.
 Existing accounts are preserved; `/api/v1/me` requires
 a signed bearer session. Unrelated paths return HTTP 404 JSON. See
 [authentication](authentication.md) for the contract and limitations.

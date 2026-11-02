@@ -140,13 +140,16 @@ Everything runs on Cloudflare: Workers, D1, R2, Workflows and Cron. No servers t
 ```bash
 git clone https://github.com/imlautaro/wildcard && cd wildcard
 npm ci
-npm run auth:setup:local   # local auth secret + local D1 with every migration
-npm run dev                # API on http://localhost:8787
-npm run dev:web            # web app on http://localhost:3000
+echo "META_API_KEY=your-meta-key" > .env   # ignored by Git; optional: ELEVENLABS_API_KEY=… for voices
+npm run setup                              # .dev.vars, auth secret and local D1 with every migration
+npm run dev:all                            # API on http://localhost:8787 + web app on http://localhost:3000
 ```
 
-No Cloudflare account is needed locally: Wrangler emulates D1, R2 and Workflows. Add your own
-`META_API_KEY` to `apps/api/.dev.vars` to generate replies.
+Open http://localhost:3000 and create an account. Use Node.js 24 (`.nvmrc`). No Cloudflare account
+is needed locally: Wrangler emulates D1, R2, Workflows and the every-minute Cron. `npm run setup`
+copies `META_API_KEY` (replies, portraits, images) and the optional `ELEVENLABS_API_KEY` (contact
+voices) from the root `.env` or your environment into `apps/api/.dev.vars` without printing them;
+you can also edit that file later.
 
 Deploying to your own Cloudflare account, the iOS app and every environment variable are covered in
 [Local development](https://wildcard-docs.imlautaro.workers.dev/en/getting-started/local-development)

@@ -296,7 +296,9 @@ the voice picker stay off (`features.voiceMessages` is false); people can still 
 voice messages, which only need `META_API_KEY`. Migration
 `0060_voice_messages.sql` adds the columns. See [infrastructure](infrastructure.md).
 
-- Local: add `ELEVENLABS_API_KEY=...` to ignored `apps/api/.dev.vars`.
+- Local: add `ELEVENLABS_API_KEY=...` to ignored `apps/api/.dev.vars`, or export it
+  (or put it in a root `.env`) before `npm run setup`, which copies it and turns on
+  `voice_messages_enabled` in the local D1 unless that setting was already chosen.
 - Production: add `ELEVENLABS_API_KEY` as an encrypted build variable of the API's
   Workers Builds project (the release copies it to the runtime secret), push, then
   turn on **Contact voice messages** in the admin panel.

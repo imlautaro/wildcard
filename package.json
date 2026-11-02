@@ -13,7 +13,9 @@
     "node": ">=24"
   },
   "scripts": {
+    "setup": "node scripts/setup-local.mjs",
     "dev": "npm run dev --workspace @wildcard/api",
+    "dev:all": "node scripts/dev-all.mjs",
     "dev:web": "npm run dev --workspace @wildcard/web",
     "dev:admin": "npm run dev --workspace @wildcard/admin",
     "dev:site": "npm run dev --workspace @wildcard/site",
@@ -38,7 +40,7 @@
     "infra:provision": "node scripts/provision-d1.mjs",
     "db:migrate:local": "npm run db:migrate:local --workspace @wildcard/api",
     "db:migrate:remote": "npm run db:migrate:remote --workspace @wildcard/api",
-    "auth:setup:local": "node scripts/setup-local-auth.mjs && npm run db:migrate:local",
+    "auth:setup:local": "npm run setup",
     "infra:photos": "node scripts/provision-photos.mjs",
     "infra:ai-gateway": "node scripts/provision-ai-gateway.mjs",
     "test:lifecycle": "npm run test:lifecycle --workspace @wildcard/api",
