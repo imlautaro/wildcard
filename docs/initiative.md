@@ -283,14 +283,15 @@ from any of their chats, then their Updates feed. A contact created within the l
 30 minutes greets even during quiet hours, because the person just created it; an
 older pending welcome waits for 08:00 without consuming an attempt. Without any
 known zone, it only sends within two hours of creation. It uses the character
-direction, configured language/region, persona, eligible shared memories and the
-stated reason for the contact (generation purpose, onboarding circle and occupation).
+direction, expression habits, configured language/region and persona only; memories
+and the reason the contact was created are deliberately left out.
 
-The welcome is one or two chat bubbles published together after a typing pause:
-a hello that introduces the contact, and optionally something about it (a taste,
-an opinion, what it likes to talk about). The prompt forbids opening with a
-question, generic icebreakers ("what are you listening to lately?") and assistant
-or onboarding phrasing; at most one light question may close the second bubble.
+The welcome is a single short bubble after a typing pause: an open hello with the
+contact's name, its personality showing only in how it is said. The prompt forbids
+describing its tastes, interests or personality, explaining why it was added, topics,
+icebreakers, help offers and onboarding phrasing; at most a casual greeting question
+("how's it going?") when it fits the character. Earlier versions (two bubbles
+published together, with something about the contact) felt forced in testing.
 
 The welcome turn's `initiative_source_id` refers to itself, so it counts as
 spontaneous outreach for budgets and adaptation. If it is ignored, greetings stay
