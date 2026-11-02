@@ -1,0 +1,71 @@
+{
+  "description": "Reference for manual Cloudflare Settings > Builds configuration; not automatically applied by Wrangler or CI. Apply web include/exclude paths to Production and Previews Base separately.",
+  "workers": {
+    "wildcard-api": {
+      "rootDirectory": "/",
+      "productionBranch": "main",
+      "includePaths": [
+        "apps/api/*",
+        "shared/*",
+        "package.json",
+        "package-lock.json",
+        ".nvmrc",
+        ".npmrc",
+        ".gitignore",
+        "scripts/release-worker.mjs"
+      ],
+      "excludePaths": [],
+      "previewBuildsEnabled": false
+    },
+    "wildcard-web": {
+      "rootDirectory": "/",
+      "productionBranch": "main",
+      "includePaths": [
+        "apps/web/*",
+        "packages/ui/*",
+        "shared/*",
+        "package.json",
+        "package-lock.json",
+        ".nvmrc",
+        ".npmrc",
+        ".gitignore",
+        "scripts/release-web.mjs",
+        "scripts/preview-web.mjs"
+      ],
+      "excludePaths": [],
+      "previewBuildsEnabled": true
+    },
+    "wildcard-admin": {
+      "rootDirectory": "/",
+      "productionBranch": "main",
+      "includePaths": [
+        "apps/admin/*",
+        "packages/ui/*",
+        "package.json",
+        "package-lock.json",
+        ".nvmrc",
+        ".npmrc",
+        ".gitignore",
+        "scripts/release-admin.mjs"
+      ],
+      "excludePaths": [],
+      "previewBuildsEnabled": false
+    },
+    "wildcard-site": {
+      "rootDirectory": "/",
+      "productionBranch": "main",
+      "includePaths": [
+        "apps/site/*",
+        "packages/ui/*",
+        "package.json",
+        "package-lock.json",
+        ".nvmrc",
+        ".npmrc",
+        ".gitignore",
+        "scripts/release-site.mjs"
+      ],
+      "excludePaths": [],
+      "previewBuildsEnabled": false
+    }
+  }
+}

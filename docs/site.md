@@ -1,5 +1,10 @@
 # Marketing site
 
+Automatic builds use the [dependency-specific watch paths](infrastructure.md#build-watch-paths)
+recorded in [workers-build-paths.json](workers-build-paths.json). Keep root `/` and
+include the shared Nuxt layer `packages/ui/*` alongside this app and root build
+inputs. Preview builds remain disabled.
+
 `apps/site` is the public marketing website: one long landing page in English that
 presents what is unique about Wildcard (independent contacts with their own memory,
 initiative, sharing, groups, For you, per-contact connectors, open source and

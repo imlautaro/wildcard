@@ -1,5 +1,11 @@
 # Web app
 
+Automatic builds use the [dependency-specific watch paths](infrastructure.md#build-watch-paths)
+recorded in [workers-build-paths.json](workers-build-paths.json). Keep root `/` and
+include the shared Nuxt layer `packages/ui/*` alongside this app and root build
+inputs. Web also watches `shared/*` and both release/preview scripts;
+apply identical paths separately to Production and enabled Previews Base.
+
 Task work uses the shared server attention dispatcher, including
 [Workflow ID recovery](tasks.md#workflow-id-recovery-october-29-2026). The correction
 also applies to iOS. Existing foreground polling refreshes work indicators after

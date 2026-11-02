@@ -61,6 +61,60 @@ The previous project's database was deleted and is not reused. These IDs and URL
 are installation-specific; replace them when configuring an independent account.
 No actual secret value belongs in Git, app build settings, or documentation.
 
+## Build watch paths
+
+The four production projects previously watched `*`, so a change anywhere in the
+repository triggered all four builds. On November 1, 2026, their dashboard filters
+were replaced with the dependency-specific includes below. Web's enabled Previews
+Base had a separate `*` filter and was updated separately with the same includes.
+API, admin and site preview builds remain disabled. Build roots stay `/` because
+npm workspaces use the root lockfile and Nuxt resolves the shared layer there.
+
+[workers-build-paths.json](workers-build-paths.json) records the exact configuration.
+It is a reference for provisioning, not an automatically consumed Wrangler option.
+For an independent account, open each existing Worker's **Settings → Builds**,
+add its include paths, remove `*`, leave exclusions empty, and save. For web,
+repeat under **Previews Base**. Keep the existing build/release commands and branch
+settings from the service-specific sections below.
+
+All projects include `package.json`, `package-lock.json`, `.nvmrc`, `.npmrc` and
+`.gitignore`. The lockfile can change any installed build dependency; `.gitignore`
+affects the release scripts' clean-checkout guard. `.npmrc` is watched for future
+npm configuration even though no root `.npmrc` currently exists.
+
+| Worker | Additional include paths |
+| --- | --- |
+| `wildcard-api` | `apps/api/*`, `shared/*`, `scripts/release-worker.mjs` |
+| `wildcard-web` (production and previews) | `apps/web/*`, `packages/ui/*`, `shared/*`, `scripts/release-web.mjs`, `scripts/preview-web.mjs` |
+| `wildcard-admin` | `apps/admin/*`, `packages/ui/*`, `scripts/release-admin.mjs` |
+| `wildcard-site` | `apps/site/*`, `packages/ui/*`, `scripts/release-site.mjs` |
+
+The Nuxt layer is used by web, admin and site, while `shared/` is imported by API
+and web. API migrations and each app's configuration/scripts/assets remain covered
+by its own directory. A service binding does not bundle the API into web/admin;
+API-only code changes therefore do not need a client build. Maintain compatible
+API contracts when releasing independently. Add new cross-directory dependencies
+to this reference and the dashboard filters in the same change.
+
+Expected push behavior: a site-only edit builds site; a Nuxt-layer edit builds
+web/admin/site; a `shared/` edit builds API/web; root dependency or build-environment
+changes build all four. Changes only in `apps/ios/`, `docs/`, root `README.md` or
+unrelated root scripts match none. The broad per-app filters deliberately include
+future files inside that app, avoiding fragile lists of individual source files.
+
+Cloudflare's [watch-path rules](https://developers.cloudflare.com/workers/ci-cd/builds/build-watch-paths/)
+use `*` to match arbitrary characters, including nested directory paths; these are
+not filesystem globs requiring `**`. Exclusions take precedence. Cloudflare bypasses
+filters for push events with no changed files, 3,000 or more changed files, or 20
+or more commits, so filtering cannot prevent every exceptional build.
+
+Verification: the saved dashboard includes and empty exclusions were inspected for
+all four production projects and web previews; no push, local build, tests or
+manual deployment was performed for this change. Actual trigger/skip behavior on
+a future normal push remains unverified. To roll back the filter settings, restore
+include `*` with no exclusions in the affected production/preview configuration;
+this changes build selection only and does not roll back deployed code or data.
+
 ## Independent account provisioning
 
 1. Install Node.js 24 or later and npm. Use `.nvmrc` and `npm ci` from the root.
@@ -309,8 +363,8 @@ Provisioning:
    `npm ci && npm run typecheck:site && npm run build:site`, deploy command
    `npm run release:site`. A credential limited to Workers Scripts edit and account
    read is enough. Disable preview builds unless you want branch previews of the site.
-3. Optional watch paths: `apps/site/**`, `packages/ui/**`, `package.json`,
-   `package-lock.json` and `scripts/release-site.mjs`.
+3. Configure the [build watch paths](#build-watch-paths) for site, including the
+   shared Nuxt layer and root build inputs, and remove the default `*` include.
 4. Push a commit. `scripts/release-site.mjs` applies the same guards as the other
    releases (Workers Builds only, production branch, clean checkout, HEAD equal to
    `WORKERS_CI_COMMIT_SHA`) and deploys `apps/site/wrangler.jsonc` tagged with the
@@ -342,8 +396,8 @@ using the existing GitHub connection for `imlautaro/wildcard`, production branch
 `main`, root `/`, build command
 `npm ci && npm run typecheck:site && npm run build:site`, and deploy command
 `npm run release:site`. Builds are enabled, preview builds are disabled, build
-caching is enabled, and include paths remain `*` with no configured exclusions,
-matching the other production projects. The existing `Workers Builds - 2026-05-27
+caching is enabled. The initial `*` include was subsequently replaced with the
+[dependency-specific watch paths](#build-watch-paths), with no exclusions. The existing `Workers Builds - 2026-05-27
 10:54` credential is selected; no credential was created or expanded and no build
 variables or secrets were added. Independent accounts must select their own
 existing credential with the permissions described above. Cloudflare confirms the

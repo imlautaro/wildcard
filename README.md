@@ -29,6 +29,7 @@ shared/
   messageMarkdown.ts         # Shared web/API Markdown rendering and plain summaries
 docs/
   infrastructure.md          # Reproducible provisioning and automatic releases
+  workers-build-paths.json    # Dashboard build filters for each Worker and web previews
   authentication.md          # Auth contract, session behavior, and limitations
   web.md                     # Web app architecture, features, and limitations
   design-system.md           # Wildcard UI layer: tokens, components, spacing rules
@@ -374,3 +375,6 @@ The web account screen can [download a debug JSON export](docs/debug-export.md)
 with private/group chat history and related authorized records, including archived
 chats. It downloads locally without uploading to an AI; credentials and media bytes
 are excluded. The feature is web-only and uses existing infrastructure.
+
+Automatic build selection is documented in [Build watch paths](docs/infrastructure.md#build-watch-paths),
+with exact dashboard settings in [workers-build-paths.json](docs/workers-build-paths.json).

@@ -1,5 +1,10 @@
 # Super admin panel
 
+Automatic builds use the [dependency-specific watch paths](infrastructure.md#build-watch-paths)
+recorded in [workers-build-paths.json](workers-build-paths.json). Keep root `/` and
+include the shared Nuxt layer `packages/ui/*` alongside this app and root build
+inputs. Preview builds remain disabled.
+
 `apps/admin` is a Nuxt 4 SPA for Wildcard's operators, served by its own Worker,
 `wildcard-admin`, separate from the web app. Super admins can:
 
