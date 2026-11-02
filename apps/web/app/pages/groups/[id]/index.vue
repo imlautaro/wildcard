@@ -206,6 +206,30 @@ const hasTasks = computed(() => !!taskBoard.state.value.value?.lists.some(list =
 usePolling(() => taskBoard.refresh(), () => 20_000);
 onMounted(() => { void taskBoard.refresh(); });
 watch(groupID, () => { void taskBoard.refresh(); });
+// When the chat pane has room, the board sits beside the messages as a vertical panel and
+// the Tasks button shows or hides it (remembered per browser); otherwise the button opens
+// the Tasks page as before.
+const split = ref<HTMLElement>();
+const splitWidth = ref(0);
+const taskPanelKey = 'wildcard-task-panel-hidden';
+const taskPanelHidden = ref(false);
+const taskPanelFits = computed(() => splitWidth.value >= 820);
+const showTaskPanel = computed(() => hasTasks.value && taskPanelFits.value && !taskPanelHidden.value);
+function toggleTaskPanel() {
+  taskPanelHidden.value = !taskPanelHidden.value;
+  try { localStorage.setItem(taskPanelKey, taskPanelHidden.value ? '1' : '0'); } catch { /* storage unavailable: keep it for this visit */ }
+}
+let splitObserver: ResizeObserver | undefined;
+onMounted(() => {
+  try { taskPanelHidden.value = localStorage.getItem(taskPanelKey) === '1'; } catch { /* storage unavailable */ }
+  splitObserver = new ResizeObserver(([entry]) => { splitWidth.value = entry?.contentRect.width ?? 0; });
+  if (split.value) splitObserver.observe(split.value);
+});
+watch(split, (element, previous) => {
+  if (previous) splitObserver?.unobserve(previous);
+  if (element) splitObserver?.observe(element);
+});
+onBeforeUnmount(() => splitObserver?.disconnect());
 watch(groupID, async () => { rescan(); await pollNow(); });
 onMounted(async () => {
   observer = new IntersectionObserver((entries) => {
@@ -243,13 +267,15 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
         </div>
       </NuxtLink>
     </template>
-    <AppIconButton v-if="hasTasks" :to="`/groups/${groupID}/tasks`" icon="tasks" :label="$t('groups.chat.tasks')" />
+    <AppIconButton v-if="hasTasks && taskPanelFits" icon="tasks" :label="$t('groups.chat.tasks')" :selected="!taskPanelHidden" @click="toggleTaskPanel" />
+    <AppIconButton v-else-if="hasTasks" :to="`/groups/${groupID}/tasks`" icon="tasks" :label="$t('groups.chat.tasks')" />
   </PageBar>
 
   <AppEmptyState v-if="state.unavailable" icon="people" :title="$t('groups.chat.unavailableTitle')" :text="$t('groups.chat.unavailableText')">
     <template #actions><AppButton to="/chats" variant="tonal">{{ $t('groups.chat.backToChats') }}</AppButton></template>
   </AppEmptyState>
-  <template v-else>
+  <div v-else ref="split" class="chat-split">
+    <div class="chat-column">
     <div class="message-viewport">
     <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" tabindex="0" @scroll.passive="onScroll" @wheel.passive="onWheel" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @keydown="onKeydown">
       <div ref="messageContent" class="message-content">
@@ -347,9 +373,32 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
       ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded || state.snapshot?.group.clearing === 1" :reply="replyTarget"
       :voice-key="groupID" :stickers="groupStickers" @send="onSend" @voice="onVoice" @sticker="onSticker" @cancel-reply="state.replyTo = null"
     />
-  </template>
+    </div>
+    <aside v-if="showTaskPanel" class="task-panel" :aria-label="$t('miniapps.tasks.title')">
+      <header class="task-panel-head">
+        <AppIcon name="tasks" />
+        <h2>{{ $t('miniapps.tasks.title') }}</h2>
+        <AppIconButton :to="`/groups/${groupID}/tasks`" icon="open-in-new" :label="$t('miniapps.tasks.board.openBoard')" />
+        <AppIconButton icon="close" :label="$t('miniapps.tasks.board.hidePanel')" @click="toggleTaskPanel" />
+      </header>
+      <TaskBoard :base="`groups/${groupID}`" variant="panel" />
+    </aside>
+  </div>
 </template>
 
 <style scoped>
 .consent-notice { padding: 0 16px 8px; }
+.chat-split { display: flex; flex: 1; min-height: 0; }
+.chat-column { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.task-panel {
+  flex: none; width: 340px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--space-3) var(--space-6);
+  border-left: 1px solid var(--md-outline-variant); background: var(--md-surface-container-low);
+}
+@media (min-width: 1600px) { .task-panel { width: 380px; } }
+.task-panel-head {
+  position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: var(--space-1); margin: 0 calc(-1 * var(--space-3)) var(--space-1);
+  padding: var(--space-2) var(--space-1) var(--space-2) var(--space-4); background: var(--md-surface-container-low);
+}
+.task-panel-head h2 { flex: 1; margin: 0; font: var(--type-title-medium); }
+.task-panel-head > svg { width: 20px; height: 20px; color: var(--md-on-surface-variant); }
 </style>

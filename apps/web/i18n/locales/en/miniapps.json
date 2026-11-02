@@ -100,7 +100,6 @@
       "unassigned": "Unassigned",
       "memberYou": "{name} (You)",
       "waitingFor": "Waiting for {tasks}",
-      "aRemovedTask": "a removed task",
       "waitsFor": "Waits for",
       "addTask": "Add a task",
       "addTaskTo": "Add a task to {list}",
@@ -178,6 +177,22 @@
           "changed": "Relevant change",
           "failed": "Check failed"
         }
+      },
+      "board": {
+        "lists": "Lists",
+        "progress": "{done} of {total} done",
+        "progressDetail": "{open} to do, {inProgress} in progress, {done} done",
+        "noTasks": "No tasks yet",
+        "empty": "Nothing here",
+        "ready": "Ready to start",
+        "canceledCount": "Canceled ({count})",
+        "lanes": {
+          "open": "To do",
+          "in_progress": "In progress",
+          "done": "Done"
+        },
+        "openBoard": "Open full board",
+        "hidePanel": "Hide tasks"
       }
     },
     "documents": {

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { TaskItem, TaskList, TaskStatus } from '~/utils/types';
 
-// Shared to-do lists of one chat. `base` is `contacts/:id` or `groups/:id`.
-const props = defineProps<{ base: string }>();
+// Shared to-do lists of one chat as a board (docs/tasks.md). `base` is `contacts/:id` or
+// `groups/:id`. One list shows at a time, in To do / In progress / Done columns that stack
+// into sections (In progress first) when the board is narrow. `panel` is the group chat's
+// side panel: compact cards, no list creation or quick add.
+const props = withDefaults(defineProps<{ base: string; variant?: 'page' | 'panel' }>(), { variant: 'page' });
 const tasks = useTasks(() => props.base);
 const board = computed(() => tasks.state.value.value);
 const error = ref<string | null>(null);
@@ -62,23 +65,10 @@ async function run(action: () => Promise<void>) {
   finally { busy.value = false; }
 }
 const assignee = (value: string) => value ? { kind: value.split(':')[0], id: value.slice(value.indexOf(':') + 1) } : null;
-const workLabel = (task: TaskItem) => task.workState === 'paused' ? t('miniapps.tasks.work.paused') : task.workState === 'blocked' ? t('miniapps.tasks.work.blocked') : task.workUsed >= task.workLimit ? t('miniapps.tasks.work.exhausted') : null;
 const controlWork = (task: TaskItem, workState: 'active' | 'paused') => run(async () => {
   await tasks.updateTask(task.id, originalTask(task).version, { workState });
   editing.value = null;
 });
-const taskTitle = (list: TaskList, id: string) => list.tasks.find(task => task.id === id)?.title ?? t('miniapps.tasks.aRemovedTask');
-
-function detail(list: TaskList, task: TaskItem) {
-  const parts = [task.assigneeName ?? t('miniapps.tasks.unassigned')];
-  if (task.status !== 'open') parts.push(statusLabel(task.status));
-  if (task.assigneeKind === 'agent') {
-    if (workLabel(task) && !['done', 'canceled'].includes(task.status)) parts.push(workLabel(task)!);
-    if (task.workUsed != null && task.workLimit != null) parts.push(t('miniapps.tasks.work.turns', { used: task.workUsed, limit: task.workLimit }));
-  }
-  if (task.blocked) parts.push(t('miniapps.tasks.waitingFor', { tasks: nameList(task.blockedBy.filter(id => ['open', 'in_progress'].includes(list.tasks.find(item => item.id === id)?.status ?? '')).map(id => taskTitle(list, id))) }));
-  return parts.join(' · ');
-}
 function edit(task: TaskItem) {
   if (editing.value === task.id) { editing.value = null; return; }
   editing.value = task.id;
@@ -114,50 +104,135 @@ const cancelList = (list: TaskList) => run(async () => {
   if (!window.confirm(t('miniapps.tasks.cancelListConfirm', { title: list.title }))) return;
   await tasks.cancelList(list.id);
 });
+
+// The list on screen: the person's pick, else the first active list, else the first one.
+const selectedListID = ref<string | null>(null);
+const lists = computed(() => board.value?.lists ?? []);
+const current = computed(() => lists.value.find(list => list.id === selectedListID.value)
+  ?? lists.value.find(list => list.status === 'active') ?? lists.value[0] ?? null);
+const showCanceled = ref(false);
+// The panel lists In progress first in the DOM too, so reading order matches what is shown;
+// the page's narrow layout reorders its columns with CSS only.
+const laneStatuses = computed(() => props.variant === 'panel' ? ['in_progress', 'open', 'done'] as const : ['open', 'in_progress', 'done'] as const);
+const lanes = computed(() => laneStatuses.value.map(status => ({ status, tasks: current.value?.tasks.filter(task => task.status === status) ?? [] })));
+const canceledTasks = computed(() => current.value?.tasks.filter(task => task.status === 'canceled') ?? []);
+const countOf = (status: TaskStatus) => current.value?.tasks.filter(task => task.status === status).length ?? 0;
+const counts = computed(() => ({ open: countOf('open'), inProgress: countOf('in_progress'), done: countOf('done') }));
+const total = computed(() => counts.value.open + counts.value.inProgress + counts.value.done);
+const editTargets = computed(() => {
+  for (const list of lists.value) {
+    const task = list.tasks.find(item => item.id === editing.value);
+    if (task) return [{ list, task }];
+  }
+  return [];
+});
+
+// Cards glide to their new place when a poll or an edit changes the board (FLIP): the
+// positions are read before Vue patches the DOM and animated from there afterwards. A
+// card that changes column is a new element, so cards are matched by `data-task-id`.
+const root = ref<HTMLElement>();
+let reduceMotion = false;
+type Snapshot = Map<string, { rect: DOMRect; status?: string; ready?: string; review?: string }>;
+const cardElements = () => [...(root.value?.querySelectorAll<HTMLElement>('[data-task-id]') ?? [])];
+function capture(): Snapshot {
+  return new Map(cardElements().map(el => [el.dataset.taskId!, { rect: el.getBoundingClientRect(), status: el.dataset.status, ready: el.dataset.ready, review: el.dataset.review }]));
+}
+const ease = 'cubic-bezier(0.2, 0, 0, 1)';
+function play(before: Snapshot) {
+  if (reduceMotion || !before.size) return;
+  for (const el of cardElements()) {
+    const was = before.get(el.dataset.taskId!);
+    if (!was) {
+      el.animate([{ opacity: 0, transform: 'translateY(-6px) scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: ease });
+      continue;
+    }
+    const now = el.getBoundingClientRect();
+    const dx = was.rect.left - now.left, dy = was.rect.top - now.top;
+    if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) {
+      el.style.zIndex = '2';
+      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 520, easing: ease })
+        .finished.then(() => { el.style.zIndex = ''; }, () => { el.style.zIndex = ''; });
+    }
+    const glow = el.dataset.status === 'done' && was.status !== 'done' ? 'success'
+      : Number(el.dataset.review) > Number(was.review) ? 'warning'
+        : (el.dataset.status === 'in_progress' && was.status !== 'in_progress') || (el.dataset.ready === '1' && was.ready !== '1') ? 'primary' : null;
+    if (glow) {
+      el.classList.remove('glow-success', 'glow-warning', 'glow-primary');
+      void el.offsetWidth;
+      el.classList.add(`glow-${glow}`);
+      setTimeout(() => el.classList.remove(`glow-${glow}`), 1700);
+    }
+  }
+}
+watch([board, () => current.value?.id, showCanceled], () => {
+  if (!import.meta.client) return;
+  const before = capture();
+  nextTick(() => play(before));
+}, { flush: 'pre' });
+onMounted(() => { reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; });
 </script>
 
 <template>
-  <div class="page-inner">
+  <div ref="root" class="task-board" :class="variant === 'page' ? 'page-inner wide' : 'panel'">
     <AppLoading v-if="!board && !tasks.state.value.error" />
     <template v-else>
       <AppNotice v-if="error ?? tasks.state.value.error">{{ error ?? tasks.state.value.error }}</AppNotice>
-      <form class="group" @submit.prevent="createList">
-        <div class="field">
+
+      <div v-if="variant === 'page' || lists.length > 1" class="task-board-top">
+        <div v-if="lists.length" class="task-board-lists" role="group" :aria-label="$t('miniapps.tasks.board.lists')">
+          <button
+            v-for="list in lists" :key="list.id" type="button" class="task-list-chip" :aria-pressed="list.id === current?.id"
+            @click="selectedListID = list.id"
+          >
+            {{ list.title }}<span v-if="list.status === 'canceled'" class="task-list-chip-state">· {{ $t('miniapps.tasks.canceled') }}</span>
+          </button>
+        </div>
+        <form v-if="variant === 'page'" class="task-board-new task-inline-form" @submit.prevent="createList">
           <input v-model="newList" type="text" maxlength="200" :placeholder="$t('miniapps.tasks.newList')" :aria-label="$t('miniapps.tasks.newListTitle')">
           <button type="submit" class="link-button" :disabled="busy || !newList.trim()">{{ $t('common.create') }}</button>
-        </div>
-      </form>
-      <p v-if="!board?.lists.length" class="group-footer">{{ $t('miniapps.tasks.intro') }}</p>
+        </form>
+      </div>
+      <p v-if="!lists.length" class="group-footer">{{ $t('miniapps.tasks.intro') }}</p>
 
-      <template v-for="list in board?.lists ?? []" :key="list.id">
-        <AppListGroup>
-          <template #title>
-            <span class="task-list-name">{{ list.title }}</span>
-            <AppChip v-if="list.status === 'canceled'">{{ $t('miniapps.tasks.canceled') }}</AppChip>
-            <span v-else class="small muted">{{ list.tasks.filter(t => t.status === 'done').length }}/{{ list.tasks.filter(t => t.status !== 'canceled').length }}</span>
-          </template>
-          <div v-for="task in list.tasks" :key="task.id" class="task-row" :class="{ finished: ['done', 'canceled'].includes(task.status) }">
-            <div class="task-line">
-              <!-- Raw markup: AppIconButton only fills its glyph through `selected`, which would add aria-pressed. -->
-              <button type="button" class="icon-button task-check" :disabled="busy || list.status === 'canceled' || task.status === 'canceled'"
-                :aria-label="task.status === 'done' ? $t('miniapps.tasks.markNotDone', { title: task.title }) : $t('miniapps.tasks.markDone', { title: task.title })" @click="toggle(task)">
-                <AppIcon :name="task.status === 'done' ? 'check' : task.status === 'canceled' ? 'block' : task.blocked ? 'clock' : 'circle'" :filled="task.status === 'done'" />
+      <template v-if="current">
+        <div class="task-board-progress">
+          <strong>{{ total ? $t('miniapps.tasks.board.progress', { done: counts.done, total }) : $t('miniapps.tasks.board.noTasks') }}</strong>
+          <div class="task-board-bar" role="img" :aria-label="$t('miniapps.tasks.board.progressDetail', { open: counts.open, inProgress: counts.inProgress, done: counts.done })">
+            <span class="open" :style="{ flexGrow: counts.open }" />
+            <span class="in_progress" :style="{ flexGrow: counts.inProgress }" />
+            <span class="done" :style="{ flexGrow: counts.done }" />
+          </div>
+          <AppButton v-if="variant === 'page' && current.status === 'active'" variant="danger-text" size="small" :disabled="busy" @click="cancelList(current)">
+            {{ $t('miniapps.tasks.cancelList') }}
+          </AppButton>
+        </div>
+
+        <div class="task-lanes">
+          <section v-for="lane in lanes" :key="lane.status" class="task-lane" :class="lane.status" :aria-label="$t(`miniapps.tasks.board.lanes.${lane.status}`)">
+            <h3 class="task-lane-head">{{ $t(`miniapps.tasks.board.lanes.${lane.status}`) }}<span class="task-lane-count">{{ lane.tasks.length }}</span></h3>
+            <p v-if="!lane.tasks.length" class="task-lane-empty">{{ $t('miniapps.tasks.board.empty') }}</p>
+            <TaskCard
+              v-for="task in lane.tasks" :key="task.id" :task="task" :list="current" :compact="variant === 'panel'" :busy="busy"
+              @toggle="toggle(task)" @edit="edit(task)"
+            />
+            <form v-if="variant === 'page' && lane.status === 'open' && current.status === 'active'" class="task-lane-add task-inline-form" @submit.prevent="addTask(current)">
+              <input v-model="drafts[current.id]" type="text" maxlength="300" :placeholder="$t('miniapps.tasks.addTask')" :aria-label="$t('miniapps.tasks.addTaskTo', { list: current.title })">
+              <button type="submit" class="link-button" :disabled="busy || !drafts[current.id]?.trim()">{{ $t('common.add') }}</button>
+            </form>
+            <div v-if="lane.status === 'done' && canceledTasks.length" class="task-lane-canceled">
+              <button type="button" class="link-button task-lane-canceled-toggle" :aria-expanded="showCanceled" @click="showCanceled = !showCanceled">
+                <AppIcon :name="showCanceled ? 'expand' : 'chevron'" />{{ $t('miniapps.tasks.board.canceledCount', { count: canceledTasks.length }) }}
               </button>
-              <button type="button" class="task-copy link-button" :disabled="list.status === 'canceled'" @click="edit(task)">
-                <span class="task-title">{{ task.title }}<AppChip v-if="task.assigneeKind === 'agent' && task.status === 'in_progress' && !workLabel(task)" tone="primary" class="task-working"><span class="live-dot" aria-hidden="true" />{{ $t('miniapps.tasks.working') }}</AppChip></span>
-                <span class="small muted">{{ detail(list, task) }}</span>
-                <span v-if="task.nextStep" class="small">{{ $t('miniapps.tasks.nextStep', { text: task.nextStep }) }}</span>
-                <span v-if="task.blockedReason" class="small">{{ $t('miniapps.tasks.blocked', { text: task.blockedReason }) }}</span>
-                <span v-if="task.researchQuery || task.researchUsed" class="small">{{ researchDetail(task) }}</span>
-                <span v-if="task.monitorURL || task.monitorTurnsUsed" class="small">{{ monitorDetail(task) }}</span>
-                <span v-if="task.documentID" class="small">{{ $t('miniapps.tasks.deliverable', { title: task.documentTitle ?? $t('miniapps.tasks.aDocument') }) }}</span>
-                <span v-if="task.reviewRounds" class="small">{{ task.reviewFeedback && !['done', 'canceled'].includes(task.status)
-                  ? $t('miniapps.tasks.revisionRoundFeedback', { round: task.reviewRounds, limit: task.reviewRoundLimit ?? 2, feedback: task.reviewFeedback })
-                  : $t('miniapps.tasks.revisionRound', { round: task.reviewRounds, limit: task.reviewRoundLimit ?? 2 }) }}</span>
-                <span v-if="task.result" class="small task-result">{{ task.result }}</span>
-              </button>
+              <template v-if="showCanceled">
+                <TaskCard v-for="task in canceledTasks" :key="task.id" :task="task" :list="current" compact :busy="busy" @toggle="toggle(task)" @edit="edit(task)" />
+              </template>
             </div>
-            <AppSheet v-if="editing === task.id" :title="$t('miniapps.tasks.task')" @close="editing = null">
+          </section>
+        </div>
+      </template>
+
+      <template v-for="{ task, list } in editTargets" :key="task.id">
+            <AppSheet :title="$t('miniapps.tasks.task')" @close="editing = null">
             <form :id="`task-form-${task.id}`" class="task-editor group" @submit.prevent="save(task)">
               <div class="field"><label :for="`title-${task.id}`">{{ $t('miniapps.tasks.fields.title') }}</label><input :id="`title-${task.id}`" v-model="form.title" type="text" maxlength="300" required></div>
               <div class="field"><label :for="`status-${task.id}`">{{ $t('miniapps.tasks.fields.status') }}</label><AppSelect :id="`status-${task.id}`" v-model="form.status" variant="plain" :options="statusOptions" /></div>
@@ -199,20 +274,59 @@ const cancelList = (list: TaskList) => run(async () => {
               <AppButton type="submit" :form="`task-form-${task.id}`" :disabled="busy || !form.title.trim() || form.monitorKeywords.trim().length > 300">{{ $t('common.save') }}</AppButton>
             </template>
             </AppSheet>
-          </div>
-          <form v-if="list.status === 'active'" class="field" @submit.prevent="addTask(list)">
-            <input v-model="drafts[list.id]" type="text" maxlength="300" :placeholder="$t('miniapps.tasks.addTask')" :aria-label="$t('miniapps.tasks.addTaskTo', { list: list.title })">
-            <button type="submit" class="link-button" :disabled="busy || !drafts[list.id]?.trim()">{{ $t('common.add') }}</button>
-          </form>
-        </AppListGroup>
-        <div v-if="list.status === 'active'" class="actions-row">
-          <AppButton variant="danger-text" size="small" :disabled="busy" @click="cancelList(list)">{{ $t('miniapps.tasks.cancelList') }}</AppButton>
-        </div>
       </template>
     </template>
   </div>
 </template>
 
 <style scoped>
-.task-list-name { flex: 1; min-width: 0; }
+/* The board is its own size container: columns while it is wide, sections below. */
+.task-board { container-type: inline-size; display: flex; flex-direction: column; gap: var(--space-4); }
+.task-board.panel { gap: var(--space-3); }
+.task-board-top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.task-board-lists { display: flex; flex-wrap: wrap; gap: var(--space-2); flex: 1 1 320px; min-width: 0; }
+.task-list-chip {
+  display: inline-flex; align-items: center; gap: var(--space-1); min-height: 32px; padding: 0 var(--space-3);
+  border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-s); background: transparent;
+  color: var(--md-on-surface-variant); font: var(--type-label-large); cursor: pointer;
+}
+.task-list-chip:hover { background: var(--hover); }
+.task-list-chip[aria-pressed='true'] { border-color: transparent; background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.task-list-chip-state { font-weight: 500; }
+.task-board-new { flex: 0 1 320px; }
+.task-inline-form { display: flex; align-items: center; gap: var(--space-1); margin: 0; }
+.task-inline-form input {
+  flex: 1; min-width: 0; height: 36px; padding: 0 var(--space-3); border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-s);
+  background: var(--md-surface-container-lowest); color: var(--md-on-surface); font: var(--type-body-medium);
+}
+.task-inline-form input:focus-visible { outline: 2px solid var(--md-primary); outline-offset: -1px; border-color: transparent; }
+.task-board-progress { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.task-board-progress strong { font: var(--type-title-small); font-variant-numeric: tabular-nums; }
+.task-board-bar { display: flex; gap: 3px; flex: 1 1 200px; height: 8px; min-width: 120px; }
+.panel .task-board-bar { flex-basis: 100%; height: 6px; }
+.task-board-bar span { flex-basis: 0; min-width: 0; border-radius: 4px; transition: flex-grow 600ms cubic-bezier(0.2, 0, 0, 1); }
+.task-board-bar .open { background: var(--md-outline-variant); }
+.task-board-bar .in_progress { background: var(--md-primary); }
+.task-board-bar .done { background: var(--md-success); }
+.task-lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); align-items: start; }
+.task-lane {
+  display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; min-height: 360px; padding: var(--space-2);
+  border-radius: var(--md-shape-l); background: var(--md-surface-container);
+}
+.task-lane-head { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-1) var(--space-1-5) 0; font: var(--type-title-small); color: var(--md-on-surface-variant); }
+.task-lane-count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 10px;
+  background: var(--md-surface-container-highest); font: var(--type-label-small); font-variant-numeric: tabular-nums;
+}
+.task-lane-empty { margin: 0; padding: var(--space-4) var(--space-2); border: 1px dashed var(--md-outline-variant); border-radius: var(--md-shape-m); text-align: center; font: var(--type-body-small); color: var(--md-on-surface-variant); }
+.task-lane-add { margin: 0; }
+.task-lane-canceled { display: flex; flex-direction: column; gap: var(--space-2); }
+.task-lane-canceled-toggle { align-self: flex-start; color: var(--md-on-surface-variant); }
+/* Narrow: one column of sections, what is moving now first. */
+@container (max-width: 599px) {
+  .task-lanes { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+  .task-lane { min-height: 0; padding: 0; background: none; border-radius: 0; }
+  .task-board:not(.panel) .task-lane.in_progress { order: -1; }
+}
+@media (prefers-reduced-motion: reduce) { .task-board-bar span { transition: none; } }
 </style>

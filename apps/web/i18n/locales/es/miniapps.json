@@ -100,7 +100,6 @@
       "unassigned": "Sin asignar",
       "memberYou": "{name} (Tú)",
       "waitingFor": "Esperando {tasks}",
-      "aRemovedTask": "una tarea eliminada",
       "waitsFor": "Espera a",
       "addTask": "Añadir una tarea",
       "addTaskTo": "Añadir una tarea a {list}",
@@ -178,6 +177,22 @@
           "changed": "Cambio relevante",
           "failed": "Revisión fallida"
         }
+      },
+      "board": {
+        "lists": "Listas",
+        "progress": "{done} de {total} hechas",
+        "progressDetail": "{open} por hacer, {inProgress} en curso, {done} hechas",
+        "noTasks": "Todavía no hay tareas",
+        "empty": "Nada por aquí",
+        "ready": "Lista para empezar",
+        "canceledCount": "Canceladas ({count})",
+        "lanes": {
+          "open": "Por hacer",
+          "in_progress": "En curso",
+          "done": "Hecho"
+        },
+        "openBoard": "Abrir tablero completo",
+        "hidePanel": "Ocultar tareas"
       }
     },
     "documents": {

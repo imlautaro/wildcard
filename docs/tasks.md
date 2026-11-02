@@ -30,6 +30,28 @@ have not been verified yet.
   **Working** chip while their work is active. Paused, blocked and exhausted tasks
   show their execution state instead, plus the number of work turns used.
 
+### Web board (2026-11-02)
+
+The web Tasks page is a board (`TaskBoard.vue`, cards in `TaskCard.vue`). One list
+shows at a time; chips at the top switch lists (the first active list by default).
+A progress line and a three-part bar count To do, In progress and Done. Tasks sit in
+three columns by status; when the board is narrower than 600px (a container query, so
+it follows the pane, not the window) the columns become sections, In progress first.
+Canceled tasks fold under Done. **Add a task** sits at the bottom of To do.
+
+Cards keep the status lines that matter on the board: the revision feedback while a
+reviewer has sent a task back, what it waits for, **Ready to start** once its blockers
+finish, the blocked reason, next step, result and deliverable. Web research and page
+monitor details stay in the task sheet. Tapping the circle marks done or not done, as
+before; tapping the title opens the same editor sheet. There is no drag and drop:
+moving a contact's task would change its work generation or reopen it (budget), so
+status changes stay explicit in the sheet.
+
+When a poll or an edit changes the board, cards glide to their new place (FLIP,
+matched by `data-task-id`) and briefly outline in green (done), amber (sent back) or
+blue (started or unblocked). `prefers-reduced-motion` turns the motion off. iOS still
+shows the list.
+
 ### Opening Tasks
 
 Most chats never have tasks, so the web chat and group top bars no longer show a
@@ -39,6 +61,13 @@ open and every 20 seconds while the chat is visible, so a list a contact creates
 during a turn brings the button back without a reload. iOS already keeps Tasks in
 the chat's three-dot menu rather than in the bar, so it is unchanged. Chat details
 keep Tasks on both clients.
+
+In a web group chat whose pane is at least 820px wide, the board opens as a vertical
+panel beside the messages (compact cards, sections In progress, To do, Done) while the
+group has an active list. The Tasks button then shows or hides the panel instead of
+navigating, and the choice is remembered per browser (`wildcard-task-panel-hidden` in
+localStorage). The panel links to the full Tasks page. Narrower panes keep the button
+as a link to the page. Private chats do not have the panel yet.
 
 ## Seeing the work
 
