@@ -41,6 +41,8 @@
       "background": "You can leave this screen or close the app. Creation will continue in the background.",
       "yourBot": "Your bot",
       "yourBotInfo": "These fields describe your bot. Your saved onboarding preferences are reused without asking for your details again. Generation uses Meta Standard processing.",
+      "character": "Character",
+      "person": "Person",
       "visualStyle": "Visual style",
       "describeCharacter": "Describe your character",
       "describePlaceholder": "A friendly robot, a kitten…",

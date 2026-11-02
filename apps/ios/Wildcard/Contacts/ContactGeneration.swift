@@ -132,6 +132,8 @@ struct ContactGenerationSection: View {
     @Environment(AuthStore.self) private var auth
     @Environment(ContactsStore.self) private var contacts
     @Environment(\.scenePhase) private var scenePhase
+    @State private var portraitStyle = "cartoon"
+    private static func themed(_ style: String) -> Bool { style == "pets" || style == "custom" }
     var body: some View {
         @Bindable var store = auth.contactGeneration
         // This section always exists, so it owns polling and the hand-off to the new chat.
@@ -140,8 +142,19 @@ struct ContactGenerationSection: View {
                 ContactGenerationProgressView(running: store.running)
             } else if let options = store.options {
                 Group {
-                    Picker("Visual style", selection: $store.draft.style) {
-                        ForEach(options.styles) { Text($0.name).tag($0.code) }
+                    if (store.draft.photo ?? "generate") == "generate" {
+                        Picker("Visual style", selection: $store.draft.style) {
+                            ForEach(options.styles) { Text($0.name).tag($0.code) }
+                        }
+                    } else {
+                        // Without a generated portrait only the character themes still matter;
+                        // the other styles collapse into Person, restoring the last one on the way back.
+                        Picker("Character", selection: Binding(
+                            get: { Self.themed(store.draft.style) ? store.draft.style : "person" },
+                            set: { store.draft.style = $0 == "person" ? (Self.themed(portraitStyle) ? "cartoon" : portraitStyle) : $0 })) {
+                            Text("Person").tag("person")
+                            ForEach(options.styles.filter { Self.themed($0.code) }) { Text($0.name).tag($0.code) }
+                        }
                     }
                     if store.draft.style == "custom" {
                         TextField("Describe your character (a friendly robot, a kitten…)", text: Binding(
@@ -178,6 +191,7 @@ struct ContactGenerationSection: View {
                 do { try await Task.sleep(for: .seconds(store.running ? 3 : 10)) } catch { return }
             }
         }
+        .onChange(of: store.draft.style, initial: true) { _, style in if !Self.themed(style) { portraitStyle = style } }
         .onChange(of: store.created, initial: true) { _, id in
             guard let id else { return }
             store.created = nil

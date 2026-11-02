@@ -41,6 +41,8 @@
       "background": "Puedes salir de esta pantalla o cerrar la app. La creación continuará en segundo plano.",
       "yourBot": "Tu bot",
       "yourBotInfo": "Estos campos describen a tu bot. Se reutilizan tus preferencias de bienvenida guardadas sin volver a pedirte tus datos. La generación usa el procesamiento Estándar de Meta.",
+      "character": "Personaje",
+      "person": "Persona",
       "visualStyle": "Estilo visual",
       "describeCharacter": "Describe a tu personaje",
       "describePlaceholder": "Un robot amigable, un gatito…",

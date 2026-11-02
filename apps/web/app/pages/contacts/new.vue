@@ -23,6 +23,18 @@ const purposeOptions = computed(() => [
 ]);
 const genderOptions = computed(() => [{ value: 'male', label: t('contacts.new.genders.male') }, { value: 'female', label: t('contacts.new.genders.female') }]);
 const photoOptions = computed(() => (['generate', 'upload', 'none'] as const).map(value => ({ value, label: t(`contacts.new.photoSources.${value}`) })));
+// Without a generated portrait only the character themes (pets, custom) still matter:
+// the other visual styles collapse into "Person", restoring the last one on the way back.
+const themed = (style: string) => style === 'pets' || style === 'custom';
+let portraitStyle = draft.style;
+watch(() => draft.style, style => { if (!themed(style)) portraitStyle = style; });
+const character = computed({
+  get: () => themed(draft.style) ? draft.style : 'person',
+  set: (value: string) => { draft.style = (value === 'person' ? (themed(portraitStyle) ? 'cartoon' : portraitStyle) : value) as typeof draft.style; },
+});
+const characterOptions = computed(() => [{ value: 'person', label: t('contacts.new.person') },
+  ...(options.value?.styles ?? []).filter(o => themed(o.code)).map(o => ({ value: o.code, label: o.name }))]);
+const age = computed({ get: () => String(draft.age), set: (value: string) => { draft.age = Number(value); } });
 const progressIndex = ref(0);
 watch(creating, (active, _, onCleanup) => {
   progressIndex.value = 0;
@@ -97,11 +109,12 @@ onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
           <!-- Outlined selects follow, not a list group, so the title stays markup. -->
           <div class="group-title info-title">{{ $t('contacts.new.yourBot') }} <InfoButton :label="$t('contacts.new.yourBot')" :text="$t('contacts.new.yourBotInfo')" /></div>
           <template v-if="options">
-            <AppSelect v-model="draft.style" :label="$t('contacts.new.visualStyle')" :options="options.styles.map(o => ({ value: o.code, label: o.name }))" />
+            <AppSelect v-if="draft.photo === 'generate'" v-model="draft.style" :label="$t('contacts.new.visualStyle')" :options="options.styles.map(o => ({ value: o.code, label: o.name }))" />
+            <AppSelect v-else v-model="character" :label="$t('contacts.new.character')" :options="characterOptions" />
             <AppTextField v-if="draft.style === 'custom'" v-model="draft.customStyle" :label="$t('contacts.new.describeCharacter')" :placeholder="$t('contacts.new.describePlaceholder')"
                           :maxlength="customStyleLimit" required />
             <AppSelect v-model="draft.purpose" :label="$t('contacts.new.relationship')" :options="purposeOptions" />
-            <label class="field">{{ $t('contacts.new.age') }}<input v-model.number="draft.age" type="number" min="18" max="120" step="1" required></label>
+            <AppTextField v-model="age" :label="$t('contacts.new.age')" type="number" inputmode="numeric" min="18" max="120" step="1" required />
             <AppSelect v-model="draft.gender" :label="$t('contacts.new.gender')" :options="genderOptions" />
             <AppSelect v-model="draft.language" :label="$t('contacts.new.language')" :options="options.languages.map(o => ({ value: o.code, label: o.name }))" />
             <AppSelect v-model="draft.country" :label="$t('contacts.new.country')" :options="options.countries.map(o => ({ value: o.code, label: o.name }))" />

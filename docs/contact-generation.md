@@ -8,7 +8,10 @@ the new contact's chat (iOS replaces the add-contact screen with it). The form a
   name (1–100 characters, no control characters) is kept exactly as the identity's name.
 - **Photo**: **Generate with AI** (default), **Upload a photo** (the same square JPEG
   crop as contact details) or **No photo**. The avatar previews the choice.
-- The bot fields below. A footer explains that empty fields are generated, the
+- The bot fields below. **Visual style** only shows while the photo is generated; with
+  an uploaded photo or none it becomes **Character** (Person, 3D animated pets, Custom),
+  since only those themes still shape the identity. Person keeps the last portrait
+  style (Cartoon by default) as the submitted `style`. A footer explains that empty fields are generated, the
   personality is always generated, and everything stays editable afterwards.
 
 Every contact therefore goes through the background job and starts with a generated
