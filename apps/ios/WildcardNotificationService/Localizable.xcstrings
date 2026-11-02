@@ -22,6 +22,7 @@
       }
     },
     "Action" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -32,6 +33,7 @@
       }
     },
     "Activity" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -42,6 +44,7 @@
       }
     },
     "Alarm" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -61,12 +64,35 @@
         }
       }
     },
+    "claim" : {
+      "comment" : "Remote timer processing stage, inserted into “Unable to confirm this timer or alarm during %@.”",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la reserva"
+          }
+        }
+      }
+    },
     "Control Wildcard alarm" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Controlar alarma de Wildcard"
+          }
+        }
+      }
+    },
+    "handoff" : {
+      "comment" : "Remote timer processing stage, inserted into “Unable to confirm this timer or alarm during %@.”",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la entrega"
           }
         }
       }
@@ -172,6 +198,7 @@
       }
     },
     "Update contact session" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -181,27 +208,8 @@
         }
       }
     },
-    "claim" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "la reserva"
-          }
-        }
-      }
-    },
-    "handoff" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "la entrega"
-          }
-        }
-      }
-    },
     "validation" : {
+      "comment" : "Remote timer processing stage, inserted into “Unable to confirm this timer or alarm during %@.”",
       "localizations" : {
         "es" : {
           "stringUnit" : {

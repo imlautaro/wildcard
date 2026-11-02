@@ -2,20 +2,38 @@
   "sourceLanguage" : "en",
   "strings" : {
     "Draft a message in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Draft a message in ${applicationName}"
+            ]
+          }
+        },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "Redactar un mensaje en ${applicationName}"
           }
         }
       }
     },
     "Open a contact in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Open a contact in ${applicationName}"
+            ]
+          }
+        },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "Abrir un contacto en ${applicationName}"
           }
         }

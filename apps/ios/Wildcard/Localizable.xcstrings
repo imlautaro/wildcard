@@ -4,6 +4,79 @@
     "" : {
       "shouldTranslate" : false
     },
+    "‹ Slide to cancel" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‹ Desliza para cancelar"
+          }
+        }
+      }
+    },
+    "“%@” and every unfinished task in it are canceled. Contacts stop working on them." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se cancelan “%@” y todas sus tareas sin terminar. Los contactos dejan de trabajar en ellas."
+          }
+        }
+      }
+    },
+    "“Add an event tomorrow at 3 PM”" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Añade un evento mañana a las 3 p. m.”"
+          }
+        }
+      }
+    },
+    "“Set a timer for 10 minutes”" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Pon un temporizador de 10 minutos”"
+          }
+        }
+      }
+    },
+    "“Set a timer for 12 minutes”" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Pon un temporizador de 12 minutos”"
+          }
+        }
+      }
+    },
+    "“Set a timer on %@’s phone for 10 minutes”" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Pon un temporizador de 10 minutos en el teléfono de %@”"
+          }
+        }
+      }
+    },
+    "*Nothing to preview.*" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "*No hay nada que previsualizar.*"
+          }
+        }
+      }
+    },
+    "/ %lld" : {
+      "shouldTranslate" : false
+    },
     "%@" : {
       "shouldTranslate" : false
     },
@@ -17,11 +90,61 @@
         }
       }
     },
-    "%@ %@" : {
+    "%@ · " : {
       "shouldTranslate" : false
     },
-    "%@ %lld" : {
+    "%@ · %@" : {
       "shouldTranslate" : false
+    },
+    "%@ · Assigned to you" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · Asignada a ti"
+          }
+        }
+      }
+    },
+    "%@ · Next %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · Siguiente: %2$@"
+          }
+        }
+      }
+    },
+    "%@ · Repeated evidence" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · Evidencia repetida"
+          }
+        }
+      }
+    },
+    "%@ · Scheduled for %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · Programada para el %2$@"
+          }
+        }
+      }
+    },
+    "%@ · Tentative" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · Provisional"
+          }
+        }
+      }
     },
     "%@ (You)" : {
       "localizations" : {
@@ -36,25 +159,11 @@
     "%@ / %@" : {
       "shouldTranslate" : false
     },
-    "%@ If execution was interrupted, inspect the system app before asking for another action." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ Si la ejecución se interrumpió, revisa la app del sistema antes de pedir otra acción."
-          }
-        }
-      }
+    "%@ %@" : {
+      "shouldTranslate" : false
     },
-    "%@ Latest: revision %lld by %@." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ Última: revisión %2$lld de %3$@."
-          }
-        }
-      }
+    "%@ %lld" : {
+      "shouldTranslate" : false
     },
     "%@ added %@" : {
       "localizations" : {
@@ -96,22 +205,22 @@
         }
       }
     },
-    "%@ couldn't finish replying to this message." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ no pudo terminar de responder este mensaje."
-          }
-        }
-      }
-    },
     "%@ couldn’t answer this one. Try again or continue in the chat." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ no pudo responder esta vez. Inténtalo de nuevo o sigue en el chat."
+          }
+        }
+      }
+    },
+    "%@ couldn't finish replying to this message." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ no pudo terminar de responder este mensaje."
           }
         }
       }
@@ -152,6 +261,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ todavía no tiene stickers para compartir contigo."
+          }
+        }
+      }
+    },
+    "%@ If execution was interrupted, inspect the system app before asking for another action." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Si la ejecución se interrumpió, revisa la app del sistema antes de pedir otra acción."
           }
         }
       }
@@ -236,6 +355,16 @@
         }
       }
     },
+    "%@ Latest: revision %lld by %@." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ Última: revisión %2$lld de %3$@."
+          }
+        }
+      }
+    },
     "%@ of %@" : {
       "localizations" : {
         "es" : {
@@ -262,62 +391,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ trabajando…"
-          }
-        }
-      }
-    },
-    "%@ · " : {
-      "shouldTranslate" : false
-    },
-    "%@ · %@" : {
-      "shouldTranslate" : false
-    },
-    "%@ · Assigned to you" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · Asignada a ti"
-          }
-        }
-      }
-    },
-    "%@ · Next %@" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ · Siguiente: %2$@"
-          }
-        }
-      }
-    },
-    "%@ · Repeated evidence" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · Evidencia repetida"
-          }
-        }
-      }
-    },
-    "%@ · Scheduled for %@" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ · Programada para el %2$@"
-          }
-        }
-      }
-    },
-    "%@ · Tentative" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · Provisional"
           }
         }
       }
@@ -392,6 +465,9 @@
       "shouldTranslate" : false
     },
     "%lld" : {
+      "shouldTranslate" : false
+    },
+    "%lld · %@ · %@" : {
       "shouldTranslate" : false
     },
     "%lld / %lld" : {
@@ -797,9 +873,6 @@
         }
       }
     },
-    "%lld · %@ · %@" : {
-      "shouldTranslate" : false
-    },
     "%lld/%lld" : {
       "shouldTranslate" : false
     },
@@ -854,6 +927,7 @@
       }
     },
     "%lldd" : {
+      "comment" : "Compact post age in days",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -864,6 +938,7 @@
       }
     },
     "%lldh" : {
+      "comment" : "Compact post age in hours",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -874,21 +949,12 @@
       }
     },
     "%lldm" : {
+      "comment" : "Compact post age in minutes",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld min"
-          }
-        }
-      }
-    },
-    "*Nothing to preview.*" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "*No hay nada que previsualizar.*"
           }
         }
       }
@@ -903,10 +969,8 @@
         }
       }
     },
-    "/ %lld" : {
-      "shouldTranslate" : false
-    },
     "3D animated movie" : {
+      "comment" : "Avatar style",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -917,6 +981,7 @@
       }
     },
     "3D animated pets" : {
+      "comment" : "Avatar style",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -932,6 +997,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Una conexión o herramienta cambió desde que activaste esta miniapp. Vuelve a revisarla para seguir usándola."
+          }
+        }
+      }
+    },
+    "a contact" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un contacto"
           }
         }
       }
@@ -962,6 +1037,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Se necesita una fecha."
+          }
+        }
+      }
+    },
+    "a document" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un documento"
           }
         }
       }
@@ -1016,16 +1101,6 @@
         }
       }
     },
-    "AI replies are temporarily unavailable. Please try again later." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Las respuestas de IA no están disponibles por ahora. Inténtalo más tarde."
-          }
-        }
-      }
-    },
     "About %@" : {
       "localizations" : {
         "es" : {
@@ -1076,7 +1151,7 @@
         }
       }
     },
-    "Accept Invitation" : {
+    "Accept invitation" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1086,7 +1161,7 @@
         }
       }
     },
-    "Accept invitation" : {
+    "Accept Invitation" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1166,16 +1241,6 @@
         }
       }
     },
-    "Add Contact" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Añadir contacto"
-          }
-        }
-      }
-    },
     "Add a contact" : {
       "localizations" : {
         "es" : {
@@ -1217,6 +1282,16 @@
       }
     },
     "Add contact" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir contacto"
+          }
+        }
+      }
+    },
+    "Add Contact" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1366,6 +1441,16 @@
         }
       }
     },
+    "AI replies are temporarily unavailable. Please try again later." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las respuestas de IA no están disponibles por ahora. Inténtalo más tarde."
+          }
+        }
+      }
+    },
     "Alarm" : {
       "localizations" : {
         "es" : {
@@ -1436,32 +1521,22 @@
         }
       }
     },
-    "Allow AlarmKit in Settings first." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Primero permite AlarmKit en Configuración."
-          }
-        }
-      }
-    },
-    "Allow Reminders access in Settings to save this reminder." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Permite el acceso a Recordatorios en Configuración para guardar este recordatorio."
-          }
-        }
-      }
-    },
     "Allow a tool first." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Primero permite una herramienta."
+          }
+        }
+      }
+    },
+    "Allow AlarmKit in Settings first." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primero permite AlarmKit en Configuración."
           }
         }
       }
@@ -1492,6 +1567,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Permitir compartir el chat privado?"
+          }
+        }
+      }
+    },
+    "Allow Reminders access in Settings to save this reminder." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permite el acceso a Recordatorios en Configuración para guardar este recordatorio."
           }
         }
       }
@@ -1557,6 +1642,7 @@
       }
     },
     "American" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1577,6 +1663,7 @@
       }
     },
     "Anime" : {
+      "comment" : "Avatar style",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1587,6 +1674,7 @@
       }
     },
     "Answered" : {
+      "comment" : "Status of an optional question a contact may ask",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1647,6 +1735,7 @@
       }
     },
     "Argentine" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1687,6 +1776,7 @@
       }
     },
     "Asked" : {
+      "comment" : "Status of an optional question a contact may ask",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1757,6 +1847,7 @@
       }
     },
     "Australian" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1837,6 +1928,7 @@
       }
     },
     "Automatic" : {
+      "comment" : "Voice chosen automatically",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1957,6 +2049,7 @@
       }
     },
     "Brazilian" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1977,6 +2070,7 @@
       }
     },
     "British" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -2177,6 +2271,7 @@
       }
     },
     "Cartoon" : {
+      "comment" : "Avatar style",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -2357,6 +2452,7 @@
       }
     },
     "Chilean" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -2372,26 +2468,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Elegir"
-          }
-        }
-      }
-    },
-    "Choose Photo" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elegir foto"
-          }
-        }
-      }
-    },
-    "Choose a JPEG, PNG, GIF, WebP, or PDF." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige un archivo JPEG, PNG, GIF, WebP o PDF."
           }
         }
       }
@@ -2412,6 +2488,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Elige un archivo de hasta 5 MB."
+          }
+        }
+      }
+    },
+    "Choose a JPEG, PNG, GIF, WebP, or PDF." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige un archivo JPEG, PNG, GIF, WebP o PDF."
           }
         }
       }
@@ -2486,6 +2572,16 @@
         }
       }
     },
+    "Choose Photo" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elegir foto"
+          }
+        }
+      }
+    },
     "Choose the location on a map when you run this action." : {
       "localizations" : {
         "es" : {
@@ -2517,6 +2613,7 @@
       }
     },
     "Cited" : {
+      "comment" : "Research source state",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -2627,6 +2724,7 @@
       }
     },
     "Colombian" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -2686,16 +2784,6 @@
         }
       }
     },
-    "Configure OAuth" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configurar OAuth"
-          }
-        }
-      }
-    },
     "Configure a connector once, then grant contacts access from their Connections screen. Tool approvals apply to every contact and group you authorize. Only connect servers you trust. Enabled tools can read or change external data without asking again. Data is sent to the server and processed with Standard." : {
       "localizations" : {
         "es" : {
@@ -2712,6 +2800,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Configura los conectores una vez en Cuenta y luego da acceso a este contacto. Las aprobaciones de herramientas se gestionan en Cuenta."
+          }
+        }
+      }
+    },
+    "Configure OAuth" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurar OAuth"
           }
         }
       }
@@ -2826,6 +2924,16 @@
         }
       }
     },
+    "Contact generation is temporarily unavailable. Please try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La creación de contactos no está disponible por ahora. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
     "Contact Invitation" : {
       "localizations" : {
         "es" : {
@@ -2842,16 +2950,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Invitaciones de contactos"
-          }
-        }
-      }
-    },
-    "Contact generation is temporarily unavailable. Please try again." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La creación de contactos no está disponible por ahora. Inténtalo de nuevo."
           }
         }
       }
@@ -3276,22 +3374,22 @@
         }
       }
     },
-    "Creating your contacts… %lld of 5 ready. Each one opens as soon as it is ready." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Creando tus contactos… %lld de 5 listos. Cada uno se abre en cuanto esté listo."
-          }
-        }
-      }
-    },
     "Creating your contact…" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Creando tu contacto…"
+          }
+        }
+      }
+    },
+    "Creating your contacts… %lld of 5 ready. Each one opens as soon as it is ready." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Creando tus contactos… %lld de 5 listos. Cada uno se abre en cuanto esté listo."
           }
         }
       }
@@ -3347,6 +3445,7 @@
       }
     },
     "Custom" : {
+      "comment" : "Avatar style",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3377,6 +3476,7 @@
       }
     },
     "Dark" : {
+      "comment" : "Appearance option",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3687,6 +3787,7 @@
       }
     },
     "Dismissed" : {
+      "comment" : "Status of an optional question a contact may ask",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3746,22 +3847,22 @@
         }
       }
     },
-    "Done" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Listo"
-          }
-        }
-      }
-    },
     "Don’t reply to this post" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "No responder a esta publicación"
+          }
+        }
+      }
+    },
+    "Done" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listo"
           }
         }
       }
@@ -3797,6 +3898,7 @@
       }
     },
     "Draft" : {
+      "comment" : "Chat list label before an unsent message",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4006,16 +4108,6 @@
         }
       }
     },
-    "Enable Live Activities for Wildcard in Settings." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activa las Actividades en vivo de Wildcard en Configuración."
-          }
-        }
-      }
-    },
     "Enable all %lld tools for %@ without asking again? This includes tools hidden by search. These tools may read, change, or send external data. Only enable tools you understand and trust." : {
       "localizations" : {
         "es" : {
@@ -4052,6 +4144,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Activar globo en el ícono"
+          }
+        }
+      }
+    },
+    "Enable Live Activities for Wildcard in Settings." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activa las Actividades en vivo de Wildcard en Configuración."
           }
         }
       }
@@ -4506,16 +4608,6 @@
         }
       }
     },
-    "Export JSON" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Exportar JSON"
-          }
-        }
-      }
-    },
     "Export chat" : {
       "localizations" : {
         "es" : {
@@ -4532,6 +4624,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No se pudo exportar"
+          }
+        }
+      }
+    },
+    "Export JSON" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar JSON"
           }
         }
       }
@@ -4767,6 +4869,7 @@
       }
     },
     "French" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4867,6 +4970,7 @@
       }
     },
     "German" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4916,16 +5020,6 @@
         }
       }
     },
-    "Group Invitations" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Invitaciones de grupos"
-          }
-        }
-      }
-    },
     "Group details" : {
       "localizations" : {
         "es" : {
@@ -4952,6 +5046,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Historial del grupo"
+          }
+        }
+      }
+    },
+    "Group Invitations" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitaciones de grupos"
           }
         }
       }
@@ -5036,16 +5140,6 @@
         }
       }
     },
-    "HTTPS endpoint" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Endpoint HTTPS"
-          }
-        }
-      }
-    },
     "Hidden" : {
       "localizations" : {
         "es" : {
@@ -5126,6 +5220,19 @@
         }
       }
     },
+    "HTTPS endpoint" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Endpoint HTTPS"
+          }
+        }
+      }
+    },
+    "https://example.com/page" : {
+      "shouldTranslate" : false
+    },
     "Humor" : {
       "localizations" : {
         "es" : {
@@ -5166,16 +5273,6 @@
         }
       }
     },
-    "I agree to Meta's Contributor data use" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Acepto el uso de datos de Contributor de Meta"
-          }
-        }
-      }
-    },
     "I agree to create my circle with shared memory" : {
       "localizations" : {
         "es" : {
@@ -5192,6 +5289,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Acepto activar la memoria compartida para mis cinco contactos de IA. Si creo un grupo, sus miembros pueden leer todo el historial del grupo. Los datos compartidos en chats privados o de grupo pueden convertirse en memorias compartidas que estos contactos recuerden en otros chats; el acceso a las transcripciones privadas sigue controlado. La configuración usa el procesamiento Estándar de Meta."
+          }
+        }
+      }
+    },
+    "I agree to Meta's Contributor data use" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acepto el uso de datos de Contributor de Meta"
           }
         }
       }
@@ -5317,6 +5424,7 @@
       }
     },
     "Irish" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5367,6 +5475,7 @@
       }
     },
     "Italian" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5436,22 +5545,22 @@
         }
       }
     },
-    "Join Shared Contact" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unirse a un contacto compartido"
-          }
-        }
-      }
-    },
     "Join group" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unirte al grupo"
+          }
+        }
+      }
+    },
+    "Join Shared Contact" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unirse a un contacto compartido"
           }
         }
       }
@@ -5657,6 +5766,7 @@
       }
     },
     "Light" : {
+      "comment" : "Appearance option",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5806,22 +5916,22 @@
         }
       }
     },
-    "Loading contacts…" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cargando contactos…"
-          }
-        }
-      }
-    },
     "Loading contact…" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cargando contacto…"
+          }
+        }
+      }
+    },
+    "Loading contacts…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargando contactos…"
           }
         }
       }
@@ -6247,6 +6357,7 @@
       }
     },
     "Mexican" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6262,6 +6373,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El acceso al micrófono está desactivado. Actívalo para Wildcard en Configuración para grabar audio."
+          }
+        }
+      }
+    },
+    "mini app" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "miniapp"
           }
         }
       }
@@ -6939,6 +7060,17 @@
         }
       }
     },
+    "now" : {
+      "comment" : "Compact post age",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ahora"
+          }
+        }
+      }
+    },
     "OAuth" : {
       "localizations" : {
         "es" : {
@@ -6979,22 +7111,22 @@
         }
       }
     },
-    "OK" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aceptar"
-          }
-        }
-      }
-    },
     "Observation" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Observación"
+          }
+        }
+      }
+    },
+    "of %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "de %@"
           }
         }
       }
@@ -7019,22 +7151,22 @@
         }
       }
     },
-    "Off. Only this chat on this iPhone can set them." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Desactivado. Solo este chat en este iPhone puede programarlos."
-          }
-        }
-      }
-    },
     "Off: they'll only see messages from when they join." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Desactivado: solo verán los mensajes desde que se unan."
+          }
+        }
+      }
+    },
+    "Off. Only this chat on this iPhone can set them." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desactivado. Solo este chat en este iPhone puede programarlos."
           }
         }
       }
@@ -7065,6 +7197,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A menudo"
+          }
+        }
+      }
+    },
+    "OK" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aceptar"
           }
         }
       }
@@ -7179,36 +7321,6 @@
         }
       }
     },
-    "Open Contacts" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abrir Contactos"
-          }
-        }
-      }
-    },
-    "Open Settings" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abrir Configuración"
-          }
-        }
-      }
-    },
-    "Open Wildcard contact" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abrir contacto de Wildcard"
-          }
-        }
-      }
-    },
     "Open a contact you enabled in Native experiments." : {
       "localizations" : {
         "es" : {
@@ -7235,6 +7347,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Abrir contacto"
+          }
+        }
+      }
+    },
+    "Open Contacts" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir Contactos"
           }
         }
       }
@@ -7275,6 +7397,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Abrir foto %1$lld de %2$lld en pantalla completa: %3$@"
+          }
+        }
+      }
+    },
+    "Open Settings" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir Configuración"
+          }
+        }
+      }
+    },
+    "Open Wildcard contact" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir contacto de Wildcard"
           }
         }
       }
@@ -7449,22 +7591,22 @@
         }
       }
     },
-    "Page monitor removed" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Monitor de página quitado"
-          }
-        }
-      }
-    },
     "Page monitor · %@" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Monitor de página · %@"
+          }
+        }
+      }
+    },
+    "Page monitor removed" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monitor de página quitado"
           }
         }
       }
@@ -7590,6 +7732,7 @@
       }
     },
     "Pending" : {
+      "comment" : "Status of an optional question a contact may ask",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7690,6 +7833,7 @@
       }
     },
     "Peruvian" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7860,6 +8004,7 @@
       }
     },
     "Portuguese (Portugal)" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -8079,6 +8224,17 @@
         }
       }
     },
+    "reacted with %@" : {
+      "comment" : "After a sender label, as in 'Ana: reacted with 👍'",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reaccionó con %@"
+          }
+        }
+      }
+    },
     "Reacted with %@" : {
       "localizations" : {
         "es" : {
@@ -8170,6 +8326,7 @@
       }
     },
     "Realistic people" : {
+      "comment" : "Avatar style",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -8439,16 +8596,6 @@
         }
       }
     },
-    "Remote Streamable HTTP servers with public access, a Bearer token, or OAuth. Legacy SSE and local command servers are not supported yet." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Servidores remotos Streamable HTTP con acceso público, un token Bearer u OAuth. Aún no se admiten los servidores SSE heredados ni los de comandos locales."
-          }
-        }
-      }
-    },
     "Remote actions are unavailable. Check App Group signing for the notification extension." : {
       "localizations" : {
         "es" : {
@@ -8469,6 +8616,16 @@
         }
       }
     },
+    "Remote Streamable HTTP servers with public access, a Bearer token, or OAuth. Legacy SSE and local command servers are not supported yet." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servidores remotos Streamable HTTP con acceso público, un token Bearer u OAuth. Aún no se admiten los servidores SSE heredados ni los de comandos locales."
+          }
+        }
+      }
+    },
     "Remove" : {
       "localizations" : {
         "es" : {
@@ -8485,16 +8642,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quitar a %@"
-          }
-        }
-      }
-    },
-    "Remove Photo" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quitar foto"
           }
         }
       }
@@ -8555,6 +8702,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Quitar al participante?"
+          }
+        }
+      }
+    },
+    "Remove Photo" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitar foto"
           }
         }
       }
@@ -8800,6 +8957,7 @@
       }
     },
     "Retrieved" : {
+      "comment" : "Research source state",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9209,16 +9367,6 @@
         }
       }
     },
-    "Scheduled Wildcard alarms" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alarmas de Wildcard programadas"
-          }
-        }
-      }
-    },
     "Scheduled message" : {
       "localizations" : {
         "es" : {
@@ -9245,6 +9393,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alarmas del sistema programadas"
+          }
+        }
+      }
+    },
+    "Scheduled Wildcard alarms" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alarmas de Wildcard programadas"
           }
         }
       }
@@ -9579,16 +9737,6 @@
         }
       }
     },
-    "Share Contact" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Compartir contacto"
-          }
-        }
-      }
-    },
     "Share code" : {
       "localizations" : {
         "es" : {
@@ -9600,6 +9748,16 @@
       }
     },
     "Share contact" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir contacto"
+          }
+        }
+      }
+    },
+    "Share Contact" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9839,6 +9997,16 @@
         }
       }
     },
+    "someone" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alguien"
+          }
+        }
+      }
+    },
     "Source: %@" : {
       "localizations" : {
         "es" : {
@@ -9850,6 +10018,7 @@
       }
     },
     "Spanish (Spain)" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9890,6 +10059,7 @@
       }
     },
     "Standard" : {
+      "comment" : "Chat model tier",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -10190,6 +10360,7 @@
       }
     },
     "System" : {
+      "comment" : "Appearance option",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -10319,16 +10490,6 @@
         }
       }
     },
-    "The contact says hi as soon as it is created, can add a thought without another prompt, and texts first when the chat goes quiet. It starts out eager and adapts to how you respond and to its personality. Outside an active conversation, nothing is sent between 22:00 and 08:00. After a few unanswered messages it waits for you. Active typing gives you space. Ask the contact to pause, or turn this off. Applies only to your private chat." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El contacto te saluda apenas se crea, puede añadir una idea sin que le escribas de nuevo y te escribe primero cuando el chat queda en silencio. Empieza con ganas y se adapta a cómo respondes y a su personalidad. Fuera de una conversación activa, no envía nada entre las 22:00 y las 08:00. Tras algunos mensajes sin respuesta, espera a que le escribas. Si estás escribiendo, te da espacio. Pídele al contacto que haga una pausa o desactiva esta opción. Solo se aplica a tu chat privado."
-          }
-        }
-      }
-    },
     "The contact can build it again later." : {
       "localizations" : {
         "es" : {
@@ -10375,6 +10536,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El contacto expresa sus tendencias con el tono y el ritmo. No recibe estos puntajes. Los sentimientos se calman con el tiempo. Su forma de actuar se adapta a cada persona sin revelar causas privadas. Las conversaciones con conexiones se mantienen aisladas. Los seguimientos siguen respetando tu interruptor de iniciativa y los límites de entrega."
+          }
+        }
+      }
+    },
+    "The contact says hi as soon as it is created, can add a thought without another prompt, and texts first when the chat goes quiet. It starts out eager and adapts to how you respond and to its personality. Outside an active conversation, nothing is sent between 22:00 and 08:00. After a few unanswered messages it waits for you. Active typing gives you space. Ask the contact to pause, or turn this off. Applies only to your private chat." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El contacto te saluda apenas se crea, puede añadir una idea sin que le escribas de nuevo y te escribe primero cuando el chat queda en silencio. Empieza con ganas y se adapta a cómo respondes y a su personalidad. Fuera de una conversación activa, no envía nada entre las 22:00 y las 08:00. Tras algunos mensajes sin respuesta, espera a que le escribas. Si estás escribiendo, te da espacio. Pídele al contacto que haga una pausa o desactiva esta opción. Solo se aplica a tu chat privado."
           }
         }
       }
@@ -10559,6 +10730,16 @@
         }
       }
     },
+    "this bot" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este bot"
+          }
+        }
+      }
+    },
     "This can take a few minutes. We are still working on your contact." : {
       "localizations" : {
         "es" : {
@@ -10575,6 +10756,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Este chat ya no está disponible."
+          }
+        }
+      }
+    },
+    "this contact" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este contacto"
           }
         }
       }
@@ -10699,16 +10890,6 @@
         }
       }
     },
-    "This iPhone" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Este iPhone"
-          }
-        }
-      }
-    },
     "This image could not be displayed." : {
       "localizations" : {
         "es" : {
@@ -10735,6 +10916,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No se pudo abrir esta imagen. Elige otra foto."
+          }
+        }
+      }
+    },
+    "This iPhone" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este iPhone"
           }
         }
       }
@@ -11550,6 +11741,7 @@
       }
     },
     "Uruguayan" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -11565,16 +11757,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Usa de 8 a 128 caracteres."
-          }
-        }
-      }
-    },
-    "Use Photo" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usar foto"
           }
         }
       }
@@ -11649,6 +11831,16 @@
         }
       }
     },
+    "Use Photo" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar foto"
+          }
+        }
+      }
+    },
     "Use their version" : {
       "localizations" : {
         "es" : {
@@ -11670,6 +11862,7 @@
       }
     },
     "Venezuelan" : {
+      "comment" : "Speech accent",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -12062,26 +12255,6 @@
         }
       }
     },
-    "Working on a task" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Trabajando en una tarea"
-          }
-        }
-      }
-    },
-    "Working on a task…" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Trabajando en una tarea…"
-          }
-        }
-      }
-    },
     "Working on “%@”" : {
       "localizations" : {
         "es" : {
@@ -12098,6 +12271,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Trabajando en “%@”…"
+          }
+        }
+      }
+    },
+    "Working on a task" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trabajando en una tarea"
+          }
+        }
+      }
+    },
+    "Working on a task…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trabajando en una tarea…"
           }
         }
       }
@@ -12133,6 +12326,7 @@
       }
     },
     "You" : {
+      "comment" : "The user, as a sender label",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -12241,6 +12435,9 @@
           }
         }
       }
+    },
+    "you@example.com" : {
+      "shouldTranslate" : false
     },
     "Your %@" : {
       "localizations" : {
@@ -12508,162 +12705,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu sesión expiró. Vuelve a iniciar sesión."
-          }
-        }
-      }
-    },
-    "a contact" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "un contacto"
-          }
-        }
-      }
-    },
-    "a document" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "un documento"
-          }
-        }
-      }
-    },
-    "https://example.com/page" : {
-      "shouldTranslate" : false
-    },
-    "mini app" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "miniapp"
-          }
-        }
-      }
-    },
-    "now" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ahora"
-          }
-        }
-      }
-    },
-    "of %@" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "de %@"
-          }
-        }
-      }
-    },
-    "reacted with %@" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "reaccionó con %@"
-          }
-        }
-      }
-    },
-    "someone" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "alguien"
-          }
-        }
-      }
-    },
-    "this bot" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "este bot"
-          }
-        }
-      }
-    },
-    "this contact" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "este contacto"
-          }
-        }
-      }
-    },
-    "you@example.com" : {
-      "shouldTranslate" : false
-    },
-    "“%@” and every unfinished task in it are canceled. Contacts stop working on them." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se cancelan “%@” y todas sus tareas sin terminar. Los contactos dejan de trabajar en ellas."
-          }
-        }
-      }
-    },
-    "“Add an event tomorrow at 3 PM”" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Añade un evento mañana a las 3 p. m.”"
-          }
-        }
-      }
-    },
-    "“Set a timer for 10 minutes”" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Pon un temporizador de 10 minutos”"
-          }
-        }
-      }
-    },
-    "“Set a timer for 12 minutes”" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Pon un temporizador de 12 minutos”"
-          }
-        }
-      }
-    },
-    "“Set a timer on %@’s phone for 10 minutes”" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Pon un temporizador de 10 minutos en el teléfono de %@”"
-          }
-        }
-      }
-    },
-    "‹ Slide to cancel" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "‹ Desliza para cancelar"
           }
         }
       }
