@@ -336,6 +336,25 @@ last message and the number of unanswered messages, and is told never to mention
 the silence. A welcome-sourced episode never classifies the welcome or changes the
 pause permission. New human input deletes the row as before.
 
+### Opening salutation
+
+A spontaneous message after hours of quiet opens with a brief salutation ("hola",
+"buen día", "buenas tardes", "buenas noches" or the equivalent in the person's
+language) before its topic, instead of resuming as if the last message had been
+seconds ago (requested 2026-11-02). The planner receives `timing.openWithSalutation`,
+true for ambient and re-engagement episodes when the latest message of either side
+is at least **3 hours** old (`salutationGap`, a tunable number); continuations never
+get it, and when it is false the planner is told not to open with a salutation. The
+model picks the wording from the local time and its character, and varies it when
+its own previous message was already a hello that day.
+
+The salutation is only how the message starts: the message keeps its `check-in` or
+`continuation` kind, so it is allowed when greetings are suppressed or the chat is
+task-only. Only a message that does nothing but greet is a `greeting`. In a live A/B
+with Contributor (re-engagement after 20 h and 6 h, 16 calls per prompt) the previous
+prompt opened 0/16 messages with a salutation and the new one 16/16, with the same
+kinds.
+
 ### Planner and policy
 
 - Ambient sending is the default when allowed and something specific fits: follow-ups
