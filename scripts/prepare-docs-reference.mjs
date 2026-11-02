@@ -33,7 +33,7 @@ function rewrite(markdown, locale) {
       if (target.startsWith('#')) return `](#${section(target.slice(1))})`;
       const [filename, fragment] = target.split('#');
       if (known.has(filename)) return `](/${locale}/reference/${filename.slice(0, -3)}${fragment ? `#${section(fragment)}` : ''})`;
-      if (filename === 'workers-build-paths.json') return '](/reference-assets/workers-build-paths.json)';
+      if (filename === 'workers-build-paths.json') return `](/${locale}/reference/workers-build-paths)`;
       // Repository working agreements are not part of the public feature guides.
       if (filename === '../AGENTS.md') return `](/${locale}/operations/contributing)`;
       throw new Error(`Unmapped reference link: ${target}`);
@@ -87,6 +87,8 @@ async function preserveSectionAnchors(english, spanish, name) {
 }
 
 const translations = path.join(root, 'apps/docs/reference/es');
+const buildPaths = await readFile(path.join(source, 'workers-build-paths.json'), 'utf8');
+JSON.parse(buildPaths);
 const revisions = JSON.parse(await readFile(path.join(translations, 'sources.json'), 'utf8'));
 for (const name of (await readdir(translations)).filter(name => name.endsWith('.md'))) {
   if (!known.has(name)) throw new Error(`Remove the obsolete Spanish reference translation: ${name}`);
@@ -117,6 +119,12 @@ for (const locale of ['en', 'es']) {
     await writeFile(path.join(destination, name), `---\ntitle: ${JSON.stringify(heading)}\ndescription: ${JSON.stringify(description)}\n---\n\n${body.trim()}\n`);
     entries.push(`- [${heading}](/${locale}/reference/${name.slice(0, -3)})`);
   }
+  const configurationTitle = locale === 'es' ? 'Filtros de builds' : 'Build watch paths';
+  const configurationIntro = locale === 'es'
+    ? 'Configuración reproducible de los filtros de Cloudflare Workers Builds. Se aplica en el panel; Wrangler no la aplica automáticamente.'
+    : 'Reproducible Cloudflare Workers Builds path filters. Apply these in the dashboard; Wrangler does not apply them automatically.';
+  await writeFile(path.join(destination, 'workers-build-paths.md'), `---\ntitle: ${configurationTitle}\n---\n\n${configurationIntro}\n\n\`\`\`json\n${buildPaths.trim()}\n\`\`\`\n`);
+  entries.push(`- [${configurationTitle}](/${locale}/reference/workers-build-paths)`);
   const intro = locale === 'es'
     ? 'Guías completas de funciones, configuración y operaciones. Incluyen contratos de API, migraciones, permisos, reglas de caché y estado de verificación.'
     : 'Complete feature, setup and operations guides, including API contracts, migrations, permissions, cache rules and verification status.';

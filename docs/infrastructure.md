@@ -437,6 +437,12 @@ dev server after changing reference sources to regenerate them.
 It does not extend `packages/ui` and has no script, binding, D1, R2,
 Workflow, Cron, secret or migration.
 
+Build-path JSON is published as a code page at `/en/reference/workers-build-paths`
+and `/es/reference/workers-build-paths`, so Docus locale routing cannot turn a
+root asset link into a missing localized file. Open Graph rendering has a bounded
+60-second timeout (`ogImage.security.renderTimeout`) to allow cold image generation
+during the larger bilingual prerender. Prerender errors still fail the build.
+
 `npm run build:docs` runs `nuxt generate` with `nitro.preset: 'static'` (explicit, so
 Workers Builds does not switch Nitro to a Cloudflare server preset) and prerenders
 `/en/**`, `/es/**`, `llms.txt`, `llms-full.txt`, raw Markdown under `/raw/**`, sitemaps

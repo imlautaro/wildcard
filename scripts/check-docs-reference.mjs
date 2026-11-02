@@ -39,7 +39,7 @@ async function visit(directory) {
       }
       inspect(parsed.body);
       if (pages.has(route)) errors.push(`Duplicate route: ${route}`);
-      pages.set(route, { ids, links, relative });
+      pages.set(route, { ids, links, relative, markdown });
     }
   }
 }
@@ -49,7 +49,7 @@ for (const [route, page] of pages) {
     if (/^(?:[a-z]+:|\/\/)/i.test(link)) continue;
     const target = new URL(link, `https://docs.invalid${route}`);
     if (target.pathname.startsWith('/reference-assets/')) {
-      if (target.pathname !== '/reference-assets/workers-build-paths.json') errors.push(`${page.relative}: unknown asset ${link}`);
+      errors.push(`${page.relative}: use a localized reference page instead of an asset link ${link}`);
       continue;
     }
     const destination = pages.get(target.pathname.replace(/\/$/, ''));
@@ -60,6 +60,8 @@ for (const [route, page] of pages) {
   }
 }
 for (const locale of ['en', 'es']) {
+  const configuration = pages.get(`/${locale}/reference/workers-build-paths`);
+  if (!configuration?.markdown.includes(`\`\`\`json\n${asset.trim()}\n\`\`\``)) errors.push(`Missing or stale ${locale} build-path configuration page.`);
   for (const guide of (await readdir(path.join(root, 'docs'))).filter(name => name.endsWith('.md'))) {
     if (!pages.has(`/${locale}/reference/${guide.slice(0, -3)}`)) errors.push(`Missing ${locale} reference: ${guide}`);
   }

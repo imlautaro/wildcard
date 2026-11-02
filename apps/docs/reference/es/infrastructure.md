@@ -395,6 +395,13 @@ en Git. Reinicia servidor de desarrollo tras cambiar fuentes para regenerar.
 No extiende `packages/ui` ni tiene script, binding, D1, R2, Workflow, Cron, secreto
 ni migración.
 
+El JSON de filtros se publica como página de código en
+`/en/reference/workers-build-paths` y `/es/reference/workers-build-paths`, para que
+Docus no convierta un enlace de recurso raíz en un archivo localizado inexistente.
+Open Graph tiene un límite acotado de 60 segundos (`ogImage.security.renderTimeout`)
+para generar imágenes en frío durante el prerrenderizado bilingüe más amplio.
+Los errores de prerrenderizado siguen haciendo fallar el build.
+
 `npm run build:docs` ejecuta `nuxt generate` con `nitro.preset: 'static'` (explícito
 para que Workers Builds no cambie a preset de servidor Cloudflare) y prerrenderiza
 `/en/**`, `/es/**`, `llms.txt`, `llms-full.txt`, Markdown bruto en `/raw/**`, sitemaps
