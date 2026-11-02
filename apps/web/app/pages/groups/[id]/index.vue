@@ -105,6 +105,14 @@ function replyPreview(quote: ReplyQuote) {
   return { quote, author: member?.name ?? quote.senderName ?? t('groups.chat.unknownMember'), color: replyColor(groupID.value, identity) };
 }
 const replyTarget = computed(() => state.value.replyTo ? replyPreview(state.value.replyTo) : null);
+// Contributor replies stay blocked until every human member consents (docs/groups.md#membership-and-consent).
+const consentPending = computed(() => {
+  const snapshot = state.value.snapshot;
+  if (!snapshot?.contributorModel) return null;
+  const missing = snapshot.members.filter(member => member.kind === 'user' && (member.contributorConsent === 0 || member.contributorConsent === false));
+  if (!missing.length) return null;
+  return { self: missing.some(member => member.id === user.value?.id), names: missing.map(member => member.name) };
+});
 const canReply = computed(() => !!state.value.snapshot && !state.value.unavailable);
 function startReply(message: GroupMessage) {
   state.value.replyTo = localReplyQuote(message.id, 'group', message.text, message.attachment,
@@ -327,9 +335,21 @@ watch(() => state.value.messages.at(-1)?.id, () => miniApps.refresh(true), { imm
     </div>
     <ChatScrollDown v-if="positioned && !pinned" @click="scrollToBottom" />
     </div>
+    <div v-if="consentPending" class="consent-notice">
+      <AppNotice tone="warning">
+        {{ consentPending.self ? $t('groups.members.consentNeeded') : $t('groups.chat.consentWaiting', { names: consentPending.names.join(', ') }) }}
+        <template v-if="consentPending.self" #actions>
+          <NuxtLink class="link-button" :to="`/groups/${groupID}/members?consent=1`">{{ $t('groups.members.giveConsent') }}</NuxtLink>
+        </template>
+      </AppNotice>
+    </div>
     <ChatComposer
       ref="composer" v-model="state.draft" :disabled="!!state.pending || !state.loaded || state.snapshot?.group.clearing === 1" :reply="replyTarget"
       :voice-key="groupID" :stickers="groupStickers" @send="onSend" @voice="onVoice" @sticker="onSticker" @cancel-reply="state.replyTo = null"
     />
   </template>
 </template>
+
+<style scoped>
+.consent-notice { padding: 0 16px 8px; }
+</style>

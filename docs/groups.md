@@ -97,7 +97,10 @@ account's Contributor consent is missing, a notice with **Give consent** appears
 it, and human members without consent are labeled "Contributor consent pending". Only
 the member can consent for themselves (`POST /:id/consent`); removing and re-adding
 is not needed. The chat's consent notice links to Members (`?consent=1` on web opens
-the consent sheet when this account's consent is missing).
+the consent sheet when this account's consent is missing). While any human member's
+consent is missing, the group chat shows a notice above the composer from the group
+details snapshot, before anyone sends: members without consent get **Give consent**
+(opens Members), everyone else sees who is still missing.
 The disclosure covers group history (including messages before joining unless the
 inviter or adder turned off **Can see earlier messages**; see
 [join banners and welcomes](#join-banners-and-welcomes)),

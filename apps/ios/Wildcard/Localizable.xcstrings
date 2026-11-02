@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Contacts can't reply in this group until every member gives Contributor consent. Waiting for %@." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los contactos no pueden responder en este grupo hasta que todos los miembros den el consentimiento de Contributor. Falta: %@."
+          }
+        }
+      }
+    },
     "Contacts can't reply in this group until you give Contributor consent." : {
       "localizations" : {
         "es" : {

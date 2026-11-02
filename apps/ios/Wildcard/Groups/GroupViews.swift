@@ -205,6 +205,13 @@ struct GroupChatView: View {
     @ScaledMetric(relativeTo: .caption2) private var memberLineHeight: CGFloat = 16
 
     private var isClearing: Bool { store.snapshot?.group.clearing == 1 }
+    /// Contributor replies stay blocked until every human member consents (docs/groups.md#membership-and-consent).
+    private var consentPending: (isSelf: Bool, names: [String])? {
+        guard let snapshot = store.snapshot, snapshot.contributorModel else { return nil }
+        let missing = snapshot.members.filter(\.contributorConsentMissing)
+        guard !missing.isEmpty else { return nil }
+        return (missing.contains { $0.id == auth.user?.id }, missing.map(\.name))
+    }
     private var canAttachDrop: Bool { store.snapshot != nil && !store.isSending && store.pendingID == nil && !isLoadingAttachment && !voice.isBusy && !isClearing }
 
     private var canSend: Bool {
@@ -578,6 +585,16 @@ struct GroupChatView: View {
     }
     private func composer(proxy: ScrollViewProxy) -> some View {
         VStack(spacing: 8) {
+            if let pending = consentPending {
+                HStack(alignment: .top) {
+                    Text(pending.isSelf ? String(localized: "Contacts can't reply in this group until you give Contributor consent.")
+                        : String(localized: "Contacts can't reply in this group until every member gives Contributor consent. Waiting for \(pending.names.formatted(.list(type: .and))).")).manrope(.footnote).foregroundStyle(.secondary)
+                    Spacer()
+                    if pending.isSelf {
+                        Button("Give consent") { open(.groupDetails(groupID)) }.manrope(.footnote)
+                    }
+                }
+            }
             if let error = store.error {
                 HStack(alignment: .top) {
                     Text(error).manrope(.footnote).foregroundStyle(.red)

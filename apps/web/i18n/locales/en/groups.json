@@ -45,7 +45,8 @@
         "researching": "{count} person is researching... | {count} people are researching...",
         "replying": "{count} person is replying... | {count} people are replying..."
       },
-      "working": "{names} working… | {names} working…"
+      "working": "{names} working… | {names} working…",
+      "consentWaiting": "Contacts can't reply in this group until every member gives Contributor consent. Waiting for {names}."
     },
     "members": {
       "fallbackTitle": "Group",

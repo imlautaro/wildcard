@@ -45,7 +45,8 @@
         "researching": "{count} persona está investigando... | {count} personas están investigando...",
         "replying": "{count} persona está respondiendo... | {count} personas están respondiendo..."
       },
-      "working": "{names} está trabajando… | {names} están trabajando…"
+      "working": "{names} está trabajando… | {names} están trabajando…",
+      "consentWaiting": "Los contactos no pueden responder en este grupo hasta que todos los miembros den el consentimiento de Contributor. Falta: {names}."
     },
     "members": {
       "fallbackTitle": "Grupo",
