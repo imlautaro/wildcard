@@ -49,7 +49,8 @@ docs/
 
 The [technical documentation site](apps/docs) (`npm run dev:docs`, http://localhost:3004)
 summarizes architecture, Cloudflare services, local setup, configuration and releases in
-English and Spanish; see [Docs site Worker](docs/infrastructure.md#docs-site-worker).
+English and Spanish; see [Docs site Worker](docs/infrastructure.md#docs-site-worker)
+for the connected Workers Builds pipeline and dependency-specific build filters.
 
 ## API development
 

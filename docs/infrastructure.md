@@ -101,8 +101,8 @@ to this reference and the dashboard filters in the same change.
 
 Expected push behavior: a site-only edit builds site; a Nuxt-layer edit builds
 web/admin/site; a `shared/` edit builds API/web; root dependency or build-environment
-changes build all four (all five once the `wildcard-docs` project is connected; a docs-only
-edit then builds only docs). Changes only in `apps/ios/`, `docs/`, root `README.md` or
+changes build all five projects. An edit only in `apps/docs/` builds only docs.
+Changes only in `apps/ios/`, `docs/`, root `README.md` or
 unrelated root scripts match none. The broad per-app filters deliberately include
 future files inside that app, avoiding fragile lists of individual source files.
 
@@ -466,9 +466,25 @@ link and anchor check over the 70 generated pages passed, and the output was ser
 with `wrangler dev`. After it, `https://wildcard-docs.imlautaro.workers.dev` answered
 `/` 302 → `/en`, `/en`, `/es`, pages in both locales, `/llms.txt` and the sitemap 200,
 and unknown paths 404; pages rendered at 1440 px and 390 px without horizontal
-overflow. The Workers Builds project for `wildcard-docs` is **not connected yet**:
-create it with the commands above (dashboard only; the local Wrangler credential
-cannot reach the Builds API) so later releases come from pushed commits.
+overflow. Workers Builds was not connected for those initial manual releases.
+
+Workers Builds connection (November 2, 2026): the existing `wildcard-docs` Worker
+is connected to `imlautaro/wildcard`, production branch `main`, root `/`, with the
+build and release commands above. Production builds and build caching are enabled;
+preview builds are disabled. Include paths match the versioned
+[reference](workers-build-paths.json): `apps/docs/*`, `scripts/release-docs.mjs`,
+`package.json`, `package-lock.json`, `.nvmrc`, `.npmrc` and `.gitignore`, with no
+exclusions. This project extends Docus rather than `packages/ui`, so changes to
+the app's shared UI layer do not trigger docs builds. The existing GitHub connection
+and `Workers Builds - 2026-05-27 10:54` credential were reused; no credentials,
+permissions, build variables or secrets were added. Independent installations must
+select their own existing build credential with the permissions described above.
+The checkout was clean and HEAD matched remote `main` at
+`cb47e2f533f8556db905e5891f23789342cd2c9b` before connection. The saved production
+settings and disabled preview builds were inspected in the dashboard. Cloudflare
+states that a subsequent matching push starts the first build. No push, local build,
+test or deployment was performed for this configuration; the first automatic
+release and its source version remain unverified.
 
 Rollback: roll back or delete the `wildcard-docs` Worker. It stores no data and no
 other Worker depends on it.
