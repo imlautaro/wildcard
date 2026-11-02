@@ -898,7 +898,13 @@ There is no platform exception for this feature.
 `usePersonality` owns session-only snapshots and dirty drafts with a budget of
 eight entries, retaining active saves until they settle. Reopen uses cached data
 immediately and revalidates; a refresh never overwrites unsaved edits. Explicit
-refresh asks before discarding changes. Mutations invalidate older reads and
+refresh asks before discarding changes. Leaving the page with unsaved edits, by
+in-app navigation or by closing/reloading the tab, asks first; confirming an in-app
+exit discards that cached draft (the browser's own leave prompt cannot report the
+choice, so a closed tab simply loses it). The loading state covers the contact fetch
+that precedes the personality request, so **Retry** appears only after a failure.
+Save sits in the top bar. iOS keeps its dirty draft across back navigation and does
+not prompt there; it confirms only before refresh or generation. Mutations invalidate older reads and
 use the draft's original server revision, so a 409 preserves the input for review.
 Deletion/access loss and account changes remove state. There is no disk retention.
 See [personality](personality.md) and [caching](caching.md). The shared API's local
@@ -1058,14 +1064,14 @@ for scope, lazy old-history indexing, limits, retention and verification.
 
 ## AI creation and personality drafts
 
-Both iOS and web support [AI contact creation](contact-generation.md), alongside
-manual creation, with persisted onboarding context and bot-only selectors. Creation
+Both iOS and web create contacts with [one form](contact-generation.md) where empty
+fields are generated with AI, with persisted onboarding context and bot-only selectors. Creation
 uses a session-owned draft/pending ID and a durable D1 job on the existing onboarding
 Workflow; navigation reuses cached state, then revalidates. New generated contacts
 receive random adult birthdays. Birthday edits must keep contacts at least 18.
 Both clients replace the form with a prominent spinner from submission through
 active creation, show **Creating…** on the action, and rotate explanatory copy
-every five seconds after job confirmation. Active cached jobs select AI mode on
+every five seconds after job confirmation. Active cached jobs show activity on
 reopen. The animation is view-only and stops on unmount (also while inactive on
 iOS); no new requests, cache, persistence or server progress stages are introduced.
 See [visible creation activity](contact-generation.md#visible-creation-activity)
@@ -1407,7 +1413,7 @@ contacts too. Matches iOS; see [onboarding](onboarding.md#progressive-setup).
 
 ## Character styles (2026-10-31)
 
-Onboarding and **Create Contact** (AI) offer **3D animated pets** and **Custom**; Custom
+Onboarding, **Create Contact** and AI photo generation in contact details offer **3D animated pets** and **Custom**; Custom
 shows a **Describe your characters** field (80 characters). The options are loaded with
 `?custom=1`. Matches iOS; see [onboarding](onboarding.md#character-styles).
 

@@ -13,6 +13,8 @@ definePageMeta({ key: route => route.fullPath });
 const { value, busy, error, refresh, save, generate, editor } = usePersonality(id);
 const { draft, baseline, revision, saved } = toRefs(editor);
 const loadError = ref<string | null>(null);
+// Covers the contact fetch that precedes the personality request, so Retry only follows a failure.
+const loading = ref(true);
 const canEdit = computed(() => contact.value?.role === 'owner');
 const dirty = computed(() => JSON.stringify(draft.value) !== baseline.value);
 const valid = computed(() => !!parsePersonality(draft.value));
@@ -65,11 +67,29 @@ async function submit() {
   const result = await save(structuredClone(toRaw(draft.value)), revision.value);
   if (result) { apply(); saved.value = true; }
 }
+// Leaving with unsaved edits asks first; confirming discards the cached draft too.
+const unsaved = () => canEdit.value && dirty.value;
+onBeforeRouteLeave(() => {
+  if (!unsaved()) return true;
+  if (!window.confirm(t('contacts.personality.leaveConfirm'))) return false;
+  draft.value = JSON.parse(baseline.value);
+  saved.value = false;
+  return true;
+});
+function warnBeforeUnload(event: BeforeUnloadEvent) {
+  if (!unsaved()) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+onMounted(() => window.addEventListener('beforeunload', warnBeforeUnload));
+onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnload));
 async function discardAndRefresh() {
   if (dirty.value && !window.confirm(t('contacts.personality.discardConfirm'))) return;
   await refresh(); apply(); saved.value = false;
 }
-onMounted(async () => {
+async function load() {
+  loading.value = true;
+  loadError.value = null;
   try {
     const result = await api<{ contact: Contact }>(`contacts/${id.value}`);
     if (session.user.value?.id !== accountID) return;
@@ -82,17 +102,21 @@ onMounted(async () => {
       contact.value = null;
     }
     loadError.value = errorMessage(failure);
+  } finally {
+    loading.value = false;
   }
-});
+}
+onMounted(load);
 </script>
 
 <template>
   <PageBar :title="$t('contacts.personality.title')" :back="`/contacts/${id}/edit`" always-back>
     <AppIconButton icon="refresh" :label="$t('contacts.personality.refresh')" :disabled="busy" @click="discardAndRefresh" />
+    <AppButton v-if="value && canEdit" type="submit" form="personality-form" size="small" :disabled="busy || !valid || !dirty">{{ $t('common.save') }}</AppButton>
   </PageBar>
-  <div class="page"><form class="page-inner" @submit.prevent="submit">
+  <div class="page"><form id="personality-form" class="page-inner" @submit.prevent="submit">
     <AppNotice v-if="error || loadError">{{ error ?? loadError }}</AppNotice>
-    <AppLoading v-if="!value && busy" :label="$t('contacts.personality.loading')" fill />
+    <AppLoading v-if="!value && (busy || loading)" :label="$t('contacts.personality.loading')" fill />
     <template v-if="value">
       <AppListGroup>
         <div v-if="canEdit" class="button-row-with-info">
@@ -117,7 +141,6 @@ onMounted(async () => {
       </AppListGroup>
       <AppNotice v-if="!valid">{{ $t('contacts.personality.invalid') }}</AppNotice>
       <p v-if="saved && !dirty" class="group-footer" role="status">{{ $t('contacts.personality.saved') }}</p>
-      <AppButton v-if="canEdit" type="submit" block class="save" :disabled="busy || !valid || !dirty">{{ $t('contacts.personality.save') }}</AppButton>
 
       <AppSheet v-if="temperamentOpen" :title="$t('contacts.personality.temperament')" @close="temperamentOpen = false">
         <template #header><InfoButton :label="$t('contacts.personality.temperament')" :text="info.temperament" /></template>
@@ -131,14 +154,13 @@ onMounted(async () => {
         <template #actions><AppButton @click="temperamentOpen = false">{{ $t('common.done') }}</AppButton></template>
       </AppSheet>
     </template>
-    <AppButton v-else-if="!busy" variant="text" icon="refresh" @click="reload">{{ $t('common.retry') }}</AppButton>
+    <AppButton v-else-if="!busy && !loading && (error || loadError)" variant="text" icon="refresh" @click="load">{{ $t('common.retry') }}</AppButton>
   </form></div>
 </template>
 
 <style scoped>
 .personality-field { padding-top: var(--space-3); padding-bottom: var(--space-3); }
 .personality-field textarea { font-size: 16px; color: var(--md-on-surface); width: 100%; }
-.save { margin-top: var(--space-3); }
 .personality-trait > span { font-weight: 500; }
 .personality-trait output { font-weight: 700; color: var(--md-primary); font-variant-numeric: tabular-nums; }
 .personality-trait { display: flex; flex-direction: column; padding: var(--space-4); gap: var(--space-2); }

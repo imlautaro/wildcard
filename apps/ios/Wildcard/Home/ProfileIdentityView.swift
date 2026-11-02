@@ -9,6 +9,12 @@ struct ProfileIdentityView<Avatar: View>: View {
     let saveName: (String) async throws -> Void
     let savePhoto: (Data?) async throws -> Void
     @ViewBuilder let avatar: () -> Avatar
+    /// Adds "Generate with AI" to the photo menu.
+    var generatePhoto: (() -> Void)? = nil
+    /// False hides the name (a form edits it elsewhere).
+    var showsName = true
+    /// Each change opens the photo picker, for a separate "Choose photo" row.
+    var pickerRequest = 0
     @State private var showingPhotoPicker = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var cropSource: PhotoCropSource?
@@ -34,6 +40,9 @@ struct ProfileIdentityView<Avatar: View>: View {
             if canEdit {
                 Menu {
                     Button("Choose Photo", systemImage: "photo") { showingPhotoPicker = true }
+                    if let generatePhoto {
+                        Button("Generate with AI", systemImage: "sparkles", action: generatePhoto)
+                    }
                     if hasPhoto {
                         Button("Remove Photo", systemImage: "trash", role: .destructive) { apply(.photo(nil)) }
                     }
@@ -51,6 +60,7 @@ struct ProfileIdentityView<Avatar: View>: View {
                 .tint(Color(uiColor: .label))
                 .accessibilityLabel("Change photo")
                 .disabled(isWorking)
+                if showsName {
                 Menu {
                     Button("Edit name", systemImage: "pencil") {
                         nameDraft = name
@@ -65,10 +75,13 @@ struct ProfileIdentityView<Avatar: View>: View {
                 .tint(Color(uiColor: .label))
                 .accessibilityLabel(name.isEmpty ? "Add name" : "Edit name: \(name)")
                 .disabled(isWorking)
+                }
             } else {
                 avatar()
-                Text(name).manrope(.title2, weight: .semibold)
-                    .multilineTextAlignment(.center)
+                if showsName {
+                    Text(name).manrope(.title2, weight: .semibold)
+                        .multilineTextAlignment(.center)
+                }
             }
             if isWorking { ProgressView() }
             if let error {
@@ -81,6 +94,7 @@ struct ProfileIdentityView<Avatar: View>: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
         .photosPicker(isPresented: $showingPhotoPicker, selection: $selectedPhoto, matching: .images)
+        .onChange(of: pickerRequest) { if canEdit && !isWorking { showingPhotoPicker = true } }
         .alert("Edit name", isPresented: $showingNameEditor) {
             TextField("Name", text: $nameDraft)
                 .textContentType(.name)

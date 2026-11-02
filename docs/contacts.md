@@ -69,8 +69,9 @@ alphabetically using localized name comparison, with IDs breaking equal-name tie
 Contacts automatically loads remaining pages, re-sorting as they arrive; errors
 retain loaded rows and offer Retry. Tap a contact to open its chat and return to
 Home when navigating back. Swipe and context-menu Edit/Delete remain available
-in both lists. Choose **Create contact**, enter a name, and tap Create to open
-the new contact's chat (iOS and web). **Join Shared Contact** accepts a code from a creator; it requires
+in both lists. Choose **Create contact**, fill in what you want (an empty name or a **Generate with AI**
+photo is generated; see [AI contact creation](contact-generation.md)), and tap Create in
+the top bar to open the new contact's chat once it is ready (iOS and web). **Join Shared Contact** accepts a code from a creator; it requires
 sharing consent and opens a new empty private chat. **Share contact** in a creator’s chat (the three-dot menu on iOS) opens sharing/access management, including invitations by an existing account’s email. Recipients open **+ → Contacts → Contact Invitations** to accept or decline requests; no mailbox email is sent. Swipe a row for Edit or Delete; a context
 menu offers the same actions. Edit pushes the editor on the existing shared
 navigation stack. Deletion requires confirmation. Successful mutations update the
@@ -251,8 +252,8 @@ Existing accounts and their contacts are unaffected.
 
 ## AI creation and personality drafts
 
-Both iOS and web support [AI contact creation](contact-generation.md), alongside
-manual creation, with persisted onboarding context and bot-only selectors. Creation
+Both iOS and web create contacts with [one form](contact-generation.md) where empty
+fields are generated with AI, with persisted onboarding context and bot-only selectors. Creation
 uses a session-owned draft/pending ID and a durable D1 job on the existing onboarding
 Workflow; navigation reuses cached state, then revalidates. New generated contacts
 receive random adult birthdays. Birthday edits must keep contacts at least 18.

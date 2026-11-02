@@ -14,7 +14,9 @@ struct ContactEditorView: View {
     @State private var photoData: Data?
     @State private var photoChanged = false
     @State private var editingIdentity = false
-    @State private var creationMode = "manual"
+    @State private var photoPickerRequest = 0
+    @State private var showingPhotoGeneration = false
+    @State private var generatingPhoto = false
     /// Opens the chat with a contact this editor created.
     private let onCreated: ((String) -> Void)?
     private var storedAlias: String? { contactID.flatMap { contacts.contact(id: $0) }?.alias }
@@ -31,37 +33,38 @@ struct ContactEditorView: View {
     var body: some View {
         Form {
             if contactID == nil {
-                Section {
-                    Picker("Create contact", selection: $creationMode) {
-                        Text("Manually").tag("manual")
-                        Text("Generate with AI").tag("ai")
-                    }
-                    .disabled(auth.contactGeneration.busy || auth.contactGeneration.running)
-                }
-            }
-            if contactID == nil && creationMode == "ai" {
-                ContactGenerationSection { id in onCreated?(id) ?? dismiss() }
-            }
-            if contactID != nil || creationMode == "manual" {
+                // One form (docs/contact-generation.md): empty fields are generated with AI.
+                creationSections
+            } else {
             Section {
                 ProfileIdentityView(
                     name: name,
                     hasPhoto: photoData != nil || (!photoChanged && contactID.flatMap { contacts.contact(id: $0)?.photoVersion } != nil),
-                    canEdit: canEdit && !saving && !contacts.isMutating,
+                    canEdit: canEdit && !saving && !contacts.isMutating && !generatingPhoto,
                     isWorking: $editingIdentity,
                     saveName: { name = $0 },
-                    savePhoto: { photoData = $0; photoChanged = true }
-                ) {
-                    if let photoData, let image = UIImage(data: photoData) {
-                        Image(uiImage: image).resizable().scaledToFill()
-                            .frame(width: 96, height: 96).clipShape(Circle())
-                            .accessibilityLabel("Selected contact photo")
-                    } else {
-                        ContactAvatar(contact: photoChanged ? nil : contactID.flatMap { contacts.contact(id: $0) }, size: 96)
-                    }
-                }
+                    savePhoto: { photoData = $0; photoChanged = true },
+                    avatar: {
+                        if let photoData, let image = UIImage(data: photoData) {
+                            Image(uiImage: image).resizable().scaledToFill()
+                                .frame(width: 96, height: 96).clipShape(Circle())
+                                .accessibilityLabel("Selected contact photo")
+                        } else {
+                            ContactAvatar(contact: photoChanged ? nil : contactID.flatMap { contacts.contact(id: $0) }, size: 96)
+                        }
+                    },
+                    generatePhoto: canEdit ? { showingPhotoGeneration = true } : nil
+                )
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+                if generatingPhoto {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Generating a photo… This can take a few minutes.").manrope(.footnote).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                }
             }
             }
             if let contactID {
@@ -171,21 +174,96 @@ struct ContactEditorView: View {
             catch { self.error = error.localizedDescription }
             _ = await profile
         }
-        .onChange(of: auth.contactGeneration.busy || auth.contactGeneration.running, initial: true) { _, active in
-            if contactID == nil && active { creationMode = "ai" }
+        .sheet(isPresented: $showingPhotoGeneration) {
+            if let contactID {
+                ContactPhotoGenerationSheet { style, customStyle in generatePhoto(contactID, style: style, customStyle: customStyle) }
+            }
         }
         .navigationTitle(contactID == nil ? "Add Contact" : (canEdit ? "Edit Contact" : "Contact"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(saving)
         .toolbar {
-            if contactID == nil && creationMode == "ai" {
+            if contactID == nil {
                 ToolbarItem(placement: .confirmationAction) { ContactGenerationCreateButton() }
             } else if canEdit {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(contactID == nil ? "Create" : "Save", action: save)
+                    Button("Save", action: save)
                         .disabled(saving || contacts.isMutating || editingIdentity)
                 }
             }
+        }
+    }
+
+    @ViewBuilder private var creationSections: some View {
+        @Bindable var store = auth.contactGeneration
+        let locked = store.busy || store.running || store.job != nil
+        if !(store.busy || store.running) {
+            Section {
+                ProfileIdentityView(
+                    name: store.draft.name ?? "",
+                    hasPhoto: store.upload != nil,
+                    canEdit: store.draft.photo == "upload" && !locked,
+                    isWorking: $editingIdentity,
+                    saveName: { _ in },
+                    savePhoto: { data in
+                        store.upload = data
+                        if data == nil && store.draft.photo == "upload" { store.draft.photo = "generate" }
+                    },
+                    avatar: {
+                        if store.draft.photo == "upload", let data = store.upload, let image = UIImage(data: data) {
+                            Image(uiImage: image).resizable().scaledToFill()
+                                .frame(width: 96, height: 96).clipShape(Circle())
+                                .accessibilityLabel("Selected contact photo")
+                        } else if store.draft.photo == "generate" {
+                            Image(systemName: "sparkles").font(.system(size: 36, weight: .semibold))
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 96, height: 96).background(Color.accentColor.opacity(0.15), in: Circle())
+                                .accessibilityLabel("Photo generated with AI")
+                        } else {
+                            ContactAvatar(contact: nil, size: 96)
+                        }
+                    },
+                    showsName: false,
+                    pickerRequest: photoPickerRequest
+                )
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
+            Section {
+                TextField("Name", text: Binding(get: { store.draft.name ?? "" }, set: { store.draft.name = String($0.prefix(100)) }),
+                          prompt: Text("Leave empty to generate with AI"))
+                    .textInputAutocapitalization(.words)
+                Picker("Photo", selection: Binding(get: { store.draft.photo ?? "generate" }, set: { store.draft.photo = $0 })) {
+                    Text("Generate with AI").tag("generate")
+                    Text("Upload a photo").tag("upload")
+                    Text("No photo").tag("none")
+                }
+                if store.draft.photo == "upload" && store.upload == nil && store.job == nil {
+                    Button("Choose photo", systemImage: "photo") { photoPickerRequest += 1 }
+                }
+            } header: {
+                Text("Contact")
+            } footer: {
+                Text("Anything you leave empty is generated with AI. The personality is always generated, and you can edit everything later.")
+            }
+            .disabled(locked)
+        }
+        ContactGenerationSection { id in onCreated?(id) ?? dismiss() }
+    }
+
+    private func generatePhoto(_ contactID: String, style: String, customStyle: String?) {
+        guard !generatingPhoto else { return }
+        generatingPhoto = true
+        error = nil
+        Task {
+            defer { generatingPhoto = false }
+            do {
+                try await contacts.generatePhoto(contactID: contactID, style: style, customStyle: customStyle, using: auth)
+                // The generated photo replaces any unsaved local photo choice.
+                photoData = nil; photoChanged = false
+            }
+            catch is CancellationError { }
+            catch { self.error = error.localizedDescription }
         }
     }
 
@@ -213,7 +291,7 @@ struct ContactEditorView: View {
 
     private func save() {
         guard canEdit, !saving, !contacts.isMutating, !editingIdentity else { return }
-        let creating = contactID == nil
+        guard let contactID else { return }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.unicodeScalars.count <= 100,
               !trimmed.unicodeScalars.contains(where: { $0.value < 0x20 || (0x7f...0x9f).contains($0.value) }) else {
@@ -226,7 +304,6 @@ struct ContactEditorView: View {
             defer { saving = false }
             do {
                 let saved = try await contacts.save(name: trimmed, contactID: contactID, using: auth)
-                contactID = saved.id
                 if photoChanged {
                     do { try await contacts.savePhoto(contactID: saved.id, data: photoData, using: auth) }
                     catch is CancellationError { return }
@@ -235,7 +312,7 @@ struct ContactEditorView: View {
                         return
                     }
                 }
-                if creating, let onCreated { onCreated(saved.id) } else { dismiss() }
+                dismiss()
             } catch is CancellationError {
                 // Navigation/session changes must not report a server error.
             } catch {

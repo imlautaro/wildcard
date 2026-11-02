@@ -1,17 +1,21 @@
 <script setup lang="ts">
 // Shared avatar and photo controls for contacts and the account, like ProfileIdentityView:
 // a camera button on the avatar changes the photo, and with `renamable` the name below it
-// opens a sheet to rename. `showName` shows the name without editing it.
-const props = defineProps<{ name: string; path: string | null; editable?: boolean; busy?: boolean; renamable?: boolean; showName?: boolean }>();
-const emit = defineEmits<{ photo: [photo: Blob | null]; rename: [name: string] }>();
+// opens a sheet to rename. `showName` shows the name without editing it. `src` previews an
+// unsent upload, `generating` marks a photo AI will create, and `generatable` adds
+// "Generate with AI" to the photo sheet (emitting `generate`).
+const props = defineProps<{ name: string; path: string | null; src?: string | null; editable?: boolean; busy?: boolean; renamable?: boolean; showName?: boolean; generating?: boolean; generatable?: boolean }>();
+const emit = defineEmits<{ photo: [photo: Blob | null]; rename: [name: string]; generate: [] }>();
+const hasPhoto = computed(() => !!(props.path || props.src));
 const choosingPhoto = ref(false);
 const renaming = ref(false);
 const draftName = ref('');
 const validName = computed(() => { const value = draftName.value.trim(); return value.length > 0 && [...value].length <= 100; });
 function changePhoto() {
-  if (props.path) choosingPhoto.value = true;
+  if (hasPhoto.value || props.generatable) choosingPhoto.value = true;
   else picker.value?.click();
 }
+defineExpose({ choose: () => { if (props.editable && !props.busy) picker.value?.click(); } });
 function startRename() { draftName.value = props.name; renaming.value = true; }
 function rename() {
   if (!validName.value) return;
@@ -64,9 +68,9 @@ async function choose(event: Event) {
 <template>
   <div class="identity">
     <div class="identity-avatar">
-      <AppAvatar :name="name" :path="path" :size="104" />
+      <AppAvatar :name="name" :path="path" :src="src" :icon="generating && !src ? 'star' : undefined" :size="104" />
       <template v-if="editable">
-        <button type="button" class="identity-camera" :aria-label="path ? $t('contacts.identity.changePhoto') : $t('contacts.identity.addPhoto')" :disabled="busy || loading" @click="changePhoto">
+        <button type="button" class="identity-camera" :aria-label="hasPhoto ? $t('contacts.identity.changePhoto') : $t('contacts.identity.addPhoto')" :disabled="busy || loading" @click="changePhoto">
           <span v-if="loading" class="spinner" /><AppIcon v-else name="camera" />
         </button>
         <input ref="picker" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="visually-hidden" tabindex="-1" @change="choose">
@@ -82,7 +86,8 @@ async function choose(event: Event) {
   <AppSheet v-if="choosingPhoto" :title="$t('contacts.identity.photo')" @close="choosingPhoto = false">
     <AppListGroup>
       <AppListItem icon="image" @click="choosingPhoto = false; picker?.click()">{{ $t('contacts.identity.choosePhoto') }}</AppListItem>
-      <AppListItem icon="delete" danger @click="choosingPhoto = false; emit('photo', null)">{{ $t('contacts.identity.removePhoto') }}</AppListItem>
+      <AppListItem v-if="generatable" icon="star" @click="choosingPhoto = false; emit('generate')">{{ $t('contacts.identity.generatePhoto') }}</AppListItem>
+      <AppListItem v-if="hasPhoto" icon="delete" danger @click="choosingPhoto = false; emit('photo', null)">{{ $t('contacts.identity.removePhoto') }}</AppListItem>
     </AppListGroup>
   </AppSheet>
   <AppSheet v-if="renaming" :title="$t('contacts.identity.name')" @close="renaming = false">

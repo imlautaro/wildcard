@@ -10,6 +10,10 @@ struct ContactGenerationInput: Codable, Sendable {
     var purpose = "friends"
     var language = "en"
     var country = ""
+    /// Chosen name; nil generates one with AI.
+    var name: String? = nil
+    /// "generate", "upload" or "none"; jobs from older clients omit it and generated a portrait.
+    var photo: String? = "generate"
 }
 struct ContactGenerationJob: Decodable, Sendable {
     let id: String
@@ -20,6 +24,8 @@ struct ContactGenerationJob: Decodable, Sendable {
 @MainActor @Observable
 final class ContactGenerationStore {
     var draft = ContactGenerationInput()
+    /// The cropped JPEG for "Upload a photo"; kept with the draft until the job is submitted.
+    var upload: Data?
     private(set) var job: ContactGenerationJob?
     private(set) var busy = false
     private(set) var options: OnboardingOptions?
@@ -32,12 +38,19 @@ final class ContactGenerationStore {
     private var submissionID: String?
     private var dismissedID: String?
     var running: Bool { ["queued", "generating"].contains(job?.status ?? "") }
+    /// An empty name is generated; a typed one must be a valid contact name.
+    var nameValid: Bool {
+        let name = (draft.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty || ProfileIdentityView<EmptyView>.validatedName(name) != nil
+    }
     var ready: Bool {
         !draft.country.isEmpty && (18...120).contains(draft.age)
             && (draft.style != "custom" || !(draft.customStyle ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            // A submitted job (a failed one being retried) already has its photo on the server.
+            && nameValid && (draft.photo != "upload" || upload != nil || job != nil)
     }
     func reset() {
-        revision += 1; draft = ContactGenerationInput(); job = nil; options = nil
+        revision += 1; draft = ContactGenerationInput(); upload = nil; job = nil; options = nil
         busy = false; loading = false; initialized = false; error = nil; submissionID = nil; dismissedID = nil; created = nil
     }
     /// A finished job is never a form state: it opens the new contact when this session
@@ -45,7 +58,12 @@ final class ContactGenerationStore {
     private func adopt(_ fetched: ContactGenerationJob?) {
         guard let fetched, fetched.id != dismissedID else { job = nil; return }
         guard fetched.status == "complete" else { job = fetched; return }
-        if job?.id == fetched.id || submissionID == fetched.id { created = fetched.contactID }
+        if job?.id == fetched.id || submissionID == fetched.id {
+            created = fetched.contactID
+            // The next contact starts without this one's name or photo.
+            draft.name = nil; upload = nil
+            if draft.photo == "upload" { draft.photo = "generate" }
+        }
         dismissedID = fetched.id; job = nil; submissionID = nil
     }
     func refresh(auth: AuthStore) async {
@@ -75,7 +93,7 @@ final class ContactGenerationStore {
                 initialized = true
             }
             adopt(result.2)
-            if let job { draft = job.input; submissionID = job.id }
+            if let job { draft = job.input; draft.photo = draft.photo ?? "generate"; submissionID = job.id }
             error = nil
         } catch is CancellationError { }
         catch { if current == revision { self.error = error.localizedDescription } }
@@ -88,13 +106,16 @@ final class ContactGenerationStore {
         let id = submissionID!
         var input = draft
         if input.style != "custom" { input.customStyle = nil }
+        input.name = ProfileIdentityView<EmptyView>.validatedName(input.name ?? "")
+        // Retrying a submitted upload job may omit the photo: the server reuses its staged copy.
+        let upload = input.photo == "upload" ? self.upload?.base64EncodedString() : nil
         busy = true; error = nil
         defer { if current == revision { busy = false } }
         do {
             let result = try await auth.withSession { api, token in
-                struct Input: Encodable { let id: String; let input: ContactGenerationInput }
+                struct Input: Encodable { let id: String; let input: ContactGenerationInput; let upload: String? }
                 struct Envelope: Decodable { let job: ContactGenerationJob }
-                let body = try JSONEncoder().encode(Input(id: id, input: input))
+                let body = try JSONEncoder().encode(Input(id: id, input: input, upload: upload))
                 let (data, _) = try await api.send(path: "contacts/generation", method: "POST", body: body, token: token)
                 return try JSONDecoder().decode(Envelope.self, from: data).job
             }
@@ -166,7 +187,7 @@ struct ContactGenerationSection: View {
         if store.job?.status == "failed" || store.error != nil {
             Section {
                 if !store.busy && store.job?.status == "failed" {
-                    Text("Could not finish creating the contact. Create again to reuse the saved identity and portrait.")
+                    Text("Could not finish creating the contact. Create again to reuse what was already generated.")
                 }
                 if let error = store.error { Text(error).foregroundStyle(.red); Button("Refresh") { Task { await store.refresh(auth: auth) } } }
             }
@@ -191,7 +212,7 @@ private struct ContactGenerationProgressView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var messageIndex = 0
     private let messages = [
-        String(localized: "A unique name, personality, and portrait are on the way."),
+        String(localized: "A unique personality is on the way, plus anything you left empty."),
         String(localized: "Your contact is being created with the preferences you chose."),
         String(localized: "This can take a few minutes. We are still working on your contact."),
     ]
@@ -220,5 +241,58 @@ private struct ContactGenerationProgressView: View {
                 messageIndex = (messageIndex + 1) % messages.count
             }
         }
+    }
+}
+
+/// Visual style for "Generate with AI" on an existing contact's photo
+/// (docs/contact-generation.md#ai-photo-for-an-existing-contact).
+struct ContactPhotoGenerationSheet: View {
+    let generate: (_ style: String, _ customStyle: String?) -> Void
+    @Environment(AuthStore.self) private var auth
+    @Environment(\.dismiss) private var dismiss
+    @State private var style: String?
+    @State private var customStyle = ""
+    private var trimmedCustomStyle: String { customStyle.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        let store = auth.contactGeneration
+        NavigationStack {
+            Form {
+                Section {
+                    if let options = store.options {
+                        Picker("Visual style", selection: Binding(get: { style ?? store.draft.style }, set: { style = $0 })) {
+                            ForEach(options.styles) { Text($0.name).tag($0.code) }
+                        }
+                        if (style ?? store.draft.style) == "custom" {
+                            TextField("Describe your character (a friendly robot, a kitten…)", text: Binding(
+                                get: { customStyle }, set: { customStyle = String($0.prefix(80)) }))
+                        }
+                    } else {
+                        ProgressView()
+                    }
+                } footer: {
+                    Text("A new portrait is created from this contact's personality. It replaces the current photo for everyone who has this contact.")
+                }
+            }
+            .navigationTitle("Generate with AI")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Generate") {
+                        let chosen = style ?? store.draft.style
+                        generate(chosen, chosen == "custom" ? trimmedCustomStyle : nil)
+                        dismiss()
+                    }
+                    .disabled(store.options == nil || ((style ?? store.draft.style) == "custom" && trimmedCustomStyle.isEmpty))
+                }
+            }
+            .task {
+                if customStyle.isEmpty { customStyle = store.draft.customStyle ?? "" }
+                if store.options == nil { await store.refresh(auth: auth) }
+                if customStyle.isEmpty { customStyle = store.draft.customStyle ?? "" }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

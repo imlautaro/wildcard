@@ -16,14 +16,22 @@
     },
     "new": {
       "title": "New Contact",
-      "mode": "Create contact",
-      "manual": "Manually",
-      "ai": "Generate with AI",
       "name": "Name",
+      "namePlaceholder": "Leave empty to generate with AI",
+      "photo": "Photo",
+      "photoSources": {
+        "generate": "Generate with AI",
+        "upload": "Upload a photo",
+        "none": "No photo"
+      },
+      "choosePhoto": "Choose photo",
+      "photoNeeded": "Choose a photo to upload, or pick another photo option.",
+      "aiFooter": "Anything you leave empty is generated with AI. The personality is always generated, and you can edit everything later.",
+      "contact": "Contact",
       "create": "Create Contact",
       "creating": "Creating…",
       "progress": {
-        "first": "A unique name, personality, and portrait are on the way.",
+        "first": "A unique personality is on the way, plus anything you left empty.",
         "second": "Your contact is being created with the preferences you chose.",
         "third": "This can take a few minutes. We are still working on your contact."
       },
@@ -51,10 +59,13 @@
       "language": "Preferred language",
       "country": "Country",
       "loadingOptions": "Loading options…",
-      "failed": "Could not finish creating the contact. Create again to reuse the saved identity and portrait.",
+      "failed": "Could not finish creating the contact. Create again to reuse what was already generated.",
       "refresh": "Refresh"
     },
     "edit": {
+      "generatingPhoto": "Generating a photo… This can take a few minutes.",
+      "generatePhotoHint": "A new portrait is created from this contact's personality. It replaces the current photo for everyone who has this contact.",
+      "generate": "Generate",
       "fallbackTitle": "Contact",
       "unavailable": "This contact is no longer available.",
       "sharedSubtitle": "Shared contact · managed by its creator",
@@ -140,9 +151,9 @@
       "traitCount": "{count} trait | {count} traits",
       "invalid": "Use a birthday at least 18 years ago, a valid time zone, description up to 2,000 characters, specialties up to 1,000 characters, and whole-number traits from 1 to 10.",
       "saved": "Saved.",
-      "save": "Save personality",
       "replaceConfirm": "Replace your unsaved personality draft with AI generation?",
       "discardConfirm": "Discard your unsaved personality changes?",
+      "leaveConfirm": "You have unsaved personality changes. Leave without saving?",
       "changed": "Personality changed. Refresh before generating again.",
       "info": {
         "generate": "Generate all personality fields with Meta Standard, then review and save the draft. Your contact name and adult birthday stay the same.",
@@ -259,6 +270,7 @@
       "resetConfirm": "Reset learning about you in this chat? Contacts will learn again from new messages. Existing chat messages and factual memories stay available."
     },
     "identity": {
+      "generatePhoto": "Generate with AI",
       "changePhoto": "Change photo",
       "addPhoto": "Add photo",
       "editName": "Edit name, {name}",

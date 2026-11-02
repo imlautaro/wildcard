@@ -67,6 +67,7 @@ No owner ID, R2 key, or permanent public image URL is exposed in those responses
 | --- | --- | --- |
 | GET | `/api/v1/contacts/:id/photo` | Read the owner's current JPEG; optional `version` must match |
 | PUT | `/api/v1/contacts/:id/photo` | Replace with raw `image/jpeg`; returns the updated contact |
+| POST | `/api/v1/contacts/:id/photo/generate` | Creator-only AI portrait from the saved identity (`{ style, customStyle? }`); returns the updated contact. See [contact generation](contact-generation.md#ai-photo-for-an-existing-contact) |
 | DELETE | `/api/v1/contacts/:id/photo` | Remove the image; returns the updated contact |
 
 All three require the existing signed bearer session. Reads check participant membership in D1; writes additionally require creator ownership.

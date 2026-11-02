@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { speechAccents } from '../../../../../../shared/voice';
+import { customStyleLimit } from '../../../../../../shared/onboarding';
 import type { ChatMediaItem, Contact, VoiceOption } from '~/utils/types';
 
 const route = useRoute();
@@ -136,6 +137,37 @@ const savePhoto = (photo: Blob | null) => run(async () => {
   apply(result.contact);
 });
 
+// "Generate with AI" in the photo sheet (docs/contact-generation.md#ai-photo-for-an-existing-contact):
+// the server derives an appearance from the saved identity in the chosen style.
+const onboarding = useOnboarding();
+const photoSheet = ref(false);
+const photoStyle = reactive({ style: 'cartoon', customStyle: '' });
+const generatingPhoto = ref(false);
+const photoStyleOptions = computed(() => onboarding.options.value?.styles.map(o => ({ value: o.code, label: o.name })) ?? []);
+const photoStyleReady = computed(() => photoStyle.style !== 'custom' || !!photoStyle.customStyle.trim());
+function openPhotoGeneration() {
+  photoSheet.value = true;
+  const saved = onboarding.snapshot.value?.input;
+  if (saved) Object.assign(photoStyle, { style: saved.style, customStyle: saved.customStyle ?? '' });
+  void onboarding.refresh().then(() => {
+    const input = onboarding.snapshot.value?.input;
+    if (input && !saved) Object.assign(photoStyle, { style: input.style, customStyle: input.customStyle ?? '' });
+  }).catch(() => {});
+}
+// Generation can take minutes, so only the photo controls wait; it finishes even if the page closes.
+async function generatePhoto() {
+  if (!photoStyleReady.value || generatingPhoto.value) return;
+  photoSheet.value = false;
+  generatingPhoto.value = true;
+  error.value = null;
+  try {
+    apply((await api<{ contact: Contact }>(`contacts/${id.value}/photo/generate`, {
+      json: photoStyle.style === 'custom' ? { style: 'custom', customStyle: photoStyle.customStyle.trim() } : { style: photoStyle.style },
+    })).contact);
+  } catch (failure) { error.value = errorMessage(failure); }
+  finally { generatingPhoto.value = false; }
+}
+
 const remove = () => run(async () => {
   if (!window.confirm(contactDeletionWarning(contact.value?.name, canManage.value))) return;
   await chats.deleteChatContact(id.value);
@@ -157,7 +189,8 @@ const voiceChoiceInfo = computed(() => canManage.value ? t('contacts.edit.voiceC
     <AppLoading v-if="!contact && busy" fill />
     <div v-else-if="!contact" class="page-inner"><AppNotice>{{ error ?? $t('contacts.edit.unavailable') }}</AppNotice></div>
     <div v-else class="page-inner">
-      <IdentityEditor :name="canManage ? realName : contact.name" :path="contactPhotoPath(contact)" :editable="canManage" :renamable="canManage" show-name :busy="busy" @photo="savePhoto" @rename="rename" />
+      <IdentityEditor :name="canManage ? realName : contact.name" :path="contactPhotoPath(contact)" :editable="canManage" :renamable="canManage" :generatable="canManage" show-name :busy="busy || generatingPhoto" @photo="savePhoto" @rename="rename" @generate="openPhotoGeneration" />
+      <p v-if="generatingPhoto" class="identity-subtitle photo-progress" role="status"><span class="spinner" aria-hidden="true" /> {{ $t('contacts.edit.generatingPhoto') }}</p>
       <p v-if="!canManage" class="identity-subtitle">{{ $t('contacts.edit.sharedSubtitle') }}</p>
       <p v-if="contact.alias && !canManage" class="identity-subtitle">{{ $t('contacts.edit.othersSee', { name: realName }) }}</p>
       <AppNotice v-if="error">{{ error }}</AppNotice>
@@ -209,6 +242,20 @@ const voiceChoiceInfo = computed(() => canManage.value ? t('contacts.edit.voiceC
         </form>
       </AppSheet>
 
+      <AppSheet v-if="photoSheet" :title="$t('contacts.identity.generatePhoto')" @close="photoSheet = false">
+        <form @submit.prevent="generatePhoto">
+          <AppSelect v-if="photoStyleOptions.length" v-model="photoStyle.style" :label="$t('contacts.new.visualStyle')" :options="photoStyleOptions" />
+          <AppLoading v-else :label="$t('contacts.new.loadingOptions')" />
+          <AppTextField v-if="photoStyle.style === 'custom'" v-model="photoStyle.customStyle" :label="$t('contacts.new.describeCharacter')" :placeholder="$t('contacts.new.describePlaceholder')"
+                        :maxlength="customStyleLimit" required />
+          <p class="small muted">{{ $t('contacts.edit.generatePhotoHint') }}</p>
+          <div class="actions-row">
+            <AppButton variant="text" @click="photoSheet = false">{{ $t('common.cancel') }}</AppButton>
+            <AppButton type="submit" :disabled="generatingPhoto || !photoStyleOptions.length || !photoStyleReady">{{ $t('contacts.edit.generate') }}</AppButton>
+          </div>
+        </form>
+      </AppSheet>
+
       <AppSheet v-if="voiceSheet" :title="$t('contacts.edit.voice')" @close="voiceSheet = false">
         <template #header><InfoButton :label="$t('contacts.edit.voice')" :text="voiceChoiceInfo" /></template>
         <AppListGroup>
@@ -254,6 +301,7 @@ const voiceChoiceInfo = computed(() => canManage.value ? t('contacts.edit.voiceC
 
 <style scoped>
 .identity-subtitle { margin-bottom: var(--space-3); }
+.photo-progress { display: flex; align-items: center; justify-content: center; gap: var(--space-2); }
 .lifecycle { margin-top: var(--space-5); }
 .voice-row { display: flex; align-items: center; gap: var(--space-3); min-height: 56px; padding: var(--space-2) var(--space-4); margin: 0; }
 .voice-search { margin: 0 0 var(--space-2); }

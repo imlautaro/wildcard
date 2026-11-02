@@ -343,8 +343,9 @@ When content needs several visuals (a comparison, before/after, steps), a contac
 can send an [album of two or three images](docs/generated-images.md#albums) on
 one message (migration 0082, [setup](docs/infrastructure.md#contact-generated-image-albums--migration-0082)).
 
-New contacts can be created manually or [generated with AI](docs/contact-generation.md)
-on iOS and web, reusing saved onboarding context with bot-only selectors. Creators
+New contacts are created with [one form](docs/contact-generation.md) on iOS and web:
+an empty name or a **Generate with AI** photo is generated (photos can also be
+uploaded or omitted), and creators can generate a new photo later, reusing saved onboarding context with bot-only selectors. Creators
 can also regenerate an existing personality as a reviewable draft. Generated
 contacts receive random adult birthdays; birthday edits require age 18 or older.
 

@@ -1214,20 +1214,27 @@ and browsers; static validation does not confirm these flows.
 
 ## AI creation and personality drafts
 
-Both iOS and web support [AI contact creation](contact-generation.md), alongside
-manual creation, with persisted onboarding context and bot-only selectors. Creation
+Both iOS and web create contacts with [one form](contact-generation.md) where empty
+fields are generated with AI, with persisted onboarding context and bot-only selectors. Creation
 uses a session-owned draft/pending ID and a durable D1 job on the existing onboarding
 Workflow; navigation reuses cached state, then revalidates. New generated contacts
 receive random adult birthdays. Birthday edits must keep contacts at least 18.
 Both clients replace the form with a prominent spinner from submission through
 active creation, show **Creating…** on the action, and rotate explanatory copy
-every five seconds after job confirmation. Active cached jobs select AI mode on
-reopen. The animation is view-only and stops on unmount (also while inactive on
+every five seconds after job confirmation. Active cached jobs show activity on
+reopen. The draft also holds a chosen upload's JPEG bytes in memory only; a completed
+job, sign-out or account switch clears them (a failed job is retried with the staged
+server copy instead). The animation is view-only and stops on unmount (also while inactive on
 iOS); no new requests, cache, persistence or server progress stages are introduced.
 See [visible creation activity](contact-generation.md#visible-creation-activity)
 for copy, accessibility and pending cross-client verification.
 Existing creators can generate/regenerate all personality fields into the existing
-session draft, review them, and save with revision conflict protection. Generation
+session draft, review them, and save with revision conflict protection. On web,
+leaving the personality page with unsaved edits asks first (in-app navigation and
+tab close); confirming an in-app exit discards the cached draft. iOS keeps the dirty
+draft across back navigation without a prompt. An AI photo for an existing contact
+updates the contact cache from the response like an upload; image bytes load through
+the existing photo caches by the new version. Generation
 preserves the name and adult birthday. Account changes/access loss discard cached
 private state; existing photo caches remain authoritative for bytes. See the linked
 guide for recovery, retention, rate limits, cache details and pending device checks.

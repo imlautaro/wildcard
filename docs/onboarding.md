@@ -296,8 +296,7 @@ AI creation reuses these persisted preferences without asking for the user profi
 
 The onboarding form keeps the shared-memory consent text visible beside its switch or
 checkbox. The notes about generated contacts (names, language, ages, gender) and about
-the circle type are behind info buttons on iOS and web, as are the Your bot and manual
-creation notes in Create contact. See the settings pattern in
+the circle type are behind info buttons on iOS and web, as is the Your bot note in Create contact. See the settings pattern in
 [contacts](contacts.md#contact-details-layout).
 
 ## Conversational generation preferences

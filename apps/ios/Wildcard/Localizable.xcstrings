@@ -4,6 +4,106 @@
     "" : {
       "shouldTranslate" : false
     },
+    "A new portrait is created from this contact's personality. It replaces the current photo for everyone who has this contact." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se crea un retrato nuevo a partir de la personalidad de este contacto. Reemplaza la foto actual para todas las personas que tienen este contacto."
+          }
+        }
+      }
+    },
+    "A unique personality is on the way, plus anything you left empty." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una personalidad única está en camino, junto con lo que dejaste vacío."
+          }
+        }
+      }
+    },
+    "Anything you leave empty is generated with AI. The personality is always generated, and you can edit everything later." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lo que dejes vacío se genera con IA. La personalidad siempre se genera y puedes editar todo después."
+          }
+        }
+      }
+    },
+    "Could not finish creating the contact. Create again to reuse what was already generated." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo terminar de crear el contacto. Vuelve a crearlo para reutilizar lo que ya se generó."
+          }
+        }
+      }
+    },
+    "Generate" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generar"
+          }
+        }
+      }
+    },
+    "Generating a photo… This can take a few minutes." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generando una foto… Esto puede tardar unos minutos."
+          }
+        }
+      }
+    },
+    "Leave empty to generate with AI" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déjalo vacío para generarlo con IA"
+          }
+        }
+      }
+    },
+    "No photo" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin foto"
+          }
+        }
+      }
+    },
+    "Photo generated with AI" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto generada con IA"
+          }
+        }
+      }
+    },
+    "Upload a photo" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subir una foto"
+          }
+        }
+      }
+    },
     "‹ Slide to cancel" : {
       "localizations" : {
         "es" : {
@@ -1087,16 +1187,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un tema que te interese…"
-          }
-        }
-      }
-    },
-    "A unique name, personality, and portrait are on the way." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Un nombre, una personalidad y un retrato únicos están en camino."
           }
         }
       }
@@ -3230,16 +3320,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No se encontró un sujeto para recortar."
-          }
-        }
-      }
-    },
-    "Could not finish creating the contact. Create again to reuse the saved identity and portrait." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo terminar de crear el contacto. Vuelve a crearlo para reutilizar la identidad y el retrato guardados."
           }
         }
       }
@@ -6202,16 +6282,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gestionar conexiones de la cuenta"
-          }
-        }
-      }
-    },
-    "Manually" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Manualmente"
           }
         }
       }

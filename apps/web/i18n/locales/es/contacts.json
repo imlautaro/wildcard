@@ -16,14 +16,22 @@
     },
     "new": {
       "title": "Nuevo contacto",
-      "mode": "Crear contacto",
-      "manual": "Manualmente",
-      "ai": "Generar con IA",
       "name": "Nombre",
+      "namePlaceholder": "Déjalo vacío para generarlo con IA",
+      "photo": "Foto",
+      "photoSources": {
+        "generate": "Generar con IA",
+        "upload": "Subir una foto",
+        "none": "Sin foto"
+      },
+      "choosePhoto": "Elegir foto",
+      "photoNeeded": "Elige una foto para subir o selecciona otra opción de foto.",
+      "aiFooter": "Lo que dejes vacío se genera con IA. La personalidad siempre se genera y puedes editar todo después.",
+      "contact": "Contacto",
       "create": "Crear contacto",
       "creating": "Creando…",
       "progress": {
-        "first": "Un nombre, una personalidad y un retrato únicos están en camino.",
+        "first": "Una personalidad única está en camino, junto con lo que dejaste vacío.",
         "second": "Estamos creando tu contacto con las preferencias que elegiste.",
         "third": "Esto puede tardar unos minutos. Seguimos trabajando en tu contacto."
       },
@@ -51,10 +59,13 @@
       "language": "Idioma preferido",
       "country": "País",
       "loadingOptions": "Cargando opciones…",
-      "failed": "No se pudo terminar de crear el contacto. Vuelve a crearlo para reutilizar la identidad y el retrato guardados.",
+      "failed": "No se pudo terminar de crear el contacto. Vuelve a crearlo para reutilizar lo que ya se generó.",
       "refresh": "Actualizar"
     },
     "edit": {
+      "generatingPhoto": "Generando una foto… Esto puede tardar unos minutos.",
+      "generatePhotoHint": "Se crea un retrato nuevo a partir de la personalidad de este contacto. Reemplaza la foto actual para todas las personas que tienen este contacto.",
+      "generate": "Generar",
       "fallbackTitle": "Contacto",
       "unavailable": "Este contacto ya no está disponible.",
       "sharedSubtitle": "Contacto compartido · lo administra su creador",
@@ -140,9 +151,9 @@
       "traitCount": "{count} rasgo | {count} rasgos",
       "invalid": "Usa un cumpleaños de hace al menos 18 años, una zona horaria válida, una descripción de hasta 2000 caracteres, especialidades de hasta 1000 caracteres y rasgos con números enteros del 1 al 10.",
       "saved": "Guardado.",
-      "save": "Guardar personalidad",
       "replaceConfirm": "¿Reemplazar tu borrador de personalidad sin guardar con una generación de IA?",
       "discardConfirm": "¿Descartar los cambios de personalidad sin guardar?",
+      "leaveConfirm": "Tienes cambios de personalidad sin guardar. ¿Salir sin guardar?",
       "changed": "La personalidad cambió. Actualiza antes de volver a generar.",
       "info": {
         "generate": "Genera todos los campos de personalidad con el procesamiento Estándar de Meta y luego revisa y guarda el borrador. El nombre del contacto y su cumpleaños de adulto no cambian.",
@@ -259,6 +270,7 @@
       "resetConfirm": "¿Restablecer lo aprendido sobre ti en este chat? Los contactos volverán a aprender de los mensajes nuevos. Los mensajes del chat y las memorias de datos existentes siguen disponibles."
     },
     "identity": {
+      "generatePhoto": "Generar con IA",
       "changePhoto": "Cambiar foto",
       "addPhoto": "Añadir foto",
       "editName": "Editar nombre, {name}",

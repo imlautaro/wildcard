@@ -2064,6 +2064,24 @@ dispatch welcomes or re-engagement, and evaluate `reengage` rows under the older
 ambient policy until they expire (at most three days). Pending welcomes stay
 unsent. Roll forward rather than reversing the migration.
 
+### Unified contact creation — migration 0095
+
+`0095_contact_generation_upload.sql` follows every migration through 0094. It only
+recreates the `cleanup_generation` trigger so deleting a generation job whose input
+chose `photo: "upload"` also queues its staged photo
+(`contacts/<user>/generation/<job>.jpg` in the existing `CONTACT_PHOTOS` bucket) in
+the durable cleanup outbox. No table, resource, binding, secret, Cron Trigger or
+Wrangler change is required. The new `POST /api/v1/contacts/:id/photo/generate`
+route uses the existing `META_API_KEY` (Muse Spark text and Muse Image) and the
+existing `auth_rate_limit` table under the `contact-photo-generate` key.
+
+Apply locally with `npx wrangler d1 migrations apply DB --local`; production applies
+it through the automatic pipeline before the Worker that stages uploads. Verify
+after release by creating a contact with an uploaded photo and confirming the
+staged key is gone once the contact appears. Rollback keeps 0095: an older Worker
+rejects `name`/`photo` inputs (422) and never stages uploads; jobs already queued
+with them still publish under the older code with a generated name and portrait.
+
 ## Remote native device execution
 
 The [remote timer/alarm prototype](native-remote.md) reuses the API Worker, D1,

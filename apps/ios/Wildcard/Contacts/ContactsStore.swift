@@ -425,6 +425,20 @@ final class ContactsStore {
         refreshedAt = nil
     }
 
+    /// Not a store mutation: generation can take minutes, so other edits stay available meanwhile.
+    func generatePhoto(contactID: String, style: String, customStyle: String?, using auth: AuthStore) async throws {
+        let accountID = auth.user?.id
+        let saved = try await auth.withSession { api, token in
+            try await api.generateContactPhoto(id: contactID, style: style, customStyle: customStyle, token: token)
+        }
+        guard auth.user?.id == accountID, knownContacts[contactID] != nil else { return }
+        knownContacts[contactID] = saved
+        if let index = contacts.firstIndex(where: { $0.id == contactID }) { contacts[index] = saved }
+        sortContacts()
+        contactRefreshedAt[contactID] = .now
+        refreshedAt = nil
+    }
+
     private func forgetHistory(id: String) {
         learningSnapshots.remove(id: id)
         conversations.remove(contactID: id)

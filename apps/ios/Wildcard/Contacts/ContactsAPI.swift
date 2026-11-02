@@ -162,6 +162,14 @@ extension AuthAPI {
         return try JSONDecoder().decode(ContactEnvelope.self, from: response).contact
     }
 
+    /// Creator-only AI portrait from the saved identity; the server finishes even if this request is abandoned.
+    func generateContactPhoto(id: String, style: String, customStyle: String?, token: String) async throws -> Contact {
+        struct Input: Encodable { let style: String; let customStyle: String? }
+        let body = try JSONEncoder().encode(Input(style: style, customStyle: style == "custom" ? customStyle : nil))
+        let (response, _) = try await send(path: "contacts/\(id)/photo/generate", method: "POST", body: body, token: token, timeout: 240)
+        return try JSONDecoder().decode(ContactEnvelope.self, from: response).contact
+    }
+
     func contactEnergy(id: String, reset: Bool = false, token: String) async throws -> ContactEnergy {
         let suffix = reset ? "/reset" : ""
         let (data, _) = try await send(path: "contacts/\(id)/energy\(suffix)", method: reset ? "POST" : "GET", token: token)

@@ -272,7 +272,7 @@ the welcome immediately (`startWelcome`), so the message arrives within the mode
 call and typing pause, typically seconds. Onboarding schedules the first circle in
 plan order 20–30 seconds apart once the circle is published (70–85 s and Cron-only
 before 2026-11-02, which left the fifth contact 5–6 minutes behind); the onboarding
-Workflow sleeps until each welcome is due and starts it itself. Manually named contacts (`POST /contacts`) and contacts joined through
+Workflow sleeps until each welcome is due and starts it itself. Contacts made through the legacy name-only `POST /contacts` (no longer used by the clients) and contacts joined through
 [sharing](sharing.md) do not send a welcome.
 
 `dispatchContactWelcomes` (one-minute Cron) is the fallback for welcomes the

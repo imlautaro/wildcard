@@ -25,6 +25,10 @@ import { readBearerSession } from '../lib/session';
 import sharing from './sharing';
 import personality from '../personality/routes';
 import generation from '../contacts/generation';
+import { describeAppearance, generatePortrait } from '../contacts/portrait';
+import { readPersonality } from '../personality/profile';
+import { isRecord } from '../chat/meta';
+import { onboardingOptions, parseCustomStyle, type OnboardingInput } from '../../../../shared/onboarding';
 import { listVoices, voiceRepliesAvailable, type Voice } from '../voice/catalog';
 
 type Contact = { archivedAt?: number | null; historyRevision?: number; clearing?: number; speechAccent: string | null; onboardingChat?: number; setupPending?: number; initiativeEnabled: number; keepPrivate: number; voiceMessagesEnabled: number; voiceID: string | null; voiceName: string | null; id: string; agentID: string | null; role: 'owner' | 'member'; name: string; realName: string; alias: string | null; photoVersion: string | null; createdAt: number; updatedAt: number; lastMessageVoiceJSON?: string | null; lastReactionJSON?: string | null; lastMessageText?: string | null; lastMessageFromUser?: number | null; lastMessageAt?: number | null; unreadCount?: number; lastReadSequence?: number };
@@ -302,27 +306,76 @@ contacts.put('/:id/photo', async (c) => {
   const bytes = await readPhoto(c.req.raw);
   if (!bytes) return c.json({ error: 'Photo too large' }, 413);
   if (!validPhoto(bytes)) return c.json({ error: 'Use a square JPEG photo between 64 and 1024 pixels' }, 422);
+  const saved = await replacePhoto(c.env, (task) => c.executionCtx.waitUntil(task), owner, id, previous, bytes);
+  return saved ? c.json({ contact: saved }) : c.json({ error: 'Contact changed. Refresh and try again.' }, 409);
+});
+
+// Compare-and-swap from the version read before, so a concurrent change is never overwritten.
+async function replacePhoto(env: Env, waitUntil: (task: Promise<unknown>) => void, owner: string, id: string,
+  previous: { version: string | null; agentID: string }, bytes: Uint8Array) {
   const version = crypto.randomUUID();
   const key = photoKey(owner, id, version);
-  await c.env.CONTACT_PHOTOS.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+  await env.CONTACT_PHOTOS.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
   let saved: Contact | null;
   try {
-    saved = await c.env.DB.prepare(`UPDATE contact SET photo_version = ?, updated_at = ?
+    saved = await env.DB.prepare(`UPDATE contact SET photo_version = ?, updated_at = ?
       WHERE id = ? AND user_id = ? AND photo_version IS ? AND ${managesAgent} RETURNING ${columns}`)
       .bind(version, Date.now(), id, owner, previous.version).first<Contact>();
   } catch (error) {
-    c.executionCtx.waitUntil(removePhoto(c.env, key));
+    waitUntil(removePhoto(env, key));
     throw error;
   }
   if (!saved) {
-    c.executionCtx.waitUntil(removePhoto(c.env, key));
-    return c.json({ error: 'Contact changed. Refresh and try again.' }, 409);
+    waitUntil(removePhoto(env, key));
+    return null;
   }
-  if (previous.version) c.executionCtx.waitUntil(removePhoto(c.env, photoKey(owner, id, previous.version)));
+  if (previous.version) waitUntil(removePhoto(env, photoKey(owner, id, previous.version)));
   // Stickers of the contact itself were cut from the old photo (docs/stickers.md).
-  c.executionCtx.waitUntil(dropAvatarStickers(c.env, previous.agentID));
-  const result = await c.env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`).bind(id, owner).first<Contact>();
-  return c.json({ contact: result ?? saved });
+  waitUntil(dropAvatarStickers(env, previous.agentID));
+  const result = await env.DB.prepare(`SELECT ${selection} FROM contact WHERE id = ? AND user_id = ?`).bind(id, owner).first<Contact>();
+  return result ? contactPreview(result) : saved;
+}
+
+// Creator-only AI portrait for an existing contact (docs/contact-generation.md#ai-photo-for-an-existing-contact).
+// The appearance is derived from the saved identity; generation finishes even if the client leaves.
+contacts.post('/:id/photo/generate', contactBody, async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const id = c.req.param('id');
+  const owner = c.get('owner');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => null);
+  const custom = body?.style === 'custom';
+  const customStyle = custom ? parseCustomStyle(body?.customStyle) : null;
+  if (!body || !onboardingOptions.styles.some(option => option.code === body.style) || (custom && !customStyle)
+    || Object.keys(body).sort().join(',') !== (custom ? 'customStyle,style' : 'style')) {
+    return c.json({ error: 'Choose a visual style' }, 422);
+  }
+  const previous = await c.env.DB.prepare('SELECT photo_version AS version, agent_id AS agentID, (SELECT owner_id FROM contact_agent WHERE id = contact.agent_id) AS photoOwner FROM contact WHERE id = ? AND user_id = ?')
+    .bind(id, owner).first<{ version: string | null; agentID: string; photoOwner: string }>();
+  if (!previous) return c.json({ error: 'Contact not found' }, 404);
+  if (previous.photoOwner !== owner) return c.json({ error: 'Only the creator can edit this contact' }, 403);
+  const admission = await admitAuthRequest(c.env.DB, owner, 'contact-photo-generate', 4);
+  if (!admission.allowed) {
+    c.header('Retry-After', String(admission.retryAfter));
+    return c.json({ error: 'Too many photo generations. Please try again later.' }, 429);
+  }
+  const input = { style: body.style as OnboardingInput['style'], ...(customStyle ? { customStyle } : {}) };
+  const env = c.env;
+  const work = (async () => {
+    const [snapshot, agent] = await Promise.all([readPersonality(env.DB, previous.agentID),
+      env.DB.prepare('SELECT name, voice_profile_json AS voiceProfile FROM contact_agent WHERE id = ?').bind(previous.agentID).first<{ name: string; voiceProfile: string | null }>()]);
+    if (!agent) return null;
+    const voice: unknown = agent.voiceProfile ? JSON.parse(agent.voiceProfile) : null;
+    const gender = isRecord(voice) && (voice.gender === 'male' || voice.gender === 'female') ? voice.gender : undefined;
+    const identity = { name: agent.name, description: snapshot.personality.description, age: snapshot.age ?? undefined, gender };
+    const portrait = await describeAppearance(env, identity, input);
+    const bytes = await generatePortrait(env, { ...identity, portrait }, input);
+    return replacePhoto(env, (task) => c.executionCtx.waitUntil(task), owner, id, previous, bytes);
+  })();
+  c.executionCtx.waitUntil(work.catch(() => { console.error(JSON.stringify({ event: 'contact_photo_generation_failed' })); }));
+  let saved: Awaited<typeof work>;
+  try { saved = await work; }
+  catch { return c.json({ error: 'Could not generate a photo. The current photo is unchanged. Please try again.' }, 502); }
+  return saved ? c.json({ contact: saved }) : c.json({ error: 'Contact changed. Refresh and try again.' }, 409);
 });
 
 contacts.delete('/:id/photo', async (c) => {
