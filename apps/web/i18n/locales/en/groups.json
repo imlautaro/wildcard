@@ -103,6 +103,7 @@
       "contributorPending": "Contributor consent pending",
       "consentNeeded": "Contacts can't reply in this group until you give Contributor consent.",
       "giveConsent": "Give consent",
+      "contributorHistoryNote": "Meta may use your earlier and future messages, attachments and shared memories in this group for model training with Contributor. Accepting also authorizes your earlier contributions. Other members must authorize their own history; earlier contact replies become available only when all human history is authorized. Existing limits on who can read earlier messages still apply.",
       "consentSaved": "Consent saved.",
       "consentDisclosureWithoutHistory": "Group members can see your name and profile photo. You can read messages from when you joined. Contacts use what group members have told them, except chats kept private. What you say here can become a shared memory, used in this group and in private chats with its members, never in other groups. Leaving stops access to your contributed group memories; messages remain visible in the group until it is deleted."
     },

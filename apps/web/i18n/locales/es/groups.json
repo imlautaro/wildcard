@@ -103,6 +103,7 @@
       "contributorPending": "Consentimiento de Contributor pendiente",
       "consentNeeded": "Los contactos no pueden responder en este grupo hasta que des el consentimiento de Contributor.",
       "giveConsent": "Dar consentimiento",
+      "contributorHistoryNote": "Meta puede usar tus mensajes, adjuntos y recuerdos compartidos anteriores y futuros de este grupo para entrenar modelos con Contributor. Al aceptar también autorizas tus aportes anteriores. Los demás miembros deben autorizar su propio historial; las respuestas anteriores de los contactos solo estarán disponibles cuando todo el historial humano esté autorizado. Se mantienen los límites existentes sobre quién puede leer mensajes anteriores.",
       "consentSaved": "Consentimiento guardado.",
       "consentDisclosureWithoutHistory": "Los miembros del grupo pueden ver tu nombre y tu foto de perfil. Puedes leer los mensajes desde que te uniste. Los contactos usan lo que les contaron los miembros del grupo, excepto los chats que se mantienen privados. Lo que digas aquí puede convertirse en una memoria compartida, que se usa en este grupo y en los chats privados con sus miembros, nunca en otros grupos. Al salir, se deja de tener acceso a las memorias de grupo que aportaste; los mensajes siguen visibles en el grupo hasta que se elimine."
     },

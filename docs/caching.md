@@ -1787,3 +1787,15 @@ User-saved files and clipboard text remain independent of later document changes
 Markdown attachments reuse file metadata in conversation/media snapshots and the
 existing temporary preview/download lifecycle, with no new persistent byte cache.
 They use the same account/access invalidation as other chat files.
+
+
+## Contributor group history authorization
+
+Consent renewal uses the existing member mutation and session-owned group-details
+refresh on iOS/web. `authorizeHistory` is server-side authorization, never a cached
+permission. Stored transcript text, pagination, pending sends and drafts are unchanged.
+The next contact turn/retrieval reads authorized source flags; an existing checkpoint
+keeps its previously loaded context. No new cache or persistent client data is added.
+Device/browser verification remains pending: review with switches initially off,
+accept then reopen details, exercise a failed renewal/offline retry, switch accounts,
+and confirm history floors and revoked membership still restrict retrieval.

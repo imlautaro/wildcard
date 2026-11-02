@@ -266,8 +266,44 @@ groups.patch('/:id', async (c) => {
 groups.post('/:id/consent', async (c) => {
   const b = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (!accepted(b, c.env)) return c.json({ error: 'Accept shared memory and model data use' }, 400);
-  await c.env.DB.prepare(`UPDATE group_member SET share_memory = 1, contributor_consent = ?
-    WHERE group_id = ? AND user_id = ?`).bind(b?.contributorConsent === true ? 1 : 0, c.req.param('id'), c.get('owner')).run();
+  const id = c.req.param('id'), owner = c.get('owner');
+  if (!await membership(c.env.DB, id, owner)) return c.json({ error: 'Group membership required' }, 403);
+  if (b?.authorizeHistory !== undefined && typeof b.authorizeHistory !== 'boolean') {
+    return c.json({ error: 'History authorization must be a boolean' }, 400);
+  }
+  if (b?.authorizeHistory === true && b.contributorConsent !== true) {
+    return c.json({ error: 'History authorization requires Contributor consent' }, 400);
+  }
+  const statements = [c.env.DB.prepare(`UPDATE group_member SET share_memory = 1, contributor_consent = ?
+    WHERE group_id = ? AND user_id = ?`).bind(b?.contributorConsent === true ? 1 : 0, id, owner)];
+  // Older clients renew future consent only. New clients disclose historical data use
+  // and explicitly authorize only this member's own earlier contributions.
+  if (b?.authorizeHistory === true) {
+    const memberConsented = `EXISTS (SELECT 1 FROM group_member WHERE group_id = ?1
+      AND user_id = ?2 AND share_memory = 1 AND contributor_consent = 1)`;
+    statements.push(
+      c.env.DB.prepare(`UPDATE group_message SET contributor_consent = 1
+        WHERE group_id = ?1 AND user_id = ?2 AND contributor_consent = 0 AND ${memberConsented}`).bind(id, owner),
+      c.env.DB.prepare(`UPDATE retained_group_memory SET contributor_consent = 1
+        WHERE group_id = ?1 AND user_id = ?2 AND category = 'human'
+          AND contributor_consent = 0 AND ${memberConsented}`).bind(id, owner),
+      // Standard replies can contain multiple people's contributions. Never let one
+      // member authorize those replies while another author's history is excluded.
+      // Departed authors also prevent this promotion; missing consent is not inferred.
+      c.env.DB.prepare(`UPDATE group_message SET contributor_consent = 1
+        WHERE group_id = ?1 AND user_id IS NULL AND contributor_consent = 0 AND ${memberConsented}
+          AND NOT EXISTS (SELECT 1 FROM mcp_private_group WHERE group_id = ?1)
+          AND NOT EXISTS (SELECT 1 FROM group_member WHERE group_id = ?1 AND (share_memory = 0 OR contributor_consent = 0))
+          AND NOT EXISTS (SELECT 1 FROM group_message human WHERE human.group_id = ?1 AND human.user_id IS NOT NULL
+            AND (human.contributor_consent = 0 OR NOT EXISTS (SELECT 1 FROM group_member author
+              WHERE author.group_id = ?1 AND author.user_id = human.user_id AND author.share_memory = 1 AND author.contributor_consent = 1)))
+          AND NOT EXISTS (SELECT 1 FROM retained_group_memory WHERE group_id = ?1 AND category = 'human' AND contributor_consent = 0)
+          AND (requester_id IS NULL OR EXISTS (SELECT 1 FROM group_member requester
+            WHERE requester.group_id = ?1 AND requester.user_id = group_message.requester_id
+              AND requester.share_memory = 1 AND requester.contributor_consent = 1))`).bind(id, owner),
+    );
+  }
+  await c.env.DB.batch(statements);
   return c.body(null, 204);
 });
 groups.post('/:id/agents', async (c) => {

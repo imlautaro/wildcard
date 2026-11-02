@@ -171,8 +171,8 @@ checks. iOS retains its existing native cropper; this change is scoped to the we
 Not in the web app yet:
 
 - **Scheduled messages** (list/cancel, including the "To <name>" recipient label for
-  messages scheduled for another participant; create/cancel them in chat), private-to-group requests, group photo
-  editing, and the group "Confirm consent for future messages" action.
+  messages scheduled for another participant; create/cancel them in chat), private-to-group requests and group photo
+  editing.
 
 Browser notifications (Web Push) are available; see [Browser notifications](#browser-notifications).
 Polling covers the visible tab, with the same cadence as the iOS
@@ -1569,3 +1569,15 @@ and group chats. File MIME is normalized to `text/markdown`; the API validates
 UTF-8 and supplies bounded text to the contact. No cache or service is added.
 See [Markdown files](attachments.md#markdown-files) for inference limits and
 manual browser/device checks.
+
+
+## Group history authorization for Contributor
+
+The Members consent sheet on web and iOS explicitly covers earlier and future
+messages, attachments and shared memories. Accepting sends `authorizeHistory` with
+Contributor consent. Each member authorizes only their own history; earlier contact
+replies wait for all human history to be authorized by still-present authors. Existing
+Contributor members can review and accept again. Old clients keep future-only renewal.
+History floors and MCP isolation remain unchanged; see [groups](groups.md#membership-and-consent).
+The existing mutation refreshes the cached details; no transcript reload, new cache,
+client persistence or optimistic permission grant is introduced.

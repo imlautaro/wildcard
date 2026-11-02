@@ -91,7 +91,7 @@ Web refresh is an icon in the page bar; iOS uses pull to refresh.
 
 Creation, acceptance and adding a contact require an unchecked, explicit shared
 memory confirmation. With the Contributor model they also require separate
-Contributor data-use consent. Group details can renew consent for future messages:
+Contributor data-use consent. Group details can renew consent for earlier and future contributions:
 **Shared memory consent** in the details list on iOS and web shows "Pending" while this
 account's Contributor consent is missing, a notice with **Give consent** appears above
 it, and human members without consent are labeled "Contributor consent pending". Only
@@ -138,7 +138,30 @@ Deleting the group cascades through its messages, jobs, invitations and sourced
 memories. Previously delivered replies and unrelated private memories are not
 retracted. Consent checks cannot retract data already sent to Meta. A model switch
 to Contributor blocks generation until current members consent; historical group
-messages lacking Contributor consent remain excluded even after renewal.
+messages lacking Contributor consent remain excluded until their own author explicitly
+authorizes earlier contributions in the updated consent sheet. The unchecked Contributor
+switch discloses earlier/future messages, attachments and shared memories. Both clients
+send `authorizeHistory: true` only when that switch is accepted. The API atomically
+updates membership, that person's earlier human messages and retained shared human
+memories. Existing grounded memories follow their source message's authorization;
+there is no bulk re-extraction or provider submission on consent.
+
+Earlier contact replies and system notices can contain multiple people's data, so
+promotion waits until all current members consent and every historical human message
+has an authorized, still-present author. Unauthorized retained human memories also
+block promotion. A departed author's messages prevent this promotion; accepting never
+authorizes another person's contributions. Notices/replies attributed to a departed
+requester remain excluded. MCP groups retain Standard isolation and their old bot
+messages are not promoted. Retained self memories without source messages are not
+retroactively authorized. Existing history-start floors, membership, memory-sharing
+and retrieval limits remain enforced; permission does not load the full transcript
+into every prompt. Already checkpointed contexts refresh on subsequent turns.
+
+Older clients that omit `authorizeHistory` retain future-only renewal. Existing
+consent is not silently backfilled: members who already accepted Contributor can
+open **Shared memory consent → Review** and accept again with the updated disclosure.
+A request with history authorization but without Contributor acceptance returns 400;
+non-members return 403. No migration, service or new client cache is required.
 
 Invitations expire after 24 hours and require current invitation permission at
 acceptance. Revoking permission deletes that sender's pending invitations.
@@ -308,7 +331,7 @@ photos and mutations require current membership. Responses have `no-store`.
 | POST /invitations/:id/accept | Explicit consent; returns group `id` |
 | DELETE /invitations/:id | Decline own invitation |
 | GET /:id | Group, members (humans include `contributorConsent` 0/1), queued/running/failed replies and permissions |
-| POST /:id/consent | Renew own consent for future messages |
+| POST /:id/consent | Renew own consent; `authorizeHistory: true` with Contributor acceptance also authorizes own earlier contributions |
 | PATCH /:id | Owner updates `name` |
 | GET /:id/photo?version=uuid | Current group avatar, members only |
 | PUT or DELETE /:id/photo | Owner replaces/removes the JPEG avatar |

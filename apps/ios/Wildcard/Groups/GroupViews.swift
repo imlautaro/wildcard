@@ -22,8 +22,13 @@ struct GroupConsentFields: View {
                 .manrope(.footnote).foregroundStyle(.secondary)
             Toggle("I accept shared memory", isOn: $shareMemory)
             if contributor {
-                Text("Your selected model is Contributor. Group messages and shared memories sent to Meta may be used for model training.")
-                    .manrope(.footnote).foregroundStyle(.secondary)
+                if alreadyMember {
+                    Text("Meta may use your earlier and future messages, attachments and shared memories in this group for model training with Contributor. Accepting also authorizes your earlier contributions. Other members must authorize their own history; earlier contact replies become available only when all human history is authorized. Existing limits on who can read earlier messages still apply.")
+                        .manrope(.footnote).foregroundStyle(.secondary)
+                } else {
+                    Text("Your selected model is Contributor. Group messages and shared memories sent to Meta may be used for model training.")
+                        .manrope(.footnote).foregroundStyle(.secondary)
+                }
                 Toggle("I accept Contributor data use", isOn: $contributorConsent)
             }
         }

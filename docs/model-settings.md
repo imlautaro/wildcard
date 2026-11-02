@@ -67,7 +67,11 @@ own contact row; no historic creator consent is invented or backfilled. Group
 memory retrieval identifies the human processing account separately from the
 agent owner's contact used to locate the shared agent.
 Groups with missing required consent continue to reject/stop Contributor replies;
-users can choose Standard or explicitly update that group's consent.
+users can choose Standard or explicitly update that group's consent. The updated
+group consent sheet also authorizes that member's earlier group contributions when
+accepted with `authorizeHistory: true`; existing consent and older clients are not
+backfilled. Earlier contact replies require authorization of all human history,
+including still-present authors. See [group consent](groups.md#membership-and-consent).
 
 Sends refused for missing consent return 403 with a `code` that both clients
 localize instead of the English `error`: `CONTACT_CONTRIBUTOR_CONSENT_REQUIRED`

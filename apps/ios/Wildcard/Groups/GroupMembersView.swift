@@ -190,10 +190,10 @@ struct GroupMembersView: View {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showingConsent = false } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Confirm") {
-                            mutate("consent", method: "POST", input: ["shareMemory": shareMemory, "contributorConsent": contributorConsent])
+                            mutate("consent", method: "POST", input: ["shareMemory": shareMemory, "contributorConsent": contributorConsent, "authorizeHistory": contributorConsent])
                             showingConsent = false
                         }
-                        .disabled(busy)
+                        .disabled(busy || !shareMemory || (snapshot?.contributorModel == true && !contributorConsent))
                     }
                 }
             }

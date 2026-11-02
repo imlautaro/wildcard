@@ -104,7 +104,7 @@ const addContact = () => run(async () => {
 
 // Renews this account's own consent; nobody can consent for another member.
 const giveConsent = () => run(async () => {
-  await api(`groups/${id.value}/consent`, { json: { shareMemory: true, contributorConsent: contributorConsent.value } });
+  await api(`groups/${id.value}/consent`, { json: { shareMemory: true, contributorConsent: contributorConsent.value, authorizeHistory: contributorConsent.value } });
   sheet.value = null;
   await load();
   notice.value = t('groups.members.consentSaved');
@@ -287,7 +287,7 @@ onMounted(() => run(async () => {
             :contributor-model="snapshot.contributorModel"
             :disclosure="[consentDisclosure]"
             :memory-label="$t('groups.new.memoryLabel')"
-            :contributor-note="$t('groups.new.contributorNote')"
+            :contributor-note="$t('groups.members.contributorHistoryNote')"
           />
           <AppNotice v-if="error">{{ error }}</AppNotice>
           <template #actions>

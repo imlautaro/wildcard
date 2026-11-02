@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Meta may use your earlier and future messages, attachments and shared memories in this group for model training with Contributor. Accepting also authorizes your earlier contributions. Other members must authorize their own history; earlier contact replies become available only when all human history is authorized. Existing limits on who can read earlier messages still apply." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meta puede usar tus mensajes, adjuntos y recuerdos compartidos anteriores y futuros de este grupo para entrenar modelos con Contributor. Al aceptar también autorizas tus aportes anteriores. Los demás miembros deben autorizar su propio historial; las respuestas anteriores de los contactos solo estarán disponibles cuando todo el historial humano esté autorizado. Se mantienen los límites existentes sobre quién puede leer mensajes anteriores."
+          }
+        }
+      }
+    },
     "Contacts can't reply in this group until every member gives Contributor consent. Waiting for %@." : {
       "localizations" : {
         "es" : {
