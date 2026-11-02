@@ -46,7 +46,9 @@
 :root[data-theme="dark"] .shell:not(.without-chat-list) > main::after { box-shadow:
   inset -1px 1px 0 0 color-mix(in srgb, var(--md-outline-variant) 50%, transparent),
   inset 0 -1px 0 0 color-mix(in srgb, var(--md-outline-variant) 50%, transparent); }
-@media (max-width: 1100px) { :root { --sidebar: 320px; --navigation-sidebar: 192px; } }
+/* 861–1100px: the navigation collapses to an 80px icon rail that expands over the
+   content on hover (NavSidebar.vue); the grid track stays 80px so nothing reflows. */
+@media (max-width: 1100px) { :root { --sidebar: 320px; --navigation-sidebar: 80px; } }
 @media (min-width: 1440px) { :root { --sidebar: 400px; } }
 @media (max-width: 860px) {
   .shell, .shell.without-chat-list { grid-template-columns: minmax(0, 1fr); }

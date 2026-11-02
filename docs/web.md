@@ -244,7 +244,7 @@ and caching still match across clients. Manrope stays the typeface on both.
   left edge with **Chats** (total unread badge), **For you** (new-posts badge, Feed icon) and
   **Account**. Each row places its icon on the left, its label on the right and
   any unread badge at the trailing edge; the active row has a full-width pill.
-  The sidebar is 224 px wide (192 px between 861 and 1100 px). Every page opens in a rounded content pane beside it, in the style of
+  The sidebar is 224 px wide. Between 861 and 1100 px it collapses to an 80 px icon rail (no title or labels, unread badges on the icon) that expands to 224 px over the content on hover or keyboard focus without moving the pane; touch screens keep the rail. Every page opens in a rounded content pane beside it, in the style of
   Threads/X. The Chats section (`/chats`, conversations, groups, Contacts, new
   contact/group, invitations and join) adds the chat list as a second column between
   the sidebar and the pane; For you and Account (including Connections and Native
