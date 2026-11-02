@@ -45,7 +45,7 @@ const shown = computed(() => moments.value.slice(0, step.value).reverse());
     radial-gradient(80% 60% at 20% 10%, #3b74f0 0%, transparent 60%),
     radial-gradient(70% 60% at 90% 80%, #7a4f9a 0%, transparent 60%),
     linear-gradient(160deg, #0d2a6b, #12122a);
-  box-shadow: 0 0 0 8px var(--md-surface-container-highest), 0 0 0 9px var(--stage-edge), var(--md-elevation-3);
+  box-shadow: 0 0 0 8px #000, 0 0 0 9px #000, var(--md-elevation-3);
 }
 .lock-status { display: flex; justify-content: center; align-items: center; height: calc(var(--phone-camera-inset) + var(--phone-camera-size) - var(--space-4)); }
 .lock-icon svg { width: 18px; height: 18px; }

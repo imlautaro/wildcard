@@ -50,7 +50,7 @@ const { t } = useI18n();
 .phone-body {
   position: relative; display: flex; flex-direction: column; width: 100%; max-width: var(--phone-width, 340px); aspect-ratio: var(--phone-ratio);
   overflow: hidden; border-radius: var(--phone-radius); background: var(--md-surface);
-  box-shadow: 0 0 0 8px var(--md-surface-container-highest), 0 0 0 9px var(--stage-edge), var(--md-elevation-3);
+  box-shadow: 0 0 0 8px #000, 0 0 0 9px #000, var(--md-elevation-3);
 }
 .phone-top { flex: none; height: calc(var(--phone-camera-inset) + var(--phone-camera-size) + var(--space-2)); }
 /* The chat bar shares the camera's row: same height, centered on it. */
