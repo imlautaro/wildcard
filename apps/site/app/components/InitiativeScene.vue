@@ -46,7 +46,7 @@ const shown = computed(() => moments.slice(0, step.value).reverse());
     linear-gradient(160deg, #0d2a6b, #12122a);
   box-shadow: 0 0 0 8px var(--md-surface-container-highest), 0 0 0 9px var(--stage-edge), var(--md-elevation-3);
 }
-.lock-status { display: flex; justify-content: center; align-items: center; height: 40px; }
+.lock-status { display: flex; justify-content: center; align-items: center; height: calc(var(--phone-camera-inset) + var(--phone-camera-size) - var(--space-4)); }
 .lock-icon svg { width: 18px; height: 18px; }
 .lock-clock { display: flex; flex-direction: column; align-items: center; margin-top: var(--space-2); }
 .lock-day { font: var(--type-title-small); opacity: 0.85; }
