@@ -40,7 +40,7 @@ const state = computed(() => {
 
 <template>
   <div ref="root" class="hero-scene scene" :class="{ fading }">
-    <PhoneFrame class="hero-phone" time="8:11">
+    <PhoneFrame class="hero-phone">
       <div class="list-head">
         <span>Chats</span>
         <span class="compose" aria-hidden="true"><AppIcon name="compose" /></span>
@@ -76,13 +76,13 @@ const state = computed(() => {
 
 <style scoped>
 .hero-scene { position: relative; display: flex; justify-content: center; padding: var(--space-6) 0; }
-.hero-phone { --phone-height: 600px; width: 100%; }
+.hero-phone { --phone-width: 360px; width: 100%; }
 .hero-phone :deep(.phone-screen) { justify-content: flex-start; padding: 0; }
 .list-head { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-5) var(--space-3); font: var(--type-headline-small); letter-spacing: var(--tracking-headline); }
 .compose { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
 .compose svg { width: 20px; height: 20px; }
 .rows { position: relative; margin: 0; padding: 0 var(--space-2); list-style: none; }
-.row { display: flex; align-items: center; gap: var(--space-3); height: 76px; padding: 0 var(--space-3); border-radius: var(--md-shape-l); }
+.row { display: flex; align-items: center; gap: var(--space-3); height: 72px; padding: 0 var(--space-3); border-radius: var(--md-shape-l); }
 .row.unread { background: color-mix(in srgb, var(--md-primary) 7%, transparent); }
 .row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .row-top, .row-bottom { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }

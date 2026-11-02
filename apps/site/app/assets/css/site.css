@@ -20,6 +20,10 @@
   /* The illustration surface behind scenes: one step above the page. */
   --stage: var(--md-surface-container-low);
   --stage-edge: color-mix(in srgb, var(--md-on-surface) 6%, transparent);
+  /* Phone mockups: 1:1.45, nearly square corners on the left, rounded on the right,
+     and a front camera dot at the top right (no status bar). */
+  --phone-ratio: 1 / 1.45;
+  --phone-radius: 4px 44px 44px 4px;
 }
 :root[data-theme="dark"] {
   --stage: var(--md-surface-container-low);
@@ -115,6 +119,11 @@ p { margin: 0; }
 }
 .system-banner svg { width: 14px; height: 14px; }
 .avatar.person { background: var(--md-secondary-container); color: var(--md-on-secondary-container); font-weight: 700; }
+
+.phone-camera {
+  position: absolute; top: 14px; right: 22px; z-index: 8; width: 12px; height: 12px; border-radius: 50%;
+  background: #000; box-shadow: inset 0 0 0 2px #1d1d22, 0 0 0 1px rgb(255 255 255 / 6%);
+}
 
 /* Items entering a scene rise and settle. */
 .pop { animation: site-pop var(--md-motion-long) var(--md-ease-decelerate) both; }

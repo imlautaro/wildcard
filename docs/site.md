@@ -100,5 +100,10 @@ motion (final states) and with motion (memory and group scenes mid-animation and
 looping): no console errors and no horizontal overflow at 390 px. `npm run build:site`
 prerendered the page and `wrangler dev` served it with the Worker configuration (200
 for `/`, 404 page for unknown paths, production hydration without console errors).
-Not verified: the Workers Builds release, Safari and Firefox, real phones and screen
-readers.
+The existing Worker was connected to Workers Builds through the dashboard on
+November 1, 2026, with production builds enabled for `imlautaro/wildcard` / `main`,
+the documented commands, root `/`, previews disabled and build caching enabled.
+Cloudflare reports that the next push starts the first build. The connection was
+verified in Settings; no push or deployment was performed for this configuration.
+Not verified: the first Workers Builds release, Safari and Firefox, real phones
+and screen readers.

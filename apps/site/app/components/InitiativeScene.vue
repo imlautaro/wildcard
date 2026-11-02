@@ -16,6 +16,7 @@ const shown = computed(() => moments.slice(0, step.value).reverse());
 <template>
   <div ref="root" class="initiative scene" :class="{ fading }">
     <div class="lock">
+      <span class="phone-camera" aria-hidden="true" />
       <div class="lock-status" aria-hidden="true"><span class="lock-icon"><SiteIcon name="lock" /></span></div>
       <div class="lock-clock">
         <span class="lock-day">{{ clock.day }}</span>
@@ -37,8 +38,8 @@ const shown = computed(() => moments.slice(0, step.value).reverse());
 <style scoped>
 .initiative { display: flex; justify-content: center; }
 .lock {
-  position: relative; display: flex; flex-direction: column; width: 100%; max-width: 360px; height: 600px; padding: var(--space-4) var(--space-3);
-  overflow: hidden; border-radius: 44px; color: #fff;
+  position: relative; display: flex; flex-direction: column; width: 100%; max-width: 360px; aspect-ratio: var(--phone-ratio); padding: var(--space-4) var(--space-3);
+  overflow: hidden; border-radius: var(--phone-radius); color: #fff;
   background:
     radial-gradient(80% 60% at 20% 10%, #3b74f0 0%, transparent 60%),
     radial-gradient(70% 60% at 90% 80%, #7a4f9a 0%, transparent 60%),

@@ -331,11 +331,25 @@ Wrangler credential, `wildcard-site` was first deployed manually with
 checkout of pushed commit `a1a6464` (version `356fc40b-5b76-4885-b265-897b7e3f44a9`).
 It serves `https://wildcard-site.imlautaro.workers.dev`: `/` 200, unknown paths 404,
 no console errors at 1280 and 390 px. Later releases must come from Workers Builds:
-connect the existing Worker under Settings → Builds with the commands above. That
-project was not yet created when this was written. A second owner-approved manual
-release published `f87b39c` (version `866609e7-72bd-424d-91a4-b33857780fd6`) because
+the existing Worker is now connected under Settings → Builds with the commands
+above (see the connection record below). Before that connection, a second
+owner-approved manual release published `f87b39c` (version `866609e7-72bd-424d-91a4-b33857780fd6`) because
 no `wildcard-site` build existed yet; pushes to `main` produced only the API, web
 and admin builds.
+
+Workers Builds connection (November 1, 2026): configured in the Cloudflare dashboard
+using the existing GitHub connection for `imlautaro/wildcard`, production branch
+`main`, root `/`, build command
+`npm ci && npm run typecheck:site && npm run build:site`, and deploy command
+`npm run release:site`. Builds are enabled, preview builds are disabled, build
+caching is enabled, and include paths remain `*` with no configured exclusions,
+matching the other production projects. The existing `Workers Builds - 2026-05-27
+10:54` credential is selected; no credential was created or expanded and no build
+variables or secrets were added. Independent accounts must select their own
+existing credential with the permissions described above. Cloudflare confirms the
+repository connection and states that the next push starts the first build. No
+push or deployment was performed to validate this connection; its first automatic
+release and source version remain unverified.
 
 Rollback: roll back or delete the `wildcard-site` Worker. It stores no data and no
 other Worker depends on it.

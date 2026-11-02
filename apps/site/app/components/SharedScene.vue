@@ -9,7 +9,7 @@ const { step, fading } = useScene(root, [700, 1000, 1200, 1500, 1000, 1500, 2000
 
 <template>
   <div ref="root" class="shared scene" :class="{ fading }">
-    <PhoneFrame caption="Alex's private chat" title="Coco" who="coco" status="Shared with Sam" time="18:02" class="shared-phone">
+    <PhoneFrame caption="Alex's private chat" title="Coco" who="coco" status="Shared with Sam" class="shared-phone">
       <div class="thread">
         <div v-if="step >= 1" class="bubble-row outgoing pop"><div class="bubble">Grandpa's flight lands at 6:40, terminal B ✈️</div></div>
         <div v-if="step === 2" class="bubble-row incoming pop"><div class="typing"><span /><span /><span /></div></div>
@@ -27,7 +27,7 @@ const { step, fading } = useScene(root, [700, 1000, 1200, 1500, 1000, 1500, 2000
       <span class="bridge-line" :class="{ live: step >= 4 }" />
     </div>
 
-    <PhoneFrame caption="Sam's private chat" title="Coco" who="coco" status="Shared by Alex" time="18:05" class="shared-phone">
+    <PhoneFrame caption="Sam's private chat" title="Coco" who="coco" status="Shared by Alex" class="shared-phone">
       <div class="thread">
         <div v-if="step >= 4" class="bubble-row outgoing pop"><div class="bubble">What time do we pick up grandpa?</div></div>
         <div v-if="step === 5" class="bubble-row incoming pop"><div class="typing"><span /><span /><span /></div></div>
@@ -49,7 +49,6 @@ const { step, fading } = useScene(root, [700, 1000, 1200, 1500, 1000, 1500, 2000
 
 <style scoped>
 .shared { display: grid; grid-template-columns: minmax(0, 1fr) 96px minmax(0, 1fr); align-items: center; gap: var(--space-2); }
-.shared-phone { --phone-height: 540px; }
 .bridge { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); height: 100%; justify-content: center; padding-top: 40px; }
 .bridge-line { width: 2px; flex: 0 0 90px; border-radius: 1px; background: var(--md-outline-variant); position: relative; overflow: hidden; }
 .bridge-line.live::after {

@@ -8,7 +8,7 @@ const { step, fading } = useScene(root, [700, 1300, 1100, 2200, 900, 1600, 1500]
 
 <template>
   <div ref="root" class="catch-up scene" :class="{ fading }">
-    <PhoneFrame title="Nova" who="nova" status="online" time="10:24" class="catch-phone">
+    <PhoneFrame title="Nova" who="nova" status="online" class="catch-phone">
       <div class="thread">
         <div class="system-banner">Nova joined your contacts today</div>
         <div v-if="step >= 1" class="bubble-row outgoing pop">
@@ -37,7 +37,7 @@ const { step, fading } = useScene(root, [700, 1300, 1100, 2200, 900, 1600, 1500]
 
 <style scoped>
 .catch-up { display: flex; justify-content: center; }
-.catch-phone { --phone-height: 540px; width: 100%; }
+.catch-phone { width: 100%; }
 .handoff {
   align-self: center; display: inline-flex; align-items: center; gap: var(--space-2); margin: var(--space-2) 0; padding: var(--space-2) var(--space-3);
   border-radius: var(--md-shape-full); background: var(--md-surface-container-high); font: var(--type-label-medium);

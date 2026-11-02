@@ -27,7 +27,7 @@ const inLane = (lane: Column) => tasks.filter((task) => columns[task.id]![Math.m
 
 <template>
   <div ref="root" class="group-scene scene stage" :class="{ fading }">
-    <PhoneFrame title="Lisbon in March ✈️" :group="['mila', 'theo', 'coco']" status="You, Ana, Mila, Theo, Coco" time="11:30" class="group-phone">
+    <PhoneFrame title="Lisbon in March ✈️" :group="['mila', 'theo', 'coco']" status="You, Ana, Mila, Theo, Coco" class="group-phone">
       <div class="thread">
         <div v-if="step >= 1" class="bubble-row outgoing pop"><div class="bubble">Plan 4 days in Lisbon for late March. Can you split it up?</div></div>
         <div v-if="step >= 2" class="bubble-row incoming pop">
@@ -77,7 +77,6 @@ const inLane = (lane: Column) => tasks.filter((task) => columns[task.id]![Math.m
 
 <style scoped>
 .group-scene { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: clamp(16px, 3vw, 32px); padding: clamp(16px, 3vw, 32px); align-items: center; }
-.group-phone { --phone-height: 560px; }
 .board { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .board-head { display: flex; align-items: center; gap: var(--space-2); font: var(--type-title-medium); }
 .board-head svg { width: 22px; height: 22px; color: var(--md-primary); }

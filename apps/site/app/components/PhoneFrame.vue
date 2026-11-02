@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// A phone-sized screen for scenes: optional caption above, a status bar and a
-// chat header (avatar, name, status) as in the app's conversation bar.
+// A phone-sized screen for scenes (1:1.45, see --phone-ratio in site.css): optional
+// caption above, the front camera dot and a chat header (avatar, name, status) as
+// in the app's conversation bar.
 withDefaults(defineProps<{
   caption?: string;
   title?: string;
@@ -8,19 +9,15 @@ withDefaults(defineProps<{
   who?: CastId;
   person?: PersonId;
   group?: CastId[];
-  time?: string;
-}>(), { caption: undefined, title: undefined, status: undefined, who: undefined, person: undefined, group: undefined, time: '9:41' });
+}>(), { caption: undefined, title: undefined, status: undefined, who: undefined, person: undefined, group: undefined });
 </script>
 
 <template>
   <figure class="phone">
     <figcaption v-if="caption" class="phone-caption">{{ caption }}</figcaption>
     <div class="phone-body">
-      <div class="phone-status" aria-hidden="true">
-        <span class="tabular">{{ time }}</span>
-        <span class="phone-island" />
-        <span class="phone-signal"><i /><i /><i /></span>
-      </div>
+      <span class="phone-camera" aria-hidden="true" />
+      <div class="phone-top" aria-hidden="true" />
       <div v-if="title" class="phone-bar">
         <SiteIcon name="chevron" class="back" />
         <span v-if="group" class="stack">
@@ -45,15 +42,11 @@ withDefaults(defineProps<{
   font: var(--type-label-medium); letter-spacing: var(--tracking-label);
 }
 .phone-body {
-  position: relative; display: flex; flex-direction: column; width: 100%; max-width: 340px; height: var(--phone-height, 560px);
-  overflow: hidden; border-radius: 44px; background: var(--md-surface);
+  position: relative; display: flex; flex-direction: column; width: 100%; max-width: var(--phone-width, 340px); aspect-ratio: var(--phone-ratio);
+  overflow: hidden; border-radius: var(--phone-radius); background: var(--md-surface);
   box-shadow: 0 0 0 8px var(--md-surface-container-highest), 0 0 0 9px var(--stage-edge), var(--md-elevation-3);
 }
-.phone-status { display: flex; align-items: center; justify-content: space-between; height: 44px; padding: 0 26px; font: var(--type-label-medium); font-size: 13px; }
-.phone-island { width: 84px; height: 24px; border-radius: 14px; background: #000; }
-.phone-signal { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; }
-.phone-signal i { width: 3px; border-radius: 1px; background: currentColor; }
-.phone-signal i:nth-child(1) { height: 5px; } .phone-signal i:nth-child(2) { height: 8px; } .phone-signal i:nth-child(3) { height: 11px; }
+.phone-top { flex: none; height: 36px; }
 .phone-bar {
   display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-4) var(--space-2) var(--space-2);
   border-bottom: 1px solid color-mix(in srgb, var(--md-on-surface) 6%, transparent);
