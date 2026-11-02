@@ -204,9 +204,16 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string;
   /** Enables one first-circle contact with its portrait, unless the person already set a photo. */
   private async ready(owner: string, contactID: string, plan: Plan, photoVersion: string | null) {
     const now = Date.now();
+    // First-circle contacts text first, staggered so they do not all arrive at once
+    // (docs/initiative.md#welcome-messages). Retries never reschedule a welcome.
+    const position = Math.max(0, plan.contacts.findIndex(c => c.id === contactID));
+    const welcomeAt = now + 60_000 + position * 240_000 + Math.floor(Math.random() * 120_000);
     await this.env.DB.batch([
-      this.env.DB.prepare('UPDATE contact SET setup_pending = 0, photo_version = COALESCE(photo_version, ?), updated_at = ? WHERE id = ? AND user_id = ?')
-        .bind(photoVersion, now, contactID, owner),
+      this.env.DB.prepare(`UPDATE contact SET setup_pending = 0, photo_version = COALESCE(photo_version, ?), updated_at = ?,
+          welcome_due_at = CASE WHEN setup_pending = 1 AND welcome_attempts = 0 AND welcome_due_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM chat_turn WHERE contact_id = contact.id) THEN ? ELSE welcome_due_at END
+        WHERE id = ? AND user_id = ?`)
+        .bind(photoVersion, now, welcomeAt, contactID, owner),
       // photo_count now counts ready contacts, in any order.
       this.env.DB.prepare(`UPDATE account_onboarding SET photo_count = (SELECT COUNT(*) FROM contact WHERE user_id = ?1 AND setup_pending = 0
           AND id IN (SELECT value FROM json_each(?2))), updated_at = ?3 WHERE user_id = ?1`)

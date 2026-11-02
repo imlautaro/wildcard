@@ -62,7 +62,7 @@
       "alias": "Alias",
       "none": "None",
       "initiative": "Conversation initiative",
-      "initiativeInfo": "The contact can add a thought without another prompt and start a conversation later. Timing adapts to this chat and its personality. Leaving the chat open does not prevent follow-ups; active typing gives you space. Unanswered greetings stop further social openers until you engage again. Ask the contact to pause, or turn this off. Applies only to your private chat.",
+      "initiativeInfo": "The contact says hi when it is new, can add a thought without another prompt, and texts first after a quiet spell. Timing adapts to this chat and its personality, and nothing is sent between 22:00 and 08:00. After a few unanswered messages it waits for you. Active typing gives you space. Ask the contact to pause, or turn this off. Applies only to your private chat.",
       "keepPrivate": "Keep this chat private",
       "privateInfo": "What you tell {name} stays in this chat. It is not used in groups, by people this contact is shared with, by your other contacts or in For you, and this chat cannot be linked or discussed in a group. Things you explicitly ask it to send or post still go where you ask.",
       "voiceMessages": "Voice messages",

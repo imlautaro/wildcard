@@ -101,7 +101,7 @@ struct ContactEditorView: View {
                     )) {
                         HStack {
                             Label("Conversation initiative", systemImage: "bubble.left.and.text.bubble.right")
-                            InfoButton(title: String(localized: "Conversation initiative"), text: String(localized: "The contact can add a thought without another prompt and start a conversation later. Timing adapts to this chat and its personality. Leaving the chat open does not prevent follow-ups; active typing gives you space. Unanswered greetings stop further social openers until you engage again. Ask the contact to pause, or turn this off. Applies only to your private chat."))
+                            InfoButton(title: String(localized: "Conversation initiative"), text: String(localized: "The contact says hi when it is new, can add a thought without another prompt, and texts first after a quiet spell. Timing adapts to this chat and its personality, and nothing is sent between 22:00 and 08:00. After a few unanswered messages it waits for you. Active typing gives you space. Ask the contact to pause, or turn this off. Applies only to your private chat."))
                         }
                     }
                     .disabled(saving || contacts.isMutating)

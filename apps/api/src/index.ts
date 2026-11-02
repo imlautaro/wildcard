@@ -9,6 +9,7 @@ import { recoverContactGeneration } from './contacts/generation';
 import { recoverOnboarding } from './onboarding/routes';
 import { deliverRemoteNative } from './native/remote';
 import { dispatchInitiatives } from './chat/initiative';
+import { dispatchContactWelcomes } from './chat/welcome';
 import { cleanOAuthFlows } from './mcp/oauth';
 import { deliverGroupPush } from './groups/push';
 import { dispatchGroupRequests } from './groups/request-results';
@@ -52,6 +53,7 @@ export default {
     ctx.waitUntil(dispatchMonitors(env));
     ctx.waitUntil(dispatchHome(env));
     ctx.waitUntil(dispatchInitiatives(env));
+    ctx.waitUntil(dispatchContactWelcomes(env));
     ctx.waitUntil(recoverChats(env));
     ctx.waitUntil(recoverGroups(env));
     ctx.waitUntil(dispatchWelcomes(env));

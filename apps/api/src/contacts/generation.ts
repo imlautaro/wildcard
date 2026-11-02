@@ -144,7 +144,8 @@ export async function runContactGeneration(env: Env, owner: string, id: string, 
       if (!row || row.status === 'complete') return;
       const now = Date.now();
       await env.DB.batch([
-        env.DB.prepare('INSERT INTO contact (id, user_id, name, photo_version, created_at, updated_at, voice_messages_enabled) VALUES (?, ?, ?, ?, ?, ?, 1)').bind(plan.id, owner, plan.name, plan.id, now, now),
+        // The new contact texts first about a minute later (docs/initiative.md#welcome-messages).
+        env.DB.prepare('INSERT INTO contact (id, user_id, name, photo_version, created_at, updated_at, voice_messages_enabled, welcome_due_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)').bind(plan.id, owner, plan.name, plan.id, now, now, now + 45_000 + Math.floor(Math.random() * 45_000)),
         // The insert trigger created the agent; keep the demographics for its voice.
         env.DB.prepare('UPDATE contact_agent SET voice_profile_json = ?, speech_accent = ? WHERE id = ?').bind(JSON.stringify({ gender: plan.gender, age: plan.age }), accentForCountry(input.country), plan.id),
         env.DB.prepare('INSERT INTO agent_personality (agent_id, profile_json, updated_at) VALUES (?, ?, ?)').bind(plan.id, JSON.stringify(plan.personality), now),

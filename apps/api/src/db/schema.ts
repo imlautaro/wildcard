@@ -74,6 +74,10 @@ export const contact = sqliteTable('contact', {
   initiativeEnabled: integer('initiative_enabled', { mode: 'boolean' }).notNull().default(true),
   keepPrivate: integer('keep_private', { mode: 'boolean' }).notNull().default(false),
   initiativePaused: integer('initiative_paused', { mode: 'boolean' }).notNull().default(false),
+  // Proactive outreach (migration 0094): one welcome per new contact and a daily re-engagement gate.
+  welcomeDueAt: date('welcome_due_at'),
+  welcomeAttempts: integer('welcome_attempts').notNull().default(0),
+  reengagedAt: date('reengaged_at'),
   lastReplyReadAt: date('last_reply_read_at'),
   agentId: text('agent_id').references(() => contactAgent.id, { onDelete: 'cascade' }),
   contributorConsent: integer('contributor_consent', { mode: 'boolean' }).notNull().default(false),
@@ -89,6 +93,8 @@ export const contact = sqliteTable('contact', {
   index('contact_user_created_idx').on(table.userId, desc(table.createdAt), desc(table.id)),
   uniqueIndex('contact_id_user_idx').on(table.id, table.userId),
   uniqueIndex('contact_agent_user_idx').on(table.agentId, table.userId),
+  index('contact_welcome_due').on(table.welcomeDueAt).where(sql`${table.welcomeDueAt} IS NOT NULL`),
+  check('contact_welcome_attempts', sql`${table.welcomeAttempts} BETWEEN 0 AND 3`),
 ]);
 
 export const contactInvite = sqliteTable('contact_invite', {
@@ -702,7 +708,7 @@ export const miniAppState = sqliteTable('mini_app_state', {
   lastExecution: text('last_execution'), updatedAt: date('updated_at').notNull(),
 });
 
-// Episode creation/invalidation triggers live in migration 0032.
+// Episode creation/invalidation triggers live in migration 0032; re-engagement rows are created by dispatchInitiatives (0094).
 export const conversationInitiative = sqliteTable('conversation_initiative', {
   mode: text('mode', { enum: ['continuation', 'ambient'] }).notNull().default('continuation'),
   contactId: text('contact_id').primaryKey().references(() => contact.id, { onDelete: 'cascade' }),
@@ -714,6 +720,8 @@ export const conversationInitiative = sqliteTable('conversation_initiative', {
   nextAt: date('next_at'),
   expiresAt: date('expires_at').notNull(),
   intent: text('intent').notNull().default(''),
+  // Re-engagement after silence (migration 0094): ambient row with its own expiry.
+  reengage: integer('reengage', { mode: 'boolean' }).notNull().default(false),
 }, table => [
   check('initiative_evaluations', sql`${table.evaluations} BETWEEN 0 AND 6`),
   check('initiative_sent', sql`${table.sent} BETWEEN 0 AND 3`),

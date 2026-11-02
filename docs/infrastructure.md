@@ -2040,6 +2040,30 @@ authorized rollback, or roll forward with a compatible fix. Re-enabling still
 waits for new human input. Use only the committed/pushed automatic pipeline;
 do not reverse migrations, erase history or manually restart stopped episodes.
 
+### Proactive outreach — migration 0094
+
+`0094_proactive_outreach.sql` follows every migration through 0093. It adds
+`contact.welcome_due_at`, `contact.welcome_attempts` (0–3), `contact.reengaged_at`,
+`conversation_initiative.reengage`, a partial index on due welcomes and three
+triggers that cancel a pending welcome on any chat message, initiative disable or
+archive. There is no backfill: existing contacts receive no welcome, and existing
+quiet chats become eligible for [re-engagement](initiative.md#re-engagement-after-silence)
+once the Worker is released. No new resource, binding, secret, provider permission,
+Cron Trigger or Wrangler change is required; the `welcome` job runs in the existing
+`ChatWorkflow` and is dispatched by the existing one-minute Cron
+(`dispatchContactWelcomes`), and the re-engagement sweep runs inside
+`dispatchInitiatives` every ten minutes.
+
+Apply locally with the existing migration command (`npx wrangler d1 migrations
+apply DB --local`); production applies it through the automatic pipeline before the
+Worker that reads the new columns. Verify after release with the
+`initiative_decision`, `initiative_reengagement` and `welcome_decision` log events.
+
+Rollback keeps 0094 and its data: older Workers ignore the new columns, never
+dispatch welcomes or re-engagement, and evaluate `reengage` rows under the older
+ambient policy until they expire (at most three days). Pending welcomes stay
+unsent. Roll forward rather than reversing the migration.
+
 ## Remote native device execution
 
 The [remote timer/alarm prototype](native-remote.md) reuses the API Worker, D1,

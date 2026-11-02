@@ -770,6 +770,10 @@ Adaptive initiative (0065) derives activity/receptivity from at most 160 complet
 turns over 28 days of this participant's chat. These statistics are request-local,
 not a new materialized or client cache. Categorical source-linked feedback remains
 on its original turns; the explicit conversational pause stays on the contact.
+
+Welcome messages and re-engagement (0094) are server-side only. They arrive as
+ordinary assistant turns through the existing history, list, unread and push
+paths; no client cache, polling interval or retained state changes.
 Neither is copied into shared factual memory or another participant's profile.
 Clearing history removes its labels and pause even when factual memory is kept;
 contact/account deletion cascades. Archiving cancels the pending plan. Finite

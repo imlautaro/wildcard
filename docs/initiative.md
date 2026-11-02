@@ -1,9 +1,12 @@
 # Conversation initiative
 
-Private contacts can continue an exchange and, when welcome, start another
-conversation later. The shared API serves iOS and web using the existing D1,
-one-minute Cron Trigger and `ChatWorkflow`. There is no always-running model or
-new service. Migration **0065** adds adaptive initiative to 0032–0033.
+Private contacts can continue an exchange, start another conversation later,
+introduce themselves when they are new and text first after a quiet spell. The
+shared API serves iOS and web using the existing D1, one-minute Cron Trigger and
+`ChatWorkflow`. There is no always-running model or new service. Migration
+**0065** adds adaptive initiative to 0032–0033; **0094** adds
+[welcome messages](#welcome-messages) and [re-engagement](#re-engagement-after-silence)
+and relaxes the ambient gates ([proactive outreach](#proactive-outreach-migration-0094)).
 
 ## Episodes and adaptive opportunities
 
@@ -17,15 +20,17 @@ and proactive messages do not start episodes. There is no history backfill or
 restart of stopped plans on upgrade.
 
 A continuation can wait, send a useful next thought, or stop the current exchange.
-Stopping an ordinary social exchange can instead create a later **ambient
-opportunity**: an optional new conversation, greeting or relevant check-in. This
-requires social participation in this private chat, no unanswered proactive
-message, no ignored greeting, no task-only pattern, and no explicit pause. A
-finished task is not a reason to keep probing socially. A goodbye ends the current
-exchange; an explicit request to stop unsolicited contact also pauses future
-initiative. Ambient opportunities expire seven days after the latest human input.
-One published ambient message ends outreach until the person returns. A model
-may also stop without sending, or wait for another flexible opportunity.
+Stopping an exchange can instead create a later **ambient opportunity**: a new
+conversation, greeting or relevant check-in. Since 0094 this requires no
+unanswered proactive message, no explicit pause and no boundary in the source
+request; a prior social classification is no longer needed. Task-only chats may
+receive task-related follow-ups but no greetings, and a greeting ignored in the
+last 72 hours suppresses greetings only. A goodbye ends the current exchange; an
+explicit request to stop unsolicited contact also pauses future initiative.
+Ambient opportunities expire seven days after the latest human input. One
+published ambient message ends this episode; later outreach comes from
+[re-engagement](#re-engagement-after-silence). A model may also stop without
+sending, or wait for another flexible opportunity.
 
 Continuations retain six evaluations over at most 24 hours. A transition to
 ambient mode has a separate six-evaluation budget over the seven-day horizon;
@@ -69,10 +74,13 @@ Consecutive human messages marked `MESSAGE_BATCHED` immediately before the sourc
 are included in that request's context, so a short acknowledgment followed by a
 separate task message is not automatically treated as ignoring the greeting.
 
-An unanswered greeting suppresses further greetings and social check-ins. An
-unrelated task does not lift this suppression; subsequent actual social engagement
-can. Two recent classified practical requests suppress social openers. An ambient
-message is never followed by another one without human input. For other outreach,
+A greeting left unanswered for less than 72 hours suppresses further greetings
+(0094; previously greetings and social check-ins, without expiry). An unrelated
+task does not lift this suppression; subsequent actual social engagement can. Two
+recent classified practical requests suppress greetings and social small talk but
+allow task-related follow-ups. Within one ambient episode, an ambient message is
+never followed by another one without human input; re-engagement episodes allow up
+to three unanswered spontaneous messages in total. For other outreach,
 measured receptivity requires at least three known outcomes from at most twenty
 recent proactive messages. Unanswered outreach older than 24 hours can reduce
 that estimate; ambiguous responses remain unknown.
@@ -146,8 +154,9 @@ The caption is withheld if the image is unavailable. Text can never prove an ext
 
 **Contact details → Conversation initiative** controls only this participant's
 private chat, including when the agent is shared. Both clients explain adaptive
-timing and ignored-greeting suppression. Disabling cancels the current plan.
-Re-enabling waits for the next completed human exchange. An explicit conversational
+timing, welcome messages, re-engagement, quiet hours and the unanswered limit.
+Disabling cancels the current plan and any pending welcome. Re-enabling starts no
+episode immediately; the next human exchange or a later re-engagement sweep does. An explicit conversational
 pause is stored on this contact; a casual greeting or unrelated task does not
 cancel it. An explicit resumption or switching initiative off/on clears it.
 Direct human replies remain available while initiative is paused.
@@ -215,9 +224,9 @@ also predate this behavior. Preserve that distinction when reporting validation.
 
 The planner receives eligible [conversation learning](conversation-learning.md) from
 this private agent/human audience, including observed preferences, one behavioral
-adjustment and optional curiosity records. A curiosity alone cannot justify outreach
-or override a pause, task-only pattern, unanswered-message suppression, quiet hours,
-consent or budget. Actual question publication records an asked status atomically.
+adjustment and optional curiosity records. Since 0094 a pending curiosity can be a reason to
+start a conversation, but it cannot override a pause, task-only pattern,
+unanswered-message suppression, quiet hours, consent or budget. Actual question publication records an asked status atomically.
 Reset/disable advances an epoch that rejects stale initiative drafts. Initiative does
 not itself trigger a learning review or enable group initiative.
 
@@ -242,3 +251,85 @@ provider inference or device/browser session was run. Check passive-open vs typi
 new input/read/profile changes during inference, personality cadence, ambient
 transition, quiet hours, stop/opt-out and replay with fictional data before making
 runtime or semantic quality claims.
+
+## Proactive outreach (migration 0094)
+
+The marketing promise is that contacts text first. Before 0094 an episode only
+started after a human message was answered, ambient outreach required a classified
+social exchange, an ignored greeting blocked social outreach indefinitely, and the
+planner prompt leaned towards silence. 0094 changes that in three parts.
+
+### Welcome messages
+
+A contact created by [contact generation](contact-generation.md) or published by
+[onboarding](onboarding.md) introduces itself once, before the person writes.
+`contact.welcome_due_at` is set to roughly one minute after a generated contact is
+published; first-circle contacts are staggered about four minutes apart after each
+becomes ready. Manually named contacts (`POST /contacts`) and contacts joined through
+[sharing](sharing.md) do not send a welcome.
+
+`dispatchContactWelcomes` (one-minute Cron) claims at most ten due contacts with a
+ten-minute lease and at most three attempts (`welcome_attempts`), registers
+`welcome-<contact>-<attempt>` in `chat_workflow_instance` and starts the `welcome`
+`ChatWorkflow` job (`apps/api/src/chat/welcome.ts`). The job uses the person's
+latest known time zone from any of their chats, then their Updates feed; with none,
+it only sends within two hours of creation, when the person is present. Quiet hours
+postpone it without consuming an attempt. It uses the character direction,
+configured language/region, persona, eligible shared memories and the stated reason
+for the contact (generation purpose, onboarding circle and occupation), shows typing
+and publishes one short first message as a `greeting`.
+
+The welcome turn's `initiative_source_id` refers to itself, so it counts as
+spontaneous outreach for the per-contact/account budgets and adaptation: if it is
+ignored, greetings stay suppressed for 72 hours and no re-engagement starts,
+because re-engagement needs at least one human message. Any message in the chat,
+disabling initiative, archive or clear cancels a pending welcome (triggers in
+0094). Publication rechecks the contact, setting, empty chat and claim atomically;
+model selection and consent are checked when the context is built, not again at
+publication. A failed attempt leaves presence to the ordinary presence expiry. Welcomes are not limited by the rolling budgets but count towards them.
+
+### Re-engagement after silence
+
+Every ten minutes `dispatchInitiatives` sweeps private chats with initiative on, no
+pause, no live episode and a human message in the last 30 days with a known time
+zone. A chat qualifies after about **1 day** of quiet with no unanswered spontaneous
+message, **3 days** after one and **7 days** after two, measured from the latest
+message of either side. After three unanswered spontaneous messages since the person
+last wrote, outreach waits for them. `contact.reengaged_at` limits the sweep to one
+episode per chat every 20 hours, even when the model chooses not to send.
+
+The sweep opens an ambient `conversation_initiative` row with `reengage = 1`, the
+latest human turn as source, the latest turn as anchor, a timestamp-seeded revision
+(Workflow IDs are never reused) and its own three-day expiry instead of the source's
+seven-day horizon. The first review is drawn from the learned activity windows within
+48 hours. Evaluation, quiet hours, personality gaps, rolling budgets, consent,
+read/typing checks and atomic publication are those of every other episode; the
+planner sees `reconnect-after-silence` with the days since the last human message and
+the number of unanswered messages, and is told never to mention the silence. New human
+input deletes the row as before.
+
+### Planner and policy
+
+- Ambient sending is the default when allowed and something specific fits: follow-ups
+  on what the person mentioned, an idea or take connected to their interests, a
+  pending curiosity or a greeting suited to the moment. Invented news, offline
+  experiences, guilt and external-action claims remain forbidden.
+- `adaptivePolicy` no longer requires a social classification for ambient outreach;
+  the source request must not be a boundary. Task-only chats can receive task
+  follow-ups (`check-in`/`continuation`), never greetings.
+- Each evaluation logs `initiative_decision` (mode, re-engagement, action, kind,
+  engagement, whether sending was allowed and whether it published) and each sweep
+  row logs `initiative_reengagement`; welcomes log `welcome_decision`. Logs never
+  contain message text.
+
+### Cost and validation
+
+Re-engagement adds at most one planner evaluation per eligible chat per 20 hours
+(up to six reviews within an episode if the model waits), and each welcome one
+completion. For 0094 the validation scope was static: API TypeScript,
+`python3 scripts/checks/initiative-sql-compile.py` (now also covering
+`welcome.ts`) and the migration plus fixtures for the self-referencing welcome
+insert, cancellation triggers, sweep selection and upsert on local workerd D1. No
+live inference, Workflow run, client session or device was exercised; the
+opt-in `scripts/checks/initiative.cjs` harness has not been updated for 0094.
+Measure the decision logs before tuning the cadence.

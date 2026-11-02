@@ -6,6 +6,7 @@ import { contactModelAllowed } from './consent';
 import { messageDelay, readingDelay, recordingDelay, type ContactResponse } from './messages';
 import { batchStatement, batchIntoNext, shouldHoldReply, waitForComposer } from './pacing';
 import { runInitiative, type InitiativeJob } from './initiative';
+import { runWelcome, type WelcomeJob } from './welcome';
 import { jobAccountID, jobModel } from '../lib/model-preference';
 import { maintainAgentMemories } from './agent-memory';
 import { dispatchGroupRequests } from '../groups/request-results';
@@ -52,10 +53,12 @@ function replyMessages(reply: ContactResponse | string[] | string | null) {
   return { response, messages, spoken, sticker, stickerIndex };
 }
 
-export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob | InitiativeJob | HomeJob | HomeCommentJob> {
-  async run(event: WorkflowEvent<ChatJob | VisitJob | GroupJob | InitiativeJob | HomeJob | HomeCommentJob>, step: WorkflowStep) {
+export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | GroupJob | InitiativeJob | WelcomeJob | HomeJob | HomeCommentJob> {
+  async run(event: WorkflowEvent<ChatJob | VisitJob | GroupJob | InitiativeJob | WelcomeJob | HomeJob | HomeCommentJob>, step: WorkflowStep) {
     if ('kind' in event.payload) {
       if (event.payload.kind === 'initiative') await runInitiative(this.env, event.payload, step);
+      // A new contact's first message (docs/initiative.md#welcome-messages).
+      else if (event.payload.kind === 'welcome') await runWelcome(this.env, event.payload, step);
       else if (event.payload.kind === 'group') await runGroup(this.env, event.payload, step);
       // Updates curation runs are per person, not per chat (docs/updates.md).
       else if (event.payload.kind === 'home') await runHome(this.env, event.payload, step);

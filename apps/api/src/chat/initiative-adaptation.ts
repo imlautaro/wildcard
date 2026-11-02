@@ -48,7 +48,13 @@ export function variedReviewDelay(seconds: number, seed: string) {
   return Math.ceil(seconds * (1.05 + seededFraction(seed) * 0.25));
 }
 
-export function adaptivePolicy(samples: InitiativeSample[], sourceID: string, p: Personality, now: number, paused: boolean) {
+// Re-engagement episodes may follow earlier unanswered outreach, up to this many
+// spontaneous messages since the person last wrote. Then outreach waits for them.
+export const reengagementCap = 3;
+// An ignored greeting suppresses greetings for this long, not forever.
+const greetingSuppression = 72 * hour;
+
+export function adaptivePolicy(samples: InitiativeSample[], sourceID: string, p: Personality, now: number, paused: boolean, reengage = false) {
   const humans = samples.filter(s => s.human);
   const source = humans.find(s => s.id === sourceID);
   const outreach = samples.filter(s => s.proactive);
@@ -57,8 +63,11 @@ export function adaptivePolicy(samples: InitiativeSample[], sourceID: string, p:
   const lastSocial = humans.find(s => s.engagement === 'social' && s.response !== 'unrelated');
   const recentStyles = humans.filter(s => s.engagement && s.engagement !== 'uncertain').slice(0, 2);
   const taskOnly = recentStyles.length >= 2 && recentStyles.every(s => s.engagement === 'practical');
-  const ignoredGreeting = outreach.find(s => s.kind === 'greeting' && (!lastSocial || lastSocial.createdAt < s.repliedAt)
+  // Only a recent ignored greeting suppresses greetings; older silence is not a lasting refusal.
+  const ignoredGreeting = outreach.find(s => s.kind === 'greeting' && now - s.repliedAt < greetingSuppression
+    && (!lastSocial || lastSocial.createdAt < s.repliedAt)
     && !humans.some(h => h.responseTo === s.id && h.response === 'engaged'));
+  const boundary = source?.engagement === 'boundary';
   const outcomes = outreach.slice(0, 20).flatMap(s => {
     const response = humans.find(h => h.responseTo === s.id);
     if (response?.response === 'engaged') return [1];
@@ -68,13 +77,17 @@ export function adaptivePolicy(samples: InitiativeSample[], sourceID: string, p:
   const responseRate = outcomes.length >= 3 ? outcomes.reduce((a, b) => a + b, 0) / outcomes.length : null;
   const initiative = p.enabled ? p.traits.initiative : 5;
   const patience = p.enabled ? p.traits.patience : 5;
-  const maxUnanswered = paused || source?.engagement === 'boundary' ? 0
+  const maxUnanswered = paused || boundary ? 0
     : taskOnly || (responseRate !== null && responseRate < 0.35) || initiative <= 3 ? 1
     : initiative >= 8 && patience <= 5 && responseRate !== null && responseRate >= 0.65 ? 3 : 2;
-  const greetingsAllowed = !paused && !taskOnly && !ignoredGreeting;
+  const greetingsAllowed = !paused && !boundary && !taskOnly && !ignoredGreeting;
   return {
-    paused, taskOnly, unanswered, maxUnanswered, greetingsAllowed,
-    ambientAllowed: !paused && !taskOnly && !ignoredGreeting && unanswered === 0 && !!lastSocial,
+    paused, taskOnly, unanswered, maxUnanswered, greetingsAllowed, reengage,
+    // A new conversation no longer needs a prior social classification: unknown is not
+    // refusal. Task-only chats may receive task-related follow-ups, never greetings.
+    // Ordinary ambient outreach still needs every earlier one answered; re-engagement
+    // after silence may follow up to the cap.
+    ambientAllowed: !paused && !boundary && unanswered < (reengage ? reengagementCap : 1),
     responseRate, measuredOutcomes: outcomes.length,
     minimumAmbientGapHours: 1 + (10 - initiative) * 0.35 + patience * 0.1
       + (responseRate !== null && responseRate < 0.5 ? 6 : 0),

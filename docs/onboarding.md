@@ -78,7 +78,9 @@ empty and accepts messages immediately after creation. All five contacts appear
 in Contacts and immediately in Chats, with **No messages yet** and zero unread
 messages. Migration 0049 adds a per-contact `onboarding_chat` marker; only newly
 published onboarding contacts receive it. Other empty contacts remain hidden in
-Chats. No welcome messages, receipt states or unread events are synthesized.
+Chats. Each ready first-circle contact then sends one generated welcome message,
+staggered about four minutes apart ([welcome messages](initiative.md#welcome-messages),
+migration 0094); no receipt states or other unread events are synthesized.
 Rows use creation time until real activity supplies normal ordering; iOS hides
 the message timestamp while empty, and web displays row creation time.
 

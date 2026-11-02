@@ -56,7 +56,7 @@ recovers queued dispatches and records terminal Workflow failures. Retry restart
 the same instance and reuses saved text and any completed portrait.
 
 Text and portrait steps have bounded retries and 2/4 minute budgets, respectively.
-A final atomic batch publishes one contact, its personality and the completed job.
+A final atomic batch publishes one contact, its personality and the completed job. It also schedules the contact's [welcome message](initiative.md#welcome-messages) about one minute later (migration 0094).
 The contact trigger creates one agent; sharing later grants access to that same
 agent. New contacts retain ordinary memory-sharing defaults; no group, consent,
 welcome message or unread event is invented. Published photos reuse private R2

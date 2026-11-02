@@ -15,14 +15,15 @@ for migration in migrations:
     db.executescript(migration.read_text())
 db.setlimit(sqlite3.SQLITE_LIMIT_EXPR_DEPTH, 100)
 source = (root / 'apps/api/src/chat/initiative.ts').read_text()
-constants = dict(re.findall(r'const (\w+) = `([^`]+)`;', source))
+welcome = (root / 'apps/api/src/chat/welcome.ts').read_text()
+constants = dict(re.findall(r'const (\w+) = `([^`]+)`;', source + welcome))
 # Production interpolates only a validated integer for the learning epoch. Use a
 # static integer while preparing the real SQL; never evaluate TypeScript here.
 constants = {key: value.replace('${Number.isSafeInteger(state.learningRevision) ? state.learningRevision : -1}', '0')
              for key, value in constants.items()}
 contributor_clause = re.search(r"const modelAllowed = contributor \? `([^`]+)` : '1';", source).group(1)
 queries = []
-for filename in ['initiative.ts', 'initiative-adaptation.ts']:
+for filename in ['initiative.ts', 'initiative-adaptation.ts', 'welcome.ts']:
     text = (root / 'apps/api/src/chat' / filename).read_text()
     queries.extend(re.findall(r'\.prepare\(`([^`]+)`\)', text))
     queries.extend(re.findall(r"\.prepare\('([^']+)'\)", text))
