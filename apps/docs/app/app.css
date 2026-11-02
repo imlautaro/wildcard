@@ -1,0 +1,23 @@
+/* Wildcard brand: primary #045de3 (packages/ui tokens.css) and Manrope. The blue
+   scale is overridden so Nuxt UI's `primary: 'blue'` uses the brand color. */
+@font-face {
+  font-family: 'Manrope';
+  src: url('/fonts/Manrope.ttf') format('truetype');
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  --color-blue-50: #eef4ff;
+  --color-blue-100: #dbe7ff;
+  --color-blue-200: #b0c6ff;
+  --color-blue-300: #85a8ff;
+  --color-blue-400: #5585f7;
+  --color-blue-500: #045de3;
+  --color-blue-600: #034ec0;
+  --color-blue-700: #05409b;
+  --color-blue-800: #08357c;
+  --color-blue-900: #0b2d63;
+  --color-blue-950: #071b3e;
+}

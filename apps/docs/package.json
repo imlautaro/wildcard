@@ -1,0 +1,17 @@
+{
+  "name": "@wildcard/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --port 3004",
+    "build": "nuxt generate",
+    "preview": "wrangler dev --config wrangler.jsonc --port 3005",
+    "typecheck": "nuxt prepare"
+  },
+  "dependencies": {
+    "@nuxtjs/i18n": "10.6.0",
+    "better-sqlite3": "12.11.1",
+    "docus": "5.15.0",
+    "nuxt": "4.6.2"
+  }
+}

@@ -36,6 +36,8 @@ prefer rolling forward to retain validation and legacy cleanup handling.
 | Workers Builds (admin, optional) | Third project on the same repository and branch, root `/` | Automatic admin releases |
 | Marketing site Worker (optional) | `apps/site/wrangler.jsonc`, `wildcard-site` | Public landing page, static assets only; see [Marketing site Worker](#marketing-site-worker) |
 | Workers Builds (site, optional) | Another project on the same repository and branch, root `/` | Automatic marketing site releases |
+| Docs site Worker (optional) | `apps/docs/wrangler.jsonc`, `wildcard-docs` | Technical documentation (Docus, English and Spanish), static assets only; see [Docs site Worker](#docs-site-worker) |
+| Workers Builds (docs, optional) | Another project on the same repository and branch, root `/` | Automatic docs site releases |
 
 There are no KV, email service, or staging dependencies. R2 is required for
 [contact profile photos](profile-photos.md). The production bucket was created and verified on October 26, 2026. Chats require
@@ -88,6 +90,7 @@ npm configuration even though no root `.npmrc` currently exists.
 | `wildcard-web` (production and previews) | `apps/web/*`, `packages/ui/*`, `shared/*`, `scripts/release-web.mjs`, `scripts/preview-web.mjs` |
 | `wildcard-admin` | `apps/admin/*`, `packages/ui/*`, `scripts/release-admin.mjs` |
 | `wildcard-site` | `apps/site/*`, `packages/ui/*`, `scripts/release-site.mjs` |
+| `wildcard-docs` | `apps/docs/*`, `scripts/release-docs.mjs` |
 
 The Nuxt layer is used by web, admin and site, while `shared/` is imported by API
 and web. API migrations and each app's configuration/scripts/assets remain covered
@@ -98,7 +101,8 @@ to this reference and the dashboard filters in the same change.
 
 Expected push behavior: a site-only edit builds site; a Nuxt-layer edit builds
 web/admin/site; a `shared/` edit builds API/web; root dependency or build-environment
-changes build all four. Changes only in `apps/ios/`, `docs/`, root `README.md` or
+changes build all four (all five once the `wildcard-docs` project is connected; a docs-only
+edit then builds only docs). Changes only in `apps/ios/`, `docs/`, root `README.md` or
 unrelated root scripts match none. The broad per-app filters deliberately include
 future files inside that app, avoiding fragile lists of individual source files.
 
@@ -408,6 +412,65 @@ push or deployment was performed to validate this connection; its first automati
 release and source version remain unverified.
 
 Rollback: roll back or delete the `wildcard-site` Worker. It stores no data and no
+other Worker depends on it.
+
+## Docs site Worker
+
+The technical documentation site is optional and independent of the app: a
+static-assets-only Worker, `wildcard-docs`, configured in `apps/docs/wrangler.jsonc`.
+It is the npm workspace `@wildcard/docs`, built with [Docus](https://docus.dev) 5.15
+(a Nuxt layer over Nuxt Content, Nuxt UI and Tailwind CSS) and `@nuxtjs/i18n`, with
+English pages in `apps/docs/content/en` and Spanish pages in `apps/docs/content/es`
+(identical trees; this site is the owner-approved bilingual exception to English-only
+documentation). It does not extend `packages/ui` and has no script, binding, D1, R2,
+Workflow, Cron, secret or migration.
+
+`npm run build:docs` runs `nuxt generate` with `nitro.preset: 'static'` (explicit, so
+Workers Builds does not switch Nitro to a Cloudflare server preset) and prerenders
+`/en/**`, `/es/**`, `llms.txt`, `llms-full.txt`, raw Markdown under `/raw/**`, sitemaps
+and Open Graph images into `apps/docs/.output/public`. Link crawling with
+`failOnError` makes broken internal links fail the build. `public/_redirects` sends `/`
+to `/en`; unknown paths are answered with `404.html`. Docus server features (AI
+assistant, MCP server) need a server runtime and are disabled. Nuxt Content writes a
+local SQLite database under `apps/docs/.data/` (ignored), and `nuxt generate` links
+`apps/docs/dist` to the output (ignored). Docus adds `better-sqlite3` and its
+dependency tree to the root lockfile, so every Workers Builds project installs it;
+the hoisted root `typescript` became 6.0.3 while the API keeps TypeScript 7.0.2 in
+`apps/api/node_modules` (API, web, admin and site type checks passed after the change).
+
+Provisioning:
+
+1. In `apps/docs/wrangler.jsonc`, replace `account_id`, and `name` if `wildcard-docs`
+   is taken. In `apps/docs/nuxt.config.ts`, set `siteUrl` to the docs origin
+   (canonical URLs, sitemap and Open Graph images).
+2. Create another Workers Builds project on the same repository and production
+   branch: root `/`, build command
+   `npm ci && npm run typecheck:docs && npm run build:docs`, deploy command
+   `npm run release:docs`. A credential limited to Workers Scripts edit and account
+   read is enough. Disable preview builds.
+3. Configure the [build watch paths](#build-watch-paths) for docs (`apps/docs/*`,
+   `scripts/release-docs.mjs` and the root build inputs) and remove the default `*`.
+4. Push a commit. `scripts/release-docs.mjs` applies the same guards as the other
+   releases and deploys `apps/docs/wrangler.jsonc` tagged with the commit.
+
+Verification: `/` answers 302 to `/en`; `/en`, `/es`, a page in each locale and
+`/llms.txt` answer 200; an unknown path answers 404 with the docs error page.
+
+Initial release (November 1, 2026): as an owner-approved exception to the
+automatic-release rule, `wildcard-docs` was first deployed manually with
+`npx wrangler deploy --config apps/docs/wrangler.jsonc` from an **uncommitted** working
+tree on top of `3ea1f3e` (version `d269cff6-80d1-4872-bdda-f4f40f4e6d54`, no commit
+tag); a second manual deploy of the same uncommitted tree published version
+`55cd665e-c3a9-4ea5-b6b6-198f6958272c` with a wording fix. Before the deploy, `npm run build:docs` prerendered 299 routes, an internal
+link and anchor check over the 70 generated pages passed, and the output was served
+with `wrangler dev`. After it, `https://wildcard-docs.imlautaro.workers.dev` answered
+`/` 302 → `/en`, `/en`, `/es`, pages in both locales, `/llms.txt` and the sitemap 200,
+and unknown paths 404; pages rendered at 1440 px and 390 px without horizontal
+overflow. The Workers Builds project for `wildcard-docs` is **not connected yet**:
+create it with the commands above (dashboard only; the local Wrangler credential
+cannot reach the Builds API) so later releases come from pushed commits.
+
+Rollback: roll back or delete the `wildcard-docs` Worker. It stores no data and no
 other Worker depends on it.
 
 ## Local setup

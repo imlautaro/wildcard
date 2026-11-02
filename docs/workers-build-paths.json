@@ -66,6 +66,21 @@
       ],
       "excludePaths": [],
       "previewBuildsEnabled": false
+    },
+    "wildcard-docs": {
+      "rootDirectory": "/",
+      "productionBranch": "main",
+      "includePaths": [
+        "apps/docs/*",
+        "package.json",
+        "package-lock.json",
+        ".nvmrc",
+        ".npmrc",
+        ".gitignore",
+        "scripts/release-docs.mjs"
+      ],
+      "excludePaths": [],
+      "previewBuildsEnabled": false
     }
   }
 }

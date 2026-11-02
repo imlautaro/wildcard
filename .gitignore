@@ -23,6 +23,9 @@ node_modules/
 dist/
 # `nuxt generate` links apps/site/dist to .output/public (a symlink, not a directory)
 apps/site/dist
+apps/docs/dist
+# Nuxt Content's local SQLite database (apps/docs)
+.data/
 .wrangler/
 .nuxt/
 .output/

@@ -18,6 +18,7 @@ apps/
     wrangler.jsonc           # Web Worker configuration
   admin/                     # Nuxt 4 super admin panel Worker (registration, users, flags)
   site/                      # Public marketing site (static Nuxt, extends packages/ui)
+  docs/                      # Technical documentation site (Docus, English and Spanish)
   ios/
     Wildcard/                # SwiftUI app, auth client, and Icon Composer icon
     Wildcard.xcodeproj/       # Xcode project
@@ -45,6 +46,10 @@ docs/
   link-previews.md           # Link cards with server-fetched page metadata
   updates.md                 # For you: an adaptive feed the contacts curate together
 ```
+
+The [technical documentation site](apps/docs) (`npm run dev:docs`, http://localhost:3004)
+summarizes architecture, Cloudflare services, local setup, configuration and releases in
+English and Spanish; see [Docs site Worker](docs/infrastructure.md#docs-site-worker).
 
 ## API development
 

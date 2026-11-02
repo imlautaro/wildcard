@@ -1,0 +1,17 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // The technical documentation site (Docus): a static-assets-only Worker with no
+  // script, binding or secret. `npm run build:docs` prerenders every page in English
+  // (/en) and Spanish (/es) into .output/public; scripts/release-docs.mjs deploys this
+  // file from Workers Builds. See docs/infrastructure.md#docs-worker.
+  "name": "wildcard-docs",
+  "compatibility_date": "2026-10-26",
+  "account_id": "a9e3a97d08ec5023cbe6b97a1a25fec6",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./.output/public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}
