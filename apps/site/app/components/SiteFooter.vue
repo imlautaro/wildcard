@@ -27,7 +27,7 @@ const year = new Date().getFullYear();
       </div>
       <div class="footer-bottom">
         <span>© {{ year }} Wildcard</span>
-        <span class="powered"><SiteIcon name="stars" /> Powered by Meta AI models</span>
+        <span class="powered"><SiteIcon name="meta" /> Powered by Meta AI models</span>
         <span class="powered"><SiteIcon name="cloud" /> Built on Cloudflare</span>
         <ThemeSwitch />
       </div>

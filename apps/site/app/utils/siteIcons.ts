@@ -1,7 +1,8 @@
 // Glyphs the marketing site uses beyond the shared registry (packages/ui
 // app/utils/icons.ts). nuxt.config.ts adds them to the client bundle; render them
-// with <SiteIcon>. Names verified against node_modules/@iconify-json/solar and
-// @iconify-json/logos: a misspelled name renders nothing instead of failing.
+// with <SiteIcon>. Names verified against node_modules/@iconify-json/solar,
+// @iconify-json/logos and @iconify-json/simple-icons: a misspelled name renders
+// nothing instead of failing.
 export const siteGlyphs = {
   brain: 'solar:brain-linear',
   memory: 'solar:layers-minimalistic-linear',
@@ -62,6 +63,8 @@ export const siteGlyphs = {
   github: 'logos:github-icon',
   cloudflare: 'logos:cloudflare-icon',
   meta: 'logos:meta-icon',
+  apple: 'logos:apple',
+  elevenlabs: 'simple-icons:elevenlabs',
   notion: 'logos:notion-icon',
   linear: 'logos:linear-icon',
   'google-calendar': 'logos:google-calendar',

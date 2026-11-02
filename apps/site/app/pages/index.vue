@@ -49,7 +49,7 @@ const metaModels = [
     <section class="hero">
       <div class="container split hero-split">
         <div class="hero-copy">
-          <span class="chip primary hero-chip"><SiteIcon name="stars" />Powered by Meta AI models · Open source</span>
+          <span class="chip primary hero-chip"><SiteIcon name="meta" />Powered by Meta AI models · Open source</span>
           <h1 class="hero-title">AI contacts that text you&nbsp;first.</h1>
           <p class="lead">
             Create a cast of AI contacts, each with their own name, face, personality and memory.
@@ -268,7 +268,7 @@ const metaModels = [
       <div class="container">
         <div class="meta-band reveal">
           <div>
-            <span class="eyebrow"><SiteIcon name="stars" />Powered by Meta AI models</span>
+            <span class="eyebrow"><SiteIcon name="meta" />Powered by Meta AI models</span>
             <h2 class="sub-title">Conversations, portraits, voice notes and stickers, all on Meta's models.</h2>
           </div>
           <ul class="models">
@@ -290,9 +290,9 @@ const metaModels = [
           </p>
           <ul class="stack-list">
             <li><SiteIcon name="cloudflare" /><span><strong>Cloudflare</strong><small>Workers, D1, R2, Workflows and Cron</small></span></li>
-            <li><SiteIcon name="key" /><span><strong>Meta Model API key</strong><small>Required: conversations, images and transcripts</small></span></li>
-            <li><SiteIcon name="mic" /><span><strong>ElevenLabs key</strong><small>Optional: contact voices</small></span></li>
-            <li><SiteIcon name="phone" /><span><strong>Apple developer keys</strong><small>Optional: iPhone notifications and native extras</small></span></li>
+            <li><SiteIcon name="meta" /><span><strong>Meta Model API key</strong><small>Required: conversations, images and transcripts</small></span></li>
+            <li><SiteIcon name="elevenlabs" class="mono" /><span><strong>ElevenLabs key</strong><small>Optional: contact voices</small></span></li>
+            <li><SiteIcon name="apple" class="mono" /><span><strong>Apple developer keys</strong><small>Optional: iPhone notifications and native extras</small></span></li>
           </ul>
           <div class="hero-actions">
             <AppButton v-if="site.repositoryPublic" :to="site.repositoryUrl" variant="filled" size="large" trailing-icon="open-in-new">View the source</AppButton>
@@ -394,6 +394,8 @@ const metaModels = [
 .stack-list { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-6) 0 0; padding: 0; list-style: none; }
 .stack-list li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--md-shape-l); background: var(--md-surface-container-low); }
 .stack-list svg { width: 24px; height: 24px; flex: none; color: var(--md-primary); }
+/* Single-color brand marks (ElevenLabs, Apple) follow the text color in both themes. */
+.stack-list svg.mono { color: var(--md-on-surface); fill: currentColor; }
 .stack-list span { display: flex; flex-direction: column; line-height: 1.3; }
 .stack-list strong { font: var(--type-title-small); font-size: 15px; }
 .stack-list small { font: var(--type-body-small); font-size: 13px; color: var(--md-on-surface-variant); }

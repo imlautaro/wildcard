@@ -15,7 +15,7 @@ export default defineNuxtConfig({
   // HTML, so the static pages never call the Iconify API either.
   icon: {
     clientBundle: { icons: siteIcons },
-    serverBundle: { collections: ['solar', 'logos'] },
+    serverBundle: { collections: ['solar', 'logos', 'simple-icons'] },
   },
   app: {
     head: {
