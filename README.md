@@ -17,6 +17,7 @@ apps/
     server/api/v1/           # Proxy to the API Worker through a service binding
     wrangler.jsonc           # Web Worker configuration
   admin/                     # Nuxt 4 super admin panel Worker (registration, users, flags)
+  site/                      # Public marketing site (static Nuxt, extends packages/ui)
   ios/
     Wildcard/                # SwiftUI app, auth client, and Icon Composer icon
     Wildcard.xcodeproj/       # Xcode project
@@ -31,6 +32,7 @@ docs/
   authentication.md          # Auth contract, session behavior, and limitations
   web.md                     # Web app architecture, features, and limitations
   design-system.md           # Wildcard UI layer: tokens, components, spacing rules
+  site.md                    # Public marketing site: scenes, copy rules, deployment
   appearance.md              # System/Light/Dark theme preference on iOS and web
   admin.md                   # Super admin panel, account deletion, and runtime flags
   mini-apps.md               # Contact-built native mini apps over MCP tools

@@ -1,0 +1,138 @@
+/* Marketing site styles. Tokens, type, buttons, chips, avatars and icons come from
+   the Wildcard UI layer (packages/ui); this file adds the marketing layout and the
+   chat vocabulary the scenes share with the web app (bubbles, typing dots, banners
+   from apps/web/app/assets/css/main.css). Rules stay unlayered so they win over the
+   layer. Dark rules use :root[data-theme="dark"], never prefers-color-scheme. */
+
+:root {
+  --incoming: var(--md-surface-container-high);
+  --outgoing: var(--md-primary-container);
+  --site-width: 1200px;
+  --site-gutter: 20px;
+  --site-nav-height: 68px;
+  --site-section-space: clamp(88px, 12vw, 152px);
+  --site-radius: var(--md-shape-xl-plus);
+  --type-hero: 800 clamp(44px, 7.4vw, 88px) / 1.02 var(--font-sans);
+  --type-section: 780 clamp(34px, 4.8vw, 58px) / 1.06 var(--font-sans);
+  --type-sub: 700 clamp(22px, 2.4vw, 28px) / 1.2 var(--font-sans);
+  --type-lead: 450 clamp(17px, 1.6vw, 20px) / 1.55 var(--font-sans);
+  --tracking-hero: -0.04em;
+  /* The illustration surface behind scenes: one step above the page. */
+  --stage: var(--md-surface-container-low);
+  --stage-edge: color-mix(in srgb, var(--md-on-surface) 6%, transparent);
+}
+:root[data-theme="dark"] {
+  --stage: var(--md-surface-container-low);
+  --stage-edge: color-mix(in srgb, var(--md-outline-variant) 60%, transparent);
+}
+@media (min-width: 760px) { :root { --site-gutter: 32px; } }
+
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--site-nav-height) + 16px); }
+html, body { height: auto; }
+body { background: var(--md-surface); overflow-x: hidden; }
+#__nuxt { height: auto; }
+img, svg { display: block; }
+p { margin: 0; }
+
+/* ---------------------------------------------------------------------------
+   Layout */
+.container { width: 100%; max-width: calc(var(--site-width) + 2 * var(--site-gutter)); margin: 0 auto; padding: 0 var(--site-gutter); }
+.section { padding: var(--site-section-space) 0 0; }
+.section-head { max-width: 760px; margin-bottom: clamp(40px, 5vw, 64px); }
+.section-head.centered { margin-inline: auto; text-align: center; }
+.eyebrow {
+  display: inline-flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-4);
+  font: var(--type-label-large); letter-spacing: 0.02em; color: var(--md-primary);
+}
+.eyebrow svg { width: 18px; height: 18px; }
+.section-title { font: var(--type-section); letter-spacing: var(--tracking-hero); text-wrap: balance; }
+.section-title .soft { color: var(--md-on-surface-variant); }
+.lead { margin-top: var(--space-5); font: var(--type-lead); color: var(--md-on-surface-variant); text-wrap: pretty; }
+.lead + .lead { margin-top: var(--space-4); }
+.lead strong { color: var(--md-on-surface); font-weight: 700; }
+.sub-title { font: var(--type-sub); letter-spacing: var(--tracking-headline); text-wrap: balance; }
+
+/* Two columns: copy beside a scene, stacking on narrow screens. */
+.split { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
+.split > * { min-width: 0; }
+@media (min-width: 960px) {
+  .split { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+  .split.flip { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); }
+  .split.flip > :first-child { order: 2; }
+}
+
+/* A scene sits on a rounded stage, like the app's content pane. */
+.stage {
+  position: relative; overflow: hidden; border-radius: var(--site-radius); background: var(--stage);
+  box-shadow: inset 0 0 0 1px var(--stage-edge);
+}
+.stage-pad { padding: clamp(16px, 3vw, 32px); }
+
+/* Points under a section: icon disc, title and a line of text. */
+.points { display: grid; gap: var(--space-6) var(--space-8); margin-top: var(--space-10); }
+@media (min-width: 640px) { .points { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .points.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.point { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--space-1) var(--space-4); }
+.point .disc { grid-row: span 2; }
+.point h3 { font: var(--type-title-medium); font-size: 17px; letter-spacing: var(--tracking-title); }
+.point p { font: var(--type-body-medium); font-size: 15px; line-height: 22px; color: var(--md-on-surface-variant); }
+.disc {
+  display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--md-shape-m);
+  background: var(--md-primary-container); color: var(--md-on-primary-container);
+}
+.disc svg { width: 22px; height: 22px; }
+.disc.neutral { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+
+/* ---------------------------------------------------------------------------
+   Chat vocabulary shared with the web app. */
+.thread { display: flex; flex-direction: column; gap: 6px; }
+.bubble-row { display: flex; align-items: flex-end; gap: 8px; max-width: 100%; }
+.bubble-row.outgoing { justify-content: flex-end; }
+.bubble-row .avatar-slot { width: 28px; flex: none; }
+.bubble {
+  max-width: min(420px, 82%); padding: 9px 14px 8px; border-radius: 20px; background: var(--incoming);
+  color: var(--md-on-surface); font: var(--type-body-medium); font-size: 15px; line-height: 21px; overflow-wrap: anywhere;
+}
+.outgoing .bubble { background: var(--outgoing); color: var(--md-on-primary-container); border-bottom-right-radius: var(--md-shape-xs); }
+.incoming .bubble { border-bottom-left-radius: var(--md-shape-xs); }
+.bubble .sender { display: block; margin-bottom: 1px; font-size: 13px; font-weight: 700; color: var(--sender-light, var(--md-on-surface-variant)); }
+:root[data-theme="dark"] .bubble .sender { color: var(--sender-dark, var(--md-on-surface-variant)); }
+.bubble .relay { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 700; color: var(--md-on-surface-variant); }
+.bubble strong { font-weight: 700; }
+.typing {
+  display: inline-flex; align-items: center; gap: 3px; padding: 13px 16px; border-radius: 20px;
+  border-bottom-left-radius: var(--md-shape-xs); background: var(--incoming);
+}
+.typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--md-primary); animation: site-typing 1.2s infinite ease-in-out; }
+.typing span:nth-child(2) { animation-delay: 0.15s; }
+.typing span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes site-typing { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+.system-banner {
+  align-self: center; max-width: min(100%, 420px); margin: var(--space-1) 0; padding: var(--space-1) var(--space-3);
+  border-radius: var(--md-shape-full); background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+  font: var(--type-label-medium); letter-spacing: var(--tracking-label); text-align: center;
+  display: inline-flex; align-items: center; gap: var(--space-1-5);
+}
+.system-banner svg { width: 14px; height: 14px; }
+.avatar.person { background: var(--md-secondary-container); color: var(--md-on-secondary-container); font-weight: 700; }
+
+/* Items entering a scene rise and settle. */
+.pop { animation: site-pop var(--md-motion-long) var(--md-ease-decelerate) both; }
+@keyframes site-pop { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
+.scene { transition: opacity 400ms var(--md-ease); }
+.scene.fading { opacity: 0; }
+
+/* ---------------------------------------------------------------------------
+   Scroll reveal (plugins/reveal.client.ts). */
+html.js .reveal { opacity: 0; transform: translateY(24px); transition: opacity 700ms var(--md-ease-decelerate), transform 700ms var(--md-ease-decelerate); }
+html.js .reveal[data-in] { opacity: 1; transform: none; }
+html.js .reveal.delay-1 { transition-delay: 90ms; }
+html.js .reveal.delay-2 { transition-delay: 180ms; }
+
+/* Every animation stops on its final frame for reduced motion. useScene keeps
+   scenes on their last beat, and reveals start visible. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  html.js .reveal { opacity: 1; transform: none; transition: none; }
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}

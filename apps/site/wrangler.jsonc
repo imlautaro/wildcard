@@ -1,0 +1,17 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // The public marketing site: a static-assets-only Worker with no script, binding
+  // or secret. `npm run build:site` prerenders every page into .output/public;
+  // scripts/release-site.mjs deploys this file from Workers Builds. Never deploy
+  // manually. See docs/site.md.
+  "name": "wildcard-site",
+  "compatibility_date": "2026-10-26",
+  "account_id": "a9e3a97d08ec5023cbe6b97a1a25fec6",
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": {
+    "directory": "./.output/public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

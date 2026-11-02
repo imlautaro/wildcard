@@ -21,6 +21,8 @@ build/
 # JavaScript dependencies and generated output
 node_modules/
 dist/
+# `nuxt generate` links apps/site/dist to .output/public (a symlink, not a directory)
+apps/site/dist
 .wrangler/
 .nuxt/
 .output/

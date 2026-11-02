@@ -2,7 +2,9 @@
 
 `packages/ui` is a [Nuxt layer](https://nuxt.com/docs/guide/going-further/layers)
 that both browser apps extend: `apps/web` and `apps/admin` declare
-`extends: ['../../packages/ui']` in `nuxt.config.ts`. The layer is the single source
+`extends: ['../../packages/ui']` in `nuxt.config.ts`. The public marketing site
+(`apps/site`, see [site](site.md)) extends it too, so layer changes also reach it;
+run `npm run typecheck:site` with the other checks. The layer is the single source
 of the web look: Material 3 components, Solar icons and the press ripple,
 with a Wildcard customization layer on top (type, spacing, shape, elevation and
 motion). iOS keeps its native SwiftUI design; this document applies to the browser

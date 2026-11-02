@@ -34,6 +34,8 @@ prefer rolling forward to retain validation and legacy cleanup handling.
 | Admin Worker (optional) | `apps/admin/wrangler.jsonc`, `wildcard-admin` | Super admin panel; see [Admin Worker](#admin-worker) |
 | Service binding (admin) | `API` → `wildcard-api`, entrypoint `AdminAPI` | Private admin API, not reachable from the public API origin |
 | Workers Builds (admin, optional) | Third project on the same repository and branch, root `/` | Automatic admin releases |
+| Marketing site Worker (optional) | `apps/site/wrangler.jsonc`, `wildcard-site` | Public landing page, static assets only; see [Marketing site Worker](#marketing-site-worker) |
+| Workers Builds (site, optional) | Another project on the same repository and branch, root `/` | Automatic marketing site releases |
 
 There are no KV, email service, or staging dependencies. R2 is required for
 [contact profile photos](profile-photos.md). The production bucket was created and verified on October 26, 2026. Chats require
@@ -284,6 +286,47 @@ Clearing `SUPER_ADMIN_USER_IDS` and releasing the API revokes access without
 touching the panel. Pre-0059 API code ignores `app_setting` and `admin_event`, so
 an API rollback reopens registration (the old code has no gate) and keeps the
 tables. To reset a setting, delete its row through the normal migration process.
+
+## Marketing site Worker
+
+The [marketing site](site.md) is optional and independent of the app: a
+static-assets-only Worker, `wildcard-site`, configured in `apps/site/wrangler.jsonc`.
+It has no script, binding, D1, R2, Workflow, Cron, secret or migration.
+`npm run build:site` runs `nuxt generate`, which prerenders every page into
+`apps/site/.output/public`; the Wrangler file serves that directory and answers
+unknown paths with `404.html`, which `nuxt generate` emits. The build compiles the shared [design system layer](design-system.md),
+so the Workers Builds root must stay `/`.
+
+Provisioning:
+
+1. In `apps/site/wrangler.jsonc`, replace `account_id`, and `name` if `wildcard-site`
+   is taken. In `apps/site/app/utils/site.ts`, set `appUrl` to your web app origin,
+   `repositoryUrl` to your repository and `iosUrl` if you distribute the iPhone app.
+   Leave `repositoryPublic: false` until the repository is public, so the site
+   doesn't link to a page that returns 404.
+2. In Cloudflare, create another Workers Builds project on the same repository and
+   production branch: root `/`, build command
+   `npm ci && npm run typecheck:site && npm run build:site`, deploy command
+   `npm run release:site`. A credential limited to Workers Scripts edit and account
+   read is enough. Disable preview builds unless you want branch previews of the site.
+3. Optional watch paths: `apps/site/**`, `packages/ui/**`, `package.json`,
+   `package-lock.json` and `scripts/release-site.mjs`.
+4. Push a commit. `scripts/release-site.mjs` applies the same guards as the other
+   releases (Workers Builds only, production branch, clean checkout, HEAD equal to
+   `WORKERS_CI_COMMIT_SHA`) and deploys `apps/site/wrangler.jsonc` tagged with the
+   commit. Optionally attach a custom domain to `wildcard-site` in the dashboard.
+
+`nuxt generate` also links `apps/site/dist` to the output; it is ignored in Git so the
+release's clean-checkout check still passes after the build.
+
+Status (November 1, 2026): `npm run build:site` was run locally (prerendered `/`,
+`200.html`, `404.html`; 1.2 MB) and served with `wrangler dev --config
+apps/site/wrangler.jsonc`: `/` returned 200, an unknown path 404 with the site's
+error page. The Workers Builds project and the first automatic release were not yet
+verified when this was written.
+
+Rollback: roll back or delete the `wildcard-site` Worker. It stores no data and no
+other Worker depends on it.
 
 ## Local setup
 
