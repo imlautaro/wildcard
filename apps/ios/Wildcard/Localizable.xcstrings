@@ -10319,12 +10319,12 @@
         }
       }
     },
-    "The contact says hi when it is new, can add a thought without another prompt, and texts first after a quiet spell. Timing adapts to this chat and its personality, and nothing is sent between 22:00 and 08:00. After a few unanswered messages it waits for you. Active typing gives you space. Ask the contact to pause, or turn this off. Applies only to your private chat." : {
+    "The contact says hi as soon as it is created, can add a thought without another prompt, and texts first when the chat goes quiet. It starts out eager and adapts to how you respond and to its personality. Outside an active conversation, nothing is sent between 22:00 and 08:00. After a few unanswered messages it waits for you. Active typing gives you space. Ask the contact to pause, or turn this off. Applies only to your private chat." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El contacto te saluda cuando es nuevo, puede añadir una idea sin que le escribas de nuevo y te escribe primero después de un tiempo sin hablar. El momento se adapta a este chat y a su personalidad, y no envía nada entre las 22:00 y las 08:00. Tras algunos mensajes sin respuesta, espera a que le escribas. Si estás escribiendo, te da espacio. Pídele al contacto que haga una pausa o desactiva esta opción. Solo se aplica a tu chat privado."
+            "value" : "El contacto te saluda apenas se crea, puede añadir una idea sin que le escribas de nuevo y te escribe primero cuando el chat queda en silencio. Empieza con ganas y se adapta a cómo respondes y a su personalidad. Fuera de una conversación activa, no envía nada entre las 22:00 y las 08:00. Tras algunos mensajes sin respuesta, espera a que le escribas. Si estás escribiendo, te da espacio. Pídele al contacto que haga una pausa o desactiva esta opción. Solo se aplica a tu chat privado."
           }
         }
       }

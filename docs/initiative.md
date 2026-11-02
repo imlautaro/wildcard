@@ -25,7 +25,7 @@ conversation, greeting or relevant check-in. Since 0094 this requires no
 unanswered proactive message, no explicit pause and no boundary in the source
 request; a prior social classification is no longer needed. Task-only chats may
 receive task-related follow-ups but no greetings, and a greeting ignored in the
-last 72 hours suppresses greetings only. A goodbye ends the current exchange; an
+last 24 hours suppresses greetings only. A goodbye ends the current exchange; an
 explicit request to stop unsolicited contact also pauses future initiative.
 Ambient opportunities expire seven days after the latest human input. One
 published ambient message ends this episode; later outreach comes from
@@ -74,7 +74,7 @@ Consecutive human messages marked `MESSAGE_BATCHED` immediately before the sourc
 are included in that request's context, so a short acknowledgment followed by a
 separate task message is not automatically treated as ignoring the greeting.
 
-A greeting left unanswered for less than 72 hours suppresses further greetings
+A greeting left unanswered for less than 24 hours suppresses further greetings
 (0094; previously greetings and social check-ins, without expiry). An unrelated
 task does not lift this suppression; subsequent actual social engagement can. Two
 recent classified practical requests suppress greetings and social small talk but
@@ -101,10 +101,10 @@ they do not establish that someone is awake, at home or available.
 Enabled personalities retain their acting director and expression guidance.
 Initiative and patience also affect the minimum gap and amount of outreach:
 
-- Low initiative, task-oriented use or low measured receptivity allows at most
-  one unanswered continuation. Unknown receptivity normally allows two.
-- Up to three requires high initiative, a less patient character and
-  positive measured engagement. The global ceiling remains three.
+- Contacts start eager: unknown receptivity allows the global ceiling of three
+  unanswered continuations (0094). Task-only use or low measured receptivity
+  (below 35%) allows one; low initiative, a very patient character or moderate
+  receptivity (below 65%) allows two.
 - The personality continuation floor is now 20–101 seconds instead of 30–480,
   with the first continuation still subject to a 30-second minimum. Neutral traits
   give a 60-second floor; low initiative and high patience leave more room.
@@ -128,11 +128,14 @@ not introduced.
 ## Delivery limits and control
 
 No spontaneous message is delivered between **22:00 and 08:00** in the time zone
-of the latest human turn. This remains a delivery boundary, not a promise to write
+of the latest human turn, except within 30 minutes of the person's latest message
+in this chat (an active conversation, 0094) and for a welcome from a contact created
+in the last 30 minutes. This remains a delivery boundary, not a promise to write
 at 08:00. Missing/invalid zones suspend the episode without guessing. Cron checks
 at most ten due rows each minute; inference, attention and queue load can delay
-sending. At most three initiative messages per contact and twelve per account
-can be published in a rolling 24-hour window. Private messages originating from
+sending. At most six spontaneous messages per contact and thirty per account
+(welcomes included; three and twelve before 0094) can be published in a rolling
+24-hour window. Private messages originating from
 groups retain their separate existing budget and do not train initiative.
 
 Before publication, the atomic transaction rechecks the source/revision/anchor,
@@ -257,56 +260,80 @@ runtime or semantic quality claims.
 The marketing promise is that contacts text first. Before 0094 an episode only
 started after a human message was answered, ambient outreach required a classified
 social exchange, an ignored greeting blocked social outreach indefinitely, and the
-planner prompt leaned towards silence. 0094 changes that in three parts.
+planner prompt leaned towards silence. 0094 inverts the default: contacts start
+fast and insistent, then slow down on their own as outreach goes unanswered.
 
 ### Welcome messages
 
 A contact created by [contact generation](contact-generation.md) or published by
 [onboarding](onboarding.md) introduces itself once, before the person writes.
-`contact.welcome_due_at` is set to roughly one minute after a generated contact is
-published; first-circle contacts are staggered about four minutes apart after each
-becomes ready. Manually named contacts (`POST /contacts`) and contacts joined through
+Generation publishes the contact with `contact.welcome_due_at` set to now and starts
+the welcome immediately (`startWelcome`), so the message arrives within the model
+call and typing pause, typically seconds. Onboarding schedules the first circle in
+plan order about 70 seconds apart once the circle is published, starting the first
+immediately. Manually named contacts (`POST /contacts`) and contacts joined through
 [sharing](sharing.md) do not send a welcome.
 
-`dispatchContactWelcomes` (one-minute Cron) claims at most ten due contacts with a
-ten-minute lease and at most three attempts (`welcome_attempts`), registers
-`welcome-<contact>-<attempt>` in `chat_workflow_instance` and starts the `welcome`
-`ChatWorkflow` job (`apps/api/src/chat/welcome.ts`). The job uses the person's
-latest known time zone from any of their chats, then their Updates feed; with none,
-it only sends within two hours of creation, when the person is present. Quiet hours
-postpone it without consuming an attempt. It uses the character direction,
-configured language/region, persona, eligible shared memories and the stated reason
-for the contact (generation purpose, onboarding circle and occupation), shows typing
-and publishes one short first message as a `greeting`.
+`dispatchContactWelcomes` (one-minute Cron) is the fallback and starts later
+onboarding welcomes as they come due. Each claim takes a ten-minute lease, with at
+most three attempts (`welcome_attempts`); it registers `welcome-<contact>-<attempt>`
+in `chat_workflow_instance` and starts the `welcome` `ChatWorkflow` job
+(`apps/api/src/chat/welcome.ts`). The job uses the person's latest known time zone
+from any of their chats, then their Updates feed. A contact created within the last
+30 minutes greets even during quiet hours, because the person just created it; an
+older pending welcome waits for 08:00 without consuming an attempt. Without any
+known zone, it only sends within two hours of creation. It uses the character
+direction, configured language/region, persona, eligible shared memories and the
+stated reason for the contact (generation purpose, onboarding circle and occupation).
+
+The welcome is one or two chat bubbles published together after a typing pause:
+a hello that introduces the contact, and optionally something about it (a taste,
+an opinion, what it likes to talk about). The prompt forbids opening with a
+question, generic icebreakers ("what are you listening to lately?") and assistant
+or onboarding phrasing; at most one light question may close the second bubble.
 
 The welcome turn's `initiative_source_id` refers to itself, so it counts as
-spontaneous outreach for the per-contact/account budgets and adaptation: if it is
-ignored, greetings stay suppressed for 72 hours and no re-engagement starts,
-because re-engagement needs at least one human message. Any message in the chat,
-disabling initiative, archive or clear cancels a pending welcome (triggers in
-0094). Publication rechecks the contact, setting, empty chat and claim atomically;
-model selection and consent are checked when the context is built, not again at
-publication. A failed attempt leaves presence to the ordinary presence expiry. Welcomes are not limited by the rolling budgets but count towards them.
+spontaneous outreach for budgets and adaptation. If it is ignored, greetings stay
+suppressed for 24 hours, and [re-engagement](#re-engagement-after-silence) can
+follow it up with a different thought. Any message in the chat, disabling
+initiative, archive or clear cancels a pending welcome (triggers in 0094).
+Publication rechecks the contact, setting, empty chat and claim atomically; model
+selection and consent are checked when the context is built, not again at
+publication. A failed attempt leaves presence to the ordinary presence expiry.
 
 ### Re-engagement after silence
 
 Every ten minutes `dispatchInitiatives` sweeps private chats with initiative on, no
-pause, no live episode and a human message in the last 30 days with a known time
-zone. A chat qualifies after about **1 day** of quiet with no unanswered spontaneous
-message, **3 days** after one and **7 days** after two, measured from the latest
-message of either side. After three unanswered spontaneous messages since the person
-last wrote, outreach waits for them. `contact.reengaged_at` limits the sweep to one
-episode per chat every 20 hours, even when the model chooses not to send.
+pause, no live episode and, within the last 30 days, either a human message or a
+welcome, with a known time zone. The source is the latest human message, or the
+welcome if the person never wrote. The base quiet time before each re-engagement,
+measured from the latest message of either side, is **3 hours** with no unanswered
+spontaneous message, **12 hours** after one and **48 hours** after two
+(`reengagementQuiet`). After three unanswered spontaneous messages (the welcome
+included) outreach waits for the person.
+
+`reengagementFactor` adapts that base per chat: unmeasured or good receptivity
+(at least 60% of measured outreach answered) keeps it, 35–60% doubles it and less
+than 35% multiplies it by four; a character with initiative 8 or more is 25% faster
+and one with 3 or less 50% slower. `contact.reengaged_at` spaces sweeps of a chat by
+at least two hours, and an episode that ends without a message pushes the next sweep
+of that chat six hours out, so a model that keeps choosing silence is not asked
+repeatedly. Quiet hours and the sweep use the source's time zone, falling back to the
+person's latest zone from any chat or their Updates feed (a welcome may have none).
+A brand-new person with no known zone anywhere gets no follow-up to an ignored
+welcome until they write or open Updates.
 
 The sweep opens an ambient `conversation_initiative` row with `reengage = 1`, the
-latest human turn as source, the latest turn as anchor, a timestamp-seeded revision
-(Workflow IDs are never reused) and its own three-day expiry instead of the source's
-seven-day horizon. The first review is drawn from the learned activity windows within
-48 hours. Evaluation, quiet hours, personality gaps, rolling budgets, consent,
-read/typing checks and atomic publication are those of every other episode; the
-planner sees `reconnect-after-silence` with the days since the last human message and
-the number of unanswered messages, and is told never to mention the silence. New human
-input deletes the row as before.
+source above, the latest turn as anchor, a timestamp-seeded revision (Workflow IDs
+are never reused) and its own three-day expiry instead of the source's seven-day
+horizon. Its first review is drawn from the learned activity windows within 48
+hours, starting immediately, without the ordinary ambient minimum gap. Evaluation,
+quiet hours, personality gaps, rolling budgets, consent, read/typing checks and
+atomic publication are those of every other episode. The planner sees
+`reconnect-after-silence`, whether the person has written, the hours since their
+last message and the number of unanswered messages, and is told never to mention
+the silence. A welcome-sourced episode never classifies the welcome or changes the
+pause permission. New human input deletes the row as before.
 
 ### Planner and policy
 
@@ -319,17 +346,19 @@ input deletes the row as before.
   follow-ups (`check-in`/`continuation`), never greetings.
 - Each evaluation logs `initiative_decision` (mode, re-engagement, action, kind,
   engagement, whether sending was allowed and whether it published) and each sweep
-  row logs `initiative_reengagement`; welcomes log `welcome_decision`. Logs never
-  contain message text.
+  row logs `initiative_reengagement` (with the applied quiet hours); welcomes log
+  `welcome_decision`. Logs never contain message text.
 
 ### Cost and validation
 
-Re-engagement adds at most one planner evaluation per eligible chat per 20 hours
-(up to six reviews within an episode if the model waits), and each welcome one
-completion. For 0094 the validation scope was static: API TypeScript,
-`python3 scripts/checks/initiative-sql-compile.py` (now also covering
-`welcome.ts`) and the migration plus fixtures for the self-referencing welcome
-insert, cancellation triggers, sweep selection and upsert on local workerd D1. No
-live inference, Workflow run, client session or device was exercised; the
-opt-in `scripts/checks/initiative.cjs` harness has not been updated for 0094.
-Measure the decision logs before tuning the cadence.
+Re-engagement adds at most one planner evaluation per eligible chat every two hours,
+six after an episode that ended silent (up to six reviews within an episode if the
+model waits), and each welcome one
+completion. The validation scope was static: API TypeScript,
+`python3 scripts/checks/initiative-sql-compile.py` (also covering `welcome.ts`),
+`scripts/checks/onboarding-sql-compile.py`, and the migration plus fixtures on local
+workerd D1 for the self-referencing welcome insert, cancellation triggers, the
+immediate welcome claim, sweep selection (including welcome-only chats) and upsert.
+No live inference, Workflow run, client session or device was exercised; the opt-in
+`scripts/checks/initiative.cjs` harness has not been updated for 0094. Measure the
+decision logs before tuning the cadence.

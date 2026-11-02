@@ -1,3 +1,4 @@
+import { startWelcome } from '../chat/welcome';
 import { accentForCountry } from '../../../../shared/voice';
 import { identityGenerationInstruction } from '../personality/identity';
 import { themedContactNames, nameKey, shuffled } from '../contacts/names';
@@ -186,8 +187,23 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string;
         );
         statements.push(db.prepare("UPDATE account_onboarding SET status = 'complete', group_id = ?, updated_at = ? WHERE user_id = ?").bind(createGroup && kept.length ? plan.groupID : null, now, owner),
           db.prepare('UPDATE user SET onboarding_required = 0 WHERE id = ?').bind(owner));
+        // The circle texts first one by one, in plan order, about a minute apart
+        // (docs/initiative.md#welcome-messages). Retries never reschedule a welcome.
+        const ordered = plan.contacts.filter(c => kept.some(k => k.id === c.id));
+        for (const [position, identity] of ordered.entries()) statements.push(db.prepare(`UPDATE contact SET welcome_due_at = ?1
+            WHERE id = ?2 AND user_id = ?3 AND welcome_attempts = 0 AND welcome_due_at IS NULL
+              AND NOT EXISTS (SELECT 1 FROM chat_turn WHERE contact_id = contact.id)`)
+          .bind(now + position * 70_000 + (position ? Math.floor(Math.random() * 15_000) : 0), identity.id, owner));
         // D1 batch is atomic: the optional group and completion appear together.
         await db.batch(statements);
+      });
+      // The first welcome starts right away; Cron starts the next ones as they come due.
+      await step.do('first-welcome', async () => {
+        const first = await this.env.DB.prepare(`SELECT id FROM contact WHERE user_id = ? AND welcome_due_at IS NOT NULL
+          AND id IN (SELECT value FROM json_each(?)) ORDER BY welcome_due_at LIMIT 1`)
+          .bind(owner, JSON.stringify(plan.contacts.map(c => c.id))).first<{ id: string }>();
+        try { if (first) await startWelcome(this.env, first.id); }
+        catch { console.error(JSON.stringify({ event: 'welcome_start_deferred' })); }
       });
     } catch (error) {
       await step.do('mark-failed', async () => {
@@ -204,16 +220,9 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string;
   /** Enables one first-circle contact with its portrait, unless the person already set a photo. */
   private async ready(owner: string, contactID: string, plan: Plan, photoVersion: string | null) {
     const now = Date.now();
-    // First-circle contacts text first, staggered so they do not all arrive at once
-    // (docs/initiative.md#welcome-messages). Retries never reschedule a welcome.
-    const position = Math.max(0, plan.contacts.findIndex(c => c.id === contactID));
-    const welcomeAt = now + 60_000 + position * 240_000 + Math.floor(Math.random() * 120_000);
     await this.env.DB.batch([
-      this.env.DB.prepare(`UPDATE contact SET setup_pending = 0, photo_version = COALESCE(photo_version, ?), updated_at = ?,
-          welcome_due_at = CASE WHEN setup_pending = 1 AND welcome_attempts = 0 AND welcome_due_at IS NULL
-            AND NOT EXISTS (SELECT 1 FROM chat_turn WHERE contact_id = contact.id) THEN ? ELSE welcome_due_at END
-        WHERE id = ? AND user_id = ?`)
-        .bind(photoVersion, now, welcomeAt, contactID, owner),
+      this.env.DB.prepare('UPDATE contact SET setup_pending = 0, photo_version = COALESCE(photo_version, ?), updated_at = ? WHERE id = ? AND user_id = ?')
+        .bind(photoVersion, now, contactID, owner),
       // photo_count now counts ready contacts, in any order.
       this.env.DB.prepare(`UPDATE account_onboarding SET photo_count = (SELECT COUNT(*) FROM contact WHERE user_id = ?1 AND setup_pending = 0
           AND id IN (SELECT value FROM json_each(?2))), updated_at = ?3 WHERE user_id = ?1`)

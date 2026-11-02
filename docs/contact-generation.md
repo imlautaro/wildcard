@@ -56,10 +56,10 @@ recovers queued dispatches and records terminal Workflow failures. Retry restart
 the same instance and reuses saved text and any completed portrait.
 
 Text and portrait steps have bounded retries and 2/4 minute budgets, respectively.
-A final atomic batch publishes one contact, its personality and the completed job. It also schedules the contact's [welcome message](initiative.md#welcome-messages) about one minute later (migration 0094).
+A final atomic batch publishes one contact, its personality and the completed job. It also marks the contact's [welcome message](initiative.md#welcome-messages) due, and a following step starts it immediately (migration 0094).
 The contact trigger creates one agent; sharing later grants access to that same
-agent. New contacts retain ordinary memory-sharing defaults; no group, consent,
-welcome message or unread event is invented. Published photos reuse private R2
+agent. New contacts retain ordinary memory-sharing defaults; no group or consent is
+invented. The only unread event is the contact's own generated welcome message. Published photos reuse private R2
 routes and existing image caches. Deleting a generated contact removes its job and
 queues its Workflow checkpoints for deletion. Completed job/plan rows and failed
 unpublished portraits remain with a live account/job without automatic expiry.

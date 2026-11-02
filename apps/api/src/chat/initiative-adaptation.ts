@@ -52,13 +52,29 @@ export function variedReviewDelay(seconds: number, seed: string) {
 // spontaneous messages since the person last wrote. Then outreach waits for them.
 export const reengagementCap = 3;
 // An ignored greeting suppresses greetings for this long, not forever.
-const greetingSuppression = 72 * hour;
+const greetingSuppression = 24 * hour;
+// Quiet time before each re-engagement, by spontaneous messages already unanswered
+// since the person last wrote. Contacts start eager; adaptation slows them down.
+export const reengagementQuiet = [3 * hour, 12 * hour, 48 * hour];
+// The smallest multiplier reengagementFactor can return, for SQL prefiltering.
+export const minimumReengagementFactor = 0.75;
+
+// Eager by default: unmeasured receptivity uses the base cadence. Measured engagement
+// keeps it; ignored outreach stretches it. A very proactive character is faster.
+export function reengagementFactor(policy: { responseRate: number | null }, p: Personality) {
+  const initiative = p.enabled ? p.traits.initiative : 5;
+  const character = initiative >= 8 ? minimumReengagementFactor : initiative <= 3 ? 1.5 : 1;
+  const rate = policy.responseRate;
+  const receptivity = rate === null || rate >= 0.6 ? 1 : rate >= 0.35 ? 2 : 4;
+  return character * receptivity;
+}
 
 export function adaptivePolicy(samples: InitiativeSample[], sourceID: string, p: Personality, now: number, paused: boolean, reengage = false) {
   const humans = samples.filter(s => s.human);
   const source = humans.find(s => s.id === sourceID);
   const outreach = samples.filter(s => s.proactive);
-  const latestHumanAt = humans[0]?.createdAt ?? now;
+  // Without any human message (a new contact's welcome), every outreach is unanswered.
+  const latestHumanAt = humans[0]?.createdAt ?? 0;
   const unanswered = outreach.filter(s => s.repliedAt >= latestHumanAt).length;
   const lastSocial = humans.find(s => s.engagement === 'social' && s.response !== 'unrelated');
   const recentStyles = humans.filter(s => s.engagement && s.engagement !== 'uncertain').slice(0, 2);
@@ -77,9 +93,12 @@ export function adaptivePolicy(samples: InitiativeSample[], sourceID: string, p:
   const responseRate = outcomes.length >= 3 ? outcomes.reduce((a, b) => a + b, 0) / outcomes.length : null;
   const initiative = p.enabled ? p.traits.initiative : 5;
   const patience = p.enabled ? p.traits.patience : 5;
+  // Eager until measured: unknown receptivity allows the global ceiling of three
+  // unanswered continuations; ignored outreach, task-only use or a reserved
+  // character lowers it.
   const maxUnanswered = paused || boundary ? 0
-    : taskOnly || (responseRate !== null && responseRate < 0.35) || initiative <= 3 ? 1
-    : initiative >= 8 && patience <= 5 && responseRate !== null && responseRate >= 0.65 ? 3 : 2;
+    : taskOnly || (responseRate !== null && responseRate < 0.35) ? 1
+    : initiative <= 3 || (responseRate !== null && responseRate < 0.65) || patience >= 8 ? 2 : 3;
   const greetingsAllowed = !paused && !boundary && !taskOnly && !ignoredGreeting;
   return {
     paused, taskOnly, unanswered, maxUnanswered, greetingsAllowed, reengage,

@@ -2,7 +2,7 @@ import { albumFields, generateChatImage, generatedImages, imageInstruction, imag
 import { embodiedIdentityInstruction } from '../personality/identity';
 import { conversationStyle, regionalConversation } from '../personality/conversation';
 import { learningContext, learningQuestionInstruction, parseLearningQuestion, recordLearningQuestion, type LearningQuestion } from './learning';
-import { adaptiveHorizon, adaptivePolicy, activityWindows, nextAmbientOpportunity, outreachBefore, projectedFeedback, readInitiativeSamples, reengagementCap, variedReviewDelay } from './initiative-adaptation';
+import { adaptiveHorizon, adaptivePolicy, activityWindows, minimumReengagementFactor, nextAmbientOpportunity, outreachBefore, projectedFeedback, readInitiativeSamples, reengagementCap, reengagementFactor, reengagementQuiet, variedReviewDelay } from './initiative-adaptation';
 import type { Engagement, InitiativeKind, OutreachResponse } from './initiative-adaptation';
 import { temporalContext, temporalInstruction } from './temporal';
 import { discardWorkflow } from './cleanup';
@@ -27,7 +27,7 @@ type Snapshot = {
   contactID: string; sourceID: string; anchorID: string; revision: number; evaluations: number;
   sent: number; expiresAt: number; intent: string; userID: string; agentID: string; name: string; alias: string | null;
   mode: 'continuation' | 'ambient'; reengage: number; sourceAt: number; paused: number; learningRevision: number;
-  activeUntil: number | null; busy: number; activityAt: number | null; lastReadSequence: number; readAt: number | null; timeZone: string | null; anchorAt: number;
+  activeUntil: number | null; busy: number; humanAt: number | null; activityAt: number | null; lastReadSequence: number; readAt: number | null; timeZone: string | null; anchorAt: number;
 };
 type Decision = { action: 'wait' | 'send' | 'stop'; delaySeconds: number; intent: string; message: string | null;
   imageJSON?: string | null;
@@ -63,7 +63,14 @@ async function snapshot(env: Env, job: InitiativeJob) {
     (SELECT MAX(typing_at + 6000) FROM chat_visit WHERE contact_id = c.id AND closed = 0
       AND expires_at > unixepoch('subsec') * 1000) AS activeUntil,
     EXISTS (SELECT 1 FROM agent_attention WHERE agent_id = c.agent_id) AS busy,
-    c.last_reply_read_at AS readAt, source.time_zone AS timeZone, anchor.updated_at AS anchorAt
+    c.last_reply_read_at AS readAt, anchor.updated_at AS anchorAt,
+    -- A welcome may have no zone; use the person's latest known zone from any chat or their feed.
+    COALESCE(source.time_zone,
+      (SELECT z.time_zone FROM chat_turn z WHERE z.user_id = c.user_id AND z.time_zone IS NOT NULL ORDER BY z.created_at DESC LIMIT 1),
+      (SELECT f.time_zone FROM home_feed f WHERE f.user_id = c.user_id)) AS timeZone,
+    (SELECT MAX(h.created_at) FROM chat_turn h WHERE h.contact_id = c.id AND h.user_id = c.user_id
+      AND h.initiative_source_id IS NULL AND h.schedule_id IS NULL AND h.task_id IS NULL AND h.group_request_id IS NULL
+      AND h.origin_group_id IS NULL AND (h.user_text != '' OR h.attachment_json IS NOT NULL)) AS humanAt
     FROM conversation_initiative p JOIN contact c ON c.id = p.contact_id
     JOIN chat_turn source ON source.id = p.source_id JOIN chat_turn anchor ON anchor.id = p.anchor_id
     WHERE p.contact_id = ? AND p.source_id = ? AND p.revision = ? AND c.initiative_enabled = 1 AND c.clearing = 0 AND c.archived_at IS NULL
@@ -73,46 +80,61 @@ async function snapshot(env: Env, job: InitiativeJob) {
 }
 
 const day = 86_400_000;
-// Quiet time required before each re-engagement, by spontaneous messages already
-// unanswered since the person last wrote: about 1, 3 and 7 days. The cap ends it.
-const reengagementQuiet = [day, 3 * day, 7 * day];
+// A model that chose silence is asked again for this chat after at least this long.
+const reengagementRetry = 2 * 3_600_000;
+// After a re-engagement episode ends without a message, the chat is not swept again for this long.
+const silentReengagementBackoff = 6 * 3_600_000;
+// Outside quiet hours, or within this long of the person's latest message.
+const activeConversation = 30 * 60_000;
+// Rolling 24-hour publication budgets for spontaneous messages, welcomes included.
+export const contactDailyOutreach = 6;
+export const accountDailyOutreach = 30;
 
 // Opens a bounded ambient episode for private chats that went quiet, so a contact
-// can text first without new human input. Every gate of an ordinary episode still
-// applies at evaluation and publication; reengaged_at keeps a model that chooses
-// silence from being asked again for about a day.
+// can text first without new human input, including after an unanswered welcome.
+// The base cadence (reengagementQuiet) is eager and stretched by reengagementFactor
+// as outreach goes unanswered. Every gate of an ordinary episode still applies at
+// evaluation and publication; reengaged_at spaces evaluations when the model stays silent.
 async function openReengagements(env: Env, now: number) {
   const { results } = await env.DB.prepare(`WITH latest AS (
       SELECT c.id AS contactID, c.user_id AS userID, c.agent_id AS agentID,
-        (SELECT h.id FROM chat_turn h WHERE h.contact_id = c.id AND h.user_id = c.user_id AND h.status = 'complete'
+        -- The latest human request; before the person ever writes, the contact's welcome.
+        COALESCE((SELECT h.id FROM chat_turn h WHERE h.contact_id = c.id AND h.user_id = c.user_id AND h.status = 'complete'
           AND h.initiative_source_id IS NULL AND h.schedule_id IS NULL AND h.task_id IS NULL AND h.group_request_id IS NULL
           AND h.origin_group_id IS NULL AND (h.user_text != '' OR h.attachment_json IS NOT NULL)
-          ORDER BY h.sequence DESC LIMIT 1) AS sourceID,
+          ORDER BY h.sequence DESC LIMIT 1),
+          (SELECT w.id FROM chat_turn w WHERE w.contact_id = c.id AND w.user_id = c.user_id AND w.status = 'complete'
+            AND w.initiative_source_id = w.id ORDER BY w.sequence LIMIT 1)) AS sourceID,
         (SELECT t.id FROM chat_turn t WHERE t.contact_id = c.id AND t.user_id = c.user_id ORDER BY t.sequence DESC LIMIT 1) AS anchorID
       FROM contact c
       WHERE c.initiative_enabled = 1 AND c.initiative_paused = 0 AND c.archived_at IS NULL AND c.clearing = 0
         AND c.setup_pending = 0 AND c.agent_id IS NOT NULL AND COALESCE(c.reengaged_at, 0) <= ?1 - ?2
         AND NOT EXISTS (SELECT 1 FROM conversation_initiative p WHERE p.contact_id = c.id AND p.next_at IS NOT NULL AND p.expires_at > ?1)
     ), candidate AS (
-      SELECT l.contactID, l.userID, l.agentID, l.sourceID, l.anchorID, source.time_zone AS timeZone,
+      SELECT l.contactID, l.userID, l.agentID, l.sourceID, l.anchorID,
+        COALESCE(source.time_zone,
+          (SELECT z.time_zone FROM chat_turn z WHERE z.user_id = l.userID AND z.time_zone IS NOT NULL ORDER BY z.created_at DESC LIMIT 1),
+          (SELECT f.time_zone FROM home_feed f WHERE f.user_id = l.userID)) AS timeZone,
         anchor.updated_at AS anchorAt, anchor.status AS anchorStatus, source.created_at AS sourceAt,
         (SELECT COUNT(*) FROM chat_turn o WHERE o.contact_id = l.contactID AND o.user_id = l.userID
-          AND o.sequence > source.sequence AND o.initiative_source_id IS NOT NULL) AS unanswered
+          AND o.sequence >= source.sequence AND o.initiative_source_id IS NOT NULL) AS unanswered
       FROM latest l JOIN chat_turn source ON source.id = l.sourceID JOIN chat_turn anchor ON anchor.id = l.anchorID
     )
     SELECT contactID, userID, agentID, sourceID, anchorID, timeZone, anchorAt, unanswered FROM candidate
     WHERE timeZone IS NOT NULL AND sourceAt > ?1 - ?3 AND anchorStatus IN ('complete', 'failed') AND unanswered < ?4
-      AND anchorAt <= ?1 - CASE unanswered WHEN 0 THEN ?5 WHEN 1 THEN ?6 ELSE ?7 END
+      AND anchorAt <= ?1 - ?8 * CASE unanswered WHEN 0 THEN ?5 WHEN 1 THEN ?6 ELSE ?7 END
     ORDER BY anchorAt LIMIT 20`)
-    .bind(now, 20 * 3_600_000, 30 * day, reengagementCap, ...reengagementQuiet)
+    .bind(now, reengagementRetry, 30 * day, reengagementCap, ...reengagementQuiet, minimumReengagementFactor)
     .all<{ contactID: string; userID: string; agentID: string; sourceID: string; anchorID: string; timeZone: string; anchorAt: number; unanswered: number }>();
   await Promise.allSettled(results.map(async (row) => {
     const samples = await readInitiativeSamples(env.DB, row.contactID, row.userID, now, row.sourceID);
     const { personality } = await readPersonality(env.DB, row.agentID, now);
     const policy = adaptivePolicy(samples, row.sourceID, personality, now, false, true);
+    // Prefiltered with the smallest factor; this chat's own pace may need more quiet first.
+    const quiet = reengagementQuiet[Math.min(row.unanswered, reengagementQuiet.length - 1)]! * reengagementFactor(policy, personality);
+    if (row.anchorAt > now - quiet) return;
     const expiresAt = now + 3 * day;
-    const nextAt = nextAmbientOpportunity({ samples, timeZone: row.timeZone, policy,
-      earliest: Math.max(now, row.anchorAt + policy.minimumAmbientGapHours * 3_600_000), expiresAt,
+    const nextAt = nextAmbientOpportunity({ samples, timeZone: row.timeZone, policy, earliest: now, expiresAt,
       seed: `${row.sourceID}/reengage/${row.anchorID}` });
     const statements = [env.DB.prepare('UPDATE contact SET reengaged_at = ?1 WHERE id = ?2').bind(now, row.contactID)];
     // A timestamp-seeded revision never reuses an earlier initiative-<source>-<revision> Workflow ID,
@@ -130,7 +152,8 @@ async function openReengagements(env: Env, now: number) {
       WHERE conversation_initiative.next_at IS NULL OR conversation_initiative.expires_at <= ?7`)
       .bind(row.contactID, row.sourceID, row.anchorID, Math.floor(now / 1000), nextAt, expiresAt, now));
     await env.DB.batch(statements);
-    console.log(JSON.stringify({ event: 'initiative_reengagement', unanswered: row.unanswered, opened: nextAt !== null }));
+    console.log(JSON.stringify({ event: 'initiative_reengagement', unanswered: row.unanswered, quietHours: Math.round(quiet / 3_600_000),
+      opened: nextAt !== null }));
   }));
 }
 
@@ -181,6 +204,12 @@ export async function dispatchInitiatives(env: Env) {
   if (outcomes.some(result => result.status === 'rejected')) console.error(JSON.stringify({ event: 'initiative_dispatch_deferred' }));
 }
 
+// Quiet hours protect the person's night, not a conversation they are having right now.
+function deliveryAt(state: { timeZone: string | null; humanAt: number | null }, now: number) {
+  if (state.timeZone && state.humanAt !== null && now - state.humanAt < activeConversation) return now;
+  return quietUntil(state.timeZone, now);
+}
+
 export function quietUntil(timeZone: string | null, now: number): number | null {
   // No guessed timezone. Unknown zones defer proactive sending until new input.
   if (!timeZone) return null;
@@ -201,7 +230,7 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
       const state = await snapshot(env, job);
       if (!state) return null;
       const now = Date.now();
-      const allowedAt = quietUntil(state.timeZone, now);
+      const allowedAt = deliveryAt(state, now);
       if (allowedAt === null) return { state, deferredUntil: state.expiresAt, model: standardModel, messages: [] };
       if (allowedAt > now) return { state, deferredUntil: allowedAt, model: standardModel, messages: [] };
       if (state.busy || (state.activeUntil ?? 0) > now) return { state,
@@ -228,7 +257,8 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
       const gap = Math.max(minimumGapsMS[state.sent]!, personalityDelay * 1000 * (state.sent + 1))
         * (adaptive.responseRate !== null && adaptive.responseRate < 0.35 ? 3 : 1);
       const ambientFloor = state.anchorAt + adaptive.minimumAmbientGapHours * 3_600_000;
-      if (state.mode === 'ambient' && (!adaptive.ambientAllowed || now < ambientFloor)) return { state,
+      // Re-engagement already waited its adaptive quiet time in the sweep.
+      if (state.mode === 'ambient' && (!adaptive.ambientAllowed || (!state.reengage && now < ambientFloor))) return { state,
         deferredUntil: nextAmbientOpportunity({ samples, timeZone: state.timeZone, policy: adaptive,
           earliest: Math.max(now, ambientFloor), expiresAt: state.expiresAt,
           seed: `${state.sourceID}/${state.revision}/defer` }) ?? state.expiresAt,
@@ -254,7 +284,8 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
         timing: {
           phase: state.reengage ? 'reconnect-after-silence' : state.mode === 'ambient' ? 'new-conversation-opportunity'
             : state.sent === 0 ? 'initial-continuation' : 'unanswered-follow-up',
-          daysSinceLastHumanMessage: Math.floor(Math.max(0, now - state.sourceAt) / 86_400_000),
+          personHasWritten: state.humanAt !== null,
+          hoursSinceLastHumanMessage: state.humanAt === null ? null : Math.floor(Math.max(0, now - state.humanAt) / 3_600_000),
           unansweredSinceLastHumanMessage: adaptive.unanswered,
           secondsSinceLastMessage: Math.max(0, Math.floor((now - state.anchorAt) / 1000)),
           secondsSinceRead: state.readAt === null ? null : Math.max(0, Math.floor((now - state.readAt) / 1000)),
@@ -299,7 +330,7 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           'Use the user’s language, your grounded persona, elapsed time, actual seen receipts, prior follow-ups and the ending of the conversation.',
           'In continuation mode, choose whether a useful next thought fits the current exchange. A bare greeting or an open social exchange is enough context to consider one short opener, relevant idea or natural next thought in your own voice. You do not need another explicit human question to have something to say. In a recent open exchange, favor an early useful continuation over waiting hours by default; waiting and silence still fit when the thought adds nothing or the person ended the exchange. Repeated silence calls for more space; do not use a read receipt as engagement. Current requests and actual conversation boundaries take priority.',
           'In ambient mode you start a new conversation after a pause, the way a friend texts first. Friends do this regularly, and a short, specific message is welcome far more often than it is intrusive. When adaptive.ambientAllowed is true and the local time is reasonable, sending is the default: choose wait or stop only when you genuinely have nothing specific to say or the history shows the person does not want it. Good reasons to text first: following up on something they mentioned (a plan, an event, a problem, a decision: how did it go?), something from your side that connects with their interests or an earlier topic (a take, an idea, a recommendation), a pending curiosity, or a greeting that fits the moment and your character. Use your character, local time, existing context and measured receptivity. Do not invent news, offline experiences, current external events or a reason the human owes you attention.',
-          'When timing.phase is reconnect-after-silence, the person has not written for timing.daysSinceLastHumanMessage days and timing.unansweredSinceLastHumanMessage of your spontaneous messages remain unanswered. Reach out once with something light, specific and easy to answer. Never mention or count the silence, ask why they have not written, or imply they owe you a reply. Earlier unanswered messages are expected in this phase and the server has already spaced this opportunity, so they are not a reason to stop: choose a different topic instead of repeating them, and keep it shorter.',
+          'When timing.phase is reconnect-after-silence, the person has not written for timing.hoursSinceLastHumanMessage hours and timing.unansweredSinceLastHumanMessage of your spontaneous messages remain unanswered. If timing.personHasWritten is false, they have not answered your first message yet: send a natural second thought that stands on its own (something from your side, a take, a small idea), not a nudge about the first one, and label it continuation or check-in, never greeting. Reach out once with something light, specific and easy to answer. Never mention or count the silence, ask why they have not written, or imply they owe you a reply. Earlier unanswered messages are expected in this phase and the server has already spaced this opportunity, so they are not a reason to stop: choose a different topic instead of repeating them, and keep it shorter.',
           'The adaptive policy is authoritative: never send a greeting when greetingsAllowed is false, or any new social opener when ambientAllowed is false. Do not disguise a greeting as a check-in or a continuation to bypass suppressed outreach. When adaptive.taskOnly is true, the relationship is practical: reach out only with task-related follow-ups (how something they worked on went, a useful next step or idea for it), never greetings or social small talk. Respect maxUnanswered. The server bounds how many spontaneous messages can remain unanswered.',
           'activityWindows is a partial estimate from this private chat, not a promise that the person is awake or available. Learned windows need several days of evidence. Late responses should move future invitations toward the times the person actually engages, rather than repeating the original send time. Timing remains approximate and varied; explicit fixed-time requests belong to schedule tools, not this planner.',
           'Prefer one or two conversational sentences, a relevant observation, a small idea or an unfinished thought completed naturally. Do not repeat an unanswered question or add a question to every message.',
@@ -324,7 +355,9 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
     });
     const characterGap = evidence.gap;
     const samples = projectedFeedback(evidence.samples, state.sourceID, plan.engagement, plan.response);
-    const permission = evidence.samples.find(s => s.id === state.sourceID)?.engagement !== null ? 'unchanged'
+    // A welcome-sourced episode has no human request to classify or take permission from.
+    const sourceSample = evidence.samples.find(s => s.id === state.sourceID);
+    const permission = !sourceSample?.human || sourceSample.engagement !== null ? 'unchanged'
       : plan.engagement === 'boundary' ? 'stop' : plan.permission;
     const paused = permission === 'stop' || (state.paused !== 0 && permission !== 'allow');
     const adaptive = adaptivePolicy(samples, state.sourceID, evidence.personality, Date.now(), paused, !!state.reengage);
@@ -343,11 +376,11 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
         const current = await snapshot(env, job);
         const now = Date.now();
         const budget = await env.DB.prepare(`SELECT
-          (SELECT COUNT(*) FROM chat_turn WHERE user_id = ?1 AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < 12
-          AND (SELECT COUNT(*) FROM chat_turn WHERE contact_id = ?2 AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < 3 AS allowed`)
-          .bind(state.userID, state.contactID, now).first<{ allowed: number }>();
+          (SELECT COUNT(*) FROM chat_turn WHERE user_id = ?1 AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < ?4
+          AND (SELECT COUNT(*) FROM chat_turn WHERE contact_id = ?2 AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < ?5 AS allowed`)
+          .bind(state.userID, state.contactID, now, accountDailyOutreach, contactDailyOutreach).first<{ allowed: number }>();
         return !!budget?.allowed && !!current && !current.busy && !changedSince(current) && current.paused === state.paused
-          && maySend && quietUntil(state.timeZone, now) === now && now >= state.anchorAt + characterGap
+          && maySend && deliveryAt(state, now) === now && now >= state.anchorAt + characterGap
           && (await readPersonality(env.DB, state.agentID)).revision === evidence.personalityRevision
           && await privateContact(env.DB, state.contactID) === evidence.isolated
           && (evidence.isolated || await accountModel(env, state.userID) === evidence.model)
@@ -373,7 +406,7 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
       const typing = await step.do('initiative-typing', async () => {
         const current = await snapshot(env, job);
         const now = Date.now();
-        if (!current || changedSince(current) || quietUntil(state.timeZone, now) !== now || now < state.anchorAt + characterGap
+        if (!current || changedSince(current) || deliveryAt(state, now) !== now || now < state.anchorAt + characterGap
           || current.paused !== state.paused || (await readPersonality(env.DB, state.agentID)).revision !== evidence.personalityRevision) return false;
         // Typing only follows the check's connection, and never overrides a reply in progress.
         const [, result] = await env.DB.batch([connectAgent(env.DB, state.agentID, now + 90_000),
@@ -422,14 +455,14 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           AND NOT EXISTS (SELECT 1 FROM chat_turn newer WHERE newer.contact_id = c.id AND newer.sequence > anchor.sequence)
           AND NOT EXISTS (SELECT 1 FROM agent_attention WHERE agent_id = c.agent_id)
           AND NOT EXISTS (SELECT 1 FROM chat_visit WHERE contact_id = c.id AND closed = 0 AND expires_at > ?3 AND typing_at > ?3 - 6000)
-          AND (SELECT COUNT(*) FROM chat_turn WHERE user_id = c.user_id AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < 12
-          AND (SELECT COUNT(*) FROM chat_turn WHERE contact_id = c.id AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < 3`)
+          AND (SELECT COUNT(*) FROM chat_turn WHERE user_id = c.user_id AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < ${accountDailyOutreach}
+          AND (SELECT COUNT(*) FROM chat_turn WHERE contact_id = c.id AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < ${contactDailyOutreach}`)
         .bind(id, plan.message, now, state.timeZone, job.contactID, job.sourceID, job.revision, state.anchorID,
-          plan.action === 'send' && maySend && canPublishImage && !changed && quietUntil(state.timeZone, now) === now && now >= state.anchorAt + characterGap ? 1 : 0,
+          plan.action === 'send' && maySend && canPublishImage && !changed && deliveryAt(state, now) === now && now >= state.anchorAt + characterGap ? 1 : 0,
           state.lastReadSequence, state.readAt, evidence.model, isolated ? 1 : 0, state.activityAt, plan.kind, evidence.personalityRevision, state.paused, assistantMessages);
       const feedback = env.DB.prepare(`UPDATE chat_turn SET initiative_engagement = ?18,
         initiative_response = ?19, initiative_response_to_id = ?20, initiative_feedback_at = ?3
-        WHERE id = ?6 AND initiative_engagement IS NULL AND ?9 = 1
+        WHERE id = ?6 AND initiative_engagement IS NULL AND initiative_source_id IS NULL AND ?9 = 1
           AND EXISTS (SELECT 1 FROM conversation_initiative p JOIN contact c ON c.id = p.contact_id
             JOIN user u ON u.id = c.user_id JOIN chat_turn anchor ON anchor.id = p.anchor_id
             WHERE p.contact_id = ?5 AND p.source_id = ?6 AND p.revision = ?7 AND p.anchor_id = ?8
@@ -496,6 +529,10 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           .bind(now + 30000, state.agentID, id),
         disconnect(env, state.agentID, now, id),
         enqueueReply(env.DB, id, 1, now),
+        // A re-engagement that ends silent waits longer than the sweep's two-hour spacing.
+        ...(state.reengage && (stopped || state.evaluations >= 6) ? [env.DB.prepare(`UPDATE contact SET reengaged_at = ?1
+          WHERE id = ?2 AND NOT EXISTS (SELECT 1 FROM chat_turn WHERE id = ?3)`)
+          .bind(now + silentReengagementBackoff - reengagementRetry, job.contactID, id)] : []),
       ]);
       // Aggregate-only decision log for calibrating proactivity; never message text.
       console.log(JSON.stringify({ event: 'initiative_decision', mode: state.mode, reengage: !!state.reengage,

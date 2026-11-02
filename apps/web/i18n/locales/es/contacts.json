@@ -62,7 +62,7 @@
       "alias": "Alias",
       "none": "Ninguno",
       "initiative": "Iniciativa en la conversación",
-      "initiativeInfo": "El contacto te saluda cuando es nuevo, puede añadir una idea sin que le escribas de nuevo y te escribe primero después de un tiempo sin hablar. El momento se adapta a este chat y a su personalidad, y no envía nada entre las 22:00 y las 08:00. Tras algunos mensajes sin respuesta, espera a que le escribas. Si estás escribiendo, te da espacio. Pídele al contacto que haga una pausa o desactiva esta opción. Solo se aplica a tu chat privado.",
+      "initiativeInfo": "El contacto te saluda apenas se crea, puede añadir una idea sin que le escribas de nuevo y te escribe primero cuando el chat queda en silencio. Empieza con ganas y se adapta a cómo respondes y a su personalidad. Fuera de una conversación activa, no envía nada entre las 22:00 y las 08:00. Tras algunos mensajes sin respuesta, espera a que le escribas. Si estás escribiendo, te da espacio. Pídele al contacto que haga una pausa o desactiva esta opción. Solo se aplica a tu chat privado.",
       "keepPrivate": "Mantener este chat privado",
       "privateInfo": "Lo que le cuentas a {name} se queda en este chat. No se usa en grupos, ni por las personas con quienes se comparte este contacto, ni por tus otros contactos, ni en Para ti, y este chat no se puede vincular ni comentar en un grupo. Lo que le pidas explícitamente enviar o publicar igual llega a donde indiques.",
       "voiceMessages": "Mensajes de voz",

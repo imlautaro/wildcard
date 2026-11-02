@@ -17,6 +17,8 @@ db.setlimit(sqlite3.SQLITE_LIMIT_EXPR_DEPTH, 100)
 source = (root / 'apps/api/src/chat/initiative.ts').read_text()
 welcome = (root / 'apps/api/src/chat/welcome.ts').read_text()
 constants = dict(re.findall(r'const (\w+) = `([^`]+)`;', source + welcome))
+# Numeric budgets interpolated into SQL are plain integer constants.
+constants.update(re.findall(r'const (\w+) = (\d+);', source + welcome))
 # Production interpolates only a validated integer for the learning epoch. Use a
 # static integer while preparing the real SQL; never evaluate TypeScript here.
 constants = {key: value.replace('${Number.isSafeInteger(state.learningRevision) ? state.learningRevision : -1}', '0')
