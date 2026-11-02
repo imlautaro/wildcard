@@ -270,12 +270,13 @@ A contact created by [contact generation](contact-generation.md) or published by
 Generation publishes the contact with `contact.welcome_due_at` set to now and starts
 the welcome immediately (`startWelcome`), so the message arrives within the model
 call and typing pause, typically seconds. Onboarding schedules the first circle in
-plan order about 70 seconds apart once the circle is published, starting the first
-immediately. Manually named contacts (`POST /contacts`) and contacts joined through
+plan order 20–30 seconds apart once the circle is published (70–85 s and Cron-only
+before 2026-11-02, which left the fifth contact 5–6 minutes behind); the onboarding
+Workflow sleeps until each welcome is due and starts it itself. Manually named contacts (`POST /contacts`) and contacts joined through
 [sharing](sharing.md) do not send a welcome.
 
-`dispatchContactWelcomes` (one-minute Cron) is the fallback and starts later
-onboarding welcomes as they come due. Each claim takes a ten-minute lease, with at
+`dispatchContactWelcomes` (one-minute Cron) is the fallback for welcomes the
+Workflow did not start; the atomic claim keeps both from sending the same welcome. Each claim takes a ten-minute lease, with at
 most three attempts (`welcome_attempts`); it registers `welcome-<contact>-<attempt>`
 in `chat_workflow_instance` and starts the `welcome` `ChatWorkflow` job
 (`apps/api/src/chat/welcome.ts`). The job uses the person's latest known time zone

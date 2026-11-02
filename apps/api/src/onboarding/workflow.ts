@@ -15,6 +15,11 @@ import { themedIdentityInstruction } from '../contacts/portrait';
 type Identity = { id: string; name: string; description: string; specialties?: string; portrait: string; age?: number; gender?: 'male' | 'female'; birthDate?: string };
 type Plan = { groupID: string; groupName: string; contacts: Identity[] };
 // Contrasting temperaments keep the generated identities behaviorally distinct.
+// Onboarding welcomes arrive in plan order this far apart: enough to read each one, short enough
+// that the whole circle has said hello within about two minutes (docs/initiative.md#welcome-messages).
+const welcomeGap = 20_000;
+const welcomeJitter = 10_000;
+
 const temperaments = [
   { identity: 'A warm, patient listener: empathetic, understated, grounded; values attentive listening but can overthink subtle cues.', traits: { warmth: 10, patience: 10, playfulness: 3, verbosity: 6, assertiveness: 2, sarcasm: 1 } },
   { identity: 'An outgoing comic adventurer: spontaneous, mischievous, energetic; enjoys unexpected ideas but can rush past nuance.', traits: { warmth: 7, patience: 3, playfulness: 10, expressiveness: 10, initiative: 9, formality: 1 } },
@@ -187,24 +192,30 @@ export class OnboardingWorkflow extends WorkflowEntrypoint<Env, { owner: string;
         );
         statements.push(db.prepare("UPDATE account_onboarding SET status = 'complete', group_id = ?, updated_at = ? WHERE user_id = ?").bind(createGroup && kept.length ? plan.groupID : null, now, owner),
           db.prepare('UPDATE user SET onboarding_required = 0 WHERE id = ?').bind(owner));
-        // The circle texts first one by one, in plan order, about a minute apart
+        // The circle texts first one by one, in plan order, 20–30 seconds apart
         // (docs/initiative.md#welcome-messages). Retries never reschedule a welcome.
         const ordered = plan.contacts.filter(c => kept.some(k => k.id === c.id));
         for (const [position, identity] of ordered.entries()) statements.push(db.prepare(`UPDATE contact SET welcome_due_at = ?1
             WHERE id = ?2 AND user_id = ?3 AND welcome_attempts = 0 AND welcome_due_at IS NULL
               AND NOT EXISTS (SELECT 1 FROM chat_turn WHERE contact_id = contact.id)`)
-          .bind(now + position * 70_000 + (position ? Math.floor(Math.random() * 15_000) : 0), identity.id, owner));
+          .bind(now + position * welcomeGap + (position ? Math.floor(Math.random() * welcomeJitter) : 0), identity.id, owner));
         // D1 batch is atomic: the optional group and completion appear together.
         await db.batch(statements);
       });
-      // The first welcome starts right away; Cron starts the next ones as they come due.
-      await step.do('first-welcome', async () => {
-        const first = await this.env.DB.prepare(`SELECT id FROM contact WHERE user_id = ? AND welcome_due_at IS NOT NULL
-          AND id IN (SELECT value FROM json_each(?)) ORDER BY welcome_due_at LIMIT 1`)
-          .bind(owner, JSON.stringify(plan.contacts.map(c => c.id))).first<{ id: string }>();
-        try { if (first) await startWelcome(this.env, first.id); }
-        catch { console.error(JSON.stringify({ event: 'welcome_start_deferred' })); }
-      });
+      // Each welcome starts when it comes due, without waiting for the one-minute Cron, which
+      // stays the fallback. startWelcome claims atomically, so Cron and this loop never both send.
+      const due = await step.do('welcome-order', async () => (await this.env.DB.prepare(`SELECT id, welcome_due_at AS dueAt
+        FROM contact WHERE user_id = ? AND welcome_due_at IS NOT NULL AND welcome_attempts = 0
+          AND id IN (SELECT value FROM json_each(?)) ORDER BY welcome_due_at`)
+        .bind(owner, JSON.stringify(plan.contacts.map(c => c.id))).all<{ id: string; dueAt: number }>()).results);
+      for (const [position, welcome] of due.entries()) {
+        const wait = welcome.dueAt - Date.now();
+        if (wait > 0) await step.sleep(`welcome-wait-${position}`, wait);
+        await step.do(`welcome-start-${position}`, async () => {
+          try { await startWelcome(this.env, welcome.id); }
+          catch { console.error(JSON.stringify({ event: 'welcome_start_deferred' })); }
+        });
+      }
     } catch (error) {
       await step.do('mark-failed', async () => {
         // Published contacts stay usable (with initials) while the person can retry the rest.
