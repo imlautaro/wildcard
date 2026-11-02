@@ -198,6 +198,9 @@ const hasTasks = computed(() => !!taskBoard.state.value.value?.lists.some(list =
 usePolling(() => taskBoard.refresh(), () => 20_000);
 onMounted(() => { void taskBoard.refresh(); });
 watch(contactID, () => { void taskBoard.refresh(); });
+// Wide chat panes show the board beside the messages (docs/tasks.md#opening-tasks).
+const taskPanel = useTaskPanel(hasTasks);
+const split = taskPanel.split;
 
 watch(contactID, async () => {
   fetched.value = null;
@@ -231,13 +234,15 @@ onBeforeUnmount(() => {
         </div>
       </NuxtLink>
     </template>
-    <AppIconButton v-if="hasTasks" :to="`/contacts/${contactID}/tasks`" icon="tasks" :label="$t('chat.conversation.tasks')" />
+    <AppIconButton v-if="hasTasks && taskPanel.fits.value" icon="tasks" :label="$t('chat.conversation.tasks')" :selected="!taskPanel.hidden.value" @click="taskPanel.toggle" />
+    <AppIconButton v-else-if="hasTasks" :to="`/contacts/${contactID}/tasks`" icon="tasks" :label="$t('chat.conversation.tasks')" />
   </PageBar>
 
   <AppEmptyState v-if="state.unavailable" icon="person" :title="$t('chat.conversation.unavailableTitle')" :text="$t('chat.conversation.unavailableText')">
     <template #actions><AppButton to="/chats" variant="tonal">{{ $t('chat.conversation.backToChats') }}</AppButton></template>
   </AppEmptyState>
-  <template v-else>
+  <div v-else ref="split" class="chat-split">
+    <div class="chat-column">
     <div class="message-viewport">
     <div ref="scroller" class="messages" :style="{ visibility: state.loaded && !positioned ? 'hidden' : undefined }" aria-live="polite" tabindex="0" @scroll.passive="onScroll" @wheel.passive="onWheel" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @keydown="onKeydown">
       <div ref="messageContent" class="message-content">
@@ -371,7 +376,9 @@ onBeforeUnmount(() => {
       ref="composer" v-model="state.draft" :disabled="!state.loaded || state.unavailable || contact?.clearing === 1" :sending="!!state.pending" :reply="replyTarget" :post="state.homePost"
       :voice-key="contactID" :stickers="stickerOptions" @send="onSend" @voice="onVoice" @sticker="onSticker" @typing="activity.typing()" @cancel-reply="state.replyTo = null" @cancel-post="state.homePost = null"
     />
-  </template>
+    </div>
+    <ChatTaskPanel v-if="taskPanel.open.value" :base="`contacts/${contactID}`" :to="`/contacts/${contactID}/tasks`" @close="taskPanel.toggle" />
+  </div>
 </template>
 
 <style scoped>

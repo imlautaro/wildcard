@@ -22,7 +22,7 @@ have not been verified yet.
   and tap a task to edit its title, status (To do, In progress, Done, Canceled),
   assignee, notes, next step, evidence and what it waits for. Contact tasks also offer
   **Pause work**, **Resume work** and **Cancel task**. **Cancel list** cancels the list and every
-  unfinished task. On iOS, swipe a task to cancel it. The task editor is a sheet on
+  unfinished task. On iOS, long-press a task and choose **Cancel task**. The task editor is a sheet on
   both clients; web research, page monitor and work explanations are behind info
   buttons, with a one-line note of what saving authorizes kept beside each field.
 - Each task row shows the assignee, its status, what it is waiting for (a clock icon
@@ -49,8 +49,20 @@ status changes stay explicit in the sheet.
 
 When a poll or an edit changes the board, cards glide to their new place (FLIP,
 matched by `data-task-id`) and briefly outline in green (done), amber (sent back) or
-blue (started or unblocked). `prefers-reduced-motion` turns the motion off. iOS still
-shows the list.
+blue (started or unblocked). `prefers-reduced-motion` turns the motion off.
+
+### iOS board (2026-11-02)
+
+iOS (`TasksView` in `Tasks/Tasks.swift`) follows the phone layout of the same design:
+list chips, a progress card with the three-part bar and counts, then sections In
+progress, To do and Done (canceled tasks folded under Done). Cards
+(`TaskCardView`) carry the same lines as the web cards. A spring animation keyed on
+the tasks' status and version moves cards between sections through a shared
+`matchedGeometryEffect`; Reduce Motion turns it off. Changed cards get the same green,
+orange or accent outline. **Cancel list** is in the toolbar menu, and canceling a task
+moved from a swipe (the board is no longer a `List`) to the card's context menu. The
+Done section title uses the key `task.board.done` because "Done" alone is the
+generic "Listo" in Spanish.
 
 ### Opening Tasks
 
@@ -62,12 +74,13 @@ during a turn brings the button back without a reload. iOS already keeps Tasks i
 the chat's three-dot menu rather than in the bar, so it is unchanged. Chat details
 keep Tasks on both clients.
 
-In a web group chat whose pane is at least 820px wide, the board opens as a vertical
-panel beside the messages (compact cards, sections In progress, To do, Done) while the
-group has an active list. The Tasks button then shows or hides the panel instead of
-navigating, and the choice is remembered per browser (`wildcard-task-panel-hidden` in
-localStorage). The panel links to the full Tasks page. Narrower panes keep the button
-as a link to the page. Private chats do not have the panel yet.
+In a web chat (private or group) whose pane is at least 820px wide, the board opens as
+a vertical panel beside the messages (compact cards, sections In progress, To do,
+Done) while the chat has an active list (`ChatTaskPanel.vue`, `useTaskPanel`). The
+Tasks button then shows or hides the panel instead of navigating, and the choice is
+remembered per browser for every chat (`wildcard-task-panel-hidden` in localStorage).
+The panel links to the full Tasks page. Narrower panes keep the button as a link to
+the page. iOS has no panel: Tasks opens from the chat's three-dot menu.
 
 ## Seeing the work
 
