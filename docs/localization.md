@@ -8,7 +8,7 @@ English text is the source; any string missing from Spanish falls back to Englis
 |---|---|---|---|
 | iOS (`apps/ios`) | String Catalogs (`.xcstrings`), English text as key | iOS per-app language (Settings › Wildcard › Language), otherwise the device's preferred languages | `Localizable.xcstrings` per target, `InfoPlist.xcstrings` |
 | Web (`apps/web`) | `@nuxtjs/i18n` 10 (vue-i18n 11), structured keys, no URL prefix | Account › Language: System (browser languages), English or Español; per browser | `apps/web/i18n/locales/<locale>/<area>.json` |
-| Site (`apps/site`) | `@nuxtjs/i18n`, `/` English, `/es` Spanish, both prerendered | Language links in the nav and footer; a first visit to `/` redirects once by browser language (cookie `wildcard_site_locale`) | `apps/site/i18n/locales/<locale>.json`; see [site](site.md#localization) |
+| Site (`apps/site`) | `@nuxtjs/i18n`, `/` English, `/es` Spanish, both prerendered | Language links in the footer; a first visit to `/` redirects once by browser language (cookie `wildcard_site_locale`) | `apps/site/i18n/locales/<locale>.json`; see [site](site.md#localization) |
 
 The admin panel (`apps/admin`) stays English only.
 

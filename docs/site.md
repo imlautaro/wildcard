@@ -21,7 +21,7 @@ in [caching](caching.md) don't apply: every page is static.
 | `app/utils/site.ts` | Installation-specific values: the site's own URL (`url`, used for canonical and hreflang links), web app URL, repository URL, `repositoryPublic`, `iosUrl`, section anchors. |
 | `i18n/locales/<locale>.json`, `i18n/i18n.config.ts` | All copy, one file per locale; vue-i18n options (English fallback). |
 | `app/app.vue` | Per-locale head: title, description, Open Graph, `<html lang>`, hreflang, canonical. |
-| `app/components/LanguageSwitch.vue` | Language links in the nav (compact) and the footer. |
+| `app/components/LanguageSwitch.vue` | Language links in the footer. |
 | `app/utils/cast.ts` | The example contacts used in the scenes, each labeled with a real portrait style. |
 | `app/utils/siteIcons.ts` | Solar and `logos` glyphs outside the shared registry, rendered with `SiteIcon`. |
 | `app/composables/useScene.ts` | The scene timeline: beats with delays, play while visible, pause off screen, loop, final state for SSR and reduced motion. |
@@ -33,8 +33,8 @@ The site reuses the layer's tokens, Manrope, Solar icons, `AppButton`, `AppIcon`
 `.chip`, `.avatar`, `.badge` and `details` styles, and copies the web app's bubble
 rules, so a design-system change shows up here too. Avoid class names the layer
 already uses (for example `.center`, `.meter`, `.field`); `site.css` documents the
-rule. Dark styles use `:root[data-theme="dark"]` like the apps; the footer and the
-nav carry the same System/Light/Dark switch (stored per browser under
+rule. Dark styles use `:root[data-theme="dark"]` like the apps; the footer
+carries the System/Light/Dark switch (stored per browser under
 `wildcard-theme`, on the site's own origin).
 
 ### Scenes and motion
@@ -79,9 +79,8 @@ redirecting it to `/es/`. Each page carries absolute hreflang alternates (`en`,
 the Spanish page; links to the web app and the repository are the same in every
 language. The 404 page is a client-rendered shell and follows the URL's locale.
 
-- **Switcher:** the nav shows a globe link to the other language (its name appears
-  from 1180 px; below that it stays available to screen readers and as a tooltip);
-  the footer lists English and Español with `aria-current` on the current one. Each
+- **Switcher:** the footer lists English and Español with `aria-current` on the
+  current one. The top bar has no language or appearance selectors. Each
   link carries `lang` and `hreflang`, and is a plain prerendered link, so it works
   without JavaScript.
 - **Browser language:** `detectBrowserLanguage` redirects a first visit to `/` once,

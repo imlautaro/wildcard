@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Sticky top bar: logo, section links (a menu on narrow screens), language,
-// appearance and the main call to action. It turns solid once the page scrolls.
+// Sticky top bar: logo, section links (a menu on narrow screens) and the main
+// call to action. It turns solid once the page scrolls.
 const { t } = useI18n();
 const localePath = useLocalePath();
 const scrolled = ref(false);
@@ -21,8 +21,6 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll));
         <a v-for="item in navigation" :key="item.id" :href="`${localePath('/')}#${item.id}`" @click="open = false">{{ t(`nav.items.${item.key}`) }}</a>
       </nav>
       <div class="actions">
-        <LanguageSwitch compact @click="open = false" />
-        <ThemeSwitch />
         <AppButton :to="site.appUrl" size="small" class="nav-cta">{{ t('common.getStarted') }}</AppButton>
         <button type="button" class="icon-button menu-toggle" :aria-expanded="open" :aria-label="t('nav.menu')" @click="open = !open">
           <SiteIcon :name="open ? 'close' : 'menu'" />
