@@ -25,17 +25,17 @@ const { t } = useI18n();
     </article>
     <article class="tile reveal delay-2">
       <div class="art art-sticker" aria-hidden="true">
-        <span class="sticker"><ContactAvatar who="coco" :size="84" /></span>
-        <span class="sticker two"><ContactAvatar who="pixel" :size="64" /></span>
+        <img class="sticker" src="/features/coco-sticker.png" alt="" width="104" height="104" loading="lazy" decoding="async">
+        <img class="sticker two" src="/features/pixel-sticker.png" alt="" width="88" height="88" loading="lazy" decoding="async">
       </div>
       <h3>{{ t('more.stickers') }}</h3>
       <p>{{ t('more.stickersText') }}</p>
     </article>
     <article class="tile reveal">
       <div class="art art-photos" aria-hidden="true">
-        <span class="photo p1"><ContactAvatar who="ivy" :size="56" /></span>
-        <span class="photo p2" />
-        <span class="photo p3" />
+        <span class="photo p1"><img src="/features/ivy-selfie.jpg" alt="" width="480" height="640" loading="lazy" decoding="async"></span>
+        <span class="photo p2"><img src="/features/mila-selfie.jpg" alt="" width="480" height="640" loading="lazy" decoding="async"></span>
+        <span class="photo p3"><img src="/features/bakery.jpg" alt="" width="480" height="640" loading="lazy" decoding="async"></span>
       </div>
       <h3>{{ t('more.photos') }}</h3>
       <p>{{ t('more.photosText') }}</p>
@@ -100,15 +100,14 @@ const { t } = useI18n();
 .art-voice small { font: var(--type-label-medium); color: var(--md-on-surface-variant); }
 
 .art-sticker { gap: var(--space-2); }
-.sticker { display: inline-flex; border-radius: 50%; padding: 4px; background: #fff; box-shadow: var(--md-elevation-2); animation: wobble 2.6s var(--ui-ease-spring) infinite; }
-.sticker.two { transform: rotate(10deg); animation-delay: -1.3s; }
+.sticker { display: block; width: 104px; height: 104px; object-fit: contain; filter: drop-shadow(0 3px 3px rgb(0 0 0 / 15%)); animation: wobble 2.6s var(--ui-ease-spring) infinite; }
+.sticker.two { width: 88px; height: 88px; transform: rotate(10deg); animation-delay: -1.3s; }
 @keyframes wobble { 0%, 100% { transform: rotate(-6deg) scale(1); } 50% { transform: rotate(6deg) scale(1.05); } }
 
 .art-photos { gap: 4px; padding: var(--space-3); }
 .photo { height: 100%; flex: 1; border-radius: var(--md-shape-m); overflow: hidden; display: grid; place-items: center; }
-.p1 { flex: 1.2; background: linear-gradient(160deg, #9be4c4, #4fae86); }
-.p2 { background: linear-gradient(170deg, #ffd29b 0%, #ff8f6b 55%, #5c4b8a 100%); }
-.p3 { background: linear-gradient(180deg, #8fc6ff 0%, #cbe6ff 60%, #e9d6b8 100%); }
+.p1 { flex: 1.2; }
+.photo img { width: 100%; height: 100%; object-fit: cover; }
 .photo { animation: settle 5s var(--md-ease) infinite; }
 .p2 { animation-delay: -1.6s; } .p3 { animation-delay: -3.2s; }
 @keyframes settle { 0%, 100% { filter: saturate(1); } 50% { filter: saturate(1.25) brightness(1.04); } }

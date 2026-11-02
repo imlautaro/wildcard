@@ -5,11 +5,12 @@
 // site's scenes; the app writes that text with Muse Spark.
 //
 // Usage (from the repository root, macOS for the resize step):
-//   node apps/site/scripts/generate-portraits.mjs [mila theo …]
+//   node apps/site/scripts/generate-portraits.mjs [--showcase] [mila theo …]
 // Reads META_API_KEY from apps/api/.dev.vars (never printed). Calls the paid Meta
-// image API once per portrait. Writes 384 px JPEGs to apps/site/public/contacts.
+// image API once per portrait. Writes 384 px JPEGs to public/contacts/cartoon;
+// --showcase uses each character's original style and writes to public/contacts.
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,7 +18,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 // PORTRAITS_OUT writes elsewhere, for trying a prompt without replacing the site's files.
-const output = process.env.PORTRAITS_OUT || join(root, 'apps/site/public/contacts');
+const showcase = process.argv.includes('--showcase');
+const output = process.env.PORTRAITS_OUT || join(root, 'apps/site/public/contacts', showcase ? '' : 'cartoon');
+mkdirSync(output, { recursive: true });
 
 const cast = {
   mila: {
@@ -64,15 +67,25 @@ await esbuild.build({
 });
 const { generatePortrait } = await import(pathToFileURL(bundle).href);
 
-const ids = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(cast);
+const requested = process.argv.slice(2).filter(argument => argument !== '--showcase');
+const ids = requested.length ? requested : Object.keys(cast);
+let failed = false;
 await Promise.all(ids.map(async (id) => {
-  if (!cast[id]) return console.log(id, 'unknown');
+  if (!cast[id]) { failed = true; console.error(id, 'unknown'); return; }
   try {
     const original = join(work, `${id}.jpg`);
-    writeFileSync(original, await generatePortrait({ META_API_KEY }, cast[id].identity, cast[id].input));
+    const member = cast[id];
+    const identity = showcase ? member.identity : {
+      ...member.identity,
+      portrait: `${member.identity.portrait} Art direction: clean 2D cartoon, crisp dark outlines, simple rounded shapes, flat warm colors with minimal cel shading, muted pale cream background, close-up centered head and shoulders.`,
+    };
+    writeFileSync(original, await generatePortrait({ META_API_KEY }, identity, showcase ? member.input : { style: 'cartoon' }));
     execFileSync('sips', ['-Z', '384', '-s', 'format', 'jpeg', '-s', 'formatOptions', '82', original, '--out', join(output, `${id}.jpg`)], { stdio: 'ignore' });
     console.log(id, 'written');
   } catch (error) {
-    console.log(id, 'failed:', error instanceof Error ? error.message : error);
+    failed = true;
+    console.error(id, 'failed:', error instanceof Error ? error.message : error);
   }
 }));
+
+if (failed) process.exitCode = 1;

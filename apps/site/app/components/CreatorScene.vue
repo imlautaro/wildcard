@@ -36,7 +36,7 @@ const styleIndex = computed(() => Math.min(step.value, order.length - 1));
     <div class="editor">
       <div class="portrait">
         <Transition name="morph" mode="out-in">
-          <ContactAvatar :key="current" :who="current" :size="168" />
+          <ContactAvatar showcase :key="current" :who="current" :size="168" />
         </Transition>
         <span class="regen"><SiteIcon name="wand" />{{ t('creatorScene.generate') }}</span>
       </div>
