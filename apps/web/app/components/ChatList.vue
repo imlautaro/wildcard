@@ -1,8 +1,14 @@
 <script setup lang="ts">
-const chats = useChats();
+const route = useRoute();
+const chats = useChats(() => {
+  const path = route.path.replace(/\/$/, '');
+  const id = String(route.params.id ?? '');
+  if (path === `/chats/${id}`) return `contact/${id}`;
+  if (path === `/groups/${id}`) return `group/${id}`;
+  return null;
+});
 const archived = ref(false);
 const visibleRows = computed(() => archived.value ? chats.archivedRows.value : chats.rows.value);
-const route = useRoute();
 // On wide screens the navigation sidebar reaches For you and Account; phones use the header menu.
 const wide = useWideLayout();
 const menuID = useId();

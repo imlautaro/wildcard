@@ -1502,8 +1502,11 @@ For you → Chats → Account → back and confirm retained chat scroll and sele
 
 ## Draft and reaction labels in the chat list (migration 0090)
 
-Same behavior as iOS: the second line of a chat row shows **Draft:** (primary color)
-with the unsent composer text, or `You: reacted with 👍` / `Reacted with 👍` /
+The second line of a chat row shows **Draft:** (primary color) with the unsent
+composer text only while that conversation is not open. While composing or revisiting
+a private chat or group, its row keeps the normal activity, reaction, or last-message
+preview; leaving the conversation reveals any unfinished text as a draft. This
+visibility rule is web-only. The row otherwise shows `You: reacted with 👍` / `Reacted with 👍` /
 `<Name>: reacted with 👍` (groups) when a reaction is newer than the last message.
 Drafts stay in the session conversation cache (`entry.draft`), which now never evicts
 an entry holding a draft. Typecheck only; browser verification pending. See

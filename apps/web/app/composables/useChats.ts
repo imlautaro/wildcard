@@ -362,7 +362,7 @@ function withReaction(row: ChatRow, reaction: LastReaction | null | undefined, g
   return { ...row, preview, sender, voice: null, own: false, readAt: null, receiptState: null };
 }
 
-function contactRow(contact: Contact): ChatRow | null {
+function contactRow(contact: Contact, activeConversation: string | null): ChatRow | null {
   if (contact.setupPending === 1) {
     return { kind: 'contact', archived: false, canClear: false, canDelete: false, id: contact.id, name: contact.name, photoPath: contactPhotoPath(contact),
       voice: null, preview: translate('chat.preview.creating'), sender: null, at: contact.createdAt, unread: 0, own: false, sending: false, readAt: null, receiptState: null, setupPending: true };
@@ -371,13 +371,13 @@ function contactRow(contact: Contact): ChatRow | null {
   const message = contactMessageRow(contact);
   // A draft keeps a chat without messages in the list.
   const row = message ?? (draft ? { kind: 'contact' as const, archived: contact.archivedAt != null, canClear: true, canDelete: true, id: contact.id, name: contact.name,
-    photoPath: contactPhotoPath(contact), voice: null, preview: '', sender: null, at: contact.createdAt, unread: Math.max(0, contact.unreadCount ?? 0),
+    photoPath: contactPhotoPath(contact), voice: null, preview: translate('chat.preview.noMessages'), sender: null, at: contact.createdAt, unread: Math.max(0, contact.unreadCount ?? 0),
     own: false, sending: false, readAt: null, receiptState: null } : null);
   if (row && contact.clearing === 1) return { ...row, voice: null, preview: translate('chat.preview.cleaningUp') };
   if (row && (contact.replyActivity === 'typing' || contact.replyActivity === 'recording' || contact.replyActivity === 'researching')) {
     return { ...row, voice: null, preview: contact.replyActivity === 'researching' ? translate('common.researching') : contact.replyActivity === 'recording' ? translate('common.recording') : translate('common.typing'), own: false, sender: null, sending: false, receiptState: null };
   }
-  return row && withDraft(withReaction(row, contact.lastReaction, false), draft);
+  return row && withDraft(withReaction(row, contact.lastReaction, false), activeConversation === `contact/${contact.id}` ? null : draft);
 }
 
 function contactMessageRow(contact: Contact): ChatRow | null {
@@ -405,7 +405,7 @@ function contactMessageRow(contact: Contact): ChatRow | null {
     sending: false, readAt: contact.lastMessageReadAt ?? null };
 }
 
-function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
+function groupRow(group: ChatGroup, me: string | undefined, activeConversation: string | null): ChatRow {
   const cached = peekGroupConversation(group.id);
   let voice = group.lastMessageVoice;
   let preview = localizeServerPreview(group.lastMessagePreview ?? (group.lastMessageUserID == null ? plainMessageMarkdown(group.lastMessageText ?? translate('chat.preview.noMessages')) : group.lastMessageText ?? translate('chat.preview.noMessages')));
@@ -442,31 +442,36 @@ function groupRow(group: ChatGroup, me: string | undefined): ChatRow {
     own: activity ? false : own, sending, readAt: null, receiptState: receiptState ?? 'sent',
   };
   if (activity || group.clearing === 1) return row;
-  return withDraft(withReaction(row, group.lastReaction, true), draftPreview(cached?.draft));
+  return withDraft(withReaction(row, group.lastReaction, true), activeConversation === `group/${group.id}` ? null : draftPreview(cached?.draft));
 }
 
 const loaded = computed(() => contactsLoaded.value && groupsLoaded.value);
 const error = computed(() => contactsError.value ?? groupsError.value);
 
-const allRows = computed<ChatRow[]>(() => {
+function projectRows(activeConversation: string | null): ChatRow[] {
   // Publish the mixed list only after both sources load, unless one failed:
   // then show whatever rows are available alongside the retry control.
   if (!loaded.value && !error.value) return [];
   const me = useSession().user.value?.id;
-  const contactRows = contacts.value.map(contactRow).filter((row): row is ChatRow => row !== null);
-  const groupRows = groups.value.map((group) => groupRow(group, me));
+  const contactRows = contacts.value.map((contact) => contactRow(contact, activeConversation)).filter((row): row is ChatRow => row !== null);
+  const groupRows = groups.value.map((group) => groupRow(group, me, activeConversation));
   return [...contactRows, ...groupRows].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id));
-});
+}
 
+const allRows = computed(() => projectRows(null));
 const rows = computed(() => allRows.value.filter(row => !row.archived));
 const archivedRows = computed(() => allRows.value.filter(row => row.archived));
 const directory = computed(() => [...contacts.value].sort((a, b) => a.name.localeCompare(b.name, appLocale(), { sensitivity: 'base' })));
 const totalUnread = computed(() => allRows.value.reduce((sum, row) => sum + row.unread, 0));
 const invitationCount = computed(() => contactInvitations.value.length + groupInvitations.value.length);
 
-export function useChats() {
+export function useChats(activeConversation?: () => string | null) {
+  // Only the visible list needs route-aware previews; the draft stays in its session entry.
+  const listRows = activeConversation ? computed(() => projectRows(activeConversation())) : allRows;
+  const visibleRows = activeConversation ? computed(() => listRows.value.filter(row => !row.archived)) : rows;
+  const visibleArchivedRows = activeConversation ? computed(() => listRows.value.filter(row => row.archived)) : archivedRows;
   return {
-    contacts, groups, rows, archivedRows, directory, totalUnread, nextCursor, loaded, contactsLoaded, groupsLoaded, allContactsLoaded, error,
+    contacts, groups, rows: visibleRows, archivedRows: visibleArchivedRows, directory, totalUnread, nextCursor, loaded, contactsLoaded, groupsLoaded, allContactsLoaded, error,
     contactInvitations, groupInvitations, invitationCount, contributorModel,
     archiveChat, clearChat, deleteChatContact, refresh, refreshLists, refreshInvitations, loadMore, loadAllContacts, setInitiative, setKeepPrivate, setAlias, upsertContact, removeContact, updateGroup, removeGroup, applyRead,
   };

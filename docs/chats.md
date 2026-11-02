@@ -513,6 +513,12 @@ falls back to the previous newer-than-message reaction, or to the last message.
 
 ### Drafts
 
+On web, the open private chat or group hides its draft label and keeps the normal
+activity, reaction, or last-message preview in the list. Leaving the conversation
+reveals unfinished composer text as **Draft:**; reopening it hides the label again.
+An otherwise empty contact with a draft stays in the list while open, with its
+normal empty preview. This presentation rule is web-only.
+
 The composer text belongs to the session conversation cache, not to the chat screen:
 iOS keeps it in `ChatStore.draft` / `GroupChatStore.draft`, web in the existing
 `entry.draft` of `useConversation` / `useGroupConversation`. Leaving and reopening a

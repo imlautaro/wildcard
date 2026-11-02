@@ -1660,7 +1660,10 @@ Visual and navigation checks for the new layout are pending in `docs/web.md`.
 
 Composer drafts live in the session conversation entries (iOS `ChatStore.draft` /
 `GroupChatStore.draft`, web `entry.draft`) so they survive navigation and feed the
-chat list `Draft:` label. They are memory-only, never persisted or uploaded, and are
+chat list `Draft:` label. Web suppresses that label for the currently open private
+chat or group, deriving visibility from the route without changing the cached draft
+or adding requests; it appears on navigation away and hides again on reopening.
+They are memory-only, never persisted or uploaded, and are
 discarded with the conversation entry on sign-out, account change, clearing,
 deletion and access loss. A non-empty draft protects its entry from LRU eviction (8
 iOS, 20 web entries), like a pending send. Reaction labels come from the
