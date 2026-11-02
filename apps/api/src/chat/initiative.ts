@@ -10,7 +10,7 @@ import type { WorkflowStep } from 'cloudflare:workers';
 import { initiativeDelay, personalityContext } from '../personality/engine';
 import { readPersonality } from '../personality/profile';
 import { expressionHabits } from '../personality/expression';
-import { accountModel, standardModel } from '../lib/model-preference';
+import { accountModel, effectiveModelSQL, standardModel } from '../lib/model-preference';
 import { privateContact } from '../mcp/client';
 import { enqueueReply, deliverPush } from '../push/delivery';
 import { contactModelAllowed } from './consent';
@@ -442,7 +442,7 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
       const contributor = evidence.model.includes('contributor');
       const modelAllowed = contributor ? `(c.user_id = (SELECT owner_id FROM contact_agent WHERE id = c.agent_id) OR c.contributor_consent = 1)` : '1';
       const isolated = evidence.isolated === true;
-      const consent = `${modelAllowed} AND (u.chat_model = ?12 OR (?13 = 1 AND EXISTS (SELECT 1 FROM mcp_private_contact WHERE contact_id = c.id)))
+      const consent = `${modelAllowed} AND (${effectiveModelSQL('u.chat_model')} = ?12 OR (?13 = 1 AND EXISTS (SELECT 1 FROM mcp_private_contact WHERE contact_id = c.id)))
         AND (EXISTS (SELECT 1 FROM mcp_private_contact WHERE contact_id = c.id)) = ?13`;
       const personalityUnchanged = `COALESCE((SELECT revision FROM agent_personality WHERE agent_id = c.agent_id), 0) = ?16
         AND c.learning_revision = ${Number.isSafeInteger(state.learningRevision) ? state.learningRevision : -1}`;

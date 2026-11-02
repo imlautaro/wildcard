@@ -3,6 +3,7 @@ import { storedColumns, type StoredTurn } from '../chat/data';
 import { dispatchGroup } from '../groups/workflow';
 import { monitorActive, monitorLimits } from '../monitors/check';
 import { taskLimits } from './data';
+import { effectiveModelSQL } from '../lib/model-preference';
 
 const reasons: Record<string, string> = { assigned: 'assigned to', unblocked: 'unblocked for', review: 'still open for', monitor: 'page change for' };
 
@@ -104,7 +105,7 @@ export async function dispatchTasks(env: Env) {
               (SELECT user_id FROM group_member WHERE group_id = g.id AND user_id = ?10 AND ?11 = 'user'), g.owner_id)
             WHERE g.id = ?2 AND ${admission.replaceAll('?4', '?6')}
               AND m.share_memory = 1 AND a.memory_shared = 1
-              AND (EXISTS (SELECT 1 FROM mcp_private_group WHERE group_id = g.id) OR COALESCE((SELECT chat_model FROM user WHERE id = m.user_id), '') NOT LIKE '%contributor%' OR NOT EXISTS (SELECT 1 FROM group_member consent WHERE consent.group_id = g.id AND consent.contributor_consent = 0))
+              AND (EXISTS (SELECT 1 FROM mcp_private_group WHERE group_id = g.id) OR COALESCE((SELECT ${effectiveModelSQL('chat_model')} FROM user WHERE id = m.user_id), '') NOT LIKE '%contributor%' OR NOT EXISTS (SELECT 1 FROM group_member consent WHERE consent.group_id = g.id AND consent.contributor_consent = 0))
               AND (SELECT COUNT(*) FROM group_reply WHERE group_id = g.id AND status IN ('queued', 'running')) < 64
             ON CONFLICT(id) DO NOTHING`)
             .bind(workID, task.groupID, `Task ${reasons[task.reason ?? 'review'] ?? 'for'} `, task.title, now, task.id, task.agentID,

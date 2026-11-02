@@ -3104,6 +3104,16 @@
         }
       }
     },
+    "Contributor is on for every account for now. Your saved choice returns when this ends." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contributor está activado para todas las cuentas por ahora. Tu elección guardada vuelve cuando esto termine."
+          }
+        }
+      }
+    },
     "Control Wildcard alarm" : {
       "localizations" : {
         "es" : {

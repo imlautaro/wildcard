@@ -5,18 +5,22 @@ import { readBearerSession } from '../lib/session';
 import { admitAuthRequest } from '../lib/auth-rate-limit';
 import { readPhoto, validPhoto, removePhoto } from '../photos/storage';
 import { contributorModel, validChatModel } from '../lib/model-preference';
+import { readSetting } from '../admin/settings';
 import { voiceRepliesAvailable } from '../voice/catalog';
 
 type Profile = { id: string; name: string; email: string; emailVerified: number; photoVersion: string | null; chatModel: string; onboardingRequired: number; contactsShare: number };
 const columns = 'id, name, email, email_verified AS emailVerified, photo_version AS photoVersion, chat_model AS chatModel, onboarding_required AS onboardingRequired, contacts_share AS contactsShare';
 const key = (owner: string, version: string) => `users/${owner}/${version}.jpg`;
-const responseUser = (row: Profile) => ({ ...row, emailVerified: Boolean(row.emailVerified), onboardingRequired: Boolean(row.onboardingRequired), contactsShare: Boolean(row.contactsShare) });
-const me = new Hono<{ Bindings: Env; Variables: { owner: string } }>();
+// While the admin flag `contributor_only` is on, profiles report the effective model
+// (Contributor); the stored choice is untouched and returns when the flag is off.
+const responseUser = (row: Profile, contributorOnly: boolean) => ({ ...row, chatModel: contributorOnly ? contributorModel : row.chatModel, emailVerified: Boolean(row.emailVerified), onboardingRequired: Boolean(row.onboardingRequired), contactsShare: Boolean(row.contactsShare) });
+const me = new Hono<{ Bindings: Env; Variables: { owner: string; contributorOnly: boolean } }>();
 
 me.use('*', async (c, next) => {
   const session = await readBearerSession(c.env, c.req.raw.headers);
   if (!session) return c.json({ error: 'Unauthorized' }, 401);
   c.set('owner', session.user.id);
+  c.set('contributorOnly', await readSetting(c.env.DB, 'contributor_only'));
   await next();
 });
 
@@ -24,7 +28,9 @@ me.get('/', async (c) => {
   const row = await c.env.DB.prepare(`SELECT ${columns} FROM user WHERE id = ?`).bind(c.get('owner')).first<Profile>();
   if (!row) return c.json({ error: 'Unauthorized' }, 401);
   // Runtime flags that change client behavior (docs/admin.md).
-  return c.json({ user: responseUser(row), features: { voiceMessages: await voiceRepliesAvailable(c.env) } });
+  return c.json({ user: responseUser(row, c.get('contributorOnly')), features: {
+    voiceMessages: await voiceRepliesAvailable(c.env), contributorOnly: c.get('contributorOnly'),
+  } });
 });
 
 me.route('/debug-export', debugExport);
@@ -41,7 +47,7 @@ me.patch('/', bodyLimit({ maxSize: 4096 }), async (c) => {
   const row = await c.env.DB.prepare(`UPDATE user SET name = ?, updated_at = ? WHERE id = ? RETURNING ${columns}`)
     .bind(name, Date.now(), c.get('owner')).first<Profile>();
   if (!row) return c.json({ error: 'Unauthorized' }, 401);
-  return c.json({ user: responseUser(row) });
+  return c.json({ user: responseUser(row, c.get('contributorOnly')) });
 });
 
 me.put('/model', bodyLimit({ maxSize: 1024 }), async (c) => {
@@ -49,13 +55,16 @@ me.put('/model', bodyLimit({ maxSize: 1024 }), async (c) => {
   if (!input || !validChatModel(input.chatModel) || Object.keys(input).some((key) => !['chatModel', 'contributorConsent'].includes(key))) {
     return c.json({ error: 'Choose a supported chat model.' }, 422);
   }
+  if (c.get('contributorOnly')) {
+    return c.json({ error: 'The chat model is set to Contributor for every account right now.', code: 'CONTRIBUTOR_ONLY' }, 409);
+  }
   if (input.chatModel === contributorModel && input.contributorConsent !== true) {
     return c.json({ error: "Agree to Meta's Contributor data use before enabling Contributor." }, 422);
   }
   const row = await c.env.DB.prepare(`UPDATE user SET chat_model = ?, updated_at = ? WHERE id = ? RETURNING ${columns}`)
     .bind(input.chatModel, Date.now(), c.get('owner')).first<Profile>();
   if (!row) return c.json({ error: 'Unauthorized' }, 401);
-  return c.json({ user: responseUser(row) });
+  return c.json({ user: responseUser(row, c.get('contributorOnly')) });
 });
 
 // "Contacts share with each other" (docs/privacy.md#contacts-share-with-each-other).
@@ -68,7 +77,7 @@ me.put('/privacy', bodyLimit({ maxSize: 1024 }), async (c) => {
   const row = await c.env.DB.prepare(`UPDATE user SET contacts_share = ?, updated_at = ? WHERE id = ? RETURNING ${columns}`)
     .bind(input.contactsShare ? 1 : 0, Date.now(), c.get('owner')).first<Profile>();
   if (!row) return c.json({ error: 'Unauthorized' }, 401);
-  return c.json({ user: responseUser(row) });
+  return c.json({ user: responseUser(row, c.get('contributorOnly')) });
 });
 
 me.get('/photo', async (c) => {
@@ -118,7 +127,7 @@ me.on(['PUT', 'DELETE'], '/photo', async (c) => {
     return c.json({ error: 'Your profile changed. Refresh and try again.' }, 409);
   }
   if (previous.version) c.executionCtx.waitUntil(removePhoto(c.env, key(owner, previous.version)));
-  return c.json({ user: responseUser(saved) });
+  return c.json({ user: responseUser(saved, c.get('contributorOnly')) });
 });
 
 export default me;

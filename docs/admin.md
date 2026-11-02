@@ -155,10 +155,11 @@ without a release.
 | --- | --- | --- |
 | `registration_enabled` | `true` | When off, `POST /api/v1/auth/sign-up/email` returns 403 `REGISTRATION_CLOSED`, after the per-IP admission check. Sign-in is unaffected. iOS and web show "New accounts are not being accepted right now. Existing accounts can still sign in." |
 | `voice_messages_enabled` | `false` | Contacts may reply with ElevenLabs voice messages and contact details show the Voice section. Takes effect only when `ELEVENLABS_API_KEY` is set. Delivered to clients as `features.voiceMessages` on `GET /me`. People can always send voice messages. See [voice messages](voice.md). |
+| `contributor_only` | `false` | Every account is processed with Muse Spark 1.3 Contributor, whatever its saved choice. `user.chat_model` is never rewritten, so each account's own choice applies again when the flag is turned off. `accountModel()` and the consent guards that compared `user.chat_model` in SQL (research access, initiative publication, task dispatch) use `effectiveModelSQL()`. Profile responses report `chatModel` as Contributor and `GET /me` sends `features.contributorOnly`; iOS and web then show the Chat model row as Contributor with no picker, and `PUT /api/v1/me/model` returns 409 `CONTRIBUTOR_ONLY`. Workflows already started keep their checkpointed model. MCP-isolated chats and groups still use Standard, and Contributor consent checks still apply: content or groups without Contributor consent are filtered or refused rather than sent with Standard, except Updates comment replies, which still fall back to Standard for a contact without consent (`home/comments.ts`). Meant for testing and demos to cut inference cost; it overrides individual model choices, so do not turn it on for real users without their consent. See [model settings](model-settings.md). |
 
 To add a flag, add a definition, read it with `readSetting` where it matters, and
 document it here. The panel lists it automatically. A flag that changes client behavior needs a delivery path: `GET /me` returns
-`features` (currently `voiceMessages`), which both clients already revalidate. `WEB_RESEARCH_ENABLED` and
+`features` (currently `voiceMessages` and `contributorOnly`), which both clients already revalidate. `WEB_RESEARCH_ENABLED` and
 `SEMANTIC_MEMORY_ENABLED` are still Wrangler vars that require a release.
 
 ## Panel caching

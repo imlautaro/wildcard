@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const { t } = useI18n();
-const { user, saveName, savePhoto, saveModel, savePrivacy, refreshProfile, signOut } = useSession();
+const { user, features, saveName, savePhoto, saveModel, savePrivacy, refreshProfile, signOut } = useSession();
 const { exporting, progress, exportError, download, cancel } = useDebugExport();
 const exportSheet = ref(false);
 onBeforeUnmount(cancel);
@@ -12,6 +12,9 @@ const models = computed(() => [
 ]);
 const currentModel = computed(() => user.value?.chatModel ?? 'muse-spark-1.3');
 const modelSheet = ref(false);
+// Admin flag: every account uses Contributor for now, so the choice is not offered.
+const contributorOnly = computed(() => !!features.value?.contributorOnly);
+watch(contributorOnly, (locked) => { if (locked) modelSheet.value = false; });
 const chatModel = ref(currentModel.value);
 const contributorConsent = ref(false);
 const modelChanged = computed(() => chatModel.value !== currentModel.value);
@@ -97,7 +100,8 @@ onMounted(async () => {
       <AppNotice v-if="error && !modelSheet">{{ error }}</AppNotice>
 
       <AppListGroup>
-        <AppListItem icon="model" opens :value="models.find(model => model.value === currentModel)?.label ?? currentModel" @click="openModelSheet">{{ t('account.chatModel.title') }}</AppListItem>
+        <AppListItem v-if="contributorOnly" icon="model" plain :supporting="t('account.chatModel.contributorOnly')" :value="t('account.chatModel.contributor')">{{ t('account.chatModel.title') }}</AppListItem>
+        <AppListItem v-else icon="model" opens :value="models.find(model => model.value === currentModel)?.label ?? currentModel" @click="openModelSheet">{{ t('account.chatModel.title') }}</AppListItem>
         <AppListItem icon="appearance" opens :value="themeOptions.find(option => option.value === themePreference)?.label" @click="themeSheet = true">{{ t('account.appearance.title') }}</AppListItem>
         <AppListItem icon="language" opens :value="languageOptions.find(option => option.value === languagePreference)?.label" @click="languageSheet = true">{{ t('common.language.title') }}</AppListItem>
         <AppSwitch icon="notifications" :label="t('account.notifications.title')" :checked="notificationsOn" :supporting="notificationsSupporting"

@@ -24,6 +24,8 @@ struct AccountView: View {
         (value: "muse-spark-1.3-contributor", label: "Contributor", detail: String(localized: "Meta may train models on what you send.")),
     ]
     private var currentModel: String { auth.user?.chatModel ?? "muse-spark-1.3" }
+    /// Admin flag: every account uses Contributor for now, so the choice is not offered.
+    private var contributorOnly: Bool { auth.user?.features?.contributorOnly == true }
     /// The language iOS chose for the app (its per-app Language setting), named in that language.
     private var languageName: String {
         let code = Bundle.main.preferredLocalizations.first ?? "en"
@@ -59,14 +61,28 @@ struct AccountView: View {
                 }
             }
             Section {
-                SheetRow(title: String(localized: "Chat model"), systemImage: "cpu",
-                         value: Self.models.first { $0.value == currentModel }?.label ?? currentModel) {
-                    chatModel = currentModel
-                    contributorConsent = false
-                    modelError = nil
-                    showingModel = true
+                if contributorOnly {
+                    LabeledContent {
+                        Text(verbatim: "Contributor")
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Chat model")
+                                Text("Contributor is on for every account for now. Your saved choice returns when this ends.")
+                                    .manrope(.caption).foregroundStyle(.secondary)
+                            }
+                        } icon: { Image(systemName: "cpu") }
+                    }
+                } else {
+                    SheetRow(title: String(localized: "Chat model"), systemImage: "cpu",
+                             value: Self.models.first { $0.value == currentModel }?.label ?? currentModel) {
+                        chatModel = currentModel
+                        contributorConsent = false
+                        modelError = nil
+                        showingModel = true
+                    }
+                    .disabled(refreshingProfile || auth.isBusy)
                 }
-                .disabled(refreshingProfile || auth.isBusy)
                 SheetRow(title: String(localized: "Notifications"), systemImage: "bell", value: push.status) { showingNotifications = true }
                 Picker(selection: $appearance) {
                     ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
@@ -124,6 +140,7 @@ struct AccountView: View {
             }
         }
         .sheet(isPresented: $showingModel) { modelSheet }
+        .onChange(of: contributorOnly) { _, locked in if locked { showingModel = false } }
         .sheet(isPresented: $showingNotifications) { notificationsSheet }
         .sheet(isPresented: $showingPrivacy) { PrivacyGuideSheet() }
         .task {

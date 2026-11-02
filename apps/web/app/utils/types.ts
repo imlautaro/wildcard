@@ -11,7 +11,7 @@ export type AuthUser = {
   contactsShare?: boolean;
 };
 // Server feature switches returned next to `user` by GET /me (docs/voice.md).
-export type Features = { voiceMessages: boolean };
+export type Features = { voiceMessages: boolean; contributorOnly?: boolean };
 
 /** `name` is set for groups only: the reacting member or contact, as this viewer sees it. */
 export type LastReaction = { at: number; emoji: string; own: boolean; name?: string | null };

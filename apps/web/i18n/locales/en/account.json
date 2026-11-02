@@ -20,7 +20,8 @@
       "contributor": "Contributor",
       "contributorDetail": "Meta may train models on what you send.",
       "info": "Contributor allows Meta to use submitted messages, files, context and responses to train models. Standard does not. Applies to new chat jobs, schedules and group exchanges you start; jobs already started keep their model. Shared data may still use Contributor when you separately consent. MCP chats always use Standard.",
-      "contributorConsent": "I agree to Meta's Contributor data use"
+      "contributorConsent": "I agree to Meta's Contributor data use",
+      "contributorOnly": "Contributor is on for every account for now. Your saved choice returns when this ends."
     },
     "appearance": {
       "title": "Appearance",

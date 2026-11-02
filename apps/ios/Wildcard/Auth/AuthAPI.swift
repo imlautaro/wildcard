@@ -16,11 +16,14 @@ struct AuthUser: Codable, Sendable {
 
 struct AccountFeatures: Codable, Equatable, Sendable {
     var voiceMessages = false
+    /// Admin flag: every account is processed with Contributor; the model choice is hidden.
+    var contributorOnly = false
 
     init() { }
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         voiceMessages = try container.decodeIfPresent(Bool.self, forKey: .voiceMessages) ?? false
+        contributorOnly = try container.decodeIfPresent(Bool.self, forKey: .contributorOnly) ?? false
     }
 }
 

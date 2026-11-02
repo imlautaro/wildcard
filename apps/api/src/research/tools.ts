@@ -1,5 +1,6 @@
 import { taskWorkAccess } from '../tasks/access';
 import type { ModelTool } from '../chat/meta';
+import { contributorModel, effectiveModelSQL } from '../lib/model-preference';
 import { safeErrorCode } from '../chat/meta';
 import { documentLimits } from '../documents/data';
 import { researchLimits, researchWeb, type ResearchResult } from './model';
@@ -43,7 +44,7 @@ export type ResearchScope = { turnID: string; attempt: number; agentID: string; 
 // This guard is also embedded in reservation/publication statements: a cached
 // Workflow checkpoint or a client's cached permission is never authorization.
 export function researchAccess(scope: ResearchScope) {
-  const consent = scope.contributor ? `AND account.chat_model = 'muse-spark-1.3-contributor'` : '';
+  const consent = scope.contributor ? `AND ${effectiveModelSQL('account.chat_model')} = '${contributorModel}'` : '';
   if (scope.kind === 'contact') return { sql: `SELECT t.id AS sourceID, NULL AS planRole, work.id AS taskID, work.work_generation AS taskGeneration,
     work.research_query AS publicQuery, COALESCE(work.research_user_id, c.user_id) AS billingUserID FROM chat_turn t
     LEFT JOIN task work ON work.id = t.task_id

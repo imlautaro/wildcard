@@ -20,7 +20,8 @@
       "contributor": "Contributor",
       "contributorDetail": "Meta puede entrenar modelos con lo que envíes.",
       "info": "Contributor permite que Meta use los mensajes, archivos, contexto y respuestas enviados para entrenar modelos. Estándar no lo permite. Se aplica a los nuevos trabajos de chat, programaciones e intercambios de grupo que inicies; los trabajos ya iniciados conservan su modelo. Los datos compartidos pueden seguir usando Contributor si das tu consentimiento por separado. Los chats con MCP siempre usan Estándar.",
-      "contributorConsent": "Acepto el uso de datos de Contributor de Meta"
+      "contributorConsent": "Acepto el uso de datos de Contributor de Meta",
+      "contributorOnly": "Contributor está activado para todas las cuentas por ahora. Tu elección guardada vuelve cuando esto termine."
     },
     "appearance": {
       "title": "Apariencia",

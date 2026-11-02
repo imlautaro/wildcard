@@ -12,6 +12,11 @@ export const settingDefinitions = {
     description: 'Let contacts reply with synthesized voice messages (ElevenLabs) and show the voice settings in contact details. Requires ELEVENLABS_API_KEY. People can always send voice messages.',
     defaultValue: false,
   },
+  contributor_only: {
+    label: 'Contributor model only',
+    description: 'Process every account with Muse Spark 1.3 Contributor and hide the Standard option. Saved account choices are kept and apply again when this is turned off. MCP-isolated chats still use Standard, and Contributor consent checks still apply.',
+    defaultValue: false,
+  },
 } as const satisfies Record<string, { label: string; description: string; defaultValue: boolean }>;
 
 export type SettingKey = keyof typeof settingDefinitions;

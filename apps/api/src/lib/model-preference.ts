@@ -6,9 +6,20 @@ export function validChatModel(value: unknown): value is ChatModel {
   return value === standardModel || value === contributorModel;
 }
 
+// Admin flag `contributor_only` (docs/admin.md): every account is processed with
+// Contributor while it is on. The stored `user.chat_model` is never changed, so each
+// account's own choice applies again when the flag is turned off.
+const contributorOnlySetting = `(SELECT value FROM app_setting WHERE key = 'contributor_only') = 'true'`;
+
+// SQL expression for an account's effective model; use it instead of reading
+// `chat_model` directly in consent guards.
+export function effectiveModelSQL(column: string): string {
+  return `(CASE WHEN ${contributorOnlySetting} THEN '${contributorModel}' ELSE ${column} END)`;
+}
+
 export async function accountModel(env: Env, userID: string | null): Promise<ChatModel> {
   if (!userID) return standardModel;
-  const row = await env.DB.prepare('SELECT chat_model AS model FROM user WHERE id = ?')
+  const row = await env.DB.prepare(`SELECT ${effectiveModelSQL('chat_model')} AS model FROM user WHERE id = ?`)
     .bind(userID).first<{ model: string }>();
   return row?.model === contributorModel ? contributorModel : standardModel;
 }

@@ -29,7 +29,11 @@ Both clients show the same model options and disclosure: Contributor allows Meta
 to use submitted messages, files, context and responses to train models; Standard
 does not. Changing to Standard affects future processing, not data already sent.
 Users can later select Contributor again with explicit acceptance. There is no
-administrator assignment UI.
+per-account administrator assignment. The admin flag `contributor_only`
+([admin](admin.md#runtime-settings-and-feature-flags)) processes every account
+with Contributor while it is on, without changing any saved choice; when it is
+turned off each account's own selection applies again. While it is on, both
+clients show Chat model as Contributor with a note instead of the picker.
 
 Each private/group reply Workflow checkpoints its account model at the start and
 keeps it through retries and publication. Private replies, autonomous schedules
