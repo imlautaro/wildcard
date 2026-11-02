@@ -718,7 +718,16 @@ before each request so the model is not invited to imitate them.
 Only sequences that decode to a plausible character are rewritten: Latin-1 letters
 (`Ã©` → `é`), general punctuation, arrows and symbols, variation selectors, CJK
 punctuation and emoji. An emoji fragment whose remaining bytes were lost (`ðŸ`
-followed by ordinary text) is removed. Ordinary text, including accented Spanish,
+followed by ordinary text) is removed. Since 2026-11-02 a lone `ð` (an emoji's first byte, usually
+where a final emoji should be) that does not touch a letter, digit or mark is removed
+too, as are stray C1 control characters, which are invisible but never legitimate in
+chat text. JSON answers (`responseFormat`) and tool arguments can carry the garbled
+bytes as escapes (`\u00f0\u009f\u0098\u0080`), which the repair could not see before
+`JSON.parse` and which then showed as a bare `ð`; `unescapeLatin1` writes escapes in
+the 0x80–0xFF range literally first (equivalent JSON), so the repair applies. Live
+probing with Contributor (about 300 responses, 2026-11-02) did not reproduce the
+problem, but showed the model does escape non-ASCII characters in JSON answers
+(`\u00e9`, `\uD83C…`), so this path is plausible; the cause is still unconfirmed. Ordinary text, including accented Spanish,
 Portuguese and French, is left unchanged. Stored messages are not rewritten; messages
 that already contain garbled text keep it. Offline regression:
 `node scripts/checks/mojibake.mjs`. No client change.

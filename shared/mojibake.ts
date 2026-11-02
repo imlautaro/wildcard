@@ -3,7 +3,8 @@
 // apostrophe as "â€™" and "é" as "Ã©". Model output sometimes contains these
 // sequences (docs/chats.md#garbled-characters). Only sequences that decode to a
 // plausible character are rewritten, so ordinary accented text is left alone; an
-// emoji fragment whose bytes were lost ("ðŸ" followed by text) is removed.
+// emoji fragment whose bytes were lost ("ðŸ" followed by text) is removed, as is a
+// lone "ð" (an emoji's first byte) standing apart from any word, and stray C1 controls.
 
 // Windows-1252 characters for bytes 0x80–0x9F; the five undefined bytes decode as C1 controls.
 const cp1252: Record<number, number> = {
@@ -36,8 +37,21 @@ const fragmentPrefixes = new Set(['f0:9f', 'e2:80', 'ef:b8']);
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false });
 const signature = /[ÂÃâðï][\u0080-¿ŒœŠšŸŽžƒˆ˜–—‘-„†-•…‰‹›€™]/u;
 
+// A lone emoji lead byte: "ð" not touching a letter, digit or mark (real "ð" sits inside words).
+const loneLead = /(?<![\p{L}\p{N}\p{M}])ð(?![\p{L}\p{N}\p{M}])/gu;
+const c1Controls = /[\u0080-\u009f]/gu;
+
+// JSON-mode answers sometimes escape the garbled bytes ("\u00f0\u009f\u0098\u0080"), which
+// the repair cannot see until the JSON is parsed. Latin-1 escapes never need escaping in
+// JSON, so writing them literally (when their backslash is not itself escaped) keeps the
+// JSON equivalent and lets repairMojibake run on it.
+export function unescapeLatin1(json: string): string {
+  return json.replace(/(?<!\\)((?:\\\\)*)\\u00([89a-f][0-9a-f])/giu,
+    (_, slashes: string, hex: string) => slashes + String.fromCharCode(parseInt(hex, 16)));
+}
+
 export function repairMojibake(text: string): string {
-  if (!signature.test(text)) return text;
+  if (!signature.test(text)) return /[ð\u0080-\u009f]/u.test(text) ? cleanup(text) : text;
   const chars = Array.from(text);
   let output = '';
   for (let i = 0; i < chars.length;) {
@@ -59,5 +73,10 @@ export function repairMojibake(text: string): string {
     output += chars[i];
     i++;
   }
-  return output;
+  return cleanup(output);
+}
+
+function cleanup(text: string): string {
+  // A space-separated lead byte takes its leading space with it ("genial ð" → "genial").
+  return text.replace(/ ð(?=\s|$)/gu, '').replace(loneLead, '').replace(c1Controls, '');
 }

@@ -1,5 +1,5 @@
 import { NonRetryableError } from 'cloudflare:workflows';
-import { repairMojibake } from '../../../../shared/mojibake';
+import { repairMojibake, unescapeLatin1 } from '../../../../shared/mojibake';
 
 export type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
 export type ModelMessage =
@@ -95,7 +95,9 @@ export async function museCompletion(env: Env, messages: ModelMessage[], configu
   if (!isRecord(message)) throw new Error('MODEL_EMPTY_RESPONSE');
   // Model text sometimes arrives with UTF-8 emoji decoded as Windows-1252 ("ðŸ˜€"); repair it
   // here so every reply, card, document and tool argument is stored correctly (shared/mojibake.ts).
-  const content = typeof message.content === 'string' ? repairMojibake(message.content).trim() : null;
+  // JSON answers may carry the garbled bytes as \u00XX escapes, written literally first.
+  const content = typeof message.content === 'string'
+    ? repairMojibake(options.responseFormat ? unescapeLatin1(message.content) : message.content).trim() : null;
   if (content && Array.from(content).length > 20_000) throw new NonRetryableError('MODEL_RESPONSE_TOO_LARGE');
   if (Array.isArray(message.tool_calls) && message.tool_calls.length) {
     if (!options.tools?.length || message.tool_calls.length > 4) throw new Error('MODEL_INVALID_TOOL_CALLS');
@@ -113,7 +115,7 @@ export async function museCompletion(env: Env, messages: ModelMessage[], configu
             : ['research_web', 'start_mini_app', 'ask_linked_contact', 'tell_linked_contact'].includes(call.function.name) ? 4000
             : ['create_schedule', 'update_schedule', 'ask_agent_in_group'].includes(call.function.name) ? 6000 : 1000) ||
         toolCalls.some((previous) => previous.id === call.id)) throw new Error('MODEL_INVALID_TOOL_CALLS');
-      toolCalls.push({ id: call.id, type: 'function', function: { name: call.function.name, arguments: repairMojibake(call.function.arguments) } });
+      toolCalls.push({ id: call.id, type: 'function', function: { name: call.function.name, arguments: repairMojibake(unescapeLatin1(call.function.arguments)) } });
     }
     return { role: 'assistant', content, tool_calls: toolCalls };
   }
