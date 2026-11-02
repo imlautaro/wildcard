@@ -20,13 +20,15 @@ export const cardLifetimes: Record<CardKind, number> = {
 
 // What the composer is told about each kind. Keep in sync with parseCard.
 export const kindGuide: Record<CardKind, string> = {
-  headlines: 'News layout. items: 1-5 {title (max 140), summary (max 280), source (outlet name, max 60), url (article https URL from evidence), time (short label like "2 h ago" or "Oct 30", max 40)}. The first item is shown as the lead story, so put the most important one first.',
+  headlines: 'News layout; with one item it is a shared link under your post (with its preview image). items: 1-5 {title (max 140), summary (max 280), source (outlet name, max 60), url (article https URL from evidence), time (short label like "2 h ago" or "Oct 30", max 40)}. The first item is shown as the lead story, so put the most important one first.',
   matches: 'Sports fixtures/results. items: 1-8 {home, away (team names, max 40), homeScore, awayScore (integers, or null before kickoff), status (max 30, e.g. "FT", "Live 63\'", "Sat 21:00"), detail (max 60, e.g. scorers or venue)}. Put the competition or matchday in subtitle.',
   table: 'Compact table such as standings. columns: 2-5 short headers (max 20). rows: 1-12 arrays with exactly one cell per column (max 24 each, strings). highlight: optional zero-based row index to emphasize (for example the person\'s team). caption: optional (max 140).',
   metrics: 'Key figures as tiles. items: 1-6 {label (max 40), value (formatted, max 24), unit (max 12), change (max 16, e.g. "+1.2%"), trend ("up", "down" or "flat"), caption (max 80)}.',
   chart: 'One series chart. style: "line" or "bar". points: 2-31 {label (max 16, e.g. a date), value (number)} in chronological order. unit (max 12), value (current headline value, max 24), change (max 16), trend, summary (one sentence, max 200).',
   tracker: 'Progress of a process or wait (application, shipment, goal). figure (the key number, max 24, e.g. "14.5 months"), figureLabel (what it means, max 80), status (max 120), progress (0 to 1, optional), steps: 0-6 {label (max 60), state ("done", "current" or "upcoming"), detail (max 80)}, note (max 280).',
-  note: 'A short personal note from you to the person. text (max 500): a useful tip, reminder or thought grounded in what you know. prompt (max 200, optional): a message the person could send you to continue, in their language. Write ____ (four underscores) for any detail only they can supply; they fill each blank in before sending.',
+  // A note is the text-first post, like most posts on X (docs/updates.md#post-formats).
+  note: 'A text-first post with no data attachment, like most posts on X; its text is the whole post. text (max 500, best under 280): your take, reaction, recommendation, prediction, striking fact or short recap, naming the concrete thing (team, player, release, author, place, figure). '
+    + 'Put the links behind it in sources. prompt (max 200, optional and rare): a message the person could send you to go deeper, in their language; omit it for almost every post. Write ____ (four underscores) in a prompt for any detail only they can supply.',
   list: 'Generic list. items: 1-8 {title (max 120), detail (max 160), trailing (short value or date, max 24), url (optional https URL from evidence)}.',
 };
 

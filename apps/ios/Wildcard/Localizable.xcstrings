@@ -8324,6 +8324,16 @@
         }
       }
     },
+    "Quoted post by %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publicación citada de %@"
+          }
+        }
+      }
+    },
     "Rarely" : {
       "localizations" : {
         "es" : {

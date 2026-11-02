@@ -5,7 +5,8 @@ import type { HomePostAction } from './HomePost.vue';
 // For you: the feed a person's contacts curate together (docs/updates.md). On wide
 // screens it fills the content pane beside the chat list as a single timeline column of
 // posts, newest first; `?thread=<topic>` shows every post on one topic as a thread and
-// `?post=<id>` one post with its comments (docs/updates.md#comments).
+// `?post=<id>` one post with its comments (docs/updates.md#comments). When the pane is wide
+// enough, "Topics to follow" sits in a column beside the timeline (docs/updates.md#topics-to-follow).
 const route = useRoute();
 const home = useHome();
 const chats = useChats();
@@ -31,6 +32,7 @@ const thread = computed(() => typeof route.query.thread === 'string' ? route.que
 const threadPosts = computed(() => thread.value ? posts.value.filter(post => post.topicID === thread.value) : []);
 const focusID = computed(() => typeof route.query.post === 'string' ? route.query.post : null);
 const focusPost = computed(() => focusID.value ? posts.value.find(post => post.id === focusID.value) ?? null : null);
+const suggestions = computed(() => setup.value ? [] : feed.value?.suggestions ?? []);
 const threadTitle = computed(() => threadPosts.value[0]?.content.title ?? t('updates.feed.thread'));
 const myPhoto = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
 
@@ -87,9 +89,15 @@ async function follow() {
   if (!text) return;
   await run(async () => { await home.follow(text); following.value = false; followText.value = ''; });
 }
+const followingSuggestion = ref<string | null>(null);
+async function followSuggestion(title: string) {
+  followingSuggestion.value = title;
+  try { await run(() => home.follow(title)); } finally { followingSuggestion.value = null; }
+}
 function act(card: HomePost, kind: HomePostAction, prompt?: string) {
   if (kind === 'thread') return openThread(card.topicID);
   if (kind === 'comment') return openPost(card.id);
+  if (kind === 'quote' && card.quote) return openPost(card.quote.id);
   if (kind === 'message' && card.contactID) return navigateTo(`/chats/${card.contactID}`);
   if (kind === 'reply' && card.contactID) { if (prompt) suggestDraft(card.contactID, prompt); return navigateTo(`/chats/${card.contactID}`); }
   if (kind === 'hide') return run(() => home.setTopic(card.topicID, { status: 'hidden' }));
@@ -152,13 +160,14 @@ function origin(topic: HomeFeed['topics'][number]) {
         :text="$t('updates.feed.threadGoneText')" />
     </div>
   </div>
-  <div v-else ref="page" class="page home-page" @scroll.passive="onScroll">
+  <div v-else ref="page" class="page home-page main-feed" @scroll.passive="onScroll">
     <AppTopBar :title="$t('updates.feed.title')">
       <template #leading><AppIconButton to="/chats" icon="back" :label="$t('updates.feed.chats')" class="back" :tooltip="false" /></template>
       <AppIconButton icon="list" :label="$t('updates.feed.topics')" @click="managing = true" />
       <AppIconButton v-if="!setup" icon="refresh" :label="$t('updates.feed.updateNow')" :disabled="!feed?.enabled || updating || busy" @click="run(home.update)" />
       <AppIconButton v-if="!setup" icon="plus" :label="$t('updates.feed.followSomethingInForYou')" variant="filled" @click="following = true" />
     </AppTopBar>
+    <div class="home-body">
     <div class="home-inner">
       <div v-if="updating && !setup" class="home-status" role="status">
         <template v-if="feed?.progress">
@@ -219,6 +228,22 @@ function origin(topic: HomeFeed['topics'][number]) {
           <AppButton variant="text" @click="following = true">{{ $t('updates.feed.followSomething') }}</AppButton>
         </template>
       </AppEmptyState>
+    </div>
+    <aside v-if="suggestions.length" class="home-aside" :aria-label="$t('updates.feed.topicsToFollow')">
+      <section class="suggestions">
+        <h2>{{ $t('updates.feed.topicsToFollow') }}</h2>
+        <ul>
+          <li v-for="item in suggestions" :key="item.title">
+            <span class="copy"><strong>{{ item.title }}</strong><small v-if="item.reason">{{ item.reason }}</small></span>
+            <AppButton variant="outlined" :disabled="busy" :aria-label="$t('updates.feed.followTopic', { title: item.title })"
+              @click="followSuggestion(item.title)">
+              {{ followingSuggestion === item.title ? $t('updates.feed.followingTopic') : $t('updates.feed.follow') }}
+            </AppButton>
+          </li>
+        </ul>
+        <button class="link-button" @click="following = true">{{ $t('updates.feed.followSomethingElse') }}</button>
+      </section>
+    </aside>
     </div>
 
     <AppSheet v-if="following" :title="$t('updates.feed.followSheetTitle')" @close="following = false">
@@ -308,4 +333,22 @@ function origin(topic: HomeFeed['topics'][number]) {
 .topics small { font: var(--type-body-small); color: var(--md-on-surface-variant); }
 .topics li.hidden strong { color: var(--md-on-surface-variant); }
 @media (max-width: 860px) { .home-inner { padding-bottom: var(--space-8); } }
+/* Topics to follow: a second column on wide screens, like X's right sidebar. A media query, not a
+   container query: containment on the scrolling page would trap the fixed ⋯ menu backdrop. At 1100px
+   the pane beside the navigation rail is about 1000px. */
+.home-aside { display: none; }
+@media (min-width: 1100px) {
+  .home-body { display: grid; grid-template-columns: minmax(0, 620px) 300px; justify-content: center; align-items: start; gap: var(--space-6); padding: 0 var(--space-4); }
+  .home-body > .home-inner { margin: 0; }
+  /* Below the sticky top bar. */
+  .home-aside { display: block; position: sticky; top: calc(var(--ui-bar-height) + var(--space-2)); }
+}
+.suggestions { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--md-outline-variant); border-radius: var(--ui-pane-radius); }
+.suggestions h2 { margin: 0; font: var(--type-title-medium); }
+.suggestions ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.suggestions li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
+.suggestions .copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-0-5); }
+.suggestions strong { font: var(--type-title-small); overflow-wrap: anywhere; }
+.suggestions small { font: var(--type-body-small); color: var(--md-on-surface-variant); }
+.suggestions .link-button { align-self: flex-start; }
 </style>

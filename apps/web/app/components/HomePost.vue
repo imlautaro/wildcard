@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HomeCardContent, HomePost } from '~/utils/types';
 
-export type HomePostAction = 'more' | 'less' | 'hide' | 'message' | 'reply' | 'thread' | 'comment';
+export type HomePostAction = 'more' | 'less' | 'hide' | 'message' | 'reply' | 'thread' | 'comment' | 'quote';
 
 // One For you post (docs/updates.md#posts), like a Threads or X post: the contact (avatar, name,
 // topic, age), the contact's text, and the card of the closed catalog (docs/updates.md#cards)
@@ -111,6 +111,7 @@ function act(kind: HomePostAction, prompt?: string) { menuOpen.value = false; em
       </header>
       <p v-if="post.replyTo" class="replying">{{ $t('updates.post.replyingTo', { name: post.replyTo.contactName ?? $t('updates.aContactLower') }) }}</p>
       <p v-if="post.text" class="post-text" :class="{ open: !inThread }" @click="!inThread && act('thread')">{{ post.text }}</p>
+      <HomePostQuote v-if="post.quote && !note" :quote="post.quote" @open="act('quote')" />
 
       <div :class="note ? 'note-body' : 'attachment'">
       <p v-if="!note && (content.subtitle || !post.text)" class="attachment-head">
@@ -222,6 +223,7 @@ function act(kind: HomePostAction, prompt?: string) { menuOpen.value = false; em
         {{ expanded ? $t('updates.post.showLess') : hidden ? $t('updates.post.showCountMore', { count: hidden }) : $t('updates.post.showMore') }}
       </button>
       </div>
+      <HomePostQuote v-if="post.quote && note" :quote="post.quote" @open="act('quote')" />
 
       <footer class="post-actions">
         <AppIconButton icon="heart" :label="$t('updates.post.moreLikeThis')" size="small" class="like" :selected="card.feedback === 'more'" @click="act('more')" />

@@ -293,9 +293,15 @@ export type HomeCard = {
 // a note (its text is the card) and for cards published before posts existed.
 export type HomePost = Omit<HomeCard, 'generatedAt'> & {
   text: string | null; replyTo: { id: string; contactName: string | null } | null; createdAt: number;
+  /** Another contact's post this one quotes (docs/updates.md#quote-posts); absent on older APIs. */
+  quote?: HomePostQuote | null;
   /** The person's comments with the contact's replies, oldest first (docs/updates.md#comments). */
   comments?: HomeComment[];
 };
+export type HomePostQuote = { id: string; contactID: string | null; contactName: string | null; contactPhotoVersion: string | null;
+  text: string | null; title: string; createdAt: number | null };
+/** A topic the editor suggests following (docs/updates.md#topics-to-follow). */
+export type HomeSuggestion = { title: string; reason: string };
 export type HomeComment = { id: string; text: string; reply: string | null; status: 'pending' | 'complete' | 'failed'; createdAt: number; repliedAt: number | null;
   /** The contact also wrote to the person in its private chat (docs/updates.md#private-messages-from-comments); absent on older APIs. */
   privateMessage?: boolean };
@@ -308,6 +314,8 @@ export type HomeFeed = {
   cards: HomeCard[];
   /** Newest first. Absent from an API without posts (before migration 0086); see homePosts(). */
   posts?: HomePost[];
+  /** Topics to follow, shown beside the timeline on wide screens; absent on older APIs. */
+  suggestions?: HomeSuggestion[];
   topics: { id: string; title: string; source: 'person' | 'contact' | 'curator'; status: 'active' | 'hidden'; feedback: 'more' | 'less' | null; contactID: string | null; hasCard: boolean }[];
   apps: { id: string; title: string; subtitle: string | null; icon: string | null; contactID: string | null; groupID: string | null; ownerName: string | null; opens: number }[];
   agenda: { id: string; kind: 'schedule' | 'task'; title: string; at: number | null; contactID: string | null; groupID: string | null; name: string | null }[];

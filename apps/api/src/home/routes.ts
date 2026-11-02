@@ -27,12 +27,15 @@ function zone(value: string | undefined): string | null {
   try { new Intl.DateTimeFormat('en-US', { timeZone: value }); return value; } catch { return null; }
 }
 
-type FeedRow = { status: string; generatedAt: number | null; briefing: string | null; progressJSON: string | null; errorCode: string | null; dueAt: number; requestedAt: number | null };
+type FeedRow = { status: string; generatedAt: number | null; briefing: string | null; progressJSON: string | null; errorCode: string | null; dueAt: number; requestedAt: number | null;
+  suggestionsJSON: string | null };
 type CardRow = { id: string; topicID: string; contactID: string | null; contactName: string | null; photoVersion: string | null; payloadJSON: string;
   connector: number; generatedAt: number; reason: string | null; source: string; feedback: string | null };
 type PostRow = { id: string; topicID: string; contactID: string | null; contactName: string | null; photoVersion: string | null; text: string | null;
   payloadJSON: string; connector: number; createdAt: number; replyTo: string | null; replyToName: string | null;
-  reason: string | null; source: string; feedback: string | null };
+  reason: string | null; source: string; feedback: string | null;
+  quoteID: string | null; quoteContactID: string | null; quoteContactName: string | null; quotePhotoVersion: string | null; quoteText: string | null;
+  quoteTitle: string | null; quoteCreatedAt: number | null };
 // The newest posts the timeline shows (docs/updates.md#posts).
 const timelinePosts = 50;
 
@@ -40,7 +43,7 @@ export async function homeFeed(env: Env, owner: string) {
   const now = Date.now();
   const [state, cards, posts, topics, apps, schedules, tasks, setup] = await Promise.all([
     env.DB.prepare(`SELECT status, generated_at AS generatedAt, briefing, progress_json AS progressJSON, error_code AS errorCode,
-      due_at AS dueAt, requested_at AS requestedAt FROM home_feed WHERE user_id = ?`).bind(owner).first<FeedRow>(),
+      due_at AS dueAt, requested_at AS requestedAt, suggestions_json AS suggestionsJSON FROM home_feed WHERE user_id = ?`).bind(owner).first<FeedRow>(),
     env.DB.prepare(`SELECT card.id, card.topic_id AS topicID, card.contact_id AS contactID, COALESCE(c.alias, c.name) AS contactName, c.photo_version AS photoVersion,
         card.payload_json AS payloadJSON, card.connector, card.generated_at AS generatedAt, t.reason, t.source, t.feedback
       FROM home_card card JOIN home_topic t ON t.id = card.topic_id AND t.status = 'active'
@@ -48,11 +51,18 @@ export async function homeFeed(env: Env, owner: string) {
       WHERE card.user_id = ? ORDER BY card.position, card.generated_at DESC LIMIT 16`).bind(owner).all<CardRow>(),
     env.DB.prepare(`SELECT p.id, p.topic_id AS topicID, p.contact_id AS contactID, COALESCE(c.alias, c.name) AS contactName, c.photo_version AS photoVersion,
         p.text, p.payload_json AS payloadJSON, p.connector, p.created_at AS createdAt, p.reply_to AS replyTo, COALESCE(rc.alias, rc.name) AS replyToName,
-        t.reason, t.source, t.feedback
+        t.reason, t.source, t.feedback,
+        q.id AS quoteID, q.contact_id AS quoteContactID, COALESCE(qc.alias, qc.name) AS quoteContactName, qc.photo_version AS quotePhotoVersion,
+        COALESCE(q.text, CASE WHEN q.kind = 'note' THEN json_extract(q.payload_json, '$.text') END) AS quoteText,
+        json_extract(q.payload_json, '$.title') AS quoteTitle, q.created_at AS quoteCreatedAt
       FROM home_post p JOIN home_topic t ON t.id = p.topic_id AND t.status = 'active'
       LEFT JOIN contact c ON c.id = p.contact_id AND c.user_id = p.user_id
       LEFT JOIN home_post r ON r.id = p.reply_to
       LEFT JOIN contact rc ON rc.id = r.contact_id AND rc.user_id = p.user_id
+      -- A quoted post shows only while its topic is still in For you (docs/updates.md#quote-posts).
+      LEFT JOIN home_post q ON q.id = p.quote_of AND q.user_id = p.user_id
+        AND EXISTS (SELECT 1 FROM home_topic qt WHERE qt.id = q.topic_id AND qt.status = 'active')
+      LEFT JOIN contact qc ON qc.id = q.contact_id AND qc.user_id = p.user_id
       WHERE p.user_id = ? AND p.created_at > ? ORDER BY p.created_at DESC LIMIT ?`).bind(owner, now - postRetention, timelinePosts).all<PostRow>(),
     env.DB.prepare(`SELECT ${topicColumns} FROM home_topic WHERE user_id = ? AND status != 'retired' ORDER BY updated_at DESC LIMIT 40`)
       .bind(owner).all<HomeTopicRow>(),
@@ -104,6 +114,9 @@ export async function homeFeed(env: Env, owner: string) {
     // The timeline, newest first: each post is a contact's text with a card attached (null text: the card alone).
     posts: posts.results.map(post => ({ id: post.id, topicID: post.topicID, contactID: post.contactID, contactName: post.contactName,
       contactPhotoVersion: post.photoVersion, text: post.text, replyTo: post.replyTo ? { id: post.replyTo, contactName: post.replyToName } : null,
+      // Another contact's post this one quotes, like a quote post on X (docs/updates.md#quote-posts).
+      quote: post.quoteID ? { id: post.quoteID, contactID: post.quoteContactID, contactName: post.quoteContactName,
+        contactPhotoVersion: post.quotePhotoVersion, text: post.quoteText, title: post.quoteTitle ?? '', createdAt: post.quoteCreatedAt } : null,
       reason: post.reason, source: post.source, feedback: post.feedback, connector: post.connector === 1, createdAt: post.createdAt,
       content: JSON.parse(post.payloadJSON),
       // The person's comments and the contact's replies, oldest first (docs/updates.md#comments).
@@ -112,6 +125,8 @@ export async function homeFeed(env: Env, owner: string) {
         createdAt: comment.createdAt, repliedAt: comment.repliedAt,
         // The contact also wrote to the person in its private chat after this comment.
         privateMessage: comment.privateMessage === 1 })) })),
+    // Topics to follow (docs/updates.md#topics-to-follow), without ones followed or hidden since the plan.
+    suggestions: suggestions(state?.suggestionsJSON ?? null, topics.results),
     topics: topics.results.map(topic => ({ id: topic.id, title: topic.title, source: topic.source, status: topic.status, feedback: topic.feedback,
       contactID: topic.contactID, hasCard: cards.results.some(card => card.topicID === topic.id) })),
     apps: apps.results.flatMap(app => {
@@ -126,6 +141,17 @@ export async function homeFeed(env: Env, owner: string) {
       ...tasks.results.map(row => ({ id: row.id, kind: 'task', title: row.title, at: null, contactID: row.contactID, groupID: row.groupID, name: row.name })),
     ],
   };
+}
+
+function suggestions(json: string | null, topics: HomeTopicRow[]): { title: string; reason: string }[] {
+  if (!json) return [];
+  const taken = new Set(topics.map(topic => topic.title.toLowerCase()));
+  try {
+    const list: unknown = JSON.parse(json);
+    return Array.isArray(list) ? list.filter((item): item is { title: string; reason: string } => isRecord(item) && typeof item.title === 'string'
+      && typeof item.reason === 'string' && !taken.has(item.title.toLowerCase())).slice(0, homeLimits.suggestions)
+      .map(item => ({ title: item.title, reason: item.reason })) : [];
+  } catch { return []; }
 }
 
 // Marks the feed due now and starts the run without waiting for the minute Cron.

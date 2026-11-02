@@ -27,6 +27,8 @@ enum HomeStyle {
 
 enum HomeCardAction {
     case more, less, hide, message, reply(String), thread, comment
+    /// Open the post this one quotes.
+    case quote(String)
 }
 
 /// One For you post (docs/updates.md#posts), like a Threads or X post: the contact's avatar on a rail,
@@ -99,6 +101,7 @@ struct HomePostView: View {
                         .contentShape(Rectangle())
                         .onTapGesture { if !inThread { act(.thread) } }
                 }
+                if let quote = post.quote, !isNote { HomePostQuoteView(quote: quote) { act(.quote(quote.id)) } }
                 if isNote {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(content.text ?? "").manrope(.body).fixedSize(horizontal: false, vertical: true)
@@ -107,6 +110,7 @@ struct HomePostView: View {
                         }
                         more
                     }
+                    if let quote = post.quote { HomePostQuoteView(quote: quote) { act(.quote(quote.id)) } }
                 } else {
                     attachment
                 }
@@ -532,6 +536,36 @@ private struct HomeTracker: View {
 /// A note's suggested reply. Plain text is one wrapping button. A template with blanks (runs of
 /// underscores) shows the sentence with its blanks marked and one field per blank; the completed
 /// text goes to the chat's composer and is never sent from here.
+/// Another contact's post quoted inside a post, like a quote post on X (docs/updates.md#quote-posts).
+/// Tapping it opens the quoted post with its comments.
+private struct HomePostQuoteView: View {
+    let quote: HomePost.Quote
+    let open: () -> Void
+    @Environment(ContactsStore.self) private var contacts
+    private var name: String { quote.contactName ?? String(localized: "A contact") }
+
+    var body: some View {
+        Button(action: open) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    ContactAvatar(contact: quote.contactID.flatMap { contacts.contact(id: $0) }, size: 20)
+                    Text(name).manrope(.caption, weight: .bold).lineLimit(1).layoutPriority(1)
+                    if !quote.title.isEmpty { Text(quote.title).manrope(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                    if let at = quote.createdAt { Text(verbatim: "· \(HomePostView.age(at))").manrope(.caption).foregroundStyle(.secondary).fixedSize() }
+                }
+                Text(quote.text ?? quote.title).manrope(.subheadline).lineLimit(4).multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.secondary.opacity(0.25)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("Quoted post by \(name)"))
+    }
+}
+
 private struct HomeReplyTemplate: View {
     let prompt: String
     let accent: Color

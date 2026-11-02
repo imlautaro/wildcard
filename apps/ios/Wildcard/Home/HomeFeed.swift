@@ -93,6 +93,18 @@ struct HomePost: Decodable, Hashable, Sendable, Identifiable {
     let content: HomeCardContent
     /// The person's comments with the contact's replies, oldest first (docs/updates.md#comments).
     var comments: [HomeComment]?
+    /// Another contact's post this one quotes, like a quote post on X (docs/updates.md#quote-posts); absent on older APIs.
+    var quote: Quote? = nil
+
+    struct Quote: Decodable, Hashable, Sendable {
+        let id: String
+        let contactID: String?
+        let contactName: String?
+        let contactPhotoVersion: String?
+        let text: String?
+        let title: String
+        let createdAt: Double?
+    }
 }
 
 struct HomeComment: Decodable, Hashable, Sendable, Identifiable {

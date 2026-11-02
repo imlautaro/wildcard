@@ -429,6 +429,8 @@ extension HomeFeedStore {
             openThread(post.topicID)
         case .comment:
             openPost(post.id)
+        case .quote(let id):
+            openPost(id)
         case .more:
             try await setTopic(post.topicID, feedback: .some(post.feedback == "more" ? nil : "more"), using: auth)
         case .less:

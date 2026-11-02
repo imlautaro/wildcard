@@ -12,7 +12,7 @@ export type HomeContact = { id: string; name: string; description: string; speci
 export type HomeTopicRow = { id: string; title: string; brief: string; reason: string | null; kind: CardKind; source: 'person' | 'contact' | 'curator';
   contactID: string | null; status: 'active' | 'hidden' | 'retired'; feedback: 'more' | 'less' | null; pinned: number; updatedAt: number; skips: number; skipReason: string | null };
 export type HomeCardRow = { topicID: string; kind: CardKind; contactID: string | null; payloadJSON: string; generatedAt: number; expiresAt: number };
-export type HomePostRow = { topicID: string; contact: string; text: string; at: number };
+export type HomePostRow = { id: string; topicID: string; contactID: string | null; contact: string; title: string; text: string; connector: number; at: number };
 export type HomeSignals = {
   userName: string; timeZone: string; now: number;
   contacts: HomeContact[];
@@ -113,9 +113,13 @@ export async function readSignals(db: D1Database, userID: string): Promise<HomeS
       .bind(userID).all<HomeTopicRow>(),
     db.prepare(`SELECT topic_id AS topicID, kind, contact_id AS contactID, payload_json AS payloadJSON, generated_at AS generatedAt,
       expires_at AS expiresAt FROM home_card WHERE user_id = ? ORDER BY position`).bind(userID).all<HomeCardRow>(),
-    db.prepare(`SELECT p.topic_id AS topicID, COALESCE(c.name, 'A contact') AS contact, p.text, p.created_at AS at FROM home_post p
+    // A note post's text is its card's text.
+    db.prepare(`SELECT p.id, p.topic_id AS topicID, p.contact_id AS contactID, COALESCE(c.name, 'A contact') AS contact,
+        COALESCE(json_extract(p.payload_json, '$.title'), '') AS title, p.text, p.connector, p.created_at AS at
+      FROM (SELECT id, topic_id, contact_id, payload_json, connector, created_at, user_id,
+          COALESCE(text, CASE WHEN kind = 'note' THEN json_extract(payload_json, '$.text') END) AS text FROM home_post WHERE user_id = ?) p
       LEFT JOIN contact c ON c.id = p.contact_id AND c.user_id = p.user_id
-      WHERE p.user_id = ? AND p.text IS NOT NULL ORDER BY p.created_at DESC LIMIT 60`).bind(userID).all<HomePostRow>(),
+      WHERE p.text IS NOT NULL ORDER BY p.created_at DESC LIMIT 60`).bind(userID).all<HomePostRow>(),
     homeTimeZone(db, userID),
   ]);
   return {

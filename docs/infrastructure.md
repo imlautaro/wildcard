@@ -2082,6 +2082,20 @@ staged key is gone once the contact appears. Rollback keeps 0095: an older Worke
 rejects `name`/`photo` inputs (422) and never stages uploads; jobs already queued
 with them still publish under the older code with a generated name and portrait.
 
+### For you quotes and topics to follow — migration 0096
+
+`0096_for_you_quotes_suggestions.sql` follows every migration through 0095. It adds the
+nullable `home_post.quote_of` (references `home_post(id)`, `ON DELETE SET NULL`) and
+`home_feed.suggestions_json` (a JSON array up to 4,000 characters). No table rebuild,
+resource, binding, secret, Cron Trigger or Wrangler change. The For you daily research
+cap in code rises from 12 to 15 per person (see [For you](updates.md#news-scan)); the
+account and global web research budgets are unchanged.
+
+Apply locally with `npx wrangler d1 migrations apply DB --local`; production applies it
+through the automatic pipeline before the Worker that writes the columns. Verify after
+release with `GET /api/v1/home` returning `suggestions` after a run. Rollback keeps 0096:
+older Workers ignore both columns, and older clients ignore `quote` and `suggestions`.
+
 ## Remote native device execution
 
 The [remote timer/alarm prototype](native-remote.md) reuses the API Worker, D1,

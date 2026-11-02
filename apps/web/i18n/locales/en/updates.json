@@ -57,7 +57,11 @@
         "contactWaiting": "Suggested by {name} · Waiting for its first card",
         "contacts": "Picked by your contacts",
         "contactsWaiting": "Picked by your contacts · Waiting for its first card"
-      }
+      },
+      "topicsToFollow": "Topics to follow",
+      "followTopic": "Follow {title}",
+      "followingTopic": "Following…",
+      "followSomethingElse": "Follow something else"
     },
     "post": {
       "options": "Post options",
@@ -71,7 +75,8 @@
       "showCountMore": "Show {count} more",
       "moreLikeThis": "More like this",
       "commentOn": "Comment on {name}’s post",
-      "threadCount": "{count} posts in this thread"
+      "threadCount": "{count} posts in this thread",
+      "quoteAria": "Quoted post by {name}"
     },
     "comments": {
       "label": "Comments",

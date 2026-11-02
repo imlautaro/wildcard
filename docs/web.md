@@ -1342,6 +1342,13 @@ padding, matching iOS; topic threads keep their compact connected layout. Follow
 uses the generic "A topic you’re interested in…" placeholder. New post and card
 prose uses a standalone timeline voice instead of addressing the account holder;
 the feed remains private and existing posts retain their text.
+Since migration 0096 a post can [quote](updates.md#quote-posts) another contact's post
+(`HomePostQuote`, opening `?post=<id>`), matching iOS. **Topics to follow** is
+web-only by request: a sticky right column with the editor's
+[suggestions](updates.md#topics-to-follow) and a Follow button each, shown on screens at least
+1100px wide (a media query; a container query on the scrolling page would trap the
+fixed ⋯ menu backdrop) and hidden on narrower screens, during setup and when there are no suggestions. iOS does not show
+suggestions.
 
 The API's optional `setup` field distinguishes contacts still being created
 (**Go to Chats**), no available contacts (**Add a contact**, opening Contacts),

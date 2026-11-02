@@ -2,13 +2,13 @@ import type { WorkflowStep } from 'cloudflare:workers';
 import { safeErrorCode } from '../chat/meta';
 import { accountModel, standardModel } from '../lib/model-preference';
 import { cardLifetimes } from './cards';
-import { composeCard, homeLimits, planHome, type ComposeContext, type EarlierPost, type PlannedTopic } from './curator';
+import { composeCard, homeLimits, planHome, scanNews, type ComposeContext, type EarlierPost, type PlannedTopic, type QuotablePost } from './curator';
 import { homeContactReady, readSignals } from './signals';
 import { reviewCandidates, type ReviewCandidate } from './review';
 import type { CardKind } from './cards';
 
 export type HomeJob = { kind: 'home'; userID: string; revision: number; force: boolean };
-type ComposeJob = PlannedTopic & { id: string; position: number; previous: string | null; earlier: EarlierPost[] };
+type ComposeJob = PlannedTopic & { id: string; position: number; previous: string | null; earlier: EarlierPost[]; quotable?: QuotablePost[] };
 type RunPlan = { context: ComposeContext; model: string; compose: ComposeJob[]; titles: string[] };
 
 // Curation runs only for people who opened Home recently; a run that has not
@@ -71,7 +71,9 @@ async function plan(env: Env, job: HomeJob): Promise<RunPlan | { error: string }
   if (!signals) return { error: 'HOME_SUPERSEDED' };
   if (!signals.contacts.length) return { waiting: true };
   const model = await accountModel(env, job.userID);
-  const planned = await planHome({ ...env, META_CHAT_MODEL: model }, signals, model);
+  // What happened this week around their interests, so topics can react to it (docs/updates.md#news-scan).
+  const news = await scanNews({ ...env, META_CHAT_MODEL: model }, signals, model, { userID: job.userID, id: `home-scan-${job.userID}-${job.revision}` });
+  const planned = await planHome({ ...env, META_CHAT_MODEL: model }, signals, model, news);
   const now = Date.now();
   const topics = planned.topics.map(topic => ({ ...topic, id: topic.id ?? crypto.randomUUID() }));
   const kept = new Set(topics.map(topic => topic.id));
@@ -93,8 +95,8 @@ async function plan(env: Env, job: HomeJob): Promise<RunPlan | { error: string }
       env.DB.prepare(`UPDATE home_topic SET status = 'retired', updated_at = ?4 WHERE id = ?1 AND user_id = ?2 AND ${fence}`)
         .bind(topic.id, job.userID, job.revision, now),
     ]),
-    env.DB.prepare(`UPDATE home_feed SET briefing = ?1 WHERE user_id = ?2 AND revision = ?3 AND status = 'running'`)
-      .bind(planned.briefing || null, job.userID, job.revision),
+    env.DB.prepare(`UPDATE home_feed SET briefing = ?1, suggestions_json = ?4 WHERE user_id = ?2 AND revision = ?3 AND status = 'running'`)
+      .bind(planned.briefing || null, job.userID, job.revision, JSON.stringify(planned.suggestions)),
     env.DB.prepare(`DELETE FROM home_topic WHERE user_id = ? AND status = 'retired' AND updated_at < ?`).bind(job.userID, now - 7 * 86_400_000),
     env.DB.prepare(`DELETE FROM home_post WHERE user_id = ? AND created_at < ?`).bind(job.userID, now - postRetention),
   ]);
@@ -108,11 +110,15 @@ async function plan(env: Env, job: HomeJob): Promise<RunPlan | { error: string }
     .slice(0, homeLimits.composePerRun)
     .map(({ topic, position, card }) => ({ ...topic, position, previous: card?.payloadJSON ?? null,
       earlier: signals.posts.filter(post => post.topicID === topic.id).slice(0, earlierPosts).reverse()
-        .map(post => ({ at: post.at, contact: post.contact, text: post.text })) }));
+        .map(post => ({ at: post.at, contact: post.contact, text: post.text })),
+      // Other contacts' recent posts it may quote (docs/updates.md#quote-posts); never connector posts.
+      quotable: signals.posts.filter(post => post.topicID !== topic.id && post.contactID !== topic.contactID && !post.connector
+        && post.at > now - homeLimits.quotableFor).slice(0, homeLimits.quotable)
+        .map(post => ({ id: post.id, contact: post.contact, title: post.title, text: post.text, at: post.at })) }));
   return {
     model, compose, titles: topics.map(topic => topic.title),
     context: { userID: job.userID, userName: signals.userName, timeZone: signals.timeZone, language: planned.language,
-      memories: signals.memories, messages: signals.messages, contacts: signals.contacts, connectors: signals.connectors.map(connector => connector.name) },
+      memories: signals.memories, messages: signals.messages, contacts: signals.contacts, connectors: signals.connectors.map(connector => connector.name), news },
   };
 }
 
@@ -126,7 +132,7 @@ async function compose(env: Env, job: HomeJob, run: RunPlan, index: number, rese
   const budget = { get research() { return research.remaining; }, set research(value: number) { research.remaining = value; },
     researchID: (attempt: number) => `home-${job.userID}-${job.revision}-${topic.id}-${attempt}`, topicID: topic.id };
   const result = await composeCard({ ...env, META_CHAT_MODEL: model }, run.context, topic, topic.previous,
-    run.titles.filter(title => title !== topic.title), model, budget, { earlier: topic.earlier });
+    run.titles.filter(title => title !== topic.title), model, budget, { earlier: topic.earlier, quotable: topic.quotable });
   const now = Date.now();
   const fence = `EXISTS (SELECT 1 FROM home_feed WHERE user_id = ?2 AND revision = ?3 AND status = 'running')`;
   if ('skip' in result) {
@@ -174,15 +180,17 @@ async function compose(env: Env, job: HomeJob, run: RunPlan, index: number, rese
     .bind(crypto.randomUUID(), job.userID, topic.id, topic.contactID, card.kind, topic.position, JSON.stringify(card), result.connector ? 1 : 0,
       now, now + cardLifetimes[card.kind], job.revision),
   // The same card is appended to the timeline as a post with the contact's text.
-  env.DB.prepare(`INSERT INTO home_post (id, user_id, topic_id, contact_id, text, kind, payload_json, connector, created_at)
-      SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
+  // A quote points at the person's own post, only while it still exists.
+  env.DB.prepare(`INSERT INTO home_post (id, user_id, topic_id, contact_id, text, kind, payload_json, connector, quote_of, created_at)
+      SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, (SELECT q.id FROM home_post q WHERE q.id = ?11 AND q.user_id = ?2 AND q.connector = 0), ?9
       WHERE EXISTS (SELECT 1 FROM home_feed WHERE user_id = ?2 AND revision = ?10 AND status = 'running')
         AND EXISTS (SELECT 1 FROM home_topic WHERE id = ?3 AND user_id = ?2 AND status = 'active')
         AND EXISTS (SELECT 1 FROM contact WHERE id = ?4 AND user_id = ?2)
-    ON CONFLICT(id) DO UPDATE SET text = excluded.text, kind = excluded.kind, payload_json = excluded.payload_json, connector = excluded.connector
+    ON CONFLICT(id) DO UPDATE SET text = excluded.text, kind = excluded.kind, payload_json = excluded.payload_json, connector = excluded.connector,
+      quote_of = excluded.quote_of
     WHERE home_post.user_id = excluded.user_id`)
     .bind(postID(topic.id, job.revision), job.userID, topic.id, topic.contactID, result.text, card.kind, JSON.stringify(card),
-      result.connector ? 1 : 0, now, job.revision)]);
+      result.connector ? 1 : 0, now, job.revision, result.quote)]);
   return 'published';
 }
 

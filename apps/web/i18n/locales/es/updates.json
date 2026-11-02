@@ -57,7 +57,11 @@
         "contactWaiting": "Sugerido por {name} · Esperando su primera tarjeta",
         "contacts": "Elegido por tus contactos",
         "contactsWaiting": "Elegido por tus contactos · Esperando su primera tarjeta"
-      }
+      },
+      "topicsToFollow": "Temas para seguir",
+      "followTopic": "Seguir {title}",
+      "followingTopic": "Siguiendo…",
+      "followSomethingElse": "Seguir otra cosa"
     },
     "post": {
       "options": "Opciones de la publicación",
@@ -71,7 +75,8 @@
       "showCountMore": "Mostrar {count} más",
       "moreLikeThis": "Más como esto",
       "commentOn": "Comentar la publicación de {name}",
-      "threadCount": "{count} publicaciones en este hilo"
+      "threadCount": "{count} publicaciones en este hilo",
+      "quoteAria": "Publicación citada de {name}"
     },
     "comments": {
       "label": "Comentarios",
