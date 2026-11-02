@@ -2,15 +2,23 @@
 // A phone-sized screen for scenes (1:1.45, see --phone-ratio in site.css): optional
 // caption above, the front camera and, for a chat (`title`), the app's
 // conversation bar on top and its message composer at the bottom.
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   caption?: string;
   title?: string;
   status?: string;
   who?: CastId;
   person?: PersonId;
   group?: CastId[];
+  draft?: string;
+  composing?: boolean;
+  pressing?: boolean;
 }>(), { caption: undefined, title: undefined, status: undefined, who: undefined, person: undefined, group: undefined });
 const { t } = useI18n();
+const composerText = useTemplateRef<HTMLElement>('composerText');
+watch(() => props.draft, () => {
+  const element = composerText.value;
+  if (element) element.scrollLeft = element.scrollWidth;
+}, { flush: 'post' });
 </script>
 
 <template>
@@ -33,8 +41,8 @@ const { t } = useI18n();
       <div class="phone-screen"><slot /></div>
       <div v-if="title" class="phone-composer" aria-hidden="true">
         <span class="composer-icon"><AppIcon name="attach" /></span>
-        <span class="composer-input">{{ t('phone.message') }}</span>
-        <span class="composer-mic"><AppIcon name="mic" /></span>
+        <span class="composer-input" :class="{ composing }"><span ref="composerText" class="composer-text">{{ composing ? draft : t('phone.message') }}</span><span v-if="composing" class="composer-caret" /></span>
+        <span class="composer-mic" :class="{ pressing }"><SiteIcon v-if="composing" name="send" /><AppIcon v-else name="mic" /><span v-if="pressing" class="composer-tap" /></span>
       </div>
     </div>
   </figure>
@@ -76,4 +84,13 @@ const { t } = useI18n();
 }
 .composer-mic { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 50%; background: var(--md-primary); color: var(--md-on-primary); }
 .composer-mic svg { width: 20px; height: 20px; }
+.composer-input.composing { color: var(--md-on-surface); }
+.composer-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.composing .composer-text { text-overflow: clip; }
+.composer-caret { flex: none; width: 2px; height: 18px; margin-left: 2px; background: var(--md-primary); animation: caret-blink 700ms step-end infinite; }
+.composer-mic { position: relative; transition: transform 150ms var(--md-ease); }
+.composer-mic.pressing { transform: scale(0.86); }
+.composer-tap { position: absolute; inset: -5px; border: 2px solid var(--md-primary); border-radius: 50%; animation: composer-tap 220ms ease-out both; }
+@keyframes caret-blink { 50% { opacity: 0; } }
+@keyframes composer-tap { from { opacity: 0.7; transform: scale(0.85); } to { opacity: 0; transform: scale(1.35); } }
 </style>

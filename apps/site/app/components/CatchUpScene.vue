@@ -3,13 +3,16 @@
 // with what it learned.
 const root = ref<HTMLElement | null>(null);
 // 1 ask · 2 typing · 3 handoff · 4 handoff done · 5 typing · 6 answer · 7 reply
-const { step, fading } = useScene(root, [700, 1300, 1100, 2200, 900, 1600, 1500], { hold: 4200 });
 const { t } = useI18n();
+const { step, fading, composer } = useChatScene(root, [700, 1300, 1100, 2200, 900, 1600, 1500], [
+  { step: 1, text: () => t('catchUpScene.ask') },
+  { step: 7, text: () => t('catchUpScene.reply') },
+], { hold: 4200 });
 </script>
 
 <template>
   <div ref="root" class="catch-up scene" :class="{ fading }">
-    <PhoneFrame title="Nova" who="nova" :status="t('phone.online')" class="catch-phone">
+    <PhoneFrame v-bind="composer()" title="Nova" who="nova" :status="t('phone.online')" class="catch-phone">
       <div class="thread">
         <div class="system-banner">{{ t('catchUpScene.joined') }}</div>
         <div v-if="step >= 1" class="bubble-row outgoing pop">

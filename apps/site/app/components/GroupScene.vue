@@ -19,7 +19,9 @@ const columns: Record<string, Column[]> = {
 };
 const root = ref<HTMLElement | null>(null);
 // 1 ask · 2 Mila · 3 Theo · 4 Ana adds Coco · 5 Coco · 6–8 progress · 9 plan · (final) doc
-const { step, fading } = useScene(root, [700, 1300, 1300, 1300, 1400, 1300, 1300, 1300, 1600], { hold: 4600 });
+const { step, fading, composer } = useChatScene(root, [700, 1300, 1300, 1300, 1400, 1300, 1300, 1300, 1600], [
+  { step: 1, text: () => t('groupScene.ask') },
+], { hold: 4600 });
 const lanes = computed<{ id: Column; label: string }[]>(() => [
   { id: 'todo', label: t('groupScene.todo') }, { id: 'doing', label: t('groupScene.doing') }, { id: 'done', label: t('groupScene.done') },
 ]);
@@ -28,7 +30,7 @@ const inLane = (lane: Column) => tasks.value.filter((task) => columns[task.id]![
 
 <template>
   <div ref="root" class="group-scene scene stage" :class="{ fading }">
-    <PhoneFrame :title="t('groupScene.title')" :group="['mila', 'theo', 'coco']" :status="t('groupScene.members')" class="group-phone">
+    <PhoneFrame v-bind="composer()" :title="t('groupScene.title')" :group="['mila', 'theo', 'coco']" :status="t('groupScene.members')" class="group-phone">
       <div class="thread">
         <div v-if="step >= 1" class="bubble-row outgoing pop"><div class="bubble">{{ t('groupScene.ask') }}</div></div>
         <div v-if="step >= 2" class="bubble-row incoming pop">

@@ -4,13 +4,18 @@
 const root = ref<HTMLElement | null>(null);
 // Beats: 1 Alex fact · 2 typing · 3 ack · 4 Sam asks · 5 typing · 6 answer ·
 // 7 Alex relay request · 8 relayed · 9 timer request · 10 timer running
-const { step, fading } = useScene(root, [700, 1000, 1200, 1500, 1000, 1500, 2000, 1500, 2000, 1500], { hold: 5200 });
 const { t } = useI18n();
+const { step, fading, composer } = useChatScene(root, [700, 1000, 1200, 1500, 1000, 1500, 2000, 1500, 2000, 1500], [
+  { step: 1, composer: 'alex', text: () => t('sharedScene.fact') },
+  { step: 4, composer: 'sam', text: () => t('sharedScene.ask') },
+  { step: 7, composer: 'alex', text: () => t('sharedScene.relay') },
+  { step: 9, composer: 'alex', text: () => t('sharedScene.timer') },
+], { hold: 5200 });
 </script>
 
 <template>
   <div ref="root" class="shared scene" :class="{ fading }">
-    <PhoneFrame :caption="t('sharedScene.alexChat')" title="Coco" who="coco" :status="t('sharedScene.sharedWith')" class="shared-phone">
+    <PhoneFrame v-bind="composer('alex')" :caption="t('sharedScene.alexChat')" title="Coco" who="coco" :status="t('sharedScene.sharedWith')" class="shared-phone">
       <div class="thread">
         <div v-if="step >= 1" class="bubble-row outgoing pop"><div class="bubble">{{ t('sharedScene.fact') }}</div></div>
         <div v-if="step === 2" class="bubble-row incoming pop"><div class="typing"><span /><span /><span /></div></div>
@@ -28,7 +33,7 @@ const { t } = useI18n();
       <span class="bridge-line" :class="{ live: step >= 4 }" />
     </div>
 
-    <PhoneFrame :caption="t('sharedScene.samChat')" title="Coco" who="coco" :status="t('sharedScene.sharedBy')" class="shared-phone">
+    <PhoneFrame v-bind="composer('sam')" :caption="t('sharedScene.samChat')" title="Coco" who="coco" :status="t('sharedScene.sharedBy')" class="shared-phone">
       <div class="thread">
         <div v-if="step >= 4" class="bubble-row outgoing pop"><div class="bubble">{{ t('sharedScene.ask') }}</div></div>
         <div v-if="step === 5" class="bubble-row incoming pop"><div class="typing"><span /><span /><span /></div></div>

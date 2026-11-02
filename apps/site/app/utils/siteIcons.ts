@@ -29,6 +29,7 @@ export const siteGlyphs = {
   globe: 'solar:global-linear',
   doc: 'solar:document-text-linear',
   mic: 'solar:microphone-3-linear',
+  send: 'solar:plain-linear',
   gallery: 'solar:gallery-wide-linear',
   sticker: 'solar:sticker-smile-square-linear',
   widget: 'solar:widget-add-linear',
