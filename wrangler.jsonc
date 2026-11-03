@@ -1,0 +1,10 @@
+// Read only by the Deploy to Cloudflare button and the Workers Builds project it creates:
+// it names the Worker that project is connected to. It declares no bindings on purpose:
+// `npm run deploy` (scripts/release-all.mjs) creates D1 and R2 and releases the real API
+// config (apps/api/wrangler.jsonc) and the web app. Do not deploy this file directly.
+// See docs/infrastructure.md#deploy-to-cloudflare-button.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wildcard-api",
+  "compatibility_date": "2026-10-26"
+}

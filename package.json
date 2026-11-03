@@ -33,6 +33,7 @@
     "build:docs": "npm run build --workspace @wildcard/docs",
     "ios": "open apps/ios/Wildcard.xcodeproj",
     "release:ci": "node scripts/release-worker.mjs",
+    "deploy": "node scripts/release-all.mjs",
     "release:check": "node scripts/release-worker.mjs --dry-run",
     "release:web": "node scripts/release-web.mjs",
     "release:admin": "node scripts/release-admin.mjs",
@@ -52,5 +53,15 @@
     "esbuild": true,
     "vue-demi": true,
     "workerd": true
+  },
+  "cloudflare": {
+    "bindings": {
+      "META_API_KEY": {
+        "description": "**Required.** Meta Model API key for replies, contact generation and images (Muse Spark 1.3, Muse Image, Muse Voice Transcribe)."
+      },
+      "ELEVENLABS_API_KEY": {
+        "description": "Optional. ElevenLabs key for contact voices. Leave empty to turn voices off."
+      }
+    }
   }
 }

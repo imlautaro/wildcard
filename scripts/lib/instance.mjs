@@ -41,6 +41,12 @@ export async function resolveApiInstance({ create = true, log = console.log } = 
   const config = readWranglerConfig(apiConfigPath);
   const env = accountEnv();
   config.account_id = env.CLOUDFLARE_ACCOUNT_ID;
+  // A Workers Builds project connected to a renamed Worker (for example from the
+  // Deploy to Cloudflare form) would break the web app's service binding to the API.
+  const override = env.WRANGLER_CI_OVERRIDE_NAME?.trim();
+  if (override && override !== config.name) {
+    throw new Error(`This Workers Builds project is connected to the Worker "${override}", but the API Worker must be named "${config.name}" (the web app's service binding targets it). Recreate the project with the Worker name "${config.name}".`);
+  }
   delete config.$schema;
   const missing = [];
 
