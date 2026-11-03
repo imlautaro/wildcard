@@ -286,7 +286,10 @@ npm run setup
 npm run dev:all      # API on http://localhost:8787 + Web on http://localhost:3000
 ```
 
-`npm run dev` and `npm run dev:web` start each one separately.
+`npm run dev` and `npm run dev:web` start each one separately. `API_PORT` and
+`WEB_PORT` (environment or root `.env`) change the ports; `dev:all` points the web
+app at the chosen API port and stops if either port is busy (see
+[infrastructure](infrastructure.md#local-setup)).
 
 In `nuxt dev` the proxy calls the API over HTTP at `runtimeConfig.apiOrigin`
 (default `http://localhost:8787`, override with `NUXT_API_ORIGIN`). Production

@@ -137,23 +137,40 @@ Everything runs on Cloudflare: Workers, D1, R2, Workflows and Cron. No servers t
 
 ## Run it yourself
 
+### Locally
+
 ```bash
 git clone https://github.com/imlautaro/wildcard && cd wildcard
 npm ci
-echo "META_API_KEY=your-meta-key" > .env   # ignored by Git; optional: ELEVENLABS_API_KEY=… for voices
-npm run setup                              # .dev.vars, auth secret and local D1 with every migration
-npm run dev:all                            # API on http://localhost:8787 + web app on http://localhost:3000
+cp .env.example .env    # add META_API_KEY; optional ELEVENLABS_API_KEY for voices
+npm run setup           # .dev.vars, auth secret and local D1 with every migration
+npm run dev:all         # API on http://localhost:8787 + web app on http://localhost:3000
 ```
 
 Open http://localhost:3000 and create an account. Use Node.js 24 (`.nvmrc`). No Cloudflare account
 is needed locally: Wrangler emulates D1, R2, Workflows and the every-minute Cron. `npm run setup`
-copies `META_API_KEY` (replies, portraits, images) and the optional `ELEVENLABS_API_KEY` (contact
-voices) from the root `.env` or your environment into `apps/api/.dev.vars` without printing them;
-you can also edit that file later.
+copies the keys from `.env` into `apps/api/.dev.vars` without printing them. Ports busy? Set
+`API_PORT` / `WEB_PORT` (in `.env` or the shell). `npm run smoke` checks sign-up, a chat and a model
+reply end to end.
 
-Deploying to your own Cloudflare account, the iOS app and every environment variable are covered in
-[Local development](https://wildcard-docs.imlautaro.workers.dev/en/getting-started/local-development)
-and [Provisioning](https://wildcard-docs.imlautaro.workers.dev/en/operations/provisioning).
+### On your own Cloudflare account
+
+1. Fork this repository.
+2. In the fork, **Settings → Secrets and variables → Actions**: add the secrets
+   `CLOUDFLARE_API_TOKEN` and `META_API_KEY` (optional `ELEVENLABS_API_KEY`), and the variable
+   `WILDCARD_DEPLOY=true`.
+3. Enable Actions in the fork and run the **Deploy** workflow (or push to `main`).
+
+The first run creates the D1 database, the private R2 bucket, the API Worker with its Workflows
+and Cron, and the web app at `https://wildcard-web.<your-subdomain>.workers.dev`. Nothing in the
+repository needs editing: account, resources and URLs are resolved at release time. Prefer
+Cloudflare Workers Builds, custom domains or the admin panel? See
+[Provisioning](https://wildcard-docs.imlautaro.workers.dev/en/operations/provisioning) and
+[Environment variables](https://wildcard-docs.imlautaro.workers.dev/en/getting-started/environment-variables).
+`npm run release:check` previews what a release would do with your Wrangler login.
+
+The iOS app and every local option are covered in
+[Local development](https://wildcard-docs.imlautaro.workers.dev/en/getting-started/local-development).
 
 ## Repository
 

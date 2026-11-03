@@ -29,13 +29,17 @@ icon) that ignores Escape, backdrop presses and Cancel while the deletion runs.
 - **Same accounts.** Admins sign in with their normal Wildcard email and
   password. The panel never offers sign-up.
 - **Roster by user ID.** Access is granted by the comma-separated
-  `SUPER_ADMIN_USER_IDS` var in `apps/api/wrangler.jsonc`. It ships empty, so nobody
-  has access until it is set. Emails are unverified (see
-  [authentication](authentication.md)), so they never grant access. Changing the
-  roster is a reviewed commit and an API release. User IDs are not secrets.
+  `SUPER_ADMIN_USER_IDS` API var. It is empty in `apps/api/wrangler.jsonc`; each API
+  release sets it from the CI variable `WILDCARD_SUPER_ADMIN_USER_IDS` (Workers
+  Builds build variable or GitHub Actions variable; see
+  [self-hosting](infrastructure.md#self-hosting)), so nobody has access until that is
+  set. Emails are unverified (see [authentication](authentication.md)), so they never
+  grant access. Changing the roster is a CI variable change plus an API release.
+  User IDs are not secrets.
 - **First admin.** Sign in to the panel with the account. The panel shows "Not a
-  super admin" with that account's user ID and a copy button. Add the ID to the var,
-  commit, push, and wait for the automatic API release.
+  super admin" with that account's user ID and a copy button. Add the ID to
+  `WILDCARD_SUPER_ADMIN_USER_IDS`, then push (or rerun the deploy workflow) and wait
+  for the automatic API release.
 - **Private entrypoint.** Admin routes are served by the API Worker's named
   entrypoint `AdminAPI` (`src/admin/app.ts`). Only a service binding that names
   that entrypoint can reach it; the public `wildcard-api` origin returns 404 for
@@ -210,8 +214,8 @@ then also mounts the admin routes. Never set this in `wrangler.jsonc`. Set
 `SUPER_ADMIN_USER_IDS` for local testing in `.dev.vars` too, then:
 
 ```sh
-npm run dev           # API on http://localhost:8787
-npm run dev:admin     # panel on http://localhost:3001
+npm run dev           # API on http://localhost:8787 (or API_PORT)
+npm run dev:admin     # panel on http://localhost:3001; set NUXT_API_ORIGIN if API_PORT is not 8787
 npm run typecheck:admin
 ```
 

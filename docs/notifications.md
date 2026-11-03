@@ -470,7 +470,7 @@ bounded to 3000 bytes, with bot Markdown removed.
 
 Secrets (all three or none; never commit values): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
 `VAPID_SUBJECT` (`mailto:` or `https:` contact). Generate a pair per installation with
-`node scripts/generate-vapid-keys.mjs`, add them as encrypted Workers Builds secrets (the
+`node scripts/generate-vapid-keys.mjs`, add them as encrypted CI secrets, Workers Builds or GitHub Actions (the
 release script forwards them) or `.dev.vars` locally. Rotating the key makes browsers
 resubscribe on their next load. Rollback: remove the secrets (web alerts stop, nothing else
 changes); migration 0085 is additive.

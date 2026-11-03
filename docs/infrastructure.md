@@ -1,5 +1,195 @@
 # Infrastructure
 
+## Self-hosting
+
+A fork deploys to its own Cloudflare account without editing versioned files. The
+Wrangler configurations of all five Workers (`apps/api`, `apps/web`, `apps/admin`,
+`apps/site`, `apps/docs`) contain no `account_id`. In `apps/api/wrangler.jsonc`,
+`BETTER_AUTH_URL`, `MCP_WEB_ORIGIN` and `SUPER_ADMIN_USER_IDS` are empty and the D1
+`database_id` is the placeholder `00000000-0000-0000-0000-000000000000`, used only by
+local development. Do not fill these in; the release resolves them.
+
+### What the release resolves
+
+`npm run release:ci` (`scripts/release-worker.mjs`, via `scripts/lib/instance.mjs`)
+resolves the installation for the credential it runs with and writes the result to
+the ignored `apps/api/wrangler.release.json`. That generated file, not
+`wrangler.jsonc`, is used for remote migrations, the secret listing and the deploy.
+
+| Value | Source | Default |
+| --- | --- | --- |
+| Account | `CLOUDFLARE_ACCOUNT_ID` | The only account the credential can see; the release stops if it sees several |
+| D1 (`DB`) | Looked up by name; `WILDCARD_DB_NAME` overrides the name | `wildcard-db`, created if missing |
+| R2 (`CONTACT_PHOTOS`) | `WILDCARD_PHOTOS_BUCKET` overrides the name | `wildcard-contact-photos`, created private if missing (no r2.dev URL or custom domain) |
+| `BETTER_AUTH_URL` | `WILDCARD_API_URL` | `https://wildcard-api.<workers.dev subdomain>.workers.dev` |
+| `MCP_WEB_ORIGIN` | `WILDCARD_WEB_URL` | `https://wildcard-web.<workers.dev subdomain>.workers.dev` |
+| `SUPER_ADMIN_USER_IDS` | `WILDCARD_SUPER_ADMIN_USER_IDS` (comma-separated user IDs, not secret) | Empty: nobody can open the admin panel |
+
+`WILDCARD_API_URL` and `WILDCARD_WEB_URL` must be HTTPS origins without a path. When
+both are set, the workers.dev subdomain is not looked up. The scripts only set these
+variables; attaching a custom domain to a Worker is a separate dashboard step that is
+not automated here. The default host names come from the versioned Worker `name`s
+(`apps/api` and `apps/web`). Worker names, Workflow names (`wildcard-chat`,
+`wildcard-onboarding`) and the web/admin `services[].service` bindings stay
+versioned; a fresh account can keep them, and renaming them is a code change. The
+web, admin, site and docs releases (`scripts/lib/release-assets.mjs`) deploy their
+built config into the same resolved account and need no other account value.
+
+Other installation-specific values remain versioned and are not resolved by the
+release: the iOS `WILDCARD_API_URL` build setting and bundle IDs (see
+[Independent account provisioning](#independent-account-provisioning)), the marketing site's URLs in
+`apps/site/app/utils/site.ts` and the docs `siteUrl` in `apps/docs/nuxt.config.ts`.
+Change them only if you distribute those clients or sites.
+
+Changing `WILDCARD_DB_NAME`, `WILDCARD_PHOTOS_BUCKET` or `CLOUDFLARE_ACCOUNT_ID`
+after the first release binds the Worker to different (new, empty) resources; the
+existing data stays where it was. Unsetting `WILDCARD_SUPER_ADMIN_USER_IDS` releases
+an empty roster and removes admin access.
+
+### Prerequisites and credential
+
+- Node.js 24 or later and npm (`.nvmrc`, `npm ci` from the root).
+- A Cloudflare account with a workers.dev subdomain (opening **Workers & Pages** once
+  in the dashboard creates it) and R2 enabled for the account. Whether the first
+  release can create a bucket in an account where R2 was never activated is unverified.
+- A Meta Model API key with Muse Spark 1.3 and Muse Voice Transcribe access.
+- A scoped Cloudflare API token for the API release with: Workers Scripts Edit
+  (deploy, secret names and upload, Worker existence check), D1 Edit, Workers R2
+  Storage Edit, and Workflows edit if Cloudflare lists it as a separate permission
+  (otherwise it is expected to be covered by Workers Scripts; unverified). Account
+  lookup (`wrangler whoami`) and the workers.dev subdomain read also need account read
+  access; the exact permission names (for example Account Settings Read) are
+  unverified. Setting `CLOUDFLARE_ACCOUNT_ID` avoids the account lookup, and setting
+  both URL variables avoids the subdomain read. Web, admin, site and docs releases
+  need only Workers Scripts Edit and account read. Keep the token out of Git, docs
+  and chat; grant only these permissions on the one account.
+
+### Option A: GitHub Actions
+
+`.github/workflows/deploy.yml` runs on every push to `main` and on manual dispatch,
+only when the repository variable `WILDCARD_DEPLOY` is `true` (forks are unaffected
+until they opt in). It uses the `production` environment and a non-cancelling
+concurrency group. Steps: `npm ci`, API and web type checks, `npm run release:ci`
+(migrations, secrets, Worker, Workflows, Cron), `npm run build:web`,
+`npm run release:web`. It does not release admin, site or docs.
+
+1. Fork the repository and enable Actions on the fork if GitHub shows them disabled.
+2. Under **Settings → Secrets and variables → Actions**, add:
+   - Repository variable `WILDCARD_DEPLOY` = `true` (it is read by the job's `if`,
+     before the environment applies, so it must be a repository or organization
+     variable).
+   - Secrets: `CLOUDFLARE_API_TOKEN` and `META_API_KEY`; optional
+     `ELEVENLABS_API_KEY`, the four `APNS_*` and the three `VAPID_*` secrets.
+   - Optional variables: `CLOUDFLARE_ACCOUNT_ID` (needed when the token sees several
+     accounts), `WILDCARD_API_URL`, `WILDCARD_WEB_URL`, `WILDCARD_SUPER_ADMIN_USER_IDS`.
+   `WILDCARD_DB_NAME` and `WILDCARD_PHOTOS_BUCKET` are not passed by the workflow;
+   the defaults apply unless you add them to its `env`.
+3. Push to `main` (or run the workflow manually on `main`). The first run creates the
+   resources below. The production branch is `main` in both the workflow trigger and
+   the release guard; another branch requires changing the workflow and setting
+   `WILDCARD_PRODUCTION_BRANCH`.
+
+The GitHub Actions path was implemented and statically reviewed; a complete fork
+release through it has not been verified.
+
+### Option B: Cloudflare Workers Builds
+
+Create one Workers Builds project per Worker on the fork's repository, production
+branch `main`, root `/`, using an existing credential with the permissions above:
+
+| Worker | Build command | Deploy command |
+| --- | --- | --- |
+| `wildcard-api` | `npm ci && npm run typecheck` | `npm run release:ci` |
+| `wildcard-web` | `npm ci && npm run typecheck:web && npm run build:web` | `npm run release:web` |
+| `wildcard-admin` (optional) | `npm ci && npm run typecheck:admin && npm run build:admin` | `npm run release:admin` |
+| `wildcard-site` (optional) | `npm ci && npm run typecheck:site && npm run build:site` | `npm run release:site` |
+| `wildcard-docs` (optional) | `npm ci && npm run typecheck:docs && npm run build:docs` | `npm run release:docs` |
+
+On the API project add the encrypted build secret `META_API_KEY`, the optional
+secrets above, and any of the optional `WILDCARD_*` / `CLOUDFLARE_ACCOUNT_ID` build
+variables. Apply the [build watch paths](#build-watch-paths) and keep API preview
+builds disabled. The new direct Cloudflare API calls (Worker existence, R2 bucket,
+workers.dev subdomain) use `CLOUDFLARE_API_TOKEN` or the Wrangler credential; that
+they work with the credential Workers Builds provides is unverified until the first
+release after this change.
+
+### Resource creation order
+
+1. Optional, before the first push: `npx wrangler login` (or a scoped token in the
+   shell), then `npm run infra:provision` to see the resolved account, names and
+   origins, and `npm run infra:provision -- --create` to create D1 and R2 ahead of
+   time. `npm run infra:photos` is an alias. Neither migrates, deploys nor edits
+   versioned files.
+2. First API release: creates D1 and the private R2 bucket if missing, applies all
+   migrations, generates `BETTER_AUTH_SECRET`, uploads `META_API_KEY` and the
+   supplied optional secrets, and deploys the Worker with its Workflows and minute
+   Cron Trigger.
+3. Web release, after the API Worker exists (its service binding names
+   `wildcard-api`). GitHub Actions runs it after the API in the same job; with
+   Workers Builds, retry the web build if it ran before the first API release.
+4. Optional admin (after an API version that exports `AdminAPI`), site and docs.
+5. Sign in, open the admin panel to copy your user ID from the "Not a super admin"
+   screen, set `WILDCARD_SUPER_ADMIN_USER_IDS`, and
+   trigger another API release.
+6. Optional: AI Gateway (`npm run infra:ai-gateway`), APNs, Web Push and the iOS
+   build settings, as described in their sections.
+
+### Secrets (names only)
+
+| Name | Required | Behavior |
+| --- | --- | --- |
+| `CLOUDFLARE_API_TOKEN` | GitHub Actions only | Pipeline credential; never reaches the Worker |
+| `META_API_KEY` | Yes | Uploaded when CI supplies a non-empty value; when empty or unset the existing runtime secret is kept; the release fails only if neither exists |
+| `BETTER_AUTH_SECRET` | Generated | Created only when the Worker does not yet have it; never set it in CI |
+| `ELEVENLABS_API_KEY` | No | Uploaded when non-empty; otherwise the runtime value is kept |
+| `APNS_PRIVATE_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_TOPIC` | No | All four or none |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | No | All three or none |
+
+Empty CI values count as unset, because GitHub Actions passes secrets that were never
+created as empty strings. In an optional group, only the non-empty values are
+counted: none is fine, all is fine, a partial set stops the release.
+
+### Verification
+
+- `npm run release:check` runs `release-worker.mjs --dry-run` anywhere with a
+  Wrangler login or token. It prints the resolved account, Worker and origins, D1
+  and R2 (and which the first release would create), the admin count, release-guard
+  problems as warnings, and the secret names that would be uploaded, never values.
+  It never creates, migrates or deploys; it does write the ignored
+  `wrangler.release.json`. It exits non-zero on secret problems, for example when
+  `META_API_KEY` is not in the shell and the Worker does not have it yet. Export the
+  same `WILDCARD_*` values as CI to see the same result.
+- In the CI log, check `Releasing <sha> from Workers Builds|GitHub Actions` and that
+  the active Worker version's `workers/tag` equals the pushed commit.
+- `npm run smoke -- https://wildcard-web.<subdomain>.workers.dev` (or your web URL)
+  signs up a throwaway `smoke-<timestamp>@example.com` account through the web
+  proxy, creates a contact, sends a message and waits for the model reply
+  (`SMOKE_TIMEOUT_SECONDS`, default 180). It proves the proxy, auth, D1, Workflows and
+  `META_API_KEY` together, consumes model credits, fails if registration is closed,
+  and leaves the account behind (delete it from Account settings). Without an
+  argument it targets `http://localhost:<WEB_PORT or 3000>`.
+
+### Upstream installation migration
+
+The existing production installation (see [This installation](#this-installation))
+needs two manual dashboard changes for this release model, both pending
+verification:
+
+- Add the build variable `WILDCARD_SUPER_ADMIN_USER_IDS` to the `wildcard-api`
+  Workers Builds project with the roster that was previously committed in
+  `wrangler.jsonc`. Without it the next API release empties the roster.
+- Add `scripts/lib/*` to the include paths of all five projects (web previews too),
+  and `apps/web/wrangler.jsonc` to the API project, matching
+  [workers-build-paths.json](workers-build-paths.json).
+
+`BETTER_AUTH_URL` and `MCP_WEB_ORIGIN` derive to the same workers.dev hosts as
+before, and D1 is found by its existing name, so no data or session changes.
+
+Rollback: Worker version rollbacks are unaffected; the resolved values are vars and
+bindings of each released version. Reverting the source to before this change
+releases the previously committed account, D1 ID, origins and roster again. D1, R2
+and runtime secrets are neither moved nor deleted by either release model.
+
 ## Task Workflow ID repair
 
 The [task dispatcher correction](tasks.md#workflow-id-recovery-october-29-2026)
@@ -27,7 +217,7 @@ prefer rolling forward to retain validation and legacy cleanup handling.
 | Meta Model API | Runtime `META_API_KEY`, `META_CHAT_MODEL` / `muse-voice-transcribe-1.0` | Generate replies and Muse Voice Transcribe transcription of voice messages |
 | ElevenLabs (optional) | Runtime secret `ELEVENLABS_API_KEY` | Contact voices and spoken voice messages; see [Voice messages](#voice-messages) |
 | Public origin | `BETTER_AUTH_URL` | Canonical auth origin, separate from the secret |
-| Workers Builds | GitHub `imlautaro/wildcard`, `main`, root `/` | Automatic releases from committed and pushed source |
+| Automatic release | Workers Builds (this installation: GitHub `imlautaro/wildcard`, `main`, root `/`) or the opt-in GitHub Actions workflow; see [Self-hosting](#self-hosting) | Automatic releases from committed and pushed source |
 | Web Worker | `apps/web/wrangler.jsonc`, `wildcard-web` | Nuxt web app and same-origin API proxy; see [Web Worker](#web-worker) |
 | Service binding | `API` → `wildcard-api` | Private web-to-API calls that keep the client IP for rate limits |
 | Workers Builds (web) | Second project on the same repository and branch, root `/` | Automatic web releases |
@@ -48,10 +238,12 @@ rather than falling back to in-memory sessions or a development secret. See
 
 ## This installation
 
-- Account: `a9e3a97d08ec5023cbe6b97a1a25fec6`.
+- Account: `a9e3a97d08ec5023cbe6b97a1a25fec6` (resolved at release, not versioned).
 - Worker: `wildcard-api`.
-- D1: `wildcard-db`, ID `ac55a941-27bf-4182-ac8a-8aebda43524f` (new database).
-- Origin: `https://wildcard-api.imlautaro.workers.dev`.
+- D1: `wildcard-db`, ID `ac55a941-27bf-4182-ac8a-8aebda43524f` (found by name at release).
+- Origin: `https://wildcard-api.imlautaro.workers.dev` (derived from the workers.dev subdomain).
+- Super admin roster: Workers Builds build variable `WILDCARD_SUPER_ADMIN_USER_IDS`
+  on `wildcard-api` (must be added; see [upstream migration](#upstream-installation-migration)).
 - Repository: `imlautaro/wildcard` (ID `1434657598`), production branch `main`.
 - Build root `/`; build command `npm ci && npm run typecheck`;
   automatic deployment command `npm run release:ci`.
@@ -60,8 +252,10 @@ rather than falling back to in-memory sessions or a development secret. See
 - Existing build credential: `Workers Builds - 2026-05-27 10:54`.
 
 The previous project's database was deleted and is not reused. These IDs and URLs
-are installation-specific; replace them when configuring an independent account.
-No actual secret value belongs in Git, app build settings, or documentation.
+are records of this installation only; they are no longer in versioned
+configuration, and an independent account needs no replacement (see
+[Self-hosting](#self-hosting)). No actual secret value belongs in Git, app build
+settings, or documentation.
 
 ## Build watch paths
 
@@ -72,8 +266,12 @@ Base had a separate `*` filter and was updated separately with the same includes
 API, admin and site preview builds remain disabled. Build roots stay `/` because
 npm workspaces use the root lockfile and Nuxt resolves the shared layer there.
 
-[workers-build-paths.json](workers-build-paths.json) records the exact configuration.
+[workers-build-paths.json](workers-build-paths.json) records the intended configuration.
 It is a reference for provisioning, not an automatically consumed Wrangler option.
+The November 3, 2026 [self-hosting change](#self-hosting) added `scripts/lib/*` to
+every project and `apps/web/wrangler.jsonc` to the API (whose default
+`MCP_WEB_ORIGIN` comes from the web Worker's name); adding them to this
+installation's dashboards is [pending](#upstream-installation-migration).
 For an independent account, open each existing Worker's **Settings → Builds**,
 add its include paths, remove `*`, leave exclusions empty, and save. For web,
 repeat under **Previews Base**. Keep the existing build/release commands and branch
@@ -86,11 +284,11 @@ npm configuration even though no root `.npmrc` currently exists.
 
 | Worker | Additional include paths |
 | --- | --- |
-| `wildcard-api` | `apps/api/*`, `shared/*`, `scripts/release-worker.mjs` |
-| `wildcard-web` (production and previews) | `apps/web/*`, `packages/ui/*`, `shared/*`, `scripts/release-web.mjs`, `scripts/preview-web.mjs` |
-| `wildcard-admin` | `apps/admin/*`, `packages/ui/*`, `scripts/release-admin.mjs` |
-| `wildcard-site` | `apps/site/*`, `packages/ui/*`, `scripts/release-site.mjs` |
-| `wildcard-docs` | `apps/docs/*`, `scripts/release-docs.mjs` |
+| `wildcard-api` | `apps/api/*`, `shared/*`, `scripts/release-worker.mjs`, `scripts/lib/*`, `apps/web/wrangler.jsonc` |
+| `wildcard-web` (production and previews) | `apps/web/*`, `packages/ui/*`, `shared/*`, `scripts/release-web.mjs`, `scripts/preview-web.mjs`, `scripts/lib/*` |
+| `wildcard-admin` | `apps/admin/*`, `packages/ui/*`, `scripts/release-admin.mjs`, `scripts/lib/*` |
+| `wildcard-site` | `apps/site/*`, `packages/ui/*`, `scripts/release-site.mjs`, `scripts/lib/*` |
+| `wildcard-docs` | `apps/docs/*`, `scripts/release-docs.mjs`, `scripts/lib/*` |
 
 The Nuxt layer is used by web, admin and site, while `shared/` is imported by API
 and web. API migrations and each app's configuration/scripts/assets remain covered
@@ -101,8 +299,9 @@ to this reference and the dashboard filters in the same change.
 
 Expected push behavior: a site-only edit builds site; a Nuxt-layer edit builds
 web/admin/site; a `shared/` edit builds API/web; root dependency or build-environment
-changes build all five projects. An edit only in `apps/docs/` builds only docs.
-Changes only in `apps/ios/`, `docs/`, root `README.md` or
+changes build all five projects, as does an edit in `scripts/lib/`. An edit only in
+`apps/docs/` builds only docs.
+Changes only in `apps/ios/`, `docs/`, `.github/`, root `README.md` or
 unrelated root scripts match none. The broad per-app filters deliberately include
 future files inside that app, avoiding fragile lists of individual source files.
 
@@ -121,41 +320,23 @@ this changes build selection only and does not roll back deployed code or data.
 
 ## Independent account provisioning
 
-1. Install Node.js 24 or later and npm. Use `.nvmrc` and `npm ci` from the root.
-2. Choose a Cloudflare account, an available Worker name, and database name.
-   Replace `account_id`, Worker `name`, and `vars.BETTER_AUTH_URL` in Wrangler.
-   Change the D1 `database_name` and set its `database_id` to
-   `00000000-0000-0000-0000-000000000000` before provisioning a new installation.
-   Preserve `binding: DB` and `migrations_dir: migrations`.
-3. Authenticate Wrangler in your account. The provisioner needs account read and
-   D1 edit permissions. Run `npm run infra:provision`. It lists databases in that
-   account, reuses a matching name or creates it, verifies its ID, and updates the
-   versioned binding. Re-running against the same configuration reuses the same
-   resource. It refuses to silently replace a different non-placeholder database
-   ID. It neither migrates nor deploys the Worker. Review the chosen account and
-   resulting IDs, then commit and push the configuration.
-4. Connect your repository to Cloudflare Workers Builds using its GitHub
-   integration. Select the production branch (`main` by default), root `/`, and
-   the build/deploy commands above. The deployment credential needs Workers
-   Scripts edit, D1 edit, Workflows edit, and account read permissions in your account. Workers
-   Scripts edit covers listing Worker secret names and uploading runtime secrets
-   with a version. Select an existing suitably scoped credential; do not commit
-   its value. Disable preview builds until staging is explicitly provisioned.
-5. Choose a unique Workflow name in `workflows[].name` for this installation;
-   preserve `binding: CHAT_WORKFLOW` and `class_name: ChatWorkflow`. The automatic
-   Worker release creates/updates this Workflow and its minute Cron Trigger from
-   Wrangler configuration. No separate local workflow deployment is needed.
-   Obtain your own Meta Model API credential with Muse Spark 1.3 and
-   Muse Voice Transcribe access and add
-   `META_API_KEY` as an encrypted secret in Worker Settings → Build → Variables
-   and secrets. The build credential must be allowed to create/update Workflows;
-   verify its permissions if the first automatic release is rejected.
-6. The automatic release applies versioned D1 migrations first, then publishes the
-   Worker with an auth secret as described below. There is no manual migration
+Follow [Self-hosting](#self-hosting): no versioned file needs an account ID, D1 ID,
+origin or admin ID, and the first automatic release creates D1, R2, the Workers,
+Workflows and Cron. Additional notes for an independent installation:
+
+1. Keep `binding: DB`, `migrations_dir: migrations`, `binding: CONTACT_PHOTOS`,
+   `binding: CHAT_WORKFLOW` / `class_name: ChatWorkflow` and the onboarding Workflow
+   binding unchanged. Workflow names must be unique within the account; the
+   versioned names work in a fresh account.
+2. The automatic release applies versioned D1 migrations first, then publishes the
+   Worker with its runtime secrets as described below. There is no manual migration
    requirement for production releases; review each migration before pushing.
-7. Provision the photo bucket using the section below before releasing these
-   changes.
-8. Replace the iOS app and notification extension `WILDCARD_API_URL` build settings with your public HTTPS origin.
+3. Disable preview builds for the API until staging is explicitly provisioned. No
+   staging environment exists; a staging installation needs its own Worker, D1, R2,
+   Workflow names, origins, secrets and iOS origin, for example in another account.
+4. Replace the iOS app and notification extension `WILDCARD_API_URL` build settings
+   with your public HTTPS API origin, and the bundle IDs as described in
+   [Private contact photo storage](#private-contact-photo-storage).
    Build/install the client separately when desired. API releases do not update an
    already installed iOS application.
 
@@ -166,13 +347,22 @@ identity verification is provided by creating these resources.
 
 ## Automatic secret initialization and releases
 
-`scripts/release-worker.mjs` requires Workers Builds (`WORKERS_CI=1`), the production
-branch, a clean checkout, and `WORKERS_CI_COMMIT_SHA` equal to Git HEAD. These system
-variables are injected by Cloudflare. Do not set them locally to bypass the guard.
-An independent installation can set `WILDCARD_PRODUCTION_BRANCH` in the build
-settings if it uses another production branch.
+All release scripts share `scripts/lib/release-guard.mjs`. A release must run in CI,
+either Workers Builds (`WORKERS_CI=1`, `WORKERS_CI_BRANCH`, `WORKERS_CI_COMMIT_SHA`)
+or GitHub Actions (`GITHUB_ACTIONS=true`, `GITHUB_REF_TYPE=branch`,
+`GITHUB_REF_NAME`, `GITHUB_SHA`), on the production branch, from a clean checkout
+whose HEAD equals the triggering commit. These system variables are injected by the
+CI system. Do not set them locally to bypass the guard. An independent installation
+can set `WILDCARD_PRODUCTION_BRANCH` in the CI settings if it uses another
+production branch.
 
-The release runs remote D1 migrations and inspects only Worker secret names. If
+`scripts/release-worker.mjs` first resolves the account-specific configuration into
+the ignored `apps/api/wrangler.release.json` ([Self-hosting](#self-hosting)),
+creating D1 and R2 on the first release. It then checks through the Cloudflare API
+whether the Worker exists. Only when it does not (first release) is the secret list
+treated as empty; for an existing Worker, listing secret names must succeed, so a
+failed listing stops the release instead of rotating the auth secret. The release
+runs remote D1 migrations and inspects only Worker secret names. If
 `BETTER_AUTH_SECRET` does not exist, it generates 48 cryptographically random bytes,
 writes an owner-only JSON file in a private temporary directory, and uploads the
 secret with the code using Wrangler's `--secrets-file`. The file is removed in a
@@ -180,11 +370,12 @@ secret with the code using Wrangler's `--secrets-file`. The file is removed in a
 Subsequent releases preserve the existing encrypted auth secret and session
 signatures. The secret is never exposed to iOS.
 
-`META_API_KEY` is an encrypted build secret and an encrypted runtime secret. The
-release copies the build value into the same temporary upload file when supplied;
-if absent from the build environment, it preserves an existing runtime key. An
-empty build value or missing key in both locations stops the release. Update the
-encrypted build secret and push an authorized commit to rotate the model key.
+`META_API_KEY` is an encrypted CI secret and an encrypted runtime secret. The
+release copies a non-empty CI value into the same temporary upload file; if the CI
+value is unset or empty, it preserves an existing runtime key. A missing key in both
+locations stops the release. Update the encrypted CI secret and push an authorized
+commit to rotate the model key. Optional secret groups follow the same empty-means-unset
+rule (see [Secrets](#secrets-names-only)).
 Never print environment values or paste the key into chat. The user confirmed
 configuring the encrypted build secret on October 26, 2026; its value and model
 access were not inspected. The Cloudflare credential is used only by the pipeline,
@@ -193,8 +384,9 @@ Future secret rotation must use an explicitly authorized automatic release; it
 invalidates existing signed sessions. Deleting/recreating the Worker also loses
 its runtime secret and requires users to sign in again.
 
-Release by committing and pushing to the selected branch. Check Workers Builds,
-confirm the source SHA, and inspect the active Worker version's `workers/tag`
+Release by committing and pushing to the selected branch. Before the first push,
+`npm run release:check` shows what the release would resolve, create and upload.
+Check the CI run (Workers Builds or GitHub Actions), confirm the source SHA, and inspect the active Worker version's `workers/tag`
 against that SHA. Verify `CHAT_WORKFLOW`, the `ChatWorkflow` class, the minute
 Cron Trigger, and the runtime secret name `META_API_KEY` after the chat release.
 The script tags every version with the full source commit.
@@ -202,7 +394,8 @@ The first repository-connection build may lack source metadata and stop safely;
 a subsequent Git push triggers a build with metadata. Investigate a failed
 pipeline; do not bypass it with a local deployment or `wrangler secret put`.
 
-The stable `workers.dev` route is enabled; preview URLs are disabled. Workers Logs
+The stable `workers.dev` route is enabled; `preview_urls` is on, but the API
+project builds no Previews ([This installation](#this-installation)). Workers Logs
 and Traces are configured with sampling rates 1 and 0.01. Review quotas/retention
 before public use. Preview branches must not share this production database.
 Separate Worker, D1, origin, and secret configuration is required for staging.
@@ -221,24 +414,25 @@ layer needs no resource, binding or secret.
 
 Provisioning (after the API Worker exists, because the service binding names it):
 
-1. In `apps/web/wrangler.jsonc`, replace `account_id`, and also `services[0].service`
-   if your API Worker has another name. Change `name` if `wildcard-web` is taken.
+1. No account replacement is needed; the release deploys into the resolved account
+   ([Self-hosting](#self-hosting)). Only if you renamed the API Worker, change
+   `services[].service` (top level and `previews`). Renaming `wildcard-web` also
+   changes the API's default `MCP_WEB_ORIGIN`.
 2. In Cloudflare, create a second Workers Builds project connected to the same
    GitHub repository and production branch: root `/`, build command
    `npm ci && npm run typecheck:web && npm run build:web`, deploy command
    `npm run release:web`. Use a credential limited to Workers Scripts edit and
    account read; the web release needs no D1, R2, or Workflows permission. For
    branch Previews, see [Web previews](#web-previews); otherwise disable preview builds.
-3. Optional: set build watch paths so web-only pushes don't rebuild the API and the
-   reverse. For example, include `apps/web/**`, `packages/ui/**`, `package.json`,
-   `package-lock.json`, and `scripts/release-web.mjs` for the web project, and exclude
-   `apps/web/**` and `packages/ui/**` for the API project. `packages/ui` is the shared
+3. Optional: set the [build watch paths](#build-watch-paths) so web-only pushes
+   don't rebuild the API and the reverse. `packages/ui` is the shared
    [design system layer](design-system.md): leaving it out of the web or admin watch
-   paths means a design-system change ships to neither app. Verify the option in your dashboard before relying on it. Without
-   it, every push runs both pipelines, and each releases only its own Worker.
+   paths means a design-system change ships to neither app. Without filters, every
+   push runs both pipelines, and each releases only its own Worker.
 4. Push a commit. `scripts/release-web.mjs` applies the same guards as the API
-   release (Workers Builds only, production branch, clean checkout, HEAD equal to
-   `WORKERS_CI_COMMIT_SHA`) and tags the version with the commit.
+   release (CI only, production branch, clean checkout, HEAD equal to the triggering
+   commit) and tags the version with the commit. The GitHub Actions workflow runs
+   the same build and release after the API instead of a second project.
 
 This installation targets `https://wildcard-web.imlautaro.workers.dev`. The second
 Workers Builds project was connected on October 27, 2026, with preview builds disabled
@@ -297,30 +491,30 @@ plus `ASSETS` added by Nitro. `npm run build:admin` writes
 `apps/admin/.output/server/wrangler.json`, and the release deploys that file.
 
 The API side needs migration `0059_admin.sql` and the `SUPER_ADMIN_USER_IDS` var
-(comma-separated user IDs, not secret). The var ships empty, so no one has access
-until it is set. Both ship with the API's normal automatic release.
+(comma-separated user IDs, not secret). It is empty in `wrangler.jsonc`; the release
+sets it from the CI variable `WILDCARD_SUPER_ADMIN_USER_IDS`, so no one has access
+until that is set. Both ship with the API's normal automatic release.
 
 Provisioning, after the API Worker has released a version that exports `AdminAPI`:
 
-1. In `apps/admin/wrangler.jsonc`, replace `account_id`, and also
-   `services[0].service` if your API Worker has another name. Change `name` if
-   `wildcard-admin` is taken.
+1. No account replacement is needed. Only if you renamed the API Worker, change
+   `services[0].service` in `apps/admin/wrangler.jsonc`. The GitHub Actions workflow
+   does not release admin; use a Workers Builds project.
 2. Create a third Workers Builds project connected to the same repository and
    production branch: root `/`, build command
    `npm ci && npm run typecheck:admin && npm run build:admin`, deploy command
    `npm run release:admin`. Use a credential limited to Workers Scripts edit and
-   account read. Disable preview builds. Optionally set watch paths (`apps/admin/**`,
-   `packages/ui/**`, `package.json`, `package-lock.json`, `scripts/release-admin.mjs`),
-   and add `apps/admin/**` to the other projects' excludes (`packages/ui/**` stays
-   included in the web project).
+   account read. Disable preview builds. Optionally set the
+   [build watch paths](#build-watch-paths) for admin.
 3. Push a commit. `scripts/release-admin.mjs` applies the same guards as the web
-   release (Workers Builds only, production branch, clean checkout, HEAD equal to
-   `WORKERS_CI_COMMIT_SHA`) and tags the version with the commit. If the admin
+   release (CI only, production branch, clean checkout, HEAD equal to the triggering
+   commit) and tags the version with the commit. If the admin
    build runs before the API release on the same push, the binding may name an
    entrypoint that doesn't exist yet. Retry the admin build after `wildcard-api`
    succeeds.
 4. Sign in on the admin origin, copy the user ID that the "Not a super admin"
-   screen shows, add it to `SUPER_ADMIN_USER_IDS`, and push.
+   screen shows, add it to the API's CI variable `WILDCARD_SUPER_ADMIN_USER_IDS`
+   (comma-separated), and trigger an API release (push, or rerun the workflow).
 
 Consider limiting the admin origin further with Cloudflare Access in front of
 `wildcard-admin` (optional; not configured in this repository).
@@ -340,8 +534,8 @@ build variables or secrets. The initial build and live checks were still pending
 when this configuration was recorded. The super admin roster remains empty.
 
 Rollback: delete or roll back the `wildcard-admin` Worker. It stores no data.
-Clearing `SUPER_ADMIN_USER_IDS` and releasing the API revokes access without
-touching the panel. Pre-0059 API code ignores `app_setting` and `admin_event`, so
+Clearing `WILDCARD_SUPER_ADMIN_USER_IDS` and releasing the API revokes access
+without touching the panel. Pre-0059 API code ignores `app_setting` and `admin_event`, so
 an API rollback reopens registration (the old code has no gate) and keeps the
 tables. To reset a setting, delete its row through the normal migration process.
 
@@ -357,8 +551,8 @@ so the Workers Builds root must stay `/`.
 
 Provisioning:
 
-1. In `apps/site/wrangler.jsonc`, replace `account_id`, and `name` if `wildcard-site`
-   is taken. In `apps/site/app/utils/site.ts`, set `url` to the site's own public
+1. No account replacement is needed in `apps/site/wrangler.jsonc`; change `name`
+   only if `wildcard-site` is taken. In `apps/site/app/utils/site.ts`, set `url` to the site's own public
    origin (canonical and hreflang links for `/` and `/es`), `appUrl` to your web app
    origin, `repositoryUrl` to your repository and `iosUrl` if you distribute the
    iPhone app.
@@ -372,8 +566,8 @@ Provisioning:
 3. Configure the [build watch paths](#build-watch-paths) for site, including the
    shared Nuxt layer and root build inputs, and remove the default `*` include.
 4. Push a commit. `scripts/release-site.mjs` applies the same guards as the other
-   releases (Workers Builds only, production branch, clean checkout, HEAD equal to
-   `WORKERS_CI_COMMIT_SHA`) and deploys `apps/site/wrangler.jsonc` tagged with the
+   releases (CI only, production branch, clean checkout, HEAD equal to the triggering
+   commit) and deploys `apps/site/wrangler.jsonc` tagged with the
    commit. Optionally attach a custom domain to `wildcard-site` in the dashboard.
 
 `nuxt generate` also links `apps/site/dist` to the output; it is ignored in Git so the
@@ -440,8 +634,8 @@ the hoisted root `typescript` became 6.0.3 while the API keeps TypeScript 7.0.2 
 
 Provisioning:
 
-1. In `apps/docs/wrangler.jsonc`, replace `account_id`, and `name` if `wildcard-docs`
-   is taken. In `apps/docs/nuxt.config.ts`, set `siteUrl` to the docs origin
+1. No account replacement is needed in `apps/docs/wrangler.jsonc`; change `name`
+   only if `wildcard-docs` is taken. In `apps/docs/nuxt.config.ts`, set `siteUrl` to the docs origin
    (canonical URLs, sitemap and Open Graph images).
 2. Create another Workers Builds project on the same repository and production
    branch: root `/`, build command
@@ -471,10 +665,11 @@ overflow. Workers Builds was not connected for those initial manual releases.
 Workers Builds connection (November 2, 2026): the existing `wildcard-docs` Worker
 is connected to `imlautaro/wildcard`, production branch `main`, root `/`, with the
 build and release commands above. Production builds and build caching are enabled;
-preview builds are disabled. Include paths match the versioned
-[reference](workers-build-paths.json): `apps/docs/*`, `scripts/release-docs.mjs`,
-`package.json`, `package-lock.json`, `.nvmrc`, `.npmrc` and `.gitignore`, with no
-exclusions. This project extends Docus rather than `packages/ui`, so changes to
+preview builds are disabled. Include paths matched the versioned
+[reference](workers-build-paths.json) at that time: `apps/docs/*`,
+`scripts/release-docs.mjs`, `package.json`, `package-lock.json`, `.nvmrc`, `.npmrc`
+and `.gitignore`, with no exclusions; `scripts/lib/*` must now be added
+([pending](#upstream-installation-migration)). This project extends Docus rather than `packages/ui`, so changes to
 the app's shared UI layer do not trigger docs builds. The existing GitHub connection
 and `Workers Builds - 2026-05-27 10:54` credential were reused; no credentials,
 permissions, build variables or secrets were added. Independent installations must
@@ -495,7 +690,7 @@ other Worker depends on it.
 npm ci
 npm run setup     # alias: npm run auth:setup:local
 npm run typecheck
-npm run dev       # API only; npm run dev:all starts the API and the web app together
+npm run dev       # API only (http://localhost:8787 or API_PORT); npm run dev:all starts the API and the web app together
 npm run dev:web   # optional web app on http://localhost:3000, proxied to the local API
 npm run dev:admin # optional admin panel on http://localhost:3001; needs ADMIN_LOCAL_ROUTES=true in .dev.vars
 ```
@@ -511,7 +706,25 @@ With an ElevenLabs key it also inserts `voice_messages_enabled=true` into the lo
 `app_setting` table unless that row already exists. Local D1 state is ignored under
 `.wrangler/`; these commands do not connect to production bindings. Model calls use
 Meta and may consume credits. Without `META_API_KEY`, new sends return 503 while
-auth/contacts still work.
+auth/contacts still work. The root `.env.example` lists the keys an ignored root
+`.env` may hold (`META_API_KEY`, `ELEVENLABS_API_KEY`, `API_PORT`, `WEB_PORT`);
+production never reads it.
+
+Local D1 uses the placeholder `database_id` in `wrangler.jsonc`. Upgrade note: the
+November 3, 2026 [self-hosting change](#self-hosting) replaced the production ID
+there with that placeholder, and Wrangler keys local D1 state by ID, so an existing
+checkout starts with an empty local database. Run `npm run setup` again to apply the
+migrations; the existing `.dev.vars` is preserved. The previous local data stays
+under `.wrangler/` but is no longer used.
+
+Ports: `API_PORT` (default 8787) and `WEB_PORT` (default 3000) come from the
+environment or the root `.env`. `npm run dev` passes `--port` to Wrangler (a
+`--port` argument still wins), and `npm run dev:all` also sets `NUXT_PORT`/`PORT` and
+`NUXT_API_ORIGIN=http://localhost:<API_PORT>` for the web app. Both refuse a port
+that is already in use instead of letting Wrangler or Nuxt move to another one, and
+suggest another value. `npm run dev:web` and `npm run dev:admin` run alone still
+default to the API at `http://localhost:8787`; set `NUXT_API_ORIGIN` when the API
+uses another port.
 
 `npm run dev` (`scripts/dev-api.mjs`) writes an ignored
 `apps/api/wrangler.local.json` from `wrangler.jsonc` and runs `wrangler dev --local
@@ -525,16 +738,22 @@ login is required and every `.dev.vars` value reaches the Worker:
   secrets from `.dev.vars` and silently ignores optional ones such as
   `ELEVENLABS_API_KEY`, `VAPID_*`, `APNS_*` and `ADMIN_LOCAL_ROUTES`.
 
-Wrangler never fires cron triggers locally, so the script calls `/__scheduled` every
-minute to run the same handler as the production `* * * * *` trigger (reminders,
+It also passes `--var BETTER_AUTH_URL:http://localhost:<port>` so auth matches the
+served port. `--var` takes precedence over `BETTER_AUTH_URL` in `.dev.vars` (checked
+with Wrangler 4.153).
+
+Wrangler never fires cron triggers locally, so the script calls `/__scheduled` on the
+same port every minute to run the same handler as the production `* * * * *` trigger (reminders,
 tasks, monitors, For you, initiative, welcomes, recovery and push delivery). Set
 `WILDCARD_LOCAL_CRON=0` to turn that off, or `WILDCARD_REMOTE_BINDINGS=1` (after
-`npx wrangler login`) to keep the remote AI binding. Deployments and
-`wrangler types` keep using `wrangler.jsonc` unchanged.
+`npx wrangler login`) to keep the remote AI binding. `wrangler types` keeps using
+`wrangler.jsonc`; releases use the generated `wrangler.release.json`.
+`npm run smoke` (no argument) runs the [end-to-end check](#verification) against the
+local web app on `WEB_PORT`.
 
-`npm run db:migrate:local` reapplies only pending local migrations. The separate
-`db:migrate:remote` command modifies the configured production database and should
-be reserved for explicitly authorized operations; releases already perform it.
+`npm run db:migrate:local` reapplies only pending local migrations. Remote migrations
+only run in the release, through the generated release config; the former
+`db:migrate:remote` command was removed because it targeted the local placeholder ID.
 `npm run types --workspace @wildcard/api` regenerates ignored binding/runtime types
 from Wrangler; `npm run typecheck` includes it. `npm run build` is a local dry run
 only and does not publish. Follow the repository's build/test preferences.
@@ -552,9 +771,9 @@ new bucket, binding or Cron is needed.
 - **Speech and the voice catalog (optional):** an ElevenLabs API key with access to
   `eleven_v4` text to speech and voices, stored as the runtime secret `ELEVENLABS_API_KEY`. It is
   not in `secrets.required`, so releases succeed without it. In production, add it as
-  an encrypted build variable of the API's Workers Builds project; the release script
-  copies it to the runtime secret, like `META_API_KEY`, and preserves an existing
-  runtime key when the build omits it. Locally, add it to ignored
+  an encrypted CI secret (API Workers Builds project or GitHub Actions); the release
+  script copies it to the runtime secret, like `META_API_KEY`, and preserves an
+  existing runtime key when CI omits it or passes it empty. Locally, add it to ignored
   `apps/api/.dev.vars` (`npm run setup` copies it from the environment or a root
   `.env`). Never commit it.
 - **Operator flag:** contact voices stay off until a super admin turns on **Contact
@@ -663,8 +882,8 @@ Independent-account reproduction and installed iOS behavior remain unverified.
 Optional. Adds browser notifications without a new Cloudflare resource or binding. Apply
 `apps/api/migrations/0085_web_push.sql` (additive `web_push_subscription`) after 0084. To
 enable delivery, generate a VAPID pair with `node scripts/generate-vapid-keys.mjs` and set
-the encrypted Workers Builds secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
-`VAPID_SUBJECT` together; `scripts/release-worker.mjs` forwards them. Without them the web
+the encrypted CI secrets (Workers Builds or GitHub Actions) `VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` together; `scripts/release-worker.mjs` forwards them. Without them the web
 switch reports notifications as not configured and nothing else changes. Rollback: delete
 the secrets; keep the table. Details: [notifications](notifications.md#browser-web-push).
 Unverified: delivery to real browser push services.
@@ -673,9 +892,10 @@ Unverified: delivery to real browser push services.
 
 [Reply notifications](notifications.md) add APNs as an optional external service.
 Provision the Apple App ID/capability, signing profiles, and provider key before
-configuring encrypted Workers Builds secrets `APNS_PRIVATE_KEY`, `APNS_KEY_ID`,
-`APNS_TEAM_ID`, and `APNS_TOPIC`. The automatic release forwards them to runtime;
-all four must be supplied together when updating. Without them chats continue
+configuring encrypted CI secrets (Workers Builds or GitHub Actions)
+`APNS_PRIVATE_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID`, and `APNS_TOPIC`. The automatic
+release forwards them to runtime; all four non-empty values must be supplied
+together when updating (empty values count as unset). Without them chats continue
 working and pending notifications expire. No new Cloudflare binding is needed.
 `0004_push.sql` adds session-bound devices and a reply outbox in existing D1;
 production release/local migration commands apply it. The Workflow attempts
@@ -716,37 +936,37 @@ must not print notification payloads or message contents in logs. See
 
 ## Private contact photo storage
 
-The versioned `r2_buckets` binding requires an existing private bucket before the
-next automatic release. The production bucket `wildcard-contact-photos` was created and verified on
-October 26, 2026 in the configured account, with Standard storage. Its r2.dev
-access is disabled and it has no public custom domains. Apple account capabilities
-and provisioning profiles have not been changed or verified remotely.
+The `CONTACT_PHOTOS` binding needs a private bucket. The API release creates it
+(private, with no r2.dev URL or custom domain) when it does not exist; see
+[Self-hosting](#self-hosting). The production bucket `wildcard-contact-photos` was
+created and verified on October 26, 2026 in the configured account, with Standard
+storage. Its r2.dev access is disabled and it has no public custom domains. Apple
+account capabilities and provisioning profiles have not been changed or verified
+remotely.
 
-For an independent account, first activate R2 in that account if necessary using
-its normal account setup, review its plan, and choose the bucket name. Update
-`account_id` and `r2_buckets[].bucket_name` in `apps/api/wrangler.jsonc`, preserving
-`binding: CONTACT_PHOTOS`. Use a credential with Workers R2 Storage Edit for
-creation and access to bucket metadata; Wrangler's info command also queries
-bucket metrics and needs Account Analytics Read. The automatic deployment
-credential needs access to the chosen R2 bucket in addition to its existing
-Workers/D1/Workflow permissions. No R2 S3 credential or new runtime secret is used.
+For an independent account, activate R2 in that account if necessary using its
+normal account setup and review its plan. The bucket name defaults to the versioned
+`wildcard-contact-photos`; set `WILDCARD_PHOTOS_BUCKET` in CI to use another name
+instead of editing `wrangler.jsonc`. Preserve `binding: CONTACT_PHOTOS`. The
+release credential needs Workers R2 Storage Edit (existence check via the
+Cloudflare API and creation) in addition to its Workers/D1/Workflow permissions. No
+R2 S3 credential or new runtime secret is used.
 
-From the repository root, in the intended authenticated account:
+Optionally, from the repository root with a Wrangler login or scoped token for the
+intended account:
 
 ```sh
-npm run infra:photos -- --create  # Create the configured bucket once, then verify
-npm run infra:photos             # Verify an existing bucket without creating it
+npm run infra:provision             # Show the resolved bucket and D1; create nothing
+npm run infra:provision -- --create # Create missing D1 and R2 now instead of at the first release
 ```
 
-Creation does not publish the Worker or enable public access. If creation reports
-an existing name, verify that resource with the second command rather than
-recreating it. Keep r2.dev and custom public domains disabled. Existing public
-bucket settings are not modified by this script; verify privacy in the R2
-dashboard. Keep staging in a different bucket and bind that name only in a
-separate staging Worker/configuration. No staging resources are provisioned here.
+`npm run infra:photos` is an alias of `infra:provision`. Neither publishes the
+Worker, enables public access or edits versioned files. An existing bucket is
+reused, and its public access settings are never modified; verify privacy in the R2
+dashboard. Keep r2.dev and custom public domains disabled. Keep staging in a
+different bucket and Worker configuration. No staging resources are provisioned here.
 
-Then commit/push the versioned configuration and feature together through the
-existing automatic pipeline. Migration `0006_contact_photos.sql` applies before
+Then commit/push the feature through the existing automatic pipeline. Migration `0006_contact_photos.sql` applies before
 Worker publication. Verify the release source SHA, migration status, and the
 `CONTACT_PHOTOS` binding's intended bucket. With an authorized fictional-account
 check, verify that unauthenticated photo reads return 401, signed URL tampering
@@ -806,9 +1026,9 @@ original version. See the [diagnostic evidence](model-settings.md#gateway-provis
 and retry a failed turn after release to verify actual generation. Failed model
 requests emit only the transport and HTTP status in Worker logs.
 
-For an independent account, replace `account_id`, the existing D1/R2/Worker
-identifiers and origins as described above, provision those required resources,
-then run `npm run infra:ai-gateway -- --create`. The script targets `wildcard`
+For an independent account, complete the first release described in
+[Self-hosting](#self-hosting), then run `npm run infra:ai-gateway -- --create`
+(account from `CLOUDFLARE_ACCOUNT_ID` or the credential's only account). The script targets `wildcard`
 when the routing variable is empty, allowing
 provisioning/verification while routing remains disabled. It otherwise uses
 the configured gateway ID. It uses existing Wrangler credentials in memory or an
@@ -1027,8 +1247,8 @@ retain the new schema and cancellation-aware code and disable only
 [Chat attachments](attachments.md) reuse the existing private `CONTACT_PHOTOS` R2
 binding and bucket under `attachments/`; no public access, extra credentials, or
 new service provisioning is required. Independent installations must provision
-the existing photo bucket before enabling attachment sends, using the same
-`npm run infra:photos` setup and account replacements documented above. Migration
+the existing photo bucket before enabling attachment sends; the API release
+creates it when missing ([Private contact photo storage](#private-contact-photo-storage)). Migration
 `0012_chat_attachments.sql` adds nullable turn metadata, an expression index,
 and an orphan-object registry. Apply locally through the normal D1 migration
 command; production applies it through the automatic commit/push release pipeline.
@@ -1716,8 +1936,9 @@ previously blocked callback requests cannot be replayed to recover their proof.
 
 Apply migration 0027 after 0026 through the automatic release pipeline. OAuth uses
 existing D1, the existing encryption derivation and existing Cron cleanup; no new
-Cloudflare resource/binding or runtime secret. `MCP_WEB_ORIGIN` is a versioned
-API variable specifying the exact public web origin. `BETTER_AUTH_URL` must be
+Cloudflare resource/binding or runtime secret. `MCP_WEB_ORIGIN` is an API variable with
+the exact public web origin, set at release from `WILDCARD_WEB_URL` or the web
+Worker's workers.dev host ([Self-hosting](#self-hosting)). `BETTER_AUTH_URL` must be
 public HTTPS for OAuth. Each environment/provider needs its own registration of
 `https://YOUR_API_HOST/api/v1/mcp/oauth/callback`; Google requires its APIs, consent,
 preview eligibility and an AI-agent-marked Web OAuth client. Users configure their
@@ -2477,7 +2698,7 @@ Apply additive `0059_admin.sql` after 0058. It creates `app_setting` (runtime
 settings, no foreign keys) and `admin_event` (append-only audit, plain IDs so
 entries survive account deletion). No row means every setting uses its code
 default, so registration stays open until a super admin closes it. The new
-`SUPER_ADMIN_USER_IDS` var ships empty. Static validation: every new statement
+`SUPER_ADMIN_USER_IDS` var is empty until `WILDCARD_SUPER_ADMIN_USER_IDS` is set in CI. Static validation: every new statement
 prepared on local workerd D1, plus a seeded account-deletion cascade. Live
 verification is listed in [admin](admin.md#verification-status). Rollback: see
 [Admin Worker](#admin-worker).
