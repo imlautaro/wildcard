@@ -125,7 +125,13 @@ generation adds `themedIdentityInstruction` (`contacts/portrait.ts`): each conta
 a `kind` (at most 60 characters, for example "Golden retriever" or "Colonial-era
 statesman") that starts its description ("Golden retriever (male), persona age 30.")
 instead of "30 years old male"; age and gender remain the voice persona and the
-birthday, within the usual age range. Characters stay conversational contacts under
+birthday, within the usual age range. When the theme is an occupation or activity ("video editors",
+"event planners"), `kind` names an interest in that field ("Film and editing
+enthusiast"), never a job title, and the field's skills go to specialties. At chat
+time any `kind` prefix, including job titles in older contacts, is read as a concept
+for voice and topics, not work the contact does between chats; contacts do not
+claim any unobserved activity, digital or physical ("been editing videos", "busy
+organizing things"), per `embodiedIdentityInstruction` (`personality/identity.ts`). Characters stay conversational contacts under
 the same identity rules. Themes naming real people or copyrighted characters produce
 original characters in that spirit, style and era, never the actual people or a
 likeness; the portrait prompt says the same. The custom text is treated as untrusted
