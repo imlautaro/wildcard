@@ -3,15 +3,16 @@
 // already built config in the resolved account.
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { accountId, root, wranglerBin } from './cloudflare.mjs';
+import { accountId, deployEnv, readWranglerConfig, root, wranglerBin } from './cloudflare.mjs';
 import { assertReleasable } from './release-guard.mjs';
 
 export function releaseBuiltWorker({ label, config, built, buildCommand }) {
   const sourceCommit = assertReleasable();
   if (!existsSync(`${root}${built}`)) throw new Error(`Build the ${label} with \`${buildCommand}\` before releasing.`);
-  console.log(`Releasing ${label} commit ${sourceCommit}`);
+  const { name } = readWranglerConfig(`${root}${config}`);
+  console.log(`Releasing ${label} (${name}) commit ${sourceCommit}`);
   const result = spawnSync(process.execPath, [wranglerBin, 'deploy', '--config', config, '--tag', sourceCommit], {
-    cwd: root, stdio: 'inherit', env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: accountId() },
+    cwd: root, stdio: 'inherit', env: deployEnv(name, { ...process.env, CLOUDFLARE_ACCOUNT_ID: accountId() }),
   });
   if (result.error) throw result.error;
   process.exitCode = result.status ?? 1;

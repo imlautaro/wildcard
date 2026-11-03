@@ -91,5 +91,17 @@ export async function workerExists(name) {
   return true;
 }
 
+// Workers Builds sets WRANGLER_CI_OVERRIDE_NAME to the Worker its project is connected
+// to, and Wrangler then deploys *any* config under that name. One build releases several
+// Workers (the Deploy to Cloudflare project releases the API and the web app), so the
+// override is kept only for the Worker it names; otherwise the web app would replace the
+// API. Returns the environment to deploy `name` with.
+export function deployEnv(name, env = process.env) {
+  const override = env.WRANGLER_CI_OVERRIDE_NAME?.trim();
+  if (!override || override === name) return env;
+  const { WRANGLER_CI_OVERRIDE_NAME: _dropped, ...rest } = env;
+  return rest;
+}
+
 // Empty strings count as unset: GitHub Actions passes missing secrets as "".
 export const envValue = (name) => process.env[name]?.trim() || undefined;
