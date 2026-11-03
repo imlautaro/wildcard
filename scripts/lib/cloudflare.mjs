@@ -19,7 +19,7 @@ export function readWranglerConfig(path) {
 // Runs Wrangler and returns stdout. Errors keep Wrangler's own message on stderr.
 export function wrangler(args, { env = process.env, inherit = false } = {}) {
   return execFileSync(process.execPath, [wranglerBin, ...args], {
-    cwd: root, encoding: 'utf8', env, stdio: ['ignore', inherit ? 'inherit' : 'pipe', 'inherit'],
+    cwd: root, encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', inherit ? 'inherit' : 'pipe', 'inherit'],
   });
 }
 

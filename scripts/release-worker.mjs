@@ -62,7 +62,9 @@ if (dryRun) {
 if (problems.length) throw new Error(problems[0]);
 
 console.log(`Applying migrations for ${sourceCommit}`);
-console.log(wrangler(['d1', 'migrations', 'apply', 'DB', '--remote', ...configArgs], { env }));
+// Streamed, not captured: a first release applies every migration and its output
+// exceeds the default child-process buffer (ENOBUFS).
+wrangler(['d1', 'migrations', 'apply', 'DB', '--remote', ...configArgs], { env, inherit: true });
 let temporaryDirectory;
 try {
   const secretArgs = [];
