@@ -420,3 +420,29 @@ te vas a Mar del Plata con tu hermana este finde"; after "decile a Tomi que al f
 el sábado temprano", Tomi's next reply to a greeting passed it along. Link SQL and
 cascades were run on the local workerd D1. Not verified on devices.
 
+
+## Verified activity
+
+Contacts have no life between chats: `embodiedIdentityInstruction`
+(`personality/identity.ts`) forbids claiming any unobserved activity, physical or
+digital ("anduve editando videos", "busy organizing things"), and a profession-like
+style becomes an interest, not a job ([character styles](onboarding.md#character-styles)).
+Since 2026-11-03, so that "¿qué andás haciendo?" still has a true answer, private
+replies and initiative receive what the server recorded the contact doing for this
+person in the last 72 hours (`ownActivity` in `chat/activity.ts`):
+
+- up to four For you posts it wrote in this person's feed (not connector posts, not
+  dismissed), including revisions of another contact's post;
+- up to three tasks of this private chat assigned to it and completed;
+- up to three documents of this private chat it last edited.
+
+The prompt lets the contact mention one item briefly and truthfully, with its real
+timing, the feed called "Para ti" in Spanish, and not again once it came up in the
+chat. With nothing recorded, it shares a thought instead. Group activity is not
+included (group disclosure rules apply), nor is it given to connector-private contacts
+(`mcp_private_contact`), task work turns or schedules. Everything listed belongs to
+the same person, so `keep_private` contacts still receive it. A live check with Contributor (fictional data)
+(20 replies with the final prompt) showed truthful mentions of a post and a task, as
+results rather than invented work, with correct day ("ayer" for a task finished 30 hours
+earlier) and no repetition after the post had come up; the SQL was run on the local workerd D1. Not verified in
+production chats.

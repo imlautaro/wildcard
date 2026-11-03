@@ -21,6 +21,7 @@ import { isRecord, museCompletion, safeErrorCode } from './meta';
 import { messageDelay } from './messages';
 import { aliasAwareness } from '../contacts/alias';
 import { connectAgent } from './presence';
+import { ownActivity } from './activity';
 
 export type InitiativeJob = { kind: 'initiative'; contactID: string; sourceID: string; revision: number };
 type Snapshot = {
@@ -292,7 +293,8 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
         GROUP BY t.initiative_topic ORDER BY count DESC`).bind(state.userID, state.contactID, now - topicWindow)
         .all<{ topic: InitiativeTopic; count: number }>();
       const otherContactsRecentTopics = topicRows.filter(row => !sharedTopicExclusions.includes(row.topic));
-      return { state, deferredUntil: null, model, isolated, imageAttempted, otherContactsRecentTopics, samples, adaptive, personality, personalityRevision,
+      const yourVerifiedActivity = isolated ? [] : await ownActivity(env.DB, { userID: state.userID, contactID: state.contactID, agentID: state.agentID }, now);
+      return { state, deferredUntil: null, model, isolated, imageAttempted, otherContactsRecentTopics, yourVerifiedActivity, samples, adaptive, personality, personalityRevision,
         character, regional: await regionalConversation(env.DB, state.agentID),
         writing: conversationStyle({ agentID: state.agentID, personality, group: false,
           own: rows.flatMap(row => row.assistantText ? [row.assistantText] : []), names: [] }), learning: await learningContext({ ...env, META_CHAT_MODEL: model },
@@ -361,6 +363,7 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           'activityWindows is a partial estimate from this private chat, not a promise that the person is awake or available. Learned windows need several days of evidence. Late responses should move future invitations toward the times the person actually engages, rather than repeating the original send time. Timing remains approximate and varied; explicit fixed-time requests belong to schedule tools, not this planner.',
           'Prefer one or two conversational sentences, a relevant observation, a small idea or an unfinished thought completed naturally. Do not repeat an unanswered question or add a question to every message.',
           'A good opener shares something from your side, the way a friend texts first with something to tell, rather than a check-in question about them: a take, an idea or something you find interesting, drawn from your own specialties and persona, from something this person actually said, or from their memories. Each contact has its own subjects; yours should sound like you, not like any friend.',
+          'yourVerifiedActivity lists the only things you actually did outside this chat recently (For you posts in this person’s feed, tasks you finished, documents you edited here). One of them can be a truthful opener, such as a short note that you posted about a topic they follow; call the feed "Para ti" in Spanish; never claim any other activity, and skip an item already mentioned in these messages.',
           'Do not fall back on generic small-talk subjects. Music, films, series and book recommendations are the usual default and feel artificial when several contacts bring them up: raise one only when your specialties, this chat or the person’s memories clearly point there.',
           `Label the subject of what you send in topic, one of ${JSON.stringify(initiativeTopics)}: follow-up when the message asks about or builds on something the person told you, everyday for a light remark about the moment or a bare salutation, other when nothing else fits. otherContactsRecentTopics lists subjects the person’s other contacts opened spontaneously in the last 48 hours, with how many times. Choose a different subject from those; a subject already there is acceptable only when this chat itself is about it. Never mention, hint at or ask about other contacts’ messages: you cannot see them, only these labels.`,
           'Read receipts are context, not permission to escalate. The first useful continuation does not require the human to read or reply first. Outside reconnect-after-silence, if a previous proactive message remains unread, give more space or stop unless another message adds clear value; do not shorten waits just because something was seen.',
@@ -377,7 +380,7 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
         ].join(' ') },
         { role: 'user', content: JSON.stringify({ state: evidence.state, adaptive: evidence.adaptive,
           activityWindows: evidence.activityWindows, outreachToAssess: evidence.outreachToAssess,
-          imageAttempted: evidence.imageAttempted, otherContactsRecentTopics: evidence.otherContactsRecentTopics ?? [], timing: evidence.timing, messages: evidence.messages, memories: evidence.memories, persona: evidence.persona, now: evidence.now }) },
+          imageAttempted: evidence.imageAttempted, otherContactsRecentTopics: evidence.otherContactsRecentTopics ?? [], yourVerifiedActivity: evidence.yourVerifiedActivity ?? [], timing: evidence.timing, messages: evidence.messages, memories: evidence.memories, persona: evidence.persona, now: evidence.now }) },
       ], evidence.model, { responseFormat: { type: 'json_object' }, maxTokens: 4400 });
       return decision(JSON.parse(answer.content ?? 'null'));
     });
