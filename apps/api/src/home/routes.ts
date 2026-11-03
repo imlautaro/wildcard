@@ -63,7 +63,7 @@ export async function homeFeed(env: Env, owner: string) {
       LEFT JOIN home_post q ON q.id = p.quote_of AND q.user_id = p.user_id
         AND EXISTS (SELECT 1 FROM home_topic qt WHERE qt.id = q.topic_id AND qt.status = 'active')
       LEFT JOIN contact qc ON qc.id = q.contact_id AND qc.user_id = p.user_id
-      WHERE p.user_id = ? AND p.created_at > ? ORDER BY p.created_at DESC LIMIT ?`).bind(owner, now - postRetention, timelinePosts).all<PostRow>(),
+      WHERE p.user_id = ? AND p.created_at > ? AND p.dismissed_at IS NULL ORDER BY p.created_at DESC LIMIT ?`).bind(owner, now - postRetention, timelinePosts).all<PostRow>(),
     env.DB.prepare(`SELECT ${topicColumns} FROM home_topic WHERE user_id = ? AND status != 'retired' ORDER BY updated_at DESC LIMIT 40`)
       .bind(owner).all<HomeTopicRow>(),
     // Enabled mini apps the person opens, plus ones created in the last three days.
@@ -187,7 +187,7 @@ home.get('/badge', async c => {
   const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unseen FROM home_post p
     JOIN home_feed f ON f.user_id = p.user_id
     JOIN home_topic t ON t.id = p.topic_id AND t.status = 'active'
-    WHERE p.user_id = ? AND p.created_at > COALESCE(f.seen_at, f.viewed_at)`).bind(c.get('owner')).first<{ unseen: number }>();
+    WHERE p.user_id = ? AND p.dismissed_at IS NULL AND p.created_at > COALESCE(f.seen_at, f.viewed_at)`).bind(c.get('owner')).first<{ unseen: number }>();
   return c.json({ unseen: homeEnabled(c.env) ? Math.min(row?.unseen ?? 0, 99) : 0 });
 });
 
@@ -251,6 +251,33 @@ home.post('/posts/:id/comments', async c => {
     if (!exists) await c.env.DB.prepare(`UPDATE home_comment SET status = 'failed', error_code = 'WORKFLOW_UNAVAILABLE' WHERE id = ? AND status = 'pending'`).bind(id).run();
   }
   return c.json(await homeFeed(c.env, owner), 201);
+});
+
+// Not interested in a topic to follow (docs/updates.md#topics-to-follow): it is saved as a
+// hidden topic, so neither the list nor the curator suggests it again. No run starts.
+home.post('/suggestions/dismiss', async c => {
+  const owner = c.get('owner');
+  const body: unknown = await c.req.json().catch(() => null);
+  if (!isRecord(body) || Object.keys(body).join(',') !== 'title' || typeof body.title !== 'string') return c.json({ error: 'Provide title.' }, 400);
+  const title = body.title.trim().toLowerCase();
+  const state = await c.env.DB.prepare('SELECT suggestions_json AS suggestionsJSON FROM home_feed WHERE user_id = ?').bind(owner).first<{ suggestionsJSON: string | null }>();
+  const suggestion = suggestions(state?.suggestionsJSON ?? null, []).find(item => item.title.toLowerCase() === title);
+  if (!suggestion) return c.json({ error: 'This suggestion is no longer listed.' }, 404);
+  const now = Date.now();
+  await c.env.DB.prepare(`INSERT INTO home_topic (id, user_id, title, brief, reason, kind, source, status, created_at, updated_at)
+    SELECT ?1, ?2, ?3, ?4, NULL, 'list', 'curator', 'hidden', ?5, ?5
+    WHERE NOT EXISTS (SELECT 1 FROM home_topic WHERE user_id = ?2 AND lower(title) = lower(?3))`)
+    .bind(crypto.randomUUID(), owner, Array.from(suggestion.title).slice(0, 80).join(''),
+      Array.from(suggestion.reason || suggestion.title).slice(0, 600).join(''), now).run();
+  return c.json(await homeFeed(c.env, owner));
+});
+
+// The X on a "Less like this" notice hides that one post (docs/updates.md#less-like-this).
+home.post('/posts/:id/dismiss', async c => {
+  const owner = c.get('owner');
+  await c.env.DB.prepare('UPDATE home_post SET dismissed_at = ?1 WHERE id = ?2 AND user_id = ?3 AND dismissed_at IS NULL')
+    .bind(Date.now(), c.req.param('id'), owner).run();
+  return c.json(await homeFeed(c.env, owner));
 });
 
 home.patch('/topics/:id', async c => {

@@ -94,6 +94,24 @@ async function followSuggestion(title: string) {
   followingSuggestion.value = title;
   try { await run(() => home.follow(title)); } finally { followingSuggestion.value = null; }
 }
+const dismissingSuggestion = ref<string | null>(null);
+async function dismissSuggestion(title: string) {
+  dismissingSuggestion.value = title;
+  try { await run(() => home.dismissSuggestion(title)); } finally { dismissingSuggestion.value = null; }
+}
+// "Less like this" keeps the post in place as a short notice (docs/updates.md#less-like-this):
+// Undo restores it, X hides that one post. Only the post it was chosen on turns into the
+// notice, and only once the feedback is saved; undoing it on another post of the topic clears it.
+const lessNotices = reactive(new Set<string>());
+const showsLessNotice = (post: HomePost) => lessNotices.has(post.id) && post.feedback === 'less';
+async function undoLess(post: HomePost) {
+  await run(() => home.setTopic(post.topicID, { feedback: null }));
+  if (home.state.value && homePosts(home.state.value).find(item => item.id === post.id)?.feedback !== 'less') lessNotices.delete(post.id);
+}
+async function dismissPost(post: HomePost) {
+  await run(() => home.dismissPost(post.id));
+  if (!homePosts(home.state.value).some(item => item.id === post.id)) lessNotices.delete(post.id);
+}
 function act(card: HomePost, kind: HomePostAction, prompt?: string) {
   if (kind === 'thread') return openThread(card.topicID);
   if (kind === 'comment') return openPost(card.id);
@@ -102,7 +120,10 @@ function act(card: HomePost, kind: HomePostAction, prompt?: string) {
   if (kind === 'reply' && card.contactID) { if (prompt) suggestDraft(card.contactID, prompt); return navigateTo(`/chats/${card.contactID}`); }
   if (kind === 'hide') return run(() => home.setTopic(card.topicID, { status: 'hidden' }));
   const feedback = kind === 'more' || kind === 'less' ? (card.feedback === kind ? null : kind) : null;
-  return run(() => home.setTopic(card.topicID, { feedback }));
+  return run(async () => {
+    await home.setTopic(card.topicID, { feedback });
+    if (feedback === 'less') lessNotices.add(card.id);
+  });
 }
 const progressPhoto = computed(() => {
   const contact = chats.contacts.value.find(item => item.id === feed.value?.progress?.contactID);
@@ -153,8 +174,11 @@ function origin(topic: HomeFeed['topics'][number]) {
     <div class="home-inner thread">
       <AppNotice v-if="actionError">{{ actionError }}</AppNotice>
       <div v-if="threadPosts.length" class="timeline">
-        <HomePost v-for="(post, index) in threadPosts" :key="post.id" :post="post" in-thread :chained="index < threadPosts.length - 1"
-          @action="(kind, prompt) => act(post, kind, prompt)" />
+        <template v-for="(post, index) in threadPosts" :key="post.id">
+          <HomePostLessNotice v-if="showsLessNotice(post)" :busy="busy" @undo="undoLess(post)" @dismiss="dismissPost(post)" />
+          <HomePost v-else :post="post" in-thread :chained="index < threadPosts.length - 1"
+            @action="(kind, prompt) => act(post, kind, prompt)" />
+        </template>
       </div>
       <AppEmptyState v-else-if="feed" class="home-empty" icon="sparkle" :title="$t('updates.feed.threadGoneTitle')"
         :text="$t('updates.feed.threadGoneText')" />
@@ -207,8 +231,11 @@ function origin(topic: HomeFeed['topics'][number]) {
 
       <button v-if="fresh" class="fresh" @click="showFresh"><AppIcon name="arrow-up" />{{ $t('updates.feed.newPosts', fresh) }}</button>
       <div v-if="posts.length" class="timeline">
-        <HomePost v-for="post in posts" :key="post.id" :post="post" :thread-count="threadCounts.get(post.topicID)"
-          @action="(kind, prompt) => act(post, kind, prompt)" />
+        <template v-for="post in posts" :key="post.id">
+          <HomePostLessNotice v-if="showsLessNotice(post)" :busy="busy" @undo="undoLess(post)" @dismiss="dismissPost(post)" />
+          <HomePost v-else :post="post" :thread-count="threadCounts.get(post.topicID)"
+            @action="(kind, prompt) => act(post, kind, prompt)" />
+        </template>
       </div>
       <AppEmptyState v-else-if="setup === 'creating_contacts'" class="home-empty" icon="sparkle" :title="$t('updates.feed.circleTitle')"
         :text="$t('updates.feed.circleText')">
@@ -239,6 +266,8 @@ function origin(topic: HomeFeed['topics'][number]) {
               @click="followSuggestion(item.title)">
               {{ followingSuggestion === item.title ? $t('updates.feed.followingTopic') : $t('updates.feed.follow') }}
             </AppButton>
+            <AppIconButton icon="close" size="small" :disabled="busy" :tooltip="false"
+              :label="$t('updates.feed.notInterestedIn', { title: item.title })" @click="dismissSuggestion(item.title)" />
           </li>
         </ul>
         <button class="link-button" @click="following = true">{{ $t('updates.feed.followSomethingElse') }}</button>
@@ -305,6 +334,9 @@ function origin(topic: HomeFeed['topics'][number]) {
 .timeline > :deep(.home-post) { padding: var(--space-5) var(--space-5) var(--space-2); border: 1px solid var(--md-outline-variant); border-radius: var(--ui-pane-radius); }
 .thread .timeline { gap: 0; margin: 0; }
 .thread .timeline > :deep(.home-post) { padding: var(--space-3) var(--space-4) var(--space-1); border: 0; border-radius: 0; }
+.timeline > :deep(.home-post.less-notice) { padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5); }
+.thread .timeline > :deep(.home-post.less-notice) { padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); }
+.suggestions li > :last-child { margin-inline-start: calc(-1 * var(--space-2)); }
 .placeholder { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--space-3); padding: var(--space-5); border: 1px solid var(--md-outline-variant); border-radius: var(--ui-pane-radius); animation: pulse 1.4s ease-in-out infinite alternate; }
 .placeholder .avatar-dot { width: 40px; height: 40px; border-radius: 50%; background: var(--md-surface-container-high); }
 .placeholder .lines { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-1); }

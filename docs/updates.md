@@ -46,7 +46,8 @@ This is a first implementation (2026-10-30). See [verification](#verification).
   count) opens the post to [comment](#comments) on it. ⋯ (or a long press on iOS) offers **Message {contact}**, **Less like
   this** and **Hide from For you**. Feedback is per topic, so every post on a topic shows
   the same heart. Hidden topics never come back unless the person shows them again in
-  **Topics**.
+  **Topics**. On the web, **Less like this** turns that post into a
+  [notice](#less-like-this) instead of leaving it unchanged.
 - **Timeline** (both clients): a single column of posts, each led by the contact
   (avatar, "name › topic · age"), then its text and the card in a rounded frame. Each
   kind shows one headline, two matches, three figures or items, four table rows (plus
@@ -301,8 +302,24 @@ On the web, on screens at least 1100px wide (the pane beside the navigation rail
 about 1000px), a sticky **Topics to follow** column sits to the right
 of the timeline, like X's sidebar. **Follow** sends the title through the existing
 `POST /home/topics`, which starts a run; **Follow something else** opens the Follow
-sheet. The column is hidden when there are no suggestions, during setup and on narrower
-screens. **Web only** by request: iOS ignores `suggestions` for now.
+sheet. The ✕ beside **Follow** (**Not interested**) calls `POST /home/suggestions/dismiss`,
+which saves the suggestion as a hidden topic (`source` `curator`, no run): `GET /home`
+then drops it from `suggestions` and the editor never suggests it again, like any hidden
+topic. It appears as hidden in **Topics**, where **Show** follows it. The column is hidden
+when there are no suggestions, during setup and on narrower screens. **Web only** by
+request: iOS ignores `suggestions` for now.
+
+## Less like this
+
+**Less like this** records `feedback: less` on the topic, as before (the editor lowers or
+drops it on the next plan). On the web the post it was chosen on then stays in place as a
+short notice, "Got it. You'll see less like this.", with **Undo** (clears the feedback and
+shows the post again) and ✕, which calls `POST /home/posts/:id/dismiss`: that one post gets
+`home_post.dismissed_at` (migration 0098) and is no longer returned by `GET /home` or
+counted by the badge, on any client; its topic and other posts are untouched. The notice
+appears only once the feedback is saved and lasts until the page is reloaded; clearing the
+feedback from another post of the topic also restores it. iOS keeps the menu toggle without
+the notice.
 
 ## Comments
 
@@ -570,6 +587,8 @@ Reads are limited to 90 per minute, writes to 20 per minute.
 | `POST /api/v1/home/refresh` | Request an update (409 when For you is turned off). Returns the feed. |
 | `POST /api/v1/home/topics` `{ text }` | Follow something (1–400 characters, at most 20 active requests). Returns the feed (201). |
 | `POST /api/v1/home/posts/:id/comments` `{ text }` | Comment on a post (1–1,000 characters); its contact answers in the background. `409` while a reply is pending or at 20 comments, `404` when the post or its contact is gone. Returns the feed (201). |
+| `POST /api/v1/home/suggestions/dismiss` `{ title }` | Not interested in a [topic to follow](#topics-to-follow): saves it as a hidden topic without starting a run. `404` when it is no longer listed. Returns the feed. |
+| `POST /api/v1/home/posts/:id/dismiss` | Remove one post from For you ([less like this](#less-like-this)). Returns the feed. |
 | `PATCH /api/v1/home/topics/:id` `{ status?, feedback? }` | `status`: `active` or `hidden`; `feedback`: `more`, `less` or `null`. Hiding deletes the card and its posts. Returns the feed. |
 
 `enabled` is `false` when `HOME_FEED_ENABLED` is not `"true"` or no model key is

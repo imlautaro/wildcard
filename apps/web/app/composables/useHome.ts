@@ -101,6 +101,8 @@ export function useHome() {
     update: () => mutate('refresh', 'POST', {}),
     follow: (text: string) => mutate('topics', 'POST', { text }),
     comment: (postID: string, text: string) => mutate(`posts/${encodeURIComponent(postID)}/comments`, 'POST', { text }),
+    dismissSuggestion: (title: string) => mutate('suggestions/dismiss', 'POST', { title }),
+    dismissPost: (id: string) => mutate(`posts/${encodeURIComponent(id)}/dismiss`, 'POST', {}),
     setTopic: (id: string, patch: { status?: 'active' | 'hidden'; feedback?: 'more' | 'less' | null }) => mutate(`topics/${id}`, 'PATCH', patch),
   };
 }

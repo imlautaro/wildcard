@@ -61,13 +61,17 @@
       "topicsToFollow": "Temas para seguir",
       "followTopic": "Seguir {title}",
       "followingTopic": "Siguiendo…",
-      "followSomethingElse": "Seguir otra cosa"
+      "followSomethingElse": "Seguir otra cosa",
+      "notInterestedIn": "No me interesa {title}"
     },
     "post": {
       "options": "Opciones de la publicación",
       "message": "Enviar mensaje a {name}",
       "lessLikeThis": "Menos como esto",
       "undoLessLikeThis": "Deshacer menos como esto",
+      "lessNotice": "Entendido. Verás menos como esto.",
+      "lessNoticeUndo": "Deshacer",
+      "lessNoticeDismiss": "Quitar esta publicación",
       "hide": "Ocultar de Para ti",
       "replyingTo": "En respuesta a {name}",
       "showLess": "Mostrar menos",

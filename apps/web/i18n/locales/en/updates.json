@@ -61,13 +61,17 @@
       "topicsToFollow": "Topics to follow",
       "followTopic": "Follow {title}",
       "followingTopic": "Following…",
-      "followSomethingElse": "Follow something else"
+      "followSomethingElse": "Follow something else",
+      "notInterestedIn": "Not interested in {title}"
     },
     "post": {
       "options": "Post options",
       "message": "Message {name}",
       "lessLikeThis": "Less like this",
       "undoLessLikeThis": "Undo less like this",
+      "lessNotice": "Got it. You’ll see less like this.",
+      "lessNoticeUndo": "Undo",
+      "lessNoticeDismiss": "Remove this post",
       "hide": "Hide from For you",
       "replyingTo": "Replying to {name}",
       "showLess": "Show less",
