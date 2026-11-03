@@ -2119,6 +2119,20 @@ through the automatic pipeline before the Worker that writes the columns. Verify
 release with `GET /api/v1/home` returning `suggestions` after a run. Rollback keeps 0096:
 older Workers ignore both columns, and older clients ignore `quote` and `suggestions`.
 
+### Initiative topic labels — migration 0097
+
+`0097_initiative_topic.sql` follows every migration through 0096. It adds the nullable
+`chat_turn.initiative_topic` with a CHECK over the fixed subject list in
+`chat/initiative.ts` (see [Topic variety](initiative.md#topic-variety)). The label query
+uses the existing `initiative_budget_idx`. No table rebuild, resource, binding, secret,
+Cron Trigger or Wrangler change.
+
+Apply locally with `npx wrangler d1 migrations apply DB --local`; production applies it
+through the automatic pipeline before the Worker that writes the column. Verify after
+release that new spontaneous rows have `initiative_topic` set (for example through the
+debug export). Rollback keeps 0097: older Workers ignore the column; adding a subject
+later requires a table rebuild because SQLite cannot alter a CHECK.
+
 ## Remote native device execution
 
 The [remote timer/alarm prototype](native-remote.md) reuses the API Worker, D1,

@@ -359,7 +359,8 @@ kinds.
 ### Planner and policy
 
 - Ambient sending is the default when allowed and something specific fits: follow-ups
-  on what the person mentioned, an idea or take connected to their interests, a
+  on what the person mentioned, an idea or take grounded in the contact's own
+  specialties, persona or this chat (see [Topic variety](#topic-variety)), a
   pending curiosity or a greeting suited to the moment. Invented news, offline
   experiences, guilt and external-action claims remain forbidden.
 - `adaptivePolicy` no longer requires a social classification for ambient outreach;
@@ -383,3 +384,42 @@ immediate welcome claim, sweep selection (including welcome-only chats) and upse
 No live inference, Workflow run, client session or device was exercised; the opt-in
 `scripts/checks/initiative.cjs` harness has not been updated for 0094. Measure the
 decision logs before tuning the cadence.
+
+## Topic variety
+
+Requested 2026-11-03: in testing, most contacts texted first about music or films, so
+several contacts opening the same subject felt artificial. Two causes: the planner's
+example openers ("a recommendation connected to their interests") steered every
+contact toward the same safe subjects, since contacts may not invent news or offline
+experiences; and each planner only sees its own chat.
+
+- **Prompt.** Openers come from the contact's own specialties and persona, something
+  the person actually said, or their memories. The planner is told not to fall back on
+  music, films, series or book recommendations unless its specialties, the chat or the
+  memories clearly point there.
+- **Shared labels (migration 0097).** Each spontaneous message the planner sends
+  carries a `topic` from a fixed list (`initiativeTopics` in `chat/initiative.ts`:
+  `music`, `film-tv`, `books`, `games`, `technology`, `science`, `food`, `sports`,
+  `art-design`, `places-culture`, `ideas`, `humor`, `everyday`, `follow-up`, `other`),
+  stored in `chat_turn.initiative_topic`. The planner receives
+  `otherContactsRecentTopics`: the labels and counts of spontaneous messages that the
+  person's **other** contacts published in the last **48 hours** (`topicWindow`), and
+  picks a different subject unless its own chat is about one of them. `follow-up` and
+  `other` are not shared, because they say nothing about subject overlap and a
+  follow-up is about the person's own news.
+- **Privacy.** Only the fixed label and a count cross chats: never message text,
+  contact names or who sent it, and the planner is told never to mention other
+  contacts' messages. Chats marked **Keep this chat private** and connector (MCP)
+  chats neither give nor receive labels. The labels are independent of "Contacts share
+  with each other", since they carry no facts about the person (see
+  [Privacy](privacy.md)).
+- **Limits.** A missing or invalid `topic` does not discard the decision; the message
+  is stored unlabeled. Welcomes, messages published before 0097 and human turns have
+  no label. Two contacts evaluated at the same moment cannot see each other's choice.
+  Welcomes do not bring up a topic, so they are unaffected.
+
+Validation was static: API TypeScript and the migration, the label query and the
+extended insert prepared with `EXPLAIN` on local workerd D1.
+`scripts/checks/initiative-sql-compile.py` already failed before this change
+("Unresolved initiative SQL template") and was not updated. No live inference or
+production behavior has been measured yet.

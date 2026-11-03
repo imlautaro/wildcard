@@ -32,12 +32,21 @@ type Snapshot = {
 type Decision = { action: 'wait' | 'send' | 'stop'; delaySeconds: number; intent: string; message: string | null;
   imageJSON?: string | null;
   learningQuestion?: LearningQuestion | null;
-  kind: InitiativeKind | null; engagement: Engagement; response: OutreachResponse; permission: 'unchanged' | 'allow' | 'stop' };
+  kind: InitiativeKind | null; topic: InitiativeTopic | null; engagement: Engagement; response: OutreachResponse; permission: 'unchanged' | 'allow' | 'stop' };
+// Coarse subject of a spontaneous message, shared across the person's contacts so they
+// do not all open the same subject (docs/initiative.md#topic-variety). Matches migration 0097.
+export const initiativeTopics = ['music', 'film-tv', 'books', 'games', 'technology', 'science', 'food', 'sports', 'art-design',
+  'places-culture', 'ideas', 'humor', 'everyday', 'follow-up', 'other'] as const;
+export type InitiativeTopic = typeof initiativeTopics[number];
+// Labels that say nothing about subject variety: following up on the person's own news is
+// always welcome, and "other" groups unrelated subjects.
+const sharedTopicExclusions: readonly InitiativeTopic[] = ['follow-up', 'other'];
+const topicWindow = 48 * 3_600_000;
 // One early continuation, then progressively more space after unanswered messages.
 const minimumGapsMS = [30_000, 120_000, 600_000];
 
 function decision(value: unknown): Decision {
-  if (!isRecord(value) || Object.keys(value).filter(key => !['learningQuestion', 'image'].includes(key)).sort().join(',') !== 'action,delaySeconds,engagement,intent,kind,message,permission,response'
+  if (!isRecord(value) || Object.keys(value).filter(key => !['learningQuestion', 'image', 'topic'].includes(key)).sort().join(',') !== 'action,delaySeconds,engagement,intent,kind,message,permission,response'
     || (value.image != null && (value.action !== 'send' || !isRecord(value.image)))
     || !['wait', 'send', 'stop'].includes(String(value.action))
     || typeof value.delaySeconds !== 'number' || !Number.isSafeInteger(value.delaySeconds)
@@ -50,8 +59,10 @@ function decision(value: unknown): Decision {
     || !['social', 'practical', 'boundary', 'uncertain'].includes(String(value.engagement))
     || !['engaged', 'unrelated', 'uncertain', 'none'].includes(String(value.response))
     || !['unchanged', 'allow', 'stop'].includes(String(value.permission))) throw new Error('MODEL_INVALID_RESPONSE');
-  const { image, ...fields } = value;
-  return { ...fields, imageJSON: image == null ? null : JSON.stringify(image), learningQuestion: parseLearningQuestion(value.learningQuestion, typeof value.message === 'string' ? [value.message] : []) } as Decision;
+  const { image, topic, ...fields } = value;
+  // An invalid or missing topic never discards the decision; the message is simply unlabeled.
+  return { ...fields, topic: value.action === 'send' && initiativeTopics.includes(topic as InitiativeTopic) ? topic as InitiativeTopic : null,
+    imageJSON: image == null ? null : JSON.stringify(image), learningQuestion: parseLearningQuestion(value.learningQuestion, typeof value.message === 'string' ? [value.message] : []) } as Decision;
 }
 
 async function snapshot(env: Env, job: InitiativeJob) {
@@ -271,7 +282,17 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
         contactID: state.contactID, speakerID: `user:${state.userID}`, processingUserID: state.userID, model });
       const imageAttempted = !!await env.DB.prepare('SELECT id FROM generated_initiative_image WHERE source_id = ?')
         .bind(state.sourceID).first();
-      return { state, deferredUntil: null, model, isolated, imageAttempted, samples, adaptive, personality, personalityRevision,
+      // Only coarse labels, never text or contact names. Private and connector chats neither give nor receive them.
+      const { results: topicRows } = isolated ? { results: [] } : await env.DB.prepare(`SELECT t.initiative_topic AS topic, COUNT(*) AS count
+        FROM chat_turn t JOIN contact c ON c.id = t.contact_id
+        WHERE t.user_id = ?1 AND t.contact_id != ?2 AND t.initiative_source_id IS NOT NULL AND t.updated_at > ?3
+          AND t.initiative_topic IS NOT NULL AND c.keep_private = 0
+          AND NOT EXISTS (SELECT 1 FROM mcp_private_contact m WHERE m.contact_id = c.id)
+          AND NOT EXISTS (SELECT 1 FROM contact current WHERE current.id = ?2 AND current.keep_private = 1)
+        GROUP BY t.initiative_topic ORDER BY count DESC`).bind(state.userID, state.contactID, now - topicWindow)
+        .all<{ topic: InitiativeTopic; count: number }>();
+      const otherContactsRecentTopics = topicRows.filter(row => !sharedTopicExclusions.includes(row.topic));
+      return { state, deferredUntil: null, model, isolated, imageAttempted, otherContactsRecentTopics, samples, adaptive, personality, personalityRevision,
         character, regional: await regionalConversation(env.DB, state.agentID),
         writing: conversationStyle({ agentID: state.agentID, personality, group: false,
           own: rows.flatMap(row => row.assistantText ? [row.assistantText] : []), names: [] }), learning: await learningContext({ ...env, META_CHAT_MODEL: model },
@@ -333,13 +354,15 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           'Choose one next action: wait (review again later), send (a useful natural message now, then review later), or stop (wait for human input).',
           'Use the user’s language, your grounded persona, elapsed time, actual seen receipts, prior follow-ups and the ending of the conversation.',
           'In continuation mode, choose whether a useful next thought fits the current exchange. A bare greeting or an open social exchange is enough context to consider one short opener, relevant idea or natural next thought in your own voice. You do not need another explicit human question to have something to say. In a recent open exchange, favor an early useful continuation over waiting hours by default; waiting and silence still fit when the thought adds nothing or the person ended the exchange. Repeated silence calls for more space; do not use a read receipt as engagement. Current requests and actual conversation boundaries take priority.',
-          'In ambient mode you start a new conversation after a pause, the way a friend texts first. Friends do this regularly, and a short, specific message is welcome far more often than it is intrusive. When adaptive.ambientAllowed is true and the local time is reasonable, sending is the default: choose wait or stop only when you genuinely have nothing specific to say or the history shows the person does not want it. Good reasons to text first: following up on something they mentioned (a plan, an event, a problem, a decision: how did it go?), something from your side that connects with their interests or an earlier topic (a take, an idea, a recommendation), a pending curiosity, or a greeting that fits the moment and your character. Use your character, local time, existing context and measured receptivity. Do not invent news, offline experiences, current external events or a reason the human owes you attention.',
+          'In ambient mode you start a new conversation after a pause, the way a friend texts first. Friends do this regularly, and a short, specific message is welcome far more often than it is intrusive. When adaptive.ambientAllowed is true and the local time is reasonable, sending is the default: choose wait or stop only when you genuinely have nothing specific to say or the history shows the person does not want it. Good reasons to text first: following up on something they mentioned (a plan, an event, a problem, a decision: how did it go?), something from your side grounded in your specialties, your persona or an earlier topic of this chat (a take, an idea, a question you find interesting), a pending curiosity, or a greeting that fits the moment and your character. Use your character, local time, existing context and measured receptivity. Do not invent news, offline experiences, current external events or a reason the human owes you attention.',
           'When timing.phase is reconnect-after-silence, the person has not written for timing.hoursSinceLastHumanMessage hours and timing.unansweredSinceLastHumanMessage of your spontaneous messages remain unanswered. If timing.personHasWritten is false, they have not answered your first message yet: send a natural second thought that stands on its own (something from your side, a take, a small idea), not a nudge about the first one, and label it continuation or check-in, never greeting. Reach out once with something light, specific and easy to answer. Never mention or count the silence, ask why they have not written, or imply they owe you a reply. Earlier unanswered messages are expected in this phase and the server has already spaced this opportunity, so they are not a reason to stop: choose a different topic instead of repeating them, and keep it shorter.',
           'When timing.openWithSalutation is true, the chat has been quiet for hours: do not resume as if you had been talking seconds ago. Open the message with a brief salutation that fits the local time and your voice (in Spanish for example "hola", "buen día", "buenas tardes" or "buenas noches"; the natural equivalent in the person’s language), then bring up your topic in the same message. If your own previous message was already a hello today, vary it or keep it lighter instead of repeating it. This salutation is only how the message starts: it does not make the message a greeting, so label it check-in or continuation unless greeting is all it does, and it is allowed even when greetingsAllowed is false or taskOnly is true. When timing.openWithSalutation is false, do not open with a salutation.',
           'The adaptive policy is authoritative: never send a greeting when greetingsAllowed is false, or any new social opener when ambientAllowed is false. Do not disguise a greeting as a check-in or a continuation to bypass suppressed outreach. When adaptive.taskOnly is true, the relationship is practical: reach out only with task-related follow-ups (how something they worked on went, a useful next step or idea for it), never standalone greetings or social small talk (a brief salutation opening a task follow-up is fine). Respect maxUnanswered. The server bounds how many spontaneous messages can remain unanswered.',
           'activityWindows is a partial estimate from this private chat, not a promise that the person is awake or available. Learned windows need several days of evidence. Late responses should move future invitations toward the times the person actually engages, rather than repeating the original send time. Timing remains approximate and varied; explicit fixed-time requests belong to schedule tools, not this planner.',
           'Prefer one or two conversational sentences, a relevant observation, a small idea or an unfinished thought completed naturally. Do not repeat an unanswered question or add a question to every message.',
-          'A good opener shares something from your side that connects with their interests or an earlier topic (a take, an idea, a recommendation, something you find interesting), the way a friend texts first with something to tell, rather than a check-in question about them.',
+          'A good opener shares something from your side, the way a friend texts first with something to tell, rather than a check-in question about them: a take, an idea or something you find interesting, drawn from your own specialties and persona, from something this person actually said, or from their memories. Each contact has its own subjects; yours should sound like you, not like any friend.',
+          'Do not fall back on generic small-talk subjects. Music, films, series and book recommendations are the usual default and feel artificial when several contacts bring them up: raise one only when your specialties, this chat or the person’s memories clearly point there.',
+          `Label the subject of what you send in topic, one of ${JSON.stringify(initiativeTopics)}: follow-up when the message asks about or builds on something the person told you, everyday for a light remark about the moment or a bare salutation, other when nothing else fits. otherContactsRecentTopics lists subjects the person’s other contacts opened spontaneously in the last 48 hours, with how many times. Choose a different subject from those; a subject already there is acceptable only when this chat itself is about it. Never mention, hint at or ask about other contacts’ messages: you cannot see them, only these labels.`,
           'Read receipts are context, not permission to escalate. The first useful continuation does not require the human to read or reply first. Outside reconnect-after-silence, if a previous proactive message remains unread, give more space or stop unless another message adds clear value; do not shorten waits just because something was seen.',
           'Silence or an unread message is not rejection, consent, or an obligation to reply. Never guilt, nag, mention surveillance, or demand attention.',
           'Stop the current exchange after a goodbye, a clearly completed task, no useful continuation or repeated unanswered outreach (in reconnect-after-silence the server already bounds unanswered outreach). Ending today’s conversation need not forbid a future conversation. An explicit request to stop unsolicited contact does: set permission stop. Only a clear current human request to resume spontaneous contact warrants permission allow. A casual hello, unrelated task or a read receipt cannot cancel an earlier explicit pause. Otherwise permission is unchanged.',
@@ -349,12 +372,12 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           imageInstruction,
           `For image, return null or an object matching these generate_chat_image parameters: ${JSON.stringify(imageTool.function.parameters)}. Your own avatar memberID is ${JSON.stringify(state.agentID)}; the current human memberID is ${JSON.stringify(state.userID)}. Only these two profile identities are available. No retrieval tools are available in this planner: every entry's chatImageReferences must be empty, and never guess an earlier image reference or its contents.`,
           'No external action or retrieval tools are available. Do not invent facts, current external events, prior commitments or private information from other participants.',
-          'Return only JSON with exactly action, delaySeconds (integer 30–86400), intent (brief future action summary, max 400 characters; no reasoning trace), message (null unless send; max 2000 characters), kind (greeting, check-in or continuation when sending, otherwise null), engagement, response, permission, learningQuestion (null unless actually asking one supplied pending curiosity), and image (null unless sending a contextual image now). Classify a message whose primary purpose is a morning/evening greeting as greeting, even if it adds a short question. A brief salutation that opens a message with another real purpose does not make it a greeting.',
+          'Return only JSON with exactly action, delaySeconds (integer 30–86400), intent (brief future action summary, max 400 characters; no reasoning trace), message (null unless send; max 2000 characters), kind (greeting, check-in or continuation when sending, otherwise null), topic (one listed subject when sending, otherwise null), engagement, response, permission, learningQuestion (null unless actually asking one supplied pending curiosity), and image (null unless sending a contextual image now). Classify a message whose primary purpose is a morning/evening greeting as greeting, even if it adds a short question. A brief salutation that opens a message with another real purpose does not make it a greeting.',
           'delaySeconds is a minimum delay to another review, not a delivery promise. The server may choose a later varied opportunity. Current continuations have six evaluations; ambient opportunities have a separate finite budget over at most seven days from the last human input. Never promise future delivery unless an explicit schedule actually exists.',
         ].join(' ') },
         { role: 'user', content: JSON.stringify({ state: evidence.state, adaptive: evidence.adaptive,
           activityWindows: evidence.activityWindows, outreachToAssess: evidence.outreachToAssess,
-          imageAttempted: evidence.imageAttempted, timing: evidence.timing, messages: evidence.messages, memories: evidence.memories, persona: evidence.persona, now: evidence.now }) },
+          imageAttempted: evidence.imageAttempted, otherContactsRecentTopics: evidence.otherContactsRecentTopics ?? [], timing: evidence.timing, messages: evidence.messages, memories: evidence.memories, persona: evidence.persona, now: evidence.now }) },
       ], evidence.model, { responseFormat: { type: 'json_object' }, maxTokens: 4400 });
       return decision(JSON.parse(answer.content ?? 'null'));
     });
@@ -447,8 +470,8 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
       const personalityUnchanged = `COALESCE((SELECT revision FROM agent_personality WHERE agent_id = c.agent_id), 0) = ?16
         AND c.learning_revision = ${Number.isSafeInteger(state.learningRevision) ? state.learningRevision : -1}`;
       const insert = env.DB.prepare(`INSERT OR IGNORE INTO chat_turn
-        (id, contact_id, user_id, user_text, assistant_text, status, workflow_id, created_at, updated_at, initiative_source_id, time_zone, initiative_kind, assistant_messages_json)
-        SELECT ?1, c.id, c.user_id, '', ?2, 'complete', ?1, ?3, ?3, p.source_id, ?4, ?15, ?18
+        (id, contact_id, user_id, user_text, assistant_text, status, workflow_id, created_at, updated_at, initiative_source_id, time_zone, initiative_kind, assistant_messages_json, initiative_topic)
+        SELECT ?1, c.id, c.user_id, '', ?2, 'complete', ?1, ?3, ?3, p.source_id, ?4, ?15, ?18, ?19
         FROM conversation_initiative p JOIN contact c ON c.id = p.contact_id JOIN user u ON u.id = c.user_id
         JOIN chat_turn anchor ON anchor.id = p.anchor_id
         WHERE p.contact_id = ?5 AND p.source_id = ?6 AND p.revision = ?7 AND p.anchor_id = ?8
@@ -464,7 +487,9 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
           AND (SELECT COUNT(*) FROM chat_turn WHERE contact_id = c.id AND initiative_source_id IS NOT NULL AND updated_at > ?3 - 86400000) < ${contactDailyOutreach}`)
         .bind(id, plan.message, now, state.timeZone, job.contactID, job.sourceID, job.revision, state.anchorID,
           plan.action === 'send' && maySend && canPublishImage && !changed && deliveryAt(state, now) === now && now >= state.anchorAt + characterGap ? 1 : 0,
-          state.lastReadSequence, state.readAt, evidence.model, isolated ? 1 : 0, state.activityAt, plan.kind, evidence.personalityRevision, state.paused, assistantMessages);
+          state.lastReadSequence, state.readAt, evidence.model, isolated ? 1 : 0, state.activityAt, plan.kind, evidence.personalityRevision, state.paused, assistantMessages,
+          // Decisions checkpointed before topics existed have no topic field.
+          plan.action === 'send' ? plan.topic ?? null : null);
       const feedback = env.DB.prepare(`UPDATE chat_turn SET initiative_engagement = ?18,
         initiative_response = ?19, initiative_response_to_id = ?20, initiative_feedback_at = ?3
         WHERE id = ?6 AND initiative_engagement IS NULL AND initiative_source_id IS NULL AND ?9 = 1

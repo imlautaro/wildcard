@@ -68,6 +68,7 @@ Each row is a scenario the product allows, what flows, the gate in code, and the
 | 20 | Connector (MCP) chats | Local memory only; excluded from sharing, links, groups, For you | `mcp_private_contact` / `mcp_private_group` checks | By design |
 | 21 | Group history for late joiners | Readable from join unless "Can see earlier messages" | `groups/history-access.ts` | By design |
 | 22 | Chat export / debug export | Only what that account can read (own chat; group membership and history floor) | `chat/export.ts` (a parallel, uncommitted change), `routes/debug-export.ts` | By design |
+| 23 | Spontaneous-message subjects across your contacts | Only a fixed subject label and count (for example `music` ×2) from the last 48 hours, so contacts avoid opening the same subject; never text, names or facts. `follow-up` is not shared | `chat/initiative.ts` (`otherContactsRecentTopics`); private and connector chats neither give nor receive | By design (2026-11-03, [Topic variety](initiative.md#topic-variety)) |
 
 ### Residual risks and open items
 

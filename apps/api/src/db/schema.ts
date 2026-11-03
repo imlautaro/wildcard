@@ -137,6 +137,8 @@ export const chatTurn = sqliteTable('chat_turn', {
   toolsStarted: integer('tools_started', { mode: 'boolean' }).notNull().default(false),
   initiativeSourceId: text('initiative_source_id').references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'set null' }),
   initiativeKind: text('initiative_kind', { enum: ['continuation', 'greeting', 'check-in'] }),
+  initiativeTopic: text('initiative_topic', { enum: ['music', 'film-tv', 'books', 'games', 'technology', 'science', 'food', 'sports', 'art-design',
+    'places-culture', 'ideas', 'humor', 'everyday', 'follow-up', 'other'] }),
   initiativeEngagement: text('initiative_engagement', { enum: ['social', 'practical', 'boundary', 'uncertain'] }),
   initiativeResponse: text('initiative_response', { enum: ['engaged', 'unrelated', 'uncertain', 'none'] }),
   initiativeResponseToId: text('initiative_response_to_id').references((): AnySQLiteColumn => chatTurn.id, { onDelete: 'set null' }),
