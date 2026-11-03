@@ -42,7 +42,6 @@
     "infra:provision": "node scripts/provision.mjs",
     "infra:photos": "node scripts/provision.mjs",
     "db:migrate:local": "npm run db:migrate:local --workspace @wildcard/api",
-    "db:migrate:remote": "npm run db:migrate:remote --workspace @wildcard/api",
     "auth:setup:local": "npm run setup",
     "infra:ai-gateway": "node scripts/provision-ai-gateway.mjs",
     "test:lifecycle": "npm run test:lifecycle --workspace @wildcard/api",

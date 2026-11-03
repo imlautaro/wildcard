@@ -66,7 +66,7 @@ npm run setup      # alias: npm run auth:setup:local
 npm run dev        # or npm run dev:all for the API and the web app together
 ```
 
-Wrangler serves the API locally at `http://localhost:8787`. Local setup creates an
+Wrangler serves the API locally at `http://localhost:8787` (`API_PORT` changes it). Local setup creates an
 ignored `apps/api/.dev.vars` (auth secret plus any `META_API_KEY` /
 `ELEVENLABS_API_KEY` found in the environment or a root `.env`) and applies D1
 migrations. `npm run dev` runs `scripts/dev-api.mjs`, which starts Wrangler without
@@ -236,16 +236,18 @@ replies remain available. Each exchange also has a fixed 100-bot-message ceiling
 
 ## Infrastructure and releases
 
-See [infrastructure setup](infrastructure.md), including private R2 bucket
-provisioning before the first profile-photo release. The API uses Cloudflare Workers Builds connected to
+See [infrastructure setup](infrastructure.md). A fork deploys to its own account
+without editing versioned files, through Workers Builds or the opt-in GitHub Actions
+workflow; see [self-hosting](infrastructure.md#self-hosting). The first release
+creates D1 and the private R2 bucket. This installation uses Cloudflare Workers Builds connected to
 `imlautaro/wildcard` on `main`, targeting
 `https://wildcard-api.imlautaro.workers.dev`. Build command:
 `npm ci && npm run typecheck`; automatic deployment command: `npm run release:ci`.
-The release script requires Workers Builds, a clean checkout, the production branch,
+The release script requires CI (Workers Builds or GitHub Actions), a clean checkout, the production branch,
 and a matching source commit, then tags the Worker version with that commit.
 Releases apply D1 migrations before publishing and initialize the runtime auth
 secret on the first auth release, preserving it afterward. Chats also require the
-encrypted `META_API_KEY` build secret, copied securely to runtime by the release.
+encrypted `META_API_KEY` CI secret, copied securely to runtime by the release.
 Each account selects Muse Spark 1.3 Standard or Contributor in **Account**, with
 explicit Contributor acceptance and Standard as the database default. Existing
 shared-memory permissions remain independent; MCP chats always use Standard.
