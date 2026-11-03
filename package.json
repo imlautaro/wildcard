@@ -58,9 +58,6 @@
     "bindings": {
       "META_API_KEY": {
         "description": "**Required.** Meta Model API key for replies, contact generation and images (Muse Spark 1.3, Muse Image, Muse Voice Transcribe)."
-      },
-      "ELEVENLABS_API_KEY": {
-        "description": "Optional. ElevenLabs key for contact voices. Leave empty to turn voices off."
       }
     }
   }
