@@ -112,7 +112,49 @@ Actions on a fork, both on an account with an existing installation and on an em
 account (D1, R2, Workers, Workflows and Cron created by the first release); with the
 credential Workers Builds provides they remain unverified.
 
-### Resource creation order
+### Deploy to Cloudflare button
+
+The README and the provisioning guide link
+`https://deploy.workers.cloudflare.com/?url=https://github.com/imlautaro/wildcard`. The
+button copies the repository into the user's GitHub account as a new repository (one
+"source repo import" commit, not a fork) and creates **one** Workers Builds project
+connected to the Worker named in the root `wrangler.jsonc` (`wildcard-api`).
+
+- **Root `wrangler.jsonc`.** Exists only for the button. It names `wildcard-api` and
+  declares no bindings, so the button provisions nothing; the release creates D1 and R2.
+  Never deploy it directly.
+- **Commands.** The button prefills the root `build` (`npm run build`, the API dry
+  run) and `deploy` (`npm run deploy` = `scripts/release-all.mjs`: API release, web
+  build, web release). One project therefore releases both Workers.
+- **Secrets.** The form asks for every uncommented key in the root `.env.example`
+  (only `META_API_KEY`, described in `package.json` `cloudflare.bindings`) and stores
+  them as runtime secrets of `wildcard-api` before the first build; the release keeps
+  them and generates `BETTER_AUTH_SECRET`. The form does not accept empty values, so
+  `ELEVENLABS_API_KEY` is commented out there and is added later as a Worker secret.
+- **First build.** It runs on the seed repository's clone with the form's files written
+  over it, and `WORKERS_CI_COMMIT_SHA` was `main` instead of a SHA. In Workers Builds
+  the commit-match and clean-checkout checks are therefore notices (the branch check
+  stays fatal); the release is tagged with `HEAD` when the CI value is not a SHA.
+- **Connected-Worker variables.** Workers Builds sets `WRANGLER_CI_OVERRIDE_NAME`
+  (Wrangler deploys any config under that name) and `WRANGLER_CI_MATCH_TAG` (Wrangler
+  refuses to deploy unless the target Worker exists with that tag). `deployEnv` in
+  `scripts/lib/cloudflare.mjs` drops them, with `WRANGLER_CI_GENERATE_PREVIEW_ALIAS`,
+  for any Worker other than the connected one; otherwise the web release would replace
+  the API or fail with "The Worker wildcard-web was not found in your account". A
+  project connected to a renamed API Worker fails early with a message.
+- **Logs.** Migration output goes to a temporary file and only a summary reaches the
+  log; Wrangler reprints the whole table after each migration (about 18,000 lines on a
+  first release), which truncated the Workers Builds log before later errors.
+
+Verified on an empty account: the first build created D1 and R2, applied every
+migration and released the API (it failed at the web step before the
+`WRANGLER_CI_MATCH_TAG` fix). The next build, after a push to the new repository,
+created `wildcard-web`. Chat replies and contact generation with a portrait in R2
+worked. A single clean first build with every fix is not separately verified. To
+remove a button installation, delete the two Workers, their Workflows, D1, R2 and the
+generated repository.
+
+
 
 1. Optional, before the first push: `npx wrangler login` (or a scoped token in the
    shell), then `npm run infra:provision` to see the resolved account, names and
