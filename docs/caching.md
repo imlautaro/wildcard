@@ -626,6 +626,19 @@ metadata and discover tools separately after completion; catalog failure leaves 
 connected account with tools requiring refresh/review. See the OAuth guide for
 expiry, account switching and pending browser/device checks.
 
+## Account deletion
+
+Deleting your own account ([authentication](authentication.md#deleting-your-account))
+uses the same teardown as sign-out once the API returns 2xx, so nothing new is cached.
+Web resets every registered session cache, the proxy clears the cookie, and this
+browser's Web Push subscription and per-account opt-in key are removed (the server
+device row is already gone). iOS deletes the Keychain session, resets onboarding and
+generation stores, clears `PrivateImageCache` (memory and protected disk), and the
+`.signedOut` transition clears push and native-action state. A failed request keeps
+all caches and the session unchanged. Other people's clients lose the deleted
+account's groups, shared contacts and messages through their existing revalidation
+and confirmed access loss. Not verified on a device or browser.
+
 ## Account model preference
 
 The existing session-owned profile holds chatModel. iOS revalidates on Account entry; web deduplicates a background profile read on Account mount and rejects reads predating a model save, sign-out or account reset. A model save applies the returned profile synchronously. Web updates Contributor flags on cached lists/groups and rejects older snapshots without clearing message history, drafts or pending UUIDs. iOS cancels group-detail reads, removes secondary sharing snapshots, wakes list synchronization and refreshes invitation consent flags; group details revalidate on reopen. Existing bounded retention, eviction and account isolation remain unchanged. Gateway response caching is bypassed because the task is cost observation and includes private state/tool calls.

@@ -145,6 +145,13 @@ struct AuthAPI: Sendable {
         return try JSONDecoder().decode(UserResponse.self, from: response).user
     }
 
+    /// Permanent account deletion (docs/authentication.md#deleting-your-account). A wrong
+    /// password is HTTP 403, so it never reads as an expired session.
+    func deleteAccount(password: String, token: String) async throws {
+        let body = try JSONEncoder().encode(["password": password])
+        _ = try await send(path: "me", method: "DELETE", body: body, token: token)
+    }
+
     func signOut(token: String) async throws {
         _ = try await send(path: "auth/sign-out", method: "POST", body: Data("{}".utf8), token: token)
     }
@@ -301,6 +308,16 @@ struct AuthAPI: Sendable {
             }
             if path == "me/model", response.statusCode == 422 {
                 throw Failure.rejected(String(localized: "Choose a supported model and agree to Meta's Contributor data use before enabling Contributor."))
+            }
+            if path == "me", method == "DELETE" {
+                let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["code"] as? String
+                switch code {
+                case "INCORRECT_PASSWORD", "PASSWORD_REQUIRED": throw Failure.rejected(String(localized: "Incorrect password."))
+                case "SUPER_ADMIN": throw Failure.rejected(String(localized: "Super admin accounts can't be deleted here. Remove this account from the super admin list first."))
+                default:
+                    if response.statusCode == 429 { throw Failure.rejected(String(localized: "Too many attempts. Please wait a minute and try again.")) }
+                    throw Failure.rejected(String(localized: "Your account could not be deleted. Please try again."))
+                }
             }
             if path == "me", [400, 422].contains(response.statusCode) {
                 throw Failure.rejected(String(localized: "Use a name with 1–100 characters and no control characters."))

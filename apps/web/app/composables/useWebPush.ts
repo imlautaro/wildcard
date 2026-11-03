@@ -137,3 +137,13 @@ export function useWebPushLifecycle() {
   const count = computed(() => status.value === 'signed-in' ? chats.totalUnread.value : 0);
   useHead({ title: () => count.value > 0 ? `Wildcard (${count.value > 99 ? '99+' : count.value})` : 'Wildcard' });
 }
+
+/** After account deletion: the server already removed the device, so only unsubscribe this browser. */
+export async function forgetWebPush(userID: string | undefined) {
+  subscribed.value = false;
+  if (userID) writeOptIn(userID, false);
+  refreshSupport();
+  if (!supported.value) return;
+  try { await (await (await navigator.serviceWorker.getRegistration('/'))?.pushManager.getSubscription())?.unsubscribe(); }
+  catch { /* Nothing to remove. */ }
+}

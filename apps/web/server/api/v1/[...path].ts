@@ -75,7 +75,8 @@ export default defineEventHandler(async (event) => {
     if (value) forwarded.set(name, value);
   }
 
-  if (isSignOut) {
+  if (isSignOut || (url.pathname === '/api/v1/me' && method === 'DELETE' && upstream.ok)) {
+    // A deleted account's sessions are gone with it.
     clearSessionToken(event);
   } else if (isCredentialRequest && upstream.ok) {
     const issued = upstream.headers.get('set-auth-token');

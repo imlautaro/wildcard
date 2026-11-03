@@ -114,6 +114,10 @@ or last edited are removed; their revisions in other documents are removed too.
 The confirmation dialog discloses these effects. Independent copies or content
 another person subsequently incorporated into their own work cannot be recalled.
 
+People can also delete their own account from the apps ([authentication](authentication.md#deleting-your-account));
+that path records a `user.self_delete` event whose actor is the deleted account, so the
+overview labels it "Deleted their own account" and shows the actor's ID instead of a name. The 0069 requeue only reads `user.delete` events.
+
 Audit events retain only IDs and counts, never the target's email/name. Content-free
 rate/paid-usage records, platform logs/backups and completed external actions keep
 their documented retention; see [chat lifecycle](chat-lifecycle.md). Deleting an

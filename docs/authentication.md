@@ -16,6 +16,7 @@ All paths are relative to the configured API origin:
 | GET | `/api/v1/auth/get-session` | Current session or null; accepts signed bearer authentication |
 | POST | `/api/v1/auth/sign-out` | `{}`; revokes the current session |
 | GET | `/api/v1/me` | Signed bearer required; returns `{ "user": { "id", "name", "email", "emailVerified" } }` or HTTP 401 |
+| DELETE | `/api/v1/me` | Signed bearer required; body `{ "password": "<current password>" }`. 202 `{ deleted: true, cleanup: "pending" }`; see [deleting your account](#deleting-your-account) |
 
 Successful registration/sign-in returns the user in JSON and a signed session in
 `set-auth-token`. Native clients must save that header, not the unsigned token in
@@ -25,7 +26,8 @@ signed bearer tokens, uses database-backed sessions, and disables session cookie
 caching so revocation is checked against D1.
 
 Only the auth routes listed above are exposed. Password change/reset, email
-verification, sign-in OAuth, account sharing, and account deletion are not configured.
+verification, sign-in OAuth, and account sharing are not configured. Account deletion is
+the app's own `DELETE /api/v1/me`, not a Better Auth route.
 Passwords must contain 8–128 characters and are hashed by Better Auth's password
 implementation; plaintext passwords are never stored. Sessions expire after seven
 days and are refreshed after one day of activity. There is no stateless JWT or
@@ -54,9 +56,45 @@ Auth and account responses use `Cache-Control: no-store`. Application logs use a
 generic event name rather than credentials, request bodies, or provider errors.
 Better Auth may persist session IP/user-agent metadata in D1. Users, password
 hashes, and sessions persist in the account's D1 database; access and retention
-follow that installation's administrative controls. There is no user-facing account
-deletion or automatic account-retention policy yet. Deleting a user row cascades
-its sessions and credential accounts, and should only be done with authorization.
+follow that installation's administrative controls. People can delete their own
+account (below); there is no automatic account-retention policy. Deleting a user row
+cascades its sessions and credential accounts, and should only be done with authorization.
+
+## Deleting your account
+
+Account → **Delete account** on iOS and web opens a destructive confirmation that
+lists what is removed, including the effects on other people (owned groups disappear
+for every member, contacts the person created disappear for everyone they were
+shared with, and their messages in other people's groups are removed). The person
+must enter their current password; the button stays disabled until they do, and the
+dialog can't be dismissed while the request runs.
+
+`DELETE /api/v1/me` (1 KiB body limit, `Cache-Control: no-store`):
+
+- Admits at most five attempts per account per minute (`account-delete`), else 429
+  with `Retry-After`, so the password check can't be brute-forced faster than sign-in.
+- Requires `{ "password" }` (1–128 characters; 422 `PASSWORD_REQUIRED`) and checks it
+  against the account's `credential` row with Better Auth's password verifier. A
+  wrong password is **403 `INCORRECT_PASSWORD`, never 401**, so clients don't treat
+  it as an expired session and sign the person out.
+- Refuses accounts listed in `SUPER_ADMIN_USER_IDS` (409 `SUPER_ADMIN`), the same
+  rule as the admin panel; remove the ID from the roster first.
+- In one D1 batch, writes a content-free `user.self_delete` audit event (IDs and
+  counts only; actor and target are the deleted account) and deletes the `user`
+  row. Everything else is the same cascade, migration 0069 outbox and asynchronous
+  R2/Workflow cleanup as [admin deletion](admin.md#deleting-an-account). Returns
+  202 `{ deleted: true, cleanup: "pending" }`.
+
+After a 2xx the web proxy clears the session cookie, the web client unsubscribes this
+browser from Web Push and forgets its opt-in, resets every session-owned cache and
+opens sign-in. iOS deletes the Keychain session, resets its stores and private image
+cache, and returns to sign-in, which also clears push and native-action state
+(`WildcardApp`). Push devices and sessions are removed server-side by the cascade.
+Any error keeps the person signed in with the dialog open and a localized message.
+
+Not verified: an end-to-end deletion against a running API, the web dialog in a
+browser and the iOS sheet on a device. Static checks only (API and web
+typecheck, iOS `swiftc -typecheck`, locale checker).
 
 ## Native app
 

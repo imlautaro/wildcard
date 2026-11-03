@@ -13150,6 +13150,146 @@
           }
         }
       }
+    },
+    "Delete account" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar cuenta"
+          }
+        }
+      }
+    },
+    "Deleting…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminando…"
+          }
+        }
+      }
+    },
+    "Delete your account?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Eliminar tu cuenta?"
+          }
+        }
+      }
+    },
+    "Incorrect password." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contraseña incorrecta."
+          }
+        }
+      }
+    },
+    "Super admin accounts can't be deleted here. Remove this account from the super admin list first." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las cuentas de superadministrador no se pueden eliminar aquí. Primero quita esta cuenta de la lista de superadministradores."
+          }
+        }
+      }
+    },
+    "Your account could not be deleted. Please try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo eliminar tu cuenta. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "This permanently deletes your account and everything it owns. It can't be undone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto elimina para siempre tu cuenta y todo lo que contiene. No se puede deshacer."
+          }
+        }
+      }
+    },
+    "Your contacts and your chats with them, including memories, schedules, tasks, documents and mini apps." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus contactos y tus chats con ellos, incluidos memorias, programaciones, tareas, documentos y miniapps."
+          }
+        }
+      }
+    },
+    "Contacts you created also disappear for anyone you shared them with." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los contactos que creaste también desaparecen para las personas con quienes los compartiste."
+          }
+        }
+      }
+    },
+    "Groups you own, with every member's messages in them." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los grupos de tu propiedad, con los mensajes de todos sus miembros."
+          }
+        }
+      }
+    },
+    "Your photo, attachments, stickers, connections, and the messages you sent or requested in other people's groups." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu foto, adjuntos, stickers, conexiones y los mensajes que enviaste o solicitaste en grupos de otras personas."
+          }
+        }
+      }
+    },
+    "Shared task lists you created, tasks you created, were assigned or authorized for research or monitoring, documents you created or last edited, and your document revisions." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las listas de tareas compartidas que creaste, las tareas que creaste, que te asignaron o que autorizaste para investigación o seguimiento, los documentos que creaste o editaste por última vez y tus revisiones de documentos."
+          }
+        }
+      }
+    },
+    "Files and background work are removed shortly afterward, with automatic retries if a service is unavailable." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los archivos y el trabajo en segundo plano se eliminan poco después, con reintentos automáticos si un servicio no está disponible."
+          }
+        }
+      }
+    },
+    "Enter your password to confirm" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe tu contraseña para confirmar"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

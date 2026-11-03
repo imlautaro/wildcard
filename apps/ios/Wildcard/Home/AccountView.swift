@@ -17,6 +17,7 @@ struct AccountView: View {
     @State private var showingPrivacy = false
     @State private var savingPrivacy = false
     @State private var privacyError: String?
+    @State private var showingDeleteAccount = false
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
 
     private static let models = [
@@ -134,6 +135,10 @@ struct AccountView: View {
                 .disabled(auth.isBusy || editingIdentity || refreshingProfile || savingModel)
                 if auth.isBusy { ProgressView() }
             }
+            Section {
+                Button("Delete account", systemImage: "trash", role: .destructive) { showingDeleteAccount = true }
+                    .disabled(auth.isBusy || editingIdentity || refreshingProfile || savingModel)
+            }
             if let error = auth.error {
                 Text(error)
                     .foregroundStyle(.red)
@@ -143,6 +148,7 @@ struct AccountView: View {
         .onChange(of: contributorOnly) { _, locked in if locked { showingModel = false } }
         .sheet(isPresented: $showingNotifications) { notificationsSheet }
         .sheet(isPresented: $showingPrivacy) { PrivacyGuideSheet() }
+        .sheet(isPresented: $showingDeleteAccount) { DeleteAccountSheet() }
         .task {
             refreshingProfile = true
             defer { refreshingProfile = false }

@@ -7,6 +7,9 @@ import { readPhoto, validPhoto, removePhoto } from '../photos/storage';
 import { contributorModel, validChatModel } from '../lib/model-preference';
 import { readSetting } from '../admin/settings';
 import { voiceRepliesAvailable } from '../voice/catalog';
+import { verifyPassword } from 'better-auth/crypto';
+import { superAdmins } from '../admin/routes';
+import { cleanResources } from '../chat/cleanup';
 
 type Profile = { id: string; name: string; email: string; emailVerified: number; photoVersion: string | null; chatModel: string; onboardingRequired: number; contactsShare: number };
 const columns = 'id, name, email, email_verified AS emailVerified, photo_version AS photoVersion, chat_model AS chatModel, onboarding_required AS onboardingRequired, contacts_share AS contactsShare';
@@ -128,6 +131,43 @@ me.on(['PUT', 'DELETE'], '/photo', async (c) => {
   }
   if (previous.version) c.executionCtx.waitUntil(removePhoto(c.env, key(owner, previous.version)));
   return c.json({ user: responseUser(saved, c.get('contributorOnly')) });
+});
+
+// Self-service account deletion (docs/authentication.md#deleting-your-account).
+// The current password confirms it; a wrong one is 403, never 401, so clients do
+// not mistake it for an expired session. Same D1 cascade, migration 0069 outbox
+// and asynchronous R2/Workflow cleanup as the admin deletion (docs/admin.md).
+me.delete('/', bodyLimit({ maxSize: 1024 }), async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const owner = c.get('owner');
+  const admission = await admitAuthRequest(c.env.DB, owner, 'account-delete', 5);
+  if (!admission.allowed) {
+    c.header('Retry-After', String(admission.retryAfter));
+    return c.json({ error: 'Too many attempts. Please wait a minute.', code: 'RATE_LIMITED' }, 429);
+  }
+  const input = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!input || typeof input.password !== 'string' || !input.password || input.password.length > 128) {
+    return c.json({ error: 'Enter your password to confirm.', code: 'PASSWORD_REQUIRED' }, 422);
+  }
+  if (superAdmins(c.env).has(owner)) {
+    return c.json({ error: 'Remove this account from SUPER_ADMIN_USER_IDS before deleting it.', code: 'SUPER_ADMIN' }, 409);
+  }
+  const credential = await c.env.DB.prepare("SELECT password FROM account WHERE user_id = ? AND provider_id = 'credential' AND account_id = ?")
+    .bind(owner, owner).first<{ password: string | null }>();
+  if (!credential?.password || !await verifyPassword({ hash: credential.password, password: input.password })) {
+    return c.json({ error: 'Incorrect password.', code: 'INCORRECT_PASSWORD' }, 403);
+  }
+  const counts = await c.env.DB.prepare(`SELECT (SELECT COUNT(*) FROM contact WHERE user_id = ?1) AS contacts,
+      (SELECT COUNT(*) FROM contact_agent WHERE owner_id = ?1) AS ownedAgents,
+      (SELECT COUNT(*) FROM chat_group WHERE owner_id = ?1) AS ownedGroups`).bind(owner).first();
+  // Content-free audit entry (IDs and counts only); the actor is the deleted account.
+  await c.env.DB.batch([
+    c.env.DB.prepare('INSERT INTO admin_event (id, actor_id, action, target, details_json, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), owner, 'user.self_delete', owner, JSON.stringify(counts ?? {}), Date.now()),
+    c.env.DB.prepare('DELETE FROM user WHERE id = ?').bind(owner),
+  ]);
+  c.executionCtx.waitUntil(cleanResources(c.env));
+  return c.json({ deleted: true, cleanup: 'pending' }, 202);
 });
 
 export default me;

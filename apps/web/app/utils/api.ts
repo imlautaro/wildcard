@@ -73,6 +73,13 @@ function failureMessage(path: string, method: string, status: number, body: unkn
     if ([400, 403, 404, 409, 413, 422].includes(status)) return serverMessage(body) ?? translate('errors.groupsUnavailable');
     return translate('errors.groupsUnavailable');
   }
+  if (path === 'me' && method === 'DELETE') {
+    const code = body && typeof body === 'object' ? (body as Record<string, unknown>).code : null;
+    if (code === 'INCORRECT_PASSWORD' || code === 'PASSWORD_REQUIRED') return translate('errors.accountDeletePassword');
+    if (code === 'SUPER_ADMIN') return translate('errors.accountDeleteSuperAdmin');
+    if (status === 429) return translate('errors.rateLimited');
+    return translate('errors.accountDeleteFailed');
+  }
   if (path === 'me' && [400, 422].includes(status)) return translate('errors.invalidName');
   if (path === 'me/photo' && status === 409) return translate('errors.profileChanged');
   if (path.startsWith('contacts/sharing/')) {

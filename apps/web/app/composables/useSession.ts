@@ -85,6 +85,19 @@ async function signOut() {
   await navigateTo('/sign-in');
 }
 
+// Permanent account deletion, confirmed with the current password (docs/authentication.md).
+// A wrong password is 403, not 401, so it never looks like an expired session. On
+// success the proxy clears the cookie and this browser forgets its push opt-in.
+async function deleteAccount(password: string) {
+  const owner = user.value?.id;
+  await api('me', { method: 'DELETE', json: { password } });
+  await import('./useWebPush').then((module) => module.forgetWebPush(owner)).catch(() => {});
+  resetCaches();
+  user.value = null;
+  status.value = 'signed-out';
+  await navigateTo('/sign-in');
+}
+
 async function saveName(name: string) {
   user.value = (await api<{ user: AuthUser }>('me', { method: 'PATCH', json: { name } })).user;
 }
@@ -133,5 +146,5 @@ async function savePrivacy(contactsShare: boolean) {
 }
 
 export function useSession() {
-  return { user: readonly(user), features: readonly(features), status: readonly(status), restore, authenticate, signOut, saveName, savePhoto, saveModel, savePrivacy, refreshProfile };
+  return { user: readonly(user), features: readonly(features), status: readonly(status), restore, authenticate, signOut, deleteAccount, saveName, savePhoto, saveModel, savePrivacy, refreshProfile };
 }

@@ -3,10 +3,10 @@ useHead({ title: 'Overview' });
 const { overview, errors, loadOverview } = useAdmin();
 onMounted(loadOverview);
 
-const actions: Record<string, string> = { 'user.delete': 'Deleted an account', 'setting.update': 'Changed a setting' };
+const actions: Record<string, string> = { 'user.delete': 'Deleted an account', 'user.self_delete': 'Deleted their own account', 'setting.update': 'Changed a setting' };
 function describe(event: { action: string; target: string | null; details: Record<string, unknown> | null }) {
   if (event.action === 'setting.update') return `${event.target} → ${event.details?.value ? 'on' : 'off'}`;
-  if (event.action === 'user.delete') {
+  if (event.action === 'user.delete' || event.action === 'user.self_delete') {
     const contacts = Number(event.details?.contacts ?? 0);
     return `${event.target} · ${plural(contacts, 'contact')}, ${plural(Number(event.details?.ownedGroups ?? 0), 'owned group')}`;
   }
@@ -44,7 +44,7 @@ const stats = computed(() => overview.value ? [
         </AppListGroup>
         <AppListGroup v-if="overview.events.length" title="Recent admin activity">
           <div v-for="event in overview.events" :key="event.id" class="field">
-            <AppIcon :name="event.action === 'user.delete' ? 'delete' : 'flag'" class="leading" />
+            <AppIcon :name="event.action.startsWith('user.') ? 'delete' : 'flag'" class="leading" />
             <span class="two-line">
               <span>{{ actions[event.action] ?? event.action }} <span class="muted">· {{ event.actorName ?? event.actorID }}</span></span>
               <span class="small">{{ describe(event) }}</span>

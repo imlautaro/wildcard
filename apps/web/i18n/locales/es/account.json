@@ -78,6 +78,20 @@
       "progress": "Exportando {dataset} · {count} registro | Exportando {dataset} · {count} registros",
       "ready": "Exportación lista. Tu navegador guardará el archivo JSON."
     },
+    "deleteAccount": {
+      "title": "Eliminar cuenta",
+      "confirmTitle": "¿Eliminar tu cuenta?",
+      "intro": "Esto elimina para siempre tu cuenta y todo lo que contiene. No se puede deshacer.",
+      "contacts": "Tus contactos y tus chats con ellos, incluidos memorias, programaciones, tareas, documentos y miniapps.",
+      "agents": "Los contactos que creaste también desaparecen para las personas con quienes los compartiste.",
+      "groups": "Los grupos de tu propiedad, con los mensajes de todos sus miembros.",
+      "media": "Tu foto, adjuntos, stickers, conexiones y los mensajes que enviaste o solicitaste en grupos de otras personas.",
+      "shared": "Las listas de tareas compartidas que creaste, las tareas que creaste, que te asignaron o que autorizaste para investigación o seguimiento, los documentos que creaste o editaste por última vez y tus revisiones de documentos.",
+      "cleanup": "Los archivos y el trabajo en segundo plano se eliminan poco después, con reintentos automáticos si un servicio no está disponible.",
+      "password": "Escribe tu contraseña para confirmar",
+      "confirm": "Eliminar cuenta",
+      "deleting": "Eliminando…"
+    },
     "photoCrop": {
       "title": "Recortar foto",
       "help": "Arrastra para cambiar la posición y pellizca para hacer zoom. También puedes usar las flechas del teclado y el control de zoom.",

@@ -133,15 +133,38 @@ final class AuthStore {
         do {
             do { try await api.signOut(token: token) }
             catch AuthAPI.Failure.unauthorized { /* The session is already invalid. */ }
-            onboarding.reset(); contactGeneration.reset()
-            await images.clear()
-            try SessionKeychain.delete()
-            self.token = nil
-            user = nil
-            state = .signedOut
+            try await clearLocalSession()
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Permanently deletes the signed-in account after the API checks `password`
+    /// (docs/authentication.md#deleting-your-account), then clears local state like
+    /// sign-out. The server already removed the sessions and push devices.
+    func deleteAccount(password: String) async throws {
+        guard !isBusy, state == .signedIn else { throw CancellationError() }
+        isBusy = true
+        error = nil
+        defer { isBusy = false }
+        // An expired session signs out through withSession like every other account call.
+        try await withSession { api, token in try await api.deleteAccount(password: password, token: token) }
+        do { try await clearLocalSession() }
+        catch {
+            // The account is gone; never keep showing it even if Keychain removal failed.
+            self.token = nil
+            user = nil
+            state = .signedOut
+        }
+    }
+
+    private func clearLocalSession() async throws {
+        onboarding.reset(); contactGeneration.reset()
+        await images.clear()
+        try SessionKeychain.delete()
+        token = nil
+        user = nil
+        state = .signedOut
     }
 
     func withSession<Value>(_ operation: (AuthAPI, String) async throws -> Value) async throws -> Value {

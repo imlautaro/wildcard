@@ -3,6 +3,7 @@ const { t } = useI18n();
 const { user, features, saveName, savePhoto, saveModel, savePrivacy, refreshProfile, signOut } = useSession();
 const { exporting, progress, exportError, download, cancel } = useDebugExport();
 const exportSheet = ref(false);
+const deleteSheet = ref(false);
 onBeforeUnmount(cancel);
 const busy = ref(false);
 const error = ref<string | null>(null);
@@ -120,6 +121,11 @@ onMounted(async () => {
       <AppListGroup :footer="t('account.schedulesFooter')">
         <AppListItem icon="logout" danger :disabled="busy" @click="leave">{{ t('auth.signOut') }}</AppListItem>
       </AppListGroup>
+      <AppListGroup>
+        <AppListItem icon="delete" danger :disabled="busy" @click="deleteSheet = true">{{ t('account.deleteAccount.title') }}</AppListItem>
+      </AppListGroup>
+
+      <DeleteAccountDialog v-if="deleteSheet" @close="deleteSheet = false" />
 
       <AppSheet v-if="privacySheet" :title="t('account.privacy.howItWorks')" @close="privacySheet = false">
         <dl class="privacy-rules">

@@ -55,7 +55,9 @@ cleanup described in [admin](admin.md#deleting-an-account) (migration 0069). iOS
 and web lose account access through existing session checks and clear their
 session-owned caches on confirmed loss. Other people's surviving shared groups
 refresh through existing polling; independently copied content remains theirs.
-The admin action itself is available only in the operator panel. The web proxy
+People can also delete their own account from Account → Delete account on web and
+iOS, confirmed with their password; see [authentication](authentication.md#deleting-your-account).
+The web proxy clears the session cookie after a successful `DELETE /api/v1/me`. The web proxy
 also reads DELETE directly from the original Cloudflare Request to avoid Nitro's
 unbuffered mock-Node-body hang; native iOS calls the API directly and needs no
 transport change. Both empty DELETE requests and JSON-bearing requests need

@@ -78,6 +78,20 @@
       "progress": "Exporting {dataset} · {count} record | Exporting {dataset} · {count} records",
       "ready": "Export ready. Your browser will save the JSON file."
     },
+    "deleteAccount": {
+      "title": "Delete account",
+      "confirmTitle": "Delete your account?",
+      "intro": "This permanently deletes your account and everything it owns. It can't be undone.",
+      "contacts": "Your contacts and your chats with them, including memories, schedules, tasks, documents and mini apps.",
+      "agents": "Contacts you created also disappear for anyone you shared them with.",
+      "groups": "Groups you own, with every member's messages in them.",
+      "media": "Your photo, attachments, stickers, connections, and the messages you sent or requested in other people's groups.",
+      "shared": "Shared task lists you created, tasks you created, were assigned or authorized for research or monitoring, documents you created or last edited, and your document revisions.",
+      "cleanup": "Files and background work are removed shortly afterward, with automatic retries if a service is unavailable.",
+      "password": "Enter your password to confirm",
+      "confirm": "Delete account",
+      "deleting": "Deleting…"
+    },
     "photoCrop": {
       "title": "Crop Photo",
       "help": "Drag to reposition and pinch to zoom. You can also use the arrow keys and zoom slider.",
