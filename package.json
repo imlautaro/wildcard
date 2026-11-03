@@ -16,6 +16,7 @@
     "setup": "node scripts/setup-local.mjs",
     "dev": "npm run dev --workspace @wildcard/api",
     "dev:all": "node scripts/dev-all.mjs",
+    "smoke": "node scripts/smoke.mjs",
     "dev:web": "npm run dev --workspace @wildcard/web",
     "dev:admin": "npm run dev --workspace @wildcard/admin",
     "dev:site": "npm run dev --workspace @wildcard/site",
@@ -32,18 +33,25 @@
     "build:docs": "npm run build --workspace @wildcard/docs",
     "ios": "open apps/ios/Wildcard.xcodeproj",
     "release:ci": "node scripts/release-worker.mjs",
+    "release:check": "node scripts/release-worker.mjs --dry-run",
     "release:web": "node scripts/release-web.mjs",
     "release:admin": "node scripts/release-admin.mjs",
     "release:site": "node scripts/release-site.mjs",
     "release:docs": "node scripts/release-docs.mjs",
     "preview:web": "node scripts/preview-web.mjs",
-    "infra:provision": "node scripts/provision-d1.mjs",
+    "infra:provision": "node scripts/provision.mjs",
+    "infra:photos": "node scripts/provision.mjs",
     "db:migrate:local": "npm run db:migrate:local --workspace @wildcard/api",
     "db:migrate:remote": "npm run db:migrate:remote --workspace @wildcard/api",
     "auth:setup:local": "npm run setup",
-    "infra:photos": "node scripts/provision-photos.mjs",
     "infra:ai-gateway": "node scripts/provision-ai-gateway.mjs",
     "test:lifecycle": "npm run test:lifecycle --workspace @wildcard/api",
     "typecheck:lifecycle": "npm run typecheck:lifecycle --workspace @wildcard/api"
+  },
+  "allowScripts": {
+    "better-sqlite3": true,
+    "esbuild": true,
+    "vue-demi": true,
+    "workerd": true
   }
 }
