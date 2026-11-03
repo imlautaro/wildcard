@@ -233,6 +233,7 @@ onMounted(() => run(async () => {
             </label>
             <div v-if="!snapshot.privateSharing?.length" class="text-block">{{ $t('groups.members.addToManage') }}</div>
           </AppListGroup>
+          <p class="sharing-note">{{ $t('groups.members.sharingNote') }}</p>
           <AppNotice v-if="error">{{ error }}</AppNotice>
         </AppSheet>
 
@@ -311,6 +312,7 @@ onMounted(() => run(async () => {
 
 <style scoped>
 .member-row .two-line { flex: 1; min-width: 0; }
+.sharing-note { margin: var(--space-3) var(--space-4) 0; font-size: 13px; line-height: 1.4; color: var(--md-on-surface-variant); }
 /* The groups after the identity header and after the media tabs don't follow another group. */
 .identity-subtitle { margin-bottom: var(--space-5); }
 :deep(.lifecycle-group) { margin-top: var(--space-5); }

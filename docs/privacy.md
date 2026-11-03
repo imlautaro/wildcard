@@ -17,6 +17,7 @@ chat boundary through an explicit per-group grant ("Discuss my private chats").
 | Facts from your private chat with contact X | Your chats with X; groups where **you** and X are both members; private chats of people you share X with | Groups you are not in; your other contacts (unless "Contacts share with each other"); For you when the chat is private |
 | Facts from what you said in group G | G itself; private chats with X of people who are members of G (from when they could read) | Other groups; private chats of people outside G |
 | Your raw private messages | Only your chat | Anywhere, unless you grant one contact in one group "Discuss my private chats" |
+| Facts told in confidence (surprise, gift, "don't tell X", a complaint about someone) | Only the chat they were told in | Everyone else, whatever the settings ([Discretion](#discretion)) |
 | Connector (MCP) chats and their facts | Only that chat | Groups, shared participants, linked contacts, For you |
 | For you cards and comments | Only you | Other people |
 
@@ -35,6 +36,12 @@ Two controls change this, both on iOS and the web:
 
 Account → Privacy → **How privacy works** shows the same rules in plain language.
 
+"Discuss my private chats" being off does **not** mean a contact never mentions anything
+from your private chat in that group: the facts above still reach groups you are both in.
+The switch adds raw message search and quoting. The group sheet says so in a visible note
+(2026-11-03, after a user expected silence with the switch off); "Keep this chat private"
+is the switch that keeps facts out.
+
 Things a person explicitly asks for are not blocked by these settings: posting in a group
 (`send_group_message`), relaying to a shared-contact participant (`send_private_message`),
 scheduling for another participant, or adding a topic to For you. The person decided.
@@ -51,7 +58,7 @@ Each row is a scenario the product allows, what flows, the gate in code, and the
 | 3 | V's private facts in a group V is **not** in (U added X to group G2) | Previously: yes, every participant's facts reached any group with X | `readMemories` with `groupID`: source must be a member of that group | **Fixed** |
 | 4 | Group G2 facts in V's private chat with shared X (V not in G2) | Previously: yes | `groupMemories(..., { readerID })` requires reader membership and history floor | **Fixed** |
 | 5 | Group G1 facts in group G2 (X in both) | Previously: yes, including `search_group_memories` | `groupMemories(..., { groupID })` | **Fixed** |
-| 6 | Your private facts in a group you are in | Yes, unless that chat is private. Raw text only with "Discuss my private chats" | `readMemories` + `groups/private-sharing.ts` | By design; now controllable |
+| 6 | Your private facts in a group you are in | Yes, unless that chat is private or the fact is confidential. Raw text only with "Discuss my private chats" | `readMemories` + `groups/private-sharing.ts` | By design; now controllable |
 | 7 | What you said in a group, in your private chat with X | Yes (you were there) | `groupMemories` reader membership | By design |
 | 8 | Raw group history in a private chat | Only groups both you and X are in, from your history floor | `groups/retrieval.ts` (`sharedGroups`, `searchGroupMessages`) | By design (verified unchanged) |
 | 9 | Group → private message (`message_privately`) | One message to a member who already has a chat with X; private memories not consulted | `groups/private-messages.ts` | By design |
@@ -69,6 +76,46 @@ Each row is a scenario the product allows, what flows, the gate in code, and the
 | 21 | Group history for late joiners | Readable from join unless "Can see earlier messages" | `groups/history-access.ts` | By design |
 | 22 | Chat export / debug export | Only what that account can read (own chat; group membership and history floor) | `chat/export.ts` (a parallel, uncommitted change), `routes/debug-export.ts` | By design |
 | 23 | Spontaneous-message subjects across your contacts | Only a fixed subject label and count (for example `music` ×2) from the last 48 hours, so contacts avoid opening the same subject; never text, names or facts. `follow-up` is not shared | `chat/initiative.ts` (`otherContactsRecentTopics`); private and connector chats neither give nor receive | By design (2026-11-03, [Topic variety](initiative.md#topic-variety)) |
+
+## Discretion
+
+Sharing a contact (or adding it to a group) means shared memory, but a friend who knows two
+people still keeps a surprise party secret and still warns you that the other person goes to
+bed early tonight. Two layers implement that (2026-11-03):
+
+1. **Classification at storage (hard gate).** Memory extraction (`maintainMemories`,
+   `chat/memory.ts`) marks each fact `confidential` when the author would not want it
+   repeated: they ask to keep it secret or not to tell someone; it is a surprise, gift or plan
+   hidden from someone; it is a complaint or private judgment about another person; or it is
+   said in confidence. `memoryAudience` only reads a confidential fact in its own chat, so it
+   never reaches other participants of a shared contact, groups, or pooled contacts. When the
+   author says the secret is out, extraction upserts the same key with `confidential` false.
+   A clear that keeps memories copies the flag into `retained_contact_memory`. Migration
+   `0099_confidential_memory.sql` (existing facts default to shareable, as before).
+2. **Judgment at reply time (soft layer).** `discretionInstruction` (private chats and groups):
+   mention another person's fact briefly when it directly bears on the request (busy, going to
+   bed early, traveling, a conflicting plan); do not volunteer unrelated facts; never reveal or
+   hint at a surprise, gift, secret, confidence or complaint about the speaker even if it is in
+   memory, and do not say there is something it cannot tell.
+
+Extraction also stores near-term plans and availability as `pending` with their date. Before,
+"transient remarks" were excluded, so "I'm going to bed early tonight" was never stored and
+the other participant's contact could not know it.
+
+Checked with `scripts/checks/shared-memory-discretion-live-eval.mjs` (fictional Alice and Bob
+sharing one contact; real extraction, then Bob's reply) on `muse-spark-1.3-contributor`.
+Baseline: the early-bedtime fact was not extracted and Bob's contact did not mention it (0/1
+private, 0/2 group); a gift question was answered with "what each person tells me privately
+stays private", which hints that a secret exists. After: 22/22 across 11 scenarios × 2
+(early-bedtime conflict in private and group, surprise party in private and group, surprise
+stored as shareable on purpose, explicit "don't tell Bob", gift, sushi preference, unrelated
+question without dumping facts, secret revealed later, complaint about Bob). The
+`isolation:` test covers the gate, including retained memories; removing the gate fails it.
+
+Limits: classification is model-based and can be wrong in either direction (the reply-time
+layer is the backstop for facts stored as shareable). Confidential is all-or-nothing: a
+surprise for Bob is also hidden from a third participant who is helping plan it. A fact
+first stored as shareable and only later marked confidential could have been read in between.
 
 ### Residual risks and open items
 

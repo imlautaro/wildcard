@@ -19,7 +19,8 @@ struct GroupMembersView: View {
     @State private var sharingAgent: String?
     @State private var showingSharing = false
     @State private var showingConsent = false
-    private static let sharingInfo = String(localized: "Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections and chats you keep private stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat.")
+    private static let sharingNote = String(localized: "Even with this off, contacts can bring up here what they know about you from your private chats, like plans or preferences. Turning it on also lets them look up and quote your whole conversation. What you tell them in confidence (surprises, gifts, things you ask them not to repeat) stays in your chat. To keep a chat out of groups entirely, turn on Keep this chat private in that contact’s details.")
+    private static let sharingInfo = String(localized: "Off: contacts can still use what they know about you from your private chats, like plans or preferences, but cannot look up or quote your messages. On: a contact can also look up and quote your entire past and future private text conversation with everyone in this group, including future members. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections, chats you keep private and things told in confidence stay private. Turning this off stops pending replies; messages already sent remain visible. Unavailable contacts need an eligible private chat.")
     private var sharingSummary: String {
         let permissions = snapshot?.privateSharing ?? []
         return permissions.isEmpty ? String(localized: "No contacts") : String(localized: "\(permissions.filter { $0.enabled == 1 }.count) of \(permissions.count) on")
@@ -151,6 +152,8 @@ struct GroupMembersView: View {
                             .disabled(permission.available != 1 && permission.enabled != 1)
                         }
                         if snapshot?.privateSharing?.isEmpty ?? true { Text("Add a contact to manage private chat sharing.").foregroundStyle(.secondary) }
+                    } footer: {
+                        Text(Self.sharingNote)
                     }
                     if let error { Text(error).foregroundStyle(.red) }
                 }

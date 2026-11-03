@@ -723,6 +723,27 @@ test('isolation: "Keep this chat private" keeps a person’s facts in their own 
   await drain();
 });
 
+test('isolation: a confidential fact stays in the chat it was told in, also after a clear keeps memories', async () => {
+  await audienceFixture();
+  await run(`UPDATE contact_memory SET confidential=1 WHERE memory_key='owner_tulip'`);
+  await run(`INSERT INTO contact_memory(contact_id,user_id,memory_key,kind,content,source_turn_id,source_quote,source_sequence,updated_at,confidential)
+    SELECT contact_id,user_id,'owner_zeppelin_secret','fact','Owner hides a Zeppelin gift.',source_turn_id,source_quote,source_sequence,updated_at,1 FROM contact_memory WHERE memory_key='owner_zeppelin'`);
+  assert.ok(sees(await privateRead(ids.contact, ids.owner, ids.contact),'Tulipan'), 'U still recalls it in their own chat (positive control)');
+  assert.ok(!sees(await privateRead(ids.shared, ids.member, ids.contact),'Tulipan'), 'LEAK: confidential fact reached the other participant');
+  assert.ok(!sees(await groupRead(ids.group),'Tulipan') && !sees(await groupRead(audience.g2),'Tulipan'), 'LEAK: confidential fact reached a group');
+  assert.ok(sees(await groupRead(ids.group),'Quokka'), 'non-confidential facts still reach the group (positive control)');
+  await api('me/privacy', ids.owner, 'PUT', { contactsShare: true });
+  const pooled = await privateRead(ids.contact, ids.owner, ids.contact);
+  assert.ok(sees(pooled,'Zeppelin tour') && !sees(pooled,'Zeppelin gift'), 'LEAK: confidential fact pooled into another contact');
+  await api('me/privacy', ids.owner, 'PUT', { contactsShare: false });
+  const cleared = await api(`contacts/${ids.contact}/clear`, ids.owner, 'POST', { clearMemory: false, historyRevision: 0 });
+  assert.equal(cleared.status, 202, JSON.stringify(cleared.body));
+  assert.equal((await rows(`SELECT confidential FROM retained_contact_memory WHERE memory_key='owner_tulip'`))[0]?.confidential, 1, 'a clear keeps the flag');
+  assert.ok(!sees(await privateRead(ids.shared, ids.member, ids.contact),'Tulipan'), 'LEAK: retained confidential fact reached the other participant');
+  assert.ok(!sees(await groupRead(ids.group),'Tulipan'), 'LEAK: retained confidential fact reached a group');
+  await drain();
+});
+
 test('isolation: "Contacts share with each other" pools only the person’s own facts across their own contacts', async () => {
   await audienceFixture();
   const before = await privateRead(audience.b, ids.owner, audience.b);

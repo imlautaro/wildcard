@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Even with this off, contacts can bring up here what they know about you from your private chats, like plans or preferences. Turning it on also lets them look up and quote your whole conversation. What you tell them in confidence (surprises, gifts, things you ask them not to repeat) stays in your chat. To keep a chat out of groups entirely, turn on Keep this chat private in that contact’s details." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aunque esté desactivado, los contactos pueden mencionar aquí lo que saben de ti por tus chats privados, como planes o preferencias. Si lo activas, además pueden buscar y citar toda tu conversación. Lo que les cuentas en confianza (sorpresas, regalos, lo que les pides que no repitan) se queda en tu chat. Para que un chat no llegue a ningún grupo, activa Mantener este chat privado en los detalles de ese contacto."
+          }
+        }
+      }
+    },
     "Meta may use your earlier and future messages, attachments and shared memories in this group for model training with Contributor. Accepting also authorizes your earlier contributions. Other members must authorize their own history; earlier contact replies become available only when all human history is authorized. Existing limits on who can read earlier messages still apply." : {
       "localizations" : {
         "es" : {
@@ -1191,12 +1201,12 @@
         }
       }
     },
-    "A contact remembers facts from your chat, never the whole conversation. Those facts can be used in your chats with it, in groups where you are both members, and by people you share that contact with." : {
+    "A contact remembers facts from your chat, never the whole conversation. Those facts can come up in your chats with it, in groups where you are both members, and with people you share that contact with. What you tell it in confidence, like surprises, gifts or things you ask it not to repeat, stays in your chat." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un contacto recuerda datos de tu chat, nunca la conversación completa. Esos datos pueden usarse en tus chats con él, en los grupos en los que ambos son miembros y por las personas con quienes compartes ese contacto."
+            "value" : "Un contacto recuerda datos de tu chat, nunca la conversación completa. Esos datos pueden salir en tus chats con él, en los grupos en los que ambos son miembros y con las personas con quienes compartes ese contacto. Lo que le cuentas en confianza, como sorpresas, regalos o lo que le pides que no repita, se queda en tu chat."
           }
         }
       }
@@ -1701,12 +1711,12 @@
         }
       }
     },
-    "Allow each contact to discuss your entire past and future private text conversation with everyone in this group, including future members. This includes personal details and temporary plans. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections and chats you keep private stay private. Turning this off stops pending replies; messages already sent remain visible. Existing shared memories keep their current rules. Unavailable contacts need an eligible private chat." : {
+    "Off: contacts can still use what they know about you from your private chats, like plans or preferences, but cannot look up or quote your messages. On: a contact can also look up and quote your entire past and future private text conversation with everyone in this group, including future members. Only your own conversation is authorized. Attachment files and scheduled messages are excluded; chats with connections, chats you keep private and things told in confidence stay private. Turning this off stops pending replies; messages already sent remain visible. Unavailable contacts need an eligible private chat." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Permite que cada contacto hable de toda tu conversación privada de texto, pasada y futura, con todas las personas de este grupo, incluidos los miembros futuros. Esto incluye datos personales y planes temporales. Solo se autoriza tu propia conversación. Se excluyen los archivos adjuntos y los mensajes programados; los chats con conexiones y los chats que mantienes privados siguen siendo privados. Desactivarlo detiene las respuestas pendientes; los mensajes ya enviados siguen visibles. Las memorias compartidas existentes mantienen sus reglas actuales. Los contactos no disponibles necesitan un chat privado apto."
+            "value" : "Desactivado: los contactos pueden usar lo que saben de ti por tus chats privados, como planes o preferencias, pero no pueden buscar ni citar tus mensajes. Activado: un contacto además puede buscar y citar toda tu conversación privada de texto, pasada y futura, con todas las personas de este grupo, incluidos los miembros futuros. Solo se autoriza tu propia conversación. Se excluyen los archivos adjuntos y los mensajes programados; los chats con conexiones, los chats que mantienes privados y lo que cuentas en confianza siguen siendo privados. Desactivarlo detiene las respuestas pendientes; los mensajes ya enviados siguen visibles. Los contactos no disponibles necesitan un chat privado apto."
           }
         }
       }
@@ -12362,12 +12372,12 @@
         }
       }
     },
-    "Whole chat transcripts, files and schedules are never shared, unless you turn on Discuss my private chats for one contact in one group. Chats with connections never leave their chat." : {
+    "Your messages themselves, files and schedules are never shared. Only Discuss my private chats lets one contact look up and quote your conversation in one group. Chats with connections never leave their chat." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Las transcripciones completas de los chats, los archivos y las programaciones nunca se comparten, salvo que actives Hablar de mis chats privados para un contacto en un grupo. Los chats con conexiones nunca salen de su chat."
+            "value" : "Tus mensajes en sí, los archivos y las programaciones nunca se comparten. Solo Hablar de mis chats privados permite que un contacto busque y cite tu conversación en un grupo. Los chats con conexiones nunca salen de su chat."
           }
         }
       }

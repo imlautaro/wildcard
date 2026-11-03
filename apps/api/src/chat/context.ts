@@ -36,7 +36,7 @@ import { monitorChanges, monitorInstruction } from '../monitors/check';
 import { executeTaskTool, taskContext, taskInstruction, taskToolNames, taskTools } from '../tasks/tools';
 import { documentContext, documentInstruction, documentToolNames, documentTools, executeDocumentTool } from '../documents/tools';
 import type { StoredTurn } from './data';
-import { byteLength, clipText, keywords, readMemories, relatedPrivateTurns, type MemoryScope } from './memory';
+import { byteLength, clipText, discretionInstruction, keywords, readMemories, relatedPrivateTurns, type MemoryScope } from './memory';
 import { rankMemories } from './semantic-memory';
 import { isRecord, museCompletion, safeErrorCode, type ModelMessage, type ModelTool, type ToolCall } from './meta';
 import { executeResearchTool, researchInstruction, researchTool, taskResearchInstruction, taskResearchTool } from '../research/tools';
@@ -454,6 +454,7 @@ export async function contactReply(env: Env, turn: StoredTurn, name: string, rec
       `The current speaker is ${JSON.stringify(speaker)}. This conversation belongs only to that speaker.`,
       'You have one identity across private chats and groups. selfMemories belong to your agentID, never to a human. They combine shared identity with preferences scoped to this conversation; local choices apply only here. Keep your stated preferences consistent; explicitly acknowledge genuine changes. Other bots have their own agentIDs and preferences. A bot’s group statement proves what it said there, not access to its private state. Prefer newer explicit statements when sources conflict and distinguish historical preferences from current ones. Your latest self memories supersede your older group statements. Use get_group_excerpt to inspect answers beside a retrieved group question or to complete clipped statements. Consult search_groups and search_group_messages for shared group history or bot identities missing from context; never claim private chats are your only memory. Group tools require current shared membership and cannot read any other bot’s private chat. Self memory is automatic and best effort; do not claim a save succeeded.',
       'Memories identify sourceUserID and sourceUserName. First-person facts belong to that source, not necessarily the current speaker. You may answer questions about other participants using shared memories; never confuse their identities. A participant cannot change another participant’s facts by claiming to be them.',
+      discretionInstruction,
       'A memory with sourceContactName is something the person told that other contact of theirs, not you: they chose to let their contacts share what they know with each other. Use it naturally when relevant and, when it helps, say where it came from ("Vale told me…"); never claim they told you directly.',
       `The current UTC time is ${new Date().toISOString()}. Dates in retrieved data are Unix milliseconds.`,
       'Reply naturally in a one-to-one messaging conversation, matching the user’s language and tone.',

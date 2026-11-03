@@ -74,9 +74,9 @@ export async function clearContact(env: Env, id: string, userID: string, clearMe
   const statements = [db.prepare('UPDATE contact SET clearing=1, history_revision=CASE WHEN history_revision=?3 THEN history_revision+1 ELSE NULL END WHERE id=?1 AND user_id=?2').bind(id,userID,historyRevision)];
   if (clearMemory) statements.push(db.prepare('DELETE FROM retained_contact_memory WHERE contact_id=?').bind(id));
   else {
-    statements.push(db.prepare(`INSERT INTO retained_contact_memory(contact_id,user_id,category,memory_key,kind,content,updated_at)
-      SELECT contact_id,user_id,'human',memory_key,kind,content,updated_at FROM contact_memory WHERE contact_id=?1
-      ON CONFLICT(contact_id,category,memory_key) DO UPDATE SET kind=excluded.kind,content=excluded.content,updated_at=excluded.updated_at`).bind(id));
+    statements.push(db.prepare(`INSERT INTO retained_contact_memory(contact_id,user_id,category,memory_key,kind,content,updated_at,confidential)
+      SELECT contact_id,user_id,'human',memory_key,kind,content,updated_at,confidential FROM contact_memory WHERE contact_id=?1
+      ON CONFLICT(contact_id,category,memory_key) DO UPDATE SET kind=excluded.kind,content=excluded.content,updated_at=excluded.updated_at,confidential=excluded.confidential`).bind(id));
     for (const [table, category] of [['agent_memory','self'],['agent_local_memory','local_self']]) {
       statements.push(db.prepare(`INSERT INTO retained_contact_memory(contact_id,user_id,category,memory_key,kind,content,updated_at)
         SELECT t.contact_id,t.user_id,'${category}',m.memory_key,m.kind,m.content,m.updated_at FROM ${table} m

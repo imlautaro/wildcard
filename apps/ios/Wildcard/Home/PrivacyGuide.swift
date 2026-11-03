@@ -10,11 +10,11 @@ enum PrivacyGuide {
     }
 
     static var rules: [(title: String, text: String)] { [
-        (String(localized: "Your private chats"), String(localized: "A contact remembers facts from your chat, never the whole conversation. Those facts can be used in your chats with it, in groups where you are both members, and by people you share that contact with.")),
+        (String(localized: "Your private chats"), String(localized: "A contact remembers facts from your chat, never the whole conversation. Those facts can come up in your chats with it, in groups where you are both members, and with people you share that contact with. What you tell it in confidence, like surprises, gifts or things you ask it not to repeat, stays in your chat.")),
         (String(localized: "Groups"), String(localized: "What is said in a group is used only in that group and in private chats with people who are in it. Contacts never carry one group's conversation into another group.")),
         (String(localized: "Keep this chat private"), String(localized: "Set in each contact’s details. What you tell that contact stays in that chat: not in groups, not with people you share it with, not with your other contacts and not in For you.")),
         (String(localized: "Contacts share with each other"), String(localized: "Set here. Your own contacts pool what they know about you in your private chats and can ask each other. Off by default.")),
-        (String(localized: "Always private"), String(localized: "Whole chat transcripts, files and schedules are never shared, unless you turn on Discuss my private chats for one contact in one group. Chats with connections never leave their chat.")),
+        (String(localized: "Always private"), String(localized: "Your messages themselves, files and schedules are never shared. Only Discuss my private chats lets one contact look up and quote your conversation in one group. Chats with connections never leave their chat.")),
         (String(localized: "For you"), String(localized: "Built only from your own chats and seen only by you. Chats you keep private are left out.")),
     ] }
 }

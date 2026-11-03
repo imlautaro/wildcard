@@ -44,7 +44,7 @@
       "rules": {
         "privateChats": {
           "title": "Your private chats",
-          "text": "A contact remembers facts from your chat, never the whole conversation. Those facts can be used in your chats with it, in groups where you are both members, and by people you share that contact with."
+          "text": "A contact remembers facts from your chat, never the whole conversation. Those facts can come up in your chats with it, in groups where you are both members, and with people you share that contact with. What you tell it in confidence, like surprises, gifts or things you ask it not to repeat, stays in your chat."
         },
         "groups": {
           "title": "Groups",
@@ -60,7 +60,7 @@
         },
         "alwaysPrivate": {
           "title": "Always private",
-          "text": "Whole chat transcripts, files and schedules are never shared, unless you turn on Discuss my private chats for one contact in one group. Chats with connections never leave their chat."
+          "text": "Your messages themselves, files and schedules are never shared. Only Discuss my private chats lets one contact look up and quote your conversation in one group. Chats with connections never leave their chat."
         },
         "forYou": {
           "title": "For you",

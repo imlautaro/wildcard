@@ -44,7 +44,7 @@
       "rules": {
         "privateChats": {
           "title": "Tus chats privados",
-          "text": "Un contacto recuerda datos de tu chat, nunca la conversación completa. Esos datos pueden usarse en tus chats con él, en los grupos en los que ambos son miembros y por las personas con quienes compartes ese contacto."
+          "text": "Un contacto recuerda datos de tu chat, nunca la conversación completa. Esos datos pueden salir en tus chats con él, en los grupos en los que ambos son miembros y con las personas con quienes compartes ese contacto. Lo que le cuentas en confianza, como sorpresas, regalos o lo que le pides que no repita, se queda en tu chat."
         },
         "groups": {
           "title": "Grupos",
@@ -60,7 +60,7 @@
         },
         "alwaysPrivate": {
           "title": "Siempre privado",
-          "text": "Las transcripciones completas de los chats, los archivos y las programaciones nunca se comparten, salvo que actives Hablar de mis chats privados para un contacto en un grupo. Los chats con conexiones nunca salen de su chat."
+          "text": "Tus mensajes en sí, los archivos y las programaciones nunca se comparten. Solo Hablar de mis chats privados permite que un contacto busque y cite tu conversación en un grupo. Los chats con conexiones nunca salen de su chat."
         },
         "forYou": {
           "title": "Para ti",
