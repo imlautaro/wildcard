@@ -53,13 +53,11 @@ an empty roster and removes admin access.
   in the dashboard creates it) and R2 enabled for the account. Whether the first
   release can create a bucket in an account where R2 was never activated is unverified.
 - A Meta Model API key with Muse Spark 1.3 and Muse Voice Transcribe access.
-- A scoped Cloudflare API token for the API release with: Workers Scripts Edit
-  (deploy, secret names and upload, Worker existence check), D1 Edit, Workers R2
-  Storage Edit, and Workflows edit if Cloudflare lists it as a separate permission
-  (otherwise it is expected to be covered by Workers Scripts; unverified). Account
-  lookup (`wrangler whoami`) and the workers.dev subdomain read also need account read
-  access; the exact permission names (for example Account Settings Read) are
-  unverified. Setting `CLOUDFLARE_ACCOUNT_ID` avoids the account lookup, and setting
+- A scoped Cloudflare API token for the API release. Verified with a token made from
+  the **Edit Cloudflare Workers** template plus **Account → D1 → Edit**, limited to one
+  account: it covers deploy, Workflows, Cron, secrets, the Worker existence check, R2
+  bucket creation, the account lookup (`wrangler whoami`) and the workers.dev
+  subdomain read. A narrower set has not been tested. Setting `CLOUDFLARE_ACCOUNT_ID` avoids the account lookup, and setting
   both URL variables avoids the subdomain read. Web, admin, site and docs releases
   need only Workers Scripts Edit and account read. Keep the token out of Git, docs
   and chat; grant only these permissions on the one account.
@@ -108,10 +106,11 @@ branch `main`, root `/`, using an existing credential with the permissions above
 On the API project add the encrypted build secret `META_API_KEY`, the optional
 secrets above, and any of the optional `WILDCARD_*` / `CLOUDFLARE_ACCOUNT_ID` build
 variables. Apply the [build watch paths](#build-watch-paths) and keep API preview
-builds disabled. The new direct Cloudflare API calls (Worker existence, R2 bucket,
-workers.dev subdomain) use `CLOUDFLARE_API_TOKEN` or the Wrangler credential; that
-they work with the credential Workers Builds provides is unverified until the first
-release after this change.
+builds disabled. The direct Cloudflare API calls (Worker existence, R2 bucket, workers.dev subdomain)
+use `CLOUDFLARE_API_TOKEN` or the Wrangler credential. They are verified with GitHub
+Actions on a fork, both on an account with an existing installation and on an empty
+account (D1, R2, Workers, Workflows and Cron created by the first release); with the
+credential Workers Builds provides they remain unverified.
 
 ### Resource creation order
 
@@ -168,6 +167,11 @@ counted: none is fine, all is fine, a partial set stops the release.
   `META_API_KEY` together, consumes model credits, fails if registration is closed,
   and leaves the account behind (delete it from Account settings). Without an
   argument it targets `http://localhost:<WEB_PORT or 3000>`.
+- After the **first** release, the new Cron Trigger and Workflows can take several
+  minutes to become active (Cloudflare documents up to 15). Verified on a fresh
+  account: a message sent one minute after the first release stayed `queued` until
+  the first Cron run (about 11 minutes later) recovered and answered it. Run the smoke
+  test about 15 minutes after the first release; later releases are not affected.
 
 ### Upstream installation migration
 
