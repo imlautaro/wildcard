@@ -17,7 +17,6 @@
       "head_sampling_rate": 1
     }
   },
-  "account_id": "a9e3a97d08ec5023cbe6b97a1a25fec6",
   // The AdminAPI entrypoint of the API Worker. It is not reachable from the
   // public API origin; only this binding can call it.
   "services": [

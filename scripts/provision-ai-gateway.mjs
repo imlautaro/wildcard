@@ -1,23 +1,11 @@
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { accountId, apiToken, readWranglerConfig, root } from './lib/cloudflare.mjs';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
-const config = JSON.parse(readFileSync(new URL('../apps/api/wrangler.jsonc', import.meta.url), 'utf8'));
+const config = { ...readWranglerConfig(`${root}apps/api/wrangler.jsonc`), account_id: accountId() };
 const id = config.vars?.AI_GATEWAY_ID || 'wildcard';
 if (!/^[a-f0-9]{32}$/.test(config.account_id) || !/^[a-z0-9-]{1,64}$/.test(id ?? '')) {
-  throw new Error('Configure account_id and AI_GATEWAY_ID first.');
+  throw new Error('Set CLOUDFLARE_ACCOUNT_ID and a valid AI_GATEWAY_ID first.');
 }
-let token = process.env.CLOUDFLARE_API_TOKEN;
-if (!token) {
-  try {
-    const credentials = JSON.parse(execFileSync(process.execPath, [
-      fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url)), 'auth', 'token', '--json',
-    ], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
-    token = credentials.token;
-  } catch { throw new Error('Wrangler authentication unavailable. Use an authenticated host or a scoped CLOUDFLARE_API_TOKEN.'); }
-}
-if (!token) throw new Error('No Cloudflare credential available.');
+const token = apiToken();
 
 const base = `https://api.cloudflare.com/client/v4/accounts/${config.account_id}/ai-gateway`;
 async function request(path, method = 'GET', body) {

@@ -1,0 +1,61 @@
+# Deploys the API and the web app to your own Cloudflare account on every push to main.
+# Alternative to Cloudflare Workers Builds for forks: everything is configured in GitHub.
+#
+# Setup (docs/infrastructure.md#self-hosting):
+#   Settings > Secrets and variables > Actions
+#     Variables:  WILDCARD_DEPLOY = true   (turns this workflow on)
+#                 CLOUDFLARE_ACCOUNT_ID    (optional when the token sees one account)
+#                 WILDCARD_API_URL, WILDCARD_WEB_URL, WILDCARD_SUPER_ADMIN_USER_IDS (optional)
+#     Secrets:    CLOUDFLARE_API_TOKEN, META_API_KEY
+#                 ELEVENLABS_API_KEY, APNS_*, VAPID_* (optional)
+# The first run creates D1, R2, the Workers, Workflows and Cron.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: vars.WILDCARD_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      WILDCARD_API_URL: ${{ vars.WILDCARD_API_URL }}
+      WILDCARD_WEB_URL: ${{ vars.WILDCARD_WEB_URL }}
+      WILDCARD_SUPER_ADMIN_USER_IDS: ${{ vars.WILDCARD_SUPER_ADMIN_USER_IDS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck && npm run typecheck:web
+      - name: Release API (migrations, secrets, Worker, Workflows, Cron)
+        run: npm run release:ci
+        env:
+          META_API_KEY: ${{ secrets.META_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
+          APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+          APNS_TEAM_ID: ${{ secrets.APNS_TEAM_ID }}
+          APNS_TOPIC: ${{ secrets.APNS_TOPIC }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+      - name: Build web
+        run: npm run build:web
+      - name: Release web
+        run: npm run release:web

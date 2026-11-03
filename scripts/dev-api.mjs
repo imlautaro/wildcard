@@ -13,12 +13,17 @@
 //
 // It also runs the Worker's cron every minute (see below).
 //
+// API_PORT (default 8787) picks the port. The script refuses a busy port instead of
+// letting Wrangler move elsewhere, and passes BETTER_AUTH_URL=http://localhost:<port>
+// so auth and the local cron always match the port actually served.
+//
 // Set WILDCARD_REMOTE_BINDINGS=1 (after `npx wrangler login`) to keep remote
 // bindings, for example to try semantic memory locally.
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { assertPortFree, configuredPort, portFrom } from './lib/ports.mjs';
 
 const apiDir = fileURLToPath(new URL('../apps/api/', import.meta.url));
 const require = createRequire(new URL('../apps/api/package.json', import.meta.url));
@@ -38,8 +43,15 @@ if (!existsSync(devVars)) {
   console.warn('META_API_KEY is empty in apps/api/.dev.vars: sign-up and contacts work, but chat replies return 503.');
 }
 
+// A --port argument still wins over API_PORT for compatibility.
 const extra = process.argv.slice(2);
-const args = ['wrangler', 'dev', '--config', 'wrangler.local.json', '--test-scheduled', ...(remote ? [] : ['--local']), ...extra];
+const portIndex = extra.findIndex((arg) => arg === '--port' || arg.startsWith('--port='));
+const portArg = portIndex < 0 ? undefined : extra[portIndex].split('=')[1] ?? extra[portIndex + 1];
+if (portIndex >= 0) extra.splice(portIndex, extra[portIndex].includes('=') ? 1 : 2);
+const port = portFrom(portArg ?? configuredPort('API_PORT'), 8787, 'API_PORT');
+await assertPortFree(port, { name: 'API', variable: 'API_PORT' });
+const args = ['wrangler', 'dev', '--config', 'wrangler.local.json', '--test-scheduled', ...(remote ? [] : ['--local']),
+  '--port', String(port), '--var', `BETTER_AUTH_URL:http://localhost:${port}`, ...extra];
 const child = spawn('npx', args, { cwd: apiDir, stdio: 'inherit', shell: process.platform === 'win32' });
 child.on('exit', (code, signal) => process.exit(signal ? 1 : code ?? 0));
 
@@ -47,8 +59,6 @@ child.on('exit', (code, signal) => process.exit(signal ? 1 : code ?? 0));
 // drives reminders, tasks, monitors, For you, initiative, welcomes and chat
 // recovery. Mimic it through `--test-scheduled`. WILDCARD_LOCAL_CRON=0 turns it off.
 if (process.env.WILDCARD_LOCAL_CRON !== '0') {
-  const portIndex = extra.findIndex((arg) => arg === '--port' || arg.startsWith('--port='));
-  const port = portIndex < 0 ? '8787' : extra[portIndex].split('=')[1] ?? extra[portIndex + 1];
   setInterval(() => {
     fetch(`http://127.0.0.1:${port}/__scheduled?cron=*+*+*+*+*`).catch(() => {});
   }, 60_000).unref();

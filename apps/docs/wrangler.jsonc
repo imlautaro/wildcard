@@ -6,7 +6,6 @@
   // file from Workers Builds. See docs/infrastructure.md#docs-worker.
   "name": "wildcard-docs",
   "compatibility_date": "2026-10-26",
-  "account_id": "a9e3a97d08ec5023cbe6b97a1a25fec6",
   "workers_dev": true,
   "preview_urls": false,
   "assets": {
