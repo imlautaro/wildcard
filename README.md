@@ -157,9 +157,10 @@ reply end to end.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/imlautaro/wildcard)
 
-The button copies this repository to your GitHub account, asks for `META_API_KEY` (optional
-`ELEVENLABS_API_KEY`) and connects Cloudflare Workers Builds, which deploys the API and the web app
-on every push. Keep the Worker name `wildcard-api`.
+The button copies this repository to your GitHub account, asks for `META_API_KEY` and connects
+Cloudflare Workers Builds, which deploys the API and the web app on every push. Keep the Worker
+name `wildcard-api`. For contact voices, add `ELEVENLABS_API_KEY` afterwards as a secret of the
+`wildcard-api` Worker.
 
 Or with GitHub Actions:
 
