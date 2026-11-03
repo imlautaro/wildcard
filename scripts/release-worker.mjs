@@ -6,7 +6,7 @@
 // `npm run release:ci -- --dry-run` runs anywhere with a Wrangler login: it prints the
 // resolved installation and what is missing, and never creates, migrates or deploys.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -62,9 +62,27 @@ if (dryRun) {
 if (problems.length) throw new Error(problems[0]);
 
 console.log(`Applying migrations for ${sourceCommit}`);
-// Streamed, not captured: a first release applies every migration and its output
-// exceeds the default child-process buffer (ENOBUFS).
-wrangler(['d1', 'migrations', 'apply', 'DB', '--remote', ...configArgs], { env, inherit: true });
+// Written to a file, not the CI log: Wrangler reprints the whole migration table after
+// each migration, so a first release (every migration) prints ~18,000 lines, which
+// exceeds the child-process buffer (ENOBUFS) and truncates the Workers Builds log before
+// any later error. The full output is shown only when migrating fails.
+{
+  const directory = mkdtempSync(join(tmpdir(), 'wildcard-migrations-'));
+  const logPath = join(directory, 'migrations.log');
+  const log = openSync(logPath, 'w');
+  const result = spawnSync(process.execPath, [wranglerBin, 'd1', 'migrations', 'apply', 'DB', '--remote', ...configArgs], {
+    cwd: root, env, stdio: ['ignore', log, log],
+  });
+  closeSync(log);
+  const output = readFileSync(logPath, 'utf8');
+  rmSync(directory, { recursive: true, force: true });
+  if (result.error || result.status !== 0) {
+    console.error(output.split('\n').slice(-150).join('\n'));
+    throw result.error ?? new Error(`D1 migrations failed (exit ${result.status}).`);
+  }
+  const applied = new Set(output.match(/\d{4}_[\w-]+\.sql(?=\s*│\s*✅)/g) ?? []).size;
+  console.log(/No migrations to apply/.test(output) ? 'No migrations to apply.' : `Applied ${applied} migration(s).`);
+}
 let temporaryDirectory;
 try {
   const secretArgs = [];
