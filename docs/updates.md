@@ -235,7 +235,32 @@ interests, so topics can react to what actually happened (`scanNews` in
 The report (clipped) reaches the editor as `worldThisWeek` and non-connector composers as
 `whatsNewThisWeek`, with its sources. Any failure plans without it. Like composer
 queries, the query is written by a model under instructions, not filtered
-deterministically.
+deterministically. The query writer is given today's date and asked to name the current
+month and year so the search favors recent pages.
+
+## Freshness
+
+The search provider often ranks old, well-indexed pages first, and its hits carry no
+publication date (snippets are empty). Three rules keep old news from being posted as new:
+
+- **Research reports are dated.** `researchWeb` (`research/model.ts`, shared with chat
+  research) tells the model today's date and, for news questions, to prefer pages from
+  the last 14 days, put a date next to every item, leave out undated or older items, and
+  say in the first line when the newest coverage is older than two weeks.
+- **Unconfirmed hits are never links.** When a report has no citations and no opened
+  pages, research credits its top search hits as sources (`searchResultsCredited`, or a
+  title-only synthesis with `synthesisCalls`).
+  Those are bare titles, often years old, so For you drops them (and the report's
+  "Search results this answer drew on" line): the composer gets no `sources` or
+  `otherSources` and an `unconfirmed` note instead. The news scan does the same.
+- **Composers apply a seven-day window.** A news item (announcement, signing, release,
+  result, headline) counts as new only when the evidence dates it within the last seven
+  days and it is not already among `earlierPosts`. Older or undated items appear only as
+  dated background; otherwise the contact answers `no_news` or `skip`. Every `checkedAt`
+  is described as the time of the search, not of the events. Figures (scores, prices,
+  standings, processing times) still show the latest value with its date.
+
+The 14- and 7-day windows are prompt rules, not deterministic filters.
 
 ## Topics to follow
 
