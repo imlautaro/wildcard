@@ -262,6 +262,27 @@ publication date (snippets are empty). Three rules keep old news from being post
 
 The 14- and 7-day windows are prompt rules, not deterministic filters.
 
+## Relevance
+
+How the editor decides what the person actually cares about:
+
+- **Evidence strength.** The editor ranks interests: requested topics first, then
+  subjects the person raises themselves in recent messages or comments on posts
+  (especially repeatedly or recently), then contact memories. A one-off question, an
+  errand, a passing mention or something a contact assumed is not an ongoing interest.
+- **Comments are engagement.** `readSignals` adds the person's own comments on posts
+  from the last 14 days (up to 15, with the post's topic and text) as
+  `theirCommentsOnPosts`; the editor favors those subjects.
+- **Requested topics keep their words.** For a topic whose source is `person` or
+  `contact`, the plan may refine the title, kind and contact, but the stored brief is
+  never overwritten. The editor's sharper brief only reaches that run's composer, which
+  also gets the original as `card.requested` and is told not to drift to a related
+  subject. Briefs rewritten by runs before this rule are kept as they are now.
+- **Requested topics always research.** Unless it reads connectors, a requested topic
+  always gets `research_web`, whatever the editor answered.
+- **Focused queries.** Composers are told to name the specific subject and, for news,
+  the current month and year, asking what happened in the last week.
+
 ## Topics to follow
 
 The editor also returns up to five `suggestions` `{ title, reason }`: topics adjacent to

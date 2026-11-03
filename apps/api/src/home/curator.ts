@@ -17,7 +17,9 @@ export const homeLimits = {
 } as const;
 
 export type PlannedTopic = { id: string | null; title: string; brief: string; reason: string; kind: CardKind;
-  contactID: string; research: boolean; connector: boolean };
+  contactID: string; research: boolean; connector: boolean;
+  /** What the person or a contact asked For you to follow, in their words (requested topics only). */
+  request?: string };
 export type TopicSuggestion = { title: string; reason: string };
 export type HomePlan = { language: string; briefing: string; topics: PlannedTopic[]; suggestions: TopicSuggestion[] };
 // A public web scan of what is new this week around the person's interests (docs/updates.md#news-scan).
@@ -71,6 +73,8 @@ export async function planHome(env: Env, signals: HomeSignals, model: string, ne
       hasCard: signals.cards.some(card => card.topicID === topic.id),
       skippedRuns: topic.skips || undefined, lastSkipReason: topic.skips && topic.skipReason ? topic.skipReason : undefined })),
     hiddenTopics: hidden.map(topic => ({ title: topic.title, brief: clipText(topic.brief, 160) })),
+    ...(signals.comments.length ? { theirCommentsOnPosts: signals.comments.map(comment => ({ topic: comment.topic, post: comment.post,
+      comment: comment.text, date: date(comment.at, signals.timeZone) })) } : {}),
     ...(news ? { worldThisWeek: { report: clipText(news.report, 4000), checkedAt: news.checkedAt } } : {}),
   };
   const answer = await museCompletion(env, [
@@ -84,6 +88,10 @@ export async function planHome(env: Env, signals: HomeSignals, model: string, ne
       'Mix formats. At least a third of the topics should be text-first note posts with a clear angle. Use a data layout (matches, metrics, table, chart, tracker) only when a figure actually moves and they care about it (their team\'s results, a currency they track, an application they wait on).',
       `worldThisWeek, when present, is a public news scan around their interests. ${freshness} Prefer topics that react to what actually happened there when it connects to evidence of their interests, with research true so the contact gets the details.`,
       'Never invent interests the evidence does not support. With thin evidence return fewer topics rather than generic ones.',
+      'Rank interests by strength of evidence: topics the person requested (source "person"), then subjects the person raises themselves in theirRecentMessages '
+        + 'or theirCommentsOnPosts, especially repeatedly or recently, then what contacts remember. A one-off question, a task or errand, a single passing mention '
+        + 'or something a contact assumed is not an ongoing interest to follow. theirCommentsOnPosts shows what they engaged with in For you: favor those subjects.',
+      'A requested topic is the person\'s own words: keep its subject exactly (do not broaden, narrow or swap it for a related one); you may sharpen the angle of its brief for this run.',
       'For you already shows upcoming schedules, tasks assigned to the person and quick access to their most used mini apps on its own; do not create topics that only repeat them. Use them as hints of what the person cares about.',
       'Keep every topic whose source is "person" or "contact" (someone asked for it) with its id. Keep useful curator topics with their id so cards stay stable; omit stale ones to drop them. Use id "" for a new topic.',
       'Never return or recreate a hidden topic or anything close to it. Feedback "less" means lower it or drop it; "more" means keep it near the top.',
@@ -125,16 +133,19 @@ export async function planHome(env: Env, signals: HomeSignals, model: string, ne
       || !contactIDs.includes(item.contactID) || !(cardKinds as readonly string[]).includes(String(item.kind))) continue;
     const id = typeof item.id === 'string' && topicIDs.includes(item.id) ? item.id : null;
     if (id && topics.some(topic => topic.id === id)) continue;
+    // A requested topic always gets current public evidence, unless it reads the person's connectors.
+    const requested = id ? visible.find(topic => topic.id === id && topic.source !== 'curator') : undefined;
+    const connector = item.connector === true && signals.connectors.length > 0;
     topics.push({ id, title: Array.from(item.title.trim()).slice(0, 60).join(''), brief: clipText(String(item.brief ?? '').trim(), 600),
       reason: Array.from(String(item.reason ?? '').trim()).slice(0, 160).join(''), kind: item.kind as CardKind, contactID: item.contactID,
-      research: item.research === true, connector: item.connector === true && signals.connectors.length > 0 });
+      research: item.research === true || (!!requested && !connector), connector, ...(requested ? { request: requested.brief } : {}) });
   }
   // Requests from the person or a contact stay in For you until the person hides them.
   for (const topic of visible) {
     if (topic.source === 'curator' || topics.some(planned => planned.id === topic.id)) continue;
     const contactID = topic.contactID && contactIDs.includes(topic.contactID) ? topic.contactID : contactIDs[0];
     if (contactID) topics.push({ id: topic.id, title: topic.title, brief: topic.brief, reason: topic.reason ?? '', kind: topic.kind,
-      contactID, research: topic.kind !== 'note', connector: false });
+      contactID, research: true, connector: false, request: topic.brief });
   }
   const language = typeof parsed.language === 'string' && parsed.language.trim() ? parsed.language.trim().slice(0, 60) : 'the language of their recent messages';
   // Suggestions never repeat a followed or hidden topic.
@@ -271,7 +282,9 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
       'Freshness: a news item (an announcement, a signing, a release, a result, a headline) is new only when the evidence dates it within the last 7 days of Now and it is not already in earlierPosts. '
         + 'Never present an older or undated item as news, as "today", "just" or "this week"; mention it only as dated background for something new, otherwise answer '
         + (canKeep ? 'no_news or skip' : 'skip') + '. A checkedAt is when a search ran, not when its items happened. Evidence marked unconfirmed has no confirmed source pages: do not use its search results as links.',
-      ...(research ? ['research_web runs one public web search. Use one focused, self-contained query without personal details.'] : []),
+      ...(research ? ['research_web runs one public web search. Use one focused, self-contained query without personal details. '
+        + 'Name the specific subject (the team, release, person, place or field from the brief) and, for news, the current month and year from Now, asking what happened in the last week.'] : []),
+      ...(topic.request ? ['card.requested is what the person (or a contact for them) asked For you to follow, in their words. Stay on exactly that subject; do not drift to a related one.'] : []),
       ...(context.news && !topic.connector ? ['whatsNewThisWeek is a public news scan around the person\'s interests. React to items in it that belong to this topic; its sources may be used as card sources and links.'] : []),
       ...(quotable.length ? ['otherContactsPosts are recent posts by the person\'s other contacts. Like a quote post on X, you may quote one when you have something to add to it from this topic: '
         + 'agree with a twist, disagree with a reason, add a fact, or connect it. Then add "quote":"<its ref>" to the publish answer and write your own angle without summarizing theirs; you may refer to its author by name. '
@@ -288,7 +301,7 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
       untrusted,
     ].join('\n') },
     { role: 'user', content: JSON.stringify({
-      card: { title: topic.title, brief: topic.brief, whyItIsInUpdates: topic.reason, kind: topic.kind },
+      card: { title: topic.title, brief: topic.brief, whyItIsInUpdates: topic.reason, kind: topic.kind, ...(topic.request ? { requested: topic.request } : {}) },
       ...(earlier.length ? { earlierPosts: earlier.map(post => ({ date: date(post.at, context.timeZone), by: post.contact, post: post.text })) } : {}),
       ...(context.news && !topic.connector ? { whatsNewThisWeek: { checkedAt: context.news.checkedAt, report: clipText(context.news.report, 3000), sources: context.news.sources,
         ...(context.news.unconfirmed ? { unconfirmed: unconfirmedNote } : {}) } } : {}),

@@ -81,7 +81,9 @@ async function plan(env: Env, job: HomeJob): Promise<RunPlan | { error: string }
   await env.DB.batch([
     ...topics.map((topic, position) => env.DB.prepare(`INSERT INTO home_topic (id, user_id, title, brief, reason, kind, source, contact_id, created_at, updated_at)
         SELECT ?1, ?2, ?4, ?5, ?6, ?7, 'curator', ?8, ?9, ?9 WHERE ${fence} AND EXISTS (SELECT 1 FROM contact WHERE id = ?8 AND user_id = ?2)
-      ON CONFLICT(id) DO UPDATE SET title = excluded.title, brief = excluded.brief, reason = excluded.reason, kind = excluded.kind,
+      ON CONFLICT(id) DO UPDATE SET title = excluded.title,
+        -- A requested topic keeps the request's words; the editor's sharper brief only reaches this run's composer.
+        brief = CASE WHEN home_topic.source = 'curator' THEN excluded.brief ELSE home_topic.brief END, reason = excluded.reason, kind = excluded.kind,
         contact_id = excluded.contact_id, updated_at = excluded.updated_at
       WHERE home_topic.user_id = excluded.user_id AND home_topic.status = 'active'`)
       .bind(topic.id, job.userID, job.revision, topic.title, topic.brief, topic.reason || null, topic.kind, topic.contactID, now + position)),

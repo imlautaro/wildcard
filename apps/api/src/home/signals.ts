@@ -25,6 +25,8 @@ export type HomeSignals = {
   cards: HomeCardRow[];
   /** Recent post texts, newest first, so a contact can tell what changed (docs/updates.md#posts). */
   posts: HomePostRow[];
+  /** The person's own comments on For you posts in the last two weeks: what they engaged with (docs/updates.md#relevance). */
+  comments: { topic: string; post: string; text: string; at: number }[];
 };
 
 // Reads only. Home never runs a tool a server or its name marks as a change.
@@ -75,7 +77,7 @@ export async function homeSetup(db: D1Database, userID: string): Promise<'needs_
 export async function readSignals(db: D1Database, userID: string): Promise<HomeSignals | null> {
   const user = await db.prepare('SELECT name FROM user WHERE id = ?').bind(userID).first<{ name: string }>();
   if (!user) return null;
-  const [contacts, access, memories, messages, groupMessages, connectors, miniApps, schedules, topics, cards, posts, timeZone] = await Promise.all([
+  const [contacts, access, memories, messages, groupMessages, connectors, miniApps, schedules, topics, cards, posts, comments, timeZone] = await Promise.all([
     db.prepare(`SELECT c.id, c.name, p.profile_json AS profile,
         (SELECT MAX(t.created_at) FROM chat_turn t WHERE t.contact_id = c.id) AS lastAt
       FROM contact c LEFT JOIN agent_personality p ON p.agent_id = c.agent_id
@@ -120,6 +122,11 @@ export async function readSignals(db: D1Database, userID: string): Promise<HomeS
           COALESCE(text, CASE WHEN kind = 'note' THEN json_extract(payload_json, '$.text') END) AS text FROM home_post WHERE user_id = ?) p
       LEFT JOIN contact c ON c.id = p.contact_id AND c.user_id = p.user_id
       WHERE p.text IS NOT NULL ORDER BY p.created_at DESC LIMIT 60`).bind(userID).all<HomePostRow>(),
+    db.prepare(`SELECT t.title AS topic, COALESCE(p.text, json_extract(p.payload_json, '$.text'), json_extract(p.payload_json, '$.title'), '') AS post,
+        m.text, m.created_at AS at
+      FROM home_comment m JOIN home_post p ON p.id = m.post_id AND p.user_id = m.user_id JOIN home_topic t ON t.id = p.topic_id
+      WHERE m.user_id = ? AND m.created_at > ? ORDER BY m.created_at DESC LIMIT 15`).bind(userID, Date.now() - 14 * 86_400_000)
+      .all<{ topic: string; post: string; text: string; at: number }>(),
     homeTimeZone(db, userID),
   ]);
   return {
@@ -138,5 +145,6 @@ export async function readSignals(db: D1Database, userID: string): Promise<HomeS
     topics: topics.results.filter(row => (cardKinds as readonly string[]).includes(row.kind)),
     cards: cards.results,
     posts: posts.results,
+    comments: comments.results.map(row => ({ topic: row.topic, post: clipText(row.post, 200), text: clipText(row.text, 300), at: row.at })),
   };
 }
