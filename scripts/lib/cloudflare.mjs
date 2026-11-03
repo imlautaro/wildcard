@@ -91,15 +91,20 @@ export async function workerExists(name) {
   return true;
 }
 
-// Workers Builds sets WRANGLER_CI_OVERRIDE_NAME to the Worker its project is connected
-// to, and Wrangler then deploys *any* config under that name. One build releases several
-// Workers (the Deploy to Cloudflare project releases the API and the web app), so the
-// override is kept only for the Worker it names; otherwise the web app would replace the
-// API. Returns the environment to deploy `name` with.
+// Workers Builds binds Wrangler to the Worker its project is connected to:
+// - WRANGLER_CI_OVERRIDE_NAME makes Wrangler deploy *any* config under that name, and
+// - WRANGLER_CI_MATCH_TAG makes it refuse to deploy unless the target Worker already
+//   exists with that Worker's tag ("The Worker ... was not found in your account").
+// One build releases several Workers (the Deploy to Cloudflare project releases the API
+// and the web app with the same credential), so these are kept only for the Worker they
+// describe. Otherwise the web app would replace the API, or fail on its first release.
+// Returns the environment to deploy `name` with.
+const connectedWorkerVariables = ['WRANGLER_CI_OVERRIDE_NAME', 'WRANGLER_CI_MATCH_TAG', 'WRANGLER_CI_GENERATE_PREVIEW_ALIAS'];
 export function deployEnv(name, env = process.env) {
   const override = env.WRANGLER_CI_OVERRIDE_NAME?.trim();
   if (!override || override === name) return env;
-  const { WRANGLER_CI_OVERRIDE_NAME: _dropped, ...rest } = env;
+  const rest = { ...env };
+  for (const variable of connectedWorkerVariables) delete rest[variable];
   return rest;
 }
 
