@@ -222,6 +222,9 @@ final class HomeFeedStore {
     private(set) var feed: HomeFeed?
     private(set) var error: String?
     private(set) var isMutating = false
+    /// Posts shown as the "Less like this" notice (docs/updates.md#less-like-this) until they are
+    /// restored or removed; memory only, so the posts show normally again on the next launch.
+    private(set) var lessNotices: Set<String> = []
     /// Cards generated since Updates was last opened (docs/updates.md#new-card-badge).
     private(set) var unseen = 0
     @ObservationIgnored private var badgeRevision = 0
@@ -304,6 +307,24 @@ final class HomeFeedStore {
 
     func follow(_ text: String, using auth: AuthStore) async throws {
         try await mutate(using: auth) { api, token in try await api.homeMutation(path: "topics", body: ["text": text], token: token) }
+    }
+
+    /// Only the post "Less like this" was chosen on turns into the notice, and only while its topic keeps
+    /// that feedback, so clearing it from another post of the topic restores it.
+    func showsLessNotice(_ post: HomePost) -> Bool { lessNotices.contains(post.id) && post.feedback == "less" }
+
+    func markLess(_ post: HomePost, using auth: AuthStore) async throws {
+        let undo = post.feedback == "less"
+        try await setTopic(post.topicID, feedback: .some(undo ? nil : "less"), using: auth)
+        if undo { lessNotices.subtract((feed?.timeline ?? []).filter { $0.topicID == post.topicID }.map(\.id) + [post.id]) }
+        else { lessNotices.insert(post.id) }
+    }
+
+    /// The notice's ✕: removes that one post from For you on every client.
+    func dismissPost(_ post: HomePost, using auth: AuthStore) async throws {
+        let path = "posts/\(post.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? post.id)/dismiss"
+        try await mutate(using: auth) { api, token in try await api.homeMutation(path: path, token: token) }
+        lessNotices.remove(post.id)
     }
 
     func setTopic(_ id: String, status: String? = nil, feedback: String?? = nil, using auth: AuthStore) async throws {

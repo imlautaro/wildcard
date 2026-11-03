@@ -46,7 +46,7 @@ This is a first implementation (2026-10-30). See [verification](#verification).
   count) opens the post to [comment](#comments) on it. ⋯ (or a long press on iOS) offers **Message {contact}**, **Less like
   this** and **Hide from For you**. Feedback is per topic, so every post on a topic shows
   the same heart. Hidden topics never come back unless the person shows them again in
-  **Topics**. On the web, **Less like this** turns that post into a
+  **Topics**. **Less like this** turns that post into a
   [notice](#less-like-this) instead of leaving it unchanged.
 - **Timeline** (both clients): a single column of posts, each led by the contact
   (avatar, "name › topic · age"), then its text and the card in a rounded frame. Each
@@ -312,14 +312,13 @@ request: iOS ignores `suggestions` for now.
 ## Less like this
 
 **Less like this** records `feedback: less` on the topic, as before (the editor lowers or
-drops it on the next plan). On the web the post it was chosen on then stays in place as a
+drops it on the next plan). On both clients the post it was chosen on then stays in place as a
 short notice, "Got it. You'll see less like this.", with **Undo** (clears the feedback and
 shows the post again) and ✕, which calls `POST /home/posts/:id/dismiss`: that one post gets
 `home_post.dismissed_at` (migration 0098) and is no longer returned by `GET /home` or
 counted by the badge, on any client; its topic and other posts are untouched. The notice
-appears only once the feedback is saved and lasts until the page is reloaded; clearing the
-feedback from another post of the topic also restores it. iOS keeps the menu toggle without
-the notice.
+appears only once the feedback is saved and lasts until the page is reloaded (on iOS, until
+the app restarts); clearing the feedback from another post of the topic also restores it.
 
 ## Comments
 

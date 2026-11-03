@@ -13120,6 +13120,36 @@
           }
         }
       }
+    },
+    "Got it. You’ll see less like this." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entendido. Verás menos como esto."
+          }
+        }
+      }
+    },
+    "Undo" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deshacer"
+          }
+        }
+      }
+    },
+    "Remove this post" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitar esta publicación"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -123,6 +123,7 @@ function act(card: HomePost, kind: HomePostAction, prompt?: string) {
   return run(async () => {
     await home.setTopic(card.topicID, { feedback });
     if (feedback === 'less') lessNotices.add(card.id);
+    else if (kind === 'less') for (const post of posts.value) if (post.topicID === card.topicID) lessNotices.delete(post.id);
   });
 }
 const progressPhoto = computed(() => {

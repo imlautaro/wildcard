@@ -205,9 +205,16 @@ struct UpdatesView: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 Divider()
                 ForEach(posts) { post in
-                    HomePostView(post: post, threadCount: counts[post.topicID] ?? 0) { action in handle(action, post: post) }
-                        .padding(.top, 12).padding(.bottom, 16)
-                        .transition(.opacity)
+                    Group {
+                        if store.showsLessNotice(post) {
+                            HomePostLessNotice(busy: store.isMutating) { handle(.less, post: post) } dismiss: { dismiss(post) }
+                                .padding(.vertical, 6)
+                        } else {
+                            HomePostView(post: post, threadCount: counts[post.topicID] ?? 0) { action in handle(action, post: post) }
+                                .padding(.top, 12).padding(.bottom, 16)
+                        }
+                    }
+                    .transition(.opacity)
                     Divider()
                 }
             }
@@ -255,6 +262,10 @@ struct UpdatesView: View {
         Task {
             await run { try await store.perform(action, on: post, auth: auth, contacts: contacts, openContact: openContact, openThread: openThread, openPost: openPost) }
         }
+    }
+
+    private func dismiss(_ post: HomePost) {
+        Task { await run { try await store.dismissPost(post, using: auth) } }
     }
 
     private func run(_ operation: () async throws -> Void) async {
@@ -434,7 +445,7 @@ extension HomeFeedStore {
         case .more:
             try await setTopic(post.topicID, feedback: .some(post.feedback == "more" ? nil : "more"), using: auth)
         case .less:
-            try await setTopic(post.topicID, feedback: .some(post.feedback == "less" ? nil : "less"), using: auth)
+            try await markLess(post, using: auth)
         case .hide:
             try await setTopic(post.topicID, status: "hidden", using: auth)
         }
@@ -463,12 +474,13 @@ struct HomeThreadView: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
-                        HomePostView(post: post, inThread: true, chained: index < posts.count - 1) { action in
-                            Task {
-                                do { try await store.perform(action, on: post, auth: auth, contacts: contacts, openContact: openContact, openThread: { _ in }, openPost: openPost) }
-                                catch is CancellationError {}
-                                catch { actionError = error.localizedDescription }
+                        if store.showsLessNotice(post) {
+                            HomePostLessNotice(busy: store.isMutating) { act(.less, on: post) } dismiss: {
+                                attempt { try await store.dismissPost(post, using: auth) }
                             }
+                            .padding(.vertical, 6)
+                        } else {
+                            HomePostView(post: post, inThread: true, chained: index < posts.count - 1) { action in act(action, on: post) }
                         }
                     }
                 }
@@ -481,6 +493,18 @@ struct HomeThreadView: View {
         .alert("For you", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
+    }
+
+    private func act(_ action: HomeCardAction, on post: HomePost) {
+        attempt { try await store.perform(action, on: post, auth: auth, contacts: contacts, openContact: openContact, openThread: { _ in }, openPost: openPost) }
+    }
+
+    private func attempt(_ operation: @escaping () async throws -> Void) {
+        Task {
+            do { try await operation() }
+            catch is CancellationError {}
+            catch { actionError = error.localizedDescription }
+        }
     }
 }
 

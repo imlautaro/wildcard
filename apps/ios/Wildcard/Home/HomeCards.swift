@@ -701,3 +701,27 @@ private struct HomeList: View {
         }
     }
 }
+
+/// What a post becomes after "Less like this" (docs/updates.md#less-like-this): Undo brings the post
+/// back and ✕ removes that one post from For you.
+struct HomePostLessNotice: View {
+    let busy: Bool
+    let undo: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "hand.thumbsdown").foregroundStyle(.secondary)
+            Text("Got it. You’ll see less like this.")
+                .manrope(.subheadline).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Undo", action: undo).manrope(.subheadline, weight: .semibold)
+            Button(action: dismiss) { Image(systemName: "xmark").foregroundStyle(.secondary) }
+                .accessibilityLabel("Remove this post")
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .accessibilityElement(children: .contain)
+    }
+}
