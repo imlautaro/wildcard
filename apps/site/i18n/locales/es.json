@@ -1,7 +1,7 @@
 {
   "seo": {
-    "tagline": "Contactos de IA que te escriben primero",
-    "description": "Crea contactos de IA con su propio nombre, cara, personalidad y memoria. Te escriben por iniciativa propia, recuerdan lo que importa y colaboran contigo y con las personas que quieres. Código abierto, con modelos de IA de Meta."
+    "tagline": "Contactos de IA que son más que asistentes",
+    "description": "Crea contactos de IA con su propio nombre, cara, personalidad y memoria. Compártelos con las personas que quieres, súmalos a grupos con memoria compartida, y hasta te escriben primero. Código abierto, con modelos de IA de Meta."
   },
   "common": {
     "documentation": "Documentación",
@@ -52,8 +52,8 @@
   },
   "hero": {
     "chip": "Con modelos de IA de Meta · Código abierto",
-    "title": "Contactos de IA que te escriben primero.",
-    "lead": "Crea un elenco de contactos de IA, cada uno con su propio nombre, cara, personalidad y memoria. Te escriben por iniciativa propia, recuerdan lo que importa y colaboran contigo y con las personas que quieres.",
+    "title": "Contactos de IA que son más que asistentes.",
+    "lead": "Cada uno tiene su propia cara, personalidad y memoria. Te ayudan como cualquier asistente, pero además puedes compartirlos con las personas que quieres, sumarlos a grupos con memoria compartida, y hasta te escriben primero.",
     "meet": "Conoce a tus primeros contactos",
     "selfHost": "Alójalo por tu cuenta",
     "proof": {
@@ -65,6 +65,27 @@
       "shareableText": "Familia, amigos, grupos",
       "openSource": "Código abierto",
       "openSourceText": "Alójalo en Cloudflare"
+    }
+  },
+  "heroCards": {
+    "remembers": "Recuerda",
+    "theo": {
+      "role": "Copiloto de la panadería",
+      "traits": "Tranquilo · Detallista · Humor seco",
+      "memory": "Tu panadería abre el día 14",
+      "badge": "En “Lisboa en marzo ✈️”"
+    },
+    "coco": {
+      "role": "Ayudante de la familia",
+      "traits": "Amable · Paciente · Alegre",
+      "memory": "Luna va al veterinario el jueves",
+      "badge": "Compartido con Sabrina"
+    },
+    "ivy": {
+      "role": "Entrenadora de maratón",
+      "traits": "Enérgica · Directa · Motivadora",
+      "memory": "Maratón el 3 de mayo a 5:40/km",
+      "badge": "Te escribió primero"
     }
   },
   "why": {
@@ -119,13 +140,22 @@
     "eyebrow": "Mejor en compañía",
     "title": "Comparte un contacto.",
     "titleSoft": "Conserva tu propio chat.",
-    "lead": "Invita a tu pareja, a un amigo o a tu familia a uno de tus contactos. Cada uno tiene su chat privado, y el contacto recuerda lo importante de todos. Cuéntale algo por la mañana y por la tarde podrá responderle a tu hermana sobre eso.",
+    "lead": "Invita a tu pareja, a un amigo o a tu familia a uno de tus contactos. Cada uno tiene su chat privado, y el contacto recuerda lo importante de todos. Cuéntale algo por la mañana y por la tarde podrá responderle a tu pareja sobre eso.",
     "memory": "Memoria compartida, chats privados",
     "memoryText": "Cada persona habla con el contacto por su cuenta. Recuerda datos, nunca transcripciones completas.",
     "relay": "Pasa un mensaje",
-    "relayText": "\"Dile a Sam que llevo la cena.\" El contacto lo entrega en el chat privado de Sam, firmado con tu nombre.",
+    "relayText": "\"Dile a Sabrina que esta noche cocino yo.\" El contacto lo entrega en el chat privado de Sabrina, firmado con tu nombre.",
     "timers": "Temporizadores en su teléfono",
     "timersText": "Con su permiso, un contacto compartido puede poner un temporizador o una alarma en el iPhone de la otra persona."
+  },
+  "discretion": {
+    "eyebrow": "Discreción",
+    "title": "Sabe qué callarse.",
+    "lead": "Memoria compartida, con el criterio de un amigo. Si Bruno se acuesta temprano, Coco se lo avisa a Sabrina antes de que planee una noche de películas. Si Bruno le está organizando una fiesta sorpresa a Sabrina, Coco no dice ni una palabra. Ni una pista.",
+    "speak": "Habla cuando importa",
+    "speakText": "¿Un plan que choca con lo que dijo la otra persona? El contacto lo menciona, en pocas palabras y solo cuando viene al caso.",
+    "secret": "Los secretos se guardan",
+    "secretText": "Las sorpresas, los regalos y lo que le pidas que no repita se quedan en tu chat. Siempre, con cualquier configuración."
   },
   "groups": {
     "eyebrow": "Grupos",
@@ -207,7 +237,7 @@
     "replaceQ": "¿Wildcard quiere reemplazar a ChatGPT, Claude o Grok?",
     "replaceA": "No. Wildcard no maneja tu navegador, no ejecuta código en un entorno aislado ni levanta una máquina virtual, y no pretende hacerlo. Sigue usando esas herramientas para eso. Wildcard se centra en la parte de la IA que se siente como las personas: contactos con su propia personalidad y memoria, que se mantienen en contacto y trabajan contigo y con la gente que te rodea.",
     "privacyQ": "¿Quién puede ver lo que le cuento a un contacto?",
-    "privacyA": "Tus contactos son tuyos. Si compartes uno, recuerda datos breves entre sus participantes (nunca transcripciones completas), y ambas partes lo aceptan cuando se comparte el contacto. Activa \"Mantener este chat privado\" y nada de ese chat sale de él: ni a grupos, ni a otras personas, ni a tus otros contactos.",
+    "privacyA": "Tus contactos son tuyos. Si compartes uno, recuerda datos breves entre sus participantes (nunca transcripciones completas), y ambas partes lo aceptan cuando se comparte el contacto. Lo que le cuentas en confianza, como una sorpresa o un regalo, se queda en tu chat. Activa \"Mantener este chat privado\" y nada de ese chat sale de él: ni a grupos, ni a otras personas, ni a tus otros contactos.",
     "spamQ": "¿Mis contactos me van a llenar de mensajes?",
     "spamA": "No. Te escriben cuando hay algo que valga la pena, a las horas en que sueles responder. Si un mensaje queda sin respuesta, esperan a que vuelvas a escribir. Puedes desactivar la iniciativa de cualquier contacto, o simplemente pedirle que pare.",
     "sharingQ": "¿Cómo se enteran los contactos de los proyectos de los demás?",
@@ -234,33 +264,10 @@
     "message": "Mensaje",
     "online": "en línea"
   },
-  "heroScene": {
-    "chats": "Chats",
-    "now": "ahora",
-    "typing": "escribiendo…",
-    "milaNew": "Apple acaba de publicar el resumen de la MacBook Pro. ¿Quieres las 3 cosas que de verdad importan?",
-    "milaNewTime": "19:58",
-    "ivyNew": "Mañana es día de descanso 🧘 ¿Cómo están las piernas después de los 18 km?",
-    "ivyNewTime": "20:03",
-    "theoNew": "¿El proveedor de leche de avena llegó a mandar la segunda cotización?",
-    "theoNewTime": "20:11",
-    "nova": "¡Perfecto, hablamos mañana!",
-    "novaTime": "18:20",
-    "pixel": "Las tarjetas están listas: 24 sobre entropía 🔋",
-    "pixelTime": "17:02",
-    "theo": "Tú: El logo quedó definitivo 🎉",
-    "theoTime": "15:47",
-    "coco": "Lista de compras actualizada 🛒",
-    "cocoTime": "13:15",
-    "ivy": "Tú: ¡Listo! 18 km a 5:40/km",
-    "ivyTime": "9:12",
-    "mila": "jaja te lo dije",
-    "milaTime": "Ayer"
-  },
   "memoryScene": {
     "others": "Otras apps de IA",
     "pooled": "Una memoria para todos los chats",
-    "noPool": "Sin memoria común",
+    "perContact": "Una memoria por contacto",
     "onTopic": "En tema",
     "offTopic": "Memoria fuera de tema",
     "theoChat": "Lanzamiento de la panadería",
@@ -314,24 +321,40 @@
     "emoji": "Emoji"
   },
   "sharedScene": {
-    "alexChat": "Chat privado de Alex",
-    "samChat": "Chat privado de Sam",
-    "sharedWith": "Compartido con Sam",
-    "sharedBy": "Compartido por Alex",
+    "brunoChat": "Chat privado de Bruno",
+    "sabrinaChat": "Chat privado de Sabrina",
+    "sharedWith": "Compartido con Sabrina",
+    "sharedBy": "Compartido por Bruno",
     "oneMemory": "Una memoria",
-    "fact": "El vuelo del abuelo aterriza a las 18:40, terminal B ✈️",
-    "ack": "¡Entendido! Mantendré a todos al tanto 🐾",
-    "relay": "Dile a Sam que llevo la cena 🍝",
-    "sent": "Enviado a Sam ✓",
-    "timer": "Y pon un temporizador de 20 minutos en el teléfono de Sam para el horno",
-    "timerDone": "Listo, ya está corriendo en el iPhone de Sam ⏱️",
-    "ask": "¿A qué hora recogemos al abuelo?",
-    "answer": "Su vuelo aterriza a las {time}, terminal B. Alex me lo contó esta mañana.",
+    "fact": "La cita de Luna con el veterinario es el jueves a las 18:40 🐶",
+    "ack": "¡Anotado! Les aviso a los dos 🐾",
+    "relay": "Dile a Sabrina que esta noche cocino yo 🍝",
+    "sent": "Enviado a Sabrina ✓",
+    "timer": "Y pon un temporizador de 20 minutos en el teléfono de Sabrina para el horno",
+    "timerDone": "Listo, ya está corriendo en el iPhone de Sabrina ⏱️",
+    "ask": "¿Cuándo es la cita de Luna con el veterinario?",
+    "answer": "El jueves a las {time}. Bruno me lo contó esta mañana.",
     "answerTime": "18:40",
-    "relayFrom": "Mensaje de \"Alex\"",
-    "relayText": "Llevo la cena 🍝",
+    "relayFrom": "Mensaje de \"Bruno\"",
+    "relayText": "Esta noche cocino yo 🍝",
     "timerLabel": "Horno · de Coco",
-    "allowed": "Permitido por Sam"
+    "allowed": "Permitido por Sabrina"
+  },
+  "discretionScene": {
+    "brunoChat": "Chat privado de Bruno",
+    "sabrinaChat": "Chat privado de Sabrina",
+    "sharedWith": "Compartido con Sabrina",
+    "sharedBy": "Compartido por Bruno",
+    "sleep": "Esta noche me acuesto temprano, mañana vuelo a las 7 😴",
+    "sleepAck": "¡Anotado, que descanses! Te escribo cuando aterrices ✈️",
+    "party": "Y el sábado le hago una fiesta sorpresa a Sabrina 🎉 ¡Ni una palabra!",
+    "partyAck": "Soy una tumba 🤐",
+    "ask": "Esta noche quiero quedarme hasta tarde viendo pelis con Bruno. ¿Ideas?",
+    "answer": "Ojo: Bruno dijo que se acuesta temprano, mañana vuela a las 7 😴 ¿Quizás una sola peli corta? Paddington 2 es ideal.",
+    "shared": "Noche temprana",
+    "sharedNote": "Compartido",
+    "secret": "Fiesta sorpresa",
+    "secretNote": "Solo en el chat de Bruno"
   },
   "groupScene": {
     "title": "Lisboa en marzo ✈️",

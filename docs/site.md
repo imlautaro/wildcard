@@ -30,13 +30,13 @@ in `app/utils/site.ts` for an independent installation.
 | `app/utils/siteIcons.ts` | Solar and `logos` glyphs outside the shared registry, rendered with `SiteIcon`. |
 | `app/composables/useScene.ts` | The scene timeline: beats with delays, play while visible, pause off screen, loop, final state for SSR and reduced motion. |
 | `app/plugins/reveal.client.ts` | Fade-in on scroll for `.reveal` elements (marked with `data-in`). |
-| `app/components/*Scene.vue`, `MoreGrid.vue` | The animated scenes. `ContactAvatar.vue` shows the example portraits from `public/contacts/`. |
+| `app/components/*Scene.vue`, `HeroCards.vue`, `MoreGrid.vue` | The animated scenes. `ContactAvatar.vue` shows the example portraits from `public/contacts/`. |
 | `app/assets/css/site.css` | Marketing layout and the chat vocabulary shared with the web app (bubbles, typing dots, banners). |
 
 The site reuses the layer's tokens, Manrope, Solar icons, `AppButton`, `AppIcon`,
 `.chip`, `.avatar`, `.badge` and `details` styles, and copies the web app's bubble
 rules, so a design-system change shows up here too. Avoid class names the layer
-already uses (for example `.center`, `.meter`, `.field`); `site.css` documents the
+already uses (for example `.center`, `.meter`, `.field`, `.badge`, `.group`); `site.css` documents the
 rule. Dark styles use `:root[data-theme="dark"]` like the apps; the footer
 carries the System/Light/Dark switch (stored per browser under
 `wildcard-theme`, on the site's own origin).
@@ -60,7 +60,14 @@ Chat scenes use `useChatScene` to insert a typed draft, a send-button press and
 then the outgoing bubble before continuing the original story beats. Each phone
 has its own composer; draft text uses the same localized message as the bubble.
 These beats share `useScene` visibility and reduced-motion behavior; final states
-show the complete conversation with empty composers.
+show the complete conversation with empty composers. Chat beats run at 1.3× their
+listed delays (`pace` in `useChatScene`), and a long draft wraps and grows the
+composer up to five lines, as in the app.
+
+The hero (`HeroCards`) is the exception: three identity cards dealt in once with
+CSS animations, no `useScene`. Its story is the entrance, and a beat timeline
+would either skip it (the hero is on screen at load, so it would keep its final
+state) or flash the prerendered cards away on hydration.
 
 ### Example portraits
 

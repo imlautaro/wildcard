@@ -14,11 +14,6 @@ const props = withDefaults(defineProps<{
   pressing?: boolean;
 }>(), { caption: undefined, title: undefined, status: undefined, who: undefined, person: undefined, group: undefined });
 const { t } = useI18n();
-const composerText = useTemplateRef<HTMLElement>('composerText');
-watch(() => props.draft, () => {
-  const element = composerText.value;
-  if (element) element.scrollLeft = element.scrollWidth;
-}, { flush: 'post' });
 </script>
 
 <template>
@@ -41,7 +36,7 @@ watch(() => props.draft, () => {
       <div class="phone-screen"><slot /></div>
       <div v-if="title" class="phone-composer" aria-hidden="true">
         <span class="composer-icon"><AppIcon name="attach" /></span>
-        <span class="composer-input" :class="{ composing }"><span ref="composerText" class="composer-text">{{ composing ? draft : t('phone.message') }}</span><span v-if="composing" class="composer-caret" /></span>
+        <span class="composer-input" :class="{ composing }"><span class="composer-text">{{ composing ? draft : t('phone.message') }}<span v-if="composing" class="composer-caret" /></span></span>
         <span class="composer-mic" :class="{ pressing }"><SiteIcon v-if="composing" name="send" /><AppIcon v-else name="mic" /><span v-if="pressing" class="composer-tap" /></span>
       </div>
     </div>
@@ -75,19 +70,22 @@ watch(() => props.draft, () => {
 .phone-title strong { font: var(--type-title-small); font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .phone-title small { font: var(--type-body-small); color: var(--md-on-surface-variant); }
 .phone-screen { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; padding: var(--space-3); }
-.phone-composer { display: flex; align-items: center; gap: var(--space-1); flex: none; padding: var(--space-1-5) var(--space-2) var(--space-3); }
+.phone-composer { display: flex; align-items: flex-end; gap: var(--space-1); flex: none; padding: var(--space-1-5) var(--space-2) var(--space-3); }
 .composer-icon { display: grid; place-items: center; width: 36px; height: 36px; flex: none; color: var(--md-on-surface-variant); }
 .composer-icon svg { width: 22px; height: 22px; }
+/* Like the app's composer: the draft wraps and the field grows up to five lines,
+   keeping the newest line (and the caret) in view. */
 .composer-input {
-  flex: 1; min-width: 0; height: 40px; display: flex; align-items: center; padding: 0 var(--space-4); border-radius: 20px;
+  flex: 1; min-width: 0; min-height: 40px; max-height: calc(5 * 20px + 20px); display: flex; flex-direction: column; justify-content: flex-end;
+  overflow: hidden; padding: 10px var(--space-4); border-radius: 20px; line-height: 20px; transition: min-height 120ms var(--md-ease);
   background: var(--md-surface-container-high); color: var(--md-on-surface-variant); font: var(--type-body-medium); font-size: 15px;
 }
 .composer-mic { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 50%; background: var(--md-primary); color: var(--md-on-primary); }
 .composer-mic svg { width: 20px; height: 20px; }
 .composer-input.composing { color: var(--md-on-surface); }
-.composer-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.composing .composer-text { text-overflow: clip; }
-.composer-caret { flex: none; width: 2px; height: 18px; margin-left: 2px; background: var(--md-primary); animation: caret-blink 700ms step-end infinite; }
+.composer-text { overflow-wrap: anywhere; white-space: pre-wrap; }
+.composer-input:not(.composing) .composer-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.composer-caret { display: inline-block; width: 2px; height: 18px; margin-left: 2px; vertical-align: -4px; background: var(--md-primary); animation: caret-blink 700ms step-end infinite; }
 .composer-mic { position: relative; transition: transform 150ms var(--md-ease); }
 .composer-mic.pressing { transform: scale(0.86); }
 .composer-tap { position: absolute; inset: -5px; border: 2px solid var(--md-primary); border-radius: 50%; animation: composer-tap 220ms ease-out both; }

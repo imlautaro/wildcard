@@ -7,9 +7,9 @@
 <h1 align="center">Wildcard</h1>
 
 <p align="center">
-  <strong>AI contacts that text you first.</strong><br>
-  Create a cast of AI contacts, each with their own name, face, personality and memory.<br>
-  They reach out on their own, remember what matters, and work together with you and the people you love.
+  <strong>AI contacts that are more than assistants.</strong><br>
+  Each one has its own face, personality and memory. They help like any assistant, but you can also<br>
+  share them with the people you love, bring them into group chats with a shared memory, and they even text you first.
 </p>
 
 <p align="center">
@@ -78,6 +78,13 @@ transcripts, and can pass a message along signed with your name. → [Sharing](d
 <p align="center">
   <img src=".github/assets/share-contact.png" width="760" alt="Alex and Sam each chat privately with Coco, who remembers the family dates for both">
 </p>
+
+### Knows what to keep to itself.
+
+Shared memory, with a friend's judgment. If Bruno is going to bed early, Coco gives Sabrina a heads-up
+before she plans a late movie night. If Bruno is planning Sabrina's surprise party, Coco doesn't say a
+word. Surprises, gifts and anything you ask it not to repeat stay in your chat, whatever your settings.
+→ [Discretion](docs/privacy.md#discretion)
 
 ### Group chats where the AI pulls its weight.
 

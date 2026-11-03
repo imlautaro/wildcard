@@ -1,85 +1,64 @@
 <script setup lang="ts">
-// Memory: the same facts as one global pool that leaks into every chat, then as
-// one memory per contact. The chips fly between the pool and the per-contact
-// vaults (FLIP), and each chat's latest reply changes with the mode.
-interface Lane { who: CastId; chat: string; leaked: string; clean: string }
+// Memory: the same facts and the same three chats, side by side. Left, one memory
+// for everything: the facts are tangled together and every reply drags in another
+// chat's business. Right, Wildcard: one memory per contact and on-topic replies.
+// Both sides answer at the same beat, so the difference reads at a glance.
+interface Lane { who: CastId; chat: string; facts: [string, string]; leaked: string; clean: string }
 const { t } = useI18n();
 const lanes = computed<Lane[]>(() => [
-  { who: 'theo', chat: t('memoryScene.theoChat'), leaked: t('memoryScene.theoLeaked'), clean: t('memoryScene.theoClean') },
-  { who: 'ivy', chat: t('memoryScene.ivyChat'), leaked: t('memoryScene.ivyLeaked'), clean: t('memoryScene.ivyClean') },
-  { who: 'pixel', chat: t('memoryScene.pixelChat'), leaked: t('memoryScene.pixelLeaked'), clean: t('memoryScene.pixelClean') },
+  { who: 'theo', chat: t('memoryScene.theoChat'), facts: [t('memoryScene.factOpening'), t('memoryScene.factSupplier')], leaked: t('memoryScene.theoLeaked'), clean: t('memoryScene.theoClean') },
+  { who: 'ivy', chat: t('memoryScene.ivyChat'), facts: [t('memoryScene.factMarathon'), t('memoryScene.factPace')], leaked: t('memoryScene.ivyLeaked'), clean: t('memoryScene.ivyClean') },
+  { who: 'pixel', chat: t('memoryScene.pixelChat'), facts: [t('memoryScene.factExam'), t('memoryScene.factEntropy')], leaked: t('memoryScene.pixelLeaked'), clean: t('memoryScene.pixelClean') },
 ]);
-const chips = computed<{ id: string; text: string; lane: number }[]>(() => [
-  { id: 'opening', text: t('memoryScene.factOpening'), lane: 0 },
-  { id: 'supplier', text: t('memoryScene.factSupplier'), lane: 0 },
-  { id: 'marathon', text: t('memoryScene.factMarathon'), lane: 1 },
-  { id: 'pace', text: t('memoryScene.factPace'), lane: 1 },
-  { id: 'exam', text: t('memoryScene.factExam'), lane: 2 },
-  { id: 'entropy', text: t('memoryScene.factEntropy'), lane: 2 },
-]);
+// The pooled memory shuffles every chat's facts together.
+const tangled = computed(() => {
+  const [a, b, c] = lanes.value.map((lane) => lane.facts);
+  return [a![0], c![1], b![1], a![1], c![0], b![0]];
+});
 
 const root = ref<HTMLElement | null>(null);
-// 0 pooled · 1–3 leaked replies · 4 separated · 5–7 clean replies
-const { step, fading } = useScene(root, [1400, 1300, 1300, 2600, 1500, 1200, 1200], { hold: 4400 });
-const separated = computed(() => step.value >= 4);
-const replyShown = (lane: number) => (separated.value ? step.value >= 5 + lane : step.value >= 1 + lane);
-
-// FLIP: measure every chip before the DOM moves, then animate from the old spot.
-const chipRefs = new Map<string, HTMLElement>();
-const setChip = (id: string) => (el: unknown) => { if (el instanceof HTMLElement) chipRefs.set(id, el); else chipRefs.delete(id); };
-watch(separated, async () => {
-  const before = new Map([...chipRefs].map(([id, el]) => [id, el.getBoundingClientRect()]));
-  await nextTick();
-  for (const [id, el] of chipRefs) {
-    const from = before.get(id);
-    if (!from) continue;
-    const to = el.getBoundingClientRect();
-    el.animate([
-      { transform: `translate(${from.left - to.left}px, ${from.top - to.top}px)` },
-      { transform: 'none' },
-    ], { duration: 900, easing: 'cubic-bezier(0.2, 0, 0, 1)', delay: chips.value.findIndex((c) => c.id === id) * 50, fill: 'backwards' });
-  }
-}, { flush: 'pre' });
+// Beats: 1 facts · 2–4 replies from Theo, Ivy, Pixel on both sides
+const { step, fading } = useScene(root, [700, 1500, 1800, 1800], { hold: 5200 });
 </script>
 
 <template>
-  <div ref="root" class="memory-scene scene stage" :class="{ fading, separated }">
-    <div class="mode" aria-hidden="true">
-      <span :class="{ on: !separated }"><SiteIcon v-if="!separated" name="done" />{{ t('memoryScene.others') }}</span>
-      <span :class="{ on: separated }"><SiteIcon v-if="separated" name="done" />Wildcard</span>
-    </div>
-
-    <div class="pool" :class="{ empty: separated }">
-      <span class="pool-label"><SiteIcon name="brain" />{{ separated ? t('memoryScene.noPool') : t('memoryScene.pooled') }}</span>
-      <div class="chip-row">
-        <template v-if="!separated">
-          <span v-for="chip in chips" :key="chip.id" :ref="setChip(chip.id)" class="fact">{{ chip.text }}</span>
-        </template>
+  <div ref="root" class="memory-scene scene" :class="{ fading }">
+    <div class="side pooled">
+      <header>
+        <span class="mark"><SiteIcon name="close" /></span>
+        <span><strong>{{ t('memoryScene.others') }}</strong><small>{{ t('memoryScene.pooled') }}</small></span>
+      </header>
+      <div class="tangle">
+        <SiteIcon name="brain" class="tangle-icon" />
+        <span v-for="(fact, i) in tangled" :key="fact" class="fact" :class="[`t${i}`, { in: step >= 1 }]" :style="{ '--i': i }">{{ fact }}</span>
+      </div>
+      <div class="replies">
+        <div v-for="(lane, i) in lanes" :key="lane.who" class="reply" :class="{ in: step >= 2 + i }">
+          <ContactAvatar :who="lane.who" :size="30" />
+          <div>
+            <p class="msg leaked">{{ lane.leaked }}</p>
+            <span class="verdict bad"><SiteIcon name="close" />{{ t('memoryScene.offTopic') }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="lanes">
-      <div v-for="(lane, index) in lanes" :key="lane.who" class="lane">
-        <div class="lane-head">
-          <ContactAvatar :who="lane.who" :size="32" />
+    <div class="side separate">
+      <header>
+        <span class="mark"><SiteIcon name="check" /></span>
+        <span><strong>Wildcard</strong><small>{{ t('memoryScene.perContact') }}</small></span>
+      </header>
+      <div v-for="(lane, i) in lanes" :key="lane.who" class="lane">
+        <div class="who">
+          <ContactAvatar :who="lane.who" :size="36" />
           <span><strong>{{ cast[lane.who].name }}</strong><small>{{ lane.chat }}</small></span>
         </div>
-        <div class="vault" :class="{ open: separated }">
-          <template v-if="separated">
-            <span v-for="chip in chips.filter((c) => c.lane === index)" :key="chip.id" :ref="setChip(chip.id)" class="fact">{{ chip.text }}</span>
-          </template>
+        <div class="facts">
+          <span v-for="fact in lane.facts" :key="fact" class="fact" :class="{ in: step >= 1 }">{{ fact }}</span>
         </div>
-        <div class="lane-chat">
-          <Transition name="swap" mode="out-in">
-            <div v-if="replyShown(index)" :key="separated ? 'clean' : 'leaked'" class="bubble-row incoming">
-              <div class="bubble" :class="{ leaked: !separated }">
-                {{ separated ? lane.clean : lane.leaked }}
-              </div>
-            </div>
-          </Transition>
-          <span v-if="replyShown(index)" class="verdict" :class="separated ? 'ok' : 'bad'">
-            <SiteIcon :name="separated ? 'check' : 'close'" />{{ separated ? t('memoryScene.onTopic') : t('memoryScene.offTopic') }}
-          </span>
+        <div class="reply" :class="{ in: step >= 2 + i }">
+          <p class="msg">{{ lane.clean }}</p>
+          <span class="verdict ok"><SiteIcon name="check" />{{ t('memoryScene.onTopic') }}</span>
         </div>
       </div>
     </div>
@@ -87,62 +66,68 @@ watch(separated, async () => {
 </template>
 
 <style scoped>
-.memory-scene { display: flex; flex-direction: column; gap: var(--space-4); padding: clamp(16px, 3vw, 28px); }
-.mode {
-  align-self: center; display: inline-flex; padding: 4px; border-radius: var(--md-shape-full);
-  background: var(--md-surface-container-highest); font: var(--type-label-large);
-}
-.mode span {
-  display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--space-4); border-radius: var(--md-shape-full);
-  color: var(--md-on-surface-variant); transition: background-color var(--md-motion-medium) linear, color var(--md-motion-medium) linear;
-}
-.mode span.on { background: var(--md-surface); color: var(--md-on-surface); box-shadow: var(--md-elevation-1); }
-.mode svg { width: 16px; height: 16px; }
-.separated .mode span.on { background: var(--md-primary); color: var(--md-on-primary); }
+.memory-scene { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: var(--space-4); align-items: stretch; }
+.side { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; padding: clamp(16px, 2.5vw, 24px); border-radius: var(--site-radius); }
+.side header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-1); }
+.side header > span:last-child { display: flex; flex-direction: column; line-height: 1.25; }
+.side header strong { font: var(--type-title-medium); }
+.side header small { font: var(--type-body-small); opacity: 0.8; }
+.mark { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: var(--md-shape-full); }
+.mark svg { width: 18px; height: 18px; }
 
-.pool {
-  display: flex; flex-direction: column; align-items: center; gap: var(--space-3); min-height: 116px; padding: var(--space-4);
-  border-radius: var(--md-shape-xl); background: color-mix(in srgb, var(--md-error) 7%, var(--md-surface));
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--md-error) 26%, transparent);
-  transition: background-color 600ms linear, box-shadow 600ms linear, opacity 600ms linear;
-}
-.pool.empty { background: transparent; box-shadow: inset 0 0 0 1.5px var(--md-outline-variant); opacity: 0.55; }
-.pool-label { display: inline-flex; align-items: center; gap: var(--space-1-5); font: var(--type-label-medium); color: var(--md-on-surface-variant); }
-.pool-label svg { width: 16px; height: 16px; }
-.chip-row { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); }
+.pooled { background: var(--md-surface-container-low); color: var(--md-on-surface-variant); }
+.pooled .mark { background: color-mix(in srgb, var(--md-error) 14%, transparent); color: var(--md-error); }
+.separate { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.separate .mark { background: var(--md-primary); color: var(--md-on-primary); }
+
 .fact {
-  display: inline-flex; align-items: center; height: 30px; padding: 0 var(--space-3); border-radius: var(--md-shape-full);
-  background: var(--md-surface); box-shadow: var(--md-elevation-1); font: var(--type-label-medium); font-size: 12.5px; white-space: nowrap;
+  display: inline-flex; align-items: center; height: 28px; padding: 0 var(--space-3); border-radius: var(--md-shape-full);
+  background: var(--md-surface); color: var(--md-on-surface); box-shadow: var(--md-elevation-1);
+  font: var(--type-label-medium); font-size: 12.5px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0; transform: scale(0.8); transition: opacity 300ms, transform 450ms var(--ui-ease-spring);
 }
+.fact.in { opacity: 1; transform: rotate(var(--r, 0deg)); }
 
-.lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
-.lane { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; padding: var(--space-3); border-radius: var(--md-shape-xl); background: var(--md-surface); }
-.lane-head { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
-.lane-head span { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
-.lane-head strong { font: var(--type-title-small); }
-.lane-head small { font: var(--type-body-small); color: var(--md-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vault {
-  display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1-5); min-height: 76px; padding: var(--space-2);
-  border-radius: var(--md-shape-l); background: var(--md-surface-container); transition: background-color 600ms linear;
+.tangle {
+  position: relative; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); padding: var(--space-5) var(--space-3);
+  border-radius: var(--md-shape-xl); border: 2px dashed color-mix(in srgb, var(--md-error) 35%, var(--md-outline-variant));
+  background: color-mix(in srgb, var(--md-error) 5%, transparent);
 }
-.vault.open { background: color-mix(in srgb, var(--md-primary) 9%, var(--md-surface-container)); }
-.vault .fact { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.lane-chat { display: flex; flex-direction: column; gap: var(--space-2); min-height: 150px; justify-content: flex-end; }
-.lane-chat .bubble { max-width: 100%; font-size: 13.5px; line-height: 19px; }
-.bubble.leaked { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--md-error) 45%, transparent); }
-.verdict { display: inline-flex; align-items: center; gap: var(--space-1); font: var(--type-label-small); }
+.tangle-icon { position: absolute; top: -11px; left: 50%; width: 22px; height: 22px; padding: 2px; transform: translateX(-50%); border-radius: var(--md-shape-full); background: var(--md-surface-container-low); color: var(--md-error); }
+.t0 { --r: -4deg; } .t1 { --r: 3deg; } .t2 { --r: -2deg; } .t3 { --r: 5deg; } .t4 { --r: -5deg; } .t5 { --r: 2deg; }
+.tangle .fact.t1, .tangle .fact.t3 { margin-top: 6px; }
+.tangle .fact { transition-delay: calc(var(--i, 0) * 60ms); }
+
+.replies { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-1); }
+.reply { display: flex; gap: var(--space-2); align-items: flex-start; opacity: 0; transform: translateY(8px); transition: opacity 350ms, transform 450ms var(--md-ease-decelerate); }
+.reply.in { opacity: 1; transform: none; }
+.reply > div, .lane .reply { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.msg {
+  margin: 0; padding: 9px 14px; border-radius: 18px 18px 18px 4px; background: var(--md-surface); color: var(--md-on-surface);
+  font: var(--type-body-medium); font-size: 14px; line-height: 20px;
+}
+.msg.leaked { background: color-mix(in srgb, var(--md-error) 8%, var(--md-surface)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--md-error) 35%, transparent); }
+.verdict { display: inline-flex; align-items: center; gap: 4px; font: var(--type-label-small); }
 .verdict svg { width: 14px; height: 14px; }
 .verdict.bad { color: var(--md-error); }
 .verdict.ok { color: var(--md-success); }
-.swap-enter-active { transition: opacity 320ms var(--md-ease), transform 420ms var(--md-ease-decelerate); }
-.swap-leave-active { transition: opacity 200ms var(--md-ease); }
-.swap-enter-from { opacity: 0; transform: translateY(8px); }
-.swap-leave-to { opacity: 0; }
 
-@media (max-width: 720px) {
-  .lanes { grid-template-columns: minmax(0, 1fr); }
-  .lane { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .lane-chat { min-height: 0; }
-  .vault { flex-direction: row; flex-wrap: wrap; min-height: 46px; }
+.lane {
+  display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: var(--space-2) var(--space-4); align-items: start;
+  padding: var(--space-3) var(--space-4); border-radius: var(--md-shape-xl); background: color-mix(in srgb, var(--md-surface) 55%, transparent); color: var(--md-on-surface);
+}
+.lane .who { display: flex; align-items: center; gap: var(--space-2); grid-row: span 2; min-width: 0; }
+.lane .who span { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.lane .who strong { font: var(--type-title-small); }
+.lane .who small { font: var(--type-body-small); color: var(--md-on-surface-variant); }
+.facts { display: flex; flex-wrap: wrap; gap: var(--space-1-5); }
+.lane .msg { background: var(--md-surface); }
+
+@media (max-width: 900px) {
+  .memory-scene { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .lane { grid-template-columns: minmax(0, 1fr); }
+  .lane .who { grid-row: auto; }
 }
 </style>

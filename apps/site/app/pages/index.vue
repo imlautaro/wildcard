@@ -42,7 +42,7 @@ const metaModels = computed(() => [
             <AppButton :to="`${localePath('/')}#open-source`" variant="tonal" size="large">{{ t('hero.selfHost') }}</AppButton>
           </div>
         </div>
-        <HeroScene />
+        <HeroCards />
       </div>
       <div class="container">
         <ul class="proof">
@@ -144,6 +144,19 @@ const metaModels = computed(() => [
           <div class="point reveal"><span class="disc"><SiteIcon name="memory" /></span><h3>{{ t('together.memory') }}</h3><p>{{ t('together.memoryText') }}</p></div>
           <div class="point reveal delay-1"><span class="disc"><SiteIcon name="chat" /></span><h3>{{ t('together.relay') }}</h3><p>{{ t('together.relayText') }}</p></div>
           <div class="point reveal delay-2"><span class="disc"><SiteIcon name="alarm" /></span><h3>{{ t('together.timers') }}</h3><p>{{ t('together.timersText') }}</p></div>
+        </div>
+
+        <div class="discretion-block">
+          <div class="section-head reveal">
+            <span class="eyebrow"><SiteIcon name="lock" />{{ t('discretion.eyebrow') }}</span>
+            <h3 class="sub-title">{{ t('discretion.title') }}</h3>
+            <p class="lead">{{ t('discretion.lead') }}</p>
+          </div>
+          <DiscretionScene class="reveal" />
+          <div class="points">
+            <div class="point reveal"><span class="disc"><SiteIcon name="bell" /></span><h3>{{ t('discretion.speak') }}</h3><p>{{ t('discretion.speakText') }}</p></div>
+            <div class="point reveal delay-1"><span class="disc"><SiteIcon name="incognito" /></span><h3>{{ t('discretion.secret') }}</h3><p>{{ t('discretion.secretText') }}</p></div>
+          </div>
         </div>
       </div>
     </section>
@@ -314,6 +327,7 @@ const metaModels = computed(() => [
 .wildcard li svg { color: var(--md-primary); }
 
 .catch-split { margin-top: clamp(72px, 9vw, 120px); }
+.discretion-block { margin-top: clamp(72px, 9vw, 120px); }
 
 /* Meta band */
 .meta-band {

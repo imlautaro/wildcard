@@ -1,7 +1,7 @@
 {
   "seo": {
-    "tagline": "AI contacts that text you first",
-    "description": "Create AI contacts with their own name, face, personality and memory. They reach out on their own, remember what matters, and work together with you and the people you love. Open source, powered by Meta AI models."
+    "tagline": "AI contacts that are more than assistants",
+    "description": "Create AI contacts with their own name, face, personality and memory. Share them with the people you love, bring them into group chats with shared memory, and they even text you first. Open source, powered by Meta AI models."
   },
   "common": {
     "documentation": "Documentation",
@@ -52,8 +52,8 @@
   },
   "hero": {
     "chip": "Powered by Meta AI models · Open source",
-    "title": "AI contacts that text you first.",
-    "lead": "Create a cast of AI contacts, each with their own name, face, personality and memory. They reach out on their own, remember what matters, and work together with you and the people you love.",
+    "title": "AI contacts that are more than assistants.",
+    "lead": "Each one has its own face, personality and memory. They help like any assistant, but you can also share them with the people you love, bring them into group chats with a shared memory, and they even text you first.",
     "meet": "Meet your first contacts",
     "selfHost": "Self-host it",
     "proof": {
@@ -65,6 +65,27 @@
       "shareableText": "Family, friends, groups",
       "openSource": "Open source",
       "openSourceText": "Self-host on Cloudflare"
+    }
+  },
+  "heroCards": {
+    "remembers": "Remembers",
+    "theo": {
+      "role": "Bakery co-pilot",
+      "traits": "Calm · Detail-minded · Dry humor",
+      "memory": "Your bakery opens on the 14th",
+      "badge": "In “Lisbon in March ✈️”"
+    },
+    "coco": {
+      "role": "Family helper",
+      "traits": "Warm · Organized · Playful",
+      "memory": "Luna’s vet visit is Thursday",
+      "badge": "Shared with Sabrina"
+    },
+    "ivy": {
+      "role": "Marathon coach",
+      "traits": "Energetic · Direct · Encouraging",
+      "memory": "Marathon on May 3 at 5:40/km",
+      "badge": "Texted you first"
     }
   },
   "why": {
@@ -119,13 +140,22 @@
     "eyebrow": "Better together",
     "title": "Share a contact.",
     "titleSoft": "Keep your own chat.",
-    "lead": "Invite your partner, a friend or your family to one of your contacts. Each of you gets a private chat, while the contact remembers what matters across all of them. Tell it something in the morning, and it can answer your sister about it in the afternoon.",
+    "lead": "Invite your partner, a friend or your family to one of your contacts. Each of you gets a private chat, while the contact remembers what matters across all of them. Tell it something in the morning, and it can answer your partner about it in the afternoon.",
     "memory": "Shared memory, private chats",
     "memoryText": "Everyone talks to the contact on their own. It remembers facts, never full transcripts.",
     "relay": "Pass a message along",
-    "relayText": "\"Tell Sam I'm bringing dinner.\" The contact delivers it to Sam's private chat, signed with your name.",
+    "relayText": "\"Tell Sabrina I'm making dinner tonight.\" The contact delivers it to Sabrina's private chat, signed with your name.",
     "timers": "Timers on their phone",
     "timersText": "With their permission, a shared contact can set a timer or alarm on the other person's iPhone."
+  },
+  "discretion": {
+    "eyebrow": "Discretion",
+    "title": "Knows what to keep to itself.",
+    "lead": "Shared memory, with a friend's judgment. If Bruno is going to bed early, Coco gives Sabrina a heads-up before she plans a late movie night. If Bruno is planning Sabrina's surprise party, Coco doesn't say a word. Not even a hint.",
+    "speak": "Speaks up when it matters",
+    "speakText": "A plan that clashes with what the other person said? The contact mentions it, briefly and only when it's relevant.",
+    "secret": "Secrets stay secret",
+    "secretText": "Surprises, gifts and anything you ask it not to repeat stay in your chat. Always, whatever your settings."
   },
   "groups": {
     "eyebrow": "Groups",
@@ -207,7 +237,7 @@
     "replaceQ": "Is Wildcard trying to replace ChatGPT, Claude or Grok?",
     "replaceA": "No. Wildcard won't drive your browser, run code in a sandbox or spin up a virtual machine, and it isn't trying to. Keep using those tools for that. Wildcard is about the part of AI that feels like people: contacts with their own personality and memory, who stay in touch and work alongside you and the people around you.",
     "privacyQ": "Who can see what I tell a contact?",
-    "privacyA": "Your contacts are yours. If you share one, it remembers short facts across its participants (never full transcripts), and both sides agree to that when the contact is shared. Turn on \"Keep this chat private\" and nothing from that chat leaves it: not to groups, not to other people, not to your other contacts.",
+    "privacyA": "Your contacts are yours. If you share one, it remembers short facts across its participants (never full transcripts), and both sides agree to that when the contact is shared. What you tell it in confidence, like a surprise or a gift, stays in your chat. Turn on \"Keep this chat private\" and nothing from that chat leaves it: not to groups, not to other people, not to your other contacts.",
     "spamQ": "Will my contacts spam me?",
     "spamA": "No. They reach out when there's something worth saying, around the times you usually reply. If one message goes unanswered, they wait for you to write back. You can switch initiative off for any contact, or just tell it to stop.",
     "sharingQ": "How do contacts learn about each other's projects?",
@@ -234,33 +264,10 @@
     "message": "Message",
     "online": "online"
   },
-  "heroScene": {
-    "chats": "Chats",
-    "now": "now",
-    "typing": "typing…",
-    "milaNew": "Apple just posted the MacBook Pro recap. Want the 3 things that actually matter?",
-    "milaNewTime": "7:58 PM",
-    "ivyNew": "Rest day tomorrow 🧘 How are the legs after the 18K?",
-    "ivyNewTime": "8:03 PM",
-    "theoNew": "Did the oat-milk supplier ever send the second quote?",
-    "theoNewTime": "8:11 PM",
-    "nova": "Sounds good, talk tomorrow!",
-    "novaTime": "6:20 PM",
-    "pixel": "Flashcards are ready: 24 on entropy 🔋",
-    "pixelTime": "5:02 PM",
-    "theo": "You: Logo is final 🎉",
-    "theoTime": "3:47 PM",
-    "coco": "Grocery list updated 🛒",
-    "cocoTime": "1:15 PM",
-    "ivy": "You: Done! 18K at 5:40/km",
-    "ivyTime": "9:12 AM",
-    "mila": "haha told you so",
-    "milaTime": "Yesterday"
-  },
   "memoryScene": {
     "others": "Other AI apps",
     "pooled": "One memory for every chat",
-    "noPool": "No shared pool",
+    "perContact": "One memory per contact",
     "onTopic": "On topic",
     "offTopic": "Off-topic memory",
     "theoChat": "Bakery launch",
@@ -314,24 +321,40 @@
     "emoji": "Emoji"
   },
   "sharedScene": {
-    "alexChat": "Alex's private chat",
-    "samChat": "Sam's private chat",
-    "sharedWith": "Shared with Sam",
-    "sharedBy": "Shared by Alex",
+    "brunoChat": "Bruno's private chat",
+    "sabrinaChat": "Sabrina's private chat",
+    "sharedWith": "Shared with Sabrina",
+    "sharedBy": "Shared by Bruno",
     "oneMemory": "One memory",
-    "fact": "Grandpa's flight lands at 6:40, terminal B ✈️",
-    "ack": "Got it! I'll keep everyone posted 🐾",
-    "relay": "Tell Sam I'm bringing dinner 🍝",
-    "sent": "Sent to Sam ✓",
-    "timer": "And set a 20-minute timer on Sam's phone for the oven",
-    "timerDone": "Done, it's running on Sam's iPhone ⏱️",
-    "ask": "What time do we pick up grandpa?",
-    "answer": "His flight lands at {time}, terminal B. Alex told me this morning.",
+    "fact": "Luna's vet appointment is Thursday at 6:40 🐶",
+    "ack": "Got it! I'll remind you both 🐾",
+    "relay": "Tell Sabrina I'm making dinner tonight 🍝",
+    "sent": "Sent to Sabrina ✓",
+    "timer": "And set a 20-minute timer on Sabrina's phone for the oven",
+    "timerDone": "Done, it's running on Sabrina's iPhone ⏱️",
+    "ask": "When is Luna's vet appointment?",
+    "answer": "Thursday at {time}. Bruno told me this morning.",
     "answerTime": "6:40",
-    "relayFrom": "Message from \"Alex\"",
-    "relayText": "I'm bringing dinner 🍝",
+    "relayFrom": "Message from \"Bruno\"",
+    "relayText": "I'm making dinner tonight 🍝",
     "timerLabel": "Oven · from Coco",
-    "allowed": "Allowed by Sam"
+    "allowed": "Allowed by Sabrina"
+  },
+  "discretionScene": {
+    "brunoChat": "Bruno's private chat",
+    "sabrinaChat": "Sabrina's private chat",
+    "sharedWith": "Shared with Sabrina",
+    "sharedBy": "Shared by Bruno",
+    "sleep": "Going to bed early tonight, my flight is at 7 tomorrow 😴",
+    "sleepAck": "Got it, sleep well! I'll check in after you land ✈️",
+    "party": "And Saturday I'm throwing Sabrina a surprise party 🎉 Not a word!",
+    "partyAck": "My lips are sealed 🤐",
+    "ask": "Tonight I want to stay up late watching movies with Bruno. Any ideas?",
+    "answer": "Heads-up: Bruno said he's going to bed early, he flies at 7 tomorrow 😴 Maybe one short movie? Paddington 2 is perfect.",
+    "shared": "Early night",
+    "sharedNote": "Shared",
+    "secret": "Surprise party",
+    "secretNote": "Only in Bruno's chat"
   },
   "groupScene": {
     "title": "Lisbon in March ✈️",

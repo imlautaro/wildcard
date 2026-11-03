@@ -9,7 +9,10 @@ export function useChatScene(
   interface Beat { step: number; message?: number; progress?: number; pressing?: boolean }
   const beats: Beat[] = [{ step: 0 }];
   const timing: number[] = [];
-  const append = (delay: number, beat: Beat) => { timing.push(delay); beats.push(beat); };
+  // Chat scenes run a little slower than the scene timings they are given, so each
+  // message can be read before the next one arrives.
+  const pace = 1.3;
+  const append = (delay: number, beat: Beat) => { timing.push(Math.round(delay * pace)); beats.push(beat); };
   delays.forEach((delay, index) => {
     const message = messages.findIndex(item => item.step === index + 1);
     if (message >= 0) {
