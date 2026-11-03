@@ -219,24 +219,30 @@ connector post.
 
 ## News scan
 
-Before planning, a run may scan the web for what is new this week around the person's
-interests, so topics can react to what actually happened (`scanNews` in
-`home/curator.ts`):
+Before planning, a run may scan the web for what is new around the person's main
+interests, one search per interest, so topics can react to what actually happened
+(`scanNews` in `home/curator.ts`):
 
-1. If a scan from the last eight hours exists (`home_research` with `topic_id =
-   'news-scan'`), it is reused at no cost.
-2. Otherwise one small model call (`reasoning: minimal`) writes a single public query
-   from what contacts remember, recent messages and followed topics. It is told to
-   combine two to four specific interests and never include names, contacts, private
-   details, health or money; it returns an empty query when interests are thin.
-3. The query goes through the For you research path (`homeResearch`), so it uses the
-   same budgets and replay as composer searches.
+1. If scans from the last twelve hours exist (`home_research` with `topic_id =
+   'news-scan'`, up to three), they are reused at no cost.
+2. Otherwise one small model call (`reasoning: minimal`) picks up to three of the
+   person's strongest ongoing interests and writes one public query for each, never
+   combining interests. Strongest first: requested topics, then what the person raises in
+   messages or comments, then contact memories; one-off questions and passing mentions are
+   not interests. It gets today's date and names the subject and current month and year in
+   each query. It never includes names, contacts, private details, health or money, and
+   returns no queries when interests are thin.
+3. The queries run side by side through the For you research path (`homeResearch`),
+   with ids fixed per revision and index, so they share the budgets and a retried step
+   replays them. A failed search is left out.
 
-The report (clipped) reaches the editor as `worldThisWeek` and non-connector composers as
-`whatsNewThisWeek`, with its sources. Any failure plans without it. Like composer
-queries, the query is written by a model under instructions, not filtered
-deterministically. The query writer is given today's date and asked to name the current
-month and year so the search favors recent pages.
+The editor gets every scan (clipped) as `worldThisWeek`, labeled by interest and query.
+A non-connector composer gets the scans whose interest or query matches its topic's
+keywords (`whatsNewThisWeek`), or all of them shorter when none matches. Any failure plans
+without them. Like composer queries, the queries are written by a model under
+instructions, not filtered deterministically. The daily For you research cap is 18
+(three scans every twelve hours leave composers about twelve searches a day); runs
+checkpointed before per-interest scans carry a single scan and still work (`newsScans`).
 
 ## Freshness
 
@@ -540,15 +546,15 @@ an exchange-rate tool or last month's spending from a personal finance connector
 `research_web` in For you calls the same research model as conversational research
 with a public query written by the contact (instructions forbid personal details).
 Each search reserves one slot of the account's and the global daily web research
-budget (`web_research_usage`, 30 and 300 per 24 hours) and one of For you' own 15 per
-person per 24 hours (`home_research`; 12 before 2026-11-02, raised by three for the
-[news scan](#news-scan), which runs at most once every eight hours). Findings are saved with the reservation, so a
+budget (`web_research_usage`, 30 and 300 per 24 hours) and one of For you' own 18 per
+person per 24 hours (`home_research`; 12 before 2026-11-02, 15 with the single-query
+[news scan](#news-scan), 18 since its three per-interest searches every twelve hours on 2026-11-03). Findings are saved with the reservation, so a
 retried Workflow step reuses them instead of searching again. Saved findings are
 deleted after two days (bounded cleanup on later reservations). `WEB_RESEARCH_ENABLED`
 also disables For you searches.
 
-Cost bounds per run: one planning call, at most one news-scan query call and search
-(skipped when a scan from the last eight hours exists), at most six cards, four model
+Cost bounds per run: one planning call, at most one news-scan query call and three searches
+(skipped when scans from the last twelve hours exist), at most six cards, four model
 rounds per card, four searches and three connector reads per card.
 
 ## API

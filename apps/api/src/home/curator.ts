@@ -8,9 +8,9 @@ import { cardKinds, homeAccents, homeIcons, kindGuide, parseCard, parsePostText,
 import { homeReadable, type HomeContact, type HomeSignals } from './signals';
 
 export const homeLimits = {
-  // researchDaily includes the news scan (at most one per scanEvery), so composers keep about twelve searches a day.
-  topics: 8, composePerRun: 6, rounds: 4, researchPerRun: 4, researchDaily: 15, connectorCalls: 3,
-  suggestions: 5, scanEvery: 8 * 3_600_000, quotable: 6, quotableFor: 3 * 86_400_000,
+  // researchDaily includes the news scan (up to scanInterests searches per scanEvery), so composers keep about twelve searches a day.
+  topics: 8, composePerRun: 6, rounds: 4, researchPerRun: 4, researchDaily: 18, connectorCalls: 3,
+  suggestions: 5, scanEvery: 12 * 3_600_000, scanInterests: 3, quotable: 6, quotableFor: 3 * 86_400_000,
   personTopics: 20, contactTopics: 30,
   // Consecutive skips after which a curator topic is retired (requested topics never are).
   skipsToRetire: 3,
@@ -22,11 +22,14 @@ export type PlannedTopic = { id: string | null; title: string; brief: string; re
   request?: string };
 export type TopicSuggestion = { title: string; reason: string };
 export type HomePlan = { language: string; briefing: string; topics: PlannedTopic[]; suggestions: TopicSuggestion[] };
-// A public web scan of what is new this week around the person's interests (docs/updates.md#news-scan).
-export type NewsScan = { report: string; sources: { title: string; url: string }[]; checkedAt: string; unconfirmed?: boolean };
+// One public web search for what is new around one of the person's interests (docs/updates.md#news-scan).
+// interest and query are missing on scans checkpointed before per-interest scans.
+export type NewsScan = { interest?: string; query?: string; report: string; sources: { title: string; url: string }[]; checkedAt: string; unconfirmed?: boolean };
+// Runs checkpointed before per-interest scans carry one scan object instead of a list.
+export const newsScans = (news: NewsScan[] | NewsScan | null | undefined): NewsScan[] => Array.isArray(news) ? news : news ? [news] : [];
 // What a composer needs about the person; checkpointed with the plan.
 export type ComposeContext = { userID: string; userName: string; timeZone: string; language: string;
-  memories: HomeSignals['memories']; messages: HomeSignals['messages']; contacts: HomeContact[]; connectors: string[]; news?: NewsScan | null };
+  memories: HomeSignals['memories']; messages: HomeSignals['messages']; contacts: HomeContact[]; connectors: string[]; news?: NewsScan[] | NewsScan | null };
 // Another contact's recent post a composer may quote, like a quote post on X (docs/updates.md#quote-posts).
 export type QuotablePost = { id: string; contact: string; title: string; text: string; at: number };
 
@@ -53,7 +56,7 @@ const kindLines = 'note (a text-first post: a take, a reaction to news, a recomm
   + 'chart (one figure over time), tracker (progress of a process or a wait, such as an application\'s processing time), list (recommendations, releases, events, anything else)';
 
 /** The editor call: which topics For you follows now, in what order, and which contact prepares each. */
-export async function planHome(env: Env, signals: HomeSignals, model: string, news: NewsScan | null = null): Promise<HomePlan> {
+export async function planHome(env: Env, signals: HomeSignals, model: string, news: NewsScan[] = []): Promise<HomePlan> {
   const visible = signals.topics.filter(topic => topic.status === 'active');
   const hidden = signals.topics.filter(topic => topic.status === 'hidden');
   const contactIDs = signals.contacts.map(contact => contact.id);
@@ -75,7 +78,7 @@ export async function planHome(env: Env, signals: HomeSignals, model: string, ne
     hiddenTopics: hidden.map(topic => ({ title: topic.title, brief: clipText(topic.brief, 160) })),
     ...(signals.comments.length ? { theirCommentsOnPosts: signals.comments.map(comment => ({ topic: comment.topic, post: comment.post,
       comment: comment.text, date: date(comment.at, signals.timeZone) })) } : {}),
-    ...(news ? { worldThisWeek: { report: clipText(news.report, 4000), checkedAt: news.checkedAt } } : {}),
+    ...(news.length ? { worldThisWeek: news.map(scan => ({ interest: scan.interest, search: scan.query, report: clipText(scan.report, 2000), checkedAt: scan.checkedAt })) } : {}),
   };
   const answer = await museCompletion(env, [
     { role: 'system', content: [
@@ -86,7 +89,7 @@ export async function planHome(env: Env, signals: HomeSignals, model: string, ne
         + 'what happened and what one of their contacts thinks of it, a recommendation, a prediction before a game or a release, a striking fact from their field, a short recap. '
         + 'Interests include culture, people, ideas, hobbies, their work field, places and creators they mention, not only things with a number. Be specific (a team, a player, a band, a technology, a city), never generic ("technology news", "sports").',
       'Mix formats. At least a third of the topics should be text-first note posts with a clear angle. Use a data layout (matches, metrics, table, chart, tracker) only when a figure actually moves and they care about it (their team\'s results, a currency they track, an application they wait on).',
-      `worldThisWeek, when present, is a public news scan around their interests. ${freshness} Prefer topics that react to what actually happened there when it connects to evidence of their interests, with research true so the contact gets the details.`,
+      `worldThisWeek, when present, lists public news scans, one per interest of theirs. ${freshness} Prefer topics that react to what actually happened there when it connects to evidence of their interests, with research true so the contact gets the details.`,
       'Never invent interests the evidence does not support. With thin evidence return fewer topics rather than generic ones.',
       'Rank interests by strength of evidence: topics the person requested (source "person"), then subjects the person raises themselves in theirRecentMessages '
         + 'or theirCommentsOnPosts, especially repeatedly or recently, then what contacts remember. A one-off question, a task or errand, a single passing mention '
@@ -163,51 +166,69 @@ export async function planHome(env: Env, signals: HomeSignals, model: string, ne
 }
 
 /**
- * One public web search for what is new this week around the person's interests, reused for
- * scanEvery so most runs pay nothing (docs/updates.md#news-scan). The query is written by a model
- * from the person's signals and must stay public: interests only, no names or private details.
- * Never fails a run: any error means planning without it.
+ * Public web searches for what is new around the person's main interests, one per interest
+ * (at most scanInterests), reused for scanEvery so most runs pay nothing (docs/updates.md#news-scan).
+ * The queries are written by a model from the person's signals and must stay public: interests
+ * only, no names or private details. Never fails a run: a failed search is left out.
  */
-export async function scanNews(env: Env, signals: HomeSignals, model: string, scope: { userID: string; id: string }): Promise<NewsScan | null> {
+export async function scanNews(env: Env, signals: HomeSignals, model: string, scope: { userID: string; id: string }): Promise<NewsScan[]> {
   const { userID, id } = scope;
-  if (env.WEB_RESEARCH_ENABLED !== 'true') return null;
+  if (env.WEB_RESEARCH_ENABLED !== 'true') return [];
   try {
-    const recent = await env.DB.prepare(`SELECT result_json AS result FROM home_research WHERE user_id = ? AND topic_id = 'news-scan'
-      AND result_json IS NOT NULL AND created_at > ? ORDER BY created_at DESC LIMIT 1`).bind(userID, Date.now() - homeLimits.scanEvery)
-      .first<{ result: string }>();
-    if (recent) return newsScan(JSON.parse(recent.result) as ResearchResult);
+    const { results: recent } = await env.DB.prepare(`SELECT result_json AS result FROM home_research WHERE user_id = ? AND topic_id = 'news-scan'
+      AND result_json IS NOT NULL AND created_at > ? ORDER BY created_at DESC LIMIT ?`).bind(userID, Date.now() - homeLimits.scanEvery, homeLimits.scanInterests)
+      .all<{ result: string }>();
+    if (recent.length) return recent.map(row => newsScan(JSON.parse(row.result) as ResearchResult));
+    const active = signals.topics.filter(topic => topic.status === 'active');
     const interests = {
-      whatContactsRemember: signals.memories.slice(0, 40).map(memory => memory.content),
+      requestedTopics: active.filter(topic => topic.source !== 'curator').map(topic => ({ title: topic.title, request: clipText(topic.brief, 200) })),
+      otherFollowedTopics: active.filter(topic => topic.source === 'curator').map(topic => topic.title),
       theirRecentMessages: signals.messages.slice(0, 20).map(message => message.text),
-      followedTopics: signals.topics.filter(topic => topic.status === 'active').map(topic => topic.title),
+      theirCommentsOnPosts: signals.comments.map(comment => comment.text),
+      whatContactsRemember: signals.memories.slice(0, 40).map(memory => memory.content),
       hiddenTopics: signals.topics.filter(topic => topic.status === 'hidden').map(topic => topic.title),
     };
     const answer = await museCompletion(env, [
       { role: 'system', content: [
-        'Write one public web search query asking what is new this week across this person\'s main interests (teams, leagues, artists, technologies, fields, hobbies, places), '
-          + 'so their contacts can post about what actually happened. Combine two to four specific interests; skip hidden topics.',
-        `Today is ${localNow(signals.now, signals.timeZone)}. Name the current month and year (or week) in the query so the search favors recent pages.`,
-        'The query is public: never include their name, contacts, private details, health, money or anything only they would know. Write it in the language that gives the best sources.',
-        'Answer {"query":""} when the evidence shows no specific interests.',
+        `Pick this person's ${homeLimits.scanInterests} strongest ongoing interests (a team, a league, an artist, a technology, a field, a hobby, a place) and write one public web search query for each, `
+          + 'asking what is new about that one interest, so their contacts can post about what actually happened. One interest per query, never combined. '
+          + 'Strongest first: requested topics, then what they raise themselves in their messages or comments, then what contacts remember. '
+          + 'A one-off question, an errand or a single passing mention is not an ongoing interest. Skip hidden topics. Fewer queries are better than weak ones.',
+        `Today is ${localNow(signals.now, signals.timeZone)}. Name the specific subject and the current month and year (or week) in each query so the search favors recent pages.`,
+        'Queries are public: never include their name, contacts, private details, health, money or anything only they would know. Write each in the language that gives the best sources for it.',
+        'interest is a short label for the interest (max 40 characters) in the person\'s language. Answer {"scans":[]} when the evidence shows no specific interests.',
         untrusted,
       ].join('\n') },
       { role: 'user', content: JSON.stringify(interests) },
     ], model, { maxTokens: 1024, reasoning: 'minimal', responseFormat: { type: 'json_schema', json_schema: { name: 'news_scan', strict: true, schema: {
-      type: 'object', additionalProperties: false, required: ['query'], properties: { query: { type: 'string' } } } } } });
-    const query = (() => { try { const value = JSON.parse(answer.content ?? '') as { query?: unknown }; return typeof value.query === 'string' ? value.query.trim() : ''; } catch { return ''; } })();
-    if (!query) return null;
-    await homeResearch(env, { userID, id, topicID: 'news-scan', model }, { query: query.slice(0, researchLimits.query) });
-    const saved = await env.DB.prepare('SELECT result_json AS result FROM home_research WHERE id = ?').bind(id).first<{ result: string | null }>();
-    return saved?.result ? newsScan(JSON.parse(saved.result) as ResearchResult) : null;
+      type: 'object', additionalProperties: false, required: ['scans'], properties: { scans: { type: 'array', maxItems: homeLimits.scanInterests, items: {
+        type: 'object', additionalProperties: false, required: ['interest', 'query'], properties: { interest: { type: 'string' }, query: { type: 'string' } } } } } } } } });
+    const planned = (() => {
+      try {
+        const value = JSON.parse(answer.content ?? '') as { scans?: unknown };
+        return (Array.isArray(value.scans) ? value.scans : []).flatMap(item => isRecord(item) && typeof item.query === 'string' && item.query.trim()
+          ? [{ interest: Array.from(String(item.interest ?? '').trim()).slice(0, 40).join(''), query: item.query.trim().slice(0, researchLimits.query) }] : [])
+          .slice(0, homeLimits.scanInterests);
+      } catch { return []; }
+    })();
+    // Searches run side by side; ids are fixed per revision and index, so a retried step replays them.
+    const scans = await Promise.all(planned.map(async (item, index): Promise<NewsScan | null> => {
+      const researchID = `${id}-${index}`;
+      await homeResearch(env, { userID, id: researchID, topicID: 'news-scan', model }, { query: item.query });
+      const saved = await env.DB.prepare('SELECT result_json AS result FROM home_research WHERE id = ?').bind(researchID).first<{ result: string | null }>();
+      return saved?.result ? { ...newsScan(JSON.parse(saved.result) as ResearchResult), ...(item.interest ? { interest: item.interest } : {}) } : null;
+    }));
+    return scans.filter((scan): scan is NewsScan => !!scan);
   } catch (error) {
     console.error(JSON.stringify({ event: 'home_news_scan_failed', code: safeErrorCode(error) }));
-    return null;
+    return [];
   }
 }
 
 const newsScan = (result: ResearchResult): NewsScan => {
   const { markdown, sources, unconfirmed } = attributed(result);
-  return { report: clipText(markdown, 5000), sources, checkedAt: new Date(result.provenance.checkedAt).toISOString(), ...(unconfirmed ? { unconfirmed } : {}) };
+  return { query: result.provenance.query, report: clipText(markdown, 4000), sources, checkedAt: new Date(result.provenance.checkedAt).toISOString(),
+    ...(unconfirmed ? { unconfirmed } : {}) };
 };
 
 const composerTools = (research: boolean, connectors: boolean): ModelTool[] => [
@@ -250,6 +271,10 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
   const memories = context.memories.filter(memory => match(memory.content));
   const messages = context.messages.filter(message => match(message.text));
   const research = topic.research && env.WEB_RESEARCH_ENABLED === 'true' && budget.research > 0;
+  // The scans about this topic's interest; with no clear match, all of them, shorter (docs/updates.md#news-scan).
+  const allScans = topic.connector ? [] : newsScans(context.news);
+  const matching = allScans.filter(scan => match(`${scan.interest ?? ''} ${scan.query ?? ''}`));
+  const scans = matching.length ? matching.map(scan => ({ scan, length: 3000 })) : allScans.map(scan => ({ scan, length: 1000 }));
   const tools = composerTools(research, topic.connector);
   const kinds = cardKinds.filter(kind => kind !== topic.kind);
   const conversation: ModelMessage[] = [
@@ -285,7 +310,7 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
       ...(research ? ['research_web runs one public web search. Use one focused, self-contained query without personal details. '
         + 'Name the specific subject (the team, release, person, place or field from the brief) and, for news, the current month and year from Now, asking what happened in the last week.'] : []),
       ...(topic.request ? ['card.requested is what the person (or a contact for them) asked For you to follow, in their words. Stay on exactly that subject; do not drift to a related one.'] : []),
-      ...(context.news && !topic.connector ? ['whatsNewThisWeek is a public news scan around the person\'s interests. React to items in it that belong to this topic; its sources may be used as card sources and links.'] : []),
+      ...(scans.length ? ['whatsNewThisWeek lists public news scans, one per interest of the person. React only to items that belong to this topic; their sources may be used as card sources and links.'] : []),
       ...(quotable.length ? ['otherContactsPosts are recent posts by the person\'s other contacts. Like a quote post on X, you may quote one when you have something to add to it from this topic: '
         + 'agree with a twist, disagree with a reason, add a fact, or connect it. Then add "quote":"<its ref>" to the publish answer and write your own angle without summarizing theirs; you may refer to its author by name. '
         + 'Most posts quote nothing; never quote just to mention it.'] : []),
@@ -303,8 +328,8 @@ export async function composeCard(env: Env, context: ComposeContext, topic: Plan
     { role: 'user', content: JSON.stringify({
       card: { title: topic.title, brief: topic.brief, whyItIsInUpdates: topic.reason, kind: topic.kind, ...(topic.request ? { requested: topic.request } : {}) },
       ...(earlier.length ? { earlierPosts: earlier.map(post => ({ date: date(post.at, context.timeZone), by: post.contact, post: post.text })) } : {}),
-      ...(context.news && !topic.connector ? { whatsNewThisWeek: { checkedAt: context.news.checkedAt, report: clipText(context.news.report, 3000), sources: context.news.sources,
-        ...(context.news.unconfirmed ? { unconfirmed: unconfirmedNote } : {}) } } : {}),
+      ...(scans.length ? { whatsNewThisWeek: scans.map(({ scan, length }) => ({ interest: scan.interest, checkedAt: scan.checkedAt, report: clipText(scan.report, length),
+        sources: scan.sources, ...(scan.unconfirmed ? { unconfirmed: unconfirmedNote } : {}) })) } : {}),
       ...(quotable.length ? { otherContactsPosts: quotable.map((post, index) => ({ ref: quoteRef(index), by: post.contact, topic: post.title,
         date: date(post.at, context.timeZone), post: post.text })) } : {}),
       whatContactsRemember: (memories.length ? memories : context.memories.slice(0, 12)).slice(0, 20).map(memory => memory.content),
