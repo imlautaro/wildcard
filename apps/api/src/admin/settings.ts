@@ -4,7 +4,7 @@
 export const settingDefinitions = {
   registration_enabled: {
     label: 'New account registration',
-    description: 'Allow anyone to create a Wildcard account on iOS and the web. Existing accounts can always sign in.',
+    description: 'Allow anyone to create a Wildcard account on iOS and the web. When off, both offer an early-access waitlist instead. Existing accounts can always sign in.',
     defaultValue: true,
   },
   voice_messages_enabled: {

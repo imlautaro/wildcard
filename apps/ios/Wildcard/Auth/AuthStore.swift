@@ -9,6 +9,13 @@ final class AuthStore {
     private(set) var user: AuthUser?
     private(set) var isBusy = false
     var error: String?
+    /// Whether sign-up is open (docs/authentication.md#early-access-waitlist). Session-owned:
+    /// read once in the background on the sign-in screen; `nil` until known or after a
+    /// failed read, so the normal form stays and a closed sign-up switches to the waitlist.
+    private(set) var registrationOpen: Bool?
+    /// The email that joined the waitlist this session, so the screen keeps its confirmation.
+    private(set) var waitlistJoinedEmail: String?
+    private var registrationStatusTask: Task<Void, Never>?
     let images = PrivateImageCache()
     let onboarding = OnboardingStore()
     let contactGeneration = ContactGenerationStore()
@@ -52,6 +59,21 @@ final class AuthStore {
         }
     }
 
+    func loadRegistrationStatus() {
+        guard registrationOpen == nil, registrationStatusTask == nil else { return }
+        registrationStatusTask = Task {
+            defer { registrationStatusTask = nil }
+            if let open = try? await api.registrationOpen() { registrationOpen = open }
+        }
+    }
+
+    /// Throws the localized failure so the waitlist form can show it inline.
+    func joinWaitlist(name: String, email: String, platform: String, note: String) async throws {
+        let locale = Bundle.main.preferredLocalizations.first?.hasPrefix("es") == true ? "es" : "en"
+        try await api.joinWaitlist(name: name, email: email, platform: platform, note: note, locale: locale)
+        waitlistJoinedEmail = email
+    }
+
     func authenticate(email: String, password: String, name: String?) async {
         guard !isBusy else { return }
         isBusy = true
@@ -79,6 +101,9 @@ final class AuthStore {
             user = profile
             images.activate(userID: newUser.id)
             state = .signedIn
+        } catch AuthAPI.Failure.registrationClosed {
+            // Closed after the screen loaded: the view switches to the waitlist.
+            registrationOpen = false
         } catch {
             self.error = error.localizedDescription
         }

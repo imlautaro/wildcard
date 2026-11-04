@@ -639,6 +639,19 @@ all caches and the session unchanged. Other people's clients lose the deleted
 account's groups, shared contacts and messages through their existing revalidation
 and confirmed access loss. Not verified on a device or browser.
 
+## Early-access waitlist
+
+The [waitlist](authentication.md#early-access-waitlist) caches two in-memory values
+per app session and persists nothing. Registration status (`AuthStore.registrationOpen`
+on iOS, `utils/registration.ts` on web) is read once in the background when the
+sign-in screen appears, with one request in flight; the form never waits for it, a
+failed read leaves it unknown (normal form, retried on the next appearance), and a
+403 `REGISTRATION_CLOSED` from sign-up sets it to closed. It is not revalidated, so
+reopening registration shows on the next launch or page load. The joined email
+(`waitlistJoinedEmail`) keeps the confirmation visible when returning to the screen.
+Neither value is account data, so sign-out does not need to clear them. Not verified
+on a device or browser.
+
 ## Account model preference
 
 The existing session-owned profile holds chatModel. iOS revalidates on Account entry; web deduplicates a background profile read on Account mount and rejects reads predating a model save, sign-out or account reset. A model save applies the returned profile synchronously. Web updates Contributor flags on cached lists/groups and rejects older snapshots without clearing message history, drafts or pending UUIDs. iOS cancels group-detail reads, removes secondary sharing snapshots, wakes list synchronization and refreshes invitation consent flags; group details revalidate on reopen. Existing bounded retention, eviction and account isolation remain unchanged. Gateway response caching is bypassed because the task is cost observation and includes private state/tool calls.

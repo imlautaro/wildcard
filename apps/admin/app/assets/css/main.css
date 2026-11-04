@@ -86,6 +86,16 @@
   .table-row [data-label]::before { content: attr(data-label); display: block; color: var(--md-on-surface-variant); font: var(--type-label-small); }
 }
 
+/* Waitlist table: same rows as users with its own columns. */
+.waitlist-table .table-row { grid-template-columns: minmax(0, 1.2fr) 112px minmax(0, 1.6fr) 96px 128px 48px; }
+.waitlist-table .table-row > :nth-child(5) { padding-left: 0; }
+.waitlist-table .note { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--md-on-surface-variant); }
+@media (max-width: 860px) {
+  .waitlist-table .table-row { grid-template-columns: repeat(3, minmax(0, 1fr)) 48px; }
+  .waitlist-table .note { grid-column: 1 / 4; }
+  .waitlist-table .table-row > :nth-child(5) { grid-column: auto; }
+}
+
 /* Overview stat cards */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); margin: var(--space-1) 0 var(--space-2); }
 .stat {

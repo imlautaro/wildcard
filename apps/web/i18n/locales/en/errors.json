@@ -36,6 +36,7 @@
     "replyConflict": "A reply is already in progress or the conversation changed. Refresh and try again.",
     "aiUnavailable": "AI replies are temporarily unavailable. Please try again later.",
     "registrationClosed": "New accounts are not being accepted right now. Existing accounts can still sign in.",
+    "waitlistFailed": "We couldn't add you to the waitlist. Please try again.",
     "contactContributorConsent": "This shared contact can't reply because you accepted it without Contributor consent. Ask its creator for a new invitation and accept it with Contributor consent.",
     "groupContributorConsentSelf": "Contacts can't reply in this group until you give Contributor consent. Turn it on in Members.",
     "groupContributorConsentOthers": "Contacts can't reply in this group until every member gives Contributor consent. Members who haven't can turn it on in Members.",

@@ -16,6 +16,7 @@ import pushPhotos from './photos/push-access';
 import voices from './voice/routes';
 import home from './home/routes';
 import stickers from './stickers/routes';
+import waitlist from './waitlist/routes';
 
 const app = new Hono<{ Bindings: Env }>();
 const authEndpoints = new Map([
@@ -43,6 +44,7 @@ app.use('/api/v1/admin/*', async (c, next) => {
 });
 app.route('/api/v1/admin', admin);
 
+app.route('/api/v1/waitlist', waitlist);
 app.route('/api/v1/mcp/oauth', oauthPublic);
 app.route('/api/v1/onboarding', onboarding);
 app.route('/api/v1/me', me);

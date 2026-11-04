@@ -98,6 +98,8 @@ function failureMessage(path: string, method: string, status: number, body: unkn
     if (status === 409) return translate('errors.replyConflict');
     if (status === 503) return translate('errors.aiUnavailable');
   }
+  // Early-access waitlist (docs/authentication.md#early-access-waitlist); the form validates first.
+  if (path === 'waitlist') return status === 429 ? translate('errors.rateLimited') : translate('errors.waitlistFailed');
   // Super admins can close registration at runtime (docs/admin.md).
   if (path === 'auth/sign-up/email' && status === 403) return translate('errors.registrationClosed');
   if (status === 401) return translate('errors.invalidCredentials');

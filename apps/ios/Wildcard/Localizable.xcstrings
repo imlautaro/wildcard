@@ -13320,6 +13320,226 @@
           }
         }
       }
+    },
+    "Both" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ambos"
+          }
+        }
+      }
+    },
+    "Deploy to Cloudflare" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desplegar en Cloudflare"
+          }
+        }
+      }
+    },
+    "Don't want to wait? Host it yourself" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿No quieres esperar? Alójalo por tu cuenta"
+          }
+        }
+      }
+    },
+    "Early access" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acceso anticipado"
+          }
+        }
+      }
+    },
+    "Enter your name." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe tu nombre."
+          }
+        }
+      }
+    },
+    "Join the\nwaitlist." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Únete a la\nlista de espera."
+          }
+        }
+      }
+    },
+    "Join the waitlist" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unirme a la lista de espera"
+          }
+        }
+      }
+    },
+    "Joining…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uniéndote…"
+          }
+        }
+      }
+    },
+    "Keep your note under 500 characters." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén tu nota por debajo de 500 caracteres."
+          }
+        }
+      }
+    },
+    "New here? Get early access" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Primera vez aquí? Pide acceso anticipado"
+          }
+        }
+      }
+    },
+    "Read the self-host guide" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leer la guía de Self-host"
+          }
+        }
+      }
+    },
+    "Thanks! We'll email %@ as soon as your spot opens up." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¡Gracias! Te escribiremos a %@ en cuanto se libere tu lugar."
+          }
+        }
+      }
+    },
+    "We couldn't add you to the waitlist. Please try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pudimos agregarte a la lista de espera. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "We'll only use your email to invite you to Wildcard." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo usaremos tu correo para invitarte a Wildcard."
+          }
+        }
+      }
+    },
+    "We're opening Wildcard a few people at a time. Leave your details and we'll email you when your spot is ready." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estamos abriendo Wildcard de a poco. Déjanos tus datos y te escribiremos cuando tu lugar esté listo."
+          }
+        }
+      }
+    },
+    "Web" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web"
+          }
+        }
+      }
+    },
+    "What would you like to use Wildcard for?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Para qué te gustaría usar Wildcard?"
+          }
+        }
+      }
+    },
+    "Where would you use it?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Dónde lo usarías?"
+          }
+        }
+      }
+    },
+    "Wildcard is open source. Deploy your own copy to your Cloudflare account in a few minutes, no invite needed." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wildcard es de código abierto. Despliega tu propia copia en tu cuenta de Cloudflare en pocos minutos, sin invitación."
+          }
+        }
+      }
+    },
+    "You're on\nthe list." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya estás\nen la lista."
+          }
+        }
+      }
+    },
+    "iPhone" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone"
+          }
+        }
+      }
+    },
+    "or" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -5,6 +5,7 @@ const { user, signOut } = useSession();
 const destinations = [
   { to: '/', label: 'Overview', icon: 'dashboard' },
   { to: '/users', label: 'Users', icon: 'people' },
+  { to: '/waitlist', label: 'Waitlist', icon: 'mail' },
   { to: '/mini-apps', label: 'Lab', icon: 'grid' },
   { to: '/settings', label: 'Flags', icon: 'flag' },
 ] as const;

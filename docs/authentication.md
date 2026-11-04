@@ -204,11 +204,47 @@ after authentication instead of trusting Better Auth's narrower response shape.
 Super admins can close registration at runtime from the [admin panel](admin.md)
 (`registration_enabled`, no release needed). While it is closed, sign-up returns
 HTTP 403 `REGISTRATION_CLOSED` after the per-IP admission check, and both clients
-show "New accounts are not being accepted right now. Existing accounts can still
-sign in." The create-account option stays visible, because the clients don't
-read settings yet. Sign-in is never affected. Super admins can also delete
+offer the [early-access waitlist](#early-access-waitlist) instead of account
+creation. Sign-in is never affected. Super admins can also delete
 accounts; see [deleting an account](admin.md#deleting-an-account) for what the
 cascade removes.
+
+### Early-access waitlist
+
+While registration is closed, iOS (`Auth/WaitlistView.swift`) and web
+(`components/WaitlistForm.vue`) replace the create-account form with a waitlist:
+name, email, where the person would use Wildcard (iPhone, Web or Both) and an
+optional note of up to 500 characters. Below it, a "Host it yourself" card leads
+with the **Deploy to Cloudflare** button and links the localized Docs
+[self-host guide](../apps/docs/content/en/2.self-host/1.deploy.md). The links are
+constants (`SelfHostLinks` on iOS, `utils/selfHost.ts` on web) that forks can change.
+After joining, the screen shows "You're on the list" with the submitted email.
+"Already have an account? Sign in" stays available throughout.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/api/v1/waitlist` | Public. `{ registrationOpen }`, read from `registration_enabled`; 60 reads per IP per minute (429 with `Retry-After`) |
+| POST | `/api/v1/waitlist` | Public. Body `{ name, email, platform: "ios" \| "web" \| "both", note?, locale?: "en" \| "es" }`, 4 KB limit, five attempts per IP per minute (429 with `Retry-After`). 422 with `INVALID_EMAIL`, `INVALID_NAME`, `INVALID_PLATFORM` or `INVALID_NOTE`. Otherwise always 202 `{ joined: true }` |
+
+Entries live in `waitlist_entry` (migration `0101_waitlist.sql`), one per email,
+compared case-insensitively and stored lowercase. Joining again updates the
+details and keeps the original date. The response never says whether an email was
+already listed or already has an account. No IP address, user agent or session is
+stored, and the list accepts entries even while registration is open (the
+clients only show it while closed). `locale` is the app language, so invitations
+can be written in English or Spanish. Super admins read and remove entries in the
+[admin panel](admin.md#waitlist). Nothing sends invitations automatically.
+
+Caching: each client reads `GET /waitlist` once per app session in the background
+when the sign-in screen appears (`AuthStore.registrationOpen` on iOS,
+`utils/registration.ts` on web). The sign-in form is usable immediately; "New
+here?" says "Create account" until the status is known and "Get early access"
+once it is known to be closed. A failed read keeps the normal form. If sign-up
+returns 403 `REGISTRATION_CLOSED` (closed after the screen loaded, or an unread
+status), the client records the closed state, clears the password and opens the
+waitlist with the typed email. The joined email is kept in memory for the session
+so returning to the screen keeps the confirmation; nothing is persisted. Reopening
+registration takes effect on the next app launch or page load.
 
 Account includes a Standard/Contributor selector with explicit Contributor
 acceptance. `GET /me` and profile mutations include `user.chatModel`;

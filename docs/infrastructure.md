@@ -2414,6 +2414,23 @@ and every chat and group Workflow select the column. Verify after release that
 `GET /api/v1/me` returns `user.fastMode` and that `PUT /api/v1/me/fast-mode` toggles it.
 Rollback keeps 0100: older Workers and clients ignore the column and field.
 
+### Early-access waitlist — migration 0101
+
+`0101_waitlist.sql` follows every migration through 0100. It creates
+`waitlist_entry` (unique case-insensitive `email`, `name`, `platform` CHECK
+`ios`/`web`/`both`, optional `note`, `locale` CHECK `en`/`es`, timestamps) and
+`waitlist_entry_created_idx` (see [early-access waitlist](authentication.md#early-access-waitlist)).
+The public `GET`/`POST /api/v1/waitlist` routes reuse `auth_rate_limit` for
+per-IP admission. No resource, binding, secret, Cron Trigger or Wrangler change.
+
+Apply locally with `npx wrangler d1 migrations apply DB --local`; production must
+apply it through the automatic pipeline before the Worker ships, because
+`GET /api/v1/admin/overview` counts the table. Verify after release that
+`GET /api/v1/waitlist` returns `registrationOpen`, and, with registration closed,
+that a fictional entry from iOS or web appears in the admin Waitlist and can be
+removed. Rollback keeps 0101: older Workers ignore the table; drop it only after
+exporting entries you want to keep.
+
 ## Remote native device execution
 
 The [remote timer/alarm prototype](native-remote.md) reuses the API Worker, D1,

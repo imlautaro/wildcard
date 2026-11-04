@@ -9,6 +9,7 @@ inputs. Preview builds remain disabled.
 `wildcard-admin`, separate from the web app. Super admins can:
 
 - open or close new account registration;
+- review and remove early-access [waitlist](#waitlist) entries;
 - list and search every account, with its contact, agent and group counts, join
   date and approximate last activity;
 - delete an account and all of its data;
@@ -66,9 +67,11 @@ the `AdminAPI` binding.
 | --- | --- | --- |
 | POST | `/api/v1/auth/sign-in/email`, `/api/v1/auth/sign-out` | Better Auth, same limits as the public API |
 | GET | `/api/v1/admin/session` | `{ user }`. 401 without a session; 403 `NOT_SUPER_ADMIN` with `userID` for accounts not on the roster |
-| GET | `/api/v1/admin/overview` | Totals (accounts, new in 7 days, contacts, groups), registration state, last 20 admin events |
+| GET | `/api/v1/admin/overview` | Totals (accounts, new in 7 days, contacts, groups, waitlist), registration state, last 20 admin events |
 | GET | `/api/v1/admin/users?q=&before=` | 50 accounts per page, newest first. `q` matches name or email; `before` is the previous page's `next` cursor |
 | DELETE | `/api/v1/admin/users/:id` | Body `{ "email": "<the account's email>" }`. 202 `{ deleted: true, cleanup: "pending" }`; D1 deletion committed, external cleanup queued |
+| GET | `/api/v1/admin/waitlist?q=&before=` | 50 [waitlist](#waitlist) entries per page, newest first, plus `total`. `q` matches name or email; `before` is the previous page's `next` cursor |
+| DELETE | `/api/v1/admin/waitlist/:id` | Removes one entry and records a `waitlist.delete` event whose target is the entry ID (not the email). 404 when it is already gone |
 | GET | `/api/v1/admin/settings` | Every declared setting with its value, default and last change |
 | PUT | `/api/v1/admin/settings/:key` | Body `{ "value": true \| false }`. Saves the value and records an event |
 | GET | `/api/v1/admin/lab/contacts` | The calling admin's own contacts `{ id, name, miniApps, labApps }` for the [mini app lab](#mini-app-lab) |
@@ -161,7 +164,7 @@ without a release.
 
 | Key | Default | Effect |
 | --- | --- | --- |
-| `registration_enabled` | `true` | When off, `POST /api/v1/auth/sign-up/email` returns 403 `REGISTRATION_CLOSED`, after the per-IP admission check. Sign-in is unaffected. iOS and web show "New accounts are not being accepted right now. Existing accounts can still sign in." |
+| `registration_enabled` | `true` | When off, `POST /api/v1/auth/sign-up/email` returns 403 `REGISTRATION_CLOSED`, after the per-IP admission check. Sign-in is unaffected. iOS and web read it through the public `GET /api/v1/waitlist` and offer the [early-access waitlist](authentication.md#early-access-waitlist) instead of sign-up. |
 | `voice_messages_enabled` | `false` | Contacts may reply with ElevenLabs voice messages and contact details show the Voice section. Takes effect only when `ELEVENLABS_API_KEY` is set. Delivered to clients as `features.voiceMessages` on `GET /me`. People can always send voice messages. See [voice messages](voice.md). |
 | `contributor_only` | `false` | Every account is processed with Muse Spark 1.3 Contributor, whatever its saved choice. `user.chat_model` is never rewritten, so each account's own choice applies again when the flag is turned off. `accountModel()` and the consent guards that compared `user.chat_model` in SQL (research access, initiative publication, task dispatch) use `effectiveModelSQL()`. Profile responses report `chatModel` as Contributor and `GET /me` sends `features.contributorOnly`; iOS and web then show the Chat model row as Contributor with no picker, and `PUT /api/v1/me/model` returns 409 `CONTRIBUTOR_ONLY`. Contact creation, onboarding, AI photos and sticker naming follow it as well. Workflows already started keep their checkpointed model. MCP-isolated chats and groups still use Standard, and Contributor consent checks still apply (sends then fail with a localized reason, see [model settings](model-settings.md#sharing-and-mcp)): content or groups without Contributor consent are filtered or refused rather than sent with Standard, except Updates comment replies, which still fall back to Standard for a contact without consent (`home/comments.ts`). Meant for testing and demos to cut inference cost; it overrides individual model choices, so do not turn it on for real users without their consent. See [model settings](model-settings.md). |
 
@@ -179,8 +182,19 @@ visible; other errors appear in a banner. Each cache has a revision counter that
 rejects late responses after a newer request, a mutation, or a sign-out. Deleting
 an account removes its row and refreshes the overview. Saving a setting replaces
 the settings list with the server's response and refreshes the overview.
-Changing the search query drops the previous results. The lab's contact list is cached the same way; an import revalidates it and the overview. Sign-out and session expiry
+Changing the search query drops the previous results. The waitlist uses the same paging, search and revision rules; removing an entry drops its row, lowers the total and refreshes the overview. The lab's contact list is cached the same way; an import revalidates it and the overview. Sign-out and session expiry
 clear every cache. Nothing is written to browser storage.
+
+## Waitlist
+
+**Waitlist** lists the people who asked for early access while registration was
+closed (see [early-access waitlist](authentication.md#early-access-waitlist)):
+name, email, platform (iPhone, Web or both), optional note, app language and the
+date they joined. Search matches name or email. Overview shows the total next to
+the registration state. Removing an entry asks for confirmation, deletes only that
+row and records a `waitlist.delete` event with the entry ID only, so the removed
+email is not kept in the audit log; it never affects an account. The panel does not send invitations or export the list; email people from
+your own mail tool and reopen registration (or remove them) when they are in.
 
 ## Mini app lab
 
@@ -231,6 +245,7 @@ automatic release, verify the following with a fictional account:
 - a non-roster account sees its ID and gets 403;
 - `GET https://wildcard-api…/api/v1/admin/session` returns 404 on the public origin;
 - closing registration makes sign-up return 403 on iOS and web while sign-in keeps
-  working;
+  working, and both clients then offer the waitlist; a submitted entry appears in
+  Waitlist and can be removed;
 - deleting the fictional account removes its rows and R2 objects, and the event
   appears in Overview.

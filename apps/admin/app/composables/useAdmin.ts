@@ -1,4 +1,4 @@
-import type { LabContact, LabResult, Overview, Setting, UserSummary } from '~/utils/types';
+import type { LabContact, LabResult, Overview, Setting, UserSummary, WaitlistEntry } from '~/utils/types';
 
 // Session-owned caches for the admin screens. Navigation shows the cached
 // value at once and revalidates in the background; a transient failure keeps
@@ -10,8 +10,12 @@ const users = ref<UserSummary[] | null>(null);
 const labContacts = ref<LabContact[] | null>(null);
 const usersQuery = ref('');
 const usersNext = ref<string | null>(null);
-const errors = reactive({ overview: null as string | null, settings: null as string | null, users: null as string | null, lab: null as string | null });
-const revisions = { overview: 0, settings: 0, users: 0, lab: 0 };
+const waitlist = ref<WaitlistEntry[] | null>(null);
+const waitlistTotal = ref(0);
+const waitlistQuery = ref('');
+const waitlistNext = ref<string | null>(null);
+const errors = reactive({ overview: null as string | null, settings: null as string | null, users: null as string | null, lab: null as string | null, waitlist: null as string | null });
+const revisions = { overview: 0, settings: 0, users: 0, lab: 0, waitlist: 0 };
 const inflight: Partial<Record<keyof typeof revisions, Promise<void>>> = {};
 
 registerSessionReset(() => {
@@ -21,7 +25,11 @@ registerSessionReset(() => {
   labContacts.value = null;
   usersQuery.value = '';
   usersNext.value = null;
-  Object.assign(errors, { overview: null, settings: null, users: null, lab: null });
+  waitlist.value = null;
+  waitlistTotal.value = 0;
+  waitlistQuery.value = '';
+  waitlistNext.value = null;
+  Object.assign(errors, { overview: null, settings: null, users: null, lab: null, waitlist: null });
   for (const key of Object.keys(revisions) as (keyof typeof revisions)[]) {
     revisions[key] += 1;
     delete inflight[key];
@@ -110,6 +118,47 @@ async function deleteUser(user: UserSummary, email: string) {
   void loadOverview();
 }
 
+// Early-access waitlist (docs/admin.md#waitlist): same paging and search as users.
+type WaitlistPage = { entries: WaitlistEntry[]; total: number; next: string | null };
+function loadWaitlist(query = waitlistQuery.value) {
+  if (query !== waitlistQuery.value) {
+    waitlistQuery.value = query;
+    waitlist.value = null;
+    waitlistNext.value = null;
+    revisions.waitlist += 1;
+    delete inflight.waitlist;
+  }
+  return load('waitlist', async () => {
+    const result = await api<WaitlistPage>('admin/waitlist', { query: { q: query || undefined } });
+    return () => { waitlist.value = result.entries; waitlistTotal.value = result.total; waitlistNext.value = result.next; };
+  }, waitlist.value !== null);
+}
+
+async function loadMoreWaitlist() {
+  const cursor = waitlistNext.value;
+  if (!cursor || inflight.waitlist) return;
+  await load('waitlist', async () => {
+    const result = await api<WaitlistPage>('admin/waitlist', { query: { q: waitlistQuery.value || undefined, before: cursor } });
+    return () => {
+      const known = new Set(waitlist.value?.map((entry) => entry.id));
+      waitlist.value = [...(waitlist.value ?? []), ...result.entries.filter((entry) => !known.has(entry.id))];
+      waitlistTotal.value = result.total;
+      waitlistNext.value = result.next;
+    };
+  }, true);
+}
+
+async function deleteWaitlistEntry(entry: WaitlistEntry) {
+  await api<{ deleted: true }>(`admin/waitlist/${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
+  revisions.waitlist += 1;
+  delete inflight.waitlist;
+  waitlist.value = waitlist.value?.filter((row) => row.id !== entry.id) ?? null;
+  waitlistTotal.value = Math.max(0, waitlistTotal.value - 1);
+  revisions.overview += 1;
+  delete inflight.overview;
+  void loadOverview();
+}
+
 // The admin's own contacts for the mini app lab, with their app counts.
 function loadLabContacts() {
   return load('lab', async () => {
@@ -135,6 +184,8 @@ export function useAdmin() {
   return {
     overview: readonly(overview), settings: readonly(settings), users: readonly(users),
     labContacts: readonly(labContacts), usersQuery: readonly(usersQuery), usersNext: readonly(usersNext), errors: readonly(errors),
+    waitlist: readonly(waitlist), waitlistTotal: readonly(waitlistTotal), waitlistQuery: readonly(waitlistQuery), waitlistNext: readonly(waitlistNext),
     loadOverview, loadSettings, loadUsers, loadMoreUsers, saveSetting, deleteUser, loadLabContacts, importLabApps,
+    loadWaitlist, loadMoreWaitlist, deleteWaitlistEntry,
   };
 }

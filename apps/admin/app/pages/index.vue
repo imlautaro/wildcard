@@ -3,7 +3,7 @@ useHead({ title: 'Overview' });
 const { overview, errors, loadOverview } = useAdmin();
 onMounted(loadOverview);
 
-const actions: Record<string, string> = { 'user.delete': 'Deleted an account', 'user.self_delete': 'Deleted their own account', 'setting.update': 'Changed a setting' };
+const actions: Record<string, string> = { 'user.delete': 'Deleted an account', 'user.self_delete': 'Deleted their own account', 'setting.update': 'Changed a setting', 'waitlist.delete': 'Removed from the waitlist' };
 function describe(event: { action: string; target: string | null; details: Record<string, unknown> | null }) {
   if (event.action === 'setting.update') return `${event.target} → ${event.details?.value ? 'on' : 'off'}`;
   if (event.action === 'user.delete' || event.action === 'user.self_delete') {
@@ -37,14 +37,18 @@ const stats = computed(() => overview.value ? [
           </div>
         </section>
         <AppListGroup title="Registration">
-          <AppListItem to="/settings" :supporting="overview.registrationEnabled ? 'Anyone can create an account.' : 'Only existing accounts can sign in.'">
+          <AppListItem to="/settings" :supporting="overview.registrationEnabled ? 'Anyone can create an account.' : 'Only existing accounts can sign in. New visitors see the waitlist.'">
             <template #leading><span class="status-dot" :class="{ on: overview.registrationEnabled }" aria-hidden="true" /></template>
             {{ overview.registrationEnabled ? 'Open' : 'Closed' }}
+          </AppListItem>
+          <AppListItem to="/waitlist" :supporting="`${plural(overview.totals.waitlist, 'person', 'people')} waiting for early access`">
+            <template #leading><AppIcon name="mail" /></template>
+            Waitlist
           </AppListItem>
         </AppListGroup>
         <AppListGroup v-if="overview.events.length" title="Recent admin activity">
           <div v-for="event in overview.events" :key="event.id" class="field">
-            <AppIcon :name="event.action.startsWith('user.') ? 'delete' : 'flag'" class="leading" />
+            <AppIcon :name="event.action.startsWith('user.') || event.action.startsWith('waitlist.') ? 'delete' : 'flag'" class="leading" />
             <span class="two-line">
               <span>{{ actions[event.action] ?? event.action }} <span class="muted">· {{ event.actorName ?? event.actorID }}</span></span>
               <span class="small">{{ describe(event) }}</span>

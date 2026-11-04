@@ -34,7 +34,7 @@ export type AdminEvent = {
 };
 
 export type Overview = {
-  totals: { users: number; newUsers: number; contacts: number; groupCount: number };
+  totals: { users: number; newUsers: number; contacts: number; groupCount: number; waitlist: number };
   registrationEnabled: boolean;
   events: AdminEvent[];
 };
@@ -42,3 +42,14 @@ export type Overview = {
 export type LabContact = { id: string; name: string; miniApps: number; labApps: number };
 
 export type LabResult = { title: string; ok: boolean; id?: string; problems?: string[] };
+
+export type WaitlistEntry = {
+  id: string;
+  email: string;
+  name: string;
+  platform: 'ios' | 'web' | 'both';
+  note: string | null;
+  locale: 'en' | 'es';
+  createdAt: number;
+  updatedAt: number;
+};

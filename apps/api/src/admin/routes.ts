@@ -45,7 +45,8 @@ admin.get('/overview', async (c) => {
     c.env.DB.prepare(`SELECT (SELECT COUNT(*) FROM user) AS users,
       (SELECT COUNT(*) FROM user WHERE created_at >= ?) AS newUsers,
       (SELECT COUNT(*) FROM contact) AS contacts,
-      (SELECT COUNT(*) FROM chat_group) AS groupCount`).bind(weekAgo),
+      (SELECT COUNT(*) FROM chat_group) AS groupCount,
+      (SELECT COUNT(*) FROM waitlist_entry) AS waitlist`).bind(weekAgo),
     c.env.DB.prepare(`SELECT e.id, e.action, e.target, e.details_json AS detailsJSON, e.created_at AS createdAt,
       e.actor_id AS actorID, u.name AS actorName FROM admin_event e LEFT JOIN user u ON u.id = e.actor_id
       ORDER BY e.created_at DESC LIMIT 20`),
@@ -83,6 +84,46 @@ admin.get('/users', async (c) => {
     users: page.map((row) => ({ ...row, onboardingRequired: Boolean(row.onboardingRequired), superAdmin: roster.has(row.id) })),
     next: results.length > pageSize && last ? `${last.createdAt}:${last.id}` : null,
   });
+});
+
+// Early-access waitlist (docs/admin.md#waitlist), newest first. Same cursor and
+// search shape as /users. Entries are not accounts; deleting one only removes the row.
+type WaitlistRow = { id: string; email: string; name: string; platform: string; note: string | null; locale: string; createdAt: number; updatedAt: number };
+admin.get('/waitlist', async (c) => {
+  const query = (c.req.query('q') ?? '').trim().slice(0, 100);
+  const cursor = /^(\d{1,16}):([\w-]{1,64})$/.exec(c.req.query('before') ?? '');
+  if (c.req.query('before') && !cursor) return c.json({ error: 'Invalid cursor' }, 400);
+  const pattern = `%${query.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
+  const [entries, total] = await c.env.DB.batch<Record<string, unknown>>([
+    c.env.DB.prepare(`SELECT id, email, name, platform, note, locale, created_at AS createdAt, updated_at AS updatedAt
+      FROM waitlist_entry
+      WHERE (?1 = '' OR email LIKE ?2 ESCAPE '\\' OR name LIKE ?2 ESCAPE '\\')
+        AND (?3 IS NULL OR created_at < ?3 OR (created_at = ?3 AND id < ?4))
+      ORDER BY created_at DESC, id DESC LIMIT ?5`)
+      .bind(query, pattern, cursor ? Number(cursor[1]) : null, cursor?.[2] ?? '', pageSize + 1),
+    c.env.DB.prepare('SELECT COUNT(*) AS total FROM waitlist_entry'),
+  ]);
+  const results = (entries?.results ?? []) as WaitlistRow[];
+  const page = results.slice(0, pageSize);
+  const last = page.at(-1);
+  return c.json({
+    entries: page,
+    total: Number(total?.results[0]?.total ?? 0),
+    next: results.length > pageSize && last ? `${last.createdAt}:${last.id}` : null,
+  });
+});
+
+admin.delete('/waitlist/:id', async (c) => {
+  const id = c.req.param('id');
+  const entry = await c.env.DB.prepare('SELECT id FROM waitlist_entry WHERE id = ?').bind(id).first<{ id: string }>();
+  if (!entry) return c.json({ error: 'This entry is no longer on the waitlist.' }, 404);
+  // The event keeps the entry ID only, so a removed person's email does not outlive the row.
+  await c.env.DB.batch([
+    c.env.DB.prepare('INSERT INTO admin_event (id, actor_id, action, target, details_json, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), c.get('admin'), 'waitlist.delete', entry.id, null, Date.now()),
+    c.env.DB.prepare('DELETE FROM waitlist_entry WHERE id = ?').bind(id),
+  ]);
+  return c.json({ deleted: true });
 });
 
 // D1 deletion and external cleanup registration commit together. The outbox

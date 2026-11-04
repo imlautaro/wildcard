@@ -36,6 +36,7 @@
     "replyConflict": "Ya hay una respuesta en curso o la conversación cambió. Actualiza e inténtalo de nuevo.",
     "aiUnavailable": "Las respuestas de IA no están disponibles por ahora. Inténtalo más tarde.",
     "registrationClosed": "No estamos aceptando cuentas nuevas en este momento. Las cuentas existentes pueden seguir iniciando sesión.",
+    "waitlistFailed": "No pudimos agregarte a la lista de espera. Inténtalo de nuevo.",
     "contactContributorConsent": "Este contacto compartido no puede responder porque lo aceptaste sin el consentimiento de Contributor. Pídele a quien lo creó una nueva invitación y acéptala con el consentimiento de Contributor.",
     "groupContributorConsentSelf": "Los contactos no pueden responder en este grupo hasta que des el consentimiento de Contributor. Actívalo en Miembros.",
     "groupContributorConsentOthers": "Los contactos no pueden responder en este grupo hasta que todos los miembros den el consentimiento de Contributor. Quienes no lo hayan dado pueden activarlo en Miembros.",

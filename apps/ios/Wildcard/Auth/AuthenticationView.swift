@@ -11,6 +11,8 @@ struct AuthenticationView: View {
     @State private var password = ""
     @State private var passwordVisible = false
     @State private var attempted = false
+    /// Replaces account creation while registration is closed (docs/authentication.md#early-access-waitlist).
+    @State private var waitlist = false
 
     private enum Input: Hashable { case email, password }
     private var colors: SignInColors { SignInColors(dark: colorScheme == .dark) }
@@ -22,41 +24,56 @@ struct AuthenticationView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 0) {
-                    welcome
-                        .padding(.bottom, 36)
-                    credentials
-                    if let error = auth.error {
-                        Label {
-                            Text(error).fixedSize(horizontal: false, vertical: true)
-                        } icon: {
-                            Image(systemName: "exclamationmark.circle")
-                        }
-                        .manrope(.subheadline)
-                        .foregroundStyle(colors.error)
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(colors.error.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-                        .padding(.top, 20)
-                        .accessibilityIdentifier("auth.error")
-                    }
-                    primaryAction
-                        .padding(.top, 28)
-                    Button(registration ? "Already have an account? Sign in" : "New here? Create account") {
-                        registration.toggle()
-                        attempted = false
+                if waitlist {
+                    WaitlistView(initialEmail: email.trimmingCharacters(in: .whitespacesAndNewlines), colors: colors) {
+                        waitlist = false
+                        registration = false
                         auth.error = nil
                     }
-                    .disabled(auth.isBusy)
-                    .padding(.top, 20)
+                    .frame(maxWidth: 420)
+                    .padding(.horizontal, 28)
+                    .padding(.top, 32)
+                    .padding(.bottom, 68)
+                    .frame(maxWidth: .infinity)
+                } else {
+                    VStack(spacing: 0) {
+                        welcome
+                            .padding(.bottom, 36)
+                        credentials
+                        if let error = auth.error {
+                            Label {
+                                Text(error).fixedSize(horizontal: false, vertical: true)
+                            } icon: {
+                                Image(systemName: "exclamationmark.circle")
+                            }
+                            .manrope(.subheadline)
+                            .foregroundStyle(colors.error)
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(colors.error.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                            .padding(.top, 20)
+                            .accessibilityIdentifier("auth.error")
+                        }
+                        primaryAction
+                            .padding(.top, 28)
+                        Button(registration ? "Already have an account? Sign in"
+                               : auth.registrationOpen == false ? "New here? Get early access" : "New here? Create account") {
+                            attempted = false
+                            auth.error = nil
+                            if !registration && auth.registrationOpen == false { waitlist = true } else { registration.toggle() }
+                        }
+                        .disabled(auth.isBusy)
+                        .padding(.top, 20)
+                    }
+                    .frame(maxWidth: 420)
+                    .padding(.horizontal, 28)
+                    .padding(.top, 32)
+                    .padding(.bottom, 68)
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: 420)
-                .padding(.horizontal, 28)
-                .padding(.top, 32)
-                .padding(.bottom, 68)
-                .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
+            .task { auth.loadRegistrationStatus() }
             .background(colors.canvas.ignoresSafeArea())
             .navigationTitle("Wildcard")
             .navigationBarTitleDisplayMode(.inline)
@@ -195,11 +212,16 @@ struct AuthenticationView: View {
         Task {
             await auth.authenticate(email: submittedEmail, password: submittedPassword, name: submittedName)
             if auth.user != nil { password = "" }
+            if submittedName != nil, auth.registrationOpen == false, auth.user == nil, auth.error == nil {
+                // Closed after the screen loaded: offer the waitlist with the typed email.
+                password = ""
+                waitlist = true
+            }
         }
     }
 }
 
-private struct CredentialBox<Content: View>: View {
+struct CredentialBox<Content: View>: View {
     let title: LocalizedStringResource
     let symbol: String
     let error: String?
@@ -240,7 +262,7 @@ private struct CredentialBox<Content: View>: View {
     }
 }
 
-private struct SignInColors {
+struct SignInColors {
     let dark: Bool
     var canvas: Color { Color(white: dark ? 0.07 : 0.965) }
     var input: Color { Color(white: dark ? 0.12 : 1) }

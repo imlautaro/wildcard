@@ -596,9 +596,12 @@ this shared API fix. See [OAuth lifecycle](connectors.md#oauth-setup-and-lifecyc
 ## Account model and closed registration
 
 Registration reopened on October 28, 2026. Super admins can close it again at
-runtime from the [admin panel](admin.md). While it is closed, the web sign-up
-form shows the same message as iOS, mapped from HTTP 403 on
-`auth/sign-up/email` in `utils/api.ts`.
+runtime from the [admin panel](admin.md). While it is closed, `/sign-in` offers
+the same [early-access waitlist](authentication.md#early-access-waitlist) as iOS
+(`components/WaitlistForm.vue`): the status comes from `GET /api/v1/waitlist`
+(`utils/registration.ts`, read once per page load), and a 403
+`REGISTRATION_CLOSED` from sign-up also switches to it. The self-host links live
+in `utils/selfHost.ts`.
 
 Both clients now sign in existing accounts only. Account offers Muse Spark 1.3 Standard/Contributor, with the same explicit Contributor acceptance and disclosure on iOS/web. The existing session profile caches the preference and web revalidates it in the background on Account mount. Model saves update cached profile/list/group flags and fence older reads without clearing drafts or pending sends.
 

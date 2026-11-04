@@ -47,6 +47,8 @@ struct AuthAPI: Sendable {
         case rateLimited(retryAfter: Int?, message: String)
         /// A send refused for missing Contributor consent; `group` offers Members as the fix.
         case consentRequired(message: String, group: Bool)
+        /// Sign-up refused with HTTP 403 `REGISTRATION_CLOSED`; the screen offers the waitlist.
+        case registrationClosed
 
         var errorDescription: String? {
             switch self {
@@ -61,6 +63,7 @@ struct AuthAPI: Sendable {
             case .conflict(let message): message
             case .noSubject(let message): message
             case .consentRequired(let message, _): message
+            case .registrationClosed: String(localized: "New accounts are not being accepted right now. Existing accounts can still sign in.")
             case .rateLimited(let retryAfter, let message):
                 retryAfter.map { seconds in String(localized: "Too many requests. Please wait \(seconds) seconds and try again.") } ?? message
             }
@@ -106,6 +109,18 @@ struct AuthAPI: Sendable {
             throw Failure.invalidResponse
         }
         return (try JSONDecoder().decode(UserResponse.self, from: data).user, token)
+    }
+
+    /// Early-access waitlist (docs/authentication.md#early-access-waitlist). Public, no session.
+    func registrationOpen() async throws -> Bool {
+        struct Status: Decodable { let registrationOpen: Bool }
+        let (data, _) = try await send(path: "waitlist")
+        return try JSONDecoder().decode(Status.self, from: data).registrationOpen
+    }
+
+    func joinWaitlist(name: String, email: String, platform: String, note: String, locale: String) async throws {
+        let body = try JSONEncoder().encode(["name": name, "email": email, "platform": platform, "note": note, "locale": locale])
+        _ = try await send(path: "waitlist", method: "POST", body: body)
     }
 
     func saveModel(_ model: String, contributorConsent: Bool, token: String) async throws -> AuthUser {
@@ -377,10 +392,13 @@ struct AuthAPI: Sendable {
                 default: break
                 }
             }
-            // Super admins can close registration at runtime (docs/admin.md).
-            if path == "auth/sign-up/email", response.statusCode == 403 {
-                throw Failure.rejected(String(localized: "New accounts are not being accepted right now. Existing accounts can still sign in."))
+            // Early-access waitlist (docs/authentication.md#early-access-waitlist); the form validates first.
+            if path == "waitlist" {
+                if response.statusCode == 429 { throw Failure.rejected(String(localized: "Too many attempts. Please wait a minute and try again.")) }
+                throw Failure.rejected(String(localized: "We couldn't add you to the waitlist. Please try again."))
             }
+            // Super admins can close registration at runtime (docs/admin.md).
+            if path == "auth/sign-up/email", response.statusCode == 403 { throw Failure.registrationClosed }
             switch response.statusCode {
             case 401: throw Failure.rejected(String(localized: "Incorrect email or password."))
             case 429: throw Failure.rejected(String(localized: "Too many attempts. Please wait a minute and try again."))

@@ -3,13 +3,22 @@ definePageMeta({ layout: false });
 
 const { authenticate } = useSession();
 const { t } = useI18n();
-const registration = ref(false);
+// 'waitlist' replaces account creation while registration is closed (docs/authentication.md#early-access-waitlist).
+const mode = ref<'sign-in' | 'register' | 'waitlist'>('sign-in');
+const registration = computed(() => mode.value === 'register');
 const email = ref('');
 const password = ref('');
 const busy = ref(false);
 const error = ref<string | null>(null);
 
+onMounted(() => { void loadRegistrationStatus(); });
+
 const valid = computed(() => /^\S+@\S+\.\S+$/.test(email.value.trim()) && password.value.length >= 8 && password.value.length <= 128);
+
+function toggleMode() {
+  error.value = null;
+  mode.value = mode.value !== 'sign-in' ? 'sign-in' : registrationOpen.value === false ? 'waitlist' : 'register';
+}
 
 async function submit() {
   if (!valid.value || busy.value) return;
@@ -21,7 +30,14 @@ async function submit() {
     password.value = '';
     await navigateTo('/');
   } catch (failure) {
-    error.value = errorMessage(failure);
+    if (failure instanceof ApiError && failure.code === 'REGISTRATION_CLOSED') {
+      // Closed after the screen loaded: offer the waitlist with the typed email.
+      registrationOpen.value = false;
+      password.value = '';
+      mode.value = 'waitlist';
+    } else {
+      error.value = errorMessage(failure);
+    }
   } finally {
     busy.value = false;
   }
@@ -30,7 +46,11 @@ async function submit() {
 
 <template>
   <div class="auth">
-    <form class="auth-card" @submit.prevent="submit">
+    <div v-if="mode === 'waitlist'" class="auth-card">
+      <img class="mark" src="/icon.svg" width="64" height="64" alt="" aria-hidden="true">
+      <WaitlistForm :initial-email="email.trim()" @sign-in="toggleMode" />
+    </div>
+    <form v-else class="auth-card" @submit.prevent="submit">
       <img class="mark" src="/icon.svg" width="64" height="64" alt="" aria-hidden="true">
       <h1>Wildcard</h1>
       <p class="lead">{{ registration ? t('auth.signIn.leadRegister') : t('auth.signIn.lead') }}</p>
@@ -42,8 +62,8 @@ async function submit() {
       <AppButton type="submit" block :disabled="!valid" :loading="busy">
         {{ registration ? t('auth.signIn.createAccount') : t('auth.signIn.signIn') }}
       </AppButton>
-      <AppButton variant="text" block :disabled="busy" @click="registration = !registration; error = null">
-        {{ registration ? t('auth.signIn.haveAccount') : t('auth.signIn.newHere') }}
+      <AppButton variant="text" block :disabled="busy" @click="toggleMode">
+        {{ registration ? t('auth.signIn.haveAccount') : registrationOpen === false ? t('auth.signIn.newHereWaitlist') : t('auth.signIn.newHere') }}
       </AppButton>
     </form>
   </div>
