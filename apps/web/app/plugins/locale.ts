@@ -23,6 +23,8 @@ export default defineNuxtPlugin({
         close: translate('common.close'),
         search: translate('common.search'),
         noMatches: translate('common.noMatches'),
+        showPassword: translate('common.showPassword'),
+        hidePassword: translate('common.hidePassword'),
       };
     }, { immediate: true });
 

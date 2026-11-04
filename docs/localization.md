@@ -140,7 +140,7 @@ ones when Xcode marks them.
 ## Shared UI layer
 
 `packages/ui` has no i18n dependency. Its few built-in strings (sheet close button,
-select search and empty result, notice dismiss, search clear, default loading label)
+select search and empty result, notice dismiss, search clear, password show/hide, default loading label)
 come from `useUiStrings()`, English by default. The web plugin replaces them on each
 locale change; the admin panel keeps English.
 

@@ -90,6 +90,7 @@ export const appIcons = {
   'trend-down': ['solar:graph-down-linear', 'solar:graph-down-linear'],
   'trend-flat': ['solar:arrow-right-linear', 'solar:arrow-right-linear'],
   'open-in-new': ['solar:square-arrow-right-up-linear', 'solar:square-arrow-right-up-linear'],
+  show: ['solar:eye-linear', 'solar:eye-bold'],
   hide: ['solar:eye-closed-linear', 'solar:eye-closed-bold'],
   'thumb-up': ['solar:like-linear', 'solar:like-bold'],
   'thumb-down': ['solar:dislike-linear', 'solar:dislike-bold'],

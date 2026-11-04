@@ -7,6 +7,8 @@
     "close": "Cerrar",
     "search": "Buscar",
     "noMatches": "Sin resultados",
+    "showPassword": "Mostrar contraseña",
+    "hidePassword": "Ocultar contraseña",
     "cancel": "Cancelar",
     "save": "Guardar",
     "saving": "Guardando…",

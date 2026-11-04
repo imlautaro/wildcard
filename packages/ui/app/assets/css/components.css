@@ -316,6 +316,10 @@
   .text-field.invalid > span { color: var(--md-error); }
   .text-field .supporting { display: block; padding: var(--space-1) var(--space-4) 0; font-size: 12px; color: var(--md-on-surface-variant); }
   .text-field.invalid .supporting { color: var(--md-error); }
+  /* Password show/hide button (AppTextField with type="password"). */
+  .text-field.revealable input { padding-right: 52px; }
+  .text-field.revealable input::-ms-reveal { display: none; } /* Edge's native eye would duplicate ours. */
+  .text-field > .reveal { position: absolute; top: 8px; right: 8px; color: var(--md-on-surface-variant); }
 
   /* Search bar: a full-round tonal field. */
   .search-field {
