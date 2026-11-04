@@ -13,16 +13,19 @@ animated scenes built in HTML, CSS and JavaScript. It has no API
 access, no account state and no network-backed data, so the session caching rules
 in [caching](caching.md) don't apply: every page is static.
 
-The footer and Open source section link to the published documentation in the
-current language (`/en` or `/es`). Set the documentation origin in `site.docsUrl`
-in `app/utils/site.ts` for an independent installation.
+The footer and Open source section link to the published Docs in the current
+language (`/en` or `/es`). The hero's "Self-host it" button, the footer and the Open
+source section link to the self-hosting guide (`site.docsUrl` + locale +
+`site.selfHostPath`), and the Open source section shows the Deploy to Cloudflare
+button (`site.deployUrl`) while `site.repositoryPublic` is true. Set these values in
+`app/utils/site.ts` for an independent installation.
 
 ## Structure
 
 | Path | Contents |
 | --- | --- |
 | `nuxt.config.ts` | Extends the [design system layer](design-system.md) (`../../packages/ui`), adds site-only icons to the bundle, configures `@nuxtjs/i18n`, prerenders every page. |
-| `app/utils/site.ts` | Installation-specific values: the site's own URL (`url`, used for canonical and hreflang links), web app URL, repository URL, `repositoryPublic`, `iosUrl`, section anchors. |
+| `app/utils/site.ts` | Installation-specific values: the site's own URL (`url`, used for canonical and hreflang links), web app URL, Docs URL and self-hosting guide path, Deploy to Cloudflare URL, repository URL, `repositoryPublic`, `iosUrl`, section anchors. |
 | `i18n/locales/<locale>.json`, `i18n/i18n.config.ts` | All copy, one file per locale; vue-i18n options (English fallback). |
 | `app/app.vue` | Per-locale head: title, description, Open Graph, `<html lang>`, hreflang, canonical. |
 | `app/components/LanguageSwitch.vue` | Language links in the footer. |

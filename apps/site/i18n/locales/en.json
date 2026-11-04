@@ -38,6 +38,7 @@
     "iosApp": "Get the iPhone app",
     "source": "Source code",
     "sourceSoon": "Source code · soon",
+    "selfHost": "Self-host it",
     "faq": "FAQ",
     "cloudflare": "Built on Cloudflare"
   },
@@ -227,6 +228,8 @@
     "elevenLabsKeyText": "Optional: contact voices",
     "appleKeys": "Apple developer keys",
     "appleKeysText": "Optional: iPhone notifications and native extras",
+    "deploy": "Deploy to Cloudflare",
+    "guide": "Self-hosting guide",
     "viewSource": "View the source",
     "soon": "Repository going public soon",
     "footnote": "Model and voice usage is billed by those providers under your own keys."

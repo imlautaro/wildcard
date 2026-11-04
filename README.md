@@ -15,7 +15,8 @@
 <p align="center">
   <a href="https://wildcard-web.imlautaro.workers.dev"><strong>Try it</strong></a> ·
   <a href="https://wildcard-site.imlautaro.workers.dev">Website</a> ·
-  <a href="https://wildcard-docs.imlautaro.workers.dev/en">Docs</a>
+  <a href="https://wildcard-docs.imlautaro.workers.dev/en">Docs</a> ·
+  <a href="https://wildcard-docs.imlautaro.workers.dev/en/self-host/deploy">Self-host</a>
   <!-- TODO: add the demo video link here once it is published -->
 </p>
 
@@ -143,22 +144,6 @@ Everything runs on Cloudflare: Workers, D1, R2, Workflows and Cron. No servers t
 
 ## Run it yourself
 
-### Locally
-
-```bash
-git clone https://github.com/imlautaro/wildcard && cd wildcard
-npm ci
-cp .env.example .env    # add META_API_KEY; optional ELEVENLABS_API_KEY for voices
-npm run setup           # .dev.vars, auth secret and local D1 with every migration
-npm run dev:all         # API on http://localhost:8787 + web app on http://localhost:3000
-```
-
-Open http://localhost:3000 and create an account. Use Node.js 24 (`.nvmrc`). No Cloudflare account
-is needed locally: Wrangler emulates D1, R2, Workflows and the every-minute Cron. `npm run setup`
-copies the keys from `.env` into `apps/api/.dev.vars` without printing them. Ports busy? Set
-`API_PORT` / `WEB_PORT` (in `.env` or the shell). `npm run smoke` checks sign-up, a chat and a model
-reply end to end.
-
 ### On your own Cloudflare account
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/imlautaro/wildcard)
@@ -179,10 +164,26 @@ Or with GitHub Actions:
 The first run creates the D1 database, the private R2 bucket, the API Worker with its Workflows
 and Cron, and the web app at `https://wildcard-web.<your-subdomain>.workers.dev`. Nothing in the
 repository needs editing: account, resources and URLs are resolved at release time. Prefer
-Cloudflare Workers Builds, custom domains or the admin panel? See
-[Provisioning](https://wildcard-docs.imlautaro.workers.dev/en/operations/provisioning) and
+Cloudflare Workers Builds, custom domains or the admin panel? See the
+[self-hosting guide](https://wildcard-docs.imlautaro.workers.dev/en/self-host/deploy) and
 [Environment variables](https://wildcard-docs.imlautaro.workers.dev/en/getting-started/environment-variables).
 `npm run release:check` previews what a release would do with your Wrangler login.
+
+### Locally
+
+```bash
+git clone https://github.com/imlautaro/wildcard && cd wildcard
+npm ci
+cp .env.example .env    # add META_API_KEY; optional ELEVENLABS_API_KEY for voices
+npm run setup           # .dev.vars, auth secret and local D1 with every migration
+npm run dev:all         # API on http://localhost:8787 + web app on http://localhost:3000
+```
+
+Open http://localhost:3000 and create an account. Use Node.js 24 (`.nvmrc`). No Cloudflare account
+is needed locally: Wrangler emulates D1, R2, Workflows and the every-minute Cron. `npm run setup`
+copies the keys from `.env` into `apps/api/.dev.vars` without printing them. Ports busy? Set
+`API_PORT` / `WEB_PORT` (in `.env` or the shell). `npm run smoke` checks sign-up, a chat and a model
+reply end to end.
 
 The iOS app and every local option are covered in
 [Local development](https://wildcard-docs.imlautaro.workers.dev/en/getting-started/local-development).

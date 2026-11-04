@@ -114,7 +114,8 @@ credential Workers Builds provides they remain unverified.
 
 ### Deploy to Cloudflare button
 
-The README and the provisioning guide link
+The README, the Docs' self-hosting guide (`apps/docs/content/*/2.self-host/1.deploy.md`),
+the Docs home and the marketing site link
 `https://deploy.workers.cloudflare.com/?url=https://github.com/imlautaro/wildcard`. The
 button copies the repository into the user's GitHub account as a new repository (one
 "source repo import" commit, not a fork) and creates **one** Workers Builds project

@@ -39,7 +39,7 @@ const metaModels = computed(() => [
           <p class="lead">{{ t('hero.lead') }}</p>
           <div class="hero-actions">
             <AppButton :to="site.appUrl" size="large" trailing-icon="chevron">{{ t('hero.meet') }}</AppButton>
-            <AppButton :to="`${localePath('/')}#open-source`" variant="tonal" size="large">{{ t('hero.selfHost') }}</AppButton>
+            <AppButton :to="`${site.docsUrl}/${locale}${site.selfHostPath}`" variant="tonal" size="large" trailing-icon="open-in-new">{{ t('hero.selfHost') }}</AppButton>
           </div>
         </div>
         <HeroCards />
@@ -244,8 +244,9 @@ const metaModels = computed(() => [
             <li><SiteIcon name="apple" class="mono" /><span><strong>{{ t('openSource.appleKeys') }}</strong><small>{{ t('openSource.appleKeysText') }}</small></span></li>
           </ul>
           <div class="hero-actions">
-            <AppButton :to="`${site.docsUrl}/${locale}`" variant="tonal" size="large" trailing-icon="open-in-new">{{ t('common.docs') }}</AppButton>
-            <AppButton v-if="site.repositoryPublic" :to="site.repositoryUrl" variant="filled" size="large" trailing-icon="open-in-new">{{ t('openSource.viewSource') }}</AppButton>
+            <AppButton v-if="site.repositoryPublic" :to="site.deployUrl" variant="filled" size="large" trailing-icon="open-in-new">{{ t('openSource.deploy') }}</AppButton>
+            <AppButton :to="`${site.docsUrl}/${locale}${site.selfHostPath}`" variant="tonal" size="large" trailing-icon="open-in-new">{{ t('openSource.guide') }}</AppButton>
+            <AppButton v-if="site.repositoryPublic" :to="site.repositoryUrl" variant="text" size="large" trailing-icon="open-in-new">{{ t('openSource.viewSource') }}</AppButton>
             <span v-else class="chip soon-chip"><SiteIcon name="code" />{{ t('openSource.soon') }}</span>
           </div>
           <p class="footnote">{{ t('openSource.footnote') }}</p>

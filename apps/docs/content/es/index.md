@@ -26,11 +26,41 @@ Cómo se construye y se opera Wildcard: una API Hono sobre Cloudflare Workers co
   ---
   color: neutral
   size: xl
-  to: /es/getting-started/local-development
+  to: /es/self-host/deploy
   variant: outline
-  icon: i-lucide-terminal
+  icon: i-lucide-server
   ---
-  Ejecutarlo en local
+  Self-host
+  :::
+::
+
+::u-page-section
+#title
+Ten tu propio Wildcard
+
+#description
+El botón Deploy to Cloudflare copia el repositorio en tu cuenta de GitHub y publica la API y la app web en tu cuenta de Cloudflare. Además de las cuentas de Cloudflare y GitHub, solo necesitas una clave de la Meta Model API, y no hace falta editar nada del repositorio.
+
+#links
+  :::u-button
+  ---
+  color: primary
+  size: xl
+  to: https://deploy.workers.cloudflare.com/?url=https://github.com/imlautaro/wildcard
+  icon: i-simple-icons-cloudflare
+  ---
+  Deploy to Cloudflare
+  :::
+
+  :::u-button
+  ---
+  color: neutral
+  size: xl
+  to: /es/self-host/deploy
+  variant: outline
+  trailing-icon: i-lucide-arrow-right
+  ---
+  Leer la guía
   :::
 ::
 
@@ -39,6 +69,18 @@ Cómo se construye y se opera Wildcard: una API Hono sobre Cloudflare Workers co
 Qué encontrarás aquí
 
 #features
+  :::u-page-feature
+  ---
+  icon: i-lucide-server
+  to: /es/self-host/deploy
+  ---
+  #title
+  Self-host
+
+  #description
+  Despliega tu propia instalación en tu cuenta de Cloudflare con un botón y luego agrega el panel de administración, dominios propios y la app de iPhone.
+  :::
+
   :::u-page-feature
   ---
   icon: i-lucide-network
@@ -73,18 +115,6 @@ Qué encontrarás aquí
 
   #description
   Node.js 24, `npm ci`, una D1 local con todas las migraciones y los servidores de desarrollo de la API, la web, el admin, el sitio y la documentación.
-  :::
-
-  :::u-page-feature
-  ---
-  icon: i-lucide-key-round
-  to: /es/getting-started/environment-variables
-  ---
-  #title
-  Variables de entorno
-
-  #description
-  Cada binding, variable y secreto por Worker, cuáles son obligatorios y qué pasa cuando falta alguno.
   :::
 
   :::u-page-feature

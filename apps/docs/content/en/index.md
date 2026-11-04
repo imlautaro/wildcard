@@ -26,11 +26,41 @@ How Wildcard is built and operated: a Hono API on Cloudflare Workers with D1, R2
   ---
   color: neutral
   size: xl
-  to: /en/getting-started/local-development
+  to: /en/self-host/deploy
   variant: outline
-  icon: i-lucide-terminal
+  icon: i-lucide-server
   ---
-  Run it locally
+  Self-host it
+  :::
+::
+
+::u-page-section
+#title
+Run your own Wildcard
+
+#description
+The Deploy to Cloudflare button copies the repository into your GitHub account and releases the API and the web app to your Cloudflare account. Besides Cloudflare and GitHub accounts, you only need a Meta Model API key, and nothing in the repository needs editing.
+
+#links
+  :::u-button
+  ---
+  color: primary
+  size: xl
+  to: https://deploy.workers.cloudflare.com/?url=https://github.com/imlautaro/wildcard
+  icon: i-simple-icons-cloudflare
+  ---
+  Deploy to Cloudflare
+  :::
+
+  :::u-button
+  ---
+  color: neutral
+  size: xl
+  to: /en/self-host/deploy
+  variant: outline
+  trailing-icon: i-lucide-arrow-right
+  ---
+  Read the guide
   :::
 ::
 
@@ -39,6 +69,18 @@ How Wildcard is built and operated: a Hono API on Cloudflare Workers with D1, R2
 What you will find here
 
 #features
+  :::u-page-feature
+  ---
+  icon: i-lucide-server
+  to: /en/self-host/deploy
+  ---
+  #title
+  Self-host
+
+  #description
+  Deploy your own installation to your Cloudflare account with one button, then add the admin panel, custom domains and the iPhone app.
+  :::
+
   :::u-page-feature
   ---
   icon: i-lucide-network
@@ -73,18 +115,6 @@ What you will find here
 
   #description
   Node.js 24, `npm ci`, a local D1 with every migration, and the API, web, admin, site and docs dev servers.
-  :::
-
-  :::u-page-feature
-  ---
-  icon: i-lucide-key-round
-  to: /en/getting-started/environment-variables
-  ---
-  #title
-  Environment variables
-
-  #description
-  Every binding, variable and secret per Worker, which ones are required, and what happens when one is missing.
   :::
 
   :::u-page-feature

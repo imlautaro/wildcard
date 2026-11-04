@@ -10,6 +10,11 @@ export const site = {
   appUrl: 'https://wildcard-web.imlautaro.workers.dev',
   // Docs links append /en or /es to match the marketing site's language.
   docsUrl: 'https://wildcard-docs.imlautaro.workers.dev',
+  // The self-hosting guide inside the Docs, after the locale (/en or /es).
+  selfHostPath: '/self-host/deploy',
+  // The Deploy to Cloudflare button: copies the repository into the visitor's GitHub
+  // account and deploys it. Shown only while `repositoryPublic` is true.
+  deployUrl: 'https://deploy.workers.cloudflare.com/?url=https://github.com/imlautaro/wildcard',
   // The source repository. While `repositoryPublic` is false the site says the code
   // is coming soon instead of linking to a private repository (which would 404).
   repositoryUrl: 'https://github.com/imlautaro/wildcard',

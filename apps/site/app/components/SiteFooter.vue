@@ -21,6 +21,7 @@ const year = new Date().getFullYear();
             <h3>Wildcard</h3>
             <a :href="site.appUrl">{{ t('footer.webApp') }}</a>
             <a :href="`${site.docsUrl}/${locale}`">{{ t('common.docs') }}</a>
+            <a :href="`${site.docsUrl}/${locale}${site.selfHostPath}`">{{ t('footer.selfHost') }}</a>
             <a v-if="site.iosUrl" :href="site.iosUrl">{{ t('footer.iosApp') }}</a>
             <a v-if="site.repositoryPublic" :href="site.repositoryUrl">{{ t('footer.source') }}</a>
             <span v-else class="soon">{{ t('footer.sourceSoon') }}</span>

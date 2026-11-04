@@ -38,6 +38,7 @@
     "iosApp": "Descargar la app para iPhone",
     "source": "Código fuente",
     "sourceSoon": "Código fuente · pronto",
+    "selfHost": "Self-host",
     "faq": "Preguntas frecuentes",
     "cloudflare": "Hecho sobre Cloudflare"
   },
@@ -55,7 +56,7 @@
     "title": "Contactos de IA que son más que asistentes.",
     "lead": "Cada uno tiene su propia cara, personalidad y memoria. Te ayudan como cualquier asistente, pero además puedes compartirlos con las personas que quieres, sumarlos a grupos con memoria compartida, y hasta te escriben primero.",
     "meet": "Conoce a tus primeros contactos",
-    "selfHost": "Alójalo por tu cuenta",
+    "selfHost": "Self-host",
     "proof": {
       "memory": "Una memoria por contacto",
       "memoryText": "Nada se filtra entre chats",
@@ -227,6 +228,8 @@
     "elevenLabsKeyText": "Opcional: voces de los contactos",
     "appleKeys": "Claves de desarrollador de Apple",
     "appleKeysText": "Opcionales: notificaciones en iPhone y funciones nativas",
+    "deploy": "Deploy to Cloudflare",
+    "guide": "Guía de Self-host",
     "viewSource": "Ver el código",
     "soon": "El repositorio será público pronto",
     "footnote": "El uso de modelos y voces lo cobran esos proveedores a través de tus propias claves."
