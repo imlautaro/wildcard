@@ -1,4 +1,4 @@
-// Publishes the prerendered documentation site built by `npm run build:docs`. The docs
+// Publishes the prerendered Docs site built by `npm run build:docs`. The docs
 // Worker has static assets only: no script, binding, migration or secret.
 import { releaseBuiltWorker } from './lib/release-assets.mjs';
 

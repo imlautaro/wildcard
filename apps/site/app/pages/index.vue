@@ -244,7 +244,7 @@ const metaModels = computed(() => [
             <li><SiteIcon name="apple" class="mono" /><span><strong>{{ t('openSource.appleKeys') }}</strong><small>{{ t('openSource.appleKeysText') }}</small></span></li>
           </ul>
           <div class="hero-actions">
-            <AppButton :to="`${site.docsUrl}/${locale}`" variant="tonal" size="large" trailing-icon="open-in-new">{{ t('common.documentation') }}</AppButton>
+            <AppButton :to="`${site.docsUrl}/${locale}`" variant="tonal" size="large" trailing-icon="open-in-new">{{ t('common.docs') }}</AppButton>
             <AppButton v-if="site.repositoryPublic" :to="site.repositoryUrl" variant="filled" size="large" trailing-icon="open-in-new">{{ t('openSource.viewSource') }}</AppButton>
             <span v-else class="chip soon-chip"><SiteIcon name="code" />{{ t('openSource.soon') }}</span>
           </div>

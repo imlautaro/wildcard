@@ -656,7 +656,7 @@ other Worker depends on it.
 
 ## Docs site Worker
 
-The technical documentation site is optional and independent of the app: a
+The Docs site is optional and independent of the app: a
 static-assets-only Worker, `wildcard-docs`, configured in `apps/docs/wrangler.jsonc`.
 It is the npm workspace `@wildcard/docs`, built with [Docus](https://docus.dev) 5.15
 (a Nuxt layer over Nuxt Content, Nuxt UI and Tailwind CSS) and `@nuxtjs/i18n`, with

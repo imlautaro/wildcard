@@ -4,7 +4,7 @@
     "description": "Create AI contacts with their own name, face, personality and memory. Share them with the people you love, bring them into group chats with shared memory, and they even text you first. Open source, powered by Meta AI models."
   },
   "common": {
-    "documentation": "Documentation",
+    "docs": "Docs",
     "getStarted": "Get started",
     "poweredByMeta": "Powered by Meta AI models",
     "openSource": "Open source"

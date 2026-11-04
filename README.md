@@ -15,9 +15,8 @@
 <p align="center">
   <a href="https://wildcard-web.imlautaro.workers.dev"><strong>Try it</strong></a> ·
   <a href="https://wildcard-site.imlautaro.workers.dev">Website</a> ·
-  <a href="https://wildcard-docs.imlautaro.workers.dev/en">Docs</a> ·
+  <a href="https://wildcard-docs.imlautaro.workers.dev/en">Docs</a>
   <!-- TODO: add the demo video link here once it is published -->
-  <a href="https://wildcard-docs.imlautaro.workers.dev/es">Documentación en español</a>
 </p>
 
 <p align="center">
@@ -196,7 +195,7 @@ The iOS app and every local option are covered in
 | [`apps/web`](apps/web) | Nuxt web app |
 | [`apps/ios`](apps/ios) | SwiftUI iPhone app, widgets, share and notification extensions |
 | [`apps/admin`](apps/admin) | Super admin panel |
-| [`apps/site`](apps/site) · [`apps/docs`](apps/docs) | Marketing site and documentation (English and Spanish) |
+| [`apps/site`](apps/site) · [`apps/docs`](apps/docs) | Marketing site and Docs (English and Spanish) |
 | [`packages/ui`](packages/ui) | Shared design system for web and admin |
 | [`docs/`](docs) | In-depth design notes for every feature; start with the [developer guide](docs/README.md) |
 

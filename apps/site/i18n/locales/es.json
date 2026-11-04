@@ -4,7 +4,7 @@
     "description": "Crea contactos de IA con su propio nombre, cara, personalidad y memoria. Compártelos con las personas que quieres, súmalos a grupos con memoria compartida, y hasta te escriben primero. Código abierto, con modelos de IA de Meta."
   },
   "common": {
-    "documentation": "Documentación",
+    "docs": "Docs",
     "getStarted": "Empezar",
     "poweredByMeta": "Con modelos de IA de Meta",
     "openSource": "Código abierto"

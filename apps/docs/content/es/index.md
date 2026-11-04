@@ -1,12 +1,12 @@
 ---
 seo:
-  title: Documentación técnica de Wildcard
+  title: Wildcard Docs
   description: Arquitectura, servicios de Cloudflare, desarrollo local, configuración y releases de Wildcard, una app social de contactos con IA construida sobre Cloudflare Workers.
 ---
 
 ::u-page-hero
 #title
-Documentación técnica de Wildcard
+Wildcard Docs
 
 #description
 Cómo se construye y se opera Wildcard: una API Hono sobre Cloudflare Workers con D1, R2 y Workflows, una app web en Nuxt 4, una app iOS en SwiftUI y un panel de super admin, todo en un monorepo con npm workspaces.
