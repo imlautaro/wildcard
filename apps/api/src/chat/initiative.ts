@@ -22,6 +22,7 @@ import { messageDelay } from './messages';
 import { aliasAwareness } from '../contacts/alias';
 import { connectAgent } from './presence';
 import { ownActivity } from './activity';
+import { contactFastMode } from '../lib/fast-mode';
 
 export type InitiativeJob = { kind: 'initiative'; contactID: string; sourceID: string; revision: number };
 type Snapshot = {
@@ -447,7 +448,9 @@ export async function runInitiative(env: Env, job: InitiativeJob, step: Workflow
             .bind(state.agentID, state.contactID)]);
         return result!.meta.changes > 0;
       });
-      if (typing) await step.sleep('initiative-typing-pause', messageDelay(plan.message, job.sourceID));
+      // Fast mode publishes without the typing pause (docs/chats.md#fast-mode).
+      if (typing && !await step.do('initiative-fast-mode', () => contactFastMode(env.DB, job.contactID)))
+        await step.sleep('initiative-typing-pause', messageDelay(plan.message, job.sourceID));
     }
     await step.do('initiative-commit', async () => {
       const current = await snapshot(env, job);

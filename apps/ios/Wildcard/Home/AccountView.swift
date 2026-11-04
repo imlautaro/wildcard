@@ -17,6 +17,8 @@ struct AccountView: View {
     @State private var showingPrivacy = false
     @State private var savingPrivacy = false
     @State private var privacyError: String?
+    @State private var savingFastMode = false
+    @State private var fastModeError: String?
     @State private var showingDeleteAccount = false
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
 
@@ -91,6 +93,27 @@ struct AccountView: View {
                     Label("Appearance", systemImage: "circle.lefthalf.filled")
                 }
                 .pickerStyle(.menu)
+                // Fast mode (docs/chats.md#fast-mode): an account switch shared with the web app.
+                Toggle(isOn: Binding(
+                    get: { auth.user?.fastMode == true },
+                    set: { enabled in
+                        guard !savingFastMode else { return }
+                        savingFastMode = true
+                        fastModeError = nil
+                        Task {
+                            defer { savingFastMode = false }
+                            do { try await auth.saveFastMode(enabled) }
+                            catch is CancellationError { } catch { fastModeError = error.localizedDescription }
+                        }
+                    }
+                )) {
+                    HStack {
+                        Label("Fast mode", systemImage: "bolt")
+                        InfoButton(title: String(localized: "Fast mode"), text: String(localized: "Contacts reply as soon as their answer is ready: no reading beat, typing pauses between messages or listening time for voice messages. Replies still take as long as the model needs. In groups it applies only when every member turns it on. Starts with your next message."))
+                    }
+                }
+                .disabled(savingFastMode || refreshingProfile || auth.isBusy)
+                if let fastModeError { Text(fastModeError).foregroundStyle(.red) }
                 // iOS shows its per-app Language picker in Settings once the app has two localizations.
                 SheetRow(title: String(localized: "Language"), systemImage: "globe", value: languageName) {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }

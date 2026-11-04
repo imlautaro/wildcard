@@ -17,6 +17,7 @@ import { connectAgent } from './presence';
 import { temporalContext, temporalInstruction } from './temporal';
 import { quietUntil } from './initiative';
 import { normalizedWorkflowID } from './workflow-ids';
+import { contactFastMode } from '../lib/fast-mode';
 
 // A new contact introduces itself once, before the person writes (docs/initiative.md#welcome-messages).
 export type WelcomeJob = { kind: 'welcome'; contactID: string; attempt: number };
@@ -163,7 +164,9 @@ export async function runWelcome(env: Env, job: WelcomeJob, step: WorkflowStep) 
           .bind(contact.agentID, contact.id)]);
       return result!.meta.changes > 0;
     });
-    if (typing) await step.sleep('welcome-typing-pause', messageDelay(message, id));
+    // Fast mode publishes without the typing pause (docs/chats.md#fast-mode).
+    if (typing && !await step.do('welcome-fast-mode', () => contactFastMode(env.DB, job.contactID)))
+      await step.sleep('welcome-typing-pause', messageDelay(message, id));
     const published = await step.do('welcome-commit', async () => {
       const now = Date.now();
       // initiative_source_id refers to the welcome itself: it is spontaneous outreach (a greeting)

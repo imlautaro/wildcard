@@ -2400,6 +2400,19 @@ release that new spontaneous rows have `initiative_topic` set (for example throu
 debug export). Rollback keeps 0097: older Workers ignore the column; adding a subject
 later requires a table rebuild because SQLite cannot alter a CHECK.
 
+### Fast mode — migration 0100
+
+`0100_fast_mode.sql` follows every migration through 0099. It adds
+`user.fast_mode INTEGER NOT NULL DEFAULT 0` with a 0/1 CHECK (see
+[fast mode](chats.md#fast-mode)). No table rebuild, index, resource, binding, secret,
+Cron Trigger or Wrangler change.
+
+Apply locally with `npx wrangler d1 migrations apply DB --local`; production must
+apply it through the automatic pipeline before the Worker ships, because `GET /me`
+and every chat and group Workflow select the column. Verify after release that
+`GET /api/v1/me` returns `user.fastMode` and that `PUT /api/v1/me/fast-mode` toggles it.
+Rollback keeps 0100: older Workers and clients ignore the column and field.
+
 ## Remote native device execution
 
 The [remote timer/alarm prototype](native-remote.md) reuses the API Worker, D1,

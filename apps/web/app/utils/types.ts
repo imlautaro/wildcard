@@ -9,6 +9,7 @@ export type AuthUser = {
   photoVersion?: string | null;
   /** "Contacts share with each other" (docs/privacy.md). */
   contactsShare?: boolean;
+  fastMode?: boolean;
 };
 // Server feature switches returned next to `user` by GET /me (docs/voice.md).
 export type Features = { voiceMessages: boolean; contributorOnly?: boolean };

@@ -295,7 +295,8 @@ The local outgoing bubble is session memory only and is cleared on invalidation.
 
 Replies show **Typing…** only when their own turn is running and global D1 presence
 is `typing`. Queued turns have no waiting label. No client timer decides whether
-the agent is generating a reply. Completed replies are never artificially delayed.
+the agent is generating a reply. Completed replies are never artificially delayed
+beyond the server's typing pauses, which [fast mode](#fast-mode) skips.
 
 ## Persisted contact presence
 
@@ -431,10 +432,48 @@ before Online, or Typing before Online and Read, from the server state.
   [conversation initiative](initiative.md#publication-and-control).
 - Groups follow the same order; see [group receipts](groups.md#delivery-and-read-receipts).
 
+[Fast mode](#fast-mode) keeps this order but removes the waits between the steps.
+
 A read is therefore a simulated contact action, not proof that a model response
 succeeded: a generation failure after the read leaves a read message with a failed
 reply, which the existing retry handles. All delays are deterministic Workflow
 sleeps so replay cannot reorder them.
+
+## Fast mode
+
+Account setting (`user.fast_mode`, migration `0100_fast_mode.sql`, off by default;
+`PUT /me/fast-mode` with `{ "fastMode": boolean }`, returned as `user.fastMode` by
+every profile response). The switch sits next to Appearance in Account on web and
+iOS, and the API response is authoritative in both clients' session state.
+
+When it is on, contacts skip humanlike pacing that does not change what is said:
+
+- the connect and read beats (1 s each, 300 ms in an attended chat) and the
+  reading pause (`readingDelay`);
+- the listening beat and clip-length listening time for voice messages
+  (transcription still runs first);
+- every typing or Recording pause before a bubble (`messageDelay`, `recordingDelay`),
+  including recovery replies and the 3 s pause before a research or mini app
+  announcement;
+- the typing pause before follow-ups and new-contact welcomes.
+
+The lifecycle order (Online → Read → Typing) and the presence writes stay, so the
+indicators show for as long as generation actually takes. Composer pacing
+([consecutive messages](#consecutive-messages-and-composer-pacing)) is kept: it
+only waits while the person is typing, so messages can still fold into one turn.
+Presence leases (staying Online after a reply), follow-up scheduling, the
+onboarding welcome stagger (onboarding finishes before the setting can be changed)
+and every retry or coordination wait are unchanged.
+
+Groups use fast mode only when every person in the group has it on, because
+everyone sees the same pacing; see [groups](groups.md#fast-mode).
+
+Workflows read the setting once per turn in a checkpointed step (`fast-mode`,
+`group-fast-mode`, `initiative-fast-mode`, `welcome-fast-mode`), so a replay keeps
+its branch and a change applies from the next turn. Announcement pauses read it
+inside their tool call. Estimated savings come from the formulas, not measurement:
+about 2–4.5 s fixed per reply plus whatever part of each bubble's typing budget
+(up to 15 s) generation did not already cover, plus the clip length for voice input.
 
 ## Visiting a chat and composing a draft
 
@@ -814,7 +853,8 @@ from the thirty-second online lease. Accepted input clears older activity, and
 leaving closes the visit. Expired visits renew only after new input. No draft text
 is uploaded by activity reporting, and activity failures never block sends.
 
-After the existing three-second connection delay, a turn allows up to twelve
+After the connection delay (one second, 300 ms in an attended chat, none in
+[fast mode](#fast-mode)), a turn allows up to twelve
 seconds of additional composer pauses, checked every two seconds. Before inference
 and atomically before publication, consecutive ordinary messages of at most 1,000 UTF-8 bytes each can fold into the
 next queued message, with at most seven preceding messages per burst. Quoted

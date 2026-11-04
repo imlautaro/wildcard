@@ -104,6 +104,13 @@ final class AuthStore {
         })
     }
 
+    /// Fast mode (docs/chats.md#fast-mode). The response is authoritative.
+    func saveFastMode(_ fastMode: Bool) async throws {
+        user = keepingFeatures(try await withSession { api, token in
+            try await api.saveFastMode(fastMode, token: token)
+        })
+    }
+
     func saveProfile(name: String) async throws {
         user = keepingFeatures(try await withSession { api, token in
             try await api.saveProfile(name: name, token: token)

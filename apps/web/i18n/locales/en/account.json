@@ -23,6 +23,10 @@
       "contributorConsent": "I agree to Meta's Contributor data use",
       "contributorOnly": "Contributor is on for every account for now. Your saved choice returns when this ends."
     },
+    "fastMode": {
+      "title": "Fast mode",
+      "info": "Contacts reply as soon as their answer is ready: no reading beat, typing pauses between messages or listening time for voice messages. Replies still take as long as the model needs. In groups it applies only when every member turns it on. Starts with your next message."
+    },
     "appearance": {
       "title": "Appearance",
       "system": "System",

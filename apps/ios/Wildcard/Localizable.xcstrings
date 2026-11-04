@@ -1,12 +1,32 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Contacts reply as soon as their answer is ready: no reading beat, typing pauses between messages or listening time for voice messages. Replies still take as long as the model needs. In groups it applies only when every member turns it on. Starts with your next message." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los contactos responden en cuanto su respuesta está lista: sin pausa de lectura, pausas de escritura entre mensajes ni tiempo de escucha de mensajes de voz. Las respuestas siguen tardando lo que necesita el modelo. En los grupos solo se aplica cuando todos los miembros lo activan. Empieza con tu próximo mensaje."
+          }
+        }
+      }
+    },
     "Even with this off, contacts can bring up here what they know about you from your private chats, like plans or preferences. Turning it on also lets them look up and quote your whole conversation. What you tell them in confidence (surprises, gifts, things you ask them not to repeat) stays in your chat. To keep a chat out of groups entirely, turn on Keep this chat private in that contact’s details." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aunque esté desactivado, los contactos pueden mencionar aquí lo que saben de ti por tus chats privados, como planes o preferencias. Si lo activas, además pueden buscar y citar toda tu conversación. Lo que les cuentas en confianza (sorpresas, regalos, lo que les pides que no repitan) se queda en tu chat. Para que un chat no llegue a ningún grupo, activa Mantener este chat privado en los detalles de ese contacto."
+          }
+        }
+      }
+    },
+    "Fast mode" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo rápido"
           }
         }
       }

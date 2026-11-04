@@ -1538,6 +1538,15 @@ shows a notice while the account switch is on; "Discuss my private chats" explai
 private chat is unavailable. iOS has the same rows and copy (`PrivacyGuide.swift`). See
 [privacy](privacy.md). Typecheck only; browser rendering is unverified.
 
+## Fast mode (2026-11-03)
+
+Account has a **Fast mode** switch (with an info button) after Appearance on web and
+iOS. It is an account setting stored by the API (`PUT /me/fast-mode`), not a device
+preference: the pacing it removes runs in server Workflows. The session profile is
+updated from the response, like the chat model. Groups apply it only when every
+member has it on. See [fast mode](chats.md#fast-mode). Typecheck only; browser and
+device rendering are unverified.
+
 ## Localization (English and Spanish, 2026-11-01)
 
 The web app ships in English (default and fallback) and Spanish with

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const { t } = useI18n();
-const { user, features, saveName, savePhoto, saveModel, savePrivacy, refreshProfile, signOut } = useSession();
+const { user, features, saveName, savePhoto, saveModel, savePrivacy, saveFastMode, refreshProfile, signOut } = useSession();
 const { exporting, progress, exportError, download, cancel } = useDebugExport();
 const exportSheet = ref(false);
 const deleteSheet = ref(false);
@@ -70,6 +70,14 @@ async function toggleContactsShare(event: Event) {
     }
   });
 }
+// Fast mode (docs/chats.md#fast-mode): an account switch shared with iOS.
+async function toggleFastMode(event: Event) {
+  const input = event.target as HTMLInputElement;
+  await run(async () => {
+    try { await saveFastMode(input.checked); }
+    finally { input.checked = user.value?.fastMode === true; }
+  });
+}
 const photoPath = computed(() => user.value?.photoVersion ? `me/photo?version=${encodeURIComponent(user.value.photoVersion)}` : null);
 
 async function run(task: () => Promise<void>) {
@@ -105,6 +113,7 @@ onMounted(async () => {
         <AppListItem v-if="contributorOnly" icon="model" plain :supporting="t('account.chatModel.contributorOnly')" :value="t('account.chatModel.contributor')">{{ t('account.chatModel.title') }}</AppListItem>
         <AppListItem v-else icon="model" opens :value="models.find(model => model.value === currentModel)?.label ?? currentModel" @click="openModelSheet">{{ t('account.chatModel.title') }}</AppListItem>
         <AppListItem icon="appearance" opens :value="themeOptions.find(option => option.value === themePreference)?.label" @click="themeSheet = true">{{ t('account.appearance.title') }}</AppListItem>
+        <AppSwitch icon="bolt" :label="t('account.fastMode.title')" :info="t('account.fastMode.info')" :checked="user?.fastMode === true" :disabled="busy" @change="toggleFastMode" />
         <AppListItem icon="language" opens :value="languageOptions.find(option => option.value === languagePreference)?.label" @click="languageSheet = true">{{ t('common.language.title') }}</AppListItem>
         <AppSwitch icon="notifications" :label="t('account.notifications.title')" :checked="notificationsOn" :supporting="notificationsSupporting"
           :disabled="busy || !webPush.supported.value || webPush.permission.value === 'denied'" @change="toggleNotifications" />

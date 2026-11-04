@@ -20,6 +20,7 @@ import { speakMessage, transcribeVoice, voiceSuitable } from '../voice/speech';
 import { planRound } from './planning';
 import { earlierTurn, newerGroupMessage, setGroupPresence } from './presence';
 import { claimPublication, closeTerminalContinuations, publicationAccess, releasePublication } from './lane';
+import { groupFastMode } from '../lib/fast-mode';
 
 export type GroupJob = { kind: 'group'; turnID: string; attempt: number };
 export async function dispatchGroup(env: Env, groupID: string) {
@@ -96,7 +97,7 @@ async function publishGroupDraft(env: Env, job: GroupJob, draft: GroupDraft, fin
   throw new Error('GROUP_UNAVAILABLE_OR_CONSENT_REQUIRED');
 }
 
-async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep, messages: string[], invitesReply?: boolean, learningFence?: GroupDraft['learningFence'], learningQuestion?: GroupDraft['learningQuestion']) {
+async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep, messages: string[], invitesReply?: boolean, learningFence?: GroupDraft['learningFence'], learningQuestion?: GroupDraft['learningQuestion'], fast = false) {
   for (let index = 1; index < messages.length; index++) {
     const id = `${job.turnID}/part/${index}`;
     const previousID = index === 1 ? job.turnID : `${job.turnID}/part/${index - 1}`;
@@ -105,7 +106,7 @@ async function publishGroupMessages(env: Env, job: GroupJob, step: WorkflowStep,
       return !!previous && await setGroupPresence(env, job, 'typing', previous.sequence);
     });
     if (!typing) break;
-    await step.sleep(`group-message-pause-${index}`, messageDelay(messages[index], job.turnID));
+    if (!fast) await step.sleep(`group-message-pause-${index}`, messageDelay(messages[index], job.turnID));
     const published = await step.do(`group-publish-message-${index}`, async () => {
       const contributor = env.META_CHAT_MODEL.includes('contributor');
       // Stop the unsent tail if anyone else speaks. Previously delivered messages
@@ -139,7 +140,7 @@ type Reader = { agentID: string; groupID: string; sequence: number };
 // People's voice messages up to this round's trigger are transcribed once, by the
 // oldest unfinished turn. Concurrent preparers wait for that transcript or for
 // their predecessor to finish, preventing duplicate provider calls.
-async function listenGroup(env: Env, job: GroupJob, step: WorkflowStep) {
+async function listenGroup(env: Env, job: GroupJob, step: WorkflowStep, fast: boolean) {
   const pending = await step.do('group-voice-pending', async () => {
     const { results } = await env.DB.prepare(`SELECT gm.id, json_extract(gm.attachment_json, '$.durationMs') AS durationMs
       FROM group_reply r JOIN group_message source ON source.id = r.source_id
@@ -163,7 +164,7 @@ async function listenGroup(env: Env, job: GroupJob, step: WorkflowStep) {
     await step.sleep(`group-voice-wait-${wait}`, '5 seconds');
   }
   if (!admitted) throw new Error('GROUP_VOICE_WAIT_EXPIRED');
-  await step.sleep('group-listen-delay', '1 second');
+  if (!fast) await step.sleep('group-listen-delay', '1 second');
   const listenedAt = await step.do('group-mark-listened', async () => {
     const now = Date.now();
     await env.DB.prepare(`UPDATE group_message SET voice_listened_at = COALESCE(voice_listened_at, ?1)
@@ -185,7 +186,7 @@ async function listenGroup(env: Env, job: GroupJob, step: WorkflowStep) {
     });
   } catch { console.error(JSON.stringify({ event: 'group_voice_transcription_deferred' })); }
   // Listen to the newest clip before deciding whether to speak.
-  await pauseGroupUntil(step, 'group-listen-pause', listenedAt + Math.min(pending[0].durationMs ?? 0, 60_000));
+  if (!fast) await pauseGroupUntil(step, 'group-listen-pause', listenedAt + Math.min(pending[0].durationMs ?? 0, 60_000));
 }
 
 async function pauseGroupUntil(step: WorkflowStep, name: string, deadline: number) {
@@ -228,12 +229,14 @@ function groupVoiceScope(env: Env, job: GroupJob) {
 export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep) {
   const model = await step.do('group-select-account-model', () => jobModel(bindings, job.turnID, true));
   const env: Env = { ...bindings, META_CHAT_MODEL: model };
+  // Fast mode only when every person in the group chose it (docs/groups.md#fast-mode).
+  const fast = await step.do('group-fast-mode', () => groupFastMode(env.DB, job.turnID));
   const admitted = await step.do('group-check-attention', async () => !!await env.DB.prepare(
     'SELECT turn_id FROM agent_attention WHERE turn_id = ? AND attempt = ?').bind(job.turnID, job.attempt).first());
   if (!admitted) return;
   try {
     // Delivered → online → read → typing, as in private chats.
-    await step.sleep('group-connect-delay', '1 second');
+    if (!fast) await step.sleep('group-connect-delay', '1 second');
     await step.do('group-mark-running', async () => {
       await env.DB.batch([
         env.DB.prepare(`UPDATE group_reply SET status = 'running' WHERE id = ? AND attempt = ? AND status = 'queued'`)
@@ -249,10 +252,10 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
     // receipt can turn Read before anyone types. Each connects before reading.
     const readers = await step.do('group-connect-readers', () => connectGroupReaders(env, job));
     if (readers.length) {
-      await step.sleep('group-read-delay', '1 second');
+      if (!fast) await step.sleep('group-read-delay', '1 second');
       await step.do('group-mark-read', () => markGroupRead(env, job, readers));
     }
-    await listenGroup(env, job, step);
+    await listenGroup(env, job, step, fast);
     // The round coordinator picks speakers; an unselected slot ends here quietly.
     const slot = await planRound(env, job, step);
     if (slot.kind === 'skip') {
@@ -348,7 +351,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
             return marked;
           });
           // Typing already visible during generation counts toward the pause.
-          if (typing) await pauseGroupUntil(step, `group-first-message-pause-${review}`, recording
+          if (typing && !fast) await pauseGroupUntil(step, `group-first-message-pause-${review}`, recording
             ? Date.now() + recordingDelay(firstMessage)
             : (prepared.typingSince ?? Date.now()) + messageDelay(firstMessage, job.turnID));
         }
@@ -364,7 +367,7 @@ export async function runGroup(bindings: Env, job: GroupJob, step: WorkflowStep)
             try { await deliverGroupPush(env, job.turnID); }
             catch { console.error(JSON.stringify({ event: 'group_push_deferred' })); }
           });
-          await publishGroupMessages(env, job, step, prepared.messages, prepared.invitesReply, prepared.learningFence, prepared.learningQuestion);
+          await publishGroupMessages(env, job, step, prepared.messages, prepared.invitesReply, prepared.learningFence, prepared.learningQuestion, fast);
           await step.do('group-complete-message-burst', async () => {
             await env.DB.prepare(`UPDATE group_reply SET status = 'complete'
               WHERE id = ?1 AND attempt = ?2 AND status = 'running'

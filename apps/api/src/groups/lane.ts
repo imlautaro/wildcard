@@ -4,6 +4,7 @@ import { groupSourceAccess } from './request-access';
 import { messageDelay } from '../chat/messages';
 import { setGroupPresence } from './presence';
 import type { GroupJob } from './workflow';
+import { groupFastMode } from '../lib/fast-mode';
 
 // One publication lane per group orders every contact bubble, including the
 // short announcement a contact sends before it starts researching.
@@ -69,7 +70,7 @@ export async function announceGroupResearch(env: Env, job: GroupJob, text: strin
   if (!claimed) return false;
   const id = `${job.turnID}/part/0`;
   try {
-    if (await setGroupPresence(env, job, 'typing')) await new Promise(resolve => setTimeout(resolve, Math.min(messageDelay(text, job.turnID), 3000)));
+    if (await setGroupPresence(env, job, 'typing') && !await groupFastMode(env.DB, job.turnID)) await new Promise(resolve => setTimeout(resolve, Math.min(messageDelay(text, job.turnID), 3000)));
     const contributor = env.META_CHAT_MODEL.includes('contributor');
     await env.DB.batch([
       env.DB.prepare(`INSERT INTO group_message (id, group_id, agent_id, sender_name, text, created_at, contributor_consent, exchange_id, requester_id)

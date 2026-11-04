@@ -795,6 +795,17 @@ parts. Directed answers returned privately stay cohesive in one message. Both
 clients reuse their existing group message caches and polling. See
 [successive contact messages](reply-messages.md) for delivery and verification.
 
+## Fast mode
+
+A group reply skips its humanlike pacing (the 1 s connect and read beats, the
+listening beat and clip-length listening time for voice, the first-message and
+successive-message typing pauses and the 3 s research announcement pause) only
+when every person in the group has [fast mode](chats.md#fast-mode) on. One member
+with it off keeps the paced behavior for everyone, because all members see the
+same delivery. The round coordinator, publication and action lanes, voice
+transcription admission and the two-minute welcome debounce are unchanged. The
+workflow checkpoints the decision once per reply (`group-fast-mode`).
+
 ## Optional private text sharing
 
 In **Group details → Discuss my private chats** (a row that opens a sheet), each human can allow an individual

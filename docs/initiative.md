@@ -147,7 +147,8 @@ or leaving the chat open no longer suppresses initiative or invalidates a draft:
 only recent actual composer activity gets a courtesy pause. The same typing
 watermark is checked in context, before Typing and in atomic publication/feedback
 SQL, including multiple devices. Passive visit timestamps do not count as typing. Presence,
-typing pauses, ordinary completed turns and the APNs outbox reuse existing paths.
+typing pauses, ordinary completed turns and the APNs outbox reuse existing paths;
+[fast mode](chats.md#fast-mode) skips the typing pause but not the follow-up gaps.
 The planner may propose one contextual image with its caption, even without an
 image request, through [generated images](generated-images.md#contextual-framing-and-spontaneous-images-0079).
 It cannot use retrieval tools, connectors, native actions, group publication or
@@ -287,7 +288,8 @@ known zone, it only sends within two hours of creation. It uses the character
 direction, expression habits, configured language/region and persona only; memories
 and the reason the contact was created are deliberately left out.
 
-The welcome is a single short bubble after a typing pause: an open hello with the
+The welcome is a single short bubble after a typing pause (skipped with
+[fast mode](chats.md#fast-mode)): an open hello with the
 contact's name, its personality showing only in how it is said. The prompt forbids
 describing its tastes, interests or personality, explaining why it was added, topics,
 icebreakers, help offers and onboarding phrasing; at most a casual greeting question

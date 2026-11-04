@@ -31,8 +31,10 @@ parts also check that the preceding message is still current before starting the
 wait. Publication retains its existing atomic access/interruption checks.
 Voice notes retain their separate 0.9–3 second preparation lead-in and Recording
 indicator; they do not inherit the longer text typing budget. Private initiative
-also uses the text budget, with a 90-second presence lease covering its maximum
-60-second wait. Workflow scheduling and network latency may increase these gaps.
+also uses the text budget, capped at 15 seconds within its 90-second presence lease.
+Workflow scheduling and network latency may increase these gaps. With
+[fast mode](chats.md#fast-mode) on, no part waits for a composition budget: each
+part is published as soon as the previous one is.
 The timing uses durable [Workflow sleep](https://developers.cloudflare.com/workflows/build/sleeping-and-retrying/),
 not timers in an open app. Both clients poll the visible conversation every second;
 slow/offline clients can receive several already-delivered parts on their next refresh.

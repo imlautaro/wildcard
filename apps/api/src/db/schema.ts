@@ -12,6 +12,7 @@ export const user = sqliteTable('user', {
   photoVersion: text('photo_version'),
   chatModel: text('chat_model').notNull().default('muse-spark-1.3'),
   contactsShare: integer('contacts_share', { mode: 'boolean' }).notNull().default(false),
+  fastMode: integer('fast_mode', { mode: 'boolean' }).notNull().default(false),
   createdAt: date('created_at').notNull(),
   updatedAt: date('updated_at').notNull(),
 });

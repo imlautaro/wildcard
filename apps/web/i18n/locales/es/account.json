@@ -23,6 +23,10 @@
       "contributorConsent": "Acepto el uso de datos de Contributor de Meta",
       "contributorOnly": "Contributor está activado para todas las cuentas por ahora. Tu elección guardada vuelve cuando esto termine."
     },
+    "fastMode": {
+      "title": "Modo rápido",
+      "info": "Los contactos responden en cuanto su respuesta está lista: sin pausa de lectura, pausas de escritura entre mensajes ni tiempo de escucha de mensajes de voz. Las respuestas siguen tardando lo que necesita el modelo. En los grupos solo se aplica cuando todos los miembros lo activan. Empieza con tu próximo mensaje."
+    },
     "appearance": {
       "title": "Apariencia",
       "system": "Sistema",

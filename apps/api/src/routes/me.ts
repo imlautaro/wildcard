@@ -11,12 +11,12 @@ import { verifyPassword } from 'better-auth/crypto';
 import { superAdmins } from '../admin/routes';
 import { cleanResources } from '../chat/cleanup';
 
-type Profile = { id: string; name: string; email: string; emailVerified: number; photoVersion: string | null; chatModel: string; onboardingRequired: number; contactsShare: number };
-const columns = 'id, name, email, email_verified AS emailVerified, photo_version AS photoVersion, chat_model AS chatModel, onboarding_required AS onboardingRequired, contacts_share AS contactsShare';
+type Profile = { id: string; name: string; email: string; emailVerified: number; photoVersion: string | null; chatModel: string; onboardingRequired: number; contactsShare: number; fastMode: number };
+const columns = 'id, name, email, email_verified AS emailVerified, photo_version AS photoVersion, chat_model AS chatModel, onboarding_required AS onboardingRequired, contacts_share AS contactsShare, fast_mode AS fastMode';
 const key = (owner: string, version: string) => `users/${owner}/${version}.jpg`;
 // While the admin flag `contributor_only` is on, profiles report the effective model
 // (Contributor); the stored choice is untouched and returns when the flag is off.
-const responseUser = (row: Profile, contributorOnly: boolean) => ({ ...row, chatModel: contributorOnly ? contributorModel : row.chatModel, emailVerified: Boolean(row.emailVerified), onboardingRequired: Boolean(row.onboardingRequired), contactsShare: Boolean(row.contactsShare) });
+const responseUser = (row: Profile, contributorOnly: boolean) => ({ ...row, chatModel: contributorOnly ? contributorModel : row.chatModel, emailVerified: Boolean(row.emailVerified), onboardingRequired: Boolean(row.onboardingRequired), contactsShare: Boolean(row.contactsShare), fastMode: Boolean(row.fastMode) });
 const me = new Hono<{ Bindings: Env; Variables: { owner: string; contributorOnly: boolean } }>();
 
 me.use('*', async (c, next) => {
@@ -79,6 +79,19 @@ me.put('/privacy', bodyLimit({ maxSize: 1024 }), async (c) => {
   }
   const row = await c.env.DB.prepare(`UPDATE user SET contacts_share = ?, updated_at = ? WHERE id = ? RETURNING ${columns}`)
     .bind(input.contactsShare ? 1 : 0, Date.now(), c.get('owner')).first<Profile>();
+  if (!row) return c.json({ error: 'Unauthorized' }, 401);
+  return c.json({ user: responseUser(row, c.get('contributorOnly')) });
+});
+
+// Fast mode: contacts skip humanlike pacing (docs/chats.md#fast-mode).
+me.put('/fast-mode', bodyLimit({ maxSize: 1024 }), async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const input = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!input || Object.keys(input).join(',') !== 'fastMode' || typeof input.fastMode !== 'boolean') {
+    return c.json({ error: 'Provide only fastMode as a boolean' }, 400);
+  }
+  const row = await c.env.DB.prepare(`UPDATE user SET fast_mode = ?, updated_at = ? WHERE id = ? RETURNING ${columns}`)
+    .bind(input.fastMode ? 1 : 0, Date.now(), c.get('owner')).first<Profile>();
   if (!row) return c.json({ error: 'Unauthorized' }, 401);
   return c.json({ user: responseUser(row, c.get('contributorOnly')) });
 });

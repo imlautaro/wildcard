@@ -10,6 +10,8 @@ struct AuthUser: Codable, Sendable {
     var photoVersion: String? = nil
     /// "Contacts share with each other" (docs/privacy.md); absent from older responses means off.
     var contactsShare: Bool? = nil
+    /// Fast mode (docs/chats.md#fast-mode); absent from older responses means off.
+    var fastMode: Bool? = nil
     /// Runtime flags from `GET /me`; other profile responses omit them, so the store keeps the last value.
     var features: AccountFeatures? = nil
 }
@@ -116,6 +118,12 @@ struct AuthAPI: Sendable {
     func savePrivacy(contactsShare: Bool, token: String) async throws -> AuthUser {
         let body = try JSONEncoder().encode(["contactsShare": contactsShare])
         let (data, _) = try await send(path: "me/privacy", method: "PUT", body: body, token: token)
+        return try JSONDecoder().decode(UserResponse.self, from: data).user
+    }
+
+    func saveFastMode(_ fastMode: Bool, token: String) async throws -> AuthUser {
+        let body = try JSONEncoder().encode(["fastMode": fastMode])
+        let (data, _) = try await send(path: "me/fast-mode", method: "PUT", body: body, token: token)
         return try JSONDecoder().decode(UserResponse.self, from: data).user
     }
 

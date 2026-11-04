@@ -29,6 +29,7 @@ import { publishedSticker } from '../stickers/publish';
 import { TranscriptionFailure } from './transcription';
 import { isVoice, privateVoiceReplies, speakMessage, transcribeVoice, voiceSuitable } from '../voice/speech';
 import { NonRetryableError } from 'cloudflare:workflows';
+import { turnFastMode } from '../lib/fast-mode';
 
 // Checkpoint the remaining delay so replay takes the same branch. Memory work,
 // generation and retries can consume the deadline before the pause is reached.
@@ -74,6 +75,8 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
     const job = event.payload;
     const model = await step.do('select-account-model', () => jobModel(this.env, job.turnID, false));
     const env: Env = { ...this.env, META_CHAT_MODEL: model };
+    // Fast mode skips the humanlike beats below, never composer batching (docs/chats.md#fast-mode).
+    const fast = await step.do('fast-mode', () => turnFastMode(env.DB, job.turnID));
     const admitted = await step.do('check-attention', async () => !!await env.DB.prepare(
       'SELECT turn_id FROM agent_attention WHERE turn_id = ? AND attempt = ?')
       .bind(job.turnID, job.attempt).first());
@@ -83,7 +86,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
       // until it actually starts handling the message. A contact still online in
       // the chat the person has open reads at once, without the connect beat.
       const attended = await step.do('attended-chat', () => attendedChat(env.DB, job));
-      await step.sleep('connect-delay', attended ? 300 : 1000);
+      if (!fast) await step.sleep('connect-delay', attended ? 300 : 1000);
       await waitForComposer(env, job, step, 'before-reply', 6);
       const batched = await step.do('batch-consecutive-messages', () => batchIntoNext(env, job));
       if (batched) {
@@ -97,15 +100,15 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         return true;
       });
       // mark-running connected the contact (agent_chat_status); it reads after a beat.
-      await step.sleep('read-delay', attended ? 300 : 1000);
+      if (!fast) await step.sleep('read-delay', attended ? 300 : 1000);
       const readAt = await step.do('mark-read', () => markRead(env.DB, job));
-      const listening = await this.listen(env, job, step);
+      const listening = await this.listen(env, job, step, fast);
       await this.refreshMemory(env, job, step, 'refresh-prior-memory', false);
       await this.refreshAgentMemory(env, job, step, 'refresh-agent-self-memory');
-      const reading = listening ?? await step.do('reading-time', async () => {
+      const reading = listening ?? (fast ? readAt : await step.do('reading-time', async () => {
         const turn = await activeTurn(env.DB, job);
         return readAt + readingDelay(turn?.userText ?? '');
-      });
+      }));
       const prepared = await step.do('prepare-reply', {
         retries: { limit: 2, delay: '5 seconds', backoff: 'exponential' },
         timeout: '8 minutes',
@@ -135,7 +138,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
           retries: { limit: 0, delay: '1 second' }, timeout: '1 minute',
         }, () => shouldHoldReply(env, job, typeof prepared.reply === 'string' ? prepared.reply : (Array.isArray(prepared.reply) ? prepared.reply : prepared.reply?.messages)?.join('\n\n') ?? null)).catch(() => false);
         if (hold) await waitForComposer(env, job, step, 'before-publish', 3);
-        await this.publishMessages(env, job, step, prepared.reply, 'reply', prepared.typingAt);
+        await this.publishMessages(env, job, step, prepared.reply, 'reply', prepared.typingAt, fast);
       }
     } catch (error) {
       const code = safeErrorCode(error);
@@ -159,7 +162,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
             return { reply };
           });
           if (recovery) {
-            await this.publishMessages(env, job, step, recovery.reply, 'recovery');
+            await this.publishMessages(env, job, step, recovery.reply, 'recovery', undefined, fast);
             recovered = true;
           }
         } catch (recoveryError) {
@@ -206,14 +209,15 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
 
   // A person's voice message: read, then listen (blue microphone) and transcribe
   // once, then keep listening for the clip's duration. Returns the time to start typing.
-  private async listen(env: Env, job: ChatJob, step: WorkflowStep): Promise<number | null> {
+  // Fast mode transcribes without the listening beat or the clip's duration.
+  private async listen(env: Env, job: ChatJob, step: WorkflowStep, fast: boolean): Promise<number | null> {
     const duration = await step.do('voice-duration', async () => {
       const turn = await activeTurn(env.DB, job);
       const audio = turn && storedAttachment(turn);
       return isVoice(audio) ? audio.durationMs : null;
     });
     if (duration === null) return null;
-    await step.sleep('listen-delay', '1 second');
+    if (!fast) await step.sleep('listen-delay', '1 second');
     const listenedAt = await step.do('mark-listened', async () => {
       const now = Date.now();
       await env.DB.prepare(`UPDATE chat_turn SET voice_listened_at = COALESCE(voice_listened_at, ?1)
@@ -237,10 +241,10 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         WHERE id = ?3 AND attempt = ?4 AND voice_transcribed_at IS NULL`).bind(transcript, Date.now(), job.turnID, job.attempt).run();
       return true;
     });
-    return listenedAt + Math.min(duration, 60_000);
+    return fast ? listenedAt : listenedAt + Math.min(duration, 60_000);
   }
 
-  private async publishMessages(env: Env, job: ChatJob, step: WorkflowStep, reply: ContactResponse | string[] | string | null, prefix = 'reply', firstTypingAt?: number) {
+  private async publishMessages(env: Env, job: ChatJob, step: WorkflowStep, reply: ContactResponse | string[] | string | null, prefix = 'reply', firstTypingAt?: number, fast = false) {
     const { response, messages, spoken, sticker, stickerIndex } = replyMessages(reply);
     // A research announcement may already be the turn's first bubble.
     const base = await step.do(`${prefix}-published-base`, async () => {
@@ -261,7 +265,7 @@ export class ChatWorkflow extends WorkflowEntrypoint<Env, ChatJob | VisitJob | G
         // Only the first bubble can credit already visible generation time. Every
         // later bubble gets a fresh typing budget, including recovery responses.
         const duration = composing.recording ? recordingDelay(messages[index]) : messageDelay(messages[index], job.turnID);
-        await pauseUntil(step, `${prefix}-composition-pause-${index}`, composing.startedAt + duration);
+        if (!fast) await pauseUntil(step, `${prefix}-composition-pause-${index}`, composing.startedAt + duration);
       }
       // Checkpointed separately so publication retries never synthesize twice.
       const voice = index === spoken ? await step.do(`${prefix}-voice-message-${index}`, { retries: { limit: 0, delay: '1 second' }, timeout: '2 minutes' }, async () => {

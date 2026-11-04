@@ -145,6 +145,16 @@ async function savePrivacy(contactsShare: boolean) {
   user.value = result.user;
 }
 
+// Fast mode (docs/chats.md#fast-mode): contacts skip humanlike pacing. The response is authoritative.
+async function saveFastMode(fastMode: boolean) {
+  const owner = user.value?.id;
+  const revision = ++profileRevision;
+  profileRequest = null;
+  const result = await api<{ user: AuthUser }>('me/fast-mode', { method: 'PUT', json: { fastMode } });
+  if (revision !== profileRevision || status.value !== 'signed-in' || user.value?.id !== owner) return;
+  user.value = result.user;
+}
+
 export function useSession() {
-  return { user: readonly(user), features: readonly(features), status: readonly(status), restore, authenticate, signOut, deleteAccount, saveName, savePhoto, saveModel, savePrivacy, refreshProfile };
+  return { user: readonly(user), features: readonly(features), status: readonly(status), restore, authenticate, signOut, deleteAccount, saveName, savePhoto, saveModel, savePrivacy, saveFastMode, refreshProfile };
 }
